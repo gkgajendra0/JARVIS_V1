@@ -11,8 +11,9 @@ import copy
 import importlib
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 DEFAULT_LLMLINGUA2_MODEL = (
     "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank"
@@ -269,7 +270,7 @@ class LLMLingua2WorkPayloadCompressor:
             return self._engine_factory()
         try:
             module = importlib.import_module("llmlingua")
-            compressor_type = getattr(module, "PromptCompressor")
+            compressor_type = module.PromptCompressor
         except (ImportError, AttributeError) as exc:
             raise PromptCompressionDependencyError(
                 "LLMLingua is unavailable. Install the optional "
@@ -283,7 +284,7 @@ class LLMLingua2WorkPayloadCompressor:
                 device_map=self._device_map,
                 model_config={"revision": DEFAULT_LLMLINGUA2_REVISION},
             )
-        except Exception as exc:  # noqa: BLE001 - optional dependency boundary
+        except Exception as exc:
             raise PromptCompressionDependencyError(
                 "LLMLingua-2 could not initialize with the configured local model"
             ) from exc
@@ -338,7 +339,7 @@ class LLMLingua2WorkPayloadCompressor:
                 force_reserve_digit=True,
                 force_tokens=["\n"],
             )
-        except Exception as exc:  # noqa: BLE001 - local compressor boundary
+        except Exception as exc:
             raise PromptCompressionError("LLMLingua-2 compression failed") from exc
         latency_ms = (time.perf_counter() - started) * 1000.0
 
