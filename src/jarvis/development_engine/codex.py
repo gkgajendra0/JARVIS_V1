@@ -571,6 +571,24 @@ def _merge_usage(
     )
 
 
+def _provider_thread_missing(error: BaseException) -> bool:
+    """Return True only when provider working memory is definitively unavailable."""
+
+    name = type(error).__name__
+    message = " ".join(str(error).split()).casefold()
+    if name not in {"InvalidParamsError", "InvalidRequestError"}:
+        return False
+    return "thread" in message and any(
+        marker in message
+        for marker in (
+            "not found",
+            "does not exist",
+            "unknown thread",
+            "missing thread",
+        )
+    )
+
+
 class CodexPlanDevelopmentEngine:
     """Long-turn Codex engineering specialist under the JARVIS control plane."""
 
@@ -627,10 +645,13 @@ class CodexPlanDevelopmentEngine:
                     session.thread_id,
                     model=self._model,
                 )
-            except Exception:
-                # Provider thread history is disposable working memory. Canonical
-                # ticket/worktree evidence is sufficient to start a fresh thread.
-                pass
+            except Exception as exc:
+                if not _provider_thread_missing(exc):
+                    raise
+                # Provider thread history is disposable working memory only when the
+                # provider definitively reports that the saved thread no longer exists.
+                # Transient quota/network/server failures must remain resource blockers
+                # rather than silently creating a second expensive thread.
         thread = await runtime.start_thread(model=self._model)
         self._sessions.bind_thread(
             ticket_digest=ticket.digest,
