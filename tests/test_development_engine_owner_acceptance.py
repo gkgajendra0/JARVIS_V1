@@ -9,12 +9,7 @@ from jarvis.chatgpt_plan import ChatGPTPlanUsageUnavailable
 from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_SCRIPT = (
-    _REPO_ROOT
-    / "tools"
-    / "research"
-    / "development_engine_owner_acceptance.py"
-)
+_SCRIPT = _REPO_ROOT / "tools" / "research" / "development_engine_owner_acceptance.py"
 
 
 def _load_module():
