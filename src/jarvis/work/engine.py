@@ -131,6 +131,8 @@ class WorkEngine:
             tuple[bool, str | None] | None,
         ]
         | None = None,
+        model_owner_request_handler: Callable[[WorkItem, str], str | None]
+        | None = None,
         context_assembler: WorkContextAssembler | None = None,
         context_mode: WorkContextMode | str = WorkContextMode.SHADOW,
     ) -> None:
@@ -141,6 +143,7 @@ class WorkEngine:
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
         self._action_admission = action_admission
         self._custom_completion_guard = completion_guard
+        self._model_owner_request_handler = model_owner_request_handler
         self._context_assembler = context_assembler or WorkContextAssembler()
         self._context_mode = normalize_work_context_mode(context_mode)
 
@@ -952,22 +955,60 @@ class WorkEngine:
             return WorkAdvanceResult(work.work_id, completed.state, progressed=True)
 
         if decision.needs_owner:
+            owner_question = (
+                decision.owner_question
+                or "This background work needs additional owner input."
+            )
+            handler = self._model_owner_request_handler
+            handled_reason = (
+                None
+                if handler is None
+                else handler(work, owner_question)
+            )
+            if handled_reason is not None:
+                normalized_reason = " ".join(str(handled_reason).split()).strip()
+                if not normalized_reason:
+                    raise ValueError(
+                        "model owner request handler returned an empty reason"
+                    )
+                latest = self._store.require(work.work_id)
+                if latest.state.terminal:
+                    return WorkAdvanceResult(
+                        latest.work_id,
+                        latest.state,
+                        progressed=False,
+                    )
+                superseded = latest.transition(
+                    WorkState.CANCELLED,
+                    status_detail=normalized_reason,
+                    current_step_id=latest.current_step_id,
+                )
+                saved = self._store.save(
+                    superseded,
+                    expected_version=latest.version,
+                )
+                return WorkAdvanceResult(
+                    saved.work_id,
+                    saved.state,
+                    progressed=True,
+                )
+
             waiting = work.transition(
                 WorkState.WAITING_FOR_OWNER,
-                status_detail=decision.owner_question,
+                status_detail=owner_question,
             )
             self._store.save(waiting, expected_version=work.version)
             self._store.enqueue_delivery(
                 work=waiting,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=decision.owner_question or "This work needs your input.",
+                message=owner_question,
                 event_key=f"owner:{waiting.version}",
             )
             return WorkAdvanceResult(
                 work.work_id,
                 waiting.state,
                 progressed=True,
-                owner_question=decision.owner_question,
+                owner_question=owner_question,
             )
 
         assert decision.action is not None
