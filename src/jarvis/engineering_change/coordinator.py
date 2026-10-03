@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import WorkItem, WorkPriority, WorkState
 
 from .models import (
@@ -114,6 +115,24 @@ class ChangeCoordinator:
         architecture = None
         if stage_contract.role is ProcessStageRole.ARCHITECTURE_SOURCE:
             request = change.request
+            revision_request = self.store.latest_artifact(
+                change_id,
+                "architecture_revision_request",
+            )
+            if (
+                revision_request is not None
+                and int(revision_request.payload.get("source_attempt", 0)) == attempt
+            ):
+                reason = " ".join(
+                    str(revision_request.payload.get("reason") or "").split()
+                )
+                if reason:
+                    request += (
+                        "\nThe previously approved architecture could not safely "
+                        "continue during governed development. Re-research the capability "
+                        "and derive a complete replacement architecture from current "
+                        "evidence. Revision reason: " + reason
+                    )
             dependencies: tuple[str, ...] = ()
         elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
             architecture = self.store.latest_artifact(change_id, "architecture")
@@ -161,11 +180,18 @@ class ChangeCoordinator:
                 )
 
         if not item.state.terminal:
-            execution_id = self.backend.submit(item.work_id, priority=item.priority)
-            if execution_id != item.work_id:
-                raise ChangeConflict(
-                    "durable backend returned mismatched work identity"
+            try:
+                ensure_durable_execution(
+                    store=self.store.work,
+                    backend=self.backend,
+                    item=item,
                 )
+            except RuntimeError as exc:
+                if "durable backend must use work_id as execution_id" in str(exc):
+                    raise ChangeConflict(
+                        "durable backend returned mismatched work identity"
+                    ) from exc
+                raise
         return stage
 
     def prepare_failed_work_retry(
@@ -204,7 +230,49 @@ class ChangeCoordinator:
             )
 
         if change.state is ChangeState.RESEARCHING:
-            stage = self.submit_stage(change_id, source_stage.stage_key, 1)
+            source_attempt = 1
+            revision_request = self.store.latest_artifact(
+                change_id,
+                "architecture_revision_request",
+            )
+            current_architecture = self.store.latest_artifact(
+                change_id,
+                "architecture",
+            )
+            if revision_request is not None:
+                requested_attempt = revision_request.payload.get("source_attempt")
+                matching_revision_stage = next(
+                    (
+                        item
+                        for item in self.store.list_stages(change_id)
+                        if item.stage_key == source_stage.stage_key
+                        and item.attempt == requested_attempt
+                    ),
+                    None,
+                )
+                previous_architecture_id = revision_request.payload.get(
+                    "previous_architecture_artifact_id"
+                )
+                revision_is_current = matching_revision_stage is not None or (
+                    current_architecture is not None
+                    and previous_architecture_id == current_architecture.artifact_id
+                )
+                if (
+                    isinstance(requested_attempt, int)
+                    and requested_attempt > 1
+                    and revision_is_current
+                ):
+                    # Before the replacement architecture exists, the previous
+                    # architecture proves this is the active revision request.
+                    # After the handler has written a replacement but before the
+                    # state transition commits, the already-linked source stage
+                    # is the durable replay identity. Never fall back to attempt 1.
+                    source_attempt = requested_attempt
+            stage = self.submit_stage(
+                change_id,
+                source_stage.stage_key,
+                source_attempt,
+            )
             source_work = self.store.work.require(stage.work_id)
             if source_work.state in {WorkState.FAILED, WorkState.CANCELLED}:
                 return self.store.transition(
