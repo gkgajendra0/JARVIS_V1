@@ -223,6 +223,9 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         "no credits remaining",
         "daily quota",
         "billing quota",
+        "subscription_sharing_usage_limit_exceeded",
+        "subscription_sharing_usage_unavailable",
+        "subscription sharing usage limit",
     )
     rate_markers = (
         "rate_limit_exceeded",
@@ -232,9 +235,6 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         "too many requests",
         "tokens per minute",
         "requests per minute",
-        "subscription_sharing_usage_limit_exceeded",
-        "subscription_sharing_usage_unavailable",
-        "subscription sharing usage limit",
     )
 
     # Realtime SDK errors do not always preserve an HTTP status. Provider error codes
