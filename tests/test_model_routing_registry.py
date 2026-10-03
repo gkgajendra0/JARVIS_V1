@@ -258,7 +258,6 @@ def test_model_target_registry_digest_changes_with_target_contract() -> None:
     assert first.digest() != second.digest()
 
 
-
 def test_chatgpt_plan_work_pool_has_no_paid_fallback_by_default() -> None:
     adapters = ModelAdapterRegistry(
         (
