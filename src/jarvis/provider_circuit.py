@@ -47,7 +47,7 @@ class BackgroundProviderCircuit:
         clock: Callable[[], float] = time.time,
         failed_attempts: int = 0,
         blocked_until: float = 0.0,
-        on_change: Callable[["BackgroundProviderCircuit"], None] | None = None,
+        on_change: Callable[[BackgroundProviderCircuit], None] | None = None,
     ) -> None:
         if isinstance(failed_attempts, bool) or int(failed_attempts) < 0:
             raise ValueError("failed_attempts must be a non-negative integer")
