@@ -82,6 +82,26 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.speaker_shadow_enabled is True
 
 
+def test_development_test_image_accepts_new_key_and_legacy_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("JARVIS_RUNTIME_ENV_OVERRIDES", "true")
+    monkeypatch.setenv(
+        "JARVIS_DEV_TEST_DOCKER_IMAGE",
+        "legacy-image:local",
+    )
+
+    legacy = JarvisConfig.from_environment()
+    assert legacy.development_test_docker_image == "legacy-image:local"
+
+    monkeypatch.setenv(
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+        "canonical-image:local",
+    )
+    canonical = JarvisConfig.from_environment()
+    assert canonical.development_test_docker_image == "canonical-image:local"
+
+
 def test_tts_defaults_to_current_quality_first_model() -> None:
     config = JarvisConfig()
     assert config.gemini_tts_model == "gemini-3.8-flash-tts"
