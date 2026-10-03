@@ -142,7 +142,11 @@ async def test_tool_port_reuses_executor_and_persists_work_step(tmp_path) -> Non
     result = await port.invoke("read_file", {"path": "src/demo.py"})
 
     assert result["ok"] is True
+    assert result["_jarvis"]["tool"] == "read_file"
+    assert result["_jarvis"]["action"] == "dev_read_file"
     steps = store.list_steps("work_demo")
+    assert result["_jarvis"]["step_id"] == steps[0].step_id
+    assert result["_jarvis"]["evidence_ref"] == f"workstep:{steps[0].step_id}"
     assert len(steps) == 1
     assert steps[0].kind == "dev_read_file"
     assert steps[0].state.value == "completed"
