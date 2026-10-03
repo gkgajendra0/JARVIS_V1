@@ -23,7 +23,10 @@ import sys
 import tempfile
 from dataclasses import asdict
 
-from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
+from jarvis.chatgpt_plan import (
+    CHATGPT_PLAN_PROVIDER_ID,
+    ChatGPTPlanSessionManager,
+)
 from jarvis.development_engine import (
     CodexPlanDevelopmentEngine,
     DevelopmentDisposition,
@@ -35,6 +38,10 @@ from jarvis.development_engine import (
 from jarvis.development_engine.codex import (
     REVIEWED_CODEX_SDK_VERSION,
     OfficialCodexRuntimeFactory,
+)
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
 )
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
@@ -115,9 +122,18 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
     image_ready = docker_ready and _docker_image_available(test_image)
     plan = ChatGPTPlanSessionManager()
     chatgpt_plan_connected = plan.is_connected()
+    provider_circuits = BackgroundProviderCircuitRegistry()
+    subscription_circuit = provider_circuits.circuit(
+        provider_circuit_key(
+            provider=CHATGPT_PLAN_PROVIDER_ID,
+            model=model,
+        )
+    )
+    circuit_allows_request = subscription_circuit.allow_request()
+    circuit_remaining_seconds = round(subscription_circuit.remaining_seconds, 3)
     model_catalog_error = None
-    model_visible = False
-    if chatgpt_plan_connected and model:
+    model_visible = None
+    if chatgpt_plan_connected and model and circuit_allows_request:
         try:
             model_visible = model in {item.slug for item in plan.list_models()}
         except Exception as exc:  # noqa: BLE001 - preflight reports provider readiness
@@ -138,17 +154,27 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
         "docker_available": docker_ready,
         "test_image_available": image_ready,
         "chatgpt_plan_connected": chatgpt_plan_connected,
+        "chatgpt_plan_circuit_allows_request": circuit_allows_request,
         "development_model_visible": model_visible,
         "openai_codex_installed": codex_installed,
         "openai_codex_reviewed_version": (codex_version == REVIEWED_CODEX_SDK_VERSION),
     }
     return {
         "schema": "jarvis.development_engine_owner_preflight.v1",
-        "passed": all(checks.values()),
+        "passed": all(value is True for value in checks.values()),
         "model": model,
         "test_image": test_image,
         "openai_codex_version": codex_version,
         "model_catalog_error": model_catalog_error,
+        "chatgpt_plan_subscription_circuit": {
+            "key": provider_circuit_key(
+                provider=CHATGPT_PLAN_PROVIDER_ID,
+                model=model,
+            ),
+            "failed_attempts": subscription_circuit.failed_attempts,
+            "allows_request": circuit_allows_request,
+            "remaining_seconds": circuit_remaining_seconds,
+        },
         "checks": checks,
         "quota_consumed": False,
     }
@@ -216,6 +242,19 @@ async def _run_proof(
         raise RuntimeError(
             "JARVIS is not connected to ChatGPT-plan usage. Run the existing "
             "ChatGPT-plan sign-in flow first."
+        )
+    provider_circuits = BackgroundProviderCircuitRegistry()
+    subscription_circuit = provider_circuits.circuit(
+        provider_circuit_key(
+            provider=CHATGPT_PLAN_PROVIDER_ID,
+            model=model,
+        )
+    )
+    if not subscription_circuit.allow_request():
+        remaining = max(1, int(subscription_circuit.remaining_seconds))
+        raise RuntimeError(
+            "Shared ChatGPT-plan subscription capacity is still cooling down for "
+            f"approximately {remaining} seconds. The owner proof will not probe it."
         )
     visible_models = {item.slug for item in plan.list_models()}
     if model not in visible_models:
@@ -295,12 +334,18 @@ async def _run_proof(
             model=model,
             sessions=sessions,
             state_dir=root / "codex",
+            provider_circuit=subscription_circuit,
         )
         coordinator = DevelopmentEngineCoordinator(
             engine=engine,
             sessions=sessions,
-            resources=ResourceLeaseManager({"development_intelligence": 1}),
-            resource_keys=("development_intelligence",),
+            resources=ResourceLeaseManager(
+                {
+                    "development_intelligence": 1,
+                    "provider_api": 1,
+                }
+            ),
+            resource_keys=("development_intelligence", "provider_api"),
         )
 
         first = await coordinator.execute(
@@ -401,6 +446,18 @@ async def _run_proof(
                 thread_resumed_after_runtime_restart
             ),
             "cloud_engine_invocations_expected": 1,
+            "chatgpt_plan_subscription_circuit": {
+                "key": provider_circuit_key(
+                    provider=CHATGPT_PLAN_PROVIDER_ID,
+                    model=model,
+                ),
+                "failed_attempts": subscription_circuit.failed_attempts,
+                "allows_request": subscription_circuit.allow_request(),
+                "remaining_seconds": round(
+                    subscription_circuit.remaining_seconds,
+                    3,
+                ),
+            },
             "progress": progress,
             "checks": checks,
         }
