@@ -41,6 +41,7 @@ from jarvis.work.brain import (
 )
 from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.reasoner import _SYSTEM_PROMPT, RoutedWorkReasoner, _WorkDecisionModel
+from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -274,6 +275,7 @@ def _routed_reasoner(
     adapter: ReasoningAdapter | None = None,
     provider_id: str = "fake",
     cost_profile: CostProfile | None = None,
+    resources: ResourceLeaseManager | None = None,
 ) -> tuple[
     SQLiteWorkStore,
     ModelRoutingStore,
@@ -310,8 +312,68 @@ def _routed_reasoner(
         invoker=ModelInvoker(adapters),
         primary_target_id="work.fake.default",
         clock=lambda: 101.0,
+        resources=resources,
+        resource_keys=(() if resources is None else ("provider_api",)),
     )
     return work_store, routing_store, reasoner, selected_adapter
+
+
+@pytest.mark.asyncio
+async def test_shared_provider_resource_serializes_parallel_reasoning(
+    tmp_path: Path,
+) -> None:
+    class ConcurrencyAdapter(ReasoningAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active = 0
+            self.max_active = 0
+
+        async def invoke_structured_with_telemetry(
+            self,
+            *,
+            target: ModelTarget,
+            system_prompt: str,
+            input_payload: dict,
+            response_model: type[BaseModel],
+            request_context: ModelInvocationContext,
+        ) -> StructuredOutputTelemetry:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            try:
+                await asyncio.sleep(0.02)
+                return await super().invoke_structured_with_telemetry(
+                    target=target,
+                    system_prompt=system_prompt,
+                    input_payload=input_payload,
+                    response_model=response_model,
+                    request_context=request_context,
+                )
+            finally:
+                self.active -= 1
+
+    resources = ResourceLeaseManager({"provider_api": 1})
+    adapter = ConcurrencyAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        resources=resources,
+    )
+    first = _work(work_store)
+    second = WorkItem(
+        request="Perform another bounded engineering step",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="session-route",
+        source_turn_id="turn-route-2",
+    )
+    work_store.create(second)
+
+    await asyncio.gather(
+        reasoner.decide(_brain_request(first)),
+        reasoner.decide(_brain_request(second)),
+    )
+
+    assert len(adapter.calls) == 2
+    assert adapter.max_active == 1
 
 
 @pytest.mark.asyncio
