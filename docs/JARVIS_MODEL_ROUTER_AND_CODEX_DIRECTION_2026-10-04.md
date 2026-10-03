@@ -304,3 +304,18 @@ References:
 - https://ollama.com/library/qwen3-coder
 - https://github.com/ollama/ollama/blob/main/docs/api.md
 - https://github.com/ollama/ollama/issues/17004
+
+
+## 2026-10-04 priority clarification — compression first
+
+The owner has explicitly deferred the ephemeral local capability-development brain.
+Do not implement or benchmark a dedicated local coding model in the current slice.
+
+Current order:
+1. integrate and benchmark local prompt compression (LLMLingua-2 first);
+2. measure semantic equivalence and real ChatGPT-plan token reduction;
+3. retain normal existing JARVIS local-brain behavior unchanged;
+4. revisit a temporary local coding brain only if compression plus existing/cloud model
+   routing still leaves capability-development cost or quota pressure materially high.
+
+This prevents solving a problem that prompt compression may already remove.
