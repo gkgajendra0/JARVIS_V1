@@ -682,6 +682,74 @@ class WorkEngine:
             self._store.save(resumed, expected_version=work.version)
         return None
 
+    def _waiting_owner_has_typed_executor_evidence(self, work: WorkItem) -> bool:
+        """Return True only for owner waits emitted by a typed executor boundary."""
+
+        current_step_id = work.current_step_id
+        if not current_step_id:
+            return False
+        step = next(
+            (
+                candidate
+                for candidate in self._store.list_steps(work.work_id)
+                if candidate.step_id == current_step_id
+            ),
+            None,
+        )
+        return bool(
+            step is not None
+            and step.state.value == "completed"
+            and step.observation.get("needs_owner") is True
+        )
+
+    def reconcile_waiting_model_owner_requests(self) -> tuple[str, ...]:
+        """Migrate legacy model-authored owner waits through the current handler.
+
+        Before the Phase-9 architecture-revision handler existed, free-form model
+        needs_owner decisions could be persisted as WAITING_FOR_OWNER. On restart
+        those stale deliveries must not bypass the current lifecycle. Typed executor
+        owner-input boundaries are preserved because their completed WorkStep carries
+        explicit needs_owner evidence and a bound current_step_id.
+        """
+
+        handler = self._model_owner_request_handler
+        if handler is None:
+            return ()
+
+        reconciled: list[str] = []
+        waiting = self._store.list(
+            states=(WorkState.WAITING_FOR_OWNER,),
+            limit=10_000,
+        )
+        for work in waiting:
+            if self._waiting_owner_has_typed_executor_evidence(work):
+                continue
+            question = (
+                work.status_detail
+                or "This background work needs additional owner input."
+            )
+            handled_reason = handler(work, question)
+            if handled_reason is None:
+                continue
+            normalized_reason = " ".join(str(handled_reason).split()).strip()
+            if not normalized_reason:
+                raise ValueError(
+                    "model owner request handler returned an empty reason"
+                )
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal:
+                continue
+            if latest.state is not WorkState.WAITING_FOR_OWNER:
+                continue
+            cancelled = latest.transition(
+                WorkState.CANCELLED,
+                status_detail=normalized_reason,
+                current_step_id=latest.current_step_id,
+            )
+            self._store.save(cancelled, expected_version=latest.version)
+            reconciled.append(work.work_id)
+        return tuple(reconciled)
+
     def reconcile_waiting_owner_deliveries(self) -> tuple[str, ...]:
         """Restore a pending OWNER_INPUT for every waiting non-silent WorkItem.
 
