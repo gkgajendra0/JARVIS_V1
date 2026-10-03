@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import jarvis.brain_routing.work as brain_routing_work
 from jarvis.brain_routing.deterministic import (
     DeterministicResolution,
     DeterministicResolutionStatus,
@@ -299,6 +300,47 @@ async def test_shadow_retry_backfills_missing_context_snapshot(tmp_path: Path) -
             "history_manifest": context_pack.history_manifest_payload(),
         }
     )
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_preserves_snapshot_from_older_reasoning_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    store, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
+    request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=context_pack,
+    )
+
+    first = await router.decide(request)
+    record = route_store.list_for_work(work.work_id)[0]
+    original = route_store.get_context_snapshot(record.route_request_id)
+    assert original is not None
+    assert original["reasoner_contract_digest"] == work_reasoning_contract_digest()
+
+    monkeypatch.setattr(
+        brain_routing_work,
+        "work_reasoning_contract_digest",
+        lambda: "f" * 64,
+    )
+
+    second = await router.decide(request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    assert route_store.get_context_snapshot(record.route_request_id) == original
 
 
 @pytest.mark.asyncio
