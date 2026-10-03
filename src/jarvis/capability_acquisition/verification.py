@@ -213,6 +213,60 @@ def _completed_steps(
     ]
 
 
+def validate_development_engine_completion_evidence(
+    work: WorkItem,
+    steps: tuple[WorkStep, ...],
+    engine_result: dict[str, object],
+) -> None:
+    """Bind a COMPLETED specialist claim to canonical WorkStep evidence."""
+
+    ticket_id = str(engine_result.get("ticket_id") or "").strip()
+    ticket_digest = str(engine_result.get("ticket_digest") or "").strip().casefold()
+    if (
+        not ticket_id
+        or work.result.get("development_ticket_id") != ticket_id
+        or work.result.get("development_ticket_digest") != ticket_digest
+    ):
+        raise CapabilityCandidateError(
+            "development_engine_ticket_drift",
+            "DevelopmentEngine completion is not bound to the canonical ticket.",
+        )
+
+    candidate_revision = str(
+        engine_result.get("candidate_revision") or ""
+    ).strip().casefold()
+    canonical_commit = str(work.result.get("commit") or "").strip().casefold()
+    if not candidate_revision or candidate_revision != canonical_commit:
+        raise CapabilityCandidateError(
+            "development_engine_candidate_drift",
+            "DevelopmentEngine completion does not match the canonical candidate commit.",
+        )
+
+    raw_refs = engine_result.get("test_evidence_refs")
+    if not isinstance(raw_refs, list) or not raw_refs:
+        raise CapabilityCandidateError(
+            "development_engine_test_evidence_missing",
+            "DevelopmentEngine completion has no canonical test evidence references.",
+        )
+    valid_test_refs = {
+        f"workstep:{step.step_id}"
+        for step in steps
+        if step.kind == "dev_run_tests"
+        and step.state.value == "completed"
+        and step.observation.get("passed") is True
+    }
+    requested_refs = {
+        str(item).strip()
+        for item in raw_refs
+        if str(item).strip()
+    }
+    if not requested_refs or not requested_refs.issubset(valid_test_refs):
+        raise CapabilityCandidateError(
+            "development_engine_test_evidence_drift",
+            "DevelopmentEngine completion references non-canonical passing tests.",
+        )
+
+
 def ensure_capability_substrate_requirements_current(
     store: ChangeStore,
     change_id: str,
@@ -1066,6 +1120,16 @@ class CapabilityAcquisitionDevelopmentCompletionHandler:
                 return ChangeState.FAILED
 
         try:
+            if engine_result is not None:
+                disposition = DevelopmentDisposition(
+                    str(engine_result.get("disposition"))
+                )
+                if disposition is DevelopmentDisposition.COMPLETED:
+                    validate_development_engine_completion_evidence(
+                        work,
+                        self._store.work.list_steps(work.work_id),
+                        engine_result,
+                    )
             result = self._verifier.verify_and_persist(change.change_id)
         except CapabilityCandidateError as exc:
             payload = {
