@@ -48,6 +48,8 @@ def test_c6_owner_harness_supports_direct_script_execution() -> None:
     assert "--fixture-stability-benchmark" in completed.stdout
     assert "--fixture-first-pair-preflight" in completed.stdout
     assert "--fixture-first-pair-benchmark" in completed.stdout
+    assert "--fixture-remaining-preflight" in completed.stdout
+    assert "--fixture-remaining-benchmark" in completed.stdout
 
 
 def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
@@ -534,4 +536,181 @@ async def test_c6_fixture_first_pair_reports_parameter_mismatch(
     assert result["pair_equivalent"] is False
     assert result["case"]["action_equal"] is True
     assert result["case"]["parameters_equal"] is False
+    assert result["c6_apply_decision_equivalence_proven"] is False
+
+
+
+@pytest.mark.asyncio
+async def test_c6_fixture_remaining_preflight_selects_only_uncovered_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden_provider():
+        raise AssertionError("remaining-pairs preflight must not initialize provider")
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _forbidden_provider)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _forbidden_provider)
+
+    result = await c6._run_fixture_decision_benchmark(
+        model="reviewed-model",
+        max_cases=2,
+        min_equivalent_cases=2,
+        preflight_only=True,
+        case_ids=(
+            "development_ready_for_local_commit",
+            "research_requires_reresolution_after_new_evidence",
+        ),
+    )
+
+    assert result["fixture_preflight_ready"] is True
+    assert result["subset_mode"] is True
+    assert result["fixture_cases"] == 0
+    assert [case["case_id"] for case in result["planned_cases"]] == [
+        "development_ready_for_local_commit",
+        "research_requires_reresolution_after_new_evidence",
+    ]
+    assert result["c6_apply_decision_equivalence_proven"] is False
+
+
+@pytest.mark.asyncio
+async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self) -> bool:
+            return True
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self) -> bool:
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **kwargs: object(),
+    )
+
+    calls: list[tuple[str, WorkContextMode]] = []
+
+    async def _evaluate(_client, request):
+        calls.append((request.work.work_id, request.context_mode))
+        if request.work.work_type is WorkType.DEVELOPMENT:
+            decision = BrainDecision(
+                action="dev_commit",
+                summary="Equivalent development decision",
+                parameters={"message": "test(c6): finalize reviewed change"},
+            )
+        else:
+            decision = BrainDecision(
+                action="acquisition_resolve",
+                summary="Equivalent research decision",
+                parameters={},
+            )
+        return (
+            decision,
+            SimpleNamespace(
+                usage={"input_tokens": len(calls)},
+                usage_observed=True,
+                latency_ms=float(len(calls)),
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_fixture_decision_benchmark(
+        model="reviewed-model",
+        max_cases=2,
+        min_equivalent_cases=2,
+        case_ids=(
+            "development_ready_for_local_commit",
+            "research_requires_reresolution_after_new_evidence",
+        ),
+    )
+
+    assert len(calls) == 4
+    assert result["fixture_cases"] == 2
+    assert result["equivalent_cases"] == 2
+    assert result["mismatch_cases"] == 0
+    assert result["all_fixture_cases_equivalent"] is True
+    assert result["c6_apply_decision_equivalence_proven"] is False
+
+
+@pytest.mark.asyncio
+async def test_c6_fixture_remaining_pairs_stop_on_first_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self) -> bool:
+            return True
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self) -> bool:
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **kwargs: object(),
+    )
+
+    calls = 0
+
+    async def _evaluate(_client, request):
+        nonlocal calls
+        calls += 1
+        message = (
+            "test(c6): finalize reviewed change"
+            if request.context_mode is WorkContextMode.SHADOW
+            else "test(c6): finalize change"
+        )
+        return (
+            BrainDecision(
+                action="dev_commit",
+                summary="Intentional remaining-pair mismatch",
+                parameters={"message": message},
+            ),
+            SimpleNamespace(
+                usage={"input_tokens": calls},
+                usage_observed=True,
+                latency_ms=float(calls),
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_fixture_decision_benchmark(
+        model="reviewed-model",
+        max_cases=2,
+        min_equivalent_cases=2,
+        case_ids=(
+            "development_ready_for_local_commit",
+            "research_requires_reresolution_after_new_evidence",
+        ),
+    )
+
+    assert calls == 2
+    assert result["fixture_cases"] == 1
+    assert result["mismatch_cases"] == 1
+    assert result["cases"][0]["parameters_equal"] is False
     assert result["c6_apply_decision_equivalence_proven"] is False
