@@ -83,6 +83,20 @@ class Phase9DevelopmentTicketBuilder:
             raise TypeError("store must be ChangeStore")
         self._store = store
 
+    def is_phase9_research_work(self, work: WorkItem) -> bool:
+        if work.work_type is not WorkType.RESEARCH:
+            return False
+        stage = self._store.stage_for_work(work.work_id)
+        if stage is None:
+            return False
+        change = self._store.require(stage.change_id)
+        return bool(
+            change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+            and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+            and stage.stage_key
+            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+        )
+
     def is_phase9_development_work(self, work: WorkItem) -> bool:
         if work.work_type is not WorkType.DEVELOPMENT:
             return False
@@ -459,6 +473,73 @@ class Phase9DevelopmentEngineExecutor:
                 observation=observation,
             )
         return observation
+
+
+class Phase9ResearchControlPlaneDecider:
+    """Handle only deterministic Phase-9 research bookkeeping without cloud reasoning."""
+
+    _EVIDENCE_KINDS = frozenset(
+        {
+            "research_web",
+            "acq_discover_local",
+            "acq_record_candidate",
+            "acq_verify_pypi_sdk",
+        }
+    )
+
+    def __init__(self, builder: Phase9DevelopmentTicketBuilder) -> None:
+        self._builder = builder
+
+    def __call__(
+        self,
+        work: WorkItem,
+        actions: tuple[BrainAction, ...],
+        steps: tuple[WorkStep, ...],
+    ) -> BrainDecision | None:
+        if not self._builder.is_phase9_research_work(work):
+            return None
+        action_names = {item.name for item in actions}
+
+        inspect = "acq_inspect_goal"
+        if inspect in action_names and not any(
+            step.kind == inspect and step.state.value == "completed"
+            for step in steps
+        ):
+            return BrainDecision(
+                action=inspect,
+                summary="Inspect the canonical capability goal before research.",
+                parameters={},
+            )
+
+        resolve = "acq_resolve"
+        if resolve not in action_names:
+            return None
+        latest_evidence = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.kind in self._EVIDENCE_KINDS
+                and step.state.value == "completed"
+            ),
+            default=-1,
+        )
+        latest_resolve = max(
+            (
+                index
+                for index, step in enumerate(steps)
+                if step.kind == resolve and step.state.value == "completed"
+            ),
+            default=-1,
+        )
+        if latest_evidence > latest_resolve:
+            return BrainDecision(
+                action=resolve,
+                summary=(
+                    "Re-resolve capability candidates after new canonical evidence."
+                ),
+                parameters={},
+            )
+        return None
 
 
 class Phase9DevelopmentControlPlaneDecider:
