@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from .contracts import DevelopmentResultV1, DevelopmentTicketV1
+
+
+@dataclass(frozen=True, slots=True)
+class DevelopmentToolSpecV1:
+    """Provider-neutral projection of one governed development operation."""
+
+    name: str
+    description: str
+    parameter_schema: Mapping[str, Any]
 
 
 class DevelopmentToolPort(Protocol):
@@ -18,6 +28,9 @@ class DevelopmentToolPort(Protocol):
 
     @property
     def tool_names(self) -> tuple[str, ...]: ...
+
+    @property
+    def tool_specs(self) -> tuple[DevelopmentToolSpecV1, ...]: ...
 
     async def invoke(
         self,
