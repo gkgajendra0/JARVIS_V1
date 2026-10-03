@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from typing import Any
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,6 +18,7 @@ from jarvis.development_engine import (
 from jarvis.development_engine.codex import (
     CodexPlanDevelopmentEngine,
     CodexTurnResponse,
+    _OfficialCodexThread,
 )
 from jarvis.provider_circuit import BackgroundProviderCircuit
 from jarvis.work.models import WorkItem, WorkType
@@ -817,3 +819,27 @@ async def test_codex_engine_propagates_governed_owner_input_boundary(tmp_path) -
 
     assert captured.value.sensitive is True
     assert captured.value.input_key == "pairing_pin"
+
+
+def test_official_codex_usage_uses_last_turn_not_cumulative_thread_total() -> None:
+    usage = SimpleNamespace(
+        last=SimpleNamespace(
+            input_tokens=100,
+            output_tokens=20,
+            total_tokens=120,
+        ),
+        total=SimpleNamespace(
+            input_tokens=900,
+            output_tokens=100,
+            total_tokens=1000,
+        ),
+    )
+    result = SimpleNamespace(usage=usage)
+
+    projected = _OfficialCodexThread._usage(result)
+
+    assert projected == DevelopmentUsageV1(
+        input_tokens=100,
+        output_tokens=20,
+        total_tokens=120,
+    )
