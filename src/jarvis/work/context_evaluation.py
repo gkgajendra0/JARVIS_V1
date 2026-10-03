@@ -74,4 +74,3 @@ def compare_recorded_context_decision(
             recorded.parameters_digest == canonical_digest(optimized.parameters)
         ),
     )
-
