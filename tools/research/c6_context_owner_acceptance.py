@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 
+from jarvis.brain_routing.models import BrainRouteKind
+from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.work.context import WorkContextAssembler
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
@@ -47,6 +49,7 @@ def main() -> int:
         payload_codec=build_default_work_payload_codec(path),
     )
     assembler = WorkContextAssembler()
+    route_store = BrainRouteStore(store)
     rows: list[dict[str, object]] = []
 
     for work in store.list(limit=500):
@@ -69,6 +72,17 @@ def main() -> int:
             if legacy_chars
             else 0.0
         )
+        routes = route_store.list_for_work(work.work_id)
+        model_routes = tuple(
+            route for route in routes if route.route_kind is BrainRouteKind.MODEL
+        )
+        comparable_routes = tuple(
+            route
+            for route in model_routes
+            if route.goal_complete is not None
+            and route.needs_owner is not None
+            and route.parameters_digest is not None
+        )
         rows.append(
             {
                 "work_id": work.work_id,
@@ -80,6 +94,8 @@ def main() -> int:
                 "selected_steps": len(pack.selected_steps),
                 "omitted_steps": pack.omitted_step_count,
                 "latest_step_retained": latest_retained,
+                "model_route_count": len(model_routes),
+                "c6_comparable_model_routes": len(comparable_routes),
             }
         )
 
@@ -96,6 +112,10 @@ def main() -> int:
         for row in evaluated
         if int(row["history_steps"]) > 12
     ]
+    model_route_count = sum(int(row["model_route_count"]) for row in evaluated)
+    comparable_route_count = sum(
+        int(row["c6_comparable_model_routes"]) for row in evaluated
+    )
     result = {
         "status": "PASS" if evaluated and not failures else "INCOMPLETE",
         "model_api_called": False,
@@ -107,6 +127,19 @@ def main() -> int:
             round(sum(reductions) / len(reductions), 2) if reductions else None
         ),
         "latest_step_retention_failures": len(failures),
+        "model_route_count": model_route_count,
+        "c6_comparable_model_routes": comparable_route_count,
+        "c6_decision_provenance_coverage_percent": (
+            None
+            if model_route_count == 0
+            else round(comparable_route_count * 100.0 / model_route_count, 2)
+        ),
+        "c6_apply_decision_equivalence_proven": False,
+        "c6_apply_note": (
+            "This zero-model harness measures context reduction and durable legacy "
+            "decision provenance only. APPLY still requires optimized decision replay "
+            "with full safety-field equivalence."
+        ),
         "items": evaluated,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
