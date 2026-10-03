@@ -561,6 +561,24 @@ def _provider_result(
     )
 
 
+def _provider_thread_missing(error: BaseException) -> bool:
+    """Return True only when Codex definitively reports missing thread state."""
+
+    name = type(error).__name__
+    message = " ".join(str(error).split()).casefold()
+    if name not in {"InvalidParamsError", "InvalidRequestError"}:
+        return False
+    return "thread" in message and any(
+        marker in message
+        for marker in (
+            "not found",
+            "does not exist",
+            "unknown thread",
+            "missing thread",
+        )
+    )
+
+
 class CodexPlanDevelopmentEngine:
     """Long-turn Codex engineering specialist under the JARVIS control plane."""
 
