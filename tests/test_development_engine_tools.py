@@ -97,6 +97,7 @@ class CommitExecutor:
 
 def _ticket(*, tools: tuple[str, ...]) -> DevelopmentTicketV1:
     return DevelopmentTicketV1.create(
+        request="Develop the approved capability.",
         work_id="work_demo",
         engineering_change_id="change_demo",
         goal_id="goal_demo",
