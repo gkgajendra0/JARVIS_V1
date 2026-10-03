@@ -278,6 +278,13 @@ def test_work_prompt_compression_defaults_off_and_validates_mode() -> None:
         JarvisConfig(work_prompt_compression_mode="automatic")
 
 
+    with pytest.raises(ValueError, match="combined-context acceptance"):
+        JarvisConfig(
+            work_context_mode="apply",
+            work_prompt_compression_mode="apply",
+        )
+
+
 def test_global_brain_router_defaults_to_shadow_and_validates_mode() -> None:
     assert JarvisConfig().global_brain_router_mode == "shadow"
     assert (
