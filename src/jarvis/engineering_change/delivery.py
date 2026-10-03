@@ -73,7 +73,7 @@ def reconcile_owner_change_gates(coordinator: ChangeCoordinator) -> tuple[str, .
         stage = next(
             (
                 item
-                for item in store.list_stages(change_id)
+                for item in reversed(store.list_stages(change_id))
                 if item.stage_key == source_stage.stage_key
             ),
             None,
