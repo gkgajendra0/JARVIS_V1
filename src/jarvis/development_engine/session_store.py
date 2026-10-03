@@ -256,7 +256,10 @@ class DevelopmentSessionStore:
         result: DevelopmentResultV1,
         reasoning_fingerprint: str,
     ) -> DevelopmentSessionRecord:
-        if result.ticket_id != ticket.ticket_id or result.ticket_digest != ticket.digest:
+        if (
+            result.ticket_id != ticket.ticket_id
+            or result.ticket_digest != ticket.digest
+        ):
             raise ValueError("development result is not bound to this ticket")
         fingerprint = str(reasoning_fingerprint).strip().casefold()
         if not fingerprint:
