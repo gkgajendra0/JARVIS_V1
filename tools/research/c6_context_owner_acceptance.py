@@ -42,6 +42,10 @@ from jarvis.work.context_evaluation import (
     reconstruct_recorded_context_request,
 )
 from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.prompt_compression import (
+    DEFAULT_LLMLINGUA2_MODEL,
+    LLMLingua2WorkPayloadCompressor,
+)
 from jarvis.work.reasoner import (
     _work_input_payload,
     evaluate_structured_work_request,
