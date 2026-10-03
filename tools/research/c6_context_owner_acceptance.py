@@ -975,6 +975,222 @@ async def _run_fixture_decision_benchmark(
     }
 
 
+def _llmlingua_fixture_cases(
+    case_ids: tuple[str, ...] | None,
+):
+    cases = build_c6_benchmark_cases()
+    if case_ids is None:
+        return cases
+    by_id = {case.case_id: case for case in cases}
+    return tuple(by_id[case_id] for case_id in case_ids if case_id in by_id)
+
+
+async def _run_llmlingua_fixture_benchmark(
+    *,
+    model: str | None,
+    compressor_model: str,
+    compression_rate: float,
+    device_map: str,
+    case_ids: tuple[str, ...] | None = None,
+    preflight_only: bool = False,
+    compressor_factory=None,
+) -> dict[str, object]:
+    """Compare exact legacy payloads with locally compressed full-context payloads."""
+
+    selected = _llmlingua_fixture_cases(case_ids)
+    requested_ids = list(case_ids or ())
+    missing_ids = (
+        []
+        if case_ids is None
+        else [case_id for case_id in case_ids if case_id not in {c.case_id for c in selected}]
+    )
+    if compressor_factory is None:
+        compressor = LLMLingua2WorkPayloadCompressor(
+            model_name=compressor_model,
+            rate=compression_rate,
+            device_map=device_map,
+        )
+    else:
+        compressor = compressor_factory()
+
+    prepared: list[tuple] = []
+    compression_failures: list[dict[str, object]] = []
+    for case in selected:
+        legacy_request = replace(case.request, context_mode=WorkContextMode.SHADOW)
+        legacy_payload = _work_input_payload(legacy_request)
+        try:
+            compressed = compressor.compress_payload(legacy_payload)
+        except Exception as exc:  # noqa: BLE001 - explicit local-compressor boundary
+            compression_failures.append(
+                {
+                    "case_id": case.case_id,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                }
+            )
+            continue
+        prepared.append((case, legacy_request, legacy_payload, compressed))
+
+    all_reduced = bool(prepared) and all(item[3].reduced for item in prepared)
+    ready = (
+        bool(selected)
+        and not missing_ids
+        and not compression_failures
+        and len(prepared) == len(selected)
+        and all_reduced
+    )
+    planned_cases = [
+        {
+            "case_id": case.case_id,
+            "work_id": case.request.work.work_id,
+            "work_type": case.request.work.work_type.value,
+            "legacy_chars": compressed.original_chars,
+            "compressed_chars": compressed.compressed_chars,
+            "reduction_percent": compressed.reduction_percent,
+            "estimated_legacy_tokens": compressed.estimated_original_tokens,
+            "estimated_compressed_tokens": compressed.estimated_compressed_tokens,
+            "candidate_strings": compressed.candidate_strings,
+            "compressed_strings": compressed.compressed_strings,
+            "compression_latency_ms": round(compressed.latency_ms, 2),
+            "changed_paths": list(compressed.changed_paths),
+            "legacy_request_digest": canonical_digest(legacy_payload),
+            "compressed_request_digest": canonical_digest(compressed.payload),
+        }
+        for case, _request, legacy_payload, compressed in prepared
+    ]
+    common: dict[str, object] = {
+        "corpus_source": "checked_in_descriptor_fixture",
+        "model": model,
+        "compressor": "llmlingua2",
+        "compressor_model": compressor_model,
+        "compression_rate": compression_rate,
+        "device_map": device_map,
+        "requested_case_ids": requested_ids,
+        "missing_case_ids": missing_ids,
+        "preflight_only": bool(preflight_only),
+        "preflight_ready": ready,
+        "production_routing_mutated": False,
+        "actions_executed": False,
+        "paid_fallback_enabled": False,
+        "provider_circuit_updated": False,
+        "c6_apply_decision_equivalence_proven": False,
+        "compression_failures": compression_failures,
+        "planned_cases": planned_cases,
+    }
+    if preflight_only or not ready:
+        return {
+            **common,
+            "model_calls": 0,
+            "fixture_cases": 0,
+            "equivalent_cases": 0,
+            "mismatch_cases": 0,
+            "all_fixture_cases_equivalent": False,
+            "all_fixture_cases_reduced": all_reduced,
+            "cases": [],
+        }
+
+    live_model = str(model or "").strip()
+    if not live_model:
+        raise ValueError("ChatGPT-plan model is required for LLMLingua live benchmark")
+
+    circuit = BackgroundProviderCircuitRegistry().circuit(
+        provider_circuit_key(provider=CHATGPT_PLAN_PROVIDER_ID, model=live_model)
+    )
+    if not circuit.allow_request():
+        raise RuntimeError(
+            "ChatGPT-plan provider circuit is cooling down; "
+            f"retry after about {int(circuit.remaining_seconds)} seconds"
+        )
+
+    plan = ChatGPTPlanSessionManager()
+    if not plan.is_connected():
+        raise RuntimeError("ChatGPT-plan connection is unavailable")
+    visible = {item.slug for item in plan.list_models()}
+    if live_model not in visible:
+        raise RuntimeError(
+            f"C6 LLMLingua benchmark model {live_model!r} is not visible to the "
+            "connected ChatGPT plan"
+        )
+    client = build_chatgpt_plan_structured_output_client(
+        model=live_model,
+        session_manager=plan,
+        provider_retries=False,
+    )
+
+    results: list[dict[str, object]] = []
+    model_calls = 0
+    for case, legacy_request, legacy_payload, compressed in prepared:
+        legacy, legacy_telemetry = await evaluate_structured_work_request(
+            client,
+            legacy_request,
+        )
+        model_calls += 1
+        compressed_decision, compressed_telemetry = (
+            await evaluate_structured_work_request(
+                client,
+                legacy_request,
+                provider_payload_override=compressed.payload,
+            )
+        )
+        model_calls += 1
+        comparison = compare_context_decisions(legacy, compressed_decision)
+        results.append(
+            {
+                "case_id": case.case_id,
+                "work_id": case.request.work.work_id,
+                "work_type": case.request.work.work_type.value,
+                "equivalent": comparison.equivalent,
+                "legacy_action": legacy.action,
+                "compressed_action": compressed_decision.action,
+                "action_equal": comparison.action_equal,
+                "legacy_parameters": dict(legacy.parameters),
+                "compressed_parameters": dict(compressed_decision.parameters),
+                "legacy_parameters_digest": canonical_digest(legacy.parameters),
+                "compressed_parameters_digest": canonical_digest(
+                    compressed_decision.parameters
+                ),
+                "goal_complete_equal": comparison.goal_complete_equal,
+                "needs_owner_equal": comparison.needs_owner_equal,
+                "owner_question_equal": comparison.owner_question_equal,
+                "parameters_equal": comparison.parameters_equal,
+                "legacy_chars": compressed.original_chars,
+                "compressed_chars": compressed.compressed_chars,
+                "reduction_percent": compressed.reduction_percent,
+                "candidate_strings": compressed.candidate_strings,
+                "compressed_strings": compressed.compressed_strings,
+                "compression_latency_ms": round(compressed.latency_ms, 2),
+                "changed_paths": list(compressed.changed_paths),
+                "legacy_request_digest": canonical_digest(legacy_payload),
+                "compressed_request_digest": canonical_digest(compressed.payload),
+                "legacy_usage": dict(legacy_telemetry.usage),
+                "legacy_usage_observed": legacy_telemetry.usage_observed,
+                "legacy_latency_ms": round(legacy_telemetry.latency_ms, 2),
+                "compressed_usage": dict(compressed_telemetry.usage),
+                "compressed_usage_observed": compressed_telemetry.usage_observed,
+                "compressed_latency_ms": round(compressed_telemetry.latency_ms, 2),
+            }
+        )
+        if not comparison.equivalent:
+            break
+
+    equivalent_count = sum(bool(item["equivalent"]) for item in results)
+    mismatch_count = len(results) - equivalent_count
+    return {
+        **common,
+        "preflight_only": False,
+        "model_calls": model_calls,
+        "fixture_cases": len(results),
+        "equivalent_cases": equivalent_count,
+        "mismatch_cases": mismatch_count,
+        "all_fixture_cases_equivalent": bool(results) and mismatch_count == 0,
+        "all_fixture_cases_reduced": all_reduced,
+        # This benchmark validates a new compressor path only. It can never silently
+        # promote the existing C6 APPLY switch.
+        "c6_apply_decision_equivalence_proven": False,
+        "cases": results,
+    }
+
+
 async def _run_decision_replay(
     *,
     store: SQLiteWorkStore,
