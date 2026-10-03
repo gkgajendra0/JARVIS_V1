@@ -172,6 +172,7 @@ class FakeTools:
 
 def _ticket(*, work_id: str = "work_demo") -> DevelopmentTicketV1:
     return DevelopmentTicketV1.create(
+        request="Develop the approved capability.",
         work_id=work_id,
         engineering_change_id="change_demo",
         goal_id="goal_demo",
