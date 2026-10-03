@@ -138,6 +138,7 @@ class JarvisConfig:
     development_engine_enabled: bool = False
     development_engine_model: str | None = None
     work_context_mode: str = "shadow"
+    work_prompt_compression_mode: str = "off"
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
@@ -246,6 +247,19 @@ class JarvisConfig:
         if work_context_mode not in {"off", "shadow", "apply"}:
             raise ValueError("work_context_mode must be one of: off, shadow, apply")
         object.__setattr__(self, "work_context_mode", work_context_mode)
+
+        work_prompt_compression_mode = str(
+            self.work_prompt_compression_mode
+        ).strip().casefold()
+        if work_prompt_compression_mode not in {"off", "shadow", "apply"}:
+            raise ValueError(
+                "work_prompt_compression_mode must be one of: off, shadow, apply"
+            )
+        object.__setattr__(
+            self,
+            "work_prompt_compression_mode",
+            work_prompt_compression_mode,
+        )
 
         brain_router_mode = str(self.global_brain_router_mode).strip().casefold()
         if brain_router_mode not in {"off", "shadow", "apply"}:
@@ -553,6 +567,11 @@ class JarvisConfig:
             work_context_mode=_configured_required_text(
                 "JARVIS_WORK_CONTEXT_MODE",
                 "shadow",
+                machine,
+            ),
+            work_prompt_compression_mode=_configured_required_text(
+                "JARVIS_WORK_PROMPT_COMPRESSION_MODE",
+                "off",
                 machine,
             ),
             global_brain_router_mode=_configured_required_text(
