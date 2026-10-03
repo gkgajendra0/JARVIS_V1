@@ -319,3 +319,58 @@ Preferred architecture investigation:
 
 This is a stronger safety design than weakening C6 equivalence and should also make lower
 model tiers more viable because less governance meaning depends on exact model wording.
+
+
+## Market-solution direction — LLMLingua family (2026-10-04)
+
+Do not build a bespoke Markdown/token-pruning compressor before benchmarking existing
+prompt-compression technology.
+
+Fresh research identifies Microsoft's open-source LLMLingua family as the strongest first
+candidate for C6:
+
+- LLMLingua is explicitly designed to compress prompts before sending them to a stronger
+  black-box LLM;
+- LongLLMLingua adds question-conditioned long-context selection/reordering and is aimed at
+  long-context/RAG workloads;
+- LLMLingua-2 replaces a generative compressor with a much smaller token-classification
+  encoder, is task-agnostic, and the project reports materially faster compression than
+  the original LLMLingua;
+- the implementation supports structured JSON compression and force-preserved tokens /
+  uncompressed regions, which is important for JARVIS canonical IDs, owner constraints,
+  action names, digests and safety contracts;
+- the official BERT-base multilingual LLMLingua-2 checkpoint is approximately 709 MB,
+  making a fully local compressor practical on the owner machine without consuming
+  ChatGPT-plan quota.
+
+Primary references:
+- https://github.com/microsoft/LLMLingua
+- https://www.microsoft.com/en-us/research/project/llmlingua/llmlingua/
+- https://huggingface.co/microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank
+- https://aclanthology.org/2024.findings-acl.57/
+- https://aclanthology.org/2024.acl-long.91/
+
+### Revised C6 experiment
+
+Before adding more custom ContextPack heuristics, compare three payloads on the same fixed
+decision corpus:
+
+A. legacy full canonical provider payload;
+B. current hand-selected C6 ContextPack;
+C. canonical payload passed through a local LLMLingua-2/LongLLMLingua adapter with
+   mandatory JARVIS fields force-preserved.
+
+Measure:
+- exact semantic decision equivalence;
+- safety/owner/parameter equivalence;
+- input tokens;
+- serialized size;
+- compressor latency;
+- compressor CPU/GPU memory;
+- whether canonical IDs/digests/constraints survive byte-for-value;
+- fallback behavior if the compressor is unavailable.
+
+LLMLingua output is model input only. It never becomes canonical JARVIS state.
+
+If C preserves more decision semantics than B at similar/lower token usage, prefer the
+existing compressor technology over additional home-grown summarization rules.
