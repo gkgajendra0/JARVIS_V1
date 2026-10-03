@@ -253,13 +253,9 @@ class ChangeCoordinator:
                 previous_architecture_id = revision_request.payload.get(
                     "previous_architecture_artifact_id"
                 )
-                revision_is_current = (
-                    matching_revision_stage is not None
-                    or (
-                        current_architecture is not None
-                        and previous_architecture_id
-                        == current_architecture.artifact_id
-                    )
+                revision_is_current = matching_revision_stage is not None or (
+                    current_architecture is not None
+                    and previous_architecture_id == current_architecture.artifact_id
                 )
                 if (
                     isinstance(requested_attempt, int)
