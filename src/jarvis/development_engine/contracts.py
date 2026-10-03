@@ -113,17 +113,31 @@ class DevelopmentDisposition(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class DevelopmentUsageV1:
-    """Observed provider usage for one development result when available."""
+    """Measured provider/tool usage for one coherent development result."""
 
     input_tokens: int = 0
+    cached_input_tokens: int = 0
     output_tokens: int = 0
+    reasoning_output_tokens: int = 0
     total_tokens: int = 0
+    model_turns: int = 0
+    tool_calls: int = 0
 
     def __post_init__(self) -> None:
-        for field_name in ("input_tokens", "output_tokens", "total_tokens"):
+        for field_name in (
+            "input_tokens",
+            "cached_input_tokens",
+            "output_tokens",
+            "reasoning_output_tokens",
+            "total_tokens",
+            "model_turns",
+            "tool_calls",
+        ):
             value = getattr(self, field_name)
             if type(value) is not int or value < 0:
                 raise ValueError(f"{field_name} must be a non-negative integer")
+        if self.cached_input_tokens > self.input_tokens:
+            raise ValueError("cached_input_tokens cannot exceed input_tokens")
         if (
             self.total_tokens
             and self.total_tokens < self.input_tokens + self.output_tokens
@@ -135,8 +149,12 @@ class DevelopmentUsageV1:
     def canonical_payload(self) -> dict[str, int]:
         return {
             "input_tokens": self.input_tokens,
+            "cached_input_tokens": self.cached_input_tokens,
             "output_tokens": self.output_tokens,
+            "reasoning_output_tokens": self.reasoning_output_tokens,
             "total_tokens": self.total_tokens,
+            "model_turns": self.model_turns,
+            "tool_calls": self.tool_calls,
         }
 
 
@@ -532,8 +550,14 @@ class DevelopmentResultV1:
                 raise TypeError("durable development usage must be an object")
             usage = DevelopmentUsageV1(
                 input_tokens=int(raw_usage.get("input_tokens", 0)),
+                cached_input_tokens=int(raw_usage.get("cached_input_tokens", 0)),
                 output_tokens=int(raw_usage.get("output_tokens", 0)),
+                reasoning_output_tokens=int(
+                    raw_usage.get("reasoning_output_tokens", 0)
+                ),
                 total_tokens=int(raw_usage.get("total_tokens", 0)),
+                model_turns=int(raw_usage.get("model_turns", 0)),
+                tool_calls=int(raw_usage.get("tool_calls", 0)),
             )
         result = cls.create(
             ticket=ticket,
