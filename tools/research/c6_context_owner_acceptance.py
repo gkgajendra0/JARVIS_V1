@@ -178,6 +178,7 @@ async def _run_decision_replay(
     model: str,
     max_cases: int,
     min_equivalent_cases: int,
+    preflight_only: bool = False,
 ) -> dict[str, object]:
     routing_store = ModelRoutingStore(store)
     candidates, candidate_stats = _replay_candidates(
@@ -294,6 +295,8 @@ async def _run_decision_replay(
             "model": model,
             "requested_max_cases": max_cases,
             "minimum_equivalent_cases": min_equivalent_cases,
+            "replay_preflight_only": bool(preflight_only),
+            "replay_preflight_ready": False,
             "replayed_cases": 0,
             "equivalent_cases": 0,
             "mismatch_cases": 0,
@@ -306,6 +309,53 @@ async def _run_decision_replay(
             "paid_fallback_enabled": False,
             "provider_circuit_updated": False,
             "candidate_stats": candidate_stats,
+            "cases": [],
+        }
+
+    if preflight_only:
+        planned_cases = [
+            {
+                "route_request_id": recorded.route_request_id,
+                "work_id": work.work_id,
+                "work_type": work.work_type.value,
+                "historical_decision_id": historical_attempt.decision_id,
+                "historical_provider_id": historical_attempt.provider_id,
+                "historical_model_id": historical_attempt.model_id,
+                "legacy_chars": legacy_chars,
+                "optimized_chars": optimized_chars,
+                "reduction_percent": round(
+                    (legacy_chars - optimized_chars) * 100.0 / legacy_chars,
+                    2,
+                ),
+            }
+            for (
+                work,
+                recorded,
+                historical_attempt,
+                _replay,
+                legacy_chars,
+                optimized_chars,
+            ) in prepared
+        ]
+        return {
+            "model": model,
+            "requested_max_cases": max_cases,
+            "minimum_equivalent_cases": min_equivalent_cases,
+            "replay_preflight_only": True,
+            "replay_preflight_ready": True,
+            "replayed_cases": 0,
+            "equivalent_cases": 0,
+            "mismatch_cases": 0,
+            "all_replayed_cases_equivalent": False,
+            "all_replayed_cases_reduced": True,
+            "representative_corpus_covered": representative_corpus,
+            "c6_apply_decision_equivalence_proven": False,
+            "production_routing_mutated": False,
+            "actions_executed": False,
+            "paid_fallback_enabled": False,
+            "provider_circuit_updated": False,
+            "candidate_stats": candidate_stats,
+            "planned_cases": planned_cases,
             "cases": [],
         }
 
@@ -389,6 +439,8 @@ async def _run_decision_replay(
         "model": model,
         "requested_max_cases": max_cases,
         "minimum_equivalent_cases": min_equivalent_cases,
+        "replay_preflight_only": False,
+        "replay_preflight_ready": True,
         "replayed_cases": len(cases),
         "equivalent_cases": equivalent_count,
         "mismatch_cases": mismatch_count,
@@ -409,7 +461,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Measure C6 context reduction and optionally replay optimized decisions."
     )
-    parser.add_argument(
+    replay_mode = parser.add_mutually_exclusive_group()
+    replay_mode.add_argument(
         "--decision-replay",
         action="store_true",
         help=(
@@ -417,11 +470,19 @@ def _parser() -> argparse.ArgumentParser:
             "APPLY decisions with durable legacy SHADOW decisions."
         ),
     )
+    replay_mode.add_argument(
+        "--decision-replay-preflight",
+        action="store_true",
+        help=(
+            "Validate exact replay corpus/model lineage and context reduction without "
+            "initializing ChatGPT-plan or consuming model quota."
+        ),
+    )
     parser.add_argument(
         "--model",
         default=None,
         help=(
-            "Optional ChatGPT-plan model override for --decision-replay. "
+            "Optional ChatGPT-plan model override for replay/preflight. "
             "Defaults to the persisted JARVIS_CHATGPT_PLAN_MODEL."
         ),
     )
@@ -561,7 +622,7 @@ def main() -> int:
         ),
         "items": evaluated,
     }
-    if args.decision_replay:
+    if args.decision_replay or args.decision_replay_preflight:
         settings = load_machine_settings()
         model = str(
             args.model
@@ -571,7 +632,7 @@ def main() -> int:
         if not model:
             print(
                 "ERROR: --model or JARVIS_CHATGPT_PLAN_MODEL is required "
-                "for --decision-replay.",
+                "for replay/preflight.",
                 file=sys.stderr,
             )
             return 2
@@ -583,22 +644,33 @@ def main() -> int:
                     model=model,
                     max_cases=args.max_cases,
                     min_equivalent_cases=args.min_equivalent_cases,
+                    preflight_only=args.decision_replay_preflight,
                 )
             )
         except Exception as exc:  # noqa: BLE001 - explicit benchmark boundary
             print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
         result["model_api_called"] = bool(replay["replayed_cases"])
-        result["decision_replay"] = replay
-        result["c6_apply_decision_equivalence_proven"] = replay[
-            "c6_apply_decision_equivalence_proven"
-        ]
-        result["c6_apply_note"] = (
-            "Decision equivalence is benchmark evidence only. Production remains "
-            "unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly promoted."
-        )
-        if replay["c6_apply_decision_equivalence_proven"] is not True:
-            result["status"] = "INCOMPLETE"
+        if args.decision_replay_preflight:
+            result["decision_replay_preflight"] = replay
+            result["c6_replay_preflight_ready"] = replay["replay_preflight_ready"]
+            result["c6_apply_note"] = (
+                "Replay corpus preflight only; no model call was made and C6 APPLY "
+                "remains unproven until the bounded decision replay passes."
+            )
+            if replay["replay_preflight_ready"] is not True:
+                result["status"] = "INCOMPLETE"
+        else:
+            result["decision_replay"] = replay
+            result["c6_apply_decision_equivalence_proven"] = replay[
+                "c6_apply_decision_equivalence_proven"
+            ]
+            result["c6_apply_note"] = (
+                "Decision equivalence is benchmark evidence only. Production remains "
+                "unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly promoted."
+            )
+            if replay["c6_apply_decision_equivalence_proven"] is not True:
+                result["status"] = "INCOMPLETE"
 
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "PASS" else 2
