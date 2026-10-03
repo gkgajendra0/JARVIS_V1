@@ -283,7 +283,9 @@ async def _run_decision_replay(
         optimized_chars,
     ) in prepared:
         try:
-            optimized, telemetry = await evaluate_structured_work_request(client, replay)
+            optimized, telemetry = await evaluate_structured_work_request(
+                client, replay
+            )
         except Exception as exc:
             circuit.record_failure(exc)
             raise
