@@ -384,9 +384,7 @@ class DevelopmentSessionStore:
         engine = str(engine_id).strip().casefold()
         version = str(engine_version).strip()
         if not fingerprint or not engine or not version:
-            raise ValueError(
-                "reasoning fingerprint and engine generation are required"
-            )
+            raise ValueError("reasoning fingerprint and engine generation are required")
         record = self.get(ticket.digest)
         if (
             record is None
