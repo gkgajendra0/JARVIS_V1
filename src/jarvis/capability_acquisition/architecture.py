@@ -489,8 +489,7 @@ def ensure_capability_acquisition_architecture_current(
                 and item.observation.get("finalized") is True
                 and item.observation.get("plan_artifact_id")
                 == plan_artifact.artifact_id
-                and item.observation.get("plan_artifact_digest")
-                == plan_artifact.digest
+                and item.observation.get("plan_artifact_digest") == plan_artifact.digest
             ),
             None,
         )
