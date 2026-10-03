@@ -40,7 +40,12 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
 )
 from jarvis.work.models import WorkItem, WorkType
-from jarvis.work.reasoner import _SYSTEM_PROMPT, RoutedWorkReasoner, _WorkDecisionModel
+from jarvis.work.reasoner import (
+    _SYSTEM_PROMPT,
+    _WorkDecisionModel,
+    RoutedWorkReasoner,
+    evaluate_structured_work_request,
+)
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore
 
@@ -98,6 +103,55 @@ class FakeStructuredClient:
     ) -> BaseModel:
         self.calls.append((system_prompt, input_payload, response_model))
         return response_model(value="ok")
+
+
+class FakeWorkDecisionClient:
+    provider_name = "fake"
+    model_name = "fake-work-model"
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict,
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry:
+        assert system_prompt == _SYSTEM_PROMPT
+        assert input_payload["work"]["type"] == "development"
+        return StructuredOutputTelemetry(
+            parsed=response_model(
+                action="do_step",
+                summary="Execute the bounded step.",
+                parameters_json='{"value":1}',
+                goal_complete=False,
+                needs_owner=False,
+                owner_question=None,
+            ),
+            usage={"input_tokens": 40, "output_tokens": 10, "total_tokens": 50},
+            usage_observed=True,
+            latency_ms=12.5,
+        )
+
+
+@pytest.mark.asyncio
+async def test_structured_work_evaluator_does_not_execute_or_route(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "evaluator.sqlite")
+    work = _work(store)
+    request = _brain_request(work)
+
+    decision, telemetry = await evaluate_structured_work_request(
+        FakeWorkDecisionClient(),
+        request,
+    )
+
+    assert decision.action == "do_step"
+    assert decision.parameters == {"value": 1}
+    assert decision.goal_complete is False
+    assert decision.needs_owner is False
+    assert telemetry.usage["total_tokens"] == 50
+    assert store.list_steps(work.work_id) == ()
 
 
 @pytest.mark.asyncio
