@@ -337,7 +337,7 @@ def main() -> int:
                 output_path=args.output,
             )
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - acceptance boundary reports exact failure
         print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
