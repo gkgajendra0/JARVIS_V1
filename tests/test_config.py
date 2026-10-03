@@ -201,6 +201,32 @@ def test_invalid_live_context_environment_value_fails_truthfully(
         JarvisConfig.from_environment()
 
 
+def test_development_engine_requires_chatgpt_plan_and_model() -> None:
+    assert JarvisConfig().development_engine_enabled is False
+
+    with pytest.raises(ValueError, match="CHATGPT_PLAN_ENABLED"):
+        JarvisConfig(
+            development_engine_enabled=True,
+            development_engine_model="gpt-test",
+        )
+
+    with pytest.raises(ValueError, match="DEVELOPMENT_ENGINE_MODEL"):
+        JarvisConfig(
+            chatgpt_plan_enabled=True,
+            chatgpt_plan_model=None,
+            development_engine_enabled=True,
+            development_engine_model=None,
+        )
+
+    config = JarvisConfig(
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-plan",
+        development_engine_enabled=True,
+    )
+    assert config.development_engine_enabled is True
+    assert config.chatgpt_plan_model == "gpt-plan"
+
+
 def test_work_context_defaults_to_shadow_and_validates_mode() -> None:
     assert JarvisConfig().work_context_mode == "shadow"
     assert JarvisConfig(work_context_mode=" APPLY ").work_context_mode == "apply"
