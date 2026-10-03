@@ -1,0 +1,349 @@
+"""Owner-machine architecture proof for the JARVIS DevelopmentEngine.
+
+This harness is intentionally isolated from the real JARVIS repository. It creates a
+temporary Git repository, lets the ChatGPT-plan/Codex DevelopmentEngine solve one tiny
+engineering ticket through the real JARVIS governed development executors, runs tests
+only through the approved Docker sandbox, and verifies that the source repository was
+not mutated.
+
+It consumes a small amount of the connected ChatGPT-plan allowance. It never pushes,
+merges, activates a capability, or touches protected main.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import asdict
+
+from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
+from jarvis.development_engine import (
+    CodexPlanDevelopmentEngine,
+    DevelopmentDisposition,
+    DevelopmentEngineCoordinator,
+    DevelopmentSessionStore,
+    DevelopmentTicketV1,
+    WorkExecutorDevelopmentToolPort,
+)
+from jarvis.work.development import (
+    DevelopmentWorkspaceManager,
+    DockerDevelopmentTestRunner,
+    build_development_executors,
+)
+from jarvis.work.engine import WorkActionRegistry
+from jarvis.work.models import WorkItem, WorkState, WorkType
+from jarvis.work.resources import ResourceLeaseManager
+from jarvis.work.store import SQLiteWorkStore
+
+
+def _run(cwd: pathlib.Path, *args: str) -> str:
+    completed = subprocess.run(
+        list(args),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        shell=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed ({completed.returncode}): {' '.join(args)}\n"
+            f"{completed.stdout}\n{completed.stderr}"
+        )
+    return completed.stdout.strip()
+
+
+def _git(cwd: pathlib.Path, *args: str) -> str:
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError("Git executable is unavailable")
+    return _run(cwd, git, *args)
+
+
+def _docker_available() -> bool:
+    docker = shutil.which("docker")
+    if docker is None:
+        return False
+    try:
+        subprocess.run(
+            [docker, "version"],
+            capture_output=True,
+            timeout=15,
+            check=True,
+            shell=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
+
+
+def _prepare_disposable_repo(root: pathlib.Path) -> tuple[pathlib.Path, str]:
+    repo = root / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "tests").mkdir(parents=True)
+    (repo / "src" / "demo.py").write_text(
+        "def answer() -> int:\n    return 1\n",
+        encoding="utf-8",
+    )
+    (repo / "tests" / "test_demo.py").write_text(
+        "from src.demo import answer\n\n\ndef test_answer() -> None:\n"
+        "    assert answer() == 42\n",
+        encoding="utf-8",
+    )
+    _git(repo, "init")
+    _git(repo, "config", "user.email", "jarvis-acceptance@example.invalid")
+    _git(repo, "config", "user.name", "JARVIS Acceptance")
+    _git(repo, "add", "--all")
+    _git(repo, "commit", "-m", "baseline")
+    return repo, _git(repo, "rev-parse", "HEAD").casefold()
+
+
+def _work_store(root: pathlib.Path) -> tuple[SQLiteWorkStore, WorkItem]:
+    store = SQLiteWorkStore(root / "work.sqlite3")
+    item = WorkItem(
+        request="Repair the disposable demo so the approved test passes.",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="development-engine-owner-acceptance",
+        source_turn_id="proof",
+    )
+    store.create(item)
+    running = store.save(
+        item.transition(
+            WorkState.RUNNING,
+            status_detail="owner-machine development-engine proof",
+        ),
+        expected_version=item.version,
+    )
+    return store, running
+
+
+async def _run_proof(
+    *,
+    model: str,
+    test_image: str,
+    output_path: pathlib.Path | None,
+) -> dict[str, object]:
+    if not _docker_available():
+        raise RuntimeError(
+            "Docker is unavailable. This proof refuses to execute model-edited code "
+            "without the approved Docker sandbox."
+        )
+
+    plan = ChatGPTPlanSessionManager()
+    if not plan.is_connected():
+        raise RuntimeError(
+            "JARVIS is not connected to ChatGPT-plan usage. Run the existing "
+            "ChatGPT-plan sign-in flow first."
+        )
+
+    try:
+        import openai_codex  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(
+            "openai-codex is not installed. Install the JARVIS "
+            "'development-codex' optional dependency before this proof."
+        ) from exc
+
+    with tempfile.TemporaryDirectory(prefix="jarvis-dev-engine-proof-") as temp:
+        root = pathlib.Path(temp).resolve()
+        repo, baseline_revision = _prepare_disposable_repo(root)
+        work_store, work = _work_store(root)
+
+        manager = DevelopmentWorkspaceManager(
+            repository_root=repo,
+            workspace_root=root / "worktrees",
+        )
+        runner = DockerDevelopmentTestRunner(test_image)
+        actions = WorkActionRegistry(
+            build_development_executors(manager, test_runner=runner)
+        )
+        ticket = DevelopmentTicketV1.create(
+            request=(
+                "Repair only src/demo.py so tests/test_demo.py passes. "
+                "Do not modify tests. Inspect the repository as needed, make the "
+                "smallest correct change, run the approved test, inspect the diff, "
+                "and create the local candidate commit."
+            ),
+            work_id=work.work_id,
+            engineering_change_id="acceptance_change",
+            goal_id="acceptance_goal",
+            goal_digest="a" * 64,
+            architecture_artifact_id="acceptance_architecture",
+            architecture_digest="b" * 64,
+            base_revision=baseline_revision,
+            workspace_id=work.work_id,
+            required_operations=("development.proof",),
+            repository_context_refs=("src/demo.py", "tests/test_demo.py"),
+            writable_paths=("src/demo.py",),
+            acceptance_criteria=("pytest:tests/test_demo.py",),
+            allowed_tools=(
+                "prepare_workspace",
+                "list_files",
+                "read_file",
+                "search_source",
+                "write_file",
+                "run_tests",
+                "inspect_diff",
+                "commit_candidate",
+                "status",
+            ),
+        )
+        tool_resources = ResourceLeaseManager({"git": 1, "cpu": 1})
+        tools = WorkExecutorDevelopmentToolPort(
+            ticket=ticket,
+            store=work_store,
+            actions=actions,
+            resources=tool_resources,
+        )
+        sessions = DevelopmentSessionStore(work_store)
+        engine = CodexPlanDevelopmentEngine(
+            chatgpt_plan=plan,
+            model=model,
+            sessions=sessions,
+            state_dir=root / "codex",
+        )
+        coordinator = DevelopmentEngineCoordinator(
+            engine=engine,
+            sessions=sessions,
+            resources=ResourceLeaseManager({"development_intelligence": 1}),
+            resource_keys=("development_intelligence",),
+        )
+
+        first = await coordinator.execute(
+            ticket,
+            tools=tools,
+            evidence_refs=("owner-machine-proof",),
+        )
+        second = await coordinator.execute(
+            ticket,
+            tools=tools,
+            evidence_refs=("owner-machine-proof",),
+        )
+
+        source_after = _git(repo, "rev-parse", "HEAD").casefold()
+        source_status = _git(repo, "status", "--porcelain=v1")
+        progress = dict(tools.snapshot())
+        result = first.result
+        candidate = result.candidate_revision
+        candidate_file = None
+        if candidate:
+            candidate_file = _git(repo, "show", f"{candidate}:src/demo.py")
+
+        checks = {
+            "completed": result.disposition is DevelopmentDisposition.COMPLETED,
+            "candidate_revision_present": bool(candidate),
+            "source_revision_unchanged": source_after == baseline_revision,
+            "source_tree_clean": not source_status,
+            "only_approved_path_changed": result.changed_files == ("src/demo.py",),
+            "test_evidence_present": bool(result.test_evidence_refs),
+            "candidate_contains_expected_fix": (
+                candidate_file is not None and "return 42" in candidate_file
+            ),
+            "identical_reasoning_reused": second.reused is True,
+            "identical_result_reused": second.result.digest == result.digest,
+            "thread_recorded": bool(sessions.get(ticket.digest).thread_id),
+        }
+        passed = all(checks.values())
+
+        report: dict[str, object] = {
+            "schema": "jarvis.development_engine_owner_acceptance.v1",
+            "passed": passed,
+            "model": model,
+            "openai_codex_version": str(
+                getattr(openai_codex, "__version__", "unknown")
+            ),
+            "baseline_revision": baseline_revision,
+            "source_revision_after": source_after,
+            "ticket_id": ticket.ticket_id,
+            "ticket_digest": ticket.digest,
+            "result_id": result.result_id,
+            "result_digest": result.digest,
+            "disposition": result.disposition.value,
+            "candidate_revision": candidate,
+            "changed_files": list(result.changed_files),
+            "test_evidence_refs": list(result.test_evidence_refs),
+            "usage": None if result.usage is None else asdict(result.usage),
+            "reasoning_fingerprint": first.reasoning_fingerprint,
+            "second_execution_reused": second.reused,
+            "progress": progress,
+            "checks": checks,
+        }
+
+        if output_path is not None:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+
+        return report
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run the isolated JARVIS DevelopmentEngine owner-machine proof."
+    )
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("JARVIS_DEVELOPMENT_ENGINE_MODEL")
+        or os.environ.get("JARVIS_CHATGPT_PLAN_MODEL"),
+        help="ChatGPT-plan model to use for the Codex engineering thread.",
+    )
+    parser.add_argument(
+        "--test-image",
+        default=os.environ.get("JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE"),
+        help="Approved JARVIS development test Docker image.",
+    )
+    parser.add_argument(
+        "--output",
+        type=pathlib.Path,
+        default=None,
+        help="Optional JSON report path.",
+    )
+    return parser
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    model = str(args.model or "").strip()
+    test_image = str(args.test_image or "").strip()
+    if not model:
+        print(
+            "ERROR: --model or JARVIS_DEVELOPMENT_ENGINE_MODEL is required.",
+            file=sys.stderr,
+        )
+        return 2
+    if not test_image:
+        print(
+            "ERROR: --test-image or JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE is required.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        report = asyncio.run(
+            _run_proof(
+                model=model,
+                test_image=test_image,
+                output_path=args.output,
+            )
+        )
+    except Exception as exc:
+        print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["passed"] is True else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
