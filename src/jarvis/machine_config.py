@@ -204,7 +204,9 @@ def configured_alias_text(
     evaluated in priority order within the chosen source.
     """
 
-    normalized = tuple(dict.fromkeys(str(name).strip() for name in names if str(name).strip()))
+    normalized = tuple(
+        dict.fromkeys(str(name).strip() for name in names if str(name).strip())
+    )
     if not normalized:
         raise ValueError("configured alias names must not be empty")
 
