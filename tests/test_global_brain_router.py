@@ -234,12 +234,51 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     assert snapshot["schema"] == "c6_work_reasoning_snapshot.v1"
     assert snapshot["work_version"] == work.version
     assert snapshot["work_state"] == work.state.value
+    assert snapshot["work_current_step_id"] is None
     assert snapshot["history_step_count"] == 0
     assert snapshot["recent_step_ids"] == []
     assert snapshot["context_version"] == context_pack.version
     assert snapshot["history_step_ids_digest"] == canonical_digest([])
     assert snapshot["allowed_actions"][0]["name"] == "dev_prepare_workspace"
     assert store.list_steps(work.work_id) == ()
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_backfills_missing_context_snapshot(tmp_path: Path) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    store, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
+    request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=context_pack,
+    )
+
+    first = await router.decide(request)
+    record = route_store.list_for_work(work.work_id)[0]
+    with store.extension_transaction() as connection:
+        connection.execute(
+            "DELETE FROM brain_route_context_snapshots WHERE route_request_id = ?",
+            (record.route_request_id,),
+        )
+    assert route_store.get_context_snapshot(record.route_request_id) is None
+
+    second = await router.decide(request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    restored = route_store.get_context_snapshot(record.route_request_id)
+    assert restored is not None
+    assert restored["work_version"] == work.version
+    assert restored["history_step_ids_digest"] == canonical_digest([])
 
 
 @pytest.mark.asyncio
