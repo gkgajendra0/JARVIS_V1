@@ -110,7 +110,6 @@ from jarvis.incident_repair.workspace import (
     build_diagnostic_workspace_executors,
 )
 from jarvis.knowledge.research import CurrentResearchService
-from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.model_routing.cost import ProviderCostEventStore
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.invoker import (
@@ -130,6 +129,7 @@ from jarvis.promotion.runtime_composition import (
     PromotionRuntimeConfig,
 )
 from jarvis.promotion.store import PromotionStore
+from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
