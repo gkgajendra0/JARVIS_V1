@@ -263,6 +263,47 @@ class DevelopmentTicketV1:
             digest=digest,
         )
 
+    @classmethod
+    def from_payload(
+        cls,
+        payload: dict[str, object],
+        *,
+        expected_digest: str | None = None,
+    ) -> DevelopmentTicketV1:
+        """Rebuild and verify a ticket from canonical durable payload."""
+
+        ticket = cls.create(
+            work_id=str(payload["work_id"]),
+            engineering_change_id=str(payload["engineering_change_id"]),
+            goal_id=str(payload["goal_id"]),
+            goal_digest=str(payload["goal_digest"]),
+            architecture_artifact_id=str(payload["architecture_artifact_id"]),
+            architecture_digest=str(payload["architecture_digest"]),
+            base_revision=str(payload["base_revision"]),
+            workspace_id=str(payload["workspace_id"]),
+            required_operations=tuple(payload["required_operations"]),  # type: ignore[arg-type]
+            dependency_refs=tuple(payload["dependency_refs"]),  # type: ignore[arg-type]
+            secret_scopes=tuple(payload["secret_scopes"]),  # type: ignore[arg-type]
+            discovery_scopes=tuple(payload["discovery_scopes"]),  # type: ignore[arg-type]
+            research_evidence_refs=tuple(  # type: ignore[arg-type]
+                payload["research_evidence_refs"]
+            ),
+            repository_context_refs=tuple(  # type: ignore[arg-type]
+                payload["repository_context_refs"]
+            ),
+            acceptance_criteria=tuple(payload["acceptance_criteria"]),  # type: ignore[arg-type]
+            allowed_tools=tuple(payload["allowed_tools"]),  # type: ignore[arg-type]
+            attempt=int(payload["attempt"]),
+        )
+        version = int(payload["contract_version"])
+        if version != DEVELOPMENT_ENGINE_CONTRACT_VERSION:
+            raise ValueError("unsupported durable development ticket version")
+        if expected_digest is not None:
+            expected = _digest(expected_digest, field="expected ticket digest")
+            if ticket.digest != expected:
+                raise ValueError("durable development ticket digest mismatch")
+        return ticket
+
     def canonical_payload(self) -> dict[str, object]:
         return {
             "work_id": self.work_id,
@@ -425,6 +466,75 @@ class DevelopmentResultV1:
             contract_version=DEVELOPMENT_ENGINE_CONTRACT_VERSION,
             digest=digest,
         )
+
+    @classmethod
+    def from_payload(
+        cls,
+        *,
+        ticket: DevelopmentTicketV1,
+        payload: dict[str, object],
+        expected_digest: str | None = None,
+    ) -> DevelopmentResultV1:
+        """Rebuild and verify one durable DevelopmentResult."""
+
+        raw_usage = payload.get("usage")
+        usage = None
+        if raw_usage is not None:
+            if not isinstance(raw_usage, dict):
+                raise TypeError("durable development usage must be an object")
+            usage = DevelopmentUsageV1(
+                input_tokens=int(raw_usage.get("input_tokens", 0)),
+                output_tokens=int(raw_usage.get("output_tokens", 0)),
+                total_tokens=int(raw_usage.get("total_tokens", 0)),
+            )
+        result = cls.create(
+            ticket=ticket,
+            disposition=DevelopmentDisposition(str(payload["disposition"])),
+            engine_id=str(payload["engine_id"]),
+            engine_version=str(payload["engine_version"]),
+            summary=str(payload["summary"]),
+            reason=(
+                None
+                if payload.get("reason") is None
+                else str(payload["reason"])
+            ),
+            thread_id=(
+                None
+                if payload.get("thread_id") is None
+                else str(payload["thread_id"])
+            ),
+            candidate_revision=(
+                None
+                if payload.get("candidate_revision") is None
+                else str(payload["candidate_revision"])
+            ),
+            changed_files=tuple(payload.get("changed_files") or ()),  # type: ignore[arg-type]
+            test_evidence_refs=tuple(  # type: ignore[arg-type]
+                payload.get("test_evidence_refs") or ()
+            ),
+            evidence_refs=tuple(payload.get("evidence_refs") or ()),  # type: ignore[arg-type]
+            requested_dependencies=tuple(  # type: ignore[arg-type]
+                payload.get("requested_dependencies") or ()
+            ),
+            blocker_code=(
+                None
+                if payload.get("blocker_code") is None
+                else str(payload["blocker_code"])
+            ),
+            usage=usage,
+        )
+        if str(payload.get("ticket_id") or "") != ticket.ticket_id:
+            raise ValueError("durable result ticket_id mismatch")
+        if str(payload.get("ticket_digest") or "") != ticket.digest:
+            raise ValueError("durable result ticket_digest mismatch")
+        version = int(payload["contract_version"])
+        if version != DEVELOPMENT_ENGINE_CONTRACT_VERSION:
+            raise ValueError("unsupported durable development result version")
+        if expected_digest is not None:
+            expected = _digest(expected_digest, field="expected result digest")
+            if result.digest != expected:
+                raise ValueError("durable development result digest mismatch")
+        return result
 
     def canonical_payload(self) -> dict[str, object]:
         return {
