@@ -770,7 +770,10 @@ def build_default_self_model() -> SelfModelRegistry:
             "work.development_engine",
             "Provider-neutral engineering specialist boundary with JARVIS-owned "
             "development authority and durable session lineage.",
-            ("src/jarvis/development_engine",),
+            (
+                "src/jarvis/development_engine",
+                "tools/research/development_engine_owner_acceptance.py",
+            ),
             parent_component_id="work",
             tests=(
                 "tests/test_development_engine_contracts.py",
