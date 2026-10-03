@@ -80,18 +80,20 @@ class FakeRuntime:
         fail_resume: bool = False,
         resume_error: BaseException | None = None,
         fail_start: BaseException | None = None,
+        version: str = "0.160.0",
     ) -> None:
         self.thread = thread
         self.fail_resume = fail_resume
         self.resume_error = resume_error
         self.fail_start = fail_start
+        self.runtime_version = version
         self.started = 0
         self.resumed: list[str] = []
         self.closed = False
 
     @property
     def version(self) -> str:
-        return "0.160.0"
+        return self.runtime_version
 
     async def start_thread(self, *, model: str) -> FakeThread:
         assert model == "gpt-test"
@@ -265,6 +267,33 @@ def _response(payload: dict[str, Any], total: int) -> CodexTurnResponse:
             )
         ),
     )
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_rejects_unreviewed_runtime_generation(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    runtime = FakeRuntime(
+        FakeThread("thr_unreviewed", []),
+        version="0.161.0",
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(runtime),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.FAILED
+    assert result.engine_version == "0.160.0"
+    assert runtime.started == 0
+    assert runtime.resumed == []
+    record = sessions.get(ticket.digest)
+    assert record is not None
+    assert record.thread_id is None
 
 
 @pytest.mark.asyncio
