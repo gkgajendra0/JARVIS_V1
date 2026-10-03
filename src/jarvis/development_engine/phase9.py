@@ -368,9 +368,11 @@ class Phase9ResearchEvidenceExecutor:
         plan_artifact_id = str(
             architecture.payload.get("plan_artifact_id") or ""
         ).strip()
-        plan_artifact_digest = str(
-            architecture.payload.get("plan_artifact_digest") or ""
-        ).strip().casefold()
+        plan_artifact_digest = (
+            str(architecture.payload.get("plan_artifact_digest") or "")
+            .strip()
+            .casefold()
+        )
         if not plan_artifact_id or not plan_artifact_digest:
             raise ChangeConflict(
                 "research evidence architecture lacks exact plan provenance"
@@ -394,11 +396,10 @@ class Phase9ResearchEvidenceExecutor:
                     if item.kind == "acq_finalize"
                     and item.state.value == "completed"
                     and item.observation.get("finalized") is True
-                    and item.observation.get("plan_artifact_id")
-                    == plan_artifact_id
-                    and str(
-                        item.observation.get("plan_artifact_digest") or ""
-                    ).strip().casefold()
+                    and item.observation.get("plan_artifact_id") == plan_artifact_id
+                    and str(item.observation.get("plan_artifact_digest") or "")
+                    .strip()
+                    .casefold()
                     == plan_artifact_digest
                 ),
                 None,
