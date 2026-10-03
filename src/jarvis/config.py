@@ -248,9 +248,9 @@ class JarvisConfig:
             raise ValueError("work_context_mode must be one of: off, shadow, apply")
         object.__setattr__(self, "work_context_mode", work_context_mode)
 
-        work_prompt_compression_mode = str(
-            self.work_prompt_compression_mode
-        ).strip().casefold()
+        work_prompt_compression_mode = (
+            str(self.work_prompt_compression_mode).strip().casefold()
+        )
         if work_prompt_compression_mode not in {"off", "shadow", "apply"}:
             raise ValueError(
                 "work_prompt_compression_mode must be one of: off, shadow, apply"
