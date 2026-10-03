@@ -325,6 +325,225 @@ async def test_decision_replay_preflight_ready_consumes_no_plan_quota(
 
 
 @pytest.mark.asyncio
+async def test_paired_benchmark_preflight_ready_consumes_no_plan_quota(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    route_store = BrainRouteStore(store)
+
+    @dataclass(frozen=True)
+    class _Replay:
+        context_mode: WorkContextMode = WorkContextMode.APPLY
+
+    works = (
+        WorkItem(
+            request="Paired generic work.",
+            work_type=WorkType.GENERIC,
+            source_session_id="session-c6",
+            source_turn_id="paired-a",
+            work_id="work-paired-a",
+        ),
+        WorkItem(
+            request="Paired diagnostic work.",
+            work_type=WorkType.DIAGNOSTICS,
+            source_session_id="session-c6",
+            source_turn_id="paired-b",
+            work_id="work-paired-b",
+        ),
+    )
+
+    prepared = []
+    for index, work in enumerate(works, start=1):
+        route = BrainRouteRecord(
+            route_request_id=f"route-paired-{index}",
+            work_id=work.work_id,
+            subsystem_key="work",
+            task_kind=work.work_type.value,
+            route_kind=BrainRouteKind.MODEL,
+            mode=BrainRoutingMode.SHADOW,
+            policy_version=1,
+            policy_digest="a" * 64,
+            reason_codes=("deterministic_abstained",),
+            created_at_epoch=float(index),
+            selected_action="expected_action",
+            reasoner_contract_digest="b" * 64,
+        )
+        prepared.append((work, route, _Replay(), 1000, 400))
+
+    monkeypatch.setattr(
+        c6,
+        "_prepare_paired_benchmark",
+        lambda **kwargs: (
+            prepared,
+            {
+                "representative_corpus_covered": True,
+                "selected_paired_cases": 2,
+                "selected_distinct_work_items": 2,
+                "selected_work_types": ["diagnostics", "generic"],
+            },
+        ),
+    )
+
+    def _forbidden_provider():
+        raise AssertionError("paired preflight must not initialize provider state")
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _forbidden_provider)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _forbidden_provider)
+
+    result = await c6._run_paired_decision_benchmark(
+        store=store,
+        route_store=route_store,
+        model="reviewed-model",
+        max_cases=2,
+        min_equivalent_cases=2,
+        preflight_only=True,
+    )
+
+    assert result["paired_preflight_only"] is True
+    assert result["paired_preflight_ready"] is True
+    assert result["paired_cases"] == 0
+    assert len(result["planned_cases"]) == 2
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert result["provider_circuit_updated"] is False
+
+
+@pytest.mark.asyncio
+async def test_paired_benchmark_stops_after_first_mismatch_without_circuit_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    route_store = BrainRouteStore(store)
+
+    @dataclass(frozen=True)
+    class _Replay:
+        context_mode: WorkContextMode = WorkContextMode.APPLY
+
+    works = (
+        WorkItem(
+            request="Paired generic work.",
+            work_type=WorkType.GENERIC,
+            source_session_id="session-c6",
+            source_turn_id="paired-a",
+            work_id="work-paired-a",
+        ),
+        WorkItem(
+            request="Paired diagnostic work.",
+            work_type=WorkType.DIAGNOSTICS,
+            source_session_id="session-c6",
+            source_turn_id="paired-b",
+            work_id="work-paired-b",
+        ),
+    )
+    prepared = []
+    for index, work in enumerate(works, start=1):
+        route = BrainRouteRecord(
+            route_request_id=f"route-paired-{index}",
+            work_id=work.work_id,
+            subsystem_key="work",
+            task_kind=work.work_type.value,
+            route_kind=BrainRouteKind.MODEL,
+            mode=BrainRoutingMode.SHADOW,
+            policy_version=1,
+            policy_digest="a" * 64,
+            reason_codes=("deterministic_abstained",),
+            created_at_epoch=float(index),
+            selected_action="expected_action",
+            reasoner_contract_digest="b" * 64,
+        )
+        prepared.append((work, route, _Replay(), 1000, 400))
+
+    monkeypatch.setattr(
+        c6,
+        "_prepare_paired_benchmark",
+        lambda **kwargs: (
+            prepared,
+            {
+                "representative_corpus_covered": True,
+                "selected_paired_cases": 2,
+                "selected_distinct_work_items": 2,
+                "selected_work_types": ["diagnostics", "generic"],
+            },
+        ),
+    )
+
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self) -> bool:
+            return True
+
+        def record_failure(self, _error):
+            raise AssertionError(
+                "paired benchmark must not mutate the shared provider circuit"
+            )
+
+        def record_success(self):
+            raise AssertionError(
+                "paired benchmark must not mutate the shared provider circuit"
+            )
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self) -> bool:
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **kwargs: object(),
+    )
+
+    calls = 0
+
+    async def _evaluate(_client, request):
+        nonlocal calls
+        calls += 1
+        action = (
+            "legacy_action"
+            if request.context_mode is WorkContextMode.SHADOW
+            else "optimized_action"
+        )
+        return (
+            BrainDecision(
+                action=action,
+                summary="Paired benchmark decision",
+            ),
+            SimpleNamespace(
+                usage={"input_tokens": 1.0},
+                usage_observed=True,
+                latency_ms=1.0,
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_paired_decision_benchmark(
+        store=store,
+        route_store=route_store,
+        model="reviewed-model",
+        max_cases=2,
+        min_equivalent_cases=2,
+    )
+
+    assert calls == 2
+    assert result["paired_cases"] == 1
+    assert result["mismatch_cases"] == 1
+    assert result["cases"][0]["action_equal"] is False
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert result["provider_circuit_updated"] is False
+
+
+@pytest.mark.asyncio
 async def test_decision_replay_stops_after_first_mismatch_without_circuit_mutation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
