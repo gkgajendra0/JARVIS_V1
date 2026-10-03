@@ -35,6 +35,10 @@ def _payload(record: BrainRouteRecord) -> dict[str, object]:
         "shadow_match": record.shadow_match,
         "model_decision_id": record.model_decision_id,
         "model_target_id": record.model_target_id,
+        "goal_complete": record.goal_complete,
+        "needs_owner": record.needs_owner,
+        "owner_question": record.owner_question,
+        "parameters_digest": record.parameters_digest,
         "outcome_code": record.outcome_code,
     }
 
@@ -83,6 +87,26 @@ def _record(payload: dict[str, object]) -> BrainRouteRecord:
             None
             if payload.get("model_target_id") is None
             else str(payload["model_target_id"])
+        ),
+        goal_complete=(
+            None
+            if payload.get("goal_complete") is None
+            else bool(payload["goal_complete"])
+        ),
+        needs_owner=(
+            None
+            if payload.get("needs_owner") is None
+            else bool(payload["needs_owner"])
+        ),
+        owner_question=(
+            None
+            if payload.get("owner_question") is None
+            else str(payload["owner_question"])
+        ),
+        parameters_digest=(
+            None
+            if payload.get("parameters_digest") is None
+            else str(payload["parameters_digest"])
         ),
         outcome_code=str(payload.get("outcome_code") or "selected"),
     )
