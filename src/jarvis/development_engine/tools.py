@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import pathlib
 from typing import Any
 
 from jarvis.work.engine import (
@@ -66,6 +67,26 @@ class DevelopmentToolOwnerInputRequired(DevelopmentToolPortError):
         self.sensitive = bool(sensitive)
         self.input_key = input_key
         self.resume_context = dict(resume_context)
+
+
+def _canonical_repository_path(value: object) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    posix = pathlib.PurePosixPath(text)
+    windows = pathlib.PureWindowsPath(text)
+    if (
+        not text
+        or posix.is_absolute()
+        or windows.is_absolute()
+        or bool(windows.drive)
+        or bool(windows.root)
+        or ".." in posix.parts
+        or text.startswith("-")
+        or posix.as_posix() == "."
+    ):
+        raise DevelopmentToolDenied(
+            "development write path must be a safe repository-relative path"
+        )
+    return posix.as_posix()
 
 
 class WorkExecutorDevelopmentToolPort:
@@ -323,6 +344,13 @@ class WorkExecutorDevelopmentToolPort:
 
         executor = self._actions.require(action, WorkType.DEVELOPMENT)
         request_parameters = dict(parameters)
+        if name == "write_file":
+            path = _canonical_repository_path(request_parameters.get("path"))
+            if path not in set(self._ticket.writable_paths):
+                raise DevelopmentToolDenied(
+                    "development write path is outside DevelopmentTicket authority"
+                )
+            request_parameters["path"] = path
         resource_provider = getattr(executor, "resource_keys", None)
         resource_keys = (
             tuple(resource_provider(work, dict(request_parameters)))
