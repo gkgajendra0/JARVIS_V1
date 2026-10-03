@@ -533,9 +533,7 @@ def test_phase9_research_revision_binds_architecture_to_exact_second_attempt(
     assert architecture2.artifact_id != architecture1.artifact_id
     assert architecture2.payload["plan_artifact_id"] == plan_artifact2.artifact_id
     assert architecture2.payload["proposed_package_version"] == "1.1.0"
-    assert architecture2.payload["allowed_paths"] == [
-        "src/jarvis/tv_control_v2.py"
-    ]
+    assert architecture2.payload["allowed_paths"] == ["src/jarvis/tv_control_v2.py"]
 
     # Restart-style replay after the replacement artifact already exists must
     # continue to resolve the exact second source attempt.
