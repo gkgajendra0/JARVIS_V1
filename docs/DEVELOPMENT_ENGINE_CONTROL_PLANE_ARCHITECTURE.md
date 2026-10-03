@@ -523,6 +523,8 @@ Do not:
 - Use restricted sandbox and deny model-side escalation.
 - Reuse approved ChatGPT-plan OAuth transport when configured.
 - Persist only non-secret thread identity and usage metadata.
+- Treat the reviewed Codex SDK version as the stable engine generation and fail closed
+  before thread start/resume if the installed runtime generation differs.
 - Add fake-SDK tests before owner-machine live proof.
 
 ### D4 — Durable session and reasoning admission
@@ -545,10 +547,31 @@ Do not:
 
 ### D6 — C6 apply validation
 
-- Replay capability/development corpus.
-- Compare shadow vs optimized decisions.
-- Move development context to `APPLY` only when acceptance threshold is satisfied.
-- Log actual input token/usage reduction.
+Implemented replay substrate:
+
+- SHADOW model routes persist a backward-compatible safety decision fingerprint:
+  selected action, `goal_complete`, `needs_owner`, owner question and canonical
+  parameter digest;
+- successful SHADOW model cycles with a ContextPack persist a small encrypted replay
+  snapshot containing only historical Work state/status, purpose, action catalog,
+  visible step IDs/history-prefix digest and evidence; full WorkStep payloads remain
+  canonical only in WorkStore;
+- replay reconstruction verifies the exact append-only history prefix before creating
+  an optimized APPLY BrainRequest and fails closed on provenance drift;
+- `tools/research/c6_context_owner_acceptance.py` remains zero-model by default and
+  exposes an explicit bounded `--decision-replay` mode that uses ChatGPT-plan directly,
+  never executes the selected action, has no paid fallback and does not mutate production
+  routing;
+- optimized replay is compared against the durable legacy decision across action,
+  completion, owner-wait, owner-question and parameter fields with usage/latency recorded.
+
+Still required before APPLY promotion:
+
+- replay a representative capability/development corpus on the owner machine;
+- require the configured minimum number of comparable cases with no safety-field
+  mismatches;
+- review actual context/token reduction and provider behavior;
+- move development context to `APPLY` only after that evidence is accepted.
 
 ### D7 — Architecture proof
 
@@ -650,6 +673,9 @@ Implemented on the draft branch:
 - restricted Codex/ChatGPT-plan engineering specialist with long coherent tool batches;
 - durable provider-thread identity, canonical progress reconstruction and engine-generation-
   scoped exact-result reuse;
+- stable reviewed Codex runtime generation enforcement before provider thread use;
+- C6 durable legacy-decision fingerprints plus exact bounded shadow replay snapshots and
+  a non-executing optimized decision replay path;
 - cumulative engineering usage telemetry;
 - one serialized `development_intelligence` resource;
 - a process-persistent shared ChatGPT-plan subscription circuit across ordinary Work
@@ -671,8 +697,10 @@ Implemented on the draft branch:
 
 Still intentionally pending:
 
-- D6 C6 `APPLY` admission. The mode is configurable, but the production default remains
-  `shadow` until replay/regression evidence justifies changing it.
+- D6 C6 `APPLY` admission. Decision provenance, exact replay reconstruction and the
+  bounded owner-machine replay harness are implemented, but production default remains
+  `shadow` until owner-machine corpus evidence shows the required safety-field
+  equivalence and material context reduction.
 - D7 owner-machine Codex proof using the real ChatGPT-plan authorization and actual
   local development sandbox.
 - D8 blind natural-goal capability acceptance through promotion, explicit activation,
