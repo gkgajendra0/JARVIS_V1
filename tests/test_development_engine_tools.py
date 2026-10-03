@@ -15,7 +15,7 @@ from jarvis.work.engine import (
     WorkActionRegistry,
     WorkOwnerInputRequired,
 )
-from jarvis.work.models import WorkItem, WorkState, WorkType
+from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
 from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore
 
