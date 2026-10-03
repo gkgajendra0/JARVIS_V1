@@ -374,3 +374,78 @@ LLMLingua output is model input only. It never becomes canonical JARVIS state.
 
 If C preserves more decision semantics than B at similar/lower token usage, prefer the
 existing compressor technology over additional home-grown summarization rules.
+
+## LLMLingua implementation status — pending owner-machine acceptance
+
+Implementation is complete on PR #252 for the bounded experiment and is intentionally
+not production-enabled yet.
+
+Implemented:
+
+- optional `context-compression` dependency group with `llmlingua==0.2.2`;
+- local LLMLingua-2 BERT-base compressor using the reviewed
+  `microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank` model;
+- reviewed Hugging Face model revision pinned to `5f0c827`;
+- CPU is the default compression device so the experiment does not depend on the normal
+  JARVIS local-brain/GPU runtime;
+- JARVIS JSON structure is preserved exactly;
+- Work identity/request, purpose, allowed action catalog/schema, IDs, versions, digests,
+  source/code `text`, errors and other non-target leaves remain exact;
+- only sufficiently long natural-language evidence fields such as `summary`, `content`,
+  `body`, `rationale` and non-action `description` are candidates;
+- a replacement is used only when it is non-empty and smaller than the original leaf;
+- post-compression validation fails closed if object keys, list lengths, types or any
+  protected value change;
+- model-facing override is explicit and does not mutate canonical `BrainRequest`,
+  WorkStore or execution state;
+- owner harness supports a zero-ChatGPT local preflight and a bounded live A/B;
+- the default LLMLingua proof targets only
+  `research_requires_reresolution_after_new_evidence`, the case that failed the
+  hand-selected C6 comparison;
+- the live default uses at most two ChatGPT-plan calls and stops on mismatch;
+- LLMLingua evidence can never automatically set global C6 APPLY.
+
+The implementation deliberately does not use LLMLingua's `compress_json` path. Upstream
+has an open LLMLingua-2 `compress_json` failure report; JARVIS instead owns JSON
+traversal/validation and gives LLMLingua only selected string leaves.
+
+### Owner-machine acceptance sequence
+
+From an exact clean branch head:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[context-compression]"
+```
+
+Then run the zero-ChatGPT local preflight:
+
+```powershell
+.\.venv\Scripts\python.exe tools\research\c6_context_owner_acceptance.py `
+    --llmlingua-fixture-preflight
+```
+
+The first run may download the pinned ~713 MB model into the normal Hugging Face cache.
+It must report `c6_llmlingua_preflight_ready=true`, zero model calls and a real size
+reduction before any ChatGPT-plan A/B is attempted.
+
+Only after preflight passes, run the bounded research-pair comparison:
+
+```powershell
+.\.venv\Scripts\python.exe tools\research\c6_context_owner_acceptance.py `
+    --llmlingua-fixture-benchmark `
+    --model gpt-6-astra
+```
+
+Default live budget: exactly two model calls if both requests execute.
+
+Acceptance requires:
+- same action;
+- exact same parameters;
+- same `goal_complete`;
+- same `needs_owner`;
+- same owner question;
+- lower actual provider input-token usage for the compressed request;
+- no action execution, routing mutation, provider-circuit mutation or paid fallback.
+
+A pass is evidence to design/promote the compressor path; it is not permission for this
+benchmark command itself to flip production C6 APPLY.
