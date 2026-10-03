@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -106,6 +108,42 @@ def run_preflight(
         str(config.chatgpt_plan_model) in visible_models,
         "configured ChatGPT-plan model is not visible to the connected account",
     )
+    _require(
+        development_model in visible_models,
+        "configured DevelopmentEngine model is not visible to the connected account",
+    )
+
+    try:
+        codex_module = importlib.import_module("openai_codex")
+    except ImportError as exc:
+        raise Phase9MissionPreflightError(
+            "openai-codex is not installed; install the JARVIS development-codex "
+            "optional dependency before the real capability mission"
+        ) from exc
+    codex_version = str(getattr(codex_module, "__version__", "")).strip()
+    _require(
+        codex_version == "0.160.0",
+        "owner machine does not have the reviewed openai-codex==0.160.0 runtime",
+    )
+
+    docker = shutil.which("docker")
+    _require(bool(docker), "Docker is unavailable for governed development testing")
+    test_image = str(config.development_test_docker_image or "").strip()
+    _require(bool(test_image), "development test Docker image is not configured")
+    image_probe = subprocess.run(
+        [str(docker), "image", "inspect", test_image],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30.0,
+        check=False,
+        shell=False,
+    )
+    _require(
+        image_probe.returncode == 0,
+        "configured development test Docker image is unavailable locally",
+    )
 
     adapters = build_default_model_adapter_registry(
         chatgpt_plan_session_manager=manager,
@@ -165,6 +203,8 @@ def run_preflight(
         "work_orchestration_enabled": config.work_orchestration_enabled,
         "development_engine_enabled": config.development_engine_enabled,
         "development_engine_model": development_model,
+        "openai_codex_version": codex_version,
+        "development_test_image": test_image,
         "work_context_mode": config.work_context_mode,
         "automatic_paid_fallback": False,
         "github_promotion_enabled": config.github_promotion_enabled,
@@ -178,7 +218,7 @@ def run_preflight(
             else config.realtime_model
         ),
         "next": (
-            "start JARVIS voice and submit one natural external outcome; "
+            "start the JARVIS runtime and submit one natural external outcome; "
             "do not provide protocol/IP/SDK implementation hints"
         ),
     }
