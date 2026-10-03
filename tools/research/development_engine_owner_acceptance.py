@@ -330,6 +330,27 @@ async def _run_proof(
         }
         passed = all(checks.values())
 
+        usage_payload = None if result.usage is None else asdict(result.usage)
+        model_turns = 0 if result.usage is None else result.usage.model_turns
+        tool_calls = 0 if result.usage is None else result.usage.tool_calls
+        input_tokens = 0 if result.usage is None else result.usage.input_tokens
+        cached_tokens = (
+            0 if result.usage is None else result.usage.cached_input_tokens
+        )
+        efficiency = {
+            "provider_model_turns": model_turns,
+            "governed_tool_calls": tool_calls,
+            "tool_calls_per_model_turn": (
+                0.0 if model_turns == 0 else round(tool_calls / model_turns, 3)
+            ),
+            "cached_input_ratio": (
+                0.0
+                if input_tokens == 0
+                else round(cached_tokens / input_tokens, 4)
+            ),
+            "identical_second_execution_reused_without_cloud_turn": second.reused,
+        }
+
         report: dict[str, object] = {
             "schema": "jarvis.development_engine_owner_acceptance.v1",
             "passed": passed,
@@ -347,7 +368,8 @@ async def _run_proof(
             "candidate_revision": candidate,
             "changed_files": list(result.changed_files),
             "test_evidence_refs": list(result.test_evidence_refs),
-            "usage": None if result.usage is None else asdict(result.usage),
+            "usage": usage_payload,
+            "efficiency": efficiency,
             "reasoning_fingerprint": first.reasoning_fingerprint,
             "second_execution_reused": second.reused,
             "provider_thread_id": thread_id,
