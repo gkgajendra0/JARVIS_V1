@@ -10,6 +10,7 @@ from jarvis.model_routing.eligibility import TargetHealthEligibility
 from jarvis.provider_resilience import ProviderFailure, ProviderFailureKind
 
 _PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS = (1.0, 2.0, 4.0, 10.0, 20.0)
+_CHATGPT_PLAN_QUOTA_BACKOFF_SECONDS = (1800.0, 3600.0, 7200.0, 14400.0, 21600.0)
 
 
 def _token(value: object, *, field: str) -> str:
@@ -184,10 +185,18 @@ def apply_provider_failure(
         ProviderFailureKind.RATE_LIMITED,
         ProviderFailureKind.QUOTA_EXHAUSTED,
     }:
-        multiplier = _PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS[
-            min(count - 1, len(_PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS) - 1)
-        ]
-        seconds = min(cap, base * multiplier)
+        if (
+            kind is ProviderFailureKind.QUOTA_EXHAUSTED
+            and failure.provider.strip().casefold() == "chatgpt_plan"
+        ):
+            seconds = _CHATGPT_PLAN_QUOTA_BACKOFF_SECONDS[
+                min(count - 1, len(_CHATGPT_PLAN_QUOTA_BACKOFF_SECONDS) - 1)
+            ]
+        else:
+            multiplier = _PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS[
+                min(count - 1, len(_PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS) - 1)
+            ]
+            seconds = min(cap, base * multiplier)
         next_record = replace(
             record,
             state=TargetHealthEligibility.COOLDOWN,
