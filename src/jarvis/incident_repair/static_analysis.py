@@ -308,7 +308,10 @@ class DiagnosticStaticCheckExecutor:
         work: WorkItem,
         parameters: dict[str, Any],
     ) -> dict[str, Any]:
-        workspace = self._manager.assert_pristine(work.work_id)
+        workspace = await asyncio.to_thread(
+            self._manager.assert_pristine,
+            work.work_id,
+        )
         raw_targets = parameters.get("targets")
         if not isinstance(raw_targets, list):
             raise DiagnosticWorkspaceError("static-check targets must be an array")
