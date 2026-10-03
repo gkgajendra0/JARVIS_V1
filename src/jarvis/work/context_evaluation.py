@@ -191,7 +191,7 @@ def reconstruct_recorded_context_request(
 
     selected_ids_raw = snapshot.get("context_selected_step_ids")
     if not isinstance(selected_ids_raw, list):
-        raise ValueError("C6 replay snapshot is missing selected-step lineage")
+        raise TypeError("context_selected_step_ids must be an array")
     expected_selected_ids = tuple(str(item).strip() for item in selected_ids_raw)
     actual_selected_ids = tuple(step.step_id for step in context_pack.selected_steps)
     if expected_selected_ids != actual_selected_ids:
@@ -199,7 +199,7 @@ def reconstruct_recorded_context_request(
 
     evidence_count = snapshot.get("context_evidence_count")
     if isinstance(evidence_count, bool) or not isinstance(evidence_count, int):
-        raise ValueError("C6 replay snapshot is missing context evidence count")
+        raise TypeError("context_evidence_count must be an integer")
     if evidence_count != len(context_pack.evidence):
         raise ValueError("C6 replay context evidence count differs from provenance")
 
