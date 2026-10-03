@@ -230,6 +230,7 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     assert record.needs_owner is False
     assert record.owner_question is None
     assert record.parameters_digest == canonical_digest({})
+    assert record.reasoner_contract_digest == work_reasoning_contract_digest()
 
     snapshot = route_store.get_context_snapshot(record.route_request_id)
     assert snapshot is not None
@@ -300,6 +301,66 @@ async def test_shadow_retry_backfills_missing_context_snapshot(tmp_path: Path) -
             "history_manifest": context_pack.history_manifest_payload(),
         }
     )
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_does_not_backfill_legacy_route_under_new_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    store, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
+    request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=context_pack,
+    )
+
+    first = await router.decide(request)
+    record = route_store.list_for_work(work.work_id)[0]
+    with store.extension_transaction() as connection:
+        row = connection.execute(
+            "SELECT route_json FROM brain_route_decisions WHERE route_request_id = ?",
+            (record.route_request_id,),
+        ).fetchone()
+        assert row is not None
+        payload = store.decode_extension_json(str(row["route_json"]))
+        payload.pop("reasoner_contract_digest", None)
+        connection.execute(
+            "UPDATE brain_route_decisions SET route_json = ? WHERE route_request_id = ?",
+            (
+                store.encode_extension_json(payload),
+                record.route_request_id,
+            ),
+        )
+        connection.execute(
+            "DELETE FROM brain_route_context_snapshots WHERE route_request_id = ?",
+            (record.route_request_id,),
+        )
+
+    monkeypatch.setattr(
+        brain_routing_work,
+        "work_reasoning_contract_digest",
+        lambda: "f" * 64,
+    )
+
+    second = await router.decide(request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    legacy = route_store.get(record.route_request_id)
+    assert legacy is not None
+    assert legacy.reasoner_contract_digest is None
+    assert route_store.get_context_snapshot(record.route_request_id) is None
 
 
 @pytest.mark.asyncio
