@@ -172,6 +172,14 @@ def test_owner_main_accepts_legacy_development_test_image_setting(
         "configured_text",
         lambda name, settings: settings.get(name),
     )
+    monkeypatch.setattr(
+        module,
+        "configured_alias_text",
+        lambda names, settings: next(
+            (settings[name] for name in names if name in settings),
+            None,
+        ),
+    )
 
     def _preflight(*, model: str, test_image: str):
         observed["model"] = model
@@ -216,6 +224,14 @@ def test_owner_main_resolves_persisted_production_configuration(
         module,
         "configured_text",
         lambda name, settings: settings.get(name),
+    )
+    monkeypatch.setattr(
+        module,
+        "configured_alias_text",
+        lambda names, settings: next(
+            (settings[name] for name in names if name in settings),
+            None,
+        ),
     )
 
     def _preflight(*, model: str, test_image: str):
