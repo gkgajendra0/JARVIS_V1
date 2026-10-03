@@ -163,7 +163,9 @@ TRANSITIONS: dict[ChangeState, frozenset[ChangeState]] = {
         }
     ),
     ChangeState.APPROVED_FOR_BUILD: frozenset({ChangeState.DEVELOPING}),
-    ChangeState.DEVELOPING: frozenset({ChangeState.VERIFYING, ChangeState.FAILED}),
+    ChangeState.DEVELOPING: frozenset(
+        {ChangeState.RESEARCHING, ChangeState.VERIFYING, ChangeState.FAILED}
+    ),
     ChangeState.VERIFYING: frozenset(
         {ChangeState.WAITING_OWNER_ACCEPTANCE, ChangeState.READY_FOR_PROMOTION}
     ),
