@@ -62,21 +62,35 @@ class FakeBuilder:
 
 
 class FakeWorkStore:
-    def __init__(self, steps: tuple[WorkStep, ...]) -> None:
-        self._steps = steps
+    def __init__(
+        self,
+        steps: tuple[WorkStep, ...],
+        *,
+        prior_steps: tuple[WorkStep, ...] = (),
+    ) -> None:
+        self._steps = {
+            "work_research": steps,
+            "work_research_old": prior_steps,
+        }
 
     def require(self, work_id: str):
-        assert work_id == "work_research"
+        assert work_id in self._steps
         return SimpleNamespace(work_id=work_id)
 
     def list_steps(self, work_id: str) -> tuple[WorkStep, ...]:
-        assert work_id == "work_research"
-        return self._steps
+        assert work_id in self._steps
+        return self._steps[work_id]
 
 
 class FakeChangeStore:
-    def __init__(self, steps: tuple[WorkStep, ...]) -> None:
-        self.work = FakeWorkStore(steps)
+    def __init__(
+        self,
+        steps: tuple[WorkStep, ...],
+        *,
+        prior_steps: tuple[WorkStep, ...] = (),
+    ) -> None:
+        self.work = FakeWorkStore(steps, prior_steps=prior_steps)
+        self._has_prior = bool(prior_steps)
 
     def stage_for_work(self, work_id: str):
         assert work_id == "work_development"
@@ -87,14 +101,37 @@ class FakeChangeStore:
 
     def list_stages(self, change_id: str):
         assert change_id == "change_demo"
-        return (
+        stages = []
+        if self._has_prior:
+            stages.append(
+                SimpleNamespace(
+                    stage_key=(
+                        OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+                    ),
+                    attempt=1,
+                    work_id="work_research_old",
+                )
+            )
+        stages.append(
             SimpleNamespace(
                 stage_key=(
                     OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
                 ),
-                attempt=1,
+                attempt=2 if self._has_prior else 1,
                 work_id="work_research",
-            ),
+            )
+        )
+        return tuple(stages)
+
+    def get_artifact(self, artifact_id: str):
+        assert artifact_id == "architecture_demo"
+        return SimpleNamespace(
+            artifact_id=artifact_id,
+            digest="b" * 64,
+            payload={
+                "plan_artifact_id": "plan_current",
+                "plan_artifact_digest": "d" * 64,
+            },
         )
 
     def require(self, change_id: str):
@@ -238,7 +275,16 @@ async def test_research_evidence_tool_is_ticket_bounded() -> None:
             ],
         },
     )
-    store = FakeChangeStore((research_step,))
+    finalize = _completed_step(
+        "work_research",
+        "acq_finalize",
+        {
+            "finalized": True,
+            "plan_artifact_id": "plan_current",
+            "plan_artifact_digest": "d" * 64,
+        },
+    )
+    store = FakeChangeStore((research_step, finalize))
     executor = Phase9ResearchEvidenceExecutor(
         store,  # type: ignore[arg-type]
         FakeBuilder(_ticket()),  # type: ignore[arg-type]
@@ -251,6 +297,9 @@ async def test_research_evidence_tool_is_ticket_bounded() -> None:
 
     assert result["schema"] == "phase9_development_research_evidence.v1"
     assert result["ticket_id"] == _ticket().ticket_id
+    assert result["source_attempt"] == 1
+    assert result["source_work_id"] == "work_research"
+    assert result["plan_artifact_id"] == "plan_current"
     assert result["evidence"][0]["kind"] == "research_web"
     assert result["evidence"][0]["step_id"] == research_step.step_id
 
@@ -259,6 +308,78 @@ async def test_research_evidence_tool_is_ticket_bounded() -> None:
             work=work,
             parameters={"evidence_refs": ["source:unapproved"]},
         )
+
+
+@pytest.mark.asyncio
+async def test_research_evidence_excludes_superseded_source_attempt() -> None:
+    work = _development_work()
+    stale_research = _completed_step(
+        "work_research_old",
+        "research_web",
+        {
+            "ok": True,
+            "query": "obsolete transport",
+            "sources": [
+                {
+                    "source_id": "source:https://example.com/docs",
+                    "excerpt": "obsolete attempt evidence",
+                }
+            ],
+        },
+    )
+    stale_finalize = _completed_step(
+        "work_research_old",
+        "acq_finalize",
+        {
+            "finalized": True,
+            "plan_artifact_id": "plan_old",
+            "plan_artifact_digest": "e" * 64,
+        },
+    )
+    current_research = _completed_step(
+        "work_research",
+        "research_web",
+        {
+            "ok": True,
+            "query": "replacement transport",
+            "sources": [
+                {
+                    "source_id": "source:https://example.com/docs",
+                    "excerpt": "current attempt evidence",
+                }
+            ],
+        },
+    )
+    current_finalize = _completed_step(
+        "work_research",
+        "acq_finalize",
+        {
+            "finalized": True,
+            "plan_artifact_id": "plan_current",
+            "plan_artifact_digest": "d" * 64,
+        },
+    )
+    store = FakeChangeStore(
+        (current_research, current_finalize),
+        prior_steps=(stale_research, stale_finalize),
+    )
+    executor = Phase9ResearchEvidenceExecutor(
+        store,  # type: ignore[arg-type]
+        FakeBuilder(_ticket()),  # type: ignore[arg-type]
+    )
+
+    result = await executor.execute(
+        work=work,
+        parameters={"evidence_refs": ["source:https://example.com/docs"]},
+    )
+
+    assert result["source_attempt"] == 2
+    assert result["source_work_id"] == "work_research"
+    evidence_step_ids = {item["step_id"] for item in result["evidence"]}
+    assert current_research.step_id in evidence_step_ids
+    assert current_finalize.step_id in evidence_step_ids
+    assert stale_research.step_id not in evidence_step_ids
+    assert stale_finalize.step_id not in evidence_step_ids
 
 
 def test_phase9_completion_guard_allows_typed_revision_without_fake_commit() -> None:
