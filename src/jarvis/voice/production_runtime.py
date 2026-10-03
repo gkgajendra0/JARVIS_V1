@@ -72,6 +72,10 @@ from jarvis.promotion.release import (
     load_active_release_for_startup,
 )
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.provider_model_lifecycle import (
     GEMINI_REALTIME_MODEL_SETTING,
     GeminiLiveLifecycleResult,
@@ -550,6 +554,28 @@ def build_production_voice_runtime(
             gicc_shadow_interpreter = None
             gicc_goal_store = None
 
+    provider_circuit_registry = BackgroundProviderCircuitRegistry()
+    memory_candidate_circuit = (
+        None
+        if candidate_extractor is None
+        else provider_circuit_registry.circuit(
+            provider_circuit_key(
+                provider=candidate_extractor.provider_name,
+                model=candidate_extractor.model_name,
+            )
+        )
+    )
+    gicc_shadow_circuit = (
+        None
+        if gicc_shadow_interpreter is None
+        else provider_circuit_registry.circuit(
+            provider_circuit_key(
+                provider=gicc_shadow_interpreter.provider_name,
+                model=gicc_shadow_interpreter.model_name,
+            )
+        )
+    )
+
     provider_resilience_state = ProviderResilienceState()
     provider_health_observer = (
         ProviderResilienceHealthObserver(self_awareness)
@@ -642,6 +668,7 @@ def build_production_voice_runtime(
             candidate_runtime = MemoryCandidateSessionRuntime(
                 conversation=bridge.conversation,
                 extractor=candidate_extractor,
+                provider_circuit=memory_candidate_circuit,
             )
             bridge.add_accepted_turn_observer(candidate_runtime.observe_turn)
             bridge.add_close_observer(candidate_runtime.close)
@@ -650,6 +677,7 @@ def build_production_voice_runtime(
                 conversation=bridge.conversation,
                 interpreter=gicc_shadow_interpreter,
                 store=gicc_goal_store,
+                provider_circuit=gicc_shadow_circuit,
             )
             bridge.add_accepted_turn_observer(gicc_shadow_runtime.observe_turn)
             bridge.add_close_observer(gicc_shadow_runtime.close)
