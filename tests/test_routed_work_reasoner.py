@@ -31,6 +31,7 @@ from jarvis.model_routing.router import (
 )
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -593,3 +594,52 @@ async def test_single_target_rate_limit_becomes_routing_resource_blocker(
     attempts = routing_store.list_attempts(persisted.decision.decision_id)
     assert len(attempts) == 1
     assert attempts[0].failure_class == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_routed_reasoner_honors_shared_circuit_before_same_target_retry(
+    tmp_path: Path,
+) -> None:
+    class ServiceUnavailable(RuntimeError):
+        status_code = 503
+
+    now = 1000.0
+    work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    routing_store = ModelRoutingStore(work_store)
+    adapter = ReasoningAdapter(
+        routing_store=routing_store,
+        error=ServiceUnavailable("503 temporarily unavailable"),
+    )
+    adapters = ModelAdapterRegistry((adapter,))
+    targets = ModelTargetRegistry(
+        adapters,
+        (_target("work.fake.default"),),
+    )
+    router = ModelRouter(
+        target_registry=targets,
+        adapter_registry=adapters,
+        strategy_registry=RoutingStrategyRegistry((EngineeringStageStrategy(),)),
+        routing_store=routing_store,
+        eligibility_policy=EligibilityPolicy(),
+        credential_available=lambda target: True,
+        clock=lambda: now,
+    )
+    circuits = BackgroundProviderCircuitRegistry(
+        path=tmp_path / "provider-circuits.json",
+        clock=lambda: now,
+    )
+    reasoner = RoutedWorkReasoner(
+        router=router,
+        invoker=ModelInvoker(adapters),
+        primary_target_id="work.fake.default",
+        clock=lambda: now,
+        provider_circuit_registry=circuits,
+    )
+
+    with pytest.raises(RoutingResourceBlocked):
+        await reasoner.decide(_brain_request(_work(work_store)))
+
+    assert len(adapter.calls) == 1
+    circuit = circuits.circuit("fake:fake-model")
+    assert circuit.allow_request() is False
+    assert circuit.failed_attempts == 1
