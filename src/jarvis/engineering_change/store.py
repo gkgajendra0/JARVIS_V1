@@ -794,6 +794,29 @@ class ChangeStore:
                 raise ChangeConflict(
                     "architecture revision may only originate from development"
                 )
+
+            existing_revision_row = connection.execute(
+                """SELECT payload
+                FROM engineering_change_artifacts
+                WHERE change_id=? AND kind='architecture_revision_request'
+                ORDER BY revision DESC LIMIT 1""",
+                (change.change_id,),
+            ).fetchone()
+            if existing_revision_row is not None:
+                existing_payload = self.work._decode_json(
+                    existing_revision_row["payload"]
+                )
+                if (
+                    isinstance(existing_payload, dict)
+                    and existing_payload.get("development_work_id")
+                    == normalized_work_id
+                    and change.state is not ChangeState.DEVELOPING
+                ):
+                    # DBOS may replay after the revision artifact + state transition
+                    # committed but before the superseded development WorkItem was
+                    # durably cancelled. Reuse that exact revision request.
+                    return change
+
             if change.state is not ChangeState.DEVELOPING:
                 raise ChangeConflict(
                     "architecture revision requires an actively developing change"
