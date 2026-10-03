@@ -898,6 +898,12 @@ def build_work_runtime(
         model_owner_request_handler=_model_owner_request_handler,
     )
     engine.reconcile_interrupted_steps()
+    migrated_model_owner_waits = engine.reconcile_waiting_model_owner_requests()
+    if migrated_model_owner_waits:
+        LOGGER.info(
+            "Migrated legacy model-authored owner waits into governed lifecycle: %s",
+            ", ".join(migrated_model_owner_waits),
+        )
     reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
     if reconciled_owner_deliveries:
         LOGGER.info(
@@ -932,6 +938,10 @@ def build_work_runtime(
             ),
         ),
     )
+    for work_id in migrated_model_owner_waits:
+        changes.reconcile_for_work(work_id)
+    if migrated_model_owner_waits:
+        reconcile_owner_change_gates(changes)
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,
