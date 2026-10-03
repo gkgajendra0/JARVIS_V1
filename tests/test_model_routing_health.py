@@ -204,3 +204,28 @@ def test_provider_pressure_backoff_reaches_ten_minute_cap() -> None:
         record = mutation.record
 
     assert delays == [30.0, 60.0, 120.0, 300.0, 600.0]
+
+
+
+def test_chatgpt_plan_quota_uses_long_probe_schedule() -> None:
+    first = apply_provider_failure(
+        TargetHealthRecord(target_id="work.chatgpt_plan.default"),
+        ProviderFailure(
+            provider="chatgpt_plan",
+            kind=ProviderFailureKind.QUOTA_EXHAUSTED,
+            status_code=429,
+        ),
+        now_epoch=100.0,
+    )
+    second = apply_provider_failure(
+        first.record,
+        ProviderFailure(
+            provider="chatgpt_plan",
+            kind=ProviderFailureKind.QUOTA_EXHAUSTED,
+            status_code=429,
+        ),
+        now_epoch=1900.0,
+    )
+
+    assert first.record.cooldown_until_epoch == 1900.0
+    assert second.record.cooldown_until_epoch == 5500.0
