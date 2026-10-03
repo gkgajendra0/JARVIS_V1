@@ -708,7 +708,9 @@ Still intentionally pending:
 - D7 owner-machine Codex proof using the real ChatGPT-plan authorization and actual
   local development sandbox. The proof now shares the persistent production subscription
   circuit, so a known quota cooldown is a zero-inference preflight blocker rather than a
-  reason to probe repeatedly.
+  reason to probe repeatedly. It also reconstructs a fresh WorkStore/session/engine/
+  coordinator stack after the first mission and must reuse the durable result before any
+  Codex runtime can be created.
 - D8 blind natural-goal capability acceptance through promotion, explicit activation,
   real external effect/readback and GICC continuation.
 - a direct development static-check tool, only if wrapping the existing source-owned
