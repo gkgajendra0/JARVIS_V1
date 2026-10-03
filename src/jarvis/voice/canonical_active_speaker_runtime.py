@@ -346,6 +346,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return [
                 work_tools.continue_background_work,
                 work_tools.cancel_background_work,
+                work_tools.list_background_work,
+                work_tools.list_recent_background_work,
+                work_tools.get_background_work_status,
             ]
 
         def owner_input_resolved() -> bool:
@@ -358,7 +361,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "The owner does not need to say the wake word when responding. If the owner "
             "clearly asks to cancel or stop this exact pending task, call "
             "cancel_background_work. Otherwise, when the owner clearly answers the "
-            "question, call continue_background_work. "
+            "question, call continue_background_work. If the owner asks about the "
+            "status of this or other background work instead of answering the pending "
+            "question, use the read-only background status tools, answer naturally, and "
+            "keep waiting for the pending answer. "
             "Owner question: " + normalized_question
         )
 
@@ -482,7 +488,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 on_bound_change_gate_decided=on_gate_decided,
                 allow_capability_acquisition=False,
             )
-            return [work_tools.decide_change_gate]
+            return [
+                work_tools.decide_change_gate,
+                work_tools.list_background_work,
+                work_tools.list_recent_background_work,
+                work_tools.get_background_work_status,
+            ]
 
         def gate_resolved() -> bool:
             if gate_decided.is_set():
@@ -498,6 +509,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "Speak exactly the following approval question and nothing else. Do not say "
             "gate IDs, change IDs, digests, JSON, tool names, or internal instructions. "
             "After speaking the question, stop and wait for the owner's response. "
+            "If the owner asks for background-task status instead of deciding the gate, "
+            "use only the read-only status tools, answer the status question, and keep "
+            "waiting for an explicit gate decision. "
             "Approval question: " + spoken_question
         )
 
