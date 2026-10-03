@@ -757,6 +757,146 @@ class ChangeStore:
                 ).fetchone()
             )
 
+    def request_architecture_revision_for_work(
+        self,
+        work_id: str,
+        *,
+        reason: str,
+    ) -> EngineeringChange:
+        """Return governed development to research without asking for ad-hoc approval."""
+
+        normalized_work_id = str(work_id).strip()
+        normalized_reason = " ".join(str(reason).split()).strip()
+        if not normalized_work_id or not normalized_reason:
+            raise ChangeConflict("work identity and architecture revision reason are required")
+
+        with self.work._lock, self.work._connect() as connection:
+            stage_row = connection.execute(
+                """SELECT change_id, stage_key, attempt
+                FROM engineering_change_stages WHERE work_id=?""",
+                (normalized_work_id,),
+            ).fetchone()
+            if stage_row is None:
+                raise ChangeConflict("architecture revision work is not change-owned")
+
+            change_row = connection.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?",
+                (stage_row["change_id"],),
+            ).fetchone()
+            if change_row is None:
+                raise ChangeConflict("architecture revision change is missing")
+            change = self._from_row(change_row)
+            process = self.process_contract(change.process_key, change.process_version)
+            stage_contract = process.stage_for_key(stage_row["stage_key"])
+            if stage_contract.role is not ProcessStageRole.DEVELOPMENT:
+                raise ChangeConflict(
+                    "architecture revision may only originate from development"
+                )
+            if change.state is not ChangeState.DEVELOPING:
+                raise ChangeConflict(
+                    "architecture revision requires an actively developing change"
+                )
+
+            architecture_row = connection.execute(
+                """SELECT artifact_id, revision, digest
+                FROM engineering_change_artifacts
+                WHERE change_id=? AND kind='architecture'
+                ORDER BY revision DESC LIMIT 1""",
+                (change.change_id,),
+            ).fetchone()
+            if architecture_row is None:
+                raise ChangeConflict("architecture revision requires approved architecture")
+
+            source_stage = process.architecture_source_stage
+            max_attempt = connection.execute(
+                """SELECT COALESCE(MAX(attempt), 0)
+                FROM engineering_change_stages
+                WHERE change_id=? AND stage_key=?""",
+                (change.change_id, source_stage.stage_key),
+            ).fetchone()[0]
+            source_attempt = int(max_attempt) + 1
+            payload: dict[str, object] = {
+                "schema": "architecture_revision_request.v1",
+                "development_work_id": normalized_work_id,
+                "development_attempt": int(stage_row["attempt"]),
+                "previous_architecture_artifact_id": architecture_row["artifact_id"],
+                "previous_architecture_revision": int(architecture_row["revision"]),
+                "previous_architecture_digest": architecture_row["digest"],
+                "source_stage_key": source_stage.stage_key,
+                "source_attempt": source_attempt,
+                "reason": normalized_reason[:1000],
+            }
+            digest = _digest(payload)
+            revision = connection.execute(
+                """SELECT COALESCE(MAX(revision), 0) + 1
+                FROM engineering_change_artifacts
+                WHERE change_id=? AND kind='architecture_revision_request'""",
+                (change.change_id,),
+            ).fetchone()[0]
+            artifact = ChangeArtifact(
+                artifact_id="artifact_" + uuid.uuid4().hex[:16],
+                change_id=change.change_id,
+                kind="architecture_revision_request",
+                revision=int(revision),
+                digest=digest,
+                payload=payload,
+                created_at=_now(),
+            )
+            connection.execute(
+                "INSERT INTO engineering_change_artifacts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    artifact.artifact_id,
+                    artifact.change_id,
+                    artifact.kind,
+                    artifact.revision,
+                    artifact.digest,
+                    self.work._encode_json(payload),
+                    artifact.created_at,
+                ),
+            )
+            timestamp = _now()
+            cursor = connection.execute(
+                """UPDATE engineering_changes
+                SET state=?, version=version+1, updated_at=?
+                WHERE change_id=? AND version=?""",
+                (
+                    ChangeState.RESEARCHING.value,
+                    timestamp,
+                    change.change_id,
+                    change.version,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ChangeConflict("stale architecture revision request")
+            self._event(
+                connection,
+                change.change_id,
+                f"artifact:{artifact.artifact_id}",
+                "artifact",
+                {
+                    "kind": artifact.kind,
+                    "revision": artifact.revision,
+                    "digest": artifact.digest,
+                },
+            )
+            self._event(
+                connection,
+                change.change_id,
+                f"architecture-revision:{artifact.artifact_id}",
+                "architecture_revision_requested",
+                {
+                    "development_work_id": normalized_work_id,
+                    "source_attempt": source_attempt,
+                    "reason": normalized_reason[:1000],
+                },
+            )
+            updated = connection.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?",
+                (change.change_id,),
+            ).fetchone()
+            assert updated is not None
+            return self._from_row(updated)
+
     def add_artifact(
         self, change_id: str, *, kind: str, payload: dict[str, object]
     ) -> ChangeArtifact:
