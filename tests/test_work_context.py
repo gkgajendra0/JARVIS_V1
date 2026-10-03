@@ -19,7 +19,7 @@ from jarvis.work.context_evaluation import (
     reconstruct_recorded_context_request,
 )
 from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
-from jarvis.work.reasoner import _work_input_payload
+from jarvis.work.reasoner import _work_input_payload, work_reasoning_contract_digest
 
 
 def _work(work_type: WorkType = WorkType.DEVELOPMENT) -> WorkItem:
@@ -341,6 +341,7 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
     )
     snapshot = {
         "schema": "c6_work_reasoning_snapshot.v1",
+        "reasoner_contract_digest": work_reasoning_contract_digest(),
         "work_version": work.version,
         "work_state": work.state.value,
         "work_status_detail": "historical status",
@@ -438,3 +439,22 @@ def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
         assert "history prefix" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("expected replay history drift to fail closed")
+
+
+def test_reconstruct_recorded_context_request_rejects_contract_drift() -> None:
+    work = _work()
+    snapshot = {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "reasoner_contract_digest": "f" * 64,
+    }
+
+    try:
+        reconstruct_recorded_context_request(
+            snapshot=snapshot,
+            work=work,
+            steps=(),
+        )
+    except ValueError as exc:
+        assert "reasoning contract" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected replay reasoning-contract drift to fail closed")
