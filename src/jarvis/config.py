@@ -132,6 +132,7 @@ class JarvisConfig:
     work_orchestration_model: str | None = None
     development_engine_enabled: bool = False
     development_engine_model: str | None = None
+    work_context_mode: str = "shadow"
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
@@ -225,6 +226,11 @@ class JarvisConfig:
 
         if not isinstance(self.autonomy_mode, AutonomyMode):
             raise TypeError("autonomy_mode must be an AutonomyMode")
+
+        work_context_mode = str(self.work_context_mode).strip().casefold()
+        if work_context_mode not in {"off", "shadow", "apply"}:
+            raise ValueError("work_context_mode must be one of: off, shadow, apply")
+        object.__setattr__(self, "work_context_mode", work_context_mode)
 
         brain_router_mode = str(self.global_brain_router_mode).strip().casefold()
         if brain_router_mode not in {"off", "shadow", "apply"}:
@@ -524,6 +530,11 @@ class JarvisConfig:
             ),
             development_engine_model=_configured_optional_text(
                 "JARVIS_DEVELOPMENT_ENGINE_MODEL",
+                machine,
+            ),
+            work_context_mode=_configured_required_text(
+                "JARVIS_WORK_CONTEXT_MODE",
+                "shadow",
                 machine,
             ),
             global_brain_router_mode=_configured_required_text(
