@@ -774,6 +774,13 @@ def build_default_self_model() -> SelfModelRegistry:
                 "tests/test_development_engine_contracts.py",
                 "tests/test_development_engine_tools.py",
                 "tests/test_development_engine_session_store.py",
+                "tests/test_development_engine_codex.py",
+                "tests/test_development_engine_coordinator.py",
+                "tests/test_development_engine_phase9.py",
+            ),
+            config_keys=(
+                "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+                "JARVIS_DEVELOPMENT_ENGINE_MODEL",
             ),
             logger_prefixes=("jarvis.development_engine",),
             docs=("docs/DEVELOPMENT_ENGINE_CONTROL_PLANE_ARCHITECTURE.md",),
