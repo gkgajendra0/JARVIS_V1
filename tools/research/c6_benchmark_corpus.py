@@ -72,13 +72,17 @@ def _fail(
     input_data: dict | None = None,
     reason: str,
 ) -> WorkStep:
-    return WorkStep(
-        work_id=work_id,
-        kind=kind,
-        summary=summary,
-        step_id=f"step_{work_id}_{index:03d}",
-        input_data=dict(input_data or {}),
-    ).start().fail(reason)
+    return (
+        WorkStep(
+            work_id=work_id,
+            kind=kind,
+            summary=summary,
+            step_id=f"step_{work_id}_{index:03d}",
+            input_data=dict(input_data or {}),
+        )
+        .start()
+        .fail(reason)
+    )
 
 
 def _request(
