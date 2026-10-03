@@ -234,3 +234,41 @@ def test_usage_rejects_inconsistent_totals() -> None:
             output_tokens=5,
             total_tokens=14,
         )
+
+
+def test_retry_cooldown_is_typed_and_resource_only() -> None:
+    ticket = _ticket()
+    blocked = DevelopmentResultV1.create(
+        ticket=ticket,
+        disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
+        engine_id="fake",
+        engine_version="1",
+        summary="capacity unavailable",
+        reason="shared plan allowance is cooling down",
+        blocker_code="provider_circuit_open",
+        retry_after_seconds=1800.0,
+    )
+    assert blocked.retry_after_seconds == 1800.0
+
+    with pytest.raises(ValueError, match="only valid for blocked-resource"):
+        DevelopmentResultV1.create(
+            ticket=ticket,
+            disposition=DevelopmentDisposition.FAILED,
+            engine_id="fake",
+            engine_version="1",
+            summary="failed",
+            reason="non-resource failure",
+            retry_after_seconds=10.0,
+        )
+
+    with pytest.raises(ValueError, match="must be positive"):
+        DevelopmentResultV1.create(
+            ticket=ticket,
+            disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
+            engine_id="fake",
+            engine_version="1",
+            summary="capacity unavailable",
+            reason="retry later",
+            blocker_code="provider_circuit_open",
+            retry_after_seconds=0.0,
+        )
