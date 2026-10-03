@@ -189,6 +189,10 @@ def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> No
         {
             "JARVIS_WORK_ORCHESTRATION_ENABLED": "true",
             "JARVIS_WORK_ORCHESTRATION_MODEL": "model-x",
+            "JARVIS_WORK_PAID_FALLBACK_ENABLED": "false",
+            "JARVIS_DEVELOPMENT_ENGINE_ENABLED": "true",
+            "JARVIS_DEVELOPMENT_ENGINE_MODEL": "gpt-reviewed",
+            "JARVIS_WORK_CONTEXT_MODE": "shadow",
             "JARVIS_GLOBAL_BRAIN_ROUTER_MODE": "shadow",
             "JARVIS_WORK_GLOBAL_CONCURRENCY": "4",
             "JARVIS_DEV_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
@@ -198,6 +202,10 @@ def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> No
     settings = load_machine_settings(path)
     assert settings["JARVIS_WORK_ORCHESTRATION_ENABLED"] == "true"
     assert settings["JARVIS_WORK_ORCHESTRATION_MODEL"] == "model-x"
+    assert settings["JARVIS_WORK_PAID_FALLBACK_ENABLED"] == "false"
+    assert settings["JARVIS_DEVELOPMENT_ENGINE_ENABLED"] == "true"
+    assert settings["JARVIS_DEVELOPMENT_ENGINE_MODEL"] == "gpt-reviewed"
+    assert settings["JARVIS_WORK_CONTEXT_MODE"] == "shadow"
     assert settings["JARVIS_GLOBAL_BRAIN_ROUTER_MODE"] == "shadow"
     assert settings["JARVIS_WORK_GLOBAL_CONCURRENCY"] == "4"
     assert settings["JARVIS_DEV_TEST_DOCKER_IMAGE"] == "jarvis-dev-tests:local"
