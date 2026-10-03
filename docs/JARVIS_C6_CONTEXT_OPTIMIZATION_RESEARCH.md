@@ -241,3 +241,40 @@ Implemented in this slice:
 - zero-cloud owner-machine history acceptance harness.
 
 Production model input remains legacy while C6 is in shadow.
+
+
+## Owner-machine paired acceptance update — 2026-10-04
+
+The current PR #252 acceptance sequence has now produced three fixed
+legacy-vs-optimized pair results:
+
+1. `development_repair_after_failure`
+   - equivalent after the fixture pinned the exact required commit message;
+   - action, parameters, completion and owner/safety fields matched;
+   - optimized context materially reduced input usage.
+2. `development_ready_for_local_commit`
+   - equivalent;
+   - 22.96% serialized-context reduction;
+   - action/parameters/completion/owner fields all matched.
+3. `research_requires_reresolution_after_new_evidence`
+   - action remained `acq_record_candidate`;
+   - `goal_complete`, `needs_owner` and owner-question fields matched;
+   - parameters did **not** match;
+   - 76.94% serialized-context reduction.
+
+The research mismatch is material for C6 because the differing parameters contain
+verification/acceptance semantics, not merely summary wording.
+
+Therefore:
+
+- production C6 remains **SHADOW**;
+- `JARVIS_WORK_CONTEXT_MODE=APPLY` is not authorized;
+- do not weaken the strict action-parameter equivalence gate to obtain a pass;
+- next diagnosis should be zero-model first: identify which omitted/reshaped research
+  evidence caused the parameter divergence and determine whether those parameters should
+  be preserved in ContextPack or constructed canonically/deterministically downstream;
+- only after that correction should the affected research pair be re-run.
+
+The same acceptance also reinforces the model-routing direction in
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`: context reduction and model
+tiering are complementary, and neither may trade away decision quality.
