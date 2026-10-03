@@ -75,6 +75,8 @@ class DevelopmentEngineCoordinator:
         reusable = self._sessions.reusable_result(
             ticket=ticket,
             reasoning_fingerprint=fingerprint,
+            engine_id=self._engine.engine_id,
+            engine_version=self._engine.engine_version,
         )
         if reusable is not None:
             return DevelopmentCoordinationResult(
