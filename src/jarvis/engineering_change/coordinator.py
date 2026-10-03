@@ -115,6 +115,25 @@ class ChangeCoordinator:
         architecture = None
         if stage_contract.role is ProcessStageRole.ARCHITECTURE_SOURCE:
             request = change.request
+            revision_request = self.store.latest_artifact(
+                change_id,
+                "architecture_revision_request",
+            )
+            if (
+                revision_request is not None
+                and int(revision_request.payload.get("source_attempt", 0)) == attempt
+            ):
+                reason = " ".join(
+                    str(revision_request.payload.get("reason") or "").split()
+                )
+                if reason:
+                    request += (
+                        "\nThe previously approved architecture could not safely "
+                        "continue during governed development. Re-research the capability "
+                        "and derive a complete replacement architecture from current "
+                        "evidence. Revision reason: "
+                        + reason
+                    )
             dependencies: tuple[str, ...] = ()
         elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
             architecture = self.store.latest_artifact(change_id, "architecture")
@@ -212,7 +231,31 @@ class ChangeCoordinator:
             )
 
         if change.state is ChangeState.RESEARCHING:
-            stage = self.submit_stage(change_id, source_stage.stage_key, 1)
+            source_attempt = 1
+            revision_request = self.store.latest_artifact(
+                change_id,
+                "architecture_revision_request",
+            )
+            current_architecture = self.store.latest_artifact(
+                change_id,
+                "architecture",
+            )
+            if (
+                revision_request is not None
+                and current_architecture is not None
+                and revision_request.payload.get(
+                    "previous_architecture_artifact_id"
+                )
+                == current_architecture.artifact_id
+            ):
+                requested_attempt = revision_request.payload.get("source_attempt")
+                if isinstance(requested_attempt, int) and requested_attempt > 1:
+                    source_attempt = requested_attempt
+            stage = self.submit_stage(
+                change_id,
+                source_stage.stage_key,
+                source_attempt,
+            )
             source_work = self.store.work.require(stage.work_id)
             if source_work.state in {WorkState.FAILED, WorkState.CANCELLED}:
                 return self.store.transition(
