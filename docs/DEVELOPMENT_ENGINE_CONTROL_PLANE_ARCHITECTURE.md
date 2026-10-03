@@ -376,6 +376,19 @@ Before any expensive engineering invocation, JARVIS should produce a determinist
 
 If the fingerprint is unchanged and a valid result already exists, reuse the result rather than invoking cloud intelligence again.
 
+### 10.2.1 Shared cloud-reasoning lease
+
+The ChatGPT-plan allowance is shared not only by DevelopmentEngine turns but also by any
+ordinary Work reasoning routed to the same connected plan. JARVIS therefore exposes one
+`provider_api` resource lease with capacity 1 to both routed WorkReasoner invocations
+and DevelopmentEngine sessions. A coherent DevelopmentEngine session holds this lease
+for its bounded engineering assignment. Other deterministic Work can continue, but a
+second background cloud-reasoning request waits rather than consuming the same shared
+allowance concurrently.
+
+This is a quota-governance rule, not a provider-specific lifecycle dependency. The
+provider circuit still handles quota/rate/service pressure after a request is admitted.
+
 ### 10.3 One expensive development mission per shared allowance
 
 The ChatGPT-plan allowance is shared. Multiple WorkItems must not independently hammer the same exhausted capacity domain.
@@ -528,6 +541,14 @@ Do not:
 - Log actual input token/usage reduction.
 
 ### D7 — Architecture proof
+
+The owner-machine proof is implemented as
+`tools/research/development_engine_owner_acceptance.py`. It must operate only on a
+disposable temporary Git repository, use the real governed DEVELOPMENT executors and
+Docker test runner, leave the source repository unchanged, prove exact allowed-path/test
+enforcement, record measured Codex usage when available, and prove a second identical
+reasoning request reuses the durable result rather than invoking cloud intelligence
+again.
 
 Owner-machine proof in a disposable isolated repo/worktree:
 
