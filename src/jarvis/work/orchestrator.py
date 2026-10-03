@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
@@ -79,7 +80,20 @@ class WorkOrchestrator:
             work_type=work_type,
         )
         if existing is not None:
-            return WorkSubmission(work=existing, execution_id=existing.work_id)
+            if (
+                existing.work_type in self._EVENT_DRIVEN_WORK_TYPES
+                or existing.state.terminal
+            ):
+                execution_id = (
+                    self._store.get_execution_id(existing.work_id) or existing.work_id
+                )
+            else:
+                execution_id = ensure_durable_execution(
+                    store=self._store,
+                    backend=self._backend,
+                    item=existing,
+                )
+            return WorkSubmission(work=existing, execution_id=execution_id)
 
         event_driven = work_type in self._EVENT_DRIVEN_WORK_TYPES
         item = WorkItem(
@@ -97,7 +111,11 @@ class WorkOrchestrator:
         if event_driven:
             return WorkSubmission(work=item, execution_id=item.work_id)
         try:
-            execution_id = self._backend.submit(item.work_id, priority=priority)
+            execution_id = ensure_durable_execution(
+                store=self._store,
+                backend=self._backend,
+                item=item,
+            )
         except Exception as exc:
             detail = " ".join(str(exc).split())[:400]
             reason = f"durable execution could not be submitted: {type(exc).__name__}"
@@ -115,21 +133,6 @@ class WorkOrchestrator:
                 event_key=f"failure:{failed.version}",
             )
             raise
-        if execution_id != item.work_id:
-            reason = "durable backend returned a mismatched execution id"
-            failed = item.transition(
-                WorkState.FAILED,
-                status_detail=reason,
-            )
-            failed = self._store.save(failed, expected_version=item.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=reason,
-                event_key=f"failure:{failed.version}",
-            )
-            raise RuntimeError("durable backend must use work_id as execution_id")
-        self._store.set_execution_id(item.work_id, execution_id)
         return WorkSubmission(work=item, execution_id=execution_id)
 
     def get(self, work_id: str) -> WorkItem:
@@ -143,29 +146,11 @@ class WorkOrchestrator:
             if item.work_type in self._EVENT_DRIVEN_WORK_TYPES:
                 reconciled.append(item.work_id)
                 continue
-            bound_execution = self._store.get_execution_id(item.work_id)
-            if bound_execution is not None and bound_execution != item.work_id:
-                # Retry executions intentionally use a non-canonical DBOS ID. After
-                # graceful shutdown they may be durably parked as CANCELLED, so let
-                # production backends resume that exact execution instead of creating
-                # a second canonical executor for the same WorkItem.
-                reconcile_execution = getattr(
-                    self._backend,
-                    "reconcile_execution",
-                    None,
-                )
-                if callable(reconcile_execution):
-                    resumed_id = reconcile_execution(bound_execution)
-                    if resumed_id != bound_execution:
-                        raise RuntimeError(
-                            "durable backend changed retry execution identity"
-                        )
-                reconciled.append(item.work_id)
-                continue
-            execution_id = self._backend.submit(item.work_id, priority=item.priority)
-            if execution_id != item.work_id:
-                raise RuntimeError("durable backend must use work_id as execution_id")
-            self._store.set_execution_id(item.work_id, execution_id)
+            ensure_durable_execution(
+                store=self._store,
+                backend=self._backend,
+                item=item,
+            )
             reconciled.append(item.work_id)
         return tuple(reconciled)
 
