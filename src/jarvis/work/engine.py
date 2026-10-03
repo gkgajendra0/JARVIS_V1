@@ -11,6 +11,7 @@ from jarvis.model_routing.router import RoutingResourceBlocked
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
+    BrainDecision,
     BrainPreempted,
     BrainRequest,
     ProviderPressure,
@@ -59,6 +60,33 @@ class WorkOwnerInputRequired(RuntimeError):
         self.resume_context = dict(resume_context or {})
 
 
+class WorkResourceBlocked(RuntimeError):
+    """An executor is temporarily blocked by a durable external/shared resource."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        retry_after_seconds: float,
+        blocker_code: str,
+        observation: dict[str, Any] | None = None,
+    ) -> None:
+        normalized = " ".join(str(reason).split()).strip()
+        code = str(blocker_code).strip().casefold()
+        retry_after = float(retry_after_seconds)
+        if not normalized:
+            raise ValueError("resource blocker reason must not be empty")
+        if not code:
+            raise ValueError("resource blocker code must not be empty")
+        if retry_after <= 0:
+            raise ValueError("resource blocker retry_after_seconds must be positive")
+        super().__init__(normalized)
+        self.reason = normalized
+        self.retry_after_seconds = retry_after
+        self.blocker_code = code
+        self.observation = dict(observation or {})
+
+
 class WorkActionExecutor(Protocol):
     descriptor: BrainAction
     work_types: frozenset[WorkType]
@@ -95,6 +123,19 @@ class WorkActionRegistry:
             for executor in self._by_name.values()
             if work_type in executor.work_types
         )
+
+    def actions_for_work(self, work: WorkItem) -> tuple[BrainAction, ...]:
+        """Return only executors admitted for this exact canonical WorkItem."""
+
+        actions: list[BrainAction] = []
+        for executor in self._by_name.values():
+            if work.work_type not in executor.work_types:
+                continue
+            availability = getattr(executor, "available_for", None)
+            if callable(availability) and not bool(availability(work)):
+                continue
+            actions.append(executor.descriptor)
+        return tuple(actions)
 
     def require(self, action: str, work_type: WorkType) -> WorkActionExecutor:
         executor = self._by_name.get(action)
@@ -133,6 +174,11 @@ class WorkEngine:
         | None = None,
         model_owner_request_handler: Callable[[WorkItem, str], str | None]
         | None = None,
+        control_plane_decider: Callable[
+            [WorkItem, tuple[BrainAction, ...], tuple[WorkStep, ...]],
+            BrainDecision | None,
+        ]
+        | None = None,
         context_assembler: WorkContextAssembler | None = None,
         context_mode: WorkContextMode | str = WorkContextMode.SHADOW,
     ) -> None:
@@ -144,6 +190,7 @@ class WorkEngine:
         self._action_admission = action_admission
         self._custom_completion_guard = completion_guard
         self._model_owner_request_handler = model_owner_request_handler
+        self._control_plane_decider = control_plane_decider
         self._context_assembler = context_assembler or WorkContextAssembler()
         self._context_mode = normalize_work_context_mode(context_mode)
 
@@ -885,7 +932,7 @@ class WorkEngine:
 
         provider_pressure_attempt = self._provider_pressure_attempt(work)
         work = self._make_running(work)
-        actions = self._actions.actions_for(work.work_type)
+        actions = self._actions.actions_for_work(work)
         if not actions:
             failed = work.transition(
                 WorkState.FAILED,
@@ -901,22 +948,45 @@ class WorkEngine:
             return WorkAdvanceResult(work.work_id, failed.state, progressed=True)
 
         steps = self._store.list_steps(work.work_id)
-        context_pack = (
+        control_decision = (
             None
-            if self._context_mode is WorkContextMode.OFF
-            else self._context_assembler.build(work=work, steps=steps)
+            if self._control_plane_decider is None
+            else self._control_plane_decider(work, actions, steps)
         )
-        try:
-            decision = await self._brain.decide(
-                BrainRequest(
-                    work=work,
-                    recent_steps=steps[-12:],
-                    purpose="choose the next bounded step for this JARVIS-owned work item",
-                    allowed_actions=actions,
-                    context_pack=context_pack,
-                    context_mode=self._context_mode,
+        if control_decision is not None:
+            if control_decision.needs_owner:
+                raise ValueError(
+                    "control-plane decider may not create ad-hoc owner requests"
                 )
+            allowed_names = {item.name for item in actions}
+            if (
+                control_decision.action is not None
+                and control_decision.action not in allowed_names
+            ):
+                raise ValueError(
+                    "control-plane decider selected an unavailable action"
+                )
+            decision = control_decision
+        else:
+            context_pack = (
+                None
+                if self._context_mode is WorkContextMode.OFF
+                else self._context_assembler.build(work=work, steps=steps)
             )
+        try:
+            if control_decision is None:
+                decision = await self._brain.decide(
+                    BrainRequest(
+                        work=work,
+                        recent_steps=steps[-12:],
+                        purpose=(
+                            "choose the next bounded step for this JARVIS-owned work item"
+                        ),
+                        allowed_actions=actions,
+                        context_pack=context_pack,
+                        context_mode=self._context_mode,
+                    )
+                )
         except BrainPreempted:
             latest = self._store.require(work.work_id)
             if latest.state.terminal or latest.state is WorkState.PAUSED:
@@ -1005,6 +1075,29 @@ class WorkEngine:
                         "passed": True,
                         "sandbox": test_step.observation.get("sandbox"),
                     }
+                development_engine_step = next(
+                    (
+                        step
+                        for step in reversed(steps)
+                        if step.kind == "dev_engine_execute"
+                        and step.state.value == "completed"
+                        and isinstance(
+                            step.observation.get("development_result"),
+                            dict,
+                        )
+                    ),
+                    None,
+                )
+                if development_engine_step is not None:
+                    result_payload["development_engine"] = dict(
+                        development_engine_step.observation["development_result"]
+                    )
+                    result_payload["development_ticket_id"] = (
+                        development_engine_step.observation.get("ticket_id")
+                    )
+                    result_payload["development_ticket_digest"] = (
+                        development_engine_step.observation.get("ticket_digest")
+                    )
             completed = work.transition(
                 WorkState.COMPLETED,
                 status_detail=decision.summary,
@@ -1200,6 +1293,44 @@ class WorkEngine:
             observation = await executor.execute(
                 work=with_step,
                 parameters=dict(decision_parameters),
+            )
+        except WorkResourceBlocked as exc:
+            blocked_observation: dict[str, Any] = {
+                "resource_blocked": True,
+                "reason": exc.reason,
+                "blocker_code": exc.blocker_code,
+                "retry_after_seconds": exc.retry_after_seconds,
+                **exc.observation,
+            }
+            blocked_step = running_step.complete(blocked_observation)
+            self._store.save_step(blocked_step)
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            waiting = latest.transition(
+                WorkState.WAITING_RESOURCE,
+                status_detail=exc.reason,
+                current_step_id=step.step_id,
+            )
+            saved = self._store.save(waiting, expected_version=latest.version)
+            blocker_digest = hashlib.sha256(
+                f"{exc.blocker_code}:{exc.reason}".encode()
+            ).hexdigest()[:24]
+            self._store.enqueue_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.RESOURCE_BLOCKER,
+                message=exc.reason,
+                event_key=f"executor-resource:{blocker_digest}",
+            )
+            return WorkAdvanceResult(
+                saved.work_id,
+                saved.state,
+                progressed=True,
+                retry_after_seconds=exc.retry_after_seconds,
             )
         except WorkOwnerInputRequired as exc:
             waiting_observation: dict[str, Any] = {
