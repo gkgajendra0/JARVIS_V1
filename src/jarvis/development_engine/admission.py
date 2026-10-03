@@ -25,6 +25,7 @@ def build_development_reasoning_fingerprint(
     *,
     evidence_refs: Iterable[str] = (),
     failure_refs: Iterable[str] = (),
+    progress_digest: str | None = None,
     tool_contract_version: int = 1,
 ) -> str:
     """Hash every fact that may justify a new expensive engineering turn.
@@ -38,12 +39,21 @@ def build_development_reasoning_fingerprint(
         raise TypeError("ticket must be DevelopmentTicketV1")
     if type(tool_contract_version) is not int or tool_contract_version < 1:
         raise ValueError("tool_contract_version must be a positive integer")
+    normalized_progress = None
+    if progress_digest is not None:
+        normalized_progress = str(progress_digest).strip().casefold()
+        if (
+            len(normalized_progress) != 64
+            or any(char not in "0123456789abcdef" for char in normalized_progress)
+        ):
+            raise ValueError("progress_digest must be a lowercase SHA-256 digest")
     return canonical_digest(
         {
             "policy_version": DEVELOPMENT_REASONING_POLICY_VERSION,
             "ticket_digest": ticket.digest,
             "evidence_refs": _refs(evidence_refs, field="evidence_ref"),
             "failure_refs": _refs(failure_refs, field="failure_ref"),
+            "progress_digest": normalized_progress,
             "tool_contract_version": tool_contract_version,
         }
     )
