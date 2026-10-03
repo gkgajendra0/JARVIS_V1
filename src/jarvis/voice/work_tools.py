@@ -221,7 +221,8 @@ class WorkAgentTools:
         """
         del context
         try:
-            item = self._runtime.configure_status_updates(
+            item = await asyncio.to_thread(
+                self._runtime.configure_status_updates,
                 work_id or None,
                 interval_minutes=interval_minutes,
             )
@@ -405,7 +406,7 @@ class WorkAgentTools:
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
-        self._runtime.refresh_capability_catalog()
+        await asyncio.to_thread(self._runtime.refresh_capability_catalog)
         return {
             "ok": True,
             "status": "disabled",
@@ -762,7 +763,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "accepted",
-            **_public_work(submission.work, self._runtime),
+            **(await self._public_work_async(submission.work)),
             "canonical_user_turn_id": turn.turn_id,
             "truth_note": (
                 "accepted means durable work was queued; do not claim completion until "
