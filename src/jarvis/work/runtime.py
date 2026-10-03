@@ -610,6 +610,7 @@ def build_work_runtime(
     model: str | None = None,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    paid_fallback_enabled: bool = False,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -676,6 +677,7 @@ def build_work_runtime(
         adapter_registry=adapter_registry,
         chatgpt_plan_enabled=chatgpt_plan_enabled,
         chatgpt_plan_model=chatgpt_plan_model,
+        paid_fallback_enabled=paid_fallback_enabled,
     )
     routing_store = ModelRoutingStore(store)
     brain_route_store = BrainRouteStore(store)
