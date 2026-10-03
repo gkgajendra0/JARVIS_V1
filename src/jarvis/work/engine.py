@@ -963,9 +963,7 @@ class WorkEngine:
                 control_decision.action is not None
                 and control_decision.action not in allowed_names
             ):
-                raise ValueError(
-                    "control-plane decider selected an unavailable action"
-                )
+                raise ValueError("control-plane decider selected an unavailable action")
             decision = control_decision
         else:
             context_pack = (
