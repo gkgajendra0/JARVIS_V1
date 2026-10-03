@@ -787,10 +787,13 @@ async def test_codex_engine_propagates_governed_owner_input_boundary(tmp_path) -
                     "summary": "Use the governed tool that requires owner input.",
                     "tool_calls": [
                         {
-                            "call_id": "read",
-                            "tool_name": "read_file",
+                            "call_id": "write",
+                            "tool_name": "write_file",
                             "parameters_json": json.dumps(
-                                {"path": "src/jarvis/demo.py"}
+                                {
+                                    "path": "src/jarvis/demo.py",
+                                    "text": "VALUE = 1\n",
+                                }
                             ),
                         }
                     ],
