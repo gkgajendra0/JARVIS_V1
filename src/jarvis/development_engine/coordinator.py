@@ -43,9 +43,7 @@ class DevelopmentEngineCoordinator:
         self._sessions = sessions
         self._resources = resources
         self._resource_keys = (
-            ()
-            if resources is None
-            else resources.normalize(resource_keys)
+            () if resources is None else resources.normalize(resource_keys)
         )
 
     async def execute(
