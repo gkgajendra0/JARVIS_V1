@@ -404,7 +404,8 @@ class RoutedWorkReasoner:
         resources: ResourceLeaseManager | None = None,
         resource_keys: tuple[str, ...] = (),
         prompt_compressor: WorkPayloadCompressor | None = None,
-        prompt_compression_mode: PromptCompressionMode | str = PromptCompressionMode.OFF,
+        prompt_compression_mode: PromptCompressionMode
+        | str = PromptCompressionMode.OFF,
         prompt_compression_work_types: frozenset[WorkType] | None = None,
         prompt_compression_resource_keys: tuple[str, ...] = (),
     ) -> None:
@@ -436,7 +437,9 @@ class RoutedWorkReasoner:
             else frozenset(prompt_compression_work_types)
         )
         if not all(isinstance(item, WorkType) for item in eligible_types):
-            raise TypeError("prompt_compression_work_types must contain WorkType values")
+            raise TypeError(
+                "prompt_compression_work_types must contain WorkType values"
+            )
         self._prompt_compression_work_types = eligible_types
         self._prompt_compression_resource_keys = (
             ()
@@ -456,7 +459,9 @@ class RoutedWorkReasoner:
 
         try:
             if self._resources is not None and self._prompt_compression_resource_keys:
-                async with self._resources.lease(self._prompt_compression_resource_keys):
+                async with self._resources.lease(
+                    self._prompt_compression_resource_keys
+                ):
                     result = await asyncio.to_thread(
                         compressor.compress_payload,
                         legacy_payload,
