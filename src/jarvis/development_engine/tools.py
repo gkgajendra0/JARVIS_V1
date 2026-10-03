@@ -316,5 +316,23 @@ class WorkExecutorDevelopmentToolPort:
                 "development executor returned an invalid observation"
             )
         result = dict(observation)
-        self._store.save_step(running.complete(result))
-        return result
+        if "_jarvis" in result:
+            self._store.save_step(
+                running.fail(
+                    "ValueError: development executor used reserved _jarvis metadata key"
+                )
+            )
+            raise DevelopmentToolExecutionError(
+                "development executor used reserved _jarvis metadata key"
+            )
+        completed = running.complete(result)
+        self._store.save_step(completed)
+        return {
+            **result,
+            "_jarvis": {
+                "tool": alias,
+                "action": action,
+                "step_id": step.step_id,
+                "evidence_ref": f"workstep:{step.step_id}",
+            },
+        }
