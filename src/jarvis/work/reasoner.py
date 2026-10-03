@@ -306,12 +306,27 @@ def _brain_decision(
 async def evaluate_structured_work_request(
     client: StructuredOutputClient,
     request: BrainRequest,
+    *,
+    provider_payload_override: dict[str, Any] | None = None,
 ) -> tuple[BrainDecision, StructuredOutputTelemetry]:
-    """Evaluate one Work request without routing persistence or action execution."""
+    """Evaluate one Work request without routing persistence or action execution.
+
+    The optional override is an explicit benchmark/integration seam. Canonical request
+    and decision validation still use request; only temporary provider input may change.
+    """
+
+    if provider_payload_override is not None and not isinstance(
+        provider_payload_override, dict
+    ):
+        raise TypeError("provider_payload_override must be an object")
 
     result = await client.parse_with_telemetry(
         system_prompt=_SYSTEM_PROMPT,
-        input_payload=_work_input_payload(request),
+        input_payload=(
+            _work_input_payload(request)
+            if provider_payload_override is None
+            else provider_payload_override
+        ),
         response_model=_WorkDecisionModel,
     )
     parsed = result.parsed
