@@ -179,15 +179,26 @@ class DevelopmentSessionStore:
                         "development session identity conflicts with durable ticket"
                     )
                 prior_fingerprint = str(existing["reasoning_fingerprint"])
+                prior_engine = str(existing["engine_id"]).strip().casefold()
+                prior_version = str(existing["engine_version"]).strip()
+                engine_generation_changed = (
+                    prior_engine != engine or prior_version != version
+                )
+                thread_id = existing["thread_id"]
                 last_result = existing["last_result_digest"]
-                if prior_fingerprint != fingerprint:
+                if prior_fingerprint != fingerprint or engine_generation_changed:
                     last_result = None
+                if engine_generation_changed:
+                    # Provider working memory is engine-generation specific. Canonical
+                    # ticket/worktree/evidence remains sufficient to reconstruct it.
+                    thread_id = None
                 connection.execute(
                     """
                     UPDATE development_engine_sessions
                     SET engine_id = ?,
                         engine_version = ?,
                         reasoning_fingerprint = ?,
+                        thread_id = ?,
                         last_result_digest = ?,
                         state = ?,
                         updated_at_epoch = ?
@@ -197,6 +208,7 @@ class DevelopmentSessionStore:
                         engine,
                         version,
                         fingerprint,
+                        thread_id,
                         last_result,
                         DevelopmentSessionState.ACTIVE.value,
                         now,
@@ -269,6 +281,11 @@ class DevelopmentSessionStore:
             raise KeyError("development session must exist before recording a result")
         if current.reasoning_fingerprint != fingerprint:
             raise ValueError("development result fingerprint is stale")
+        if (
+            result.engine_id != current.engine_id
+            or result.engine_version != current.engine_version
+        ):
+            raise ValueError("development result engine generation is stale")
 
         if result.disposition is DevelopmentDisposition.COMPLETED:
             state = DevelopmentSessionState.COMPLETED
@@ -358,14 +375,24 @@ class DevelopmentSessionStore:
         *,
         ticket: DevelopmentTicketV1,
         reasoning_fingerprint: str,
+        engine_id: str,
+        engine_version: str,
     ) -> DevelopmentResultV1 | None:
-        """Return an exact durable reasoning result when no relevant fact changed."""
+        """Return an exact durable result for the current engine generation only."""
 
         fingerprint = str(reasoning_fingerprint).strip().casefold()
+        engine = str(engine_id).strip().casefold()
+        version = str(engine_version).strip()
+        if not fingerprint or not engine or not version:
+            raise ValueError(
+                "reasoning fingerprint and engine generation are required"
+            )
         record = self.get(ticket.digest)
         if (
             record is None
             or record.reasoning_fingerprint != fingerprint
+            or record.engine_id != engine
+            or record.engine_version != version
             or record.last_result_digest is None
         ):
             return None
