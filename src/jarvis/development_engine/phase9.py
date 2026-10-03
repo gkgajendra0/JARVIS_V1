@@ -17,7 +17,6 @@ from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_P
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.work.brain import BrainAction, BrainDecision
-from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.engine import (
     WorkActionRegistry,
     WorkResourceBlocked,
