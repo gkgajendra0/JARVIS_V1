@@ -70,7 +70,9 @@ def _payload() -> dict:
     }
 
 
-def test_llmlingua_payload_compression_preserves_structure_and_protected_values() -> None:
+def test_llmlingua_payload_compression_preserves_structure_and_protected_values() -> (
+    None
+):
     engine = _Engine()
     payload = _payload()
     compressor = LLMLingua2WorkPayloadCompressor(
@@ -94,10 +96,10 @@ def test_llmlingua_payload_compression_preserves_structure_and_protected_values(
         result.payload["recent_steps"][0]["observation"]["text"]
         == payload["recent_steps"][0]["observation"]["text"]
     )
-    assert (
-        result.payload["recent_steps"][0]["observation"]["evidence_refs"]
-        == ["evidence-2", "evidence-4"]
-    )
+    assert result.payload["recent_steps"][0]["observation"]["evidence_refs"] == [
+        "evidence-2",
+        "evidence-4",
+    ]
     assert result.payload["evidence"][0]["source_identity"] == "example-device-sdk"
     assert result.payload["evidence"][0]["source_version"] == "2.4.1"
     assert len(engine.calls) == 1
@@ -107,7 +109,9 @@ def test_llmlingua_payload_compression_preserves_structure_and_protected_values(
     assert kwargs["force_reserve_digit"] is True
 
 
-def test_llmlingua_payload_compression_does_not_load_engine_without_candidates() -> None:
+def test_llmlingua_payload_compression_does_not_load_engine_without_candidates() -> (
+    None
+):
     calls = 0
 
     def _factory():
@@ -167,7 +171,9 @@ def test_llmlingua_payload_compression_rejects_malformed_batch_shape() -> None:
 
 
 @pytest.mark.asyncio
-async def test_reasoner_payload_override_is_explicit_and_decision_stays_validated() -> None:
+async def test_reasoner_payload_override_is_explicit_and_decision_stays_validated() -> (
+    None
+):
     from jarvis.work.brain import BrainAction, BrainRequest
     from jarvis.work.models import WorkItem, WorkType
     from jarvis.work.reasoner import (
