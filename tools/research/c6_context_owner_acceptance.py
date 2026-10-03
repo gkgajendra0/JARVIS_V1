@@ -841,9 +841,8 @@ def main() -> int:
         )
         return 2
     if (
-        (args.paired_decision_preflight or args.paired_decision_benchmark)
-        and args.max_cases > _MAX_PAIRED_BENCHMARK_CASES
-    ):
+        args.paired_decision_preflight or args.paired_decision_benchmark
+    ) and args.max_cases > _MAX_PAIRED_BENCHMARK_CASES:
         print(
             "ERROR: paired benchmark --max-cases cannot exceed "
             f"{_MAX_PAIRED_BENCHMARK_CASES} ({_MAX_PAIRED_BENCHMARK_CASES * 2} "
