@@ -403,6 +403,7 @@ def _ticket_prompt(
         "ticket_id": ticket.ticket_id,
         "ticket_digest": ticket.digest,
         "ticket": ticket.canonical_payload(),
+        "progress": dict(tools.snapshot()),
         "tools": [_tool_payload(spec) for spec in tools.tool_specs],
         "instructions": {
             "tool_batch": (
@@ -808,10 +809,33 @@ class CodexPlanDevelopmentEngine:
         runtime: CodexRuntimePort | None = None
         thread: CodexThreadPort | None = None
         last_usage: DevelopmentUsageV1 | None = None
+        progress = dict(tools.snapshot())
+        recent_progress = progress.get("recent_tool_evidence")
         observed_evidence: set[str] = set()
-        changed_files: set[str] = set()
-        passing_tests: list[str] = []
-        candidate_revision: str | None = None
+        if isinstance(recent_progress, list):
+            for item in recent_progress:
+                if not isinstance(item, dict):
+                    continue
+                evidence_ref = str(item.get("evidence_ref") or "").strip()
+                if evidence_ref:
+                    observed_evidence.add(evidence_ref)
+        changed_files = {
+            str(item).strip()
+            for item in progress.get("changed_files", ())
+            if str(item).strip()
+        }
+        passing_tests = [
+            str(item).strip()
+            for item in progress.get("passing_test_evidence_refs", ())
+            if str(item).strip()
+        ]
+        raw_candidate = str(progress.get("candidate_revision") or "").strip().casefold()
+        candidate_revision = (
+            raw_candidate
+            if len(raw_candidate) == 40
+            and all(char in "0123456789abcdef" for char in raw_candidate)
+            else None
+        )
         total_tool_calls = 0
 
         try:
