@@ -221,6 +221,12 @@ class JarvisConfig:
                     "DevelopmentEngine requires JARVIS_DEVELOPMENT_ENGINE_MODEL "
                     "or JARVIS_CHATGPT_PLAN_MODEL"
                 )
+            if not str(self.development_test_docker_image or "").strip():
+                raise ValueError(
+                    "DevelopmentEngine requires "
+                    "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE so model-edited code is "
+                    "never executed directly on the owner host"
+                )
 
         if not isinstance(self.work_paid_fallback_enabled, bool):
             raise TypeError("work_paid_fallback_enabled must be a bool")
