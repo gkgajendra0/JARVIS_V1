@@ -32,6 +32,10 @@ class DevelopmentToolPort(Protocol):
     @property
     def tool_specs(self) -> tuple[DevelopmentToolSpecV1, ...]: ...
 
+    def snapshot(self) -> Mapping[str, Any]:
+        """Return bounded canonical progress for crash/thread reconstruction."""
+        ...
+
     async def invoke(
         self,
         tool_name: str,
