@@ -19,6 +19,7 @@ from jarvis.brain_routing.models import (
     GlobalBrainRouteFacts,
 )
 from jarvis.brain_routing.store import BrainRouteStore
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.model_routing.models import (
     EvidenceSizeClass,
     LocalityRequirement,
@@ -254,6 +255,7 @@ class GlobalBrainRouterReasoner:
         route_kind: BrainRouteKind,
         reason_codes: tuple[str, ...],
         selected_action: str | None,
+        decision: BrainDecision | None = None,
         resolution: DeterministicResolution | None = None,
         shadow_match: bool | None = None,
         model_decision_id: str | None = None,
@@ -285,6 +287,14 @@ class GlobalBrainRouterReasoner:
                 shadow_match=shadow_match,
                 model_decision_id=model_decision_id,
                 model_target_id=model_target_id,
+                goal_complete=(None if decision is None else decision.goal_complete),
+                needs_owner=(None if decision is None else decision.needs_owner),
+                owner_question=(None if decision is None else decision.owner_question),
+                parameters_digest=(
+                    None
+                    if decision is None
+                    else canonical_digest(decision.parameters)
+                ),
                 outcome_code=outcome_code,
             )
         )
@@ -328,6 +338,7 @@ class GlobalBrainRouterReasoner:
                 route_kind=BrainRouteKind.DETERMINISTIC,
                 reason_codes=resolution.reason_codes,
                 selected_action=decision.action,
+                decision=decision,
                 resolution=resolution,
                 outcome_code="model_bypassed",
             )
@@ -385,6 +396,7 @@ class GlobalBrainRouterReasoner:
                 route_kind=BrainRouteKind.MODEL,
                 reason_codes=reason_codes,
                 selected_action=actual.action,
+                decision=actual,
                 resolution=(resolution if resolution.matched else None),
                 shadow_match=shadow_match,
                 model_decision_id=model_decision_id,
