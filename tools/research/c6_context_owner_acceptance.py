@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 from dataclasses import replace
 
@@ -23,6 +22,7 @@ from jarvis.chatgpt_plan import CHATGPT_PLAN_PROVIDER_ID, ChatGPTPlanSessionMana
 from jarvis.hands.provider_adapters import (
     build_chatgpt_plan_structured_output_client,
 )
+from jarvis.machine_config import configured_text, load_machine_settings
 from jarvis.model_routing.models import ResponseContractResult
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.provider_circuit import (
@@ -41,6 +41,9 @@ from jarvis.work.reasoner import (
     evaluate_structured_work_request,
 )
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
+
+_MAX_DECISION_REPLAY_CASES = 5
+_MAX_REPLAY_CANDIDATE_SCAN = 25
 
 
 def _chars(value: object) -> int:
@@ -174,9 +177,61 @@ async def _run_decision_replay(
         route_store,
         routing_store,
         model=model,
-        limit=max_cases,
+        limit=_MAX_REPLAY_CANDIDATE_SCAN,
     )
-    if len(candidates) < min_equivalent_cases:
+
+    prepared = []
+    context_drift_cases = 0
+    non_reducing_cases = 0
+    for (
+        _created_at,
+        work,
+        steps,
+        recorded,
+        snapshot,
+        historical_attempt,
+    ) in candidates:
+        try:
+            replay = reconstruct_recorded_context_request(
+                snapshot=snapshot,
+                work=work,
+                steps=steps,
+            )
+        except (TypeError, ValueError):
+            context_drift_cases += 1
+            continue
+
+        legacy_payload = _work_input_payload(
+            replace(replay, context_mode=WorkContextMode.SHADOW)
+        )
+        optimized_payload = _work_input_payload(replay)
+        legacy_chars = _chars(legacy_payload)
+        optimized_chars = _chars(optimized_payload)
+        if optimized_chars >= legacy_chars:
+            non_reducing_cases += 1
+            continue
+
+        prepared.append(
+            (
+                work,
+                recorded,
+                historical_attempt,
+                replay,
+                legacy_chars,
+                optimized_chars,
+            )
+        )
+        if len(prepared) >= max_cases:
+            break
+
+    candidate_stats = {
+        **candidate_stats,
+        "same_model_candidates": len(candidates),
+        "context_drift_cases": context_drift_cases,
+        "non_reducing_cases": non_reducing_cases,
+        "replay_ready_cases": len(prepared),
+    }
+    if len(prepared) < min_equivalent_cases:
         return {
             "model": model,
             "requested_max_cases": max_cases,
@@ -185,6 +240,7 @@ async def _run_decision_replay(
             "equivalent_cases": 0,
             "mismatch_cases": 0,
             "all_replayed_cases_equivalent": False,
+            "all_replayed_cases_reduced": False,
             "c6_apply_decision_equivalence_proven": False,
             "production_routing_mutated": False,
             "actions_executed": False,
@@ -216,30 +272,29 @@ async def _run_decision_replay(
         session_manager=plan,
         provider_retries=False,
     )
+
     cases: list[dict[str, object]] = []
-    for _created_at, work, steps, recorded, snapshot, historical_attempt in candidates:
-        replay = reconstruct_recorded_context_request(
-            snapshot=snapshot,
-            work=work,
-            steps=steps,
-        )
-        legacy_payload = _work_input_payload(
-            replace(replay, context_mode=WorkContextMode.SHADOW)
-        )
-        optimized_payload = _work_input_payload(replay)
-        optimized, telemetry = await evaluate_structured_work_request(client, replay)
+    for (
+        work,
+        recorded,
+        historical_attempt,
+        replay,
+        legacy_chars,
+        optimized_chars,
+    ) in prepared:
+        try:
+            optimized, telemetry = await evaluate_structured_work_request(client, replay)
+        except Exception as exc:
+            circuit.record_failure(exc)
+            raise
+        circuit.record_success()
+
         comparison = compare_recorded_context_decision(recorded, optimized)
         if comparison is None:
             raise RuntimeError(
                 "C6 replay candidate lost its durable decision provenance"
             )
-        legacy_chars = _chars(legacy_payload)
-        optimized_chars = _chars(optimized_payload)
-        reduction = (
-            0.0
-            if legacy_chars == 0
-            else (legacy_chars - optimized_chars) * 100.0 / legacy_chars
-        )
+        reduction = (legacy_chars - optimized_chars) * 100.0 / legacy_chars
         cases.append(
             {
                 "route_request_id": recorded.route_request_id,
@@ -257,19 +312,21 @@ async def _run_decision_replay(
                 "parameters_equal": comparison.parameters_equal,
                 "legacy_chars": legacy_chars,
                 "optimized_chars": optimized_chars,
+                "context_reduced": True,
                 "reduction_percent": round(reduction, 2),
                 "usage": dict(telemetry.usage),
                 "usage_observed": telemetry.usage_observed,
                 "latency_ms": round(telemetry.latency_ms, 2),
             }
         )
-        if not comparison.equivalent:
-            break
 
     equivalent_count = sum(bool(item["equivalent"]) for item in cases)
     mismatch_count = len(cases) - equivalent_count
+    all_reduced = bool(cases) and all(bool(item["context_reduced"]) for item in cases)
     apply_equivalence_proven = (
-        len(cases) >= min_equivalent_cases and mismatch_count == 0
+        len(cases) >= min_equivalent_cases
+        and mismatch_count == 0
+        and all_reduced
     )
     return {
         "model": model,
@@ -279,15 +336,15 @@ async def _run_decision_replay(
         "equivalent_cases": equivalent_count,
         "mismatch_cases": mismatch_count,
         "all_replayed_cases_equivalent": bool(cases) and mismatch_count == 0,
+        "all_replayed_cases_reduced": all_reduced,
         "c6_apply_decision_equivalence_proven": apply_equivalence_proven,
         "production_routing_mutated": False,
         "actions_executed": False,
         "paid_fallback_enabled": False,
-        "provider_circuit_updated": False,
+        "provider_circuit_updated": bool(cases),
         "candidate_stats": candidate_stats,
         "cases": cases,
     }
-
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -303,9 +360,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("JARVIS_WORK_ORCHESTRATION_MODEL")
-        or os.environ.get("JARVIS_CHATGPT_PLAN_MODEL"),
-        help="ChatGPT-plan model used only when --decision-replay is supplied.",
+        default=None,
+        help=(
+            "Optional ChatGPT-plan model override for --decision-replay. "
+            "Defaults to the persisted JARVIS_CHATGPT_PLAN_MODEL."
+        ),
     )
     parser.add_argument(
         "--max-cases",
@@ -326,6 +385,13 @@ def main() -> int:
     args = _parser().parse_args()
     if args.max_cases <= 0:
         print("ERROR: --max-cases must be positive.", file=sys.stderr)
+        return 2
+    if args.max_cases > _MAX_DECISION_REPLAY_CASES:
+        print(
+            "ERROR: --max-cases cannot exceed "
+            f"{_MAX_DECISION_REPLAY_CASES} for the bounded owner replay.",
+            file=sys.stderr,
+        )
         return 2
     if args.min_equivalent_cases <= 0:
         print("ERROR: --min-equivalent-cases must be positive.", file=sys.stderr)
@@ -437,11 +503,16 @@ def main() -> int:
         "items": evaluated,
     }
     if args.decision_replay:
-        model = str(args.model or "").strip()
+        settings = load_machine_settings()
+        model = str(
+            args.model
+            or configured_text("JARVIS_CHATGPT_PLAN_MODEL", settings, "")
+            or ""
+        ).strip()
         if not model:
             print(
-                "ERROR: --model, JARVIS_WORK_ORCHESTRATION_MODEL, or "
-                "JARVIS_CHATGPT_PLAN_MODEL is required for --decision-replay.",
+                "ERROR: --model or JARVIS_CHATGPT_PLAN_MODEL is required "
+                "for --decision-replay.",
                 file=sys.stderr,
             )
             return 2
