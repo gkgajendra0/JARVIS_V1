@@ -765,6 +765,20 @@ def build_default_self_model() -> SelfModelRegistry:
             logger_prefixes=("jarvis.work.development",),
         ),
         C(
+            "work.development_engine",
+            "Provider-neutral engineering specialist boundary with JARVIS-owned "
+            "development authority and durable session lineage.",
+            ("src/jarvis/development_engine",),
+            parent_component_id="work",
+            tests=(
+                "tests/test_development_engine_contracts.py",
+                "tests/test_development_engine_tools.py",
+                "tests/test_development_engine_session_store.py",
+            ),
+            logger_prefixes=("jarvis.development_engine",),
+            docs=("docs/DEVELOPMENT_ENGINE_CONTROL_PLANE_ARCHITECTURE.md",),
+        ),
+        C(
             "work.engineering_change",
             "Governed engineering lifecycle over canonical WorkItems and owner gates.",
             ("src/jarvis/engineering_change",),
