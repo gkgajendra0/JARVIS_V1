@@ -70,10 +70,12 @@ class FakeRuntime:
         thread: FakeThread,
         *,
         fail_resume: bool = False,
+        resume_error: BaseException | None = None,
         fail_start: BaseException | None = None,
     ) -> None:
         self.thread = thread
         self.fail_resume = fail_resume
+        self.resume_error = resume_error
         self.fail_start = fail_start
         self.started = 0
         self.resumed: list[str] = []
@@ -93,6 +95,8 @@ class FakeRuntime:
     async def resume_thread(self, thread_id: str, *, model: str) -> FakeThread:
         assert model == "gpt-test"
         self.resumed.append(thread_id)
+        if self.resume_error is not None:
+            raise self.resume_error
         if self.fail_resume:
             raise InvalidRequestError("thread not found")
         return self.thread
@@ -438,3 +442,30 @@ async def test_codex_completion_without_durable_commit_is_rejected(tmp_path) -> 
 
     assert result.disposition is DevelopmentDisposition.FAILED
     assert "evidence validation" in result.summary.casefold()
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_does_not_replace_thread_on_transient_resume_pressure(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    sessions.bind_thread(ticket_digest=ticket.digest, thread_id="thr_saved")
+    runtime = FakeRuntime(
+        FakeThread("thr_unused", []),
+        resume_error=RuntimeError("subscription_sharing_usage_limit_exceeded"),
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(runtime),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert runtime.resumed == ["thr_saved"]
+    assert runtime.started == 0
+    assert sessions.get(ticket.digest).thread_id == "thr_saved"
