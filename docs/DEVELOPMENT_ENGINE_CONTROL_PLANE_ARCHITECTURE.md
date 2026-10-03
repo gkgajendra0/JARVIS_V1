@@ -572,6 +572,19 @@ Implemented replay substrate:
   `needs_owner`, `owner_question`, and parameters, stops at the first mismatch,
   never executes the selected action, has no paid fallback, does not mutate the shared
   provider circuit, and never changes production routing;
+- owner-machine preflight on 2026-10-03 found that the legacy model-route population
+  predates replayable C6 request snapshots/provenance, so those rows remain explicitly
+  non-comparable rather than being guessed or backfilled;
+- when historical replay is unavailable, `tools/research/c6_benchmark_corpus.py`
+  provides a checked-in descriptor-only three-case corpus derived from repository-tested
+  Work shapes: development repair after a failed test, development ready for local
+  commit, and research/acquisition requiring re-resolution after newer evidence. The
+  corpus imports current production `BrainAction` descriptors directly and
+  instantiates no executor/runtime service;
+- `--fixture-decision-preflight` must prove all three fixture requests use the smaller
+  optimized payload and cover both DEVELOPMENT and RESEARCH before any provider state is
+  initialized. Only then may `--fixture-decision-benchmark` spend at most six
+  ChatGPT-plan calls for same-request legacy-vs-optimized decision equivalence;
 - optimized replay is compared against the durable legacy decision across action,
   completion, owner-wait, owner-question and parameter fields with usage/latency recorded.
 
