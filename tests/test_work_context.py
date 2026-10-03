@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+from jarvis.brain_routing.models import (
+    BrainRouteKind,
+    BrainRouteRecord,
+    BrainRoutingMode,
+)
 from jarvis.brain_routing.work import build_work_global_route_facts
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.brain import BrainAction, BrainDecision, BrainRequest
 from jarvis.work.context import (
     WorkContextAssembler,
     WorkContextMode,
     build_context_shadow_report,
 )
-from jarvis.work.context_evaluation import compare_context_decisions
+from jarvis.work.context_evaluation import (
+    compare_context_decisions,
+    compare_recorded_context_decision,
+)
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.reasoner import _work_input_payload
 
@@ -231,3 +240,85 @@ def test_global_route_facts_use_context_pack_only_in_apply() -> None:
 
     assert apply_facts.route_request_id == shadow_facts.route_request_id
     assert apply_facts.estimated_context_tokens < shadow_facts.estimated_context_tokens
+
+
+def _recorded_decision(
+    decision: BrainDecision,
+    *,
+    include_c6_provenance: bool = True,
+) -> BrainRouteRecord:
+    return BrainRouteRecord(
+        route_request_id="route-c6-recorded",
+        work_id="work-c6-recorded",
+        subsystem_key="work",
+        task_kind="development",
+        route_kind=BrainRouteKind.MODEL,
+        mode=BrainRoutingMode.SHADOW,
+        policy_version=1,
+        policy_digest="a" * 64,
+        reason_codes=("deterministic_abstained",),
+        created_at_epoch=1.0,
+        selected_action=decision.action,
+        goal_complete=(
+            decision.goal_complete if include_c6_provenance else None
+        ),
+        needs_owner=(
+            decision.needs_owner if include_c6_provenance else None
+        ),
+        owner_question=(
+            decision.owner_question if include_c6_provenance else None
+        ),
+        parameters_digest=(
+            canonical_digest(decision.parameters)
+            if include_c6_provenance
+            else None
+        ),
+    )
+
+
+def test_recorded_context_equivalence_uses_full_safety_fingerprint() -> None:
+    legacy = BrainDecision(
+        action="dev_status",
+        summary="Inspect status",
+        parameters={"scope": "candidate"},
+    )
+    same = BrainDecision(
+        action="dev_status",
+        summary="Different wording is allowed",
+        parameters={"scope": "candidate"},
+    )
+    changed = BrainDecision(
+        action="dev_status",
+        summary="Different parameters are material",
+        parameters={"scope": "workspace"},
+    )
+
+    equivalent = compare_recorded_context_decision(
+        _recorded_decision(legacy),
+        same,
+    )
+    assert equivalent is not None and equivalent.equivalent is True
+
+    mismatch = compare_recorded_context_decision(
+        _recorded_decision(legacy),
+        changed,
+    )
+    assert mismatch is not None
+    assert mismatch.equivalent is False
+    assert mismatch.parameters_equal is False
+
+
+def test_recorded_context_equivalence_rejects_legacy_incomplete_provenance() -> None:
+    decision = BrainDecision(
+        action="dev_status",
+        summary="Inspect status",
+    )
+
+    assert (
+        compare_recorded_context_decision(
+            _recorded_decision(decision, include_c6_provenance=False),
+            decision,
+        )
+        is None
+    )
+
