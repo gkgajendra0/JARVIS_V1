@@ -559,10 +559,19 @@ Implemented replay substrate:
 - replay reconstruction verifies the exact append-only history prefix before creating
   an optimized APPLY BrainRequest and fails closed on provenance drift;
 - `tools/research/c6_context_owner_acceptance.py` remains zero-model by default,
-  exposes `--decision-replay-preflight` to prove corpus/model-lineage readiness without
-  initializing ChatGPT-plan, and exposes an explicit bounded `--decision-replay` mode
-  that uses ChatGPT-plan directly, never executes the selected action, has no paid
-  fallback and does not mutate production routing;
+  exposes `--decision-replay-preflight` to prove historical recorded-decision replay
+  readiness without initializing ChatGPT-plan, and exposes an explicit bounded
+  `--decision-replay` mode when durable legacy decision provenance exists;
+- older Work routes may predate decision-output provenance and must never be backfilled
+  from guessed later state. For those routes, `--paired-decision-preflight` validates
+  whether their immutable C6 request snapshots can support a fresh same-request A/B,
+  and `--paired-decision-benchmark` compares legacy-context vs optimized-context
+  decisions using the current configured ChatGPT-plan model;
+- the paired benchmark is capped at three cases / six model calls, requires at least
+  two Work types and two distinct WorkItems, compares action, `goal_complete`,
+  `needs_owner`, `owner_question`, and parameters, stops at the first mismatch,
+  never executes the selected action, has no paid fallback, does not mutate the shared
+  provider circuit, and never changes production routing;
 - optimized replay is compared against the durable legacy decision across action,
   completion, owner-wait, owner-question and parameter fields with usage/latency recorded.
 
