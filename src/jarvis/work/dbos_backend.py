@@ -32,11 +32,83 @@ _WAITING_STATES = frozenset(
 )
 
 _ENGINE: WorkEngine | None = None
-_JARVIS_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
+_WORK_EVENT_LOOP: asyncio.AbstractEventLoop | None = None
+_WORK_LOOP_RUNTIME: "_DedicatedWorkLoop" | None = None
 _ON_WORK_TERMINAL: Callable[[str], object] | None = None
 _ACTIVE_ADVANCE_LOCK = threading.Lock()
 _ACTIVE_ADVANCES: dict[Future[Any], threading.Event] = {}
 _ADVANCE_QUIESCING = False
+
+
+class _DedicatedWorkLoop:
+    """Own one asyncio loop exclusively for durable background WorkEngine cycles."""
+
+    def __init__(self) -> None:
+        self._ready = threading.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread_id: int | None = None
+        self._startup_error: BaseException | None = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name="jarvis-work-asyncio",
+            daemon=True,
+        )
+        self._thread.start()
+        if not self._ready.wait(timeout=10.0):
+            raise RuntimeError("dedicated JARVIS work event loop did not start")
+        if self._startup_error is not None:
+            raise RuntimeError("dedicated JARVIS work event loop failed to start") from (
+                self._startup_error
+            )
+
+    def _run(self) -> None:
+        loop: asyncio.AbstractEventLoop | None = None
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            self._loop = loop
+            self._thread_id = threading.get_ident()
+        except BaseException as exc:  # noqa: BLE001 - startup must report across threads
+            self._startup_error = exc
+            self._ready.set()
+            return
+
+        self._ready.set()
+        try:
+            loop.run_forever()
+        finally:
+            pending = tuple(asyncio.all_tasks(loop))
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+            asyncio.set_event_loop(None)
+            loop.close()
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            raise RuntimeError("dedicated JARVIS work event loop is unavailable")
+        return loop
+
+    @property
+    def thread_id(self) -> int:
+        if self._thread_id is None:
+            raise RuntimeError("dedicated JARVIS work thread is unavailable")
+        return self._thread_id
+
+    def stop(self) -> None:
+        loop = self._loop
+        if loop is None:
+            return
+        if loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        self._thread.join(timeout=10.0)
+        if self._thread.is_alive():
+            raise RuntimeError("dedicated JARVIS work event loop did not stop")
 
 
 def configure_terminal_reconciliation(callback: Callable[[str], object]) -> None:
@@ -53,10 +125,10 @@ def configure_work_engine(
     engine: WorkEngine,
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
-    global _ENGINE, _JARVIS_EVENT_LOOP
+    global _ENGINE, _WORK_EVENT_LOOP
     if _ENGINE is not None and _ENGINE is not engine:
         raise RuntimeError("JARVIS work engine is already configured")
-    if _JARVIS_EVENT_LOOP is not None and _JARVIS_EVENT_LOOP is not event_loop:
+    if _WORK_EVENT_LOOP is not None and _WORK_EVENT_LOOP is not event_loop:
         raise RuntimeError("JARVIS work event loop is already configured")
     if event_loop.is_closed():
         raise RuntimeError("JARVIS work event loop is closed")
@@ -66,7 +138,7 @@ def configure_work_engine(
             raise RuntimeError("JARVIS work runtime still has active engine advances")
         _ADVANCE_QUIESCING = False
     _ENGINE = engine
-    _JARVIS_EVENT_LOOP = event_loop
+    _WORK_EVENT_LOOP = event_loop
 
 
 def _engine() -> WorkEngine:
@@ -75,10 +147,10 @@ def _engine() -> WorkEngine:
     return _ENGINE
 
 
-def _jarvis_loop() -> asyncio.AbstractEventLoop:
-    if _JARVIS_EVENT_LOOP is None or _JARVIS_EVENT_LOOP.is_closed():
+def _work_loop() -> asyncio.AbstractEventLoop:
+    if _WORK_EVENT_LOOP is None or _WORK_EVENT_LOOP.is_closed():
         raise RuntimeError("JARVIS work event loop is unavailable")
-    return _JARVIS_EVENT_LOOP
+    return _WORK_EVENT_LOOP
 
 
 def _run_dbos_sync(callable_, /, *args, **kwargs):
@@ -146,7 +218,7 @@ def _durable_interruptible_wait(seconds: float, *, patch_name: str) -> None:
     )
 
 
-async def _advance_on_jarvis_loop(
+async def _advance_on_work_loop(
     work_id: str,
     completion: threading.Event,
 ):
@@ -166,8 +238,8 @@ def _run_advance_work(work_id: str) -> dict[str, Any]:
         if _ADVANCE_QUIESCING:
             raise RuntimeError("JARVIS work runtime is quiescing")
         future = asyncio.run_coroutine_threadsafe(
-            _advance_on_jarvis_loop(work_id, completion),
-            _jarvis_loop(),
+            _advance_on_work_loop(work_id, completion),
+            _work_loop(),
         )
         _ACTIVE_ADVANCES[future] = completion
 
@@ -188,7 +260,7 @@ def _run_advance_work(work_id: str) -> dict[str, Any]:
 
 @DBOS.step(retries_allowed=True, max_attempts=3, interval_seconds=1.0)
 def _advance_work(work_id: str) -> dict[str, Any]:
-    """Run one async JARVIS cycle on the canonical production event loop."""
+    """Run one async JARVIS cycle on the dedicated background-work event loop."""
 
     return _run_advance_work(work_id)
 
@@ -293,11 +365,17 @@ class DBOSWorkExecutionBackend:
         self,
         *,
         max_reasoning_cycles: int = _MAX_REASONING_CYCLES,
+        work_loop_thread_id: int | None = None,
     ) -> None:
         if isinstance(max_reasoning_cycles, bool) or max_reasoning_cycles <= 0:
             raise ValueError("max reasoning cycles must be positive")
         self._max_reasoning_cycles = int(max_reasoning_cycles)
+        self._work_loop_thread_id = work_loop_thread_id
         self._accepting_work = True
+
+    @property
+    def work_loop_thread_id(self) -> int | None:
+        return self._work_loop_thread_id
 
     def begin_shutdown(self) -> None:
         """Stop new work and prevent DBOS from starting another engine advance."""
@@ -593,7 +671,18 @@ def initialize_dbos_work_runtime(
         raise ValueError("DBOS queue concurrency must be positive when configured")
     if isinstance(max_reasoning_cycles, bool) or max_reasoning_cycles <= 0:
         raise ValueError("max reasoning cycles must be positive")
-    configure_work_engine(engine, event_loop)
+    if event_loop.is_closed():
+        raise RuntimeError("JARVIS caller event loop is closed")
+
+    # DBOS workflows are durable background execution. Never run WorkEngine cycles
+    # on the realtime voice loop: one slow synchronous callback in a Work executor
+    # would otherwise starve microphone ingress, playout and supervisor liveness.
+    global _WORK_LOOP_RUNTIME
+    if _WORK_LOOP_RUNTIME is not None:
+        raise RuntimeError("dedicated JARVIS work event loop is already running")
+    work_loop_runtime = _DedicatedWorkLoop()
+    _WORK_LOOP_RUNTIME = work_loop_runtime
+    configure_work_engine(engine, work_loop_runtime.loop)
 
     config: DBOSConfig = {
         "name": "jarvis-v1-work",
@@ -616,6 +705,7 @@ def initialize_dbos_work_runtime(
         ).result()
     return DBOSWorkExecutionBackend(
         max_reasoning_cycles=max_reasoning_cycles,
+        work_loop_thread_id=work_loop_runtime.thread_id,
     )
 
 
@@ -625,7 +715,7 @@ def shutdown_dbos_work_runtime(
 ) -> None:
     """Stop DBOS after a bounded drain window for already-running workflows."""
 
-    global _ENGINE, _JARVIS_EVENT_LOOP, _ON_WORK_TERMINAL
+    global _ENGINE, _WORK_EVENT_LOOP, _WORK_LOOP_RUNTIME, _ON_WORK_TERMINAL
     if (
         isinstance(workflow_completion_timeout_sec, bool)
         or workflow_completion_timeout_sec < 0
@@ -636,6 +726,12 @@ def shutdown_dbos_work_runtime(
             workflow_completion_timeout_sec=int(workflow_completion_timeout_sec),
         )
     finally:
-        _ENGINE = None
-        _JARVIS_EVENT_LOOP = None
-        _ON_WORK_TERMINAL = None
+        loop_runtime = _WORK_LOOP_RUNTIME
+        _WORK_LOOP_RUNTIME = None
+        try:
+            if loop_runtime is not None:
+                loop_runtime.stop()
+        finally:
+            _ENGINE = None
+            _WORK_EVENT_LOOP = None
+            _ON_WORK_TERMINAL = None
