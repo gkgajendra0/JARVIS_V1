@@ -7,7 +7,11 @@ from types import SimpleNamespace
 import pytest
 from tools.research import c6_context_owner_acceptance as c6
 
-from jarvis.brain_routing.models import BrainRouteKind, BrainRouteRecord, BrainRoutingMode
+from jarvis.brain_routing.models import (
+    BrainRouteKind,
+    BrainRouteRecord,
+    BrainRoutingMode,
+)
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.model_routing.models import (
@@ -302,10 +306,14 @@ async def test_decision_replay_stops_after_first_mismatch_without_circuit_mutati
             return True
 
         def record_failure(self, _error):
-            raise AssertionError("C6 replay must not mutate the shared provider circuit")
+            raise AssertionError(
+                "C6 replay must not mutate the shared provider circuit"
+            )
 
         def record_success(self):
-            raise AssertionError("C6 replay must not mutate the shared provider circuit")
+            raise AssertionError(
+                "C6 replay must not mutate the shared provider circuit"
+            )
 
     class _CircuitRegistry:
         def circuit(self, _key):
@@ -358,4 +366,3 @@ async def test_decision_replay_stops_after_first_mismatch_without_circuit_mutati
     assert result["mismatch_cases"] == 1
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert result["provider_circuit_updated"] is False
-
