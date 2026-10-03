@@ -553,6 +553,21 @@ def _provider_result(
     )
 
 
+def _merge_usage(
+    current: DevelopmentUsageV1 | None,
+    next_usage: DevelopmentUsageV1 | None,
+) -> DevelopmentUsageV1 | None:
+    if next_usage is None:
+        return current
+    if current is None:
+        return next_usage
+    return DevelopmentUsageV1(
+        input_tokens=current.input_tokens + next_usage.input_tokens,
+        output_tokens=current.output_tokens + next_usage.output_tokens,
+        total_tokens=current.total_tokens + next_usage.total_tokens,
+    )
+
+
 class CodexPlanDevelopmentEngine:
     """Long-turn Codex engineering specialist under the JARVIS control plane."""
 
@@ -788,7 +803,7 @@ class CodexPlanDevelopmentEngine:
             )
 
             for _turn_index in range(self._max_turns):
-                last_usage = response.usage or last_usage
+                last_usage = _merge_usage(last_usage, response.usage)
                 directive = _parse_directive(response)
                 if directive["kind"] == "result":
                     return self._terminal_result(
