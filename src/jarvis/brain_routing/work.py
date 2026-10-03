@@ -192,6 +192,7 @@ def _context_replay_snapshot(
         "work_version": request.work.version,
         "work_state": request.work.state.value,
         "work_status_detail": request.work.status_detail,
+        "work_current_step_id": request.work.current_step_id,
         "purpose": request.purpose,
         "allowed_actions": [
             {
@@ -433,17 +434,20 @@ class GlobalBrainRouterReasoner:
                 model_decision_id=model_decision_id,
                 model_target_id=model_target_id,
             )
-            if (
-                request.context_mode is WorkContextMode.SHADOW
-                and request.context_pack is not None
-            ):
-                self._route_store.record_context_snapshot(
-                    route_request_id=facts.route_request_id,
-                    work_id=request.work.work_id,
-                    snapshot=_context_replay_snapshot(
-                        request,
-                        all_steps=all_steps,
-                    ),
-                    created_at_epoch=float(self._clock()),
-                )
+        if (
+            request.context_mode is WorkContextMode.SHADOW
+            and request.context_pack is not None
+        ):
+            # Keep replay provenance restart-safe. Route provenance and its bounded
+            # C6 snapshot are separate durable writes, so a retry must idempotently
+            # backfill a snapshot if the process stopped between those writes.
+            self._route_store.record_context_snapshot(
+                route_request_id=facts.route_request_id,
+                work_id=request.work.work_id,
+                snapshot=_context_replay_snapshot(
+                    request,
+                    all_steps=all_steps,
+                ),
+                created_at_epoch=float(self._clock()),
+            )
         return actual
