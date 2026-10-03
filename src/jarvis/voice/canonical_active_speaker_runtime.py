@@ -680,7 +680,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     await asyncio.sleep(0)
                     continue
             if not self._work_delivery_is_current(delivery.kind, work.state):
-                runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                await asyncio.to_thread(
+                    runtime.store.mark_delivery_delivered,
+                    delivery.delivery_id,
+                )
                 LOGGER.info(
                     "Obsolete background notification discarded | "
                     "delivery_id=%s | work_id=%s | kind=%s | current_state=%s",
