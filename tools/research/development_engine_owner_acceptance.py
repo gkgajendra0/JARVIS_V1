@@ -115,6 +115,13 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
     image_ready = docker_ready and _docker_image_available(test_image)
     plan = ChatGPTPlanSessionManager()
     chatgpt_plan_connected = plan.is_connected()
+    model_catalog_error = None
+    model_visible = False
+    if chatgpt_plan_connected and model:
+        try:
+            model_visible = model in {item.slug for item in plan.list_models()}
+        except Exception as exc:  # noqa: BLE001 - preflight reports provider readiness
+            model_catalog_error = f"{type(exc).__name__}: {exc}"
     codex_version = None
     try:
         import openai_codex  # type: ignore
@@ -131,6 +138,7 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
         "docker_available": docker_ready,
         "test_image_available": image_ready,
         "chatgpt_plan_connected": chatgpt_plan_connected,
+        "development_model_visible": model_visible,
         "openai_codex_installed": codex_installed,
         "openai_codex_reviewed_version": (
             codex_version == REVIEWED_CODEX_SDK_VERSION
@@ -142,6 +150,7 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
         "model": model,
         "test_image": test_image,
         "openai_codex_version": codex_version,
+        "model_catalog_error": model_catalog_error,
         "checks": checks,
         "quota_consumed": False,
     }
@@ -198,12 +207,23 @@ async def _run_proof(
             "Docker is unavailable. This proof refuses to execute model-edited code "
             "without the approved Docker sandbox."
         )
+    if not _docker_image_available(test_image):
+        raise RuntimeError(
+            "The configured development test Docker image is unavailable locally. "
+            "The proof will not consume model quota without its approved sandbox."
+        )
 
     plan = ChatGPTPlanSessionManager()
     if not plan.is_connected():
         raise RuntimeError(
             "JARVIS is not connected to ChatGPT-plan usage. Run the existing "
             "ChatGPT-plan sign-in flow first."
+        )
+    visible_models = {item.slug for item in plan.list_models()}
+    if model not in visible_models:
+        raise RuntimeError(
+            f"DevelopmentEngine model {model!r} is not visible to the connected "
+            "ChatGPT-plan account."
         )
 
     try:
