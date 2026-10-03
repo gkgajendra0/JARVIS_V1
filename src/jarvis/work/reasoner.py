@@ -462,15 +462,8 @@ class RoutedWorkReasoner:
             ):
                 return self._router.target_registry.require(last_target_id)
 
-        failed_target_ids = {
-            attempt.target_id
-            for attempt in attempts
-            if attempt.failure_class is not None
-        }
         allowed_ids = decision.ordered_target_ids[: 1 + decision.fallback_budget]
         for target_id in allowed_ids:
-            if target_id in failed_target_ids:
-                continue
             health = self._router.routing_store.get_health(target_id)
             if health is not None and health.effective_state(
                 now_epoch=now_epoch
@@ -480,6 +473,11 @@ class RoutedWorkReasoner:
             circuit = self._provider_circuit(target)
             if circuit is not None and not circuit.allow_request():
                 continue
+            # A historical failure does not permanently blacklist a target.
+            # Cooldown expiry intentionally admits one recovery probe while
+            # preserving the failure streak; only a successful invocation resets
+            # that streak. Health + the shared provider circuit are the capacity
+            # authorities for whether this target may be tried now.
             return target
         return None
 
