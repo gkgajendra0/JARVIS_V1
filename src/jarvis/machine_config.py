@@ -192,6 +192,39 @@ def save_machine_settings(
     return target
 
 
+def configured_alias_text(
+    names: tuple[str, ...],
+    machine_settings: Mapping[str, str],
+    default: str | None = None,
+) -> str | None:
+    """Resolve one logical setting across canonical/legacy names safely.
+
+    Persisted machine values remain authoritative across the whole alias family
+    unless runtime environment overrides were explicitly enabled. Names are
+    evaluated in priority order within the chosen source.
+    """
+
+    normalized = tuple(dict.fromkeys(str(name).strip() for name in names if str(name).strip()))
+    if not normalized:
+        raise ValueError("configured alias names must not be empty")
+
+    override = runtime_environment_overrides_enabled()
+    if not override:
+        for name in normalized:
+            if name in machine_settings:
+                return machine_settings[name]
+
+    for name in normalized:
+        environment_value = os.getenv(name)
+        if environment_value is not None:
+            return environment_value
+
+    for name in normalized:
+        if name in machine_settings:
+            return machine_settings[name]
+    return default
+
+
 def configured_text(
     name: str,
     machine_settings: Mapping[str, str],
