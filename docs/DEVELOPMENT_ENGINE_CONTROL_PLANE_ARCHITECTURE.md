@@ -262,6 +262,15 @@ Initial operations:
 - `get_research_evidence`
 - `get_architecture_context`
 
+The first implementation deliberately does **not** add a second architecture-context
+tool: the exact approved architecture is already embedded in the immutable ticket.
+Likewise, `run_static_checks` remains a staged follow-up rather than duplicating the
+existing diagnostic/static-analysis substrate. The v1 DevelopmentEngine uses
+network-disabled sandbox tests before the candidate commit, then the existing GitHub
+CI/promotion gates remain the authoritative broader static/quality checks. A direct
+development static-check tool should be admitted only by wrapping the existing
+source-owned verifier substrate, not by granting Codex shell authority.
+
 The tool implementation must enforce:
 
 - isolated WorkItem worktree;
@@ -596,3 +605,47 @@ JARVIS should be able to:
 The owner should not need to identify the protocol, choose the package, provide the device IP manually when it is discoverable, write code, install dependencies, run tests, inspect logs, or debug the integration.
 
 That is the architectural direction. Future changes that materially violate this document require an explicit architecture revision rather than an incidental implementation shortcut.
+
+## 18. Implementation status — PR #252
+
+The capability-focused implementation on `feat/development-engine-control-plane`
+now covers D0 through the core of D5. This status is intentionally about code on the
+draft branch; it is **not** an owner-machine or real-device acceptance claim.
+
+Implemented on the draft branch:
+
+- provider-neutral ticket/result/tool contracts with exact digests;
+- governed adapter over JARVIS DEVELOPMENT executors;
+- restricted Codex/ChatGPT-plan engineering specialist with long coherent tool batches;
+- durable provider-thread identity, canonical progress reconstruction and exact-result reuse;
+- cumulative engineering usage telemetry;
+- one serialized `development_intelligence` resource;
+- a process-persistent shared ChatGPT-plan subscription circuit across ordinary Work
+  reasoning and DevelopmentEngine sessions;
+- subscription/quota pressure parked as resource wait with long bounded cooldown;
+- no automatic paid-provider fallback in the production Work composition;
+- Phase-9 DEVELOPMENT bypass of micro-step model orchestration;
+- deterministic Phase-9 research bookkeeping bypass where no model judgement is needed;
+- bounded retrieval of canonical research/discovery/SDK-verification evidence;
+- typed re-research / architecture-revision / dependency outcomes;
+- exact revised-research-attempt and architecture lineage;
+- restart-safe durable Work execution recovery;
+- migration of stale model-authored Phase-9 owner waits into governed re-research;
+- exact DevelopmentEngine completion binding to the canonical ticket, commit and passing
+  test WorkSteps before ordinary candidate verification;
+- existing strong Phase-9 candidate verification, promotion, Phase-8 lifecycle and
+  external-acceptance control planes remain authoritative.
+
+Still intentionally pending:
+
+- D6 C6 `APPLY` admission. The mode is configurable, but the production default remains
+  `shadow` until replay/regression evidence justifies changing it.
+- D7 owner-machine Codex proof using the real ChatGPT-plan authorization and actual
+  local development sandbox.
+- D8 blind natural-goal capability acceptance through promotion, explicit activation,
+  real external effect/readback and GICC continuation.
+- a direct development static-check tool, only if wrapping the existing source-owned
+  verifier substrate proves useful beyond sandbox tests plus CI.
+
+PR #252 must remain draft and unmerged until CI/regression validation and the required
+owner-machine acceptance are complete.
