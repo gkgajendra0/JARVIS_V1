@@ -659,8 +659,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     ()
                     if runtime.changes is None
                     else await asyncio.to_thread(
-                        lambda: GateService(
-                            runtime.changes.store,
+                        lambda store=runtime.changes.store: GateService(
+                            store,
                             verify_owner=lambda *_: False,
                         ).pending_gate_ids()
                     )
