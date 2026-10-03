@@ -271,3 +271,22 @@ non-equivalent research pair. The research pair chose the same action and matche
 owner/completion fields but produced materially different action parameters. C6 therefore
 remains SHADOW and APPLY promotion is blocked pending a zero-model root-cause diagnosis
 and corrected research-pair acceptance.
+
+
+## 2026-10-04 context-compression/local-development research update
+
+Before implementing more custom C6 compression logic, benchmark Microsoft's LLMLingua
+family as an existing local prompt-compression solution. LLMLingua-2's small official
+checkpoint is suitable for an owner-machine local experiment and supports structured
+compression/forced preservation. Compare legacy vs current C6 vs LLMLingua-assisted
+payloads under the same strict semantic-equivalence gate.
+
+For capability creation, also evaluate an ephemeral local coding-brain mode using the
+existing Ollama/local-residency substrate: evict the ordinary local model when required,
+load a benchmark-qualified coding model for the DevelopmentEngine mission, unload and
+verify VRAM release afterward, then restore ordinary JARVIS routing. The first practical
+8-GB-GPU candidate is Qwen2.5-Coder 7B; Qwen3-Coder 30B is too large for the intended
+fully-resident owner-machine tier.
+
+These are research/benchmark directions only. C6 remains SHADOW and no new production
+model route is authorized until owner-machine quality/resource evidence passes.
