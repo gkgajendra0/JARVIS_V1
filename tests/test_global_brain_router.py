@@ -19,6 +19,7 @@ from jarvis.brain_routing.models import (
 )
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.brain_routing.work import GlobalBrainRouterReasoner
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.models import (
     BenchmarkStatus,
@@ -210,6 +211,10 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     assert record.shadow_proposed_action == "dev_prepare_workspace"
     assert record.shadow_match is True
     assert record.reason_codes == ("shadow_deterministic_match",)
+    assert record.goal_complete is False
+    assert record.needs_owner is False
+    assert record.owner_question is None
+    assert record.parameters_digest == canonical_digest({})
 
 
 @pytest.mark.asyncio
@@ -235,6 +240,35 @@ async def test_shadow_mode_records_mismatch_without_overriding_model(
     record = route_store.list_for_work(work.work_id)[0]
     assert record.shadow_match is False
     assert record.reason_codes == ("shadow_deterministic_mismatch",)
+
+
+@pytest.mark.asyncio
+async def test_model_route_persists_owner_wait_decision_fingerprint(
+    tmp_path: Path,
+) -> None:
+    model_decision = BrainDecision(
+        action=None,
+        summary="Protected pairing input is required.",
+        needs_owner=True,
+        owner_question="Enter the pairing PIN.",
+    )
+    _, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+
+    decision = await router.decide(_request(work, "dev_prepare_workspace"))
+
+    assert decision == model_decision
+    assert model.calls == 1
+    record = route_store.list_for_work(work.work_id)[0]
+    assert record.route_kind is BrainRouteKind.MODEL
+    assert record.selected_action is None
+    assert record.goal_complete is False
+    assert record.needs_owner is True
+    assert record.owner_question == "Enter the pairing PIN."
+    assert record.parameters_digest == canonical_digest({})
 
 
 @pytest.mark.asyncio
