@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
