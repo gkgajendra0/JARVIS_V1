@@ -688,7 +688,9 @@ async def test_codex_tool_batch_cannot_smuggle_terminal_disposition(tmp_path) ->
                         {
                             "call_id": "read",
                             "tool_name": "read_file",
-                            "parameters_json": json.dumps({"path": "src/jarvis/demo.py"}),
+                            "parameters_json": json.dumps(
+                                {"path": "src/jarvis/demo.py"}
+                            ),
                         }
                     ],
                     "disposition": "completed",
@@ -776,7 +778,9 @@ async def test_codex_engine_propagates_governed_owner_input_boundary(tmp_path) -
                         {
                             "call_id": "read",
                             "tool_name": "read_file",
-                            "parameters_json": json.dumps({"path": "src/jarvis/demo.py"}),
+                            "parameters_json": json.dumps(
+                                {"path": "src/jarvis/demo.py"}
+                            ),
                         }
                     ],
                     "disposition": None,
