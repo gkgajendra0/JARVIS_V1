@@ -185,8 +185,24 @@ def _context_replay_snapshot(
     *,
     all_steps: tuple[WorkStep, ...],
 ) -> dict[str, object]:
-    """Capture only the structural facts needed to reconstruct one C6 replay."""
+    """Capture bounded facts needed to reconstruct one exact C6 replay.
 
+    Canonical WorkStep payloads stay in WorkStore rather than being duplicated here.
+    Digests bind replay to the exact optimized projection shadowed by the legacy call.
+    If external context evidence cannot be reconstructed later, replay fails closed
+    instead of benchmarking a different prompt.
+    """
+
+    pack = request.context_pack
+    pack_payload = (
+        None
+        if pack is None
+        else {
+            "recent_steps": pack.recent_steps_payload(),
+            "evidence": list(pack.evidence),
+            "history_manifest": pack.history_manifest_payload(),
+        }
+    )
     return {
         "schema": "c6_work_reasoning_snapshot.v1",
         "work_version": request.work.version,
@@ -208,8 +224,16 @@ def _context_replay_snapshot(
             [step.step_id for step in all_steps]
         ),
         "evidence": list(request.evidence),
-        "context_version": (
-            None if request.context_pack is None else request.context_pack.version
+        "context_version": None if pack is None else pack.version,
+        "context_selected_step_ids": (
+            [] if pack is None else [step.step_id for step in pack.selected_steps]
+        ),
+        "context_evidence_count": 0 if pack is None else len(pack.evidence),
+        "context_evidence_digest": (
+            None if pack is None else canonical_digest(list(pack.evidence))
+        ),
+        "context_pack_digest": (
+            None if pack_payload is None else canonical_digest(pack_payload)
         ),
     }
 
