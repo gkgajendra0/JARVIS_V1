@@ -114,7 +114,9 @@ async def test_work_status_scheduler_persistence_does_not_block_event_loop() -> 
         started.set()
         assert release.wait(timeout=2.0)
 
-    runtime._process_due_status_updates = blocking_status_tick  # type: ignore[method-assign]
+    runtime._process_due_status_updates = (  # type: ignore[method-assign]
+        blocking_status_tick
+    )
 
     task = asyncio.create_task(runtime._status_update_loop())
 
