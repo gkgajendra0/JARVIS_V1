@@ -384,7 +384,6 @@ def test_gemini_live_websocket_1011_is_retryable_provider_server_error() -> None
     assert "internal server error" in failure.spoken_message
 
 
-
 def test_subscription_sharing_limit_is_quota_exhaustion() -> None:
     class SubscriptionLimit(RuntimeError):
         status_code = 429
