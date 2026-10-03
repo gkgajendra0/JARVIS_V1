@@ -31,6 +31,7 @@ from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.brain import BrainDecision, BrainReasoner, BrainRequest
 from jarvis.work.context import WorkContextMode
 from jarvis.work.models import WorkStep
+from jarvis.work.reasoner import work_reasoning_contract_digest
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -224,6 +225,7 @@ def _context_replay_snapshot(
             [step.step_id for step in all_steps]
         ),
         "evidence": list(request.evidence),
+        "reasoner_contract_digest": work_reasoning_contract_digest(),
         "context_version": None if pack is None else pack.version,
         "context_selected_step_ids": (
             [] if pack is None else [step.step_id for step in pack.selected_steps]
