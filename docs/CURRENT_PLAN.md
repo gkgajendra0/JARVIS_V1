@@ -252,3 +252,22 @@ Historical experiments, old acceptance transcripts and superseded research remai
 ## Immediate next action
 
 **Start the JARVIS Cost Optimization interlude from Slice C0 in `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`. Do not purchase the ₹400–₹500 paid-brain experiment balance until the documented pre-credit gate passes. Preserve production SHADOW, existing Authority, accepted Phase-4 routing contracts and the deferred Phase-9 blind external lifecycle. Phase 11 remains next in the autonomous-engineering sequence after this bounded interlude unless the owner changes priority.**
+
+
+## 2026-10-04 active routing/C6 decision
+
+The owner has explicitly directed that JARVIS must not use Astra-class reasoning as the
+routine/default coding path merely because it is available. The durable decision is
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`.
+
+The intended future ladder is deterministic/bounded/local -> economical cloud ->
+balanced/strong cloud -> frontier escalation, with concrete models selected through the
+existing registry, JARVIS-specific benchmarks, health/quota evidence and explicit
+escalation reasons. DevelopmentEngine/Codex is the preferred coherent coding-agent
+boundary; normal ChatGPT UI automation is not the target architecture.
+
+Current C6 owner-machine evidence has two equivalent development pairs and one
+non-equivalent research pair. The research pair chose the same action and matched
+owner/completion fields but produced materially different action parameters. C6 therefore
+remains SHADOW and APPLY promotion is blocked pending a zero-model root-cause diagnosis
+and corrected research-pair acceptance.
