@@ -143,6 +143,19 @@ class FakeTools:
             for name in self._names
         )
 
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "schema": "jarvis.development_progress.v1",
+            "ticket_id": "fake",
+            "ticket_digest": "fake",
+            "completed_tool_step_count": 0,
+            "changed_files": [],
+            "passing_test_evidence_refs": [],
+            "candidate_revision": None,
+            "candidate_branch": None,
+            "recent_tool_evidence": [],
+        }
+
     async def invoke(self, tool_name: str, parameters):
         self._sequence += 1
         values = dict(parameters)
