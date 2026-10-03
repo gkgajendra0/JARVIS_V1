@@ -1423,9 +1423,7 @@ def main() -> int:
         if args.fixture_stability_preflight:
             result["model_api_called"] = False
             result["fixture_stability_preflight"] = replay
-            result["c6_fixture_stability_ready"] = replay[
-                "fixture_stability_ready"
-            ]
+            result["c6_fixture_stability_ready"] = replay["fixture_stability_ready"]
             result["c6_apply_note"] = (
                 "Same-context stability preflight only; no model call was made and "
                 "C6 APPLY remains unproven."

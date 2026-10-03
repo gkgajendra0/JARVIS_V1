@@ -214,7 +214,6 @@ async def test_c6_fixture_benchmark_stops_on_first_mismatch_without_circuit_muta
     assert result["provider_circuit_updated"] is False
 
 
-
 @pytest.mark.asyncio
 async def test_c6_fixture_stability_preflight_uses_no_provider_state(
     monkeypatch: pytest.MonkeyPatch,
