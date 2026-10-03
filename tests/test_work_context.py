@@ -338,6 +338,7 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
         "work_version": work.version,
         "work_state": work.state.value,
         "work_status_detail": "historical status",
+        "work_current_step_id": second.step_id,
         "purpose": "choose the next bounded step",
         "allowed_actions": [
             {
@@ -370,6 +371,7 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
     assert replay.work.version == work.version
     assert replay.work.state is work.state
     assert replay.work.status_detail == "historical status"
+    assert replay.work.current_step_id == second.step_id
     assert [step.step_id for step in replay.recent_steps] == [
         first.step_id,
         second.step_id,
@@ -387,6 +389,7 @@ def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
         "work_version": work.version,
         "work_state": work.state.value,
         "work_status_detail": None,
+        "work_current_step_id": step.step_id,
         "purpose": "choose the next bounded step",
         "allowed_actions": [
             {
