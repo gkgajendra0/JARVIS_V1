@@ -87,6 +87,60 @@ def _docker_available() -> bool:
     return True
 
 
+def _docker_image_available(image: str) -> bool:
+    docker = shutil.which("docker")
+    if docker is None:
+        return False
+    try:
+        completed = subprocess.run(
+            [docker, "image", "inspect", image],
+            capture_output=True,
+            timeout=20,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
+def _preflight(*, model: str, test_image: str) -> dict[str, object]:
+    """Check the owner-machine proof prerequisites without consuming model quota."""
+
+    git_ready = shutil.which("git") is not None
+    docker_ready = _docker_available()
+    image_ready = docker_ready and _docker_image_available(test_image)
+    plan = ChatGPTPlanSessionManager()
+    chatgpt_plan_connected = plan.is_connected()
+    codex_version = None
+    try:
+        import openai_codex  # type: ignore
+
+        codex_version = str(getattr(openai_codex, "__version__", "unknown"))
+        codex_ready = True
+    except ImportError:
+        codex_ready = False
+
+    checks = {
+        "model_configured": bool(model),
+        "test_image_configured": bool(test_image),
+        "git_available": git_ready,
+        "docker_available": docker_ready,
+        "test_image_available": image_ready,
+        "chatgpt_plan_connected": chatgpt_plan_connected,
+        "openai_codex_installed": codex_ready,
+    }
+    return {
+        "schema": "jarvis.development_engine_owner_preflight.v1",
+        "passed": all(checks.values()),
+        "model": model,
+        "test_image": test_image,
+        "openai_codex_version": codex_version,
+        "checks": checks,
+        "quota_consumed": False,
+    }
+
+
 def _prepare_disposable_repo(root: pathlib.Path) -> tuple[pathlib.Path, str]:
     repo = root / "repo"
     (repo / "src").mkdir(parents=True)
@@ -336,6 +390,14 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional JSON report path.",
     )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help=(
+            "Check Git, Docker, test image, ChatGPT-plan connection and Codex SDK "
+            "without consuming model quota."
+        ),
+    )
     return parser
 
 
@@ -355,6 +417,14 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+
+    preflight = _preflight(model=model, test_image=test_image)
+    if args.preflight_only:
+        print(json.dumps(preflight, indent=2, sort_keys=True))
+        return 0 if preflight["passed"] is True else 1
+    if preflight["passed"] is not True:
+        print(json.dumps(preflight, indent=2, sort_keys=True), file=sys.stderr)
+        return 1
 
     try:
         report = asyncio.run(
