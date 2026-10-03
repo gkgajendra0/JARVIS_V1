@@ -141,6 +141,10 @@ from jarvis.promotion.runtime_composition import (
     PromotionRuntimeConfig,
 )
 from jarvis.promotion.store import PromotionStore
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -690,7 +694,9 @@ def build_work_runtime(
         adapter_registry=adapter_registry,
         chatgpt_plan_enabled=chatgpt_plan_enabled,
         chatgpt_plan_model=chatgpt_plan_model,
+        paid_fallback_enabled=paid_fallback_enabled,
     )
+    provider_circuits = provider_circuit_registry or BackgroundProviderCircuitRegistry()
     routing_store = ModelRoutingStore(store)
     brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
@@ -718,6 +724,7 @@ def build_work_runtime(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
+        provider_circuit_registry=provider_circuits,
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
@@ -840,6 +847,12 @@ def build_work_runtime(
             chatgpt_plan=chatgpt_plan_session,
             model=development_model,
             sessions=development_sessions,
+            provider_circuit=provider_circuits.circuit(
+                provider_circuit_key(
+                    provider=CHATGPT_PLAN_PROVIDER_ID,
+                    model=development_model,
+                )
+            ),
         )
         development_coordinator = DevelopmentEngineCoordinator(
             engine=development_specialist,
