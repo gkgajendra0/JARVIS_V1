@@ -225,7 +225,12 @@ def _development_repair_case(
                 "Applied the first bounded implementation.",
                 input_data={
                     "path": "src/jarvis/example.py",
-                    "text": "def normalize(value):\n    return value.strip()\n",
+                    "text": (
+                        "def normalize(value):\n"
+                        "    # bounded implementation context\n"
+                        "    return value.strip()\n"
+                    )
+                    * 110,
                 },
                 observation={
                     "path": "src/jarvis/example.py",
@@ -233,13 +238,34 @@ def _development_repair_case(
                     "production_tree_modified": False,
                 },
             ),
-            _fail(
+            _complete(
                 work_id,
                 index + 1,
                 "dev_run_tests",
-                "Initial sandboxed regression run failed.",
+                "Initial sandboxed regression run reported a failing test.",
                 input_data={"targets": ["tests/test_example.py"]},
-                reason="1 failed: whitespace-only input should normalize to an empty value",
+                observation={
+                    "passed": False,
+                    "returncode": 1,
+                    "timed_out": False,
+                    "output": (
+                        "FAILED tests/test_example.py::test_whitespace_only - "
+                        "AssertionError: expected empty normalized value\n"
+                    )
+                    * 130,
+                    "command": [
+                        "python",
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "tests/test_example.py",
+                    ],
+                    "sandbox": "docker",
+                    "network": "disabled",
+                    "workspace": "read_only",
+                    "sandbox_profile": "test.offline.v1",
+                    "sandbox_profile_version": 1,
+                },
             ),
             _complete(
                 work_id,
@@ -267,8 +293,10 @@ def _development_repair_case(
                     "text": (
                         "def normalize(value):\n"
                         "    cleaned = value.strip()\n"
+                        "    # preserve bounded normalization semantics\n"
                         "    return cleaned\n"
-                    ),
+                    )
+                    * 95,
                 },
                 observation={
                     "path": "src/jarvis/example.py",
@@ -284,9 +312,25 @@ def _development_repair_case(
                 input_data={"targets": ["tests/test_example.py"]},
                 observation={
                     "passed": True,
-                    "exit_code": 0,
-                    "summary": "12 passed",
+                    "returncode": 0,
+                    "timed_out": False,
+                    "output": (
+                        "tests/test_example.py::test_normalize PASSED\n"
+                        "tests/test_example.py::test_whitespace_only PASSED\n"
+                    )
+                    * 100,
+                    "command": [
+                        "python",
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "tests/test_example.py",
+                    ],
                     "sandbox": "docker",
+                    "network": "disabled",
+                    "workspace": "read_only",
+                    "sandbox_profile": "test.offline.v1",
+                    "sandbox_profile_version": 1,
                 },
             ),
             _complete(
@@ -410,7 +454,12 @@ def _development_commit_case(
                 "Applied the final reviewed source change.",
                 input_data={
                     "path": "src/jarvis/review.py",
-                    "text": "def accepted(value):\n    return bool(value)\n",
+                    "text": (
+                        "def accepted(value):\n"
+                        "    # reviewed bounded acceptance implementation\n"
+                        "    return bool(value)\n"
+                    )
+                    * 105,
                 },
                 observation={
                     "path": "src/jarvis/review.py",
@@ -426,9 +475,25 @@ def _development_commit_case(
                 input_data={"targets": ["tests/test_review.py"]},
                 observation={
                     "passed": True,
-                    "exit_code": 0,
-                    "summary": "28 passed",
+                    "returncode": 0,
+                    "timed_out": False,
+                    "output": (
+                        "tests/test_review.py::test_accepts_valid_value PASSED\n"
+                        "tests/test_review.py::test_rejects_empty_value PASSED\n"
+                    )
+                    * 105,
+                    "command": [
+                        "python",
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "tests/test_review.py",
+                    ],
                     "sandbox": "docker",
+                    "network": "disabled",
+                    "workspace": "read_only",
+                    "sandbox_profile": "test.offline.v1",
+                    "sandbox_profile_version": 1,
                 },
             ),
             _complete(
