@@ -358,9 +358,7 @@ class RoutedWorkReasoner:
         self._provider_circuit_registry = provider_circuit_registry
         self._resources = resources
         self._resource_keys = (
-            ()
-            if resources is None
-            else resources.normalize(resource_keys)
+            () if resources is None else resources.normalize(resource_keys)
         )
 
     def _provider_circuit(self, target):
