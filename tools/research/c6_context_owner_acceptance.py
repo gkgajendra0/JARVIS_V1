@@ -141,9 +141,9 @@ def _replay_candidates(
             if route.reasoner_contract_digest is None:
                 stats["missing_route_contract_lineage"] += 1
                 continue
-            snapshot_contract = str(
-                snapshot.get("reasoner_contract_digest") or ""
-            ).strip().casefold()
+            snapshot_contract = (
+                str(snapshot.get("reasoner_contract_digest") or "").strip().casefold()
+            )
             if route.reasoner_contract_digest != snapshot_contract:
                 stats["route_snapshot_contract_mismatch"] += 1
                 continue
