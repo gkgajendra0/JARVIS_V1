@@ -54,6 +54,36 @@ class FakeExecutor:
         }
 
 
+class WriteExecutor:
+    descriptor = BrainAction(
+        name="dev_write_file",
+        description="Write a synthetic file.",
+        parameter_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "text": {"type": "string"},
+            },
+            "required": ["path", "text"],
+            "additionalProperties": False,
+        },
+    )
+    work_types = frozenset({WorkType.DEVELOPMENT})
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        del work
+        return {
+            "path": parameters["path"],
+            "sha256": "f" * 64,
+            "written": True,
+        }
+
+
 class OwnerExecutor:
     descriptor = BrainAction(
         name="dev_run_tests",
@@ -95,7 +125,11 @@ class CommitExecutor:
         return {"committed": True}
 
 
-def _ticket(*, tools: tuple[str, ...]) -> DevelopmentTicketV1:
+def _ticket(
+    *,
+    tools: tuple[str, ...],
+    writable_paths: tuple[str, ...] = (),
+) -> DevelopmentTicketV1:
     return DevelopmentTicketV1.create(
         request="Develop the approved capability.",
         work_id="work_demo",
@@ -109,6 +143,7 @@ def _ticket(*, tools: tuple[str, ...]) -> DevelopmentTicketV1:
         required_operations=("operation.demo",),
         acceptance_criteria=("tests pass",),
         allowed_tools=tools,
+        writable_paths=writable_paths,
     )
 
 
@@ -168,6 +203,57 @@ async def test_tool_port_rejects_tool_not_on_ticket(tmp_path) -> None:
 
     with pytest.raises(DevelopmentToolDenied, match="not authorized"):
         await port.invoke("write_file", {"path": "src/demo.py"})
+
+
+@pytest.mark.asyncio
+async def test_tool_port_enforces_exact_ticket_writable_paths(tmp_path) -> None:
+    store = _running_store(tmp_path)
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=_ticket(
+            tools=("write_file",),
+            writable_paths=("src/approved.py",),
+        ),
+        store=store,
+        actions=WorkActionRegistry((WriteExecutor(),)),
+        resources=ResourceLeaseManager({"git": 1}),
+    )
+
+    written = await port.invoke(
+        "write_file",
+        {"path": "src\\approved.py", "text": "VALUE = 1\n"},
+    )
+    assert written["path"] == "src/approved.py"
+
+    with pytest.raises(DevelopmentToolDenied, match="outside DevelopmentTicket"):
+        await port.invoke(
+            "write_file",
+            {"path": "src/unapproved.py", "text": "VALUE = 2\n"},
+        )
+
+    with pytest.raises(DevelopmentToolDenied, match="safe repository-relative"):
+        await port.invoke(
+            "write_file",
+            {"path": "../escape.py", "text": "VALUE = 3\n"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_tool_port_denies_writes_when_ticket_has_no_writable_paths(
+    tmp_path,
+) -> None:
+    store = _running_store(tmp_path)
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=_ticket(tools=("write_file",)),
+        store=store,
+        actions=WorkActionRegistry((WriteExecutor(),)),
+        resources=ResourceLeaseManager({"git": 1}),
+    )
+
+    with pytest.raises(DevelopmentToolDenied, match="outside DevelopmentTicket"):
+        await port.invoke(
+            "write_file",
+            {"path": "src/demo.py", "text": "VALUE = 1\n"},
+        )
 
 
 @pytest.mark.asyncio
