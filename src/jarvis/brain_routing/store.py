@@ -128,6 +128,17 @@ class BrainRouteStore:
 
                 CREATE INDEX IF NOT EXISTS idx_brain_route_decisions_work
                     ON brain_route_decisions(work_id, created_at_epoch);
+
+                CREATE TABLE IF NOT EXISTS brain_route_context_snapshots (
+                    route_request_id TEXT PRIMARY KEY,
+                    work_id TEXT NOT NULL,
+                    snapshot_json TEXT NOT NULL,
+                    created_at_epoch REAL NOT NULL,
+                    FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_brain_route_context_snapshots_work
+                    ON brain_route_context_snapshots(work_id, created_at_epoch);
                 """
             )
 
@@ -203,6 +214,87 @@ class BrainRouteStore:
             _record(self._work_store.decode_extension_json(row["route_json"]))
             for row in rows
         )
+
+    def record_context_snapshot(
+        self,
+        *,
+        route_request_id: str,
+        work_id: str,
+        snapshot: dict[str, object],
+        created_at_epoch: float,
+    ) -> dict[str, object]:
+        """Persist one bounded C6 replay snapshot without duplicating Work history."""
+
+        route_id = str(route_request_id).strip()
+        normalized_work_id = str(work_id).strip()
+        if not route_id or not normalized_work_id:
+            raise ValueError("route_request_id and work_id are required")
+        if not isinstance(snapshot, dict):
+            raise TypeError("snapshot must be an object")
+        if snapshot.get("schema") != "c6_work_reasoning_snapshot.v1":
+            raise ValueError("unsupported C6 work reasoning snapshot schema")
+        encoded = self._work_store.encode_extension_json(snapshot)
+        with self._work_store.extension_transaction() as connection:
+            existing = connection.execute(
+                """
+                SELECT work_id, snapshot_json
+                FROM brain_route_context_snapshots
+                WHERE route_request_id = ?
+                """,
+                (route_id,),
+            ).fetchone()
+            if existing is not None:
+                if str(existing["work_id"]) != normalized_work_id:
+                    raise BrainRouteStoreError(
+                        "C6 context snapshot route is bound to another WorkItem"
+                    )
+                current = self._work_store.decode_extension_json(
+                    str(existing["snapshot_json"])
+                )
+                if current != snapshot:
+                    raise BrainRouteStoreError(
+                        "C6 context snapshot conflicts with durable provenance"
+                    )
+                return dict(current)
+            connection.execute(
+                """
+                INSERT INTO brain_route_context_snapshots (
+                    route_request_id, work_id, snapshot_json, created_at_epoch
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    route_id,
+                    normalized_work_id,
+                    encoded,
+                    float(created_at_epoch),
+                ),
+            )
+        return dict(snapshot)
+
+    def get_context_snapshot(
+        self,
+        route_request_id: str,
+    ) -> dict[str, object] | None:
+        route_id = str(route_request_id).strip()
+        if not route_id:
+            raise ValueError("route_request_id must not be empty")
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                """
+                SELECT snapshot_json
+                FROM brain_route_context_snapshots
+                WHERE route_request_id = ?
+                """,
+                (route_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._work_store.decode_extension_json(str(row["snapshot_json"]))
+        if not isinstance(payload, dict):
+            raise BrainRouteStoreError("C6 context snapshot payload is invalid")
+        if payload.get("schema") != "c6_work_reasoning_snapshot.v1":
+            raise BrainRouteStoreError("C6 context snapshot schema is invalid")
+        return dict(payload)
 
     def summary_for_work(self, work_id: str) -> dict[str, int]:
         records = self.list_for_work(work_id)
