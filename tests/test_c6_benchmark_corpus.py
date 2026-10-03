@@ -749,6 +749,17 @@ class _FakeCompressionResult:
     def reduced(self):
         return self.compressed_chars < self.original_chars
 
+    @property
+    def reduction_percent(self):
+        if self.original_chars <= 0:
+            return 0.0
+        return round(
+            (self.original_chars - self.compressed_chars)
+            * 100.0
+            / self.original_chars,
+            2,
+        )
+
 
 class _FakeCompressor:
     def compress_payload(self, payload):
