@@ -736,9 +736,7 @@ class WorkEngine:
                 continue
             normalized_reason = " ".join(str(handled_reason).split()).strip()
             if not normalized_reason:
-                raise ValueError(
-                    "model owner request handler returned an empty reason"
-                )
+                raise ValueError("model owner request handler returned an empty reason")
             latest = self._store.require(work.work_id)
             if latest.state.terminal:
                 continue
