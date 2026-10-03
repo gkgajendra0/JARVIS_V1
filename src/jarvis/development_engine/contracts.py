@@ -436,9 +436,7 @@ class DevelopmentResultV1:
                 disposition is DevelopmentDisposition.BLOCKED_RESOURCE
                 and blocker is None
             ):
-                raise ValueError(
-                    "blocked-resource disposition requires blocker_code"
-                )
+                raise ValueError("blocked-resource disposition requires blocker_code")
 
         payload: dict[str, object] = {
             "ticket_id": ticket.ticket_id,
