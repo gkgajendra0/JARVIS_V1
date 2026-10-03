@@ -268,10 +268,10 @@ def test_raw_chatgpt_plan_subscription_limit_is_provider_pressure() -> None:
         provider="chatgpt_plan",
     )
 
-    assert failure.kind is ProviderFailureKind.RATE_LIMITED
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
 
 
-def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None:
+def test_chatgpt_plan_usage_error_maps_to_quota_exhausted() -> None:
     failure = classify_provider_failure(
         ChatGPTPlanUsageUnavailable(
             "limit",
@@ -282,11 +282,11 @@ def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None
         provider="chatgpt_plan",
     )
 
-    assert failure.kind is ProviderFailureKind.RATE_LIMITED
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
     assert failure.retryable is True
 
 
-def test_plan_enabled_work_pool_is_plan_primary_plus_configured_paid_fallback() -> None:
+def test_plan_enabled_work_pool_is_plan_only_without_explicit_paid_fallback() -> None:
     adapters = ModelAdapterRegistry(
         (
             _DummyAdapter("chatgpt_plan"),
@@ -307,7 +307,6 @@ def test_plan_enabled_work_pool_is_plan_primary_plus_configured_paid_fallback() 
     assert targets.primary_target_id == CHATGPT_PLAN_TARGET_ID
     assert tuple(target.target_id for target in all_targets) == (
         CHATGPT_PLAN_TARGET_ID,
-        "work.gemini.default",
     )
     plan = targets.registry.require(CHATGPT_PLAN_TARGET_ID)
     assert plan.locality is ModelLocality.CLOUD
