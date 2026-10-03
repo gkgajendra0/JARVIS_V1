@@ -19,6 +19,7 @@ from jarvis.engineering_change.store import ChangeStore
 from jarvis.work.brain import BrainAction, BrainDecision
 from jarvis.work.engine import (
     WorkActionRegistry,
+    WorkOwnerInputRequired,
     WorkResourceBlocked,
 )
 from jarvis.work.models import WorkItem, WorkStep, WorkType
@@ -26,7 +27,10 @@ from jarvis.work.resources import ResourceLeaseManager
 
 from .contracts import DevelopmentDisposition, DevelopmentResultV1, DevelopmentTicketV1
 from .coordinator import DevelopmentEngineCoordinator
-from .tools import WorkExecutorDevelopmentToolPort
+from .tools import (
+    DevelopmentToolOwnerInputRequired,
+    WorkExecutorDevelopmentToolPort,
+)
 
 PHASE9_DEVELOPMENT_ENGINE_ACTION = "dev_engine_execute"
 
@@ -458,14 +462,22 @@ class Phase9DevelopmentEngineExecutor:
             resources=self._resources,
             action_admission=self._changes.work_admitted,
         )
-        coordinated = await self._coordinator.execute(
-            ticket,
-            tools=tools,
-            evidence_refs=(
-                ticket.architecture_digest,
-                *ticket.research_evidence_refs,
-            ),
-        )
+        try:
+            coordinated = await self._coordinator.execute(
+                ticket,
+                tools=tools,
+                evidence_refs=(
+                    ticket.architecture_digest,
+                    *ticket.research_evidence_refs,
+                ),
+            )
+        except DevelopmentToolOwnerInputRequired as exc:
+            raise WorkOwnerInputRequired(
+                exc.question,
+                sensitive=exc.sensitive,
+                input_key=exc.input_key,
+                resume_context=exc.resume_context,
+            ) from exc
         result = coordinated.result
         observation: dict[str, Any] = {
             "schema": "phase9_development_engine_execution.v1",
