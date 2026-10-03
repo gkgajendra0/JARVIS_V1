@@ -539,7 +539,6 @@ async def test_c6_fixture_first_pair_reports_parameter_mismatch(
     assert result["c6_apply_decision_equivalence_proven"] is False
 
 
-
 @pytest.mark.asyncio
 async def test_c6_fixture_remaining_preflight_selects_only_uncovered_pairs(
     monkeypatch: pytest.MonkeyPatch,
