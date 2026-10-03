@@ -670,3 +670,91 @@ async def test_codex_engine_subscription_limit_opens_shared_circuit_and_suppress
     assert circuit.failed_attempts == 1
     assert plan.calls == 1
     assert runtime.started == 1
+
+
+@pytest.mark.asyncio
+async def test_codex_tool_batch_cannot_smuggle_terminal_disposition(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_invalid_batch",
+        [
+            _response(
+                {
+                    "kind": "tool_batch",
+                    "summary": "Invalid mixed directive.",
+                    "tool_calls": [
+                        {
+                            "call_id": "read",
+                            "tool_name": "read_file",
+                            "parameters_json": json.dumps({"path": "src/jarvis/demo.py"}),
+                        }
+                    ],
+                    "disposition": "completed",
+                    "reason": None,
+                    "requested_dependencies": [],
+                    "evidence_refs": [],
+                    "blocker_code": None,
+                },
+                25,
+            )
+        ],
+    )
+    tools = FakeTools(ticket.allowed_tools)
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=tools)
+
+    assert result.disposition is DevelopmentDisposition.FAILED
+    assert tools.calls == []
+
+
+@pytest.mark.asyncio
+async def test_codex_terminal_result_cannot_request_more_tools(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_invalid_result",
+        [
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "Invalid terminal directive.",
+                    "tool_calls": [
+                        {
+                            "call_id": "write",
+                            "tool_name": "write_file",
+                            "parameters_json": json.dumps(
+                                {"path": "src/jarvis/demo.py", "text": "VALUE = 2\n"}
+                            ),
+                        }
+                    ],
+                    "disposition": "failed",
+                    "reason": "synthetic",
+                    "requested_dependencies": [],
+                    "evidence_refs": [],
+                    "blocker_code": None,
+                },
+                25,
+            )
+        ],
+    )
+    tools = FakeTools(ticket.allowed_tools)
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=tools)
+
+    assert result.disposition is DevelopmentDisposition.FAILED
+    assert tools.calls == []
