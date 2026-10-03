@@ -857,6 +857,36 @@ def build_work_runtime(
                     )
         return None
 
+    def _model_owner_request_handler(
+        work: WorkItem,
+        question: str,
+    ) -> str | None:
+        stage = change_store.stage_for_work(work.work_id)
+        if stage is None:
+            return None
+        change = change_store.require(stage.change_id)
+        if (
+            change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+            or change.process_version != OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+            or stage.stage_key
+            != OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+        ):
+            return None
+
+        # Phase-9 development is already governed by EngineeringChange gates.
+        # A model may request factual input only through a typed executor
+        # WorkOwnerInputRequired. If free-form reasoning asks the owner to revise
+        # or approve development, deterministically return the change to research
+        # and let the canonical architecture gate own the next approval.
+        change_store.request_architecture_revision_for_work(
+            work.work_id,
+            reason=question,
+        )
+        return (
+            "superseded by governed architecture revision research; "
+            "a new architecture gate will be surfaced if the revised plan is ready"
+        )
+
     engine = WorkEngine(
         store=store,
         brain=brain,
@@ -865,6 +895,7 @@ def build_work_runtime(
         base_resource_keys=("work",),
         action_admission=change_store.work_admitted,
         completion_guard=_completion_guard,
+        model_owner_request_handler=_model_owner_request_handler,
     )
     engine.reconcile_interrupted_steps()
     reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
