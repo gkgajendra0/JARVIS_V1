@@ -1141,6 +1141,16 @@ async def _run_llmlingua_fixture_benchmark(
         )
         model_calls += 1
         comparison = compare_context_decisions(legacy, compressed_decision)
+        legacy_input_tokens = int(legacy_telemetry.usage.get("input_tokens", 0) or 0)
+        compressed_input_tokens = int(
+            compressed_telemetry.usage.get("input_tokens", 0) or 0
+        )
+        provider_input_tokens_reduced = (
+            legacy_telemetry.usage_observed
+            and compressed_telemetry.usage_observed
+            and legacy_input_tokens > 0
+            and compressed_input_tokens < legacy_input_tokens
+        )
         results.append(
             {
                 "case_id": case.case_id,
@@ -1175,6 +1185,17 @@ async def _run_llmlingua_fixture_benchmark(
                 "compressed_usage": dict(compressed_telemetry.usage),
                 "compressed_usage_observed": compressed_telemetry.usage_observed,
                 "compressed_latency_ms": round(compressed_telemetry.latency_ms, 2),
+                "provider_input_tokens_reduced": provider_input_tokens_reduced,
+                "provider_input_token_reduction_percent": (
+                    round(
+                        (legacy_input_tokens - compressed_input_tokens)
+                        * 100.0
+                        / legacy_input_tokens,
+                        2,
+                    )
+                    if provider_input_tokens_reduced
+                    else 0.0
+                ),
             }
         )
         if not comparison.equivalent:
@@ -1182,6 +1203,9 @@ async def _run_llmlingua_fixture_benchmark(
 
     equivalent_count = sum(bool(item["equivalent"]) for item in results)
     mismatch_count = len(results) - equivalent_count
+    all_provider_input_tokens_reduced = bool(results) and all(
+        bool(item["provider_input_tokens_reduced"]) for item in results
+    )
     return {
         **common,
         "preflight_only": False,
@@ -1191,6 +1215,7 @@ async def _run_llmlingua_fixture_benchmark(
         "mismatch_cases": mismatch_count,
         "all_fixture_cases_equivalent": bool(results) and mismatch_count == 0,
         "all_fixture_cases_reduced": all_reduced,
+        "all_provider_input_tokens_reduced": all_provider_input_tokens_reduced,
         # This benchmark validates a new compressor path only. It can never silently
         # promote the existing C6 APPLY switch.
         "c6_apply_decision_equivalence_proven": False,
@@ -1923,7 +1948,10 @@ def main() -> int:
                 "LLMLingua A/B evidence cannot promote C6 APPLY automatically. "
                 "Production remains SHADOW pending explicit owner acceptance."
             )
-            if replay["all_fixture_cases_equivalent"] is not True:
+            if (
+                replay["all_fixture_cases_equivalent"] is not True
+                or replay["all_provider_input_tokens_reduced"] is not True
+            ):
                 result["status"] = "INCOMPLETE"
         elif args.fixture_stability_preflight:
             result["model_api_called"] = False
