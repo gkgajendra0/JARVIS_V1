@@ -960,11 +960,7 @@ class WorkEngine:
                 or "This background work needs additional owner input."
             )
             handler = self._model_owner_request_handler
-            handled_reason = (
-                None
-                if handler is None
-                else handler(work, owner_question)
-            )
+            handled_reason = None if handler is None else handler(work, owner_question)
             if handled_reason is not None:
                 normalized_reason = " ".join(str(handled_reason).split()).strip()
                 if not normalized_reason:
