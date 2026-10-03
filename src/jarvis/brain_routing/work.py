@@ -476,10 +476,7 @@ class GlobalBrainRouterReasoner:
             existing_snapshot = self._route_store.get_context_snapshot(
                 facts.route_request_id
             )
-            if existing_snapshot is None or (
-                existing_snapshot.get("reasoner_contract_digest")
-                == snapshot.get("reasoner_contract_digest")
-            ):
+            if existing_snapshot is None:
                 self._route_store.record_context_snapshot(
                     route_request_id=facts.route_request_id,
                     work_id=request.work.work_id,
