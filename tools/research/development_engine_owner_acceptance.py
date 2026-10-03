@@ -32,6 +32,7 @@ from jarvis.development_engine import (
     DevelopmentTicketV1,
     WorkExecutorDevelopmentToolPort,
 )
+from jarvis.development_engine.codex import OfficialCodexRuntimeFactory
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
     DockerDevelopmentTestRunner,
@@ -229,6 +230,26 @@ async def _run_proof(
             evidence_refs=("owner-machine-proof",),
         )
 
+        session = sessions.get(ticket.digest)
+        thread_id = None if session is None else session.thread_id
+        thread_resumed_after_runtime_restart = False
+        if thread_id:
+            restarted_runtime = OfficialCodexRuntimeFactory().create(
+                access_token=plan.access_token(),
+                codex_home=(root / "codex" / "home"),
+                cwd=(root / "codex" / "scratch" / ticket.ticket_id),
+            )
+            try:
+                resumed_thread = await restarted_runtime.resume_thread(
+                    thread_id,
+                    model=model,
+                )
+                thread_resumed_after_runtime_restart = (
+                    resumed_thread.id == thread_id
+                )
+            finally:
+                await restarted_runtime.close()
+
         source_after = _git(repo, "rev-parse", "HEAD").casefold()
         source_status = _git(repo, "status", "--porcelain=v1")
         progress = dict(tools.snapshot())
@@ -250,7 +271,10 @@ async def _run_proof(
             ),
             "identical_reasoning_reused": second.reused is True,
             "identical_result_reused": second.result.digest == result.digest,
-            "thread_recorded": bool(sessions.get(ticket.digest).thread_id),
+            "thread_recorded": bool(thread_id),
+            "thread_resumed_after_runtime_restart": (
+                thread_resumed_after_runtime_restart
+            ),
         }
         passed = all(checks.values())
 
@@ -274,6 +298,11 @@ async def _run_proof(
             "usage": None if result.usage is None else asdict(result.usage),
             "reasoning_fingerprint": first.reasoning_fingerprint,
             "second_execution_reused": second.reused,
+            "provider_thread_id": thread_id,
+            "provider_runtime_restart_resume_verified": (
+                thread_resumed_after_runtime_restart
+            ),
+            "cloud_engine_invocations_expected": 1,
             "progress": progress,
             "checks": checks,
         }
