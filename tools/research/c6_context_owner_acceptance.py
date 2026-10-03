@@ -685,9 +685,7 @@ async def _run_fixture_decision_benchmark(
     equivalent_count = sum(bool(item["equivalent"]) for item in results)
     mismatch_count = len(results) - equivalent_count
     apply_equivalence_proven = (
-        len(results) >= min_equivalent_cases
-        and mismatch_count == 0
-        and representative
+        len(results) >= min_equivalent_cases and mismatch_count == 0 and representative
     )
     return {
         **common,
@@ -1064,8 +1062,7 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=3,
         help=(
-            "Minimum equivalent cases required to mark C6 decision equivalence "
-            "proven."
+            "Minimum equivalent cases required to mark C6 decision equivalence proven."
         ),
     )
     return parser
