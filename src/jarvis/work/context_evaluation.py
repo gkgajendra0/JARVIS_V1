@@ -156,6 +156,7 @@ def reconstruct_recorded_context_request(
     historical_work = replace(
         work,
         state=work_state,
+        paused_from_state=None,
         status_detail=status_detail,
         version=work_version,
     )
