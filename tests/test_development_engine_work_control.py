@@ -151,7 +151,9 @@ async def test_control_plane_development_bypasses_model_micro_steps(tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_executor_resource_blocker_parks_without_reasoning_failure(tmp_path) -> None:
+async def test_executor_resource_blocker_parks_without_reasoning_failure(
+    tmp_path,
+) -> None:
     store, work = _store_with_development(tmp_path)
     reasoner = NeverReason()
     action = ResourceBlockedDevelopmentAction()
