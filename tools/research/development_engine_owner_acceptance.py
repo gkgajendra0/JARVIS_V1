@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import pathlib
 import shutil
 import subprocess
@@ -39,6 +38,7 @@ from jarvis.development_engine.codex import (
     REVIEWED_CODEX_SDK_VERSION,
     OfficialCodexRuntimeFactory,
 )
+from jarvis.machine_config import configured_text, load_machine_settings
 from jarvis.provider_circuit import (
     BackgroundProviderCircuitRegistry,
     provider_circuit_key,
@@ -478,14 +478,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("JARVIS_DEVELOPMENT_ENGINE_MODEL")
-        or os.environ.get("JARVIS_CHATGPT_PLAN_MODEL"),
-        help="ChatGPT-plan model to use for the Codex engineering thread.",
+        default=None,
+        help=(
+            "Optional ChatGPT-plan coding model override. Defaults to the persisted "
+            "JARVIS_DEVELOPMENT_ENGINE_MODEL, then JARVIS_CHATGPT_PLAN_MODEL."
+        ),
     )
     parser.add_argument(
         "--test-image",
-        default=os.environ.get("JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE"),
-        help="Approved JARVIS development test Docker image.",
+        default=None,
+        help=(
+            "Optional approved Docker image override. Defaults to the persisted "
+            "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -506,17 +511,29 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
-    model = str(args.model or "").strip()
-    test_image = str(args.test_image or "").strip()
+    settings = load_machine_settings()
+    model = str(
+        args.model
+        or configured_text("JARVIS_DEVELOPMENT_ENGINE_MODEL", settings)
+        or configured_text("JARVIS_CHATGPT_PLAN_MODEL", settings)
+        or ""
+    ).strip()
+    test_image = str(
+        args.test_image
+        or configured_text("JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE", settings)
+        or ""
+    ).strip()
     if not model:
         print(
-            "ERROR: --model or JARVIS_DEVELOPMENT_ENGINE_MODEL is required.",
+            "ERROR: configure JARVIS_DEVELOPMENT_ENGINE_MODEL or "
+            "JARVIS_CHATGPT_PLAN_MODEL, or pass --model.",
             file=sys.stderr,
         )
         return 2
     if not test_image:
         print(
-            "ERROR: --test-image or JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE is required.",
+            "ERROR: configure JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE "
+            "or pass --test-image.",
             file=sys.stderr,
         )
         return 2
