@@ -31,6 +31,7 @@ from jarvis.provider_circuit import (
 )
 from jarvis.work.context import WorkContextAssembler, WorkContextMode
 from jarvis.work.context_evaluation import (
+    compare_context_decisions,
     compare_recorded_context_decision,
     reconstruct_recorded_context_request,
 )
@@ -169,6 +170,316 @@ def _replay_candidates(
             )
     candidates.sort(key=lambda item: (-float(item[0]), item[3].route_request_id))
     return tuple(candidates[:limit]), stats
+
+
+
+def _paired_benchmark_candidates(
+    store: SQLiteWorkStore,
+    route_store: BrainRouteStore,
+    *,
+    limit: int,
+):
+    """Return successful model-route snapshots usable for fresh legacy/APPLY A/B."""
+
+    candidates = []
+    stats = {
+        "model_routes_seen": 0,
+        "missing_context_snapshot": 0,
+        "missing_route_contract_lineage": 0,
+        "route_snapshot_contract_mismatch": 0,
+        "non_selected_model_routes": 0,
+    }
+    for work in store.list(limit=500):
+        steps = store.list_steps(work.work_id)
+        for route in route_store.list_for_work(work.work_id):
+            if route.route_kind is not BrainRouteKind.MODEL:
+                continue
+            stats["model_routes_seen"] += 1
+            if route.outcome_code != "selected" or route.selected_action is None:
+                stats["non_selected_model_routes"] += 1
+                continue
+            snapshot = route_store.get_context_snapshot(route.route_request_id)
+            if snapshot is None:
+                stats["missing_context_snapshot"] += 1
+                continue
+            if route.reasoner_contract_digest is None:
+                stats["missing_route_contract_lineage"] += 1
+                continue
+            snapshot_contract = (
+                str(snapshot.get("reasoner_contract_digest") or "").strip().casefold()
+            )
+            if route.reasoner_contract_digest != snapshot_contract:
+                stats["route_snapshot_contract_mismatch"] += 1
+                continue
+            candidates.append(
+                (
+                    route.created_at_epoch,
+                    work,
+                    steps,
+                    route,
+                    snapshot,
+                )
+            )
+    candidates.sort(key=lambda item: (-float(item[0]), item[3].route_request_id))
+    return tuple(candidates[:limit]), stats
+
+
+def _prepare_paired_benchmark(
+    *,
+    store: SQLiteWorkStore,
+    route_store: BrainRouteStore,
+    max_cases: int,
+) -> tuple[list[tuple], dict[str, object]]:
+    candidates, candidate_stats = _paired_benchmark_candidates(
+        store,
+        route_store,
+        limit=_MAX_REPLAY_CANDIDATE_SCAN,
+    )
+
+    prepared = []
+    context_drift_cases = 0
+    non_reducing_cases = 0
+    for _created_at, work, steps, route, snapshot in candidates:
+        try:
+            replay = reconstruct_recorded_context_request(
+                snapshot=snapshot,
+                work=work,
+                steps=steps,
+            )
+        except (TypeError, ValueError):
+            context_drift_cases += 1
+            continue
+
+        legacy_payload = _work_input_payload(
+            replace(replay, context_mode=WorkContextMode.SHADOW)
+        )
+        optimized_payload = _work_input_payload(replay)
+        legacy_chars = _chars(legacy_payload)
+        optimized_chars = _chars(optimized_payload)
+        if optimized_chars >= legacy_chars:
+            non_reducing_cases += 1
+            continue
+        prepared.append(
+            (
+                work,
+                route,
+                replay,
+                legacy_chars,
+                optimized_chars,
+            )
+        )
+
+    ready_types = tuple(
+        sorted({item[0].work_type for item in prepared}, key=lambda value: value.value)
+    )
+    ready_by_type = {
+        work_type.value: sum(1 for item in prepared if item[0].work_type is work_type)
+        for work_type in ready_types
+    }
+
+    selected = []
+    selected_ids: set[int] = set()
+    for required_type in ready_types:
+        if len(selected) >= max_cases:
+            break
+        for index, item in enumerate(prepared):
+            if index in selected_ids or item[0].work_type is not required_type:
+                continue
+            selected.append(item)
+            selected_ids.add(index)
+            break
+
+    selected_work_ids = {item[0].work_id for item in selected}
+    for index, item in enumerate(prepared):
+        if len(selected) >= max_cases:
+            break
+        if index in selected_ids or item[0].work_id in selected_work_ids:
+            continue
+        selected.append(item)
+        selected_ids.add(index)
+        selected_work_ids.add(item[0].work_id)
+
+    for index, item in enumerate(prepared):
+        if len(selected) >= max_cases:
+            break
+        if index in selected_ids:
+            continue
+        selected.append(item)
+        selected_ids.add(index)
+
+    selected = selected[:max_cases]
+    selected_types = {item[0].work_type for item in selected}
+    distinct_work_items = len({item[0].work_id for item in selected})
+    representative_corpus = len(selected_types) >= 2 and distinct_work_items >= 2
+
+    return selected, {
+        **candidate_stats,
+        "snapshot_candidates": len(candidates),
+        "context_drift_cases": context_drift_cases,
+        "non_reducing_cases": non_reducing_cases,
+        "paired_ready_by_work_type": ready_by_type,
+        "paired_ready_work_types": [item.value for item in ready_types],
+        "selected_paired_cases": len(selected),
+        "selected_work_types": sorted(item.value for item in selected_types),
+        "selected_distinct_work_items": distinct_work_items,
+        "representative_corpus_covered": representative_corpus,
+    }
+
+
+async def _run_paired_decision_benchmark(
+    *,
+    store: SQLiteWorkStore,
+    route_store: BrainRouteStore,
+    model: str,
+    max_cases: int,
+    min_equivalent_cases: int,
+    preflight_only: bool = False,
+) -> dict[str, object]:
+    prepared, candidate_stats = _prepare_paired_benchmark(
+        store=store,
+        route_store=route_store,
+        max_cases=max_cases,
+    )
+    representative_corpus = bool(candidate_stats["representative_corpus_covered"])
+    ready = len(prepared) >= min_equivalent_cases and representative_corpus
+
+    common = {
+        "model": model,
+        "requested_max_cases": max_cases,
+        "minimum_equivalent_cases": min_equivalent_cases,
+        "paired_preflight_only": bool(preflight_only),
+        "paired_preflight_ready": ready,
+        "representative_corpus_covered": representative_corpus,
+        "production_routing_mutated": False,
+        "actions_executed": False,
+        "paid_fallback_enabled": False,
+        "provider_circuit_updated": False,
+        "candidate_stats": candidate_stats,
+    }
+    if not ready:
+        return {
+            **common,
+            "paired_cases": 0,
+            "equivalent_cases": 0,
+            "mismatch_cases": 0,
+            "all_paired_cases_equivalent": False,
+            "all_paired_cases_reduced": False,
+            "c6_apply_decision_equivalence_proven": False,
+            "planned_cases": [],
+            "cases": [],
+        }
+
+    planned_cases = [
+        {
+            "route_request_id": route.route_request_id,
+            "work_id": work.work_id,
+            "work_type": work.work_type.value,
+            "legacy_chars": legacy_chars,
+            "optimized_chars": optimized_chars,
+            "reduction_percent": round(
+                (legacy_chars - optimized_chars) * 100.0 / legacy_chars,
+                2,
+            ),
+        }
+        for work, route, _replay, legacy_chars, optimized_chars in prepared
+    ]
+    if preflight_only:
+        return {
+            **common,
+            "paired_cases": 0,
+            "equivalent_cases": 0,
+            "mismatch_cases": 0,
+            "all_paired_cases_equivalent": False,
+            "all_paired_cases_reduced": True,
+            "c6_apply_decision_equivalence_proven": False,
+            "planned_cases": planned_cases,
+            "cases": [],
+        }
+
+    circuit = BackgroundProviderCircuitRegistry().circuit(
+        provider_circuit_key(provider=CHATGPT_PLAN_PROVIDER_ID, model=model)
+    )
+    if not circuit.allow_request():
+        raise RuntimeError(
+            "ChatGPT-plan provider circuit is cooling down; "
+            f"retry after about {int(circuit.remaining_seconds)} seconds"
+        )
+
+    plan = ChatGPTPlanSessionManager()
+    if not plan.is_connected():
+        raise RuntimeError("ChatGPT-plan connection is unavailable")
+    visible = {item.slug for item in plan.list_models()}
+    if model not in visible:
+        raise RuntimeError(
+            f"C6 paired benchmark model {model!r} is not visible to the connected "
+            "ChatGPT plan"
+        )
+    client = build_chatgpt_plan_structured_output_client(
+        model=model,
+        session_manager=plan,
+        provider_retries=False,
+    )
+
+    cases: list[dict[str, object]] = []
+    for work, route, replay, legacy_chars, optimized_chars in prepared:
+        legacy_request = replace(replay, context_mode=WorkContextMode.SHADOW)
+        legacy, legacy_telemetry = await evaluate_structured_work_request(
+            client,
+            legacy_request,
+        )
+        optimized, optimized_telemetry = await evaluate_structured_work_request(
+            client,
+            replay,
+        )
+        comparison = compare_context_decisions(legacy, optimized)
+        reduction = (legacy_chars - optimized_chars) * 100.0 / legacy_chars
+        cases.append(
+            {
+                "route_request_id": route.route_request_id,
+                "work_id": work.work_id,
+                "work_type": work.work_type.value,
+                "equivalent": comparison.equivalent,
+                "action_equal": comparison.action_equal,
+                "goal_complete_equal": comparison.goal_complete_equal,
+                "needs_owner_equal": comparison.needs_owner_equal,
+                "owner_question_equal": comparison.owner_question_equal,
+                "parameters_equal": comparison.parameters_equal,
+                "legacy_chars": legacy_chars,
+                "optimized_chars": optimized_chars,
+                "context_reduced": True,
+                "reduction_percent": round(reduction, 2),
+                "legacy_usage": dict(legacy_telemetry.usage),
+                "legacy_usage_observed": legacy_telemetry.usage_observed,
+                "legacy_latency_ms": round(legacy_telemetry.latency_ms, 2),
+                "optimized_usage": dict(optimized_telemetry.usage),
+                "optimized_usage_observed": optimized_telemetry.usage_observed,
+                "optimized_latency_ms": round(optimized_telemetry.latency_ms, 2),
+            }
+        )
+        if not comparison.equivalent:
+            break
+
+    equivalent_count = sum(bool(item["equivalent"]) for item in cases)
+    mismatch_count = len(cases) - equivalent_count
+    all_reduced = bool(cases) and all(bool(item["context_reduced"]) for item in cases)
+    apply_equivalence_proven = (
+        len(cases) >= min_equivalent_cases
+        and mismatch_count == 0
+        and all_reduced
+        and representative_corpus
+    )
+    return {
+        **common,
+        "paired_preflight_only": False,
+        "paired_cases": len(cases),
+        "equivalent_cases": equivalent_count,
+        "mismatch_cases": mismatch_count,
+        "all_paired_cases_equivalent": bool(cases) and mismatch_count == 0,
+        "all_paired_cases_reduced": all_reduced,
+        "c6_apply_decision_equivalence_proven": apply_equivalence_proven,
+        "planned_cases": planned_cases,
+        "cases": cases,
+    }
 
 
 async def _run_decision_replay(
@@ -478,11 +789,27 @@ def _parser() -> argparse.ArgumentParser:
             "initializing ChatGPT-plan or consuming model quota."
         ),
     )
+    replay_mode.add_argument(
+        "--paired-decision-preflight",
+        action="store_true",
+        help=(
+            "Validate a representative historical snapshot corpus for a fresh "
+            "legacy-context vs optimized-context A/B benchmark without model calls."
+        ),
+    )
+    replay_mode.add_argument(
+        "--paired-decision-benchmark",
+        action="store_true",
+        help=(
+            "Explicitly consume at most two ChatGPT-plan calls per selected case to "
+            "compare legacy and optimized decisions on the same historical request."
+        ),
+    )
     parser.add_argument(
         "--model",
         default=None,
         help=(
-            "Optional ChatGPT-plan model override for replay/preflight. "
+            "Optional ChatGPT-plan model override for replay/paired benchmark. "
             "Defaults to the persisted JARVIS_CHATGPT_PLAN_MODEL."
         ),
     )
@@ -622,7 +949,12 @@ def main() -> int:
         ),
         "items": evaluated,
     }
-    if args.decision_replay or args.decision_replay_preflight:
+    if (
+        args.decision_replay
+        or args.decision_replay_preflight
+        or args.paired_decision_preflight
+        or args.paired_decision_benchmark
+    ):
         settings = load_machine_settings()
         model = str(
             args.model
@@ -637,40 +969,78 @@ def main() -> int:
             )
             return 2
         try:
-            replay = asyncio.run(
-                _run_decision_replay(
-                    store=store,
-                    route_store=route_store,
-                    model=model,
-                    max_cases=args.max_cases,
-                    min_equivalent_cases=args.min_equivalent_cases,
-                    preflight_only=args.decision_replay_preflight,
+            if args.paired_decision_preflight or args.paired_decision_benchmark:
+                replay = asyncio.run(
+                    _run_paired_decision_benchmark(
+                        store=store,
+                        route_store=route_store,
+                        model=model,
+                        max_cases=args.max_cases,
+                        min_equivalent_cases=args.min_equivalent_cases,
+                        preflight_only=args.paired_decision_preflight,
+                    )
                 )
-            )
+            else:
+                replay = asyncio.run(
+                    _run_decision_replay(
+                        store=store,
+                        route_store=route_store,
+                        model=model,
+                        max_cases=args.max_cases,
+                        min_equivalent_cases=args.min_equivalent_cases,
+                        preflight_only=args.decision_replay_preflight,
+                    )
+                )
         except Exception as exc:  # noqa: BLE001 - explicit benchmark boundary
             print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        result["model_api_called"] = bool(replay["replayed_cases"])
-        if args.decision_replay_preflight:
-            result["decision_replay_preflight"] = replay
-            result["c6_replay_preflight_ready"] = replay["replay_preflight_ready"]
+
+        if args.paired_decision_preflight:
+            result["model_api_called"] = False
+            result["paired_decision_preflight"] = replay
+            result["c6_paired_preflight_ready"] = replay["paired_preflight_ready"]
             result["c6_apply_note"] = (
-                "Replay corpus preflight only; no model call was made and C6 APPLY "
-                "remains unproven until the bounded decision replay passes."
+                "Paired benchmark corpus preflight only; no model call was made and "
+                "C6 APPLY remains unproven until the bounded paired benchmark passes."
             )
-            if replay["replay_preflight_ready"] is not True:
+            if replay["paired_preflight_ready"] is not True:
                 result["status"] = "INCOMPLETE"
-        else:
-            result["decision_replay"] = replay
+        elif args.paired_decision_benchmark:
+            result["model_api_called"] = bool(replay["paired_cases"])
+            result["paired_decision_benchmark"] = replay
             result["c6_apply_decision_equivalence_proven"] = replay[
                 "c6_apply_decision_equivalence_proven"
             ]
             result["c6_apply_note"] = (
-                "Decision equivalence is benchmark evidence only. Production remains "
-                "unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly promoted."
+                "Paired A/B equivalence is benchmark evidence only. Production "
+                "remains unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly "
+                "promoted."
             )
             if replay["c6_apply_decision_equivalence_proven"] is not True:
                 result["status"] = "INCOMPLETE"
+        else:
+            result["model_api_called"] = bool(replay["replayed_cases"])
+            if args.decision_replay_preflight:
+                result["decision_replay_preflight"] = replay
+                result["c6_replay_preflight_ready"] = replay["replay_preflight_ready"]
+                result["c6_apply_note"] = (
+                    "Replay corpus preflight only; no model call was made and C6 APPLY "
+                    "remains unproven until the bounded decision replay passes."
+                )
+                if replay["replay_preflight_ready"] is not True:
+                    result["status"] = "INCOMPLETE"
+            else:
+                result["decision_replay"] = replay
+                result["c6_apply_decision_equivalence_proven"] = replay[
+                    "c6_apply_decision_equivalence_proven"
+                ]
+                result["c6_apply_note"] = (
+                    "Decision equivalence is benchmark evidence only. Production "
+                    "remains unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly "
+                    "promoted."
+                )
+                if replay["c6_apply_decision_equivalence_proven"] is not True:
+                    result["status"] = "INCOMPLETE"
 
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "PASS" else 2
