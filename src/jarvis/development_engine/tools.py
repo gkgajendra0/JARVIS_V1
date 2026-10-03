@@ -29,6 +29,7 @@ _TOOL_TO_ACTION: dict[str, str] = {
     "resolve_python_dependency": "dev_resolve_python_dependency",
     "bind_capability_manifest": "dev_bind_capability_manifest",
     "record_substrate_verification": "dev_verify_capability_substrate",
+    "get_research_evidence": "dev_get_research_evidence",
 }
 
 
