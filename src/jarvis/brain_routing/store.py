@@ -88,14 +88,8 @@ def _record(payload: dict[str, object]) -> BrainRouteRecord:
             if payload.get("model_target_id") is None
             else str(payload["model_target_id"])
         ),
-        goal_complete=(
-            None
-            if payload.get("goal_complete") is None
-            else bool(payload["goal_complete"])
-        ),
-        needs_owner=(
-            None if payload.get("needs_owner") is None else bool(payload["needs_owner"])
-        ),
+        goal_complete=payload.get("goal_complete"),
+        needs_owner=payload.get("needs_owner"),
         owner_question=(
             None
             if payload.get("owner_question") is None
