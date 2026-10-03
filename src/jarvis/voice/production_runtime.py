@@ -453,6 +453,8 @@ def build_production_voice_runtime(
             model=config.work_orchestration_model,
             chatgpt_plan_enabled=config.chatgpt_plan_enabled,
             chatgpt_plan_model=config.chatgpt_plan_model,
+            development_engine_enabled=config.development_engine_enabled,
+            development_engine_model=config.development_engine_model,
             global_brain_router_mode=config.global_brain_router_mode,
             global_concurrency=config.work_global_concurrency,
             acquisition_candidate_advisor=acquisition_candidate_advisor,
@@ -488,12 +490,14 @@ def build_production_voice_runtime(
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
-            "brain_router_mode=%s dev_sandbox=%s canonical_store=True durable_backend=DBOS "
+            "brain_router_mode=%s dev_sandbox=%s development_engine=%s "
+            "canonical_store=True durable_backend=DBOS "
             "capability_acquisition_live_catalog=True",
             config.ai_provider,
             config.work_global_concurrency,
             config.global_brain_router_mode,
             bool(config.development_test_docker_image),
+            config.development_engine_enabled,
         )
 
     gicc_apply_runtime = None
