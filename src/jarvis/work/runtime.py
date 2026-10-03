@@ -110,6 +110,7 @@ from jarvis.incident_repair.workspace import (
     build_diagnostic_workspace_executors,
 )
 from jarvis.knowledge.research import CurrentResearchService
+from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.model_routing.cost import ProviderCostEventStore
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.invoker import (
@@ -611,6 +612,7 @@ def build_work_runtime(
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
     paid_fallback_enabled: bool = False,
+    provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -706,6 +708,7 @@ def build_work_runtime(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
+        provider_circuit_registry=provider_circuit_registry,
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
