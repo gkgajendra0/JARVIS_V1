@@ -39,6 +39,7 @@ def _payload(record: BrainRouteRecord) -> dict[str, object]:
         "needs_owner": record.needs_owner,
         "owner_question": record.owner_question,
         "parameters_digest": record.parameters_digest,
+        "reasoner_contract_digest": record.reasoner_contract_digest,
         "outcome_code": record.outcome_code,
     }
 
@@ -99,6 +100,11 @@ def _record(payload: dict[str, object]) -> BrainRouteRecord:
             None
             if payload.get("parameters_digest") is None
             else str(payload["parameters_digest"])
+        ),
+        reasoner_contract_digest=(
+            None
+            if payload.get("reasoner_contract_digest") is None
+            else str(payload["reasoner_contract_digest"])
         ),
         outcome_code=str(payload.get("outcome_code") or "selected"),
     )
