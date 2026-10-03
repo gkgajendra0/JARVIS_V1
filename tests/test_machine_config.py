@@ -164,10 +164,7 @@ def test_development_test_image_alias_can_be_persisted(tmp_path: Path) -> None:
     )
 
     settings = load_machine_settings(path)
-    assert (
-        settings["JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE"]
-        == "jarvis-dev-tests:local"
-    )
+    assert settings["JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE"] == "jarvis-dev-tests:local"
 
 
 def test_work_database_url_cannot_be_persisted(tmp_path: Path) -> None:
