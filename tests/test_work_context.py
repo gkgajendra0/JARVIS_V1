@@ -351,9 +351,7 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
         ],
         "recent_step_ids": [first.step_id, second.step_id],
         "history_step_count": 2,
-        "history_step_ids_digest": canonical_digest(
-            [first.step_id, second.step_id]
-        ),
+        "history_step_ids_digest": canonical_digest([first.step_id, second.step_id]),
         "evidence": [{"ref": "evidence:historical"}],
         "context_version": "c6.v1",
     }
@@ -414,4 +412,3 @@ def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
         assert "history prefix" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("expected replay history drift to fail closed")
-
