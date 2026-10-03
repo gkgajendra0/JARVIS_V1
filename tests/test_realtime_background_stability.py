@@ -109,7 +109,7 @@ async def test_background_delivery_store_poll_does_not_block_event_loop() -> Non
 
     class BlockingStore:
         def list_due_deliveries(self, *, limit: int):
-            assert limit == 50
+            assert limit == 5
             started.set()
             assert release.wait(timeout=2.0)
             return ()
