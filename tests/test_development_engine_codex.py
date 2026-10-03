@@ -261,6 +261,7 @@ def _response(payload: dict[str, Any], total: int) -> CodexTurnResponse:
                 input_tokens=total - 10,
                 output_tokens=10,
                 total_tokens=total,
+                model_turns=1,
             )
         ),
     )
@@ -359,7 +360,9 @@ async def test_codex_engine_runs_coherent_tool_batches_and_derives_completion(
     assert result.changed_files == ("src/jarvis/demo.py",)
     assert result.test_evidence_refs == ("workstep:step_2",)
     assert result.usage is not None
-    assert result.usage.total_tokens == 300
+    assert result.usage.total_tokens == 600
+    assert result.usage.model_turns == 3
+    assert result.usage.tool_calls == 4
     assert sessions.get(ticket.digest).thread_id == "thr_demo"
     assert plan.calls == 1
     assert factory.access_token == "test-access-token"
@@ -842,4 +845,5 @@ def test_official_codex_usage_uses_last_turn_not_cumulative_thread_total() -> No
         input_tokens=100,
         output_tokens=20,
         total_tokens=120,
+        model_turns=1,
     )
