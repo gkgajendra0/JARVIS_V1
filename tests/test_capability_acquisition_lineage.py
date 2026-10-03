@@ -20,11 +20,18 @@ class FakeStore:
         return self.artifacts.get(kind)
 
 
-def _artifact(artifact_id: str, digest_char: str, payload):
+def _artifact(
+    artifact_id: str,
+    digest_char: str,
+    payload,
+    *,
+    created_at: str = "2026-10-03T10:00:00+00:00",
+):
     return SimpleNamespace(
         artifact_id=artifact_id,
         digest=digest_char * 64,
         payload=payload,
+        created_at=created_at,
     )
 
 
@@ -188,3 +195,53 @@ def test_lineage_verifier_requires_external_pass_when_declared() -> None:
     assert result is not None
     assert result.external_acceptance_required is True
     assert result.external_acceptance_artifact_id == "external"
+
+
+def test_lineage_verifier_returns_none_after_later_explicit_disable() -> None:
+    store = _current_store()
+    candidate = store.artifacts["capability_candidate"]
+    store.artifacts["capability_lifecycle_disable"] = _artifact(
+        "disable",
+        "d",
+        {
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "effective_enabled": False,
+        },
+        created_at="2026-10-03T10:01:00+00:00",
+    )
+
+    assert (
+        verify_capability_acquisition_completion(
+            store,
+            change_id="change-tv",
+            motivating_goal_id="goal-tv",
+            gap_id="gap-tv",
+        )
+        is None
+    )
+
+
+def test_lineage_verifier_accepts_reactivation_after_older_disable() -> None:
+    store = _current_store()
+    candidate = store.artifacts["capability_candidate"]
+    store.artifacts["capability_lifecycle_disable"] = _artifact(
+        "disable",
+        "d",
+        {
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "effective_enabled": False,
+        },
+        created_at="2026-10-03T09:59:00+00:00",
+    )
+
+    result = verify_capability_acquisition_completion(
+        store,
+        change_id="change-tv",
+        motivating_goal_id="goal-tv",
+        gap_id="gap-tv",
+    )
+
+    assert result is not None
+    assert result.activation_artifact_id == "activation"
