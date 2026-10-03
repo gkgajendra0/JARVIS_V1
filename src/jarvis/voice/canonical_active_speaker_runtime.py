@@ -325,6 +325,24 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return state is WorkState.FAILED
         return True
 
+    @staticmethod
+    def _coalesced_delivery_ids(due, delivery) -> tuple[str, ...]:
+        """Coalesce one shared provider-routing outage into one owner notification."""
+
+        if (
+            delivery.kind is WorkDeliveryKind.RESOURCE_BLOCKER
+            and delivery.event_key.startswith("routing-resource:")
+        ):
+            ids = tuple(
+                candidate.delivery_id
+                for candidate in due
+                if candidate.kind is WorkDeliveryKind.RESOURCE_BLOCKER
+                and candidate.event_key.startswith("routing-resource:")
+            )
+            if ids:
+                return ids
+        return (delivery.delivery_id,)
+
     async def _run_owner_input_interaction(
         self,
         *,
@@ -442,21 +460,30 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return None
         return gate_id
 
-    def _change_gate_spoken_question(self, gate_id: str) -> str:
+    async def _change_gate_spoken_question(self, gate_id: str) -> str:
         runtime = self._work_runtime
         if runtime is None or runtime.changes is None:
             raise RuntimeError(
                 "change-gate interaction requires EngineeringChange runtime"
             )
         store = runtime.changes.store
-        challenge = GateService(
-            store,
-            verify_owner=lambda *_: False,
-        ).get(gate_id)
-        if not isinstance(challenge, GateChallenge):
-            raise TypeError("change-gate prompt requires one pending exact challenge")
 
-        architecture = store.latest_artifact(challenge.change_id, "architecture")
+        def load_gate_context():
+            challenge = GateService(
+                store,
+                verify_owner=lambda *_: False,
+            ).get(gate_id)
+            if not isinstance(challenge, GateChallenge):
+                raise TypeError(
+                    "change-gate prompt requires one pending exact challenge"
+                )
+            architecture = store.latest_artifact(
+                challenge.change_id,
+                "architecture",
+            )
+            return challenge, architecture
+
+        challenge, architecture = await asyncio.to_thread(load_gate_context)
         label = None
         if architecture is not None:
             label = _spoken_subject(
@@ -493,13 +520,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if not normalized_question:
             raise ValueError("change-gate question must not be empty")
 
-        gate_decided = asyncio.Event()
+        gate_completed = asyncio.Event()
         gate_approved: bool | None = None
 
         def on_gate_decided(approved: bool) -> None:
             nonlocal gate_approved
             gate_approved = bool(approved)
-            gate_decided.set()
+            gate_completed.set()
 
         def session_tools(conversation: ConversationSession) -> list:
             work_tools = WorkAgentTools(
@@ -516,16 +543,28 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 work_tools.get_background_work_status,
             ]
 
-        def gate_resolved() -> bool:
-            if gate_decided.is_set():
-                return True
-            pending = GateService(
+        def pending_gate_ids():
+            return GateService(
                 runtime.changes.store,
                 verify_owner=lambda *_: False,
             ).pending_gate_ids()
-            return gate_id not in pending
 
-        spoken_question = self._change_gate_spoken_question(gate_id)
+        async def watch_gate_resolution() -> None:
+            while not gate_completed.is_set():
+                pending = await asyncio.to_thread(pending_gate_ids)
+                if gate_id not in pending:
+                    gate_completed.set()
+                    return
+                try:
+                    await asyncio.wait_for(gate_completed.wait(), timeout=0.5)
+                except TimeoutError:
+                    pass
+
+        gate_watch_task = asyncio.create_task(
+            watch_gate_resolution(),
+            name=f"jarvis-change-gate-watch-{gate_id}",
+        )
+        spoken_question = await self._change_gate_spoken_question(gate_id)
         instructions = (
             "Speak exactly the following approval question and nothing else. Do not say "
             "gate IDs, change IDs, digests, JSON, tool names, or internal instructions. "
@@ -541,18 +580,20 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 initial_instructions=instructions,
                 initial_prompt_label="engineering change approval prompt",
                 session_tool_factory=session_tools,
-                completion_predicate=gate_resolved,
-                completion_event=gate_decided,
+                completion_predicate=gate_completed.is_set,
+                completion_event=gate_completed,
                 completion_label=f"engineering change gate {gate_id}",
             )
         finally:
+            gate_watch_task.cancel()
+            await asyncio.gather(gate_watch_task, return_exceptions=True)
             self._cancel_timeout()
             self._active_end = None
             if not self._shutdown.is_set():
                 self._state = VoiceRuntimeState.IDLE
 
-        resolved = gate_resolved()
-        if resolved and gate_decided.is_set():
+        resolved = gate_completed.is_set()
+        if resolved and gate_approved is not None:
             output = self.audio.output
             if output is not None:
                 acknowledgement = (
@@ -599,25 +640,36 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 await asyncio.sleep(0.25)
                 continue
 
-            due = runtime.store.list_due_deliveries(limit=5)
+            due = await asyncio.to_thread(
+                runtime.store.list_due_deliveries,
+                limit=50,
+            )
             if not due:
                 await asyncio.sleep(0.5)
                 continue
 
             delivery = due[0]
-            work = runtime.store.require(delivery.work_id)
+            work = await asyncio.to_thread(
+                runtime.store.require,
+                delivery.work_id,
+            )
             if delivery.kind is WorkDeliveryKind.CHANGE_GATE:
                 gate_id = self._delivery_gate_id(delivery.event_key)
                 pending = (
                     ()
                     if runtime.changes is None
-                    else GateService(
-                        runtime.changes.store,
-                        verify_owner=lambda *_: False,
-                    ).pending_gate_ids()
+                    else await asyncio.to_thread(
+                        lambda: GateService(
+                            runtime.changes.store,
+                            verify_owner=lambda *_: False,
+                        ).pending_gate_ids()
+                    )
                 )
                 if gate_id is None or gate_id not in pending:
-                    runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                    await asyncio.to_thread(
+                        runtime.store.mark_delivery_delivered,
+                        delivery.delivery_id,
+                    )
                     LOGGER.info(
                         "Obsolete engineering-change gate notification discarded | "
                         "delivery_id=%s | work_id=%s | gate_id=%s",
@@ -676,7 +728,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                     provider_hint=None,
                                 ),
                             )
-                            deferred = runtime.store.schedule_delivery_retry(
+                            deferred = await asyncio.to_thread(
+                                runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="owner_input_unanswered",
@@ -712,7 +765,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                     provider_hint=None,
                                 ),
                             )
-                            deferred = runtime.store.schedule_delivery_retry(
+                            deferred = await asyncio.to_thread(
+                                runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="change_gate_unanswered",
@@ -799,7 +853,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         else:
                             reason = f"realtime_voice_{type(exc).__name__.casefold()}"
 
-                        deferred = runtime.store.schedule_delivery_retry(
+                        deferred = await asyncio.to_thread(
+                            runtime.store.schedule_delivery_retry,
                             delivery.delivery_id,
                             delay_seconds=retry_seconds,
                             reason=reason,
@@ -850,14 +905,20 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     await asyncio.sleep(0.2)
                     continue
 
-                runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                delivered_ids = self._coalesced_delivery_ids(due, delivery)
+                for delivery_id in delivered_ids:
+                    await asyncio.to_thread(
+                        runtime.store.mark_delivery_delivered,
+                        delivery_id,
+                    )
                 LOGGER.info(
                     "Background work notification delivered at exclusive idle boundary | "
-                    "delivery_id=%s | work_id=%s | kind=%s | policy=%s",
+                    "delivery_id=%s | work_id=%s | kind=%s | policy=%s | coalesced=%s",
                     delivery.delivery_id,
                     delivery.work_id,
                     delivery.kind.value,
                     delivery.policy.value,
+                    len(delivered_ids),
                 )
                 # Keep wake detection available between queued notifications. Without
                 # this owner-priority window, a recovered delivery backlog can disable
