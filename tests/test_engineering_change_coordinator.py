@@ -295,6 +295,18 @@ def test_development_can_reopen_governed_architecture_research(tmp_path) -> None
     )
 
     assert reopened.state is ChangeState.RESEARCHING
+
+    replayed = changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="Replay after a process interruption.",
+    )
+    assert replayed == reopened
+    revision_requests = changes.list_artifacts(
+        change.change_id,
+        kind="architecture_revision_request",
+    )
+    assert len(revision_requests) == 1
+
     coordinator.reconcile(change.change_id)
     research_stages = [
         stage
