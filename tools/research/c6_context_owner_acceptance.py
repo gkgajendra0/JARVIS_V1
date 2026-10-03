@@ -87,7 +87,12 @@ def _successful_historical_attempt(
         and attempt.provider_id is not None
         and attempt.model_id is not None
     )
-    if len(valid) != 1:
+    if not valid:
+        return None
+    identities = {
+        (attempt.target_id, attempt.provider_id, attempt.model_id) for attempt in valid
+    }
+    if len(identities) != 1:
         return None
     return valid[0]
 
@@ -222,12 +227,7 @@ async def _run_decision_replay(
             replace(replay, context_mode=WorkContextMode.SHADOW)
         )
         optimized_payload = _work_input_payload(replay)
-        try:
-            optimized, telemetry = await evaluate_structured_work_request(client, replay)
-        except Exception as exc:
-            circuit.record_failure(exc)
-            raise
-        circuit.record_success()
+        optimized, telemetry = await evaluate_structured_work_request(client, replay)
         comparison = compare_recorded_context_decision(recorded, optimized)
         if comparison is None:
             raise RuntimeError(
@@ -263,6 +263,8 @@ async def _run_decision_replay(
                 "latency_ms": round(telemetry.latency_ms, 2),
             }
         )
+        if not comparison.equivalent:
+            break
 
     equivalent_count = sum(bool(item["equivalent"]) for item in cases)
     mismatch_count = len(cases) - equivalent_count
@@ -281,7 +283,7 @@ async def _run_decision_replay(
         "production_routing_mutated": False,
         "actions_executed": False,
         "paid_fallback_enabled": False,
-        "provider_circuit_updated": bool(cases),
+        "provider_circuit_updated": False,
         "candidate_stats": candidate_stats,
         "cases": cases,
     }
@@ -465,7 +467,7 @@ def main() -> int:
             "Decision equivalence is benchmark evidence only. Production remains "
             "unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly promoted."
         )
-        if replay["replayed_cases"] == 0 or replay["mismatch_cases"] != 0:
+        if replay["c6_apply_decision_equivalence_proven"] is not True:
             result["status"] = "INCOMPLETE"
 
     print(json.dumps(result, indent=2, sort_keys=True))
