@@ -627,6 +627,8 @@ def build_work_runtime(
     chatgpt_plan_model: str | None = None,
     development_engine_enabled: bool = False,
     development_engine_model: str | None = None,
+    paid_fallback_enabled: bool = False,
+    provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
     work_context_mode: str = "shadow",
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
