@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -46,6 +47,12 @@ from jarvis.provider_circuit import (
 from jarvis.provider_resilience import classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 from jarvis.work.context import WorkContextMode, build_context_shadow_report
+from jarvis.work.models import WorkType
+from jarvis.work.prompt_compression import (
+    PromptCompressionMode,
+    WorkPayloadCompressor,
+    normalize_prompt_compression_mode,
+)
 from jarvis.work.resources import ResourceLeaseManager
 
 LOGGER = logging.getLogger(__name__)
@@ -396,6 +403,10 @@ class RoutedWorkReasoner:
         provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
         resources: ResourceLeaseManager | None = None,
         resource_keys: tuple[str, ...] = (),
+        prompt_compressor: WorkPayloadCompressor | None = None,
+        prompt_compression_mode: PromptCompressionMode | str = PromptCompressionMode.OFF,
+        prompt_compression_work_types: frozenset[WorkType] | None = None,
+        prompt_compression_resource_keys: tuple[str, ...] = (),
     ) -> None:
         self._router = router
         self._invoker = invoker
@@ -408,6 +419,83 @@ class RoutedWorkReasoner:
         self._resource_keys = (
             () if resources is None else resources.normalize(resource_keys)
         )
+        self._prompt_compression_mode = normalize_prompt_compression_mode(
+            prompt_compression_mode
+        )
+        self._prompt_compressor = prompt_compressor
+        if (
+            self._prompt_compression_mode is not PromptCompressionMode.OFF
+            and self._prompt_compressor is None
+        ):
+            raise ValueError(
+                "prompt compression mode requires a configured Work payload compressor"
+            )
+        eligible_types = (
+            frozenset({WorkType.RESEARCH})
+            if prompt_compression_work_types is None
+            else frozenset(prompt_compression_work_types)
+        )
+        if not all(isinstance(item, WorkType) for item in eligible_types):
+            raise TypeError("prompt_compression_work_types must contain WorkType values")
+        self._prompt_compression_work_types = eligible_types
+        self._prompt_compression_resource_keys = (
+            ()
+            if resources is None
+            else resources.normalize(prompt_compression_resource_keys)
+        )
+
+    async def _provider_payload(self, request: BrainRequest) -> dict[str, Any]:
+        legacy_payload = _work_input_payload(request)
+        compressor = self._prompt_compressor
+        if (
+            self._prompt_compression_mode is PromptCompressionMode.OFF
+            or compressor is None
+            or request.work.work_type not in self._prompt_compression_work_types
+        ):
+            return legacy_payload
+
+        try:
+            if self._resources is not None and self._prompt_compression_resource_keys:
+                async with self._resources.lease(self._prompt_compression_resource_keys):
+                    result = await asyncio.to_thread(
+                        compressor.compress_payload,
+                        legacy_payload,
+                    )
+            else:
+                result = await asyncio.to_thread(
+                    compressor.compress_payload,
+                    legacy_payload,
+                )
+        except Exception as exc:
+            LOGGER.warning(
+                "C6 local prompt compression unavailable; exact legacy payload retained: "
+                "work_id=%s work_type=%s error=%s",
+                request.work.work_id,
+                request.work.work_type.value,
+                type(exc).__name__,
+            )
+            return legacy_payload
+
+        LOGGER.info(
+            "C6 local prompt compression: work_id=%s work_type=%s mode=%s "
+            "reduced=%s original_chars=%s compressed_chars=%s reduction_percent=%s "
+            "compressed_strings=%s latency_ms=%.2f",
+            request.work.work_id,
+            request.work.work_type.value,
+            self._prompt_compression_mode.value,
+            result.reduced,
+            result.original_chars,
+            result.compressed_chars,
+            result.reduction_percent,
+            result.compressed_strings,
+            result.latency_ms,
+        )
+        if (
+            self._prompt_compression_mode is PromptCompressionMode.APPLY
+            and result.reduced
+        ):
+            return result.payload
+        return legacy_payload
 
     def _provider_circuit(self, target):
         registry = self._provider_circuit_registry
@@ -594,6 +682,7 @@ class RoutedWorkReasoner:
                     now_epoch=float(self._clock()),
                 ),
             ) from exc
+        provider_payload = await self._provider_payload(request)
         attempts = list(
             self._router.routing_store.list_attempts(selection.decision.decision_id)
         )
@@ -636,7 +725,7 @@ class RoutedWorkReasoner:
                             await self._invoker.invoke_structured_with_telemetry(
                                 target=target,
                                 system_prompt=_SYSTEM_PROMPT,
-                                input_payload=_work_input_payload(request),
+                                input_payload=provider_payload,
                                 response_model=_WorkDecisionModel,
                                 request_context=context,
                             )
@@ -645,7 +734,7 @@ class RoutedWorkReasoner:
                     invocation = await self._invoker.invoke_structured_with_telemetry(
                         target=target,
                         system_prompt=_SYSTEM_PROMPT,
-                        input_payload=_work_input_payload(request),
+                        input_payload=provider_payload,
                         response_model=_WorkDecisionModel,
                         request_context=context,
                     )
