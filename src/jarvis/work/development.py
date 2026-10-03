@@ -476,6 +476,37 @@ class DevelopmentSearchExecutor:
         del work, parameters
         return ("cpu",)
 
+    @staticmethod
+    def _search_without_rg(
+        workspace: pathlib.Path,
+        query: str,
+        limit: int,
+    ) -> list[str]:
+        matches: list[str] = []
+        for path in workspace.rglob("*"):
+            if len(matches) >= limit:
+                break
+            if not path.is_file():
+                continue
+            relative = path.relative_to(workspace)
+            if _is_sensitive(relative) or ".git" in relative.parts:
+                continue
+            try:
+                if path.stat().st_size > _MAX_WRITE_BYTES:
+                    continue
+                for number, line in enumerate(
+                    path.read_text(encoding="utf-8").splitlines(), 1
+                ):
+                    if query in line and not _contains_secret(line):
+                        matches.append(
+                            f"{relative.as_posix()}:{number}:{line[:500]}"
+                        )
+                        if len(matches) >= limit:
+                            break
+            except (OSError, UnicodeError):
+                continue
+        return matches
+
     async def execute(
         self, *, work: WorkItem, parameters: dict[str, Any]
     ) -> dict[str, Any]:
@@ -509,28 +540,12 @@ class DevelopmentSearchExecutor:
                 if not _contains_secret(line)
             ][:limit]
         else:
-            for path in workspace.path.rglob("*"):
-                if len(matches) >= limit:
-                    break
-                if not path.is_file():
-                    continue
-                relative = path.relative_to(workspace.path)
-                if _is_sensitive(relative) or ".git" in relative.parts:
-                    continue
-                try:
-                    if path.stat().st_size > _MAX_WRITE_BYTES:
-                        continue
-                    for number, line in enumerate(
-                        path.read_text(encoding="utf-8").splitlines(), 1
-                    ):
-                        if query in line and not _contains_secret(line):
-                            matches.append(
-                                f"{relative.as_posix()}:{number}:{line[:500]}"
-                            )
-                            if len(matches) >= limit:
-                                break
-                except (OSError, UnicodeError):
-                    continue
+            matches = await asyncio.to_thread(
+                self._search_without_rg,
+                workspace.path,
+                query,
+                limit,
+            )
         return {"query": query, "matches": matches, "max_results": limit}
 
 
