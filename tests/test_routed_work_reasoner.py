@@ -560,7 +560,7 @@ async def test_chatgpt_plan_subscription_limit_falls_back_to_paid_provider(
         "work.chatgpt_plan.default",
         "work.gemini.default",
     ]
-    assert attempts[0].failure_class == "rate_limited"
+    assert attempts[0].failure_class == "quota_exhausted"
     assert attempts[1].failure_class is None
 
 
