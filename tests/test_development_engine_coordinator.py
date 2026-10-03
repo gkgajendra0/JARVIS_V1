@@ -120,6 +120,47 @@ async def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_engine_generation_change_does_not_reuse_prior_result(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path)
+    first_engine = FakeEngine()
+    first = DevelopmentEngineCoordinator(
+        engine=first_engine,
+        sessions=sessions,
+    )
+    first_result = await first.execute(
+        ticket,
+        tools=FakeTools(),
+        evidence_refs=("evidence:1",),
+    )
+
+    class ReplacementEngine(FakeEngine):
+        engine_id = "replacement_engine"
+        engine_version = "2"
+
+    replacement_engine = ReplacementEngine()
+    replacement = DevelopmentEngineCoordinator(
+        engine=replacement_engine,
+        sessions=sessions,
+    )
+    second_result = await replacement.execute(
+        ticket,
+        tools=FakeTools(),
+        evidence_refs=("evidence:1",),
+    )
+
+    assert first_result.reused is False
+    assert second_result.reused is False
+    assert first_engine.calls == 1
+    assert replacement_engine.calls == 1
+    assert second_result.result.engine_id == "replacement_engine"
+    record = sessions.get(ticket.digest)
+    assert record is not None
+    assert record.engine_id == "replacement_engine"
+    assert record.engine_version == "2"
+
+
+@pytest.mark.asyncio
 async def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
