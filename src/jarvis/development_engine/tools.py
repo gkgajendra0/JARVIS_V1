@@ -31,6 +31,7 @@ _TOOL_TO_ACTION: dict[str, str] = {
     "record_substrate_verification": "dev_verify_capability_substrate",
     "get_research_evidence": "dev_get_research_evidence",
 }
+_ACTION_TO_TOOL = {action: tool for tool, action in _TOOL_TO_ACTION.items()}
 
 
 class DevelopmentToolPortError(RuntimeError):
@@ -127,6 +128,118 @@ class WorkExecutorDevelopmentToolPort:
                 )
             )
         return tuple(specs)
+
+    def snapshot(self) -> Mapping[str, Any]:
+        """Project durable development progress without depending on provider memory."""
+
+        steps = self._store.list_steps(self._ticket.work_id)
+        relevant: list[tuple[int, WorkStep, str]] = []
+        for index, step in enumerate(steps):
+            alias = _ACTION_TO_TOOL.get(step.kind)
+            if alias is None or step.state.value != "completed":
+                continue
+            relevant.append((index, step, alias))
+
+        last_write = max(
+            (index for index, step, _ in relevant if step.kind == "dev_write_file"),
+            default=-1,
+        )
+        last_passing_test = max(
+            (
+                index
+                for index, step, _ in relevant
+                if step.kind == "dev_run_tests"
+                and step.observation.get("passed") is True
+            ),
+            default=-1,
+        )
+        last_diff = max(
+            (index for index, step, _ in relevant if step.kind == "dev_diff"),
+            default=-1,
+        )
+        last_commit = max(
+            (
+                index
+                for index, step, _ in relevant
+                if step.kind == "dev_commit"
+                and step.observation.get("committed") is True
+                and step.observation.get("clean") is True
+            ),
+            default=-1,
+        )
+
+        changed_files = tuple(
+            sorted(
+                {
+                    str(step.observation.get("path") or "").strip()
+                    for _, step, _ in relevant
+                    if step.kind == "dev_write_file"
+                    and str(step.observation.get("path") or "").strip()
+                }
+            )
+        )
+        passing_test_refs = tuple(
+            f"workstep:{step.step_id}"
+            for index, step, _ in relevant
+            if step.kind == "dev_run_tests"
+            and step.observation.get("passed") is True
+            and index > last_write
+        )
+        candidate_revision = None
+        candidate_branch = None
+        if (
+            last_commit > last_diff > last_passing_test > last_write >= 0
+        ):
+            commit_step = steps[last_commit]
+            raw_commit = str(commit_step.observation.get("commit") or "").strip().casefold()
+            if len(raw_commit) == 40 and all(
+                char in "0123456789abcdef" for char in raw_commit
+            ):
+                candidate_revision = raw_commit
+                candidate_branch = str(
+                    commit_step.observation.get("branch") or ""
+                ).strip() or None
+
+        recent = [
+            {
+                "tool": alias,
+                "step_id": step.step_id,
+                "evidence_ref": f"workstep:{step.step_id}",
+                "summary": step.summary,
+                "observation": {
+                    key: value
+                    for key, value in step.observation.items()
+                    if key
+                    in {
+                        "path",
+                        "sha256",
+                        "passed",
+                        "timed_out",
+                        "sandbox",
+                        "committed",
+                        "commit",
+                        "branch",
+                        "clean",
+                        "manifest_id",
+                        "manifest_digest",
+                        "verification_artifact_id",
+                        "verification_artifact_digest",
+                    }
+                },
+            }
+            for _, step, alias in relevant[-12:]
+        ]
+        return {
+            "schema": "jarvis.development_progress.v1",
+            "ticket_id": self._ticket.ticket_id,
+            "ticket_digest": self._ticket.digest,
+            "completed_tool_step_count": len(relevant),
+            "changed_files": list(changed_files),
+            "passing_test_evidence_refs": list(passing_test_refs),
+            "candidate_revision": candidate_revision,
+            "candidate_branch": candidate_branch,
+            "recent_tool_evidence": recent,
+        }
 
     def _require_active_work(self) -> WorkItem:
         work = self._store.require(self._ticket.work_id)
