@@ -152,9 +152,11 @@ class BackgroundProviderCircuitRegistry:
         path: str | pathlib.Path | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
-        self._path = pathlib.Path(
-            path or (default_work_state_dir() / "provider_circuits.json")
-        ).expanduser().resolve()
+        self._path = (
+            pathlib.Path(path or (default_work_state_dir() / "provider_circuits.json"))
+            .expanduser()
+            .resolve()
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._clock = clock
         self._lock = threading.RLock()
