@@ -108,14 +108,20 @@ def test_session_persists_thread_and_exact_result(tmp_path) -> None:
 
     assert recorded.state is DevelopmentSessionState.COMPLETED
     assert recorded.last_result_digest == result.digest
-    assert sessions.load_result(
-        ticket=ticket,
-        result_digest=result.digest,
-    ) == result
-    assert sessions.reusable_result(
-        ticket=ticket,
-        reasoning_fingerprint=fingerprint,
-    ) == result
+    assert (
+        sessions.load_result(
+            ticket=ticket,
+            result_digest=result.digest,
+        )
+        == result
+    )
+    assert (
+        sessions.reusable_result(
+            ticket=ticket,
+            reasoning_fingerprint=fingerprint,
+        )
+        == result
+    )
 
 
 def test_changed_reasoning_fingerprint_invalidates_reuse(tmp_path) -> None:
@@ -146,10 +152,13 @@ def test_changed_reasoning_fingerprint_invalidates_reuse(tmp_path) -> None:
         result=result,
         reasoning_fingerprint=first,
     )
-    assert sessions.reusable_result(
-        ticket=ticket,
-        reasoning_fingerprint=first,
-    ) == result
+    assert (
+        sessions.reusable_result(
+            ticket=ticket,
+            reasoning_fingerprint=first,
+        )
+        == result
+    )
 
     second = build_development_reasoning_fingerprint(
         ticket,
@@ -164,10 +173,13 @@ def test_changed_reasoning_fingerprint_invalidates_reuse(tmp_path) -> None:
 
     assert reopened.state is DevelopmentSessionState.ACTIVE
     assert reopened.last_result_digest is None
-    assert sessions.reusable_result(
-        ticket=ticket,
-        reasoning_fingerprint=second,
-    ) is None
+    assert (
+        sessions.reusable_result(
+            ticket=ticket,
+            reasoning_fingerprint=second,
+        )
+        is None
+    )
 
 
 def test_resource_blocker_is_never_reused(tmp_path) -> None:
@@ -196,7 +208,10 @@ def test_resource_blocker_is_never_reused(tmp_path) -> None:
         reasoning_fingerprint=fingerprint,
     )
 
-    assert sessions.reusable_result(
-        ticket=ticket,
-        reasoning_fingerprint=fingerprint,
-    ) is None
+    assert (
+        sessions.reusable_result(
+            ticket=ticket,
+            reasoning_fingerprint=fingerprint,
+        )
+        is None
+    )
