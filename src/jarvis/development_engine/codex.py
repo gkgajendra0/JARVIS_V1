@@ -153,8 +153,13 @@ class _OfficialCodexThread:
             return None
         return DevelopmentUsageV1(
             input_tokens=int(getattr(last, "input_tokens", 0) or 0),
+            cached_input_tokens=int(getattr(last, "cached_input_tokens", 0) or 0),
             output_tokens=int(getattr(last, "output_tokens", 0) or 0),
+            reasoning_output_tokens=int(
+                getattr(last, "reasoning_output_tokens", 0) or 0
+            ),
             total_tokens=int(getattr(last, "total_tokens", 0) or 0),
+            model_turns=1,
         )
 
     async def _run(
@@ -605,6 +610,47 @@ def _provider_thread_missing(error: BaseException) -> bool:
     )
 
 
+def _merge_usage(
+    current: DevelopmentUsageV1 | None,
+    next_usage: DevelopmentUsageV1 | None,
+) -> DevelopmentUsageV1 | None:
+    if next_usage is None:
+        return current
+    if current is None:
+        return next_usage
+    return DevelopmentUsageV1(
+        input_tokens=current.input_tokens + next_usage.input_tokens,
+        cached_input_tokens=(
+            current.cached_input_tokens + next_usage.cached_input_tokens
+        ),
+        output_tokens=current.output_tokens + next_usage.output_tokens,
+        reasoning_output_tokens=(
+            current.reasoning_output_tokens + next_usage.reasoning_output_tokens
+        ),
+        total_tokens=current.total_tokens + next_usage.total_tokens,
+        model_turns=current.model_turns + next_usage.model_turns,
+        tool_calls=current.tool_calls + next_usage.tool_calls,
+    )
+
+
+def _record_tool_calls(
+    usage: DevelopmentUsageV1 | None,
+    count: int,
+) -> DevelopmentUsageV1:
+    if count < 0:
+        raise ValueError("tool call count must not be negative")
+    current = usage or DevelopmentUsageV1()
+    return DevelopmentUsageV1(
+        input_tokens=current.input_tokens,
+        cached_input_tokens=current.cached_input_tokens,
+        output_tokens=current.output_tokens,
+        reasoning_output_tokens=current.reasoning_output_tokens,
+        total_tokens=current.total_tokens,
+        model_turns=current.model_turns,
+        tool_calls=current.tool_calls + count,
+    )
+
+
 class CodexPlanDevelopmentEngine:
     """Long-turn Codex engineering specialist under the JARVIS control plane."""
 
@@ -892,7 +938,7 @@ class CodexPlanDevelopmentEngine:
                 circuit.record_success()
 
             for _turn_index in range(self._max_turns):
-                last_usage = response.usage or last_usage
+                last_usage = _merge_usage(last_usage, response.usage)
                 directive = _parse_directive(response)
                 if directive["kind"] == "result":
                     return self._terminal_result(
@@ -910,6 +956,7 @@ class CodexPlanDevelopmentEngine:
                 if not isinstance(calls, list) or not calls:
                     raise ValueError("Codex tool_batch must contain at least one call")
                 total_tool_calls += len(calls)
+                last_usage = _record_tool_calls(last_usage, len(calls))
                 if total_tool_calls > self._max_tool_calls:
                     return DevelopmentResultV1.create(
                         ticket=ticket,
