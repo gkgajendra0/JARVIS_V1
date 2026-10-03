@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
 from jarvis.config import JarvisConfig
+from jarvis.development_engine.codex import REVIEWED_CODEX_SDK_VERSION
 from jarvis.engineering_substrate.secrets.store import (
     SecretNotFoundError,
     SecretStore,
@@ -122,8 +123,9 @@ def run_preflight(
         ) from exc
     codex_version = str(getattr(codex_module, "__version__", "")).strip()
     _require(
-        codex_version == "0.160.0",
-        "owner machine does not have the reviewed openai-codex==0.160.0 runtime",
+        codex_version == REVIEWED_CODEX_SDK_VERSION,
+        "owner machine does not have the reviewed openai-codex=="
+        f"{REVIEWED_CODEX_SDK_VERSION} runtime",
     )
 
     docker = shutil.which("docker")
