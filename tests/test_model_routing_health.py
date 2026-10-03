@@ -161,3 +161,46 @@ def test_local_resource_pressure_immediately_allows_fallback() -> None:
     assert mutation.record.last_failure_kind == "local_resource_pressure"
     assert mutation.action is HealthAction.FALLBACK_ALLOWED
     assert mutation.reason_code == "local_resource_pressure_cooldown"
+
+
+
+def test_provider_pressure_probe_backoff_preserves_failure_streak() -> None:
+    first = apply_provider_failure(
+        TargetHealthRecord(target_id="gemini"),
+        _failure(ProviderFailureKind.RATE_LIMITED),
+        now_epoch=100.0,
+    )
+    second = apply_provider_failure(
+        first.record,
+        _failure(ProviderFailureKind.RATE_LIMITED),
+        now_epoch=130.0,
+    )
+    third = apply_provider_failure(
+        second.record,
+        _failure(ProviderFailureKind.RATE_LIMITED),
+        now_epoch=190.0,
+    )
+
+    assert first.record.cooldown_until_epoch == 130.0
+    assert second.record.cooldown_until_epoch == 190.0
+    assert third.record.cooldown_until_epoch == 310.0
+    assert third.record.consecutive_failures == 3
+
+
+def test_provider_pressure_backoff_reaches_ten_minute_cap() -> None:
+    record = TargetHealthRecord(target_id="gemini")
+    now = 100.0
+    delays = []
+    for _ in range(5):
+        mutation = apply_provider_failure(
+            record,
+            _failure(ProviderFailureKind.RATE_LIMITED),
+            now_epoch=now,
+        )
+        assert mutation.record.cooldown_until_epoch is not None
+        delay = mutation.record.cooldown_until_epoch - now
+        delays.append(delay)
+        now = mutation.record.cooldown_until_epoch
+        record = mutation.record
+
+    assert delays == [30.0, 60.0, 120.0, 300.0, 600.0]
