@@ -334,9 +334,7 @@ async def _run_proof(
         model_turns = 0 if result.usage is None else result.usage.model_turns
         tool_calls = 0 if result.usage is None else result.usage.tool_calls
         input_tokens = 0 if result.usage is None else result.usage.input_tokens
-        cached_tokens = (
-            0 if result.usage is None else result.usage.cached_input_tokens
-        )
+        cached_tokens = 0 if result.usage is None else result.usage.cached_input_tokens
         efficiency = {
             "provider_model_turns": model_turns,
             "governed_tool_calls": tool_calls,
@@ -344,9 +342,7 @@ async def _run_proof(
                 0.0 if model_turns == 0 else round(tool_calls / model_turns, 3)
             ),
             "cached_input_ratio": (
-                0.0
-                if input_tokens == 0
-                else round(cached_tokens / input_tokens, 4)
+                0.0 if input_tokens == 0 else round(cached_tokens / input_tokens, 4)
             ),
             "identical_second_execution_reused_without_cloud_turn": second.reused,
         }
