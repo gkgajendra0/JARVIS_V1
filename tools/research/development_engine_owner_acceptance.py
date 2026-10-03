@@ -140,9 +140,7 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
         "chatgpt_plan_connected": chatgpt_plan_connected,
         "development_model_visible": model_visible,
         "openai_codex_installed": codex_installed,
-        "openai_codex_reviewed_version": (
-            codex_version == REVIEWED_CODEX_SDK_VERSION
-        ),
+        "openai_codex_reviewed_version": (codex_version == REVIEWED_CODEX_SDK_VERSION),
     }
     return {
         "schema": "jarvis.development_engine_owner_preflight.v1",
