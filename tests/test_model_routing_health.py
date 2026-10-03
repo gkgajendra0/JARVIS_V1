@@ -163,7 +163,6 @@ def test_local_resource_pressure_immediately_allows_fallback() -> None:
     assert mutation.reason_code == "local_resource_pressure_cooldown"
 
 
-
 def test_provider_pressure_probe_backoff_preserves_failure_streak() -> None:
     first = apply_provider_failure(
         TargetHealthRecord(target_id="gemini"),
@@ -204,7 +203,6 @@ def test_provider_pressure_backoff_reaches_ten_minute_cap() -> None:
         record = mutation.record
 
     assert delays == [30.0, 60.0, 120.0, 300.0, 600.0]
-
 
 
 def test_chatgpt_plan_quota_uses_long_probe_schedule() -> None:
