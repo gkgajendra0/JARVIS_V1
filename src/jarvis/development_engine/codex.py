@@ -699,11 +699,10 @@ class CodexPlanDevelopmentEngine:
         )
         self._max_turns = max_turns
         self._max_tool_calls = max_tool_calls
-        self._observed_version = _DEFAULT_ENGINE_VERSION
 
     @property
     def engine_version(self) -> str:
-        return self._observed_version
+        return _DEFAULT_ENGINE_VERSION
 
     async def _thread(
         self,
@@ -932,7 +931,12 @@ class CodexPlanDevelopmentEngine:
                 codex_home=codex_home,
                 cwd=scratch,
             )
-            self._observed_version = runtime.version
+            runtime_version = str(runtime.version).strip()
+            if runtime_version != self.engine_version:
+                raise RuntimeError(
+                    "Unsupported Codex runtime generation: expected "
+                    f"{self.engine_version}, found {runtime_version or 'unknown'}."
+                )
             thread = await self._thread(runtime, ticket)
             response = await thread.run_user(
                 _ticket_prompt(ticket, tools),
