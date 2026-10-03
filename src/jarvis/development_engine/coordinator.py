@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.resources import ResourceLeaseManager, ResourcePressure
 
 from .admission import build_development_reasoning_fingerprint
@@ -15,6 +16,12 @@ from .contracts import (
 )
 from .protocol import DevelopmentEngine, DevelopmentToolPort
 from .session_store import DevelopmentSessionStore
+
+
+def _progress_digest(tools: DevelopmentToolPort) -> str:
+    """Hash canonical Work-backed progress, never provider conversation memory."""
+
+    return canonical_digest(dict(tools.snapshot()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +69,7 @@ class DevelopmentEngineCoordinator:
             ticket,
             evidence_refs=evidence_refs,
             failure_refs=failure_refs,
+            progress_digest=_progress_digest(tools),
             tool_contract_version=tool_contract_version,
         )
         reusable = self._sessions.reusable_result(
@@ -99,13 +107,30 @@ class DevelopmentEngineCoordinator:
                 blocker_code="development_intelligence_capacity",
             )
 
+        final_fingerprint = build_development_reasoning_fingerprint(
+            ticket,
+            evidence_refs=evidence_refs,
+            failure_refs=failure_refs,
+            progress_digest=_progress_digest(tools),
+            tool_contract_version=tool_contract_version,
+        )
+        if final_fingerprint != fingerprint:
+            # Tool execution changed canonical Work evidence while the specialist was
+            # active. Bind the result to the post-turn truth so restart/replay can
+            # reuse it without repeating the same expensive reasoning.
+            self._sessions.begin(
+                ticket=ticket,
+                engine_id=self._engine.engine_id,
+                engine_version=self._engine.engine_version,
+                reasoning_fingerprint=final_fingerprint,
+            )
         self._sessions.record_result(
             ticket=ticket,
             result=result,
-            reasoning_fingerprint=fingerprint,
+            reasoning_fingerprint=final_fingerprint,
         )
         return DevelopmentCoordinationResult(
             result=result,
-            reasoning_fingerprint=fingerprint,
+            reasoning_fingerprint=final_fingerprint,
             reused=False,
         )
