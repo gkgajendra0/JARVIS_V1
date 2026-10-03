@@ -71,6 +71,71 @@ GICC no longer refreshes capability discovery simply because a goal remains in `
 
 A refresh occurs only when exact EngineeringChange/Phase-9 lineage says the continuation is eligible to resume, and the synchronous refresh executes with `asyncio.to_thread()`.
 
+## 2026-10-03 owner-machine follow-up
+
+The first combined owner-machine run after the provider-pressure and durable-recovery
+changes materially narrowed the remaining failure surface.
+
+### Evidence established
+
+- long Gemini speech segments completed normally with no fixed-duration cutoff;
+- the validated MediaDevices/WebRTC AEC path remained active;
+- DBOS recovered canonical active work instead of failing on the historical terminal
+  execution mismatch;
+- provider-capacity cooldown prevented a new provider-hammering failure pattern;
+- one microphone-ingress warning still reported 11 stale frames shed while the
+  canonical asyncio loop had accumulated 1359 ms of scheduling lag;
+- legacy Phase-9 WorkItems persisted before the governed architecture-revision fix
+  could still restart in WAITING_FOR_OWNER and replay old model-authored approval
+  questions;
+- multiple WorkItems sharing the same provider-routing outage could each enqueue an
+  owner-visible resource-blocker notification, causing repeated short realtime
+  lifecycle sessions.
+
+The 1359 ms sample proves canonical-loop starvation, but it does **not** by itself
+prove that LiveKit AgentSession startup is the blocking operation. The warning occurred
+while recovered background work and proactive notification sessions were active, so
+the permanent correction is to remove known synchronous persistence/discovery work
+from that loop and then re-test physically rather than replace the validated audio
+topology on inference alone.
+
+### Coordinated correction
+
+The follow-up keeps the existing architecture intact and corrects lifecycle boundaries:
+
+1. startup migrates legacy model-authored Phase-9 owner waits through the current
+   EngineeringChange architecture-revision handler before owner deliveries are
+   reopened; typed executor requests such as pairing/PIN input remain owner waits;
+2. durable Work/EngineeringChange reads and writes used by realtime voice tools and
+   notification delivery are dispatched off the canonical asyncio loop;
+3. the periodic Work status scheduler performs its SQLite persistence tick on a worker
+   thread rather than the realtime loop;
+4. identical provider-routing blocker deliveries that are simultaneously due are
+   coalesced into one owner notification while each durable delivery is still consumed;
+5. no change is made to MediaDevices, AEC, provider-native barge-in, the 300 ms
+   prebuffer, or the Phase-9/EngineeringChange/Phase-7/Phase-8 authority chain.
+
+A separate dedicated Work event loop was considered and rejected for this correction.
+The Work brain gate, DBOS callback path, shutdown semantics, and provider clients are
+currently composed around the canonical loop; moving them wholesale would be a larger
+architecture migration with new cross-loop failure modes. It is not justified unless
+the next physical run still proves sustained loop starvation after known synchronous
+boundaries are removed.
+
+### Remaining physical gate
+
+Software validation cannot prove the final hardware behavior. Before this ADR can move
+from proposed to accepted, the exact tested revision must still prove:
+
+- deliberate human barge-in produces a real interrupted JARVIS utterance;
+- no legacy architecture-review owner prompt is replayed after restart;
+- one shared provider-capacity outage does not produce a burst of repeated spoken
+  blockers;
+- normal speech plus active background work produces no recurring microphone-frame
+  shedding or comparable event-loop scheduling stall;
+- the deferred Phase-9 external-device path is exercised against a real target when
+  provider capacity is available.
+
 ## Non-negotiable regressions
 
 Owner-machine acceptance fails if any of these occur:
