@@ -283,6 +283,34 @@ class WorkExecutorDevelopmentToolPort:
             )
         return work
 
+    def _approved_test_targets(self) -> tuple[str, ...]:
+        return tuple(
+            item.removeprefix("pytest:").strip()
+            for item in self._ticket.acceptance_criteria
+            if item.startswith("pytest:") and item.removeprefix("pytest:").strip()
+        )
+
+    def _guard_test_targets(
+        self,
+        parameters: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        approved = self._approved_test_targets()
+        if not approved:
+            raise DevelopmentToolDenied(
+                "development ticket has no approved pytest targets"
+            )
+        requested = parameters.get("targets")
+        if requested is None:
+            return {**dict(parameters), "targets": list(approved)}
+        if not isinstance(requested, list):
+            raise DevelopmentToolDenied("development test targets must be an array")
+        normalized = tuple(str(item).strip() for item in requested if str(item).strip())
+        if not normalized or any(item not in set(approved) for item in normalized):
+            raise DevelopmentToolDenied(
+                "development tests must stay inside DevelopmentTicket acceptance targets"
+            )
+        return {**dict(parameters), "targets": list(normalized)}
+
     def _guard_commit(self) -> None:
         steps = self._store.list_steps(self._ticket.work_id)
         last_write = max(
@@ -344,6 +372,8 @@ class WorkExecutorDevelopmentToolPort:
 
         executor = self._actions.require(action, WorkType.DEVELOPMENT)
         request_parameters = dict(parameters)
+        if name == "run_tests":
+            request_parameters = self._guard_test_targets(request_parameters)
         if name == "write_file":
             path = _canonical_repository_path(request_parameters.get("path"))
             if path not in set(self._ticket.writable_paths):
