@@ -483,16 +483,14 @@ class RoutedWorkReasoner:
             return target
         return None
 
-    def _blocked_retry_after(
+    def _target_capacity_retry_after(
         self,
-        selection: RoutedSelection,
+        target_ids: tuple[str, ...],
         *,
         now_epoch: float,
     ) -> float:
         target_waits: list[float] = []
-        for target_id in selection.decision.ordered_target_ids[
-            : 1 + selection.decision.fallback_budget
-        ]:
+        for target_id in target_ids:
             constraints: list[float] = []
             record = self._router.routing_store.get_health(target_id)
             if record is not None and record.cooldown_until_epoch is not None:
@@ -504,11 +502,25 @@ class RoutedWorkReasoner:
             if circuit is not None and circuit.remaining_seconds > 0:
                 constraints.append(circuit.remaining_seconds)
             if constraints:
-                # A target becomes eligible only after all of its active capacity
-                # constraints have expired. Across fallback targets, the soonest
-                # eligible target determines the next durable probe.
+                # A target becomes eligible only after all active capacity
+                # constraints have expired. Across targets, retry when the first
+                # target can actually be probed without violating any cooldown.
                 target_waits.append(max(constraints))
         return max(1.0, min(target_waits)) if target_waits else 30.0
+
+    def _blocked_retry_after(
+        self,
+        selection: RoutedSelection,
+        *,
+        now_epoch: float,
+    ) -> float:
+        target_ids = selection.decision.ordered_target_ids[
+            : 1 + selection.decision.fallback_budget
+        ]
+        return self._target_capacity_retry_after(
+            target_ids,
+            now_epoch=now_epoch,
+        )
 
     async def decide(self, request: BrainRequest) -> BrainDecision:
         routing_request = build_work_routing_request(
@@ -521,7 +533,10 @@ class RoutedWorkReasoner:
             raise RoutingResourceBlocked(
                 routing_request_id=routing_request.routing_request_id,
                 reason="no approved routing target is currently eligible",
-                retry_after_seconds=30.0,
+                retry_after_seconds=self._target_capacity_retry_after(
+                    exc.snapshot.considered_target_ids,
+                    now_epoch=float(self._clock()),
+                ),
             ) from exc
         attempts = list(
             self._router.routing_store.list_attempts(selection.decision.decision_id)
