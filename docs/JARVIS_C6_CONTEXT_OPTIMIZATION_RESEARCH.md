@@ -278,3 +278,44 @@ Therefore:
 The same acceptance also reinforces the model-routing direction in
 `JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`: context reduction and model
 tiering are complementary, and neither may trade away decision quality.
+
+
+## Zero-model research-mismatch diagnosis — 2026-10-04
+
+Repository inspection after the failed research pair shows:
+
+- the fixed research fixture contains an original owner goal, nine earlier research
+  observations, an unverified SDK candidate, a prior resolve, a prior finalize and then
+  newer authoritative evidence;
+- the C6 RESEARCH selector explicitly retains the latest step per kind, the latest
+  research observations and critical `acq_inspect_goal`, `acq_resolve`,
+  `acq_finalize` and `research_web` milestones;
+- therefore the mismatch is not evidence that C6 simply dropped the candidate,
+  re-resolution/finalization state or newest evidence;
+- `acq_record_candidate` currently asks the model to generate free-form
+  `verification_requirements` and optional free-form
+  `external_acceptance_requirements`, and those strings participate in the canonical
+  candidate digest.
+
+The owner-machine mismatch is consistent with two context projections causing the model
+to phrase/choose different safety requirements even though both selected the same source,
+version, operations, evidence and action. The optimized output also surfaced owner-goal
+constraints such as activation approval/no broad scanning that were not present in the
+legacy parameter set.
+
+Do **not** solve this by ignoring parameter differences. These fields affect candidate
+identity and governance semantics.
+
+Preferred architecture investigation:
+
+1. move workflow invariants such as "re-resolve after verification" into deterministic
+   control-plane/completion-guard logic rather than model prose;
+2. derive mandatory owner-goal constraints (for example activation approval or discovery
+   restrictions) from canonical goal/Authority state;
+3. replace safety-critical free-form requirement strings with typed/versioned requirement
+   IDs or another canonical representation where practical;
+4. leave model-generated narrative advisory rather than authority-bearing;
+5. then re-run only the affected research legacy-vs-optimized pair.
+
+This is a stronger safety design than weakening C6 equivalence and should also make lower
+model tiers more viable because less governance meaning depends on exact model wording.
