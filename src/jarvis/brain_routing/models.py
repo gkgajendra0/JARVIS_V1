@@ -199,6 +199,7 @@ class BrainRouteRecord:
     needs_owner: bool | None = None
     owner_question: str | None = None
     parameters_digest: str | None = None
+    reasoner_contract_digest: str | None = None
     outcome_code: str = "selected"
 
     def __post_init__(self) -> None:
@@ -259,16 +260,16 @@ class BrainRouteRecord:
             value = getattr(self, name)
             if value is not None and not isinstance(value, bool):
                 raise TypeError(f"{name} must be a bool or None")
-        digest = self.parameters_digest
-        if digest is not None:
-            normalized_digest = _token(digest, field="parameters_digest")
+        for name in ("parameters_digest", "reasoner_contract_digest"):
+            digest = getattr(self, name)
+            if digest is None:
+                continue
+            normalized_digest = _token(digest, field=name)
             if len(normalized_digest) != 64 or any(
                 char not in "0123456789abcdef" for char in normalized_digest
             ):
-                raise ValueError(
-                    "parameters_digest must be a 64-character SHA-256 digest"
-                )
-            object.__setattr__(self, "parameters_digest", normalized_digest)
+                raise ValueError(f"{name} must be a 64-character SHA-256 digest")
+            object.__setattr__(self, name, normalized_digest)
         if self.needs_owner is True and self.owner_question is None:
             raise ValueError("owner-waiting route provenance requires owner_question")
         if self.resolver_version is not None:
