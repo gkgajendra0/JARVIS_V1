@@ -120,10 +120,16 @@ class FakeRuntimeFactory:
 
 
 class FakeTools:
-    def __init__(self, names: tuple[str, ...]) -> None:
+    def __init__(
+        self,
+        names: tuple[str, ...],
+        *,
+        snapshot_data: dict[str, Any] | None = None,
+    ) -> None:
         self._names = tuple(sorted(names))
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self._sequence = 0
+        self._snapshot_data = snapshot_data
 
     @property
     def tool_names(self) -> tuple[str, ...]:
@@ -144,6 +150,8 @@ class FakeTools:
         )
 
     def snapshot(self) -> dict[str, Any]:
+        if self._snapshot_data is not None:
+            return dict(self._snapshot_data)
         return {
             "schema": "jarvis.development_progress.v1",
             "ticket_id": "fake",
@@ -482,3 +490,80 @@ async def test_codex_engine_does_not_replace_thread_on_transient_resume_pressure
     assert runtime.resumed == ["thr_saved"]
     assert runtime.started == 0
     assert sessions.get(ticket.digest).thread_id == "thr_saved"
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_reconstructs_completion_from_canonical_progress(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    sessions.bind_thread(ticket_digest=ticket.digest, thread_id="thr_missing")
+    thread = FakeThread(
+        "thr_rebuilt",
+        [
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "Canonical candidate is already complete.",
+                    "tool_calls": [],
+                    "disposition": "completed",
+                    "reason": None,
+                    "requested_dependencies": [],
+                    "evidence_refs": [
+                        "workstep:test_prior",
+                        "workstep:commit_prior",
+                    ],
+                    "blocker_code": None,
+                },
+                40,
+            )
+        ],
+    )
+    runtime = FakeRuntime(thread, fail_resume=True)
+    tools = FakeTools(
+        ticket.allowed_tools,
+        snapshot_data={
+            "schema": "jarvis.development_progress.v1",
+            "ticket_id": ticket.ticket_id,
+            "ticket_digest": ticket.digest,
+            "completed_tool_step_count": 4,
+            "changed_files": ["src/jarvis/demo.py"],
+            "passing_test_evidence_refs": ["workstep:test_prior"],
+            "candidate_revision": "d" * 40,
+            "candidate_branch": "work/demo",
+            "recent_tool_evidence": [
+                {
+                    "tool": "run_tests",
+                    "step_id": "test_prior",
+                    "evidence_ref": "workstep:test_prior",
+                    "summary": "tests",
+                    "observation": {"passed": True},
+                },
+                {
+                    "tool": "commit_candidate",
+                    "step_id": "commit_prior",
+                    "evidence_ref": "workstep:commit_prior",
+                    "summary": "commit",
+                    "observation": {"commit": "d" * 40, "clean": True},
+                },
+            ],
+        },
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(runtime),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=tools)
+
+    assert result.disposition is DevelopmentDisposition.COMPLETED
+    assert result.candidate_revision == "d" * 40
+    assert result.changed_files == ("src/jarvis/demo.py",)
+    assert result.test_evidence_refs == ("workstep:test_prior",)
+    assert tools.calls == []
+    assert runtime.resumed == ["thr_missing"]
+    assert runtime.started == 1
