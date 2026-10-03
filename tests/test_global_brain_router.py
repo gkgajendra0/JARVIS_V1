@@ -40,6 +40,7 @@ from jarvis.model_routing.registry import (
 from jarvis.model_routing.router import ModelRouter, build_work_routing_request
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
+from jarvis.work.context import WorkContextAssembler, WorkContextMode
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
@@ -78,6 +79,8 @@ def _request(
     work: WorkItem,
     *actions: str,
     recent_steps: tuple[WorkStep, ...] = (),
+    context_mode: WorkContextMode = WorkContextMode.OFF,
+    context_pack=None,
 ) -> BrainRequest:
     return BrainRequest(
         work=work,
@@ -91,6 +94,8 @@ def _request(
             )
             for action in actions
         ),
+        context_mode=context_mode,
+        context_pack=context_pack,
     )
 
 
@@ -196,13 +201,21 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
         action="dev_prepare_workspace",
         summary="Model agrees",
     )
-    _, work, route_store, _, model, router = _router(
+    store, work, route_store, _, model, router = _router(
         tmp_path,
         mode="shadow",
         model_decision=model_decision,
     )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
 
-    decision = await router.decide(_request(work, "dev_prepare_workspace"))
+    decision = await router.decide(
+        _request(
+            work,
+            "dev_prepare_workspace",
+            context_mode=WorkContextMode.SHADOW,
+            context_pack=context_pack,
+        )
+    )
 
     assert decision == model_decision
     assert model.calls == 1
@@ -215,6 +228,18 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     assert record.needs_owner is False
     assert record.owner_question is None
     assert record.parameters_digest == canonical_digest({})
+
+    snapshot = route_store.get_context_snapshot(record.route_request_id)
+    assert snapshot is not None
+    assert snapshot["schema"] == "c6_work_reasoning_snapshot.v1"
+    assert snapshot["work_version"] == work.version
+    assert snapshot["work_state"] == work.state.value
+    assert snapshot["history_step_count"] == 0
+    assert snapshot["recent_step_ids"] == []
+    assert snapshot["context_version"] == context_pack.version
+    assert snapshot["history_step_ids_digest"] == canonical_digest([])
+    assert snapshot["allowed_actions"][0]["name"] == "dev_prepare_workspace"
+    assert store.list_steps(work.work_id) == ()
 
 
 @pytest.mark.asyncio
