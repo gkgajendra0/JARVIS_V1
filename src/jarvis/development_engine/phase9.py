@@ -248,6 +248,7 @@ class Phase9DevelopmentTicketBuilder:
             discovery_scopes=_strings(payload.get("discovery_scopes")),
             research_evidence_refs=evidence_refs,
             repository_context_refs=repository_context_refs,
+            writable_paths=allowed_paths,
             acceptance_criteria=acceptance_criteria,
             allowed_tools=allowed,
             attempt=stage.attempt,
