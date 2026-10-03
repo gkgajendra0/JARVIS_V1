@@ -297,6 +297,52 @@ For the initial implementation, the Codex engine should use the most restrictive
 
 If MCP is the selected transport for those development tools, MCP is only the transport. JARVIS remains the authorization source.
 
+## 9.1 Initial Codex transport decision
+
+The initial Codex adapter will use a persistent Codex development thread plus a
+**structured JARVIS tool-batch protocol** over the provider-neutral
+`DevelopmentToolPort`.
+
+This is intentionally narrower than giving Codex direct host shell or workspace-write
+authority:
+
+1. Codex receives the immutable `DevelopmentTicketV1` and the schemas of the tools
+   authorized by that ticket.
+2. Codex returns either a bounded batch of requested JARVIS development-tool calls or
+   a typed terminal development disposition.
+3. JARVIS executes those calls through `DevelopmentToolPort`, which reuses the
+   existing DEVELOPMENT executors and persists every operation as canonical Work
+   evidence.
+4. The resulting compact observations are sent back into the same Codex thread as
+   tool-level/external observations.
+5. The thread may continue until it produces a typed `DevelopmentResultV1`, reaches
+   a configured turn/tool budget, or becomes resource-blocked.
+
+This keeps the first integration in-process, testable with a fake Codex runtime, and
+independent of Codex's native host filesystem/shell authority. It also makes the
+provider thread resumable working memory while WorkStore/DBOS remains canonical truth.
+
+MCP remains a compatible future transport behind the same `DevelopmentToolPort`.
+It should be adopted only if owner-machine benchmarks show that it improves reliability,
+turn efficiency, or interoperability. The architectural boundary does not depend on
+MCP.
+
+The initial Codex process configuration must therefore remain restrictive:
+
+- reuse the approved ChatGPT-plan access token without persisting it in development
+  artifacts;
+- use an isolated JARVIS-owned Codex home/configuration;
+- deny provider-side approval escalation;
+- use read-only/native sandboxing where practical;
+- disable child-agent/swarm behavior initially;
+- disable native web search for development turns unless a later governed design
+  explicitly admits it;
+- do not treat Codex native shell, workspace write, Git, package installation, or
+  sandboxing as JARVIS authority.
+
+The DevelopmentEngine may decide **what engineering work is needed**. JARVIS still
+decides **which executable operations exist and whether they are authorized**.
+
 ## 10. Quota-efficiency rules
 
 Cloud engineering intelligence is a scarce resource.
