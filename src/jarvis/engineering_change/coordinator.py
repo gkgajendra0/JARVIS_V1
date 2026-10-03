@@ -131,8 +131,7 @@ class ChangeCoordinator:
                         "\nThe previously approved architecture could not safely "
                         "continue during governed development. Re-research the capability "
                         "and derive a complete replacement architecture from current "
-                        "evidence. Revision reason: "
-                        + reason
+                        "evidence. Revision reason: " + reason
                     )
             dependencies: tuple[str, ...] = ()
         elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
@@ -243,9 +242,7 @@ class ChangeCoordinator:
             if (
                 revision_request is not None
                 and current_architecture is not None
-                and revision_request.payload.get(
-                    "previous_architecture_artifact_id"
-                )
+                and revision_request.payload.get("previous_architecture_artifact_id")
                 == current_architecture.artifact_id
             ):
                 requested_attempt = revision_request.payload.get("source_attempt")
