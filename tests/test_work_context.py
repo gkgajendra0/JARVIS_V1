@@ -333,6 +333,12 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
         "dev_write_file",
         observation={"path": "src/later.py"},
     )
+    historical_evidence = ({"ref": "evidence:historical"},)
+    expected_pack = WorkContextAssembler().build(
+        work=work,
+        steps=(first, second),
+        evidence=historical_evidence,
+    )
     snapshot = {
         "schema": "c6_work_reasoning_snapshot.v1",
         "work_version": work.version,
@@ -353,8 +359,20 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
         "recent_step_ids": [first.step_id, second.step_id],
         "history_step_count": 2,
         "history_step_ids_digest": canonical_digest([first.step_id, second.step_id]),
-        "evidence": [{"ref": "evidence:historical"}],
-        "context_version": "c6.v1",
+        "evidence": list(historical_evidence),
+        "context_version": expected_pack.version,
+        "context_selected_step_ids": [
+            step.step_id for step in expected_pack.selected_steps
+        ],
+        "context_evidence_count": len(expected_pack.evidence),
+        "context_evidence_digest": canonical_digest(list(expected_pack.evidence)),
+        "context_pack_digest": canonical_digest(
+            {
+                "recent_steps": expected_pack.recent_steps_payload(),
+                "evidence": list(expected_pack.evidence),
+                "history_manifest": expected_pack.history_manifest_payload(),
+            }
+        ),
     }
     advanced = work.transition(
         WorkState.RUNNING,
@@ -378,7 +396,9 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
     ]
     assert replay.context_pack is not None
     assert replay.context_pack.full_history_step_count == 2
-    assert replay.evidence == ({"ref": "evidence:historical"},)
+    assert replay.context_pack.recent_steps_payload() == expected_pack.recent_steps_payload()
+    assert replay.context_pack.evidence == expected_pack.evidence
+    assert replay.evidence == historical_evidence
 
 
 def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
