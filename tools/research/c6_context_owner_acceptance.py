@@ -1645,7 +1645,8 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Optional fixed fixture case ID for LLMLingua modes. Repeat to select "
-            "multiple cases; omit to use all three."
+            "multiple cases. By default the benchmark targets the research case that "
+            "failed hand-selected C6 equivalence."
         ),
     )
     return parser
@@ -1827,7 +1828,9 @@ def main() -> int:
                         compression_rate=float(args.llmlingua_rate),
                         device_map=str(args.llmlingua_device).strip(),
                         case_ids=(
-                            None
+                            (
+                                "research_requires_reresolution_after_new_evidence",
+                            )
                             if not args.llmlingua_case_id
                             else tuple(dict.fromkeys(args.llmlingua_case_id))
                         ),
