@@ -90,9 +90,9 @@ def reconstruct_recorded_context_request(
 
     if snapshot.get("schema") != "c6_work_reasoning_snapshot.v1":
         raise ValueError("unsupported C6 work reasoning snapshot schema")
-    expected_contract_digest = str(
-        snapshot.get("reasoner_contract_digest") or ""
-    ).strip().casefold()
+    expected_contract_digest = (
+        str(snapshot.get("reasoner_contract_digest") or "").strip().casefold()
+    )
     if expected_contract_digest != work_reasoning_contract_digest():
         raise ValueError("C6 replay reasoning contract differs from durable provenance")
     if not isinstance(work, WorkItem):
