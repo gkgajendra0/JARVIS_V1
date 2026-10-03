@@ -69,6 +69,19 @@ class DevelopmentToolOwnerInputRequired(DevelopmentToolPortError):
         self.resume_context = dict(resume_context)
 
 
+def _path_within_writable_scope(path: str, scope: str) -> bool:
+    """Match the same file/directory semantics as Phase-9 candidate verification."""
+
+    if path == scope:
+        return True
+    normalized_scope = scope.rstrip("/")
+    if not normalized_scope:
+        return False
+    if pathlib.PurePosixPath(normalized_scope).suffix == "":
+        return path.startswith(normalized_scope + "/")
+    return False
+
+
 def _canonical_repository_path(value: object) -> str:
     text = str(value or "").strip().replace("\\", "/")
     posix = pathlib.PurePosixPath(text)
@@ -376,7 +389,10 @@ class WorkExecutorDevelopmentToolPort:
             request_parameters = self._guard_test_targets(request_parameters)
         if name == "write_file":
             path = _canonical_repository_path(request_parameters.get("path"))
-            if path not in set(self._ticket.writable_paths):
+            if not any(
+                _path_within_writable_scope(path, scope)
+                for scope in self._ticket.writable_paths
+            ):
                 raise DevelopmentToolDenied(
                     "development write path is outside DevelopmentTicket authority"
                 )
