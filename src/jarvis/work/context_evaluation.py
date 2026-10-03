@@ -9,6 +9,7 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.brain import BrainAction, BrainDecision, BrainRequest
 from jarvis.work.context import WorkContextAssembler, WorkContextMode
 from jarvis.work.models import WorkItem, WorkState, WorkStep
+from jarvis.work.reasoner import work_reasoning_contract_digest
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +90,11 @@ def reconstruct_recorded_context_request(
 
     if snapshot.get("schema") != "c6_work_reasoning_snapshot.v1":
         raise ValueError("unsupported C6 work reasoning snapshot schema")
+    expected_contract_digest = str(
+        snapshot.get("reasoner_contract_digest") or ""
+    ).strip().casefold()
+    if expected_contract_digest != work_reasoning_contract_digest():
+        raise ValueError("C6 replay reasoning contract differs from durable provenance")
     if not isinstance(work, WorkItem):
         raise TypeError("work must be a WorkItem")
     if any(not isinstance(step, WorkStep) for step in steps):
