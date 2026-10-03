@@ -11,6 +11,7 @@ import pytest
 from tools.research import c6_context_owner_acceptance as c6
 from tools.research.c6_benchmark_corpus import build_c6_benchmark_cases
 
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.brain import BrainDecision
 from jarvis.work.context import WorkContextMode
 from jarvis.work.models import WorkType
@@ -59,6 +60,8 @@ def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
         WorkType.DEVELOPMENT,
         WorkType.RESEARCH,
     }
+    assert "test(c6): repair bounded normalization" in first[0].request.work.request
+    assert "test(c6): finalize reviewed change" in first[1].request.work.request
 
     first_step_ids = [
         [step.step_id for step in item.request.context_pack.selected_steps]
@@ -158,15 +161,16 @@ async def test_c6_fixture_benchmark_stops_on_first_mismatch_without_circuit_muta
     async def _evaluate(_client, request):
         nonlocal calls
         calls += 1
-        action = (
-            "dev_status"
+        message = (
+            "test(c6): repair bounded normalization"
             if request.context_mode is WorkContextMode.SHADOW
-            else "dev_diff"
+            else "test(c6): repair normalization"
         )
         return (
             BrainDecision(
-                action=action,
-                summary="Intentional C6 fixture mismatch",
+                action="dev_commit",
+                summary="Intentional C6 parameter mismatch",
+                parameters={"message": message},
             ),
             SimpleNamespace(
                 usage={"input_tokens": 1.0},
@@ -186,7 +190,23 @@ async def test_c6_fixture_benchmark_stops_on_first_mismatch_without_circuit_muta
     assert calls == 2
     assert result["fixture_cases"] == 1
     assert result["mismatch_cases"] == 1
-    assert result["cases"][0]["action_equal"] is False
+    case = result["cases"][0]
+    assert case["action_equal"] is True
+    assert case["parameters_equal"] is False
+    assert case["legacy_action"] == "dev_commit"
+    assert case["optimized_action"] == "dev_commit"
+    assert case["legacy_parameters"] == {
+        "message": "test(c6): repair bounded normalization",
+    }
+    assert case["optimized_parameters"] == {
+        "message": "test(c6): repair normalization",
+    }
+    assert case["legacy_parameters_digest"] == canonical_digest(
+        case["legacy_parameters"]
+    )
+    assert case["optimized_parameters_digest"] == canonical_digest(
+        case["optimized_parameters"]
+    )
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert result["actions_executed"] is False
     assert result["provider_circuit_updated"] is False
