@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -354,6 +355,43 @@ async def test_development_read_and_search_do_not_expose_secret_like_content(
         parameters={"query": "TOKEN"},
     )
     assert result["matches"] == []
+
+
+@pytest.mark.asyncio
+async def test_development_search_fallback_runs_off_event_loop_thread(
+    git_project: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = DevelopmentWorkspaceManager(
+        repository_root=git_project,
+        workspace_root=tmp_path / "worktrees",
+    )
+    manager.ensure("work_dev_test")
+    executor = DevelopmentSearchExecutor(manager)
+    event_loop_thread = threading.get_ident()
+    observed_threads: list[int] = []
+    original = DevelopmentSearchExecutor._search_without_rg
+
+    def observed_search(workspace: Path, query: str, limit: int) -> list[str]:
+        observed_threads.append(threading.get_ident())
+        return original(workspace, query, limit)
+
+    monkeypatch.setattr("jarvis.work.development.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        DevelopmentSearchExecutor,
+        "_search_without_rg",
+        staticmethod(observed_search),
+    )
+
+    result = await executor.execute(
+        work=_development_item(),
+        parameters={"query": "VALUE", "max_results": 10},
+    )
+
+    assert result["matches"]
+    assert observed_threads
+    assert observed_threads[0] != event_loop_thread
 
 
 @pytest.mark.asyncio
