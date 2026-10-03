@@ -31,6 +31,7 @@ from jarvis.model_routing.router import (
 )
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -562,6 +563,78 @@ async def test_chatgpt_plan_subscription_limit_falls_back_to_paid_provider(
     ]
     assert attempts[0].failure_class == "quota_exhausted"
     assert attempts[1].failure_class is None
+
+
+@pytest.mark.asyncio
+async def test_shared_gemini_circuit_prevents_early_same_work_retries(
+    tmp_path: Path,
+) -> None:
+    class RateLimitError(RuntimeError):
+        status_code = 429
+
+    class Clock:
+        def __init__(self) -> None:
+            self.value = 100.0
+
+        def __call__(self) -> float:
+            return self.value
+
+    clock = Clock()
+    registry = BackgroundProviderCircuitRegistry(
+        path=tmp_path / "provider-circuits.json",
+        clock=clock,
+    )
+    work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    routing_store = ModelRoutingStore(work_store)
+    adapter = ReasoningAdapter(
+        routing_store=routing_store,
+        error=RateLimitError("429 Too Many Requests"),
+    )
+    adapters = ModelAdapterRegistry((adapter,))
+    targets = ModelTargetRegistry(
+        adapters,
+        (
+            _target(
+                "work.gemini.default",
+                adapter_id="fake",
+                provider_id="gemini",
+            ),
+        ),
+    )
+    router = ModelRouter(
+        target_registry=targets,
+        adapter_registry=adapters,
+        strategy_registry=RoutingStrategyRegistry((EngineeringStageStrategy(),)),
+        routing_store=routing_store,
+        eligibility_policy=EligibilityPolicy(),
+        credential_available=lambda target: True,
+        clock=clock,
+    )
+    reasoner = RoutedWorkReasoner(
+        router=router,
+        invoker=ModelInvoker(adapters),
+        primary_target_id="work.gemini.default",
+        clock=clock,
+        provider_circuit_registry=registry,
+    )
+    work = _work(work_store)
+    request = _brain_request(work)
+
+    with pytest.raises(RoutingResourceBlocked) as first:
+        await reasoner.decide(request)
+    assert first.value.retry_after_seconds == pytest.approx(60.0)
+    assert len(adapter.calls) == 1
+
+    with pytest.raises(RoutingResourceBlocked) as blocked:
+        await reasoner.decide(request)
+    assert blocked.value.retry_after_seconds == pytest.approx(60.0)
+    assert len(adapter.calls) == 1
+
+    clock.value += 60.0
+    with pytest.raises(RoutingResourceBlocked) as second:
+        await reasoner.decide(request)
+    assert second.value.retry_after_seconds == pytest.approx(120.0)
+    assert len(adapter.calls) == 2
 
 
 @pytest.mark.asyncio
