@@ -182,6 +182,18 @@ async def test_owner_input_resolution_closes_session_before_exact_acknowledgemen
             del context
             return {"ok": True}
 
+        async def list_background_work(self, context=None):
+            del context
+            return {"ok": True, "work": []}
+
+        async def list_recent_background_work(self, context=None):
+            del context
+            return {"ok": True, "work": []}
+
+        async def get_background_work_status(self, context=None, work_id=None):
+            del context, work_id
+            return {"ok": True}
+
     monkeypatch.setattr(
         canonical_runtime_module,
         "WorkAgentTools",
@@ -237,7 +249,7 @@ async def test_owner_input_interaction_builds_exact_bound_conversation() -> None
         conversation.start()
         tool_factory = kwargs["session_tool_factory"]
         tools = tool_factory(conversation)
-        assert len(tools) == 2
+        assert len(tools) == 5
         bound_instances = [tool._instance for tool in tools]
         assert all(
             instance._bound_owner_input_work_id == "work-tv"
@@ -247,6 +259,14 @@ async def test_owner_input_interaction_builds_exact_bound_conversation() -> None
             callable(instance._on_bound_owner_input_submitted)
             for instance in bound_instances
         )
+        tool_names = {tool.__name__ for tool in tools}
+        assert {
+            "continue_background_work",
+            "cancel_background_work",
+            "list_background_work",
+            "list_recent_background_work",
+            "get_background_work_status",
+        } == tool_names
 
     controller._run_one_session_owned = fake_run_one_session_owned
 
@@ -262,5 +282,6 @@ async def test_owner_input_interaction_builds_exact_bound_conversation() -> None
     assert "cancel or stop this exact pending task" in str(
         captured["initial_instructions"]
     )
+    assert "read-only background status tools" in str(captured["initial_instructions"])
     assert callable(captured["completion_predicate"])
     assert captured["completion_label"] == "owner input for work-tv"
