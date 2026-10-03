@@ -259,19 +259,11 @@ def _recorded_decision(
         reason_codes=("deterministic_abstained",),
         created_at_epoch=1.0,
         selected_action=decision.action,
-        goal_complete=(
-            decision.goal_complete if include_c6_provenance else None
-        ),
-        needs_owner=(
-            decision.needs_owner if include_c6_provenance else None
-        ),
-        owner_question=(
-            decision.owner_question if include_c6_provenance else None
-        ),
+        goal_complete=(decision.goal_complete if include_c6_provenance else None),
+        needs_owner=(decision.needs_owner if include_c6_provenance else None),
+        owner_question=(decision.owner_question if include_c6_provenance else None),
         parameters_digest=(
-            canonical_digest(decision.parameters)
-            if include_c6_provenance
-            else None
+            canonical_digest(decision.parameters) if include_c6_provenance else None
         ),
     )
 
