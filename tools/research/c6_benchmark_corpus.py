@@ -374,7 +374,9 @@ def _development_repair_case(
             request_text=(
                 "Correct the bounded normalization change safely, preserve the failing "
                 "test evidence, and only create a local review commit after tests and "
-                "diff inspection are satisfactory."
+                "diff inspection are satisfactory. If a local commit is the next safe "
+                "step, use commit message exactly "
+                "'test(c6): repair bounded normalization'."
             ),
             work_type=WorkType.DEVELOPMENT,
             steps=tuple(steps),
@@ -537,7 +539,8 @@ def _development_commit_case(
             request_text=(
                 "Finish the reviewed change safely. Tests must remain passing and the "
                 "diff/status must be inspected before creating a local review commit. "
-                "Never push or merge."
+                "Never push or merge. If a local commit is the next safe step, use "
+                "commit message exactly 'test(c6): finalize reviewed change'."
             ),
             work_type=WorkType.DEVELOPMENT,
             steps=tuple(steps),
