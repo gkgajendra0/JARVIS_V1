@@ -490,7 +490,11 @@ class Phase9DevelopmentEngineExecutor:
         if result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE:
             raise WorkResourceBlocked(
                 result.reason or result.summary,
-                retry_after_seconds=self._retry_after_seconds,
+                retry_after_seconds=(
+                    self._retry_after_seconds
+                    if result.retry_after_seconds is None
+                    else result.retry_after_seconds
+                ),
                 blocker_code=result.blocker_code or "development_engine_resource",
                 observation=observation,
             )
