@@ -449,3 +449,31 @@ Acceptance requires:
 
 A pass is evidence to design/promote the compressor path; it is not permission for this
 benchmark command itself to flip production C6 APPLY.
+
+### Production integration gate
+
+The same compressor is now wired into the real `RoutedWorkReasoner`, not only the
+benchmark harness. The production-facing setting is:
+
+`JARVIS_WORK_PROMPT_COMPRESSION_MODE=off|shadow|apply`
+
+Safety behavior:
+
+- default is `off`, so current production behavior is unchanged;
+- `shadow` locally compresses eligible RESEARCH payloads and records/logs the metrics
+  while still sending the exact legacy payload to the model;
+- `apply` sends the compressed payload only when the structure-preserving compressor
+  reports a real reduction;
+- compressor initialization/inference/validation failure falls back to the exact
+  legacy payload rather than blocking Work or sending partially compressed data;
+- initial runtime eligibility is RESEARCH only; DEVELOPMENT remains on its already
+  tested C6 path and source/diff text is never token-pruned by LLMLingua;
+- compression runs through a serialized local `prompt_compression`/CPU resource lease
+  so concurrent WorkItems cannot stampede one local transformer;
+- routing/replay identity remains based on canonical BrainRequest/Work state;
+- `JARVIS_WORK_CONTEXT_MODE=apply` and
+  `JARVIS_WORK_PROMPT_COMPRESSION_MODE=apply` are rejected together until a combined
+  compression acceptance exists.
+
+The runtime integration is code-complete but remains `off` by default. The owner-machine
+preflight and A/B decision test above are the admission gate before any setting change.
