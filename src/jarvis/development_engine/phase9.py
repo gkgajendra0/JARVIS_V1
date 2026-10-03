@@ -121,10 +121,9 @@ class Phase9DevelopmentTicketBuilder:
         plan_artifact = self._store.get_artifact(plan_artifact_id)
         if goal_artifact is None or plan_artifact is None:
             raise ChangeConflict("development ticket provenance artifacts are missing")
-        if (
-            goal_artifact.digest != payload.get("goal_artifact_digest")
-            or plan_artifact.digest != payload.get("plan_artifact_digest")
-        ):
+        if goal_artifact.digest != payload.get(
+            "goal_artifact_digest"
+        ) or plan_artifact.digest != payload.get("plan_artifact_digest"):
             raise ChangeConflict("development ticket provenance digest drift")
 
         goal = goal_from_payload(goal_artifact.payload)
@@ -151,9 +150,7 @@ class Phase9DevelopmentTicketBuilder:
             )
         )
         verification_targets = _strings(payload.get("verification_targets"))
-        verification_contracts = _strings(
-            payload.get("verification_contract_ids")
-        )
+        verification_contracts = _strings(payload.get("verification_contract_ids"))
         acceptance_criteria = tuple(
             sorted(
                 {
