@@ -71,7 +71,6 @@ def test_success_resets_provider_circuit() -> None:
     assert circuit.remaining_seconds == 0.0
 
 
-
 def test_chatgpt_plan_circuit_key_is_shared_across_models() -> None:
     assert provider_circuit_key(
         provider="chatgpt_plan",
