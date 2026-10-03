@@ -396,7 +396,10 @@ def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
     ]
     assert replay.context_pack is not None
     assert replay.context_pack.full_history_step_count == 2
-    assert replay.context_pack.recent_steps_payload() == expected_pack.recent_steps_payload()
+    assert (
+        replay.context_pack.recent_steps_payload()
+        == expected_pack.recent_steps_payload()
+    )
     assert replay.context_pack.evidence == expected_pack.evidence
     assert replay.evidence == historical_evidence
 
