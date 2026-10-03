@@ -744,9 +744,7 @@ class _FakeCompressionResult:
         self.llmlingua_origin_tokens = 100
         self.llmlingua_compressed_tokens = 40
         self.latency_ms = 2.0
-        self.changed_paths = (
-            ("recent_steps[0].observation.summary",) if changed else ()
-        )
+        self.changed_paths = ("recent_steps[0].observation.summary",) if changed else ()
 
     @property
     def reduced(self):
@@ -834,7 +832,9 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
                 },
             ),
             SimpleNamespace(
-                usage={"input_tokens": 100 if provider_payload_override is None else 45},
+                usage={
+                    "input_tokens": 100 if provider_payload_override is None else 45
+                },
                 usage_observed=True,
                 latency_ms=10.0,
             ),
