@@ -741,3 +741,30 @@ Still intentionally pending:
 
 PR #252 must remain draft and unmerged until CI/regression validation and the required
 owner-machine acceptance are complete.
+
+
+## 19. Model selection and Codex integration direction — 2026-10-04
+
+The durable routing decision is
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`.
+
+The DevelopmentEngine must not equate "coding" with "use the strongest model". Its
+provider-neutral boundary must allow the existing Global Brain Router/model-selection
+evidence to choose the cheapest benchmark-qualified engineering intelligence and escalate
+only for explicit quality/failure reasons.
+
+Target behavior:
+
+- local/Luna/Terra-class or equivalent for focused/routine work when qualified;
+- Sol-class or equivalent for normal substantial implementation/research;
+- Astra-class or equivalent only for genuinely hard/unfamiliar/high-consequence work or
+  evidence-backed escalation;
+- Codex remains the coherent coding-agent runtime candidate, while JARVIS owns the ticket,
+  Authority, repository tool surface, tests, canonical truth, CI, promotion and rollback.
+
+Do not automate the normal ChatGPT UI as an engineering backend. The supported
+ChatGPT-plan OAuth + Codex SDK/app-server boundary is the intended subscription-backed
+integration path. Shared-plan quota is a governed resource and not unlimited compute.
+
+This direction strengthens rather than replaces the existing rule that provider identity
+must remain outside the canonical Phase-9/DevelopmentEngine lifecycle.
