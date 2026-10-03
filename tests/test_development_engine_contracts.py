@@ -25,6 +25,10 @@ def _ticket() -> DevelopmentTicketV1:
         dependency_refs=("dependency:example==1.2.3",),
         research_evidence_refs=("evidence:research:1",),
         repository_context_refs=("repo:src/jarvis/capabilities/runtime.py",),
+        writable_paths=(
+            "src/jarvis/capabilities/tv_adapter.py",
+            "tests/test_tv_adapter.py",
+        ),
         acceptance_criteria=("targeted tests pass", "candidate diff is inspectable"),
         allowed_tools=("read_file", "write_file", "run_tests"),
         attempt=2,
@@ -47,6 +51,10 @@ def test_ticket_is_canonical_and_order_independent() -> None:
         dependency_refs=("dependency:example==1.2.3",),
         research_evidence_refs=("evidence:research:1",),
         repository_context_refs=("repo:src/jarvis/capabilities/runtime.py",),
+        writable_paths=(
+            "tests\\test_tv_adapter.py",
+            "src\\jarvis\\capabilities\\tv_adapter.py",
+        ),
         acceptance_criteria=("candidate diff is inspectable", "targeted tests pass"),
         allowed_tools=("run_tests", "write_file", "read_file"),
         attempt=2,
@@ -55,6 +63,33 @@ def test_ticket_is_canonical_and_order_independent() -> None:
     assert left == right
     assert left.ticket_id == f"dev_ticket_{left.digest[:16]}"
     assert left.canonical_payload()["contract_version"] == 1
+
+
+def test_ticket_writable_paths_are_canonical_and_repository_relative() -> None:
+    ticket = _ticket()
+
+    assert ticket.writable_paths == (
+        "src/jarvis/capabilities/tv_adapter.py",
+        "tests/test_tv_adapter.py",
+    )
+    assert ticket.canonical_payload()["writable_paths"] == list(ticket.writable_paths)
+
+    with pytest.raises(ValueError, match="safe repository-relative path"):
+        DevelopmentTicketV1.create(
+            request="Develop the approved capability.",
+            work_id="work_demo",
+            engineering_change_id="change_demo",
+            goal_id="goal_demo",
+            goal_digest="a" * 64,
+            architecture_artifact_id="artifact_demo",
+            architecture_digest="b" * 64,
+            base_revision="c" * 40,
+            workspace_id="workspace_demo",
+            required_operations=("operation.demo",),
+            acceptance_criteria=("tests pass",),
+            allowed_tools=("write_file",),
+            writable_paths=("../escape.py",),
+        )
 
 
 def test_ticket_requires_bounded_tools_and_acceptance() -> None:
