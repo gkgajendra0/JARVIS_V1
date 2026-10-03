@@ -8,6 +8,8 @@ import pytest
 from jarvis.config import JarvisConfig
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
+    _owner_interaction_retry_seconds,
+    _spoken_subject,
 )
 from jarvis.voice.runtime import VoiceRuntimeState
 from jarvis.work.models import DeliveryPolicy, WorkDeliveryKind, WorkState
@@ -150,6 +152,14 @@ class FakeStore:
         return SimpleNamespace(failed_attempts=self.delivery.failed_attempts)
 
 
+async def _wait_delivery_persisted(store: FakeStore, timeout: float = 1.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not store.delivered:
+        if asyncio.get_running_loop().time() >= deadline:
+            raise TimeoutError("delivery persistence did not complete")
+        await asyncio.sleep(0.01)
+
+
 class FakeWorkRuntime:
     def __init__(
         self,
@@ -208,7 +218,7 @@ async def test_owner_input_waits_for_idle_then_opens_interactive_session(
     runtime._live_session = None
 
     await asyncio.wait_for(interaction_started.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_delivery_persisted(work.store)
 
     assert calls == [
         (
@@ -258,7 +268,7 @@ async def test_owner_input_interaction_respects_shared_speech_lease() -> None:
 
     runtime._speech_ownership.release()
     await asyncio.wait_for(interaction_started.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_delivery_persisted(work.store)
 
     assert work.store.delivered is True
 
@@ -294,13 +304,28 @@ async def test_unanswered_owner_input_stays_durable_and_retries() -> None:
     assert work.store.delivered is False
     assert work.store.retry is not None
     delay_seconds, reason = work.store.retry
-    assert delay_seconds >= 30.0
+    assert delay_seconds >= 30.0 * 60.0
     assert reason == "owner_input_unanswered"
     assert audio.resume_calls == 1
     assert audio.detector.enabled is True
 
     runtime.request_shutdown()
     await asyncio.wait_for(delivery_task, timeout=1)
+
+
+def test_owner_interaction_retry_uses_long_exponential_backoff() -> None:
+    assert _owner_interaction_retry_seconds(0) == pytest.approx(30.0 * 60.0)
+    assert _owner_interaction_retry_seconds(1) == pytest.approx(60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(2) == pytest.approx(2.0 * 60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(3) == pytest.approx(4.0 * 60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(4) == pytest.approx(6.0 * 60.0 * 60.0)
+    assert _owner_interaction_retry_seconds(99) == pytest.approx(6.0 * 60.0 * 60.0)
+
+
+def test_spoken_subject_hides_internal_identifier_formatting() -> None:
+    assert _spoken_subject("media_catalog.search") == "media catalog search"
+    assert _spoken_subject("change_deadbeef") is None
+    assert _spoken_subject("gate_deadbeef") is None
 
 
 @pytest.mark.asyncio
@@ -329,7 +354,7 @@ async def test_noninteractive_critical_notification_falls_back_to_local_speech()
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
 
     await asyncio.wait_for(local.spoken.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_delivery_persisted(work.store)
 
     assert local.messages == [
         "Sir, a background task failed. The capability build failed."

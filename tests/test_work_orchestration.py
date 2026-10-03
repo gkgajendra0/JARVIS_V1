@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import jarvis.work.dbos_backend as dbos_backend_module
 import jarvis.work.store as work_store_module
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
@@ -19,6 +20,7 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
     ProviderPressure,
 )
+from jarvis.work.dbos_backend import DBOSWorkExecutionBackend
 from jarvis.work.engine import (
     WorkActionRegistry,
     WorkEngine,
@@ -265,6 +267,100 @@ def test_reconcile_waiting_owner_is_idempotent_for_pending_prompt(
     assert pending[0].delivery_id == delivery.delivery_id
 
 
+def test_reconcile_waiting_model_owner_request_migrates_legacy_wait(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Build governed TV control")
+    running = item.transition(
+        WorkState.RUNNING,
+        status_detail="developing capability",
+    )
+    running = store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Approve revising the media-player architecture?",
+    )
+    waiting = store.save(waiting, expected_version=running.version)
+
+    handled: list[tuple[str, str]] = []
+
+    def handle(work: WorkItem, question: str) -> str | None:
+        handled.append((work.work_id, question))
+        return "superseded by governed architecture revision research"
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry(()),
+        model_owner_request_handler=handle,
+    )
+
+    reconciled = engine.reconcile_waiting_model_owner_requests()
+
+    assert reconciled == (waiting.work_id,)
+    assert handled == [
+        (
+            waiting.work_id,
+            "Approve revising the media-player architecture?",
+        )
+    ]
+    migrated = store.require(waiting.work_id)
+    assert migrated.state is WorkState.CANCELLED
+    assert (
+        migrated.status_detail
+        == "superseded by governed architecture revision research"
+    )
+
+
+def test_reconcile_waiting_model_owner_request_preserves_typed_executor_wait(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Pair with the TV")
+    running = item.transition(WorkState.RUNNING, status_detail="pairing")
+    running = store.save(running, expected_version=item.version)
+
+    step = WorkStep(
+        work_id=item.work_id,
+        kind="tv_pair",
+        summary="Pair with the physical TV",
+        input_data={},
+    )
+    store.add_step(step)
+    completed_step = step.start().complete(
+        {
+            "needs_owner": True,
+            "question": "Enter the PIN shown on the TV.",
+            "sensitive": True,
+            "input_key": "tv_pin",
+        }
+    )
+    store.save_step(completed_step)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Enter the PIN shown on the TV.",
+        current_step_id=step.step_id,
+    )
+    waiting = store.save(waiting, expected_version=running.version)
+
+    def must_not_handle(work: WorkItem, question: str) -> str | None:
+        del work, question
+        raise AssertionError("typed executor owner input must not be migrated")
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry(()),
+        model_owner_request_handler=must_not_handle,
+    )
+
+    assert engine.reconcile_waiting_model_owner_requests() == ()
+    preserved = store.require(waiting.work_id)
+    assert preserved.state is WorkState.WAITING_FOR_OWNER
+    assert preserved.current_step_id == step.step_id
+
+
 def test_public_work_status_preserves_canonical_owner_request(tmp_path: Path) -> None:
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     item = WorkItem(
@@ -344,12 +440,12 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
 
     first = await engine.advance(item.work_id)
     assert first.state is WorkState.WAITING_RESOURCE
-    assert first.retry_after_seconds == 5.0
+    assert first.retry_after_seconds == 30.0
     assert "Gemini rate limit" in (store.require(item.work_id).status_detail or "")
 
     second = await engine.advance(item.work_id)
     assert second.state is WorkState.WAITING_RESOURCE
-    assert second.retry_after_seconds == 10.0
+    assert second.retry_after_seconds == 60.0
 
     recovered = await engine.advance(item.work_id)
     assert recovered.state is WorkState.RUNNING
@@ -357,7 +453,7 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
 
     reset = await engine.advance(item.work_id)
     assert reset.state is WorkState.WAITING_RESOURCE
-    assert reset.retry_after_seconds == 5.0
+    assert reset.retry_after_seconds == 30.0
 
     pressure_steps = [
         step
@@ -502,6 +598,47 @@ async def test_waiting_for_owner_does_not_fabricate_progress(
 
     await engine.advance(item.work_id)
     assert store.require(item.work_id).state is WorkState.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_model_owner_request_handler_can_supersede_generic_owner_prompt(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    handled: list[tuple[str, str]] = []
+
+    def handle_owner_request(work: WorkItem, question: str) -> str | None:
+        handled.append((work.work_id, question))
+        return "superseded by governed architecture revision research"
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+        model_owner_request_handler=handle_owner_request,
+    )
+    item = create_item(store, request="Acquire media-player capability")
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(
+            action=None,
+            summary="Approved architecture needs revision",
+            needs_owner=True,
+            owner_question="Missing supported device transport.",
+        )
+    ]
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.CANCELLED
+    assert handled == [(item.work_id, "Missing supported device transport.")]
+    assert store.require(item.work_id).status_detail == (
+        "superseded by governed architecture revision research"
+    )
+    assert not any(
+        delivery.kind is WorkDeliveryKind.OWNER_INPUT
+        for delivery in store.list_pending_deliveries(limit=20)
+    )
 
 
 def test_failed_work_retry_preserves_canonical_identity_and_history(
@@ -938,6 +1075,8 @@ def test_work_submission_is_idempotent_for_same_canonical_turn(tmp_path: Path) -
     )
 
     assert first.work.work_id == second.work.work_id
+    assert first.execution_id == second.execution_id == first.work.work_id
+    assert store.get_execution_id(first.work.work_id) == first.work.work_id
     assert backend.submitted == [first.work.work_id]
 
 
@@ -1909,6 +2048,257 @@ def test_orchestrator_reconciles_active_execution_idempotently(
     assert reconciled == (item.work_id,)
     assert backend.submitted == [item.work_id]
     assert store.require(item.work_id).state is WorkState.QUEUED
+
+
+def test_orchestrator_recovers_legacy_unbound_canonical_error(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover legacy unbound durable execution")
+
+    class RecoveringBackend(FakeBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.recovered: list[tuple[str, str, WorkPriority, str]] = []
+
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority: WorkPriority,
+            recovery_token: str,
+        ) -> str:
+            self.recovered.append((execution_id, work_id, priority, recovery_token))
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    reconciled = orchestrator.reconcile_active()
+
+    assert reconciled == (item.work_id,)
+    assert backend.submitted == []
+    assert len(backend.recovered) == 1
+    source_execution, work_id, priority, recovery_token = backend.recovered[0]
+    assert source_execution == item.work_id
+    assert work_id == item.work_id
+    assert priority is item.priority
+    assert recovery_token.startswith("startup_recovery_")
+    assert store.get_execution_id(item.work_id) == (
+        f"{item.work_id}__retry_{recovery_token}"
+    )
+
+
+def test_orchestrator_rebinds_fresh_recovery_execution_after_terminal_error(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover durable execution")
+    store.set_execution_id(item.work_id, item.work_id)
+
+    class RecoveringBackend(FakeBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.reconciled: list[tuple[str, str, WorkPriority, str]] = []
+
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority: WorkPriority,
+            recovery_token: str,
+        ) -> str:
+            self.reconciled.append((execution_id, work_id, priority, recovery_token))
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    reconciled = orchestrator.reconcile_active()
+
+    assert reconciled == (item.work_id,)
+    assert backend.submitted == []
+    assert len(backend.reconciled) == 1
+    old_execution, work_id, priority, recovery_token = backend.reconciled[0]
+    assert old_execution == item.work_id
+    assert work_id == item.work_id
+    assert priority is item.priority
+    assert recovery_token.startswith("startup_recovery_")
+    recovered_execution = store.get_execution_id(item.work_id)
+    assert recovered_execution == f"{item.work_id}__retry_{recovery_token}"
+
+
+def test_interrupted_side_effect_stays_owner_gated_when_execution_is_rebound(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Recover interrupted executor safely")
+    running = item.transition(WorkState.RUNNING, status_detail="executing")
+    running = store.save(running, expected_version=item.version)
+    step = WorkStep(
+        work_id=item.work_id,
+        kind="do_step",
+        summary="Potential side effect",
+    )
+    store.add_step(step)
+    running_step = step.start()
+    store.save_step(running_step)
+    running = store.save(
+        running.with_progress(
+            current_step_id=step.step_id,
+            status_detail="Potential side effect",
+        ),
+        expected_version=running.version,
+    )
+    store.set_execution_id(item.work_id, item.work_id)
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+    )
+    assert engine.reconcile_interrupted_steps() == (item.work_id,)
+    waiting = store.require(item.work_id)
+    assert waiting.state is WorkState.WAITING_FOR_OWNER
+
+    class RecoveringBackend(FakeBackend):
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority: WorkPriority,
+            recovery_token: str,
+        ) -> str:
+            del execution_id, priority
+            return f"{work_id}__retry_{recovery_token}"
+
+    orchestrator = WorkOrchestrator(store, RecoveringBackend())
+
+    assert orchestrator.reconcile_active() == (item.work_id,)
+    recovered = store.require(item.work_id)
+    recovered_step = store.list_steps(item.work_id)[-1]
+    assert recovered.state is WorkState.WAITING_FOR_OWNER
+    assert "outcome is unverified" in (recovered.status_detail or "")
+    assert recovered_step.state.value == "interrupted"
+    assert store.get_execution_id(item.work_id).startswith(
+        f"{item.work_id}__retry_startup_recovery_"
+    )
+
+
+def test_dbos_missing_canonical_execution_submits_fresh_canonical_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = DBOSWorkExecutionBackend()
+    submissions: list[tuple[str, WorkPriority]] = []
+
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def fake_submit(work_id: str, *, priority: WorkPriority) -> str:
+        submissions.append((work_id, priority))
+        return work_id
+
+    monkeypatch.setattr(backend, "submit", fake_submit)
+
+    recovered = backend.recover_execution(
+        "work_0123456789abcdef",
+        work_id="work_0123456789abcdef",
+        priority=WorkPriority.NORMAL,
+        recovery_token="startup_recovery_deadbeef1234",
+    )
+
+    assert recovered == "work_0123456789abcdef"
+    assert submissions == [("work_0123456789abcdef", WorkPriority.NORMAL)]
+
+
+def test_dbos_missing_noncanonical_bound_execution_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = DBOSWorkExecutionBackend()
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(RuntimeError, match="durable execution is missing from DBOS"):
+        backend.recover_execution(
+            "work_0123456789abcdef__retry_v4",
+            work_id="work_0123456789abcdef",
+            priority=WorkPriority.NORMAL,
+            recovery_token="startup_recovery_deadbeef1234",
+        )
+
+
+def test_dbos_terminal_error_reconciliation_uses_fresh_recovery_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Status:
+        status = "ERROR"
+
+    backend = DBOSWorkExecutionBackend()
+    restart_calls: list[tuple[str, WorkPriority, str]] = []
+
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: Status(),
+    )
+
+    def fake_restart(
+        work_id: str,
+        *,
+        priority: WorkPriority,
+        retry_token: str,
+    ) -> str:
+        restart_calls.append((work_id, priority, retry_token))
+        return f"{work_id}__retry_{retry_token}"
+
+    monkeypatch.setattr(backend, "restart", fake_restart)
+
+    recovered = backend.recover_execution(
+        "work_0123456789abcdef",
+        work_id="work_0123456789abcdef",
+        priority=WorkPriority.NORMAL,
+        recovery_token="startup_recovery_deadbeef1234",
+    )
+
+    assert recovered == ("work_0123456789abcdef__retry_startup_recovery_deadbeef1234")
+    assert restart_calls == [
+        (
+            "work_0123456789abcdef",
+            WorkPriority.NORMAL,
+            "startup_recovery_deadbeef1234",
+        )
+    ]
+
+
+def test_dbos_terminal_success_never_replays_active_canonical_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Status:
+        status = "SUCCESS"
+
+    backend = DBOSWorkExecutionBackend()
+    monkeypatch.setattr(
+        dbos_backend_module,
+        "_run_dbos_sync",
+        lambda *_args, **_kwargs: Status(),
+    )
+
+    with pytest.raises(RuntimeError, match=r"terminal: .* \(SUCCESS\)"):
+        backend.recover_execution(
+            "work_0123456789abcdef",
+            work_id="work_0123456789abcdef",
+            priority=WorkPriority.NORMAL,
+            recovery_token="startup_recovery_deadbeef1234",
+        )
 
 
 def test_monitoring_work_is_event_driven_without_dbos_execution(

@@ -129,6 +129,7 @@ from jarvis.promotion.runtime_composition import (
     PromotionRuntimeConfig,
 )
 from jarvis.promotion.store import PromotionStore
+from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -149,6 +150,7 @@ from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
+from jarvis.work.shutdown import DBOS_WORKFLOW_DRAIN_TIMEOUT_SECONDS
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError, default_work_store_path
 
 LOGGER = logging.getLogger(__name__)
@@ -441,39 +443,46 @@ class WorkRuntime:
         )
         return work
 
+    def _process_due_status_updates(self) -> None:
+        """Run the persistence-heavy status tick outside the realtime event loop."""
+
+        due = self.store.list_due_status_updates(limit=20)
+        for work_id, interval_seconds, due_at in due:
+            work = self.store.require(work_id)
+            if work.state.terminal:
+                self.store.clear_status_update_interval(work_id)
+                continue
+            estimate = estimate_work(self.store, work)
+            parts = [
+                f"Background task update: approximately {estimate.progress_percent}% complete."
+            ]
+            if work.status_detail:
+                parts.append(f"Current status: {work.status_detail}.")
+            if estimate.blocked_reason:
+                parts.append(f"Blocker: {estimate.blocked_reason}.")
+            if estimate.remaining_work:
+                parts.append(
+                    "Remaining work: " + ", ".join(estimate.remaining_work[:3]) + "."
+                )
+            self.store.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.PROGRESS,
+                message=" ".join(parts),
+                event_key=f"progress:{int(due_at.timestamp())}",
+            )
+            self.store.advance_status_update_interval(
+                work_id,
+                interval_seconds=interval_seconds,
+            )
+
     async def _status_update_loop(self) -> None:
         while not self._closed:
             try:
-                due = self.store.list_due_status_updates(limit=20)
-                for work_id, interval_seconds, due_at in due:
-                    work = self.store.require(work_id)
-                    if work.state.terminal:
-                        self.store.clear_status_update_interval(work_id)
-                        continue
-                    estimate = estimate_work(self.store, work)
-                    parts = [
-                        f"Background task update: approximately {estimate.progress_percent}% complete."
-                    ]
-                    if work.status_detail:
-                        parts.append(f"Current status: {work.status_detail}.")
-                    if estimate.blocked_reason:
-                        parts.append(f"Blocker: {estimate.blocked_reason}.")
-                    if estimate.remaining_work:
-                        parts.append(
-                            "Remaining work: "
-                            + ", ".join(estimate.remaining_work[:3])
-                            + "."
-                        )
-                    self.store.enqueue_delivery(
-                        work=work,
-                        kind=WorkDeliveryKind.PROGRESS,
-                        message=" ".join(parts),
-                        event_key=f"progress:{int(due_at.timestamp())}",
-                    )
-                    self.store.advance_status_update_interval(
-                        work_id,
-                        interval_seconds=interval_seconds,
-                    )
+                # SQLite uses a bounded lock timeout and may contend with DBOS /
+                # EngineeringChange writers. The status scheduler is best-effort
+                # background work, so it must never stall microphone/realtime
+                # scheduling while waiting on durable persistence.
+                await asyncio.to_thread(self._process_due_status_updates)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -585,7 +594,7 @@ class WorkRuntime:
         # explicitly woken by park_for_shutdown().
         await asyncio.to_thread(
             shutdown_dbos_work_runtime,
-            workflow_completion_timeout_sec=70,
+            workflow_completion_timeout_sec=DBOS_WORKFLOW_DRAIN_TIMEOUT_SECONDS,
         )
 
     def close(self) -> None:
@@ -609,6 +618,8 @@ def build_work_runtime(
     model: str | None = None,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    paid_fallback_enabled: bool = False,
+    provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -675,6 +686,7 @@ def build_work_runtime(
         adapter_registry=adapter_registry,
         chatgpt_plan_enabled=chatgpt_plan_enabled,
         chatgpt_plan_model=chatgpt_plan_model,
+        paid_fallback_enabled=paid_fallback_enabled,
     )
     routing_store = ModelRoutingStore(store)
     brain_route_store = BrainRouteStore(store)
@@ -703,6 +715,7 @@ def build_work_runtime(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
+        provider_circuit_registry=provider_circuit_registry,
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
@@ -851,6 +864,36 @@ def build_work_runtime(
                     )
         return None
 
+    def _model_owner_request_handler(
+        work: WorkItem,
+        question: str,
+    ) -> str | None:
+        stage = change_store.stage_for_work(work.work_id)
+        if stage is None:
+            return None
+        change = change_store.require(stage.change_id)
+        if (
+            change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+            or change.process_version != OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+            or stage.stage_key
+            != OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+        ):
+            return None
+
+        # Phase-9 development is already governed by EngineeringChange gates.
+        # A model may request factual input only through a typed executor
+        # WorkOwnerInputRequired. If free-form reasoning asks the owner to revise
+        # or approve development, deterministically return the change to research
+        # and let the canonical architecture gate own the next approval.
+        change_store.request_architecture_revision_for_work(
+            work.work_id,
+            reason=question,
+        )
+        return (
+            "superseded by governed architecture revision research; "
+            "a new architecture gate will be surfaced if the revised plan is ready"
+        )
+
     engine = WorkEngine(
         store=store,
         brain=brain,
@@ -859,8 +902,15 @@ def build_work_runtime(
         base_resource_keys=("work",),
         action_admission=change_store.work_admitted,
         completion_guard=_completion_guard,
+        model_owner_request_handler=_model_owner_request_handler,
     )
     engine.reconcile_interrupted_steps()
+    migrated_model_owner_waits = engine.reconcile_waiting_model_owner_requests()
+    if migrated_model_owner_waits:
+        LOGGER.info(
+            "Migrated legacy model-authored owner waits into governed lifecycle: %s",
+            ", ".join(migrated_model_owner_waits),
+        )
     reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
     if reconciled_owner_deliveries:
         LOGGER.info(
@@ -895,6 +945,10 @@ def build_work_runtime(
             ),
         ),
     )
+    for work_id in migrated_model_owner_waits:
+        changes.reconcile_for_work(work_id)
+    if migrated_model_owner_waits:
+        reconcile_owner_change_gates(changes)
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,

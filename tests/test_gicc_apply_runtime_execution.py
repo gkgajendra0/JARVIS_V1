@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -53,9 +54,11 @@ class FakeCapabilityRuntime:
     def __init__(self) -> None:
         self.requests = []
         self.refreshes = 0
+        self.refresh_thread_ids: list[int] = []
 
     def refresh_catalog(self):
         self.refreshes += 1
+        self.refresh_thread_ids.append(threading.get_ident())
 
     def execute(self, request):
         self.requests.append(request)
@@ -614,10 +617,12 @@ async def test_external_acceptance_fences_capability_continuation(
         change_store=changes,
     )
 
+    event_loop_thread = threading.get_ident()
     blocked = await runtime.reconcile_once()
 
     assert blocked == 0
     assert coordinator.calls == 0
+    assert capability_runtime.refreshes == 0
     assert store.get_goal(goal.goal_id).state is GoalState.WAITING_CAPABILITY
 
     changes.pass_current_acceptance()
@@ -626,6 +631,9 @@ async def test_external_acceptance_fences_capability_continuation(
     latest = store.get_goal(goal.goal_id)
     assert advanced == 1
     assert coordinator.calls == 1
+    assert capability_runtime.refreshes == 1
+    assert len(capability_runtime.refresh_thread_ids) == 1
+    assert capability_runtime.refresh_thread_ids[0] != event_loop_thread
     assert latest is not None
     assert latest.state is GoalState.COMPLETED
 

@@ -537,7 +537,10 @@ class DiagnosticRunReproductionExecutor:
         work: WorkItem,
         parameters: dict[str, Any],
     ) -> dict[str, Any]:
-        workspace = self._manager.assert_pristine(work.work_id)
+        workspace = await asyncio.to_thread(
+            self._manager.assert_pristine,
+            work.work_id,
+        )
         raw_targets = parameters.get("targets")
         if not isinstance(raw_targets, list):
             raise DiagnosticWorkspaceError(
@@ -560,5 +563,8 @@ class DiagnosticRunReproductionExecutor:
             targets=targets,
             timeout_seconds=float(parameters.get("timeout_seconds", 120.0)),
         )
-        self._manager.assert_pristine(work.work_id)
+        await asyncio.to_thread(
+            self._manager.assert_pristine,
+            work.work_id,
+        )
         return result.to_payload()

@@ -32,7 +32,7 @@ from jarvis.work.resources import ResourceLeaseManager, ResourcePressure
 from jarvis.work.store import SQLiteWorkStore
 
 _MAX_CONSECUTIVE_FAILURES = 3
-_PROVIDER_BACKOFF_SECONDS = (5.0, 10.0, 20.0, 40.0, 60.0)
+_PROVIDER_BACKOFF_SECONDS = (30.0, 60.0, 120.0, 300.0, 600.0)
 
 
 class WorkOwnerInputRequired(RuntimeError):
@@ -131,6 +131,8 @@ class WorkEngine:
             tuple[bool, str | None] | None,
         ]
         | None = None,
+        model_owner_request_handler: Callable[[WorkItem, str], str | None]
+        | None = None,
         context_assembler: WorkContextAssembler | None = None,
         context_mode: WorkContextMode | str = WorkContextMode.SHADOW,
     ) -> None:
@@ -141,6 +143,7 @@ class WorkEngine:
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
         self._action_admission = action_admission
         self._custom_completion_guard = completion_guard
+        self._model_owner_request_handler = model_owner_request_handler
         self._context_assembler = context_assembler or WorkContextAssembler()
         self._context_mode = normalize_work_context_mode(context_mode)
 
@@ -679,6 +682,72 @@ class WorkEngine:
             self._store.save(resumed, expected_version=work.version)
         return None
 
+    def _waiting_owner_has_typed_executor_evidence(self, work: WorkItem) -> bool:
+        """Return True only for owner waits emitted by a typed executor boundary."""
+
+        current_step_id = work.current_step_id
+        if not current_step_id:
+            return False
+        step = next(
+            (
+                candidate
+                for candidate in self._store.list_steps(work.work_id)
+                if candidate.step_id == current_step_id
+            ),
+            None,
+        )
+        return bool(
+            step is not None
+            and step.state.value == "completed"
+            and step.observation.get("needs_owner") is True
+        )
+
+    def reconcile_waiting_model_owner_requests(self) -> tuple[str, ...]:
+        """Migrate legacy model-authored owner waits through the current handler.
+
+        Before the Phase-9 architecture-revision handler existed, free-form model
+        needs_owner decisions could be persisted as WAITING_FOR_OWNER. On restart
+        those stale deliveries must not bypass the current lifecycle. Typed executor
+        owner-input boundaries are preserved because their completed WorkStep carries
+        explicit needs_owner evidence and a bound current_step_id.
+        """
+
+        handler = self._model_owner_request_handler
+        if handler is None:
+            return ()
+
+        reconciled: list[str] = []
+        waiting = self._store.list(
+            states=(WorkState.WAITING_FOR_OWNER,),
+            limit=10_000,
+        )
+        for work in waiting:
+            if self._waiting_owner_has_typed_executor_evidence(work):
+                continue
+            question = (
+                work.status_detail
+                or "This background work needs additional owner input."
+            )
+            handled_reason = handler(work, question)
+            if handled_reason is None:
+                continue
+            normalized_reason = " ".join(str(handled_reason).split()).strip()
+            if not normalized_reason:
+                raise ValueError("model owner request handler returned an empty reason")
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal:
+                continue
+            if latest.state is not WorkState.WAITING_FOR_OWNER:
+                continue
+            cancelled = latest.transition(
+                WorkState.CANCELLED,
+                status_detail=normalized_reason,
+                current_step_id=latest.current_step_id,
+            )
+            self._store.save(cancelled, expected_version=latest.version)
+            reconciled.append(work.work_id)
+        return tuple(reconciled)
+
     def reconcile_waiting_owner_deliveries(self) -> tuple[str, ...]:
         """Restore a pending OWNER_INPUT for every waiting non-silent WorkItem.
 
@@ -952,22 +1021,56 @@ class WorkEngine:
             return WorkAdvanceResult(work.work_id, completed.state, progressed=True)
 
         if decision.needs_owner:
+            owner_question = (
+                decision.owner_question
+                or "This background work needs additional owner input."
+            )
+            handler = self._model_owner_request_handler
+            handled_reason = None if handler is None else handler(work, owner_question)
+            if handled_reason is not None:
+                normalized_reason = " ".join(str(handled_reason).split()).strip()
+                if not normalized_reason:
+                    raise ValueError(
+                        "model owner request handler returned an empty reason"
+                    )
+                latest = self._store.require(work.work_id)
+                if latest.state.terminal:
+                    return WorkAdvanceResult(
+                        latest.work_id,
+                        latest.state,
+                        progressed=False,
+                    )
+                superseded = latest.transition(
+                    WorkState.CANCELLED,
+                    status_detail=normalized_reason,
+                    current_step_id=latest.current_step_id,
+                )
+                saved = self._store.save(
+                    superseded,
+                    expected_version=latest.version,
+                )
+                return WorkAdvanceResult(
+                    saved.work_id,
+                    saved.state,
+                    progressed=True,
+                )
+
             waiting = work.transition(
                 WorkState.WAITING_FOR_OWNER,
-                status_detail=decision.owner_question,
+                status_detail=owner_question,
             )
             self._store.save(waiting, expected_version=work.version)
             self._store.enqueue_delivery(
                 work=waiting,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=decision.owner_question or "This work needs your input.",
+                message=owner_question,
                 event_key=f"owner:{waiting.version}",
             )
             return WorkAdvanceResult(
                 work.work_id,
                 waiting.state,
                 progressed=True,
-                owner_question=decision.owner_question,
+                owner_question=owner_question,
             )
 
         assert decision.action is not None

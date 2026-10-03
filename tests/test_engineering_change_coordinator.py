@@ -48,7 +48,48 @@ def test_restart_reconciles_submission_without_duplicate_stage(tmp_path) -> None
     coordinator.reconcile(change.change_id)
     coordinator.reconcile(change.change_id)
     assert changes.list_stages(change.change_id) == stages
-    assert backend.submissions == [stages[0].work_id, stages[0].work_id]
+    assert backend.submissions == [stages[0].work_id]
+    assert work.get_execution_id(stages[0].work_id) == stages[0].work_id
+
+
+def test_change_stage_uses_shared_terminal_recovery_and_persists_binding(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+
+    class RecoveringBackend(RecordingBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.recoveries: list[tuple[str, str, str]] = []
+
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority,
+            recovery_token: str,
+        ) -> str:
+            del priority
+            self.recoveries.append((execution_id, work_id, recovery_token))
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = coordinator.start("Recover camera stage", "session", "turn")
+    stage = changes.list_stages(change.change_id)[0]
+
+    assert backend.submissions == []
+    assert len(backend.recoveries) == 1
+    source_execution, work_id, recovery_token = backend.recoveries[0]
+    assert source_execution == stage.work_id
+    assert work_id == stage.work_id
+    assert recovery_token.startswith("startup_recovery_")
+    assert work.get_execution_id(stage.work_id) == (
+        f"{stage.work_id}__retry_{recovery_token}"
+    )
 
 
 def test_independent_changes_can_have_ready_research_workitems_in_parallel(
@@ -210,6 +251,82 @@ def test_changed_architecture_cannot_verify_completed_old_development(tmp_path) 
     assert new_development.work_id != development.work_id
     assert not changes.work_admitted(development.work_id)
     assert changes.work_admitted(new_development.work_id)
+
+
+def test_development_can_reopen_governed_architecture_research(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Build media adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"v": 1, "transport": "initial"},
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+    )
+    coordinator.reconcile(change.change_id)
+    development = next(
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "development"
+    )
+
+    reopened = changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="Dependency graph changed after verification.",
+    )
+
+    assert reopened.state is ChangeState.RESEARCHING
+
+    replayed = changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="Replay after a process interruption.",
+    )
+    assert replayed == reopened
+    revision_requests = changes.list_artifacts(
+        change.change_id,
+        kind="architecture_revision_request",
+    )
+    assert len(revision_requests) == 1
+
+    coordinator.reconcile(change.change_id)
+    research_stages = [
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ]
+    assert [stage.attempt for stage in research_stages] == [1, 2]
+    replacement = work.require(research_stages[-1].work_id)
+    assert "Dependency graph changed after verification." in replacement.request
+    assert replacement.work_id != research.work_id
+    revision = changes.latest_artifact(
+        change.change_id,
+        "architecture_revision_request",
+    )
+    assert revision is not None
+    assert (
+        revision.payload["previous_architecture_artifact_id"]
+        == architecture.artifact_id
+    )
+    assert revision.payload["source_attempt"] == 2
 
 
 def test_failed_research_is_recorded_without_starting_development(tmp_path) -> None:

@@ -7,6 +7,11 @@ import pytest
 
 import jarvis.dev_supervisor as supervisor
 from jarvis.dev_supervisor import DevSupervisorConfig, _config_from_environment
+from jarvis.work.shutdown import (
+    DBOS_WORKFLOW_DRAIN_TIMEOUT_SECONDS,
+    SUPERVISOR_GRACE_MARGIN_SECONDS,
+    SUPERVISOR_SIGNAL_SHUTDOWN_TIMEOUT_SECONDS,
+)
 
 
 def test_supervisor_config_rejects_invalid_values() -> None:
@@ -62,6 +67,71 @@ def test_environment_config_allows_explicit_development_branch(
 
 def test_supervisor_startup_timeout_allows_heavy_hardware_initialization() -> None:
     assert DevSupervisorConfig().startup_timeout_seconds == 120.0
+
+
+def test_supervisor_graceful_shutdown_covers_durable_dbos_drain() -> None:
+    config = DevSupervisorConfig()
+
+    assert config.shutdown_timeout_seconds == (
+        DBOS_WORKFLOW_DRAIN_TIMEOUT_SECONDS + SUPERVISOR_GRACE_MARGIN_SECONDS
+    )
+    assert config.shutdown_timeout_seconds > DBOS_WORKFLOW_DRAIN_TIMEOUT_SECONDS
+
+
+def test_signal_fallback_stays_bounded_after_graceful_shutdown_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    waits: list[float] = []
+
+    class FakeProcess:
+        pid = 41
+
+        def __init__(self) -> None:
+            self.wait_calls = 0
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout: float) -> None:
+            waits.append(timeout)
+            self.wait_calls += 1
+            if self.wait_calls < 3:
+                raise supervisor.subprocess.TimeoutExpired("jarvis", timeout)
+
+        def send_signal(self, _signal_value) -> None:
+            return None
+
+        def kill(self) -> None:
+            return None
+
+    class FakeControl:
+        def request_shutdown(self) -> bool:
+            return True
+
+        def child_stopped(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        supervisor,
+        "_snapshot_runtime_process_tree",
+        lambda _pid: (),
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_force_cleanup_runtime",
+        lambda *_args, **_kwargs: (False, 0),
+    )
+    monkeypatch.setattr(supervisor, "os", SimpleNamespace(name="posix"))
+
+    config = DevSupervisorConfig()
+    supervisor._stop_jarvis(
+        FakeProcess(),  # type: ignore[arg-type]
+        timeout_seconds=config.shutdown_timeout_seconds,
+        control=FakeControl(),  # type: ignore[arg-type]
+    )
+
+    assert waits[0] == config.shutdown_timeout_seconds
+    assert waits[1] == SUPERVISOR_SIGNAL_SHUTDOWN_TIMEOUT_SECONDS
 
 
 def test_wait_for_child_ready_requires_explicit_runtime_ready(

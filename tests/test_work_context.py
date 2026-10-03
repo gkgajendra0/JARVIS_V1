@@ -169,6 +169,34 @@ def test_shadow_mode_keeps_legacy_payload_and_apply_uses_context_pack() -> None:
     assert report.reduction_percent > 0
 
 
+def test_apply_context_falls_back_when_optimized_payload_is_larger() -> None:
+    work = _work()
+    steps = (
+        _completed_step(
+            work,
+            "dev_status",
+            observation={"state": "running"},
+        ),
+    )
+    pack = WorkContextAssembler().build(work=work, steps=steps)
+    apply_request = BrainRequest(
+        work=work,
+        recent_steps=steps,
+        purpose="choose the next bounded step",
+        allowed_actions=(_action(),),
+        context_pack=pack,
+        context_mode=WorkContextMode.APPLY,
+    )
+    legacy_request = BrainRequest(
+        work=work,
+        recent_steps=steps,
+        purpose="choose the next bounded step",
+        allowed_actions=(_action(),),
+    )
+
+    assert _work_input_payload(apply_request) == _work_input_payload(legacy_request)
+
+
 def test_context_decision_equivalence_requires_all_safety_fields_to_match() -> None:
     legacy = BrainDecision(
         action="dev_status",

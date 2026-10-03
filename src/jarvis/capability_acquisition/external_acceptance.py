@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.engineering_substrate.hardware_acceptance import HardwareAcceptanceService
 from jarvis.work.brain import BrainAction
 from jarvis.work.engine import WorkOwnerInputRequired
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkItem,
@@ -369,14 +371,18 @@ class ExternalAcceptanceCoordinator:
         )
         if existing is not None:
             if not existing.state.terminal:
-                execution_id = self._backend.submit(
-                    existing.work_id,
-                    priority=existing.priority,
-                )
-                if execution_id != existing.work_id:
-                    raise ExternalAcceptanceError(
-                        "external acceptance backend returned mismatched identity"
+                try:
+                    ensure_durable_execution(
+                        store=self._changes.work,
+                        backend=self._backend,
+                        item=existing,
                     )
+                except RuntimeError as exc:
+                    if "durable backend must use work_id as execution_id" in str(exc):
+                        raise ExternalAcceptanceError(
+                            "external acceptance backend returned mismatched identity"
+                        ) from exc
+                    raise
             return existing
 
         goal = goal_from_payload(goal_artifact.payload)
@@ -443,16 +449,25 @@ class ExternalAcceptanceCoordinator:
                 ),
             },
         )
-        execution_id = self._backend.submit(item.work_id, priority=item.priority)
-        if execution_id != item.work_id:
-            failed = item.transition(
-                WorkState.FAILED,
-                status_detail="external acceptance backend returned mismatched identity",
+        try:
+            ensure_durable_execution(
+                store=self._changes.work,
+                backend=self._backend,
+                item=item,
             )
-            self._changes.work.save(failed, expected_version=item.version)
-            raise ExternalAcceptanceError(
-                "external acceptance backend returned mismatched identity"
-            )
+        except RuntimeError as exc:
+            if "durable backend must use work_id as execution_id" in str(exc):
+                failed = item.transition(
+                    WorkState.FAILED,
+                    status_detail=(
+                        "external acceptance backend returned mismatched identity"
+                    ),
+                )
+                self._changes.work.save(failed, expected_version=item.version)
+                raise ExternalAcceptanceError(
+                    "external acceptance backend returned mismatched identity"
+                ) from exc
+            raise
         return item
 
 
@@ -809,7 +824,8 @@ class ExternalAcceptanceInvokeExecutor:
             field="authority_session_id",
             limit=180,
         )
-        result = self._runtime.execute_operation(
+        result = await asyncio.to_thread(
+            self._runtime.execute_operation,
             session_id=authority_session_id,
             operation=operation,
             parameters=invoke_parameters,

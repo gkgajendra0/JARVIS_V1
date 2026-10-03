@@ -21,6 +21,33 @@ class WorkToolGroundingError(ValueError):
     pass
 
 
+def _bound_gate_conflict_payload(
+    reason: str,
+    gate_id: str,
+) -> dict[str, object] | None:
+    if reason == "no accepted owner turn":
+        return {
+            "ok": False,
+            "status": "awaiting_owner_turn",
+            "gate_id": gate_id,
+            "message": (
+                "No canonical owner decision has been accepted yet. "
+                "Keep listening and do not report an internal error."
+            ),
+        }
+    if reason == "owner must explicitly identify the current gate":
+        return {
+            "ok": False,
+            "status": "awaiting_explicit_decision",
+            "gate_id": gate_id,
+            "message": (
+                "The latest owner turn did not contain an explicit "
+                "approve/reject decision. Ask again naturally."
+            ),
+        }
+    return None
+
+
 def _public_work(item: WorkItem, runtime: WorkRuntime) -> dict[str, object]:
     estimate = estimate_work(runtime.store, item)
     completion_notification_expected = item.delivery_policy is not DeliveryPolicy.SILENT
@@ -59,6 +86,8 @@ class WorkAgentTools:
         *,
         bound_owner_input_work_id: str | None = None,
         on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
+        bound_change_gate_id: str | None = None,
+        on_bound_change_gate_decided: Callable[[bool], None] | None = None,
         allow_capability_acquisition: bool = True,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
@@ -70,6 +99,14 @@ class WorkAgentTools:
         self._conversation = conversation
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
+        normalized_bound_gate_id = str(bound_change_gate_id or "").strip() or None
+        if (
+            normalized_bound_gate_id is not None
+            and not normalized_bound_gate_id.startswith("gate_")
+        ):
+            raise ValueError("bound_change_gate_id must be an exact gate ID")
+        self._bound_change_gate_id = normalized_bound_gate_id
+        self._on_bound_change_gate_decided = on_bound_change_gate_decided
         if not isinstance(allow_capability_acquisition, bool):
             raise TypeError("allow_capability_acquisition must be bool")
         self._allow_capability_acquisition = allow_capability_acquisition
@@ -142,7 +179,8 @@ class WorkAgentTools:
             }
         target_work_id = focused_work_id or requested_work_id or None
         try:
-            item = self._runtime.retry_failed_work(
+            item = await asyncio.to_thread(
+                self._runtime.retry_failed_work,
                 target_work_id,
                 owner_request=turn.text,
                 source_session_id=self._conversation.session_id,
@@ -156,11 +194,11 @@ class WorkAgentTools:
                 "status": "retry_target_unresolved",
                 "reason": str(exc),
             }
-        self._runtime.set_owner_work_focus(item.work_id)
+        await self._set_owner_work_focus(item.work_id)
         return {
             "ok": True,
             "status": "retrying",
-            **_public_work(item, self._runtime),
+            **(await self._public_work_async(item)),
             "canonical_user_turn_id": turn.turn_id,
             "truth_note": (
                 "retry continues the same canonical work and preserved evidence; "
@@ -183,7 +221,8 @@ class WorkAgentTools:
         """
         del context
         try:
-            item = self._runtime.configure_status_updates(
+            item = await asyncio.to_thread(
+                self._runtime.configure_status_updates,
                 work_id or None,
                 interval_minutes=interval_minutes,
             )
@@ -242,10 +281,14 @@ class WorkAgentTools:
             source_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
-        admission = coordinator.admit(
-            goal,
-            source_revision=self._runtime.current_source_revision(),
-        )
+
+        def admit_capability():
+            return coordinator.admit(
+                goal,
+                source_revision=self._runtime.current_source_revision(),
+            )
+
+        admission = await asyncio.to_thread(admit_capability)
         selected = admission.initial_resolution.selected_candidate
         result: dict[str, object] = {
             "ok": True,
@@ -309,7 +352,7 @@ class WorkAgentTools:
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
-        self._runtime.refresh_capability_catalog()
+        await asyncio.to_thread(self._runtime.refresh_capability_catalog)
         acceptance = self._runtime.capability_external_acceptance
         acceptance_work = (
             None
@@ -364,7 +407,7 @@ class WorkAgentTools:
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
-        self._runtime.refresh_capability_catalog()
+        await asyncio.to_thread(self._runtime.refresh_capability_catalog)
         return {
             "ok": True,
             "status": "disabled",
@@ -383,6 +426,12 @@ class WorkAgentTools:
             raise WorkToolGroundingError("engineering changes are unavailable")
         return ChangeService(self._runtime.changes, self._conversation)
 
+    async def _public_work_async(self, item: WorkItem) -> dict[str, object]:
+        return await asyncio.to_thread(_public_work, item, self._runtime)
+
+    async def _set_owner_work_focus(self, work_id: str | None) -> None:
+        await asyncio.to_thread(self._runtime.set_owner_work_focus, work_id)
+
     @function_tool()
     async def start_engineering_change(self, context: RunContext) -> dict[str, object]:
         """Start a governed engineering change from the latest accepted USER goal.
@@ -391,7 +440,10 @@ class WorkAgentTools:
         verification and explicit owner gates. Do not paraphrase the owner's request.
         """
         del context
-        change = self._change_service().start(self._latest_user_turn())
+        change = await asyncio.to_thread(
+            self._change_service().start,
+            self._latest_user_turn(),
+        )
         return {"ok": True, "change_id": change.change_id, "state": change.state.value}
 
     @function_tool()
@@ -407,8 +459,10 @@ class WorkAgentTools:
         summary = architecture_summary.strip()
         if not summary:
             raise ChangeConflict("architecture summary is empty")
-        gate = self._change_service().propose_architecture(
-            change_id, {"summary": summary}
+        gate = await asyncio.to_thread(
+            self._change_service().propose_architecture,
+            change_id,
+            {"summary": summary},
         )
         return {
             "ok": True,
@@ -431,8 +485,10 @@ class WorkAgentTools:
         summary = architecture_summary.strip()
         if not summary:
             raise ChangeConflict("architecture summary is empty")
-        gate = self._change_service().revise_architecture(
-            change_id, {"summary": summary}
+        gate = await asyncio.to_thread(
+            self._change_service().revise_architecture,
+            change_id,
+            {"summary": summary},
         )
         return {
             "ok": True,
@@ -451,7 +507,10 @@ class WorkAgentTools:
         Only a completed development WorkItem with a verified commit is eligible.
         """
         del context
-        gate = self._change_service().prepare_acceptance(change_id)
+        gate = await asyncio.to_thread(
+            self._change_service().prepare_acceptance,
+            change_id,
+        )
         return {
             "ok": True,
             "change_id": change_id,
@@ -540,22 +599,49 @@ class WorkAgentTools:
     async def decide_change_gate(
         self, context: RunContext, gate_id: str
     ) -> dict[str, object]:
-        """Record the latest canonical owner's explicit 'approve gate_ID' or 'reject gate_ID'.
+        """Record the latest canonical owner's explicit change-gate decision.
 
-        Never call this from a generic yes, model-generated reply, WorkItem input,
-        or an earlier USER turn. The service independently checks the accepted turn.
+        Outside a proactive bound gate interaction, the owner must identify the
+        gate using the canonical decision grammar. Inside a session already bound
+        to one exact gate, natural wording is allowed only when the latest USER
+        turn still contains an explicit approve/reject decision. Bare yes/no and
+        unrelated language remain invalid. Strong owner verification and exact
+        artifact-digest binding are enforced independently by ChangeService.
         """
         del context
-        decision = await asyncio.to_thread(
-            self._change_service().decide_latest, gate_id
-        )
+        requested_gate_id = str(gate_id or "").strip()
+        bound_gate_id = self._bound_change_gate_id
+        if bound_gate_id is not None and requested_gate_id != bound_gate_id:
+            return {
+                "ok": False,
+                "status": "change_gate_target_mismatch",
+                "requested_gate_id": requested_gate_id,
+                "bound_gate_id": bound_gate_id,
+            }
+        target_gate_id = bound_gate_id or requested_gate_id
+        try:
+            decision = await asyncio.to_thread(
+                self._change_service().decide_latest,
+                target_gate_id,
+                bound_gate_id=bound_gate_id,
+            )
+        except ChangeConflict as exc:
+            payload = _bound_gate_conflict_payload(str(exc), target_gate_id)
+            if payload is not None:
+                return payload
+            raise
+        if bound_gate_id is not None and self._on_bound_change_gate_decided is not None:
+            self._on_bound_change_gate_decided(decision.approved)
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
-            "gate_id": gate_id,
+            "gate_id": target_gate_id,
             "approved": decision.approved,
-            "state": self._runtime.changes.store.require(
-                decision.challenge.change_id
+            "state": (
+                await asyncio.to_thread(
+                    self._runtime.changes.store.require,
+                    decision.challenge.change_id,
+                )
             ).state.value,
         }
 
@@ -568,24 +654,29 @@ class WorkAgentTools:
         coordinator = self._runtime.changes
         if coordinator is None:
             return {"ok": False, "status": "unavailable"}
-        change = coordinator.store.require(change_id)
-        stages: list[dict[str, object]] = []
-        for stage in coordinator.store.list_stages(change_id):
-            item = coordinator.store.work.require(stage.work_id)
-            estimate = estimate_work(coordinator.store.work, item)
-            stages.append(
-                {
-                    "stage": stage.stage_key,
-                    "attempt": stage.attempt,
-                    "work_id": stage.work_id,
-                    "work_state": item.state.value,
-                    "progress_percent": estimate.progress_percent,
-                    "progress_is_approximate": estimate.progress_is_approximate,
-                    "eta_low_seconds": estimate.eta_low_seconds,
-                    "eta_high_seconds": estimate.eta_high_seconds,
-                    "eta_confidence": estimate.eta_confidence,
-                }
-            )
+
+        def load_change_status():
+            change = coordinator.store.require(change_id)
+            stages: list[dict[str, object]] = []
+            for stage in coordinator.store.list_stages(change_id):
+                item = coordinator.store.work.require(stage.work_id)
+                estimate = estimate_work(coordinator.store.work, item)
+                stages.append(
+                    {
+                        "stage": stage.stage_key,
+                        "attempt": stage.attempt,
+                        "work_id": stage.work_id,
+                        "work_state": item.state.value,
+                        "progress_percent": estimate.progress_percent,
+                        "progress_is_approximate": estimate.progress_is_approximate,
+                        "eta_low_seconds": estimate.eta_low_seconds,
+                        "eta_high_seconds": estimate.eta_high_seconds,
+                        "eta_confidence": estimate.eta_confidence,
+                    }
+                )
+            return change, stages
+
+        change, stages = await asyncio.to_thread(load_change_status)
         return {
             "ok": True,
             "change_id": change_id,
@@ -662,7 +753,8 @@ class WorkAgentTools:
                 ),
                 "canonical_user_turn_id": turn.turn_id,
             }
-        submission = self._runtime.orchestrator.start(
+        submission = await asyncio.to_thread(
+            self._runtime.orchestrator.start,
             request=turn.text,
             work_type=resolved_type,
             source_session_id=self._conversation.session_id,
@@ -673,7 +765,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "accepted",
-            **_public_work(submission.work, self._runtime),
+            **(await self._public_work_async(submission.work)),
             "canonical_user_turn_id": turn.turn_id,
             "truth_note": (
                 "accepted means durable work was queued; do not claim completion until "
@@ -699,30 +791,35 @@ class WorkAgentTools:
         or just-completed background task is not incorrectly described as if no task existed.
         """
         del context
-        items = self._runtime.orchestrator.list_active(limit=50)
+        items = await asyncio.to_thread(
+            self._runtime.orchestrator.list_active,
+            limit=50,
+        )
         payload: dict[str, object] = {
             "ok": True,
             "status": "listed",
-            "work": [_public_work(item, self._runtime) for item in items],
+            "work": [await self._public_work_async(item) for item in items],
         }
         if len(items) == 1:
-            self._runtime.set_owner_work_focus(items[0].work_id)
+            await self._set_owner_work_focus(items[0].work_id)
         elif items:
-            self._runtime.set_owner_work_focus(None)
+            await self._set_owner_work_focus(None)
         else:
-            recent = self._runtime.store.list_recent(limit=1)
+            recent = await asyncio.to_thread(
+                self._runtime.store.list_recent,
+                limit=1,
+            )
             if recent and recent[0].state.terminal:
-                self._runtime.set_owner_work_focus(recent[0].work_id)
-                payload["recent_terminal_work"] = _public_work(
+                await self._set_owner_work_focus(recent[0].work_id)
+                payload["recent_terminal_work"] = await self._public_work_async(
                     recent[0],
-                    self._runtime,
                 )
                 payload["truth_note"] = (
                     "no work is currently active; report the recent terminal work "
                     "instead of saying no background task existed"
                 )
             else:
-                self._runtime.set_owner_work_focus(None)
+                await self._set_owner_work_focus(None)
         return payload
 
     @function_tool()
@@ -736,15 +833,18 @@ class WorkAgentTools:
         wants both active and recently terminal work.
         """
         del context
-        items = self._runtime.store.list_recent(limit=50)
+        items = await asyncio.to_thread(
+            self._runtime.store.list_recent,
+            limit=50,
+        )
         if len(items) == 1:
-            self._runtime.set_owner_work_focus(items[0].work_id)
+            await self._set_owner_work_focus(items[0].work_id)
         else:
-            self._runtime.set_owner_work_focus(None)
+            await self._set_owner_work_focus(None)
         return {
             "ok": True,
             "status": "listed",
-            "work": [_public_work(item, self._runtime) for item in items],
+            "work": [await self._public_work_async(item) for item in items],
         }
 
     @function_tool()
@@ -763,11 +863,14 @@ class WorkAgentTools:
         """
         del context
         try:
-            item = self._runtime.orchestrator.get(work_id)
+            item = await asyncio.to_thread(
+                self._runtime.orchestrator.get,
+                work_id,
+            )
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
-        self._runtime.set_owner_work_focus(item.work_id)
-        return {"ok": True, "status": "found", **_public_work(item, self._runtime)}
+        await self._set_owner_work_focus(item.work_id)
+        return {"ok": True, "status": "found", **(await self._public_work_async(item))}
 
     @function_tool()
     async def cancel_background_work(
@@ -804,7 +907,10 @@ class WorkAgentTools:
                 "reason": "cancel requires an exact work_id outside bound owner input",
             }
         try:
-            item = self._runtime.orchestrator.cancel(target_work_id)
+            item = await asyncio.to_thread(
+                self._runtime.orchestrator.cancel,
+                target_work_id,
+            )
         except WorkStoreError:
             return {
                 "ok": False,
@@ -819,7 +925,11 @@ class WorkAgentTools:
             # resolves the pending owner-attention dependency just as definitively
             # as supplying an answer, without submitting fake owner input to DBOS.
             self._on_bound_owner_input_submitted(item)
-        return {"ok": True, "status": "cancelled", **_public_work(item, self._runtime)}
+        return {
+            "ok": True,
+            "status": "cancelled",
+            **(await self._public_work_async(item)),
+        }
 
     @function_tool()
     async def pause_background_work(
@@ -830,7 +940,10 @@ class WorkAgentTools:
         """Pause one non-terminal JARVIS WorkItem after any current atomic step."""
         del context
         try:
-            item = self._runtime.orchestrator.pause(work_id)
+            item = await asyncio.to_thread(
+                self._runtime.orchestrator.pause,
+                work_id,
+            )
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
@@ -839,7 +952,7 @@ class WorkAgentTools:
                 "status": "owner_input_target_unresolved",
                 "reason": str(exc),
             }
-        return {"ok": True, "status": "paused", **_public_work(item, self._runtime)}
+        return {"ok": True, "status": "paused", **(await self._public_work_async(item))}
 
     @function_tool()
     async def resume_background_work(
@@ -850,12 +963,19 @@ class WorkAgentTools:
         """Resume one paused JARVIS WorkItem from canonical durable state."""
         del context
         try:
-            item = self._runtime.orchestrator.resume(work_id)
+            item = await asyncio.to_thread(
+                self._runtime.orchestrator.resume,
+                work_id,
+            )
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
             return {"ok": False, "status": "invalid_state", "reason": str(exc)}
-        return {"ok": True, "status": "resumed", **_public_work(item, self._runtime)}
+        return {
+            "ok": True,
+            "status": "resumed",
+            **(await self._public_work_async(item)),
+        }
 
     @function_tool()
     async def reprioritize_background_work(
@@ -886,7 +1006,11 @@ class WorkAgentTools:
                 "allowed": list(mapping),
             }
         try:
-            item = self._runtime.orchestrator.reprioritize(work_id, selected)
+            item = await asyncio.to_thread(
+                self._runtime.orchestrator.reprioritize,
+                work_id,
+                selected,
+            )
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
@@ -894,7 +1018,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "reprioritized",
-            **_public_work(item, self._runtime),
+            **(await self._public_work_async(item)),
         }
 
     @function_tool()
@@ -910,7 +1034,10 @@ class WorkAgentTools:
         this tool to one exact WorkItem; in that mode an omitted work_id resolves to the
         bound item and any attempt to target a different item fails closed. The actual
         response is always grounded from the canonical USER turn, never from
-        model-generated hidden text.
+        model-generated hidden text. After success, only confirm that the owner's
+        response was recorded and the waiting work will continue. Never claim that a
+        downstream architecture, acceptance, promotion, or other approval gate was
+        approved unless that separate exact gate was actually decided.
         """
         del context
         turn = self._latest_user_turn()
@@ -929,7 +1056,11 @@ class WorkAgentTools:
             }
         target_work_id = requested_work_id or bound_work_id
         try:
-            waiting = self._runtime.submit_owner_input(target_work_id, turn.text)
+            waiting = await asyncio.to_thread(
+                self._runtime.submit_owner_input,
+                target_work_id,
+                turn.text,
+            )
         except WorkStoreError:
             return {
                 "ok": False,
@@ -950,6 +1081,10 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "owner_input_submitted",
-            **_public_work(waiting, self._runtime),
+            **(await self._public_work_async(waiting)),
             "canonical_user_turn_id": turn.turn_id,
+            "acknowledgement_constraint": (
+                "Confirm only that the owner response was recorded and the waiting "
+                "work will continue. Do not claim any downstream approval gate passed."
+            ),
         }

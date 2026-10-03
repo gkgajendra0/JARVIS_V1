@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -364,7 +365,10 @@ class DiagnosticRetrieveKnowledgeExecutor:
         for revision_id in context.knowledge_revision_ids:
             row: dict[str, object] = {"revision_id": revision_id}
             if self._reader is not None:
-                detail = self._reader.read_revision(revision_id)
+                detail = await asyncio.to_thread(
+                    self._reader.read_revision,
+                    revision_id,
+                )
                 if detail is not None:
                     row["detail"] = detail
             rows.append(row)

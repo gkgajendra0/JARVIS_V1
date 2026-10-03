@@ -72,6 +72,10 @@ from jarvis.promotion.release import (
     load_active_release_for_startup,
 )
 from jarvis.promotion.runtime_composition import PromotionRuntimeConfig
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.provider_model_lifecycle import (
     GEMINI_REALTIME_MODEL_SETTING,
     GeminiLiveLifecycleResult,
@@ -436,6 +440,8 @@ def build_production_voice_runtime(
         projection=None if package_stack is None else package_stack.projection,
     )
 
+    provider_circuit_registry = BackgroundProviderCircuitRegistry()
+
     work_runtime = None
     if config.work_orchestration_enabled:
         deployment_metadata = DeploymentMetadataStore(default_deployment_root())
@@ -453,6 +459,8 @@ def build_production_voice_runtime(
             model=config.work_orchestration_model,
             chatgpt_plan_enabled=config.chatgpt_plan_enabled,
             chatgpt_plan_model=config.chatgpt_plan_model,
+            paid_fallback_enabled=config.work_paid_fallback_enabled,
+            provider_circuit_registry=provider_circuit_registry,
             global_brain_router_mode=config.global_brain_router_mode,
             global_concurrency=config.work_global_concurrency,
             acquisition_candidate_advisor=acquisition_candidate_advisor,
@@ -488,11 +496,13 @@ def build_production_voice_runtime(
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
-            "brain_router_mode=%s dev_sandbox=%s canonical_store=True durable_backend=DBOS "
+            "brain_router_mode=%s paid_fallback=%s dev_sandbox=%s "
+            "canonical_store=True durable_backend=DBOS "
             "capability_acquisition_live_catalog=True",
             config.ai_provider,
             config.work_global_concurrency,
             config.global_brain_router_mode,
+            config.work_paid_fallback_enabled,
             bool(config.development_test_docker_image),
         )
 
@@ -549,6 +559,27 @@ def build_production_voice_runtime(
             )
             gicc_shadow_interpreter = None
             gicc_goal_store = None
+
+    memory_candidate_circuit = (
+        None
+        if candidate_extractor is None
+        else provider_circuit_registry.circuit(
+            provider_circuit_key(
+                provider=candidate_extractor.provider_name,
+                model=candidate_extractor.model_name,
+            )
+        )
+    )
+    gicc_shadow_circuit = (
+        None
+        if gicc_shadow_interpreter is None
+        else provider_circuit_registry.circuit(
+            provider_circuit_key(
+                provider=gicc_shadow_interpreter.provider_name,
+                model=gicc_shadow_interpreter.model_name,
+            )
+        )
+    )
 
     provider_resilience_state = ProviderResilienceState()
     provider_health_observer = (
@@ -642,6 +673,7 @@ def build_production_voice_runtime(
             candidate_runtime = MemoryCandidateSessionRuntime(
                 conversation=bridge.conversation,
                 extractor=candidate_extractor,
+                provider_circuit=memory_candidate_circuit,
             )
             bridge.add_accepted_turn_observer(candidate_runtime.observe_turn)
             bridge.add_close_observer(candidate_runtime.close)
@@ -650,6 +682,7 @@ def build_production_voice_runtime(
                 conversation=bridge.conversation,
                 interpreter=gicc_shadow_interpreter,
                 store=gicc_goal_store,
+                provider_circuit=gicc_shadow_circuit,
             )
             bridge.add_accepted_turn_observer(gicc_shadow_runtime.observe_turn)
             bridge.add_close_observer(gicc_shadow_runtime.close)

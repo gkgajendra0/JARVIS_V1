@@ -211,7 +211,7 @@ def test_active_states_consume_reasoning_budget(state: WorkState) -> None:
 def test_waiting_resource_delay_honors_provider_backoff_and_defaults() -> None:
     assert _waiting_resource_delay({}) == 0.25
     assert _waiting_resource_delay({"retry_after_seconds": 5.0}) == 5.0
-    assert _waiting_resource_delay({"retry_after_seconds": 120.0}) == 60.0
+    assert _waiting_resource_delay({"retry_after_seconds": 120.0}) == 120.0
     assert _waiting_resource_delay({"retry_after_seconds": "bad"}) == 0.25
 
 
@@ -323,3 +323,8 @@ def test_dbos_shutdown_forwards_bounded_workflow_drain_timeout(
 def test_dbos_shutdown_rejects_invalid_drain_timeout() -> None:
     with pytest.raises(ValueError, match="workflow completion timeout"):
         shutdown_dbos_work_runtime(workflow_completion_timeout_sec=-1)
+
+
+def test_waiting_resource_preserves_long_provider_cooldown() -> None:
+    assert _waiting_resource_delay({"retry_after_seconds": 1800.0}) == 1800.0
+    assert _waiting_resource_delay({"retry_after_seconds": 21600.0}) == 21600.0

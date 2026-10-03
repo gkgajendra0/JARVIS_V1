@@ -211,6 +211,7 @@ class _RetryStore:
             state=WorkState.RETRYING,
             priority=WorkPriority.HIGH,
             work_type=WorkType.GENERIC,
+            version=4,
         )
         self.execution_id = "work-retry__retry_v4"
 

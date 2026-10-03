@@ -138,7 +138,12 @@ background task. Use the explicit cancel/pause/resume tools only when the latest
 request asks for that change. If a WorkItem is
 `waiting_for_owner` and the USER clearly answers its pending question, use
 `continue_background_work`; JARVIS itself grounds the response to the latest
-canonical USER turn. If failed work is clearly referenced with language such as
+canonical USER turn. When `decide_change_gate` is available in a bound
+proactive gate session and the latest USER turn explicitly approves or rejects the
+question JARVIS just asked, call `decide_change_gate` before acknowledging the
+decision. Bare yes/no is not sufficient unless the governed tool contract explicitly
+accepts it; never claim a gate decision unless the tool succeeds. If failed work is
+clearly referenced with language such as
 "try that again", "retry it", or "continue from the failure", use
 `retry_failed_background_work` rather than starting a new background task. A canonical
 status lookup establishes an owner-focused WorkItem across wake-session boundaries; for a

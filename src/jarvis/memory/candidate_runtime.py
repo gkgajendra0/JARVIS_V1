@@ -11,6 +11,7 @@ from jarvis.memory.candidates import (
     MemoryCandidateExtractor,
     MemoryCandidateQuarantine,
 )
+from jarvis.provider_circuit import BackgroundProviderCircuit
 
 LOGGER = logging.getLogger(__name__)
 _DEFAULT_DEFER_SECONDS = 5.0
@@ -25,6 +26,7 @@ class MemoryCandidateSessionRuntime:
         conversation: ConversationSession,
         extractor: MemoryCandidateExtractor,
         defer_seconds: float = _DEFAULT_DEFER_SECONDS,
+        provider_circuit: BackgroundProviderCircuit | None = None,
     ) -> None:
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
@@ -40,6 +42,7 @@ class MemoryCandidateSessionRuntime:
             quarantine=self._quarantine,
         )
         self._tasks: set[asyncio.Task[None]] = set()
+        self._provider_circuit = provider_circuit or BackgroundProviderCircuit()
         self._closed = False
 
     @property
@@ -63,6 +66,8 @@ class MemoryCandidateSessionRuntime:
 
         if self._closed or turn.role is not ConversationRole.USER:
             return
+        if not self._provider_circuit.allow_request():
+            return
         task = asyncio.create_task(
             self._process_turn(turn),
             name=f"jarvis-memory-candidate-{turn.turn_id[:8]}",
@@ -80,13 +85,28 @@ class MemoryCandidateSessionRuntime:
                 self._conversation,
                 turn,
             )
+            self._provider_circuit.record_success()
         except asyncio.CancelledError:
             raise
-        except Exception:
-            LOGGER.exception(
-                "Memory candidate shadow failed for turn %s; conversation is unaffected",
-                turn.turn_id,
-            )
+        except Exception as exc:
+            trip = self._provider_circuit.record_failure(exc)
+            if trip is not None:
+                LOGGER.warning(
+                    "Memory candidate shadow paused for provider pressure | turn_id=%s "
+                    "reason=%s status=%s retry_in=%.1fs attempts=%s "
+                    "conversation_unaffected=True",
+                    turn.turn_id,
+                    trip.reason,
+                    trip.status_code,
+                    trip.delay_seconds,
+                    trip.failed_attempts,
+                )
+            else:
+                LOGGER.exception(
+                    "Memory candidate shadow failed for turn %s; "
+                    "conversation is unaffected",
+                    turn.turn_id,
+                )
             return
         LOGGER.info(
             "Memory candidate shadow turn %s | outcome=%s | reason=%s | "
