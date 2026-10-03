@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -45,6 +46,32 @@ def _optional_git_revision(value: object | None, *, field: str) -> str | None:
     if value is None:
         return None
     return _git_revision(value, field=field)
+
+
+def _paths(
+    values: tuple[str, ...] | list[str],
+    *,
+    field: str,
+) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for value in values:
+        text = _text(value, field=field).replace("\\", "/")
+        posix = pathlib.PurePosixPath(text)
+        windows = pathlib.PureWindowsPath(text)
+        if (
+            posix.is_absolute()
+            or windows.is_absolute()
+            or bool(windows.drive)
+            or bool(windows.root)
+            or ".." in posix.parts
+            or text.startswith("-")
+            or posix.as_posix() in {"", "."}
+        ):
+            raise ValueError(f"{field} must be a safe repository-relative path")
+        normalized.append(posix.as_posix())
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{field} values must be unique")
+    return tuple(sorted(normalized))
 
 
 def _tokens(
@@ -133,6 +160,7 @@ class DevelopmentTicketV1:
     discovery_scopes: tuple[str, ...]
     research_evidence_refs: tuple[str, ...]
     repository_context_refs: tuple[str, ...]
+    writable_paths: tuple[str, ...]
     acceptance_criteria: tuple[str, ...]
     allowed_tools: tuple[str, ...]
     attempt: int
@@ -160,6 +188,7 @@ class DevelopmentTicketV1:
         discovery_scopes: tuple[str, ...] | list[str] = (),
         research_evidence_refs: tuple[str, ...] | list[str] = (),
         repository_context_refs: tuple[str, ...] | list[str] = (),
+        writable_paths: tuple[str, ...] | list[str] = (),
         attempt: int = 1,
     ) -> DevelopmentTicketV1:
         if type(attempt) is not int or attempt < 1:
@@ -223,6 +252,9 @@ class DevelopmentTicketV1:
                     field="repository_context_ref",
                 )
             ),
+            "writable_paths": list(
+                _paths(tuple(writable_paths), field="writable_path")
+            ),
             "acceptance_criteria": list(
                 _tokens(
                     tuple(acceptance_criteria),
@@ -263,6 +295,7 @@ class DevelopmentTicketV1:
             repository_context_refs=tuple(  # type: ignore[arg-type]
                 payload["repository_context_refs"]
             ),
+            writable_paths=tuple(payload["writable_paths"]),  # type: ignore[arg-type]
             acceptance_criteria=tuple(payload["acceptance_criteria"]),  # type: ignore[arg-type]
             allowed_tools=tuple(payload["allowed_tools"]),  # type: ignore[arg-type]
             attempt=attempt,
@@ -299,6 +332,7 @@ class DevelopmentTicketV1:
             repository_context_refs=tuple(  # type: ignore[arg-type]
                 payload["repository_context_refs"]
             ),
+            writable_paths=tuple(payload.get("writable_paths", ())),  # type: ignore[arg-type]
             acceptance_criteria=tuple(payload["acceptance_criteria"]),  # type: ignore[arg-type]
             allowed_tools=tuple(payload["allowed_tools"]),  # type: ignore[arg-type]
             attempt=int(payload["attempt"]),
@@ -329,6 +363,7 @@ class DevelopmentTicketV1:
             "discovery_scopes": list(self.discovery_scopes),
             "research_evidence_refs": list(self.research_evidence_refs),
             "repository_context_refs": list(self.repository_context_refs),
+            "writable_paths": list(self.writable_paths),
             "acceptance_criteria": list(self.acceptance_criteria),
             "allowed_tools": list(self.allowed_tools),
             "attempt": self.attempt,
