@@ -221,17 +221,64 @@ async def _run_decision_replay(
                 optimized_chars,
             )
         )
-        if len(prepared) >= max_cases:
+
+    ready_by_type = {
+        work_type.value: sum(
+            1 for item in prepared if item[0].work_type is work_type
+        )
+        for work_type in (WorkType.RESEARCH, WorkType.DEVELOPMENT)
+    }
+    selected = []
+    selected_ids: set[int] = set()
+
+    # First guarantee cross-stage coverage when the corpus contains both phases.
+    for required_type in (WorkType.RESEARCH, WorkType.DEVELOPMENT):
+        for index, item in enumerate(prepared):
+            if index in selected_ids or item[0].work_type is not required_type:
+                continue
+            selected.append(item)
+            selected_ids.add(index)
             break
+
+    # Prefer additional distinct WorkItems before taking another cycle from the same one.
+    selected_work_ids = {item[0].work_id for item in selected}
+    for index, item in enumerate(prepared):
+        if len(selected) >= max_cases:
+            break
+        if index in selected_ids or item[0].work_id in selected_work_ids:
+            continue
+        selected.append(item)
+        selected_ids.add(index)
+        selected_work_ids.add(item[0].work_id)
+
+    for index, item in enumerate(prepared):
+        if len(selected) >= max_cases:
+            break
+        if index in selected_ids:
+            continue
+        selected.append(item)
+        selected_ids.add(index)
+
+    prepared = selected[:max_cases]
+    selected_types = {item[0].work_type for item in prepared}
+    distinct_work_items = len({item[0].work_id for item in prepared})
+    representative_corpus = (
+        WorkType.RESEARCH in selected_types
+        and WorkType.DEVELOPMENT in selected_types
+        and distinct_work_items >= 2
+    )
 
     candidate_stats = {
         **candidate_stats,
         "same_model_candidates": len(candidates),
         "context_drift_cases": context_drift_cases,
         "non_reducing_cases": non_reducing_cases,
-        "replay_ready_cases": len(prepared),
+        "replay_ready_by_work_type": ready_by_type,
+        "selected_replay_cases": len(prepared),
+        "selected_distinct_work_items": distinct_work_items,
+        "representative_corpus_covered": representative_corpus,
     }
-    if len(prepared) < min_equivalent_cases:
+    if len(prepared) < min_equivalent_cases or not representative_corpus:
         return {
             "model": model,
             "requested_max_cases": max_cases,
@@ -241,6 +288,7 @@ async def _run_decision_replay(
             "mismatch_cases": 0,
             "all_replayed_cases_equivalent": False,
             "all_replayed_cases_reduced": False,
+            "representative_corpus_covered": representative_corpus,
             "c6_apply_decision_equivalence_proven": False,
             "production_routing_mutated": False,
             "actions_executed": False,
@@ -329,6 +377,7 @@ async def _run_decision_replay(
         len(cases) >= min_equivalent_cases
         and mismatch_count == 0
         and all_reduced
+        and representative_corpus
     )
     return {
         "model": model,
@@ -339,6 +388,7 @@ async def _run_decision_replay(
         "mismatch_cases": mismatch_count,
         "all_replayed_cases_equivalent": bool(cases) and mismatch_count == 0,
         "all_replayed_cases_reduced": all_reduced,
+        "representative_corpus_covered": representative_corpus,
         "c6_apply_decision_equivalence_proven": apply_equivalence_proven,
         "production_routing_mutated": False,
         "actions_executed": False,
