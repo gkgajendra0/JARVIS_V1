@@ -268,7 +268,7 @@ def test_raw_chatgpt_plan_subscription_limit_is_provider_pressure() -> None:
         provider="chatgpt_plan",
     )
 
-    assert failure.kind is ProviderFailureKind.RATE_LIMITED
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
 
 
 def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None:
