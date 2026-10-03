@@ -251,8 +251,7 @@ async def test_owner_input_spoken_prompt_redacts_internal_entity_identity() -> N
     answered = await controller._run_owner_input_interaction(
         work_id="work-tv",
         question=(
-            "Do you approve the target-bound adapter for "
-            "entity 80185cc24a9625821018?"
+            "Do you approve the target-bound adapter for entity 80185cc24a9625821018?"
         ),
     )
 
