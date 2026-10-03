@@ -81,7 +81,7 @@ def _sessions(tmp_path) -> DevelopmentSessionStore:
     return DevelopmentSessionStore(store)
 
 
-async def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
+@pytest.mark.asyncio\nasync def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
     coordinator = DevelopmentEngineCoordinator(
@@ -106,7 +106,7 @@ async def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
     assert engine.calls == 1
 
 
-async def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
+@pytest.mark.asyncio\nasync def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
     coordinator = DevelopmentEngineCoordinator(
@@ -130,7 +130,7 @@ async def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
     assert engine.calls == 2
 
 
-async def test_coordinator_can_serialize_expensive_engine_capacity(tmp_path) -> None:
+@pytest.mark.asyncio\nasync def test_coordinator_can_serialize_expensive_engine_capacity(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
     coordinator = DevelopmentEngineCoordinator(
