@@ -498,9 +498,7 @@ class DevelopmentSearchExecutor:
                     path.read_text(encoding="utf-8").splitlines(), 1
                 ):
                     if query in line and not _contains_secret(line):
-                        matches.append(
-                            f"{relative.as_posix()}:{number}:{line[:500]}"
-                        )
+                        matches.append(f"{relative.as_posix()}:{number}:{line[:500]}")
                         if len(matches) >= limit:
                             break
             except (OSError, UnicodeError):
