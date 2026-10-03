@@ -130,6 +130,8 @@ class JarvisConfig:
     autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
+    development_engine_enabled: bool = False
+    development_engine_model: str | None = None
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
@@ -202,6 +204,21 @@ class JarvisConfig:
 
         if not isinstance(self.chatgpt_plan_enabled, bool):
             raise TypeError("chatgpt_plan_enabled must be a bool")
+        if not isinstance(self.development_engine_enabled, bool):
+            raise TypeError("development_engine_enabled must be a bool")
+        if self.development_engine_enabled:
+            if not self.chatgpt_plan_enabled:
+                raise ValueError(
+                    "DevelopmentEngine requires JARVIS_CHATGPT_PLAN_ENABLED=true"
+                )
+            development_model = str(
+                self.development_engine_model or self.chatgpt_plan_model or ""
+            ).strip()
+            if not development_model:
+                raise ValueError(
+                    "DevelopmentEngine requires JARVIS_DEVELOPMENT_ENGINE_MODEL "
+                    "or JARVIS_CHATGPT_PLAN_MODEL"
+                )
 
         if not isinstance(self.tts_project_billing_isolation_verified, bool):
             raise TypeError("tts_project_billing_isolation_verified must be a bool")
@@ -499,6 +516,15 @@ class JarvisConfig:
             ),
             work_orchestration_model=_configured_optional_text(
                 "JARVIS_WORK_ORCHESTRATION_MODEL", machine
+            ),
+            development_engine_enabled=_configured_bool(
+                "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+                False,
+                machine,
+            ),
+            development_engine_model=_configured_optional_text(
+                "JARVIS_DEVELOPMENT_ENGINE_MODEL",
+                machine,
             ),
             global_brain_router_mode=_configured_required_text(
                 "JARVIS_GLOBAL_BRAIN_ROUTER_MODE",
