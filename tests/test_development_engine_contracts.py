@@ -12,6 +12,7 @@ from jarvis.development_engine import (
 
 def _ticket() -> DevelopmentTicketV1:
     return DevelopmentTicketV1.create(
+        request="Develop the approved capability.",
         work_id="work_demo",
         engineering_change_id="change_demo",
         goal_id="goal_demo",
@@ -33,6 +34,7 @@ def _ticket() -> DevelopmentTicketV1:
 def test_ticket_is_canonical_and_order_independent() -> None:
     left = _ticket()
     right = DevelopmentTicketV1.create(
+        request="Develop the approved capability.",
         work_id="work_demo",
         engineering_change_id="change_demo",
         goal_id="goal_demo",
@@ -58,6 +60,7 @@ def test_ticket_is_canonical_and_order_independent() -> None:
 def test_ticket_requires_bounded_tools_and_acceptance() -> None:
     with pytest.raises(ValueError, match="acceptance_criterion"):
         DevelopmentTicketV1.create(
+            request="Develop the approved capability.",
             work_id="work_demo",
             engineering_change_id="change_demo",
             goal_id="goal_demo",
@@ -73,6 +76,7 @@ def test_ticket_requires_bounded_tools_and_acceptance() -> None:
 
     with pytest.raises(ValueError, match="allowed_tool"):
         DevelopmentTicketV1.create(
+            request="Develop the approved capability.",
             work_id="work_demo",
             engineering_change_id="change_demo",
             goal_id="goal_demo",
