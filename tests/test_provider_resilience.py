@@ -382,3 +382,18 @@ def test_gemini_live_websocket_1011_is_retryable_provider_server_error() -> None
     assert failure.kind is ProviderFailureKind.PROVIDER_SERVER_ERROR
     assert failure.retryable is True
     assert "internal server error" in failure.spoken_message
+
+
+
+def test_subscription_sharing_limit_is_quota_exhaustion() -> None:
+    class SubscriptionLimit(RuntimeError):
+        status_code = 429
+
+    failure = classify_provider_failure(
+        SubscriptionLimit(
+            "subscription_sharing_usage_limit_exceeded: usage limit reached"
+        ),
+        provider="chatgpt_plan",
+    )
+
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
