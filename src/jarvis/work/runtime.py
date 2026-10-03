@@ -78,6 +78,7 @@ from jarvis.development_engine.phase9 import (
     Phase9DevelopmentControlPlaneDecider,
     Phase9DevelopmentEngineExecutor,
     Phase9DevelopmentTicketBuilder,
+    Phase9ResearchControlPlaneDecider,
     Phase9ResearchEvidenceExecutor,
     handle_phase9_model_owner_request,
     phase9_development_completion_guard,
@@ -854,9 +855,18 @@ def build_work_runtime(
             change_store=change_store,
         )
         actions = WorkActionRegistry((*executors, phase9_engine_executor))
-        control_plane_decider = Phase9DevelopmentControlPlaneDecider(
+        phase9_research_decider = Phase9ResearchControlPlaneDecider(
             phase9_ticket_builder
         )
+        phase9_development_decider = Phase9DevelopmentControlPlaneDecider(
+            phase9_ticket_builder
+        )
+
+        def control_plane_decider(work, available_actions, steps):
+            research = phase9_research_decider(work, available_actions, steps)
+            if research is not None:
+                return research
+            return phase9_development_decider(work, available_actions, steps)
     else:
         actions = base_actions
 
