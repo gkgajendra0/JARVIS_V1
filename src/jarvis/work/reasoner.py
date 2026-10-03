@@ -13,7 +13,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
-from jarvis.hands.provider_adapters import build_structured_output_client
+from jarvis.hands.provider_adapters import (
+    StructuredOutputClient,
+    StructuredOutputTelemetry,
+    build_structured_output_client,
+)
 from jarvis.model_routing.cost import estimate_usage_cost_usd
 from jarvis.model_routing.health import (
     HealthAction,
@@ -285,6 +289,23 @@ def _brain_decision(
     if decision.action is not None and decision.action not in allowed:
         raise ValueError("work reasoner selected an action outside the JARVIS catalog")
     return decision
+
+
+async def evaluate_structured_work_request(
+    client: StructuredOutputClient,
+    request: BrainRequest,
+) -> tuple[BrainDecision, StructuredOutputTelemetry]:
+    """Evaluate one Work request without routing persistence or action execution."""
+
+    result = await client.parse_with_telemetry(
+        system_prompt=_SYSTEM_PROMPT,
+        input_payload=_work_input_payload(request),
+        response_model=_WorkDecisionModel,
+    )
+    parsed = result.parsed
+    if not isinstance(parsed, _WorkDecisionModel):
+        raise TypeError("work reasoner returned unexpected response type")
+    return _brain_decision(request, parsed), result
 
 
 def _attempt_id(decision_id: str, ordinal: int) -> str:
