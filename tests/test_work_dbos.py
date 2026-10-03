@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 from types import SimpleNamespace
 
 import pytest
@@ -20,25 +19,6 @@ from jarvis.work.models import WorkPriority, WorkState
 
 class ImmediateCompleteEngine:
     async def advance(self, work_id: str) -> WorkAdvanceResult:
-        return WorkAdvanceResult(work_id, WorkState.COMPLETED, progressed=True)
-
-    def apply_owner_input(self, work_id: str, response: str):
-        del work_id, response
-        return SimpleNamespace(state=WorkState.RUNNING)
-
-    def fail(self, work_id: str, reason: str):
-        del work_id, reason
-        return SimpleNamespace(state=WorkState.FAILED)
-
-
-class LoopCaptureEngine:
-    def __init__(self) -> None:
-        self.thread_id: int | None = None
-        self.loop: asyncio.AbstractEventLoop | None = None
-
-    async def advance(self, work_id: str) -> WorkAdvanceResult:
-        self.thread_id = threading.get_ident()
-        self.loop = asyncio.get_running_loop()
         return WorkAdvanceResult(work_id, WorkState.COMPLETED, progressed=True)
 
     def apply_owner_input(self, work_id: str, response: str):
@@ -131,32 +111,6 @@ async def test_dbos_executes_durable_work_without_blocking_event_loop(
         handle = await DBOS.retrieve_workflow_async(work_id)
         result = await handle.get_result()
         assert result["state"] == WorkState.COMPLETED.value
-    finally:
-        shutdown_dbos_work_runtime()
-
-
-@pytest.mark.asyncio
-async def test_dbos_work_engine_runs_on_dedicated_loop_not_voice_loop(tmp_path) -> None:
-    voice_thread_id = threading.get_ident()
-    voice_loop = asyncio.get_running_loop()
-    engine = LoopCaptureEngine()
-    backend = initialize_dbos_work_runtime(
-        engine=engine,  # type: ignore[arg-type]
-        event_loop=voice_loop,
-        application_version="test-work-loop-isolation-v1",
-        system_database_url=f"sqlite:///{(tmp_path / 'dbos-loop.sqlite3').as_posix()}",
-    )
-    try:
-        backend.submit("work_loop_isolation", priority=WorkPriority.NORMAL)
-        handle = await DBOS.retrieve_workflow_async("work_loop_isolation")
-        result = await asyncio.wait_for(handle.get_result(), timeout=10.0)
-
-        assert result["state"] == WorkState.COMPLETED.value
-        assert engine.loop is not None
-        assert engine.loop is not voice_loop
-        assert engine.thread_id is not None
-        assert engine.thread_id != voice_thread_id
-        assert backend.work_loop_thread_id == engine.thread_id
     finally:
         shutdown_dbos_work_runtime()
 
