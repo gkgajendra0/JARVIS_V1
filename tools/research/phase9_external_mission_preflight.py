@@ -90,7 +90,9 @@ def run_preflight(
     development_model = str(
         config.development_engine_model or config.chatgpt_plan_model or ""
     ).strip()
-    _require(bool(development_model), "DevelopmentEngine coding model is not configured")
+    _require(
+        bool(development_model), "DevelopmentEngine coding model is not configured"
+    )
     _require(
         config.work_orchestration_enabled, "durable Work orchestration is disabled"
     )
@@ -125,8 +127,7 @@ def run_preflight(
         "production Work pool still contains a local LLM",
     )
     _require(
-        len(all_targets) == 1
-        and all_targets[0].provider_id == "chatgpt_plan",
+        len(all_targets) == 1 and all_targets[0].provider_id == "chatgpt_plan",
         "production Work pool must not contain an automatic paid-provider fallback",
     )
 
