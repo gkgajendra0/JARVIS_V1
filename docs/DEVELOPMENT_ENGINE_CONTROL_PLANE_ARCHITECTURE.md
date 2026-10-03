@@ -586,13 +586,16 @@ again.
 Owner-machine proof in a disposable isolated repo/worktree:
 
 1. use existing ChatGPT-plan authorization;
-2. start official Codex SDK;
-3. expose harmless JARVIS-style development tools;
-4. complete one bounded code task;
-5. restart JARVIS/Codex process;
-6. resume or reconstruct from canonical state;
-7. record exact model calls and token usage;
-8. prove no direct protected-main mutation or uncontrolled shell access.
+2. consult the same persistent app/account-scoped ChatGPT-plan subscription circuit used
+   by production and refuse to probe while a known quota cooldown remains;
+3. start the reviewed official Codex SDK only after zero-inference prerequisites pass;
+4. expose harmless JARVIS-style development tools;
+5. complete one bounded code task;
+6. restart JARVIS/Codex process;
+7. resume or reconstruct from canonical state;
+8. record exact model calls, token usage and final shared-circuit state;
+9. prove no direct protected-main mutation, uncontrolled shell access or automatic paid
+   fallback.
 
 ### D8 — Blind capability acceptance
 
@@ -702,7 +705,9 @@ Still intentionally pending:
   `shadow` until owner-machine corpus evidence shows the required safety-field
   equivalence and material context reduction.
 - D7 owner-machine Codex proof using the real ChatGPT-plan authorization and actual
-  local development sandbox.
+  local development sandbox. The proof now shares the persistent production subscription
+  circuit, so a known quota cooldown is a zero-inference preflight blocker rather than a
+  reason to probe repeatedly.
 - D8 blind natural-goal capability acceptance through promotion, explicit activation,
   real external effect/readback and GICC continuation.
 - a direct development static-check tool, only if wrapping the existing source-owned
