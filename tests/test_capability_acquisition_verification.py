@@ -663,6 +663,94 @@ def test_valid_candidate_binds_package_git_architecture_and_acceptance(
     assert store.require(change_id).state is ChangeState.WAITING_OWNER_ACCEPTANCE
 
 
+def test_development_engine_revision_reopens_phase9_research_end_to_end(
+    tmp_path: Path,
+    acquisition_repo: tuple[Path, str],
+) -> None:
+    repository_root, revision = acquisition_repo
+    (
+        work_store,
+        store,
+        coordinator,
+        _,
+        _,
+        change_id,
+        architecture,
+        development_work,
+    ) = _build_change(tmp_path, repository_root, revision)
+
+    engine_result = {
+        "ticket_id": "dev_ticket_revision",
+        "ticket_digest": "e" * 64,
+        "disposition": "needs_architecture_revision",
+        "engine_id": "codex_plan",
+        "engine_version": "0.160.0",
+        "summary": "Approved transport cannot satisfy the required operation.",
+        "reason": "Current transport lacks the required operation.",
+        "thread_id": "thread-revision",
+        "candidate_revision": None,
+        "changed_files": [],
+        "test_evidence_refs": [],
+        "evidence_refs": ["owner-goal"],
+        "requested_dependencies": [],
+        "blocker_code": None,
+        "usage": None,
+        "contract_version": 1,
+    }
+    engine_step = _completed_step(
+        development_work.work_id,
+        "dev_engine_execute",
+        observation={
+            "ticket_id": "dev_ticket_revision",
+            "ticket_digest": "e" * 64,
+            "reasoning_fingerprint": "f" * 64,
+            "reasoning_reused": False,
+            "development_result": engine_result,
+        },
+    )
+    work_store.add_step(engine_step)
+    running = work_store.save(
+        development_work.transition(WorkState.RUNNING),
+        expected_version=development_work.version,
+    )
+    work_store.save(
+        running.transition(
+            WorkState.COMPLETED,
+            result={
+                "summary": engine_result["summary"],
+                "development_engine": engine_result,
+                "development_ticket_id": "dev_ticket_revision",
+                "development_ticket_digest": "e" * 64,
+            },
+        ),
+        expected_version=running.version,
+    )
+
+    reopened = coordinator.reconcile_for_work(development_work.work_id)
+
+    assert reopened is not None
+    assert reopened.state is ChangeState.RESEARCHING
+    revision_request = store.latest_artifact(
+        change_id,
+        "architecture_revision_request",
+    )
+    assert revision_request is not None
+    assert (
+        revision_request.payload["previous_architecture_artifact_id"]
+        == architecture.artifact_id
+    )
+    outcome = store.latest_artifact(change_id, "development_engine_outcome")
+    assert outcome is not None
+    assert outcome.payload["engine_step_id"] == engine_step.step_id
+    research_stages = [
+        stage
+        for stage in store.list_stages(change_id)
+        if stage.stage_key
+        == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+    ]
+    assert [stage.attempt for stage in research_stages] == [1, 2]
+
+
 def test_core_source_package_fails_candidate_verification(
     tmp_path: Path,
     acquisition_repo: tuple[Path, str],
