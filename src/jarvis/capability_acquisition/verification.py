@@ -232,9 +232,9 @@ def validate_development_engine_completion_evidence(
             "DevelopmentEngine completion is not bound to the canonical ticket.",
         )
 
-    candidate_revision = str(
-        engine_result.get("candidate_revision") or ""
-    ).strip().casefold()
+    candidate_revision = (
+        str(engine_result.get("candidate_revision") or "").strip().casefold()
+    )
     canonical_commit = str(work.result.get("commit") or "").strip().casefold()
     if not candidate_revision or candidate_revision != canonical_commit:
         raise CapabilityCandidateError(
@@ -255,11 +255,7 @@ def validate_development_engine_completion_evidence(
         and step.state.value == "completed"
         and step.observation.get("passed") is True
     }
-    requested_refs = {
-        str(item).strip()
-        for item in raw_refs
-        if str(item).strip()
-    }
+    requested_refs = {str(item).strip() for item in raw_refs if str(item).strip()}
     if not requested_refs or not requested_refs.issubset(valid_test_refs):
         raise CapabilityCandidateError(
             "development_engine_test_evidence_drift",
