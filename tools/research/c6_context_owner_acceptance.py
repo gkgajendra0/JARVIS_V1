@@ -1,17 +1,39 @@
-"""Owner-machine C6 shadow acceptance with zero model/API calls.
+"""Owner-machine C6 context acceptance and bounded decision replay.
 
-The harness reads canonical Work history, builds the bounded ContextPack, and emits
-only aggregate size/provenance metrics.  It never prints raw Work payloads.
+The default mode is zero-model: it reads canonical Work history, builds bounded
+ContextPacks, and emits aggregate size/provenance metrics without printing raw Work
+payloads. An explicit --decision-replay run may consume a small, bounded amount of the
+connected ChatGPT-plan allowance to compare optimized APPLY decisions against durable
+legacy SHADOW decision fingerprints. It never executes the selected Work action and
+never changes production routing mode.
 """
 
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
+import os
+import sys
+from dataclasses import replace
 
 from jarvis.brain_routing.models import BrainRouteKind
 from jarvis.brain_routing.store import BrainRouteStore
-from jarvis.work.context import WorkContextAssembler
+from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
+from jarvis.hands.provider_adapters import (
+    build_chatgpt_plan_structured_output_client,
+)
+from jarvis.work.context import WorkContextAssembler, WorkContextMode
+from jarvis.work.context_evaluation import (
+    compare_recorded_context_decision,
+    reconstruct_recorded_context_request,
+)
+from jarvis.work.models import WorkType
 from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.reasoner import (
+    _work_input_payload,
+    evaluate_structured_work_request,
+)
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 
@@ -42,7 +64,177 @@ def _legacy_steps(steps):
     ]
 
 
+def _replay_candidates(
+    store: SQLiteWorkStore,
+    route_store: BrainRouteStore,
+    *,
+    limit: int,
+):
+    candidates = []
+    for work in store.list(limit=500):
+        if work.work_type not in {WorkType.DEVELOPMENT, WorkType.RESEARCH}:
+            continue
+        steps = store.list_steps(work.work_id)
+        for route in route_store.list_for_work(work.work_id):
+            if route.route_kind is not BrainRouteKind.MODEL:
+                continue
+            if (
+                route.goal_complete is None
+                or route.needs_owner is None
+                or route.parameters_digest is None
+            ):
+                continue
+            snapshot = route_store.get_context_snapshot(route.route_request_id)
+            if snapshot is None:
+                continue
+            candidates.append(
+                (
+                    route.created_at_epoch,
+                    work,
+                    steps,
+                    route,
+                    snapshot,
+                )
+            )
+    candidates.sort(key=lambda item: (-float(item[0]), item[3].route_request_id))
+    return tuple(candidates[:limit])
+
+
+async def _run_decision_replay(
+    *,
+    store: SQLiteWorkStore,
+    route_store: BrainRouteStore,
+    model: str,
+    max_cases: int,
+    min_equivalent_cases: int,
+) -> dict[str, object]:
+    plan = ChatGPTPlanSessionManager()
+    if not plan.is_connected():
+        raise RuntimeError("ChatGPT-plan connection is unavailable")
+    visible = {item.slug for item in plan.list_models()}
+    if model not in visible:
+        raise RuntimeError(
+            f"C6 replay model {model!r} is not visible to the connected ChatGPT plan"
+        )
+    client = build_chatgpt_plan_structured_output_client(
+        model=model,
+        session_manager=plan,
+        provider_retries=False,
+    )
+    candidates = _replay_candidates(store, route_store, limit=max_cases)
+    cases: list[dict[str, object]] = []
+    for _created_at, work, steps, recorded, snapshot in candidates:
+        replay = reconstruct_recorded_context_request(
+            snapshot=snapshot,
+            work=work,
+            steps=steps,
+        )
+        legacy_payload = _work_input_payload(
+            replace(replay, context_mode=WorkContextMode.SHADOW)
+        )
+        optimized_payload = _work_input_payload(replay)
+        optimized, telemetry = await evaluate_structured_work_request(client, replay)
+        comparison = compare_recorded_context_decision(recorded, optimized)
+        if comparison is None:
+            raise RuntimeError(
+                "C6 replay candidate lost its durable decision provenance"
+            )
+        legacy_chars = _chars(legacy_payload)
+        optimized_chars = _chars(optimized_payload)
+        reduction = (
+            0.0
+            if legacy_chars == 0
+            else (legacy_chars - optimized_chars) * 100.0 / legacy_chars
+        )
+        cases.append(
+            {
+                "route_request_id": recorded.route_request_id,
+                "work_id": work.work_id,
+                "work_type": work.work_type.value,
+                "equivalent": comparison.equivalent,
+                "action_equal": comparison.action_equal,
+                "goal_complete_equal": comparison.goal_complete_equal,
+                "needs_owner_equal": comparison.needs_owner_equal,
+                "owner_question_equal": comparison.owner_question_equal,
+                "parameters_equal": comparison.parameters_equal,
+                "legacy_chars": legacy_chars,
+                "optimized_chars": optimized_chars,
+                "reduction_percent": round(reduction, 2),
+                "usage": dict(telemetry.usage),
+                "usage_observed": telemetry.usage_observed,
+                "latency_ms": round(telemetry.latency_ms, 2),
+            }
+        )
+
+    equivalent_count = sum(bool(item["equivalent"]) for item in cases)
+    mismatch_count = len(cases) - equivalent_count
+    apply_equivalence_proven = (
+        len(cases) >= min_equivalent_cases and mismatch_count == 0
+    )
+    return {
+        "model": model,
+        "requested_max_cases": max_cases,
+        "minimum_equivalent_cases": min_equivalent_cases,
+        "replayed_cases": len(cases),
+        "equivalent_cases": equivalent_count,
+        "mismatch_cases": mismatch_count,
+        "all_replayed_cases_equivalent": bool(cases) and mismatch_count == 0,
+        "c6_apply_decision_equivalence_proven": apply_equivalence_proven,
+        "production_routing_mutated": False,
+        "actions_executed": False,
+        "paid_fallback_enabled": False,
+        "cases": cases,
+    }
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Measure C6 context reduction and optionally replay optimized decisions."
+    )
+    parser.add_argument(
+        "--decision-replay",
+        action="store_true",
+        help=(
+            "Explicitly consume bounded ChatGPT-plan inference to compare optimized "
+            "APPLY decisions with durable legacy SHADOW decisions."
+        ),
+    )
+    parser.add_argument(
+        "--model",
+        default=os.environ.get("JARVIS_WORK_ORCHESTRATION_MODEL")
+        or os.environ.get("JARVIS_CHATGPT_PLAN_MODEL"),
+        help="ChatGPT-plan model used only when --decision-replay is supplied.",
+    )
+    parser.add_argument(
+        "--max-cases",
+        type=int,
+        default=3,
+        help="Maximum number of sequential decision replay calls.",
+    )
+    parser.add_argument(
+        "--min-equivalent-cases",
+        type=int,
+        default=3,
+        help="Minimum equivalent replay cases required to mark decision equivalence proven.",
+    )
+    return parser
+
+
 def main() -> int:
+    args = _parser().parse_args()
+    if args.max_cases <= 0:
+        print("ERROR: --max-cases must be positive.", file=sys.stderr)
+        return 2
+    if args.min_equivalent_cases <= 0:
+        print("ERROR: --min-equivalent-cases must be positive.", file=sys.stderr)
+        return 2
+    if args.min_equivalent_cases > args.max_cases:
+        print(
+            "ERROR: --min-equivalent-cases cannot exceed --max-cases.",
+            file=sys.stderr,
+        )
+        return 2
+
     path = default_work_store_path()
     store = SQLiteWorkStore(
         path,
@@ -142,6 +334,40 @@ def main() -> int:
         ),
         "items": evaluated,
     }
+    if args.decision_replay:
+        model = str(args.model or "").strip()
+        if not model:
+            print(
+                "ERROR: --model, JARVIS_WORK_ORCHESTRATION_MODEL, or "
+                "JARVIS_CHATGPT_PLAN_MODEL is required for --decision-replay.",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            replay = asyncio.run(
+                _run_decision_replay(
+                    store=store,
+                    route_store=route_store,
+                    model=model,
+                    max_cases=args.max_cases,
+                    min_equivalent_cases=args.min_equivalent_cases,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - explicit benchmark boundary
+            print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        result["model_api_called"] = bool(replay["replayed_cases"])
+        result["decision_replay"] = replay
+        result["c6_apply_decision_equivalence_proven"] = replay[
+            "c6_apply_decision_equivalence_proven"
+        ]
+        result["c6_apply_note"] = (
+            "Decision equivalence is benchmark evidence only. Production remains "
+            "unchanged until JARVIS_WORK_CONTEXT_MODE is explicitly promoted."
+        )
+        if replay["replayed_cases"] == 0 or replay["mismatch_cases"] != 0:
+            result["status"] = "INCOMPLETE"
+
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "PASS" else 2
 
