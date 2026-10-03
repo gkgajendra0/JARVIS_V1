@@ -218,10 +218,18 @@ def test_development_engine_requires_chatgpt_plan_and_model() -> None:
             development_engine_model=None,
         )
 
+    with pytest.raises(ValueError, match="DEVELOPMENT_TEST_DOCKER_IMAGE"):
+        JarvisConfig(
+            chatgpt_plan_enabled=True,
+            chatgpt_plan_model="gpt-plan",
+            development_engine_enabled=True,
+        )
+
     config = JarvisConfig(
         chatgpt_plan_enabled=True,
         chatgpt_plan_model="gpt-plan",
         development_engine_enabled=True,
+        development_test_docker_image="jarvis-dev-tests:local",
     )
     assert config.development_engine_enabled is True
     assert config.chatgpt_plan_model == "gpt-plan"
