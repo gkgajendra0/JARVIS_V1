@@ -768,7 +768,9 @@ class ChangeStore:
         normalized_work_id = str(work_id).strip()
         normalized_reason = " ".join(str(reason).split()).strip()
         if not normalized_work_id or not normalized_reason:
-            raise ChangeConflict("work identity and architecture revision reason are required")
+            raise ChangeConflict(
+                "work identity and architecture revision reason are required"
+            )
 
         with self.work._lock, self.work._connect() as connection:
             stage_row = connection.execute(
@@ -805,7 +807,9 @@ class ChangeStore:
                 (change.change_id,),
             ).fetchone()
             if architecture_row is None:
-                raise ChangeConflict("architecture revision requires approved architecture")
+                raise ChangeConflict(
+                    "architecture revision requires approved architecture"
+                )
 
             source_stage = process.architecture_source_stage
             max_attempt = connection.execute(
