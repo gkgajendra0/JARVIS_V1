@@ -188,7 +188,138 @@ async def test_insufficient_replay_corpus_consumes_no_plan_quota(
         min_equivalent_cases=3,
     )
 
+    assert result["replay_preflight_ready"] is False
     assert result["replayed_cases"] == 0
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert result["provider_circuit_updated"] is False
+
+
+@pytest.mark.asyncio
+async def test_decision_replay_preflight_ready_consumes_no_plan_quota(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    route_store = BrainRouteStore(store)
+    works = (
+        WorkItem(
+            request="Replay generic work.",
+            work_type=WorkType.GENERIC,
+            source_session_id="session-c6",
+            source_turn_id="turn-a",
+            work_id="work-c6-a",
+        ),
+        WorkItem(
+            request="Replay diagnostic work.",
+            work_type=WorkType.DIAGNOSTICS,
+            source_session_id="session-c6",
+            source_turn_id="turn-b",
+            work_id="work-c6-b",
+        ),
+    )
+
+    def _candidate(work: WorkItem, index: int):
+        route = BrainRouteRecord(
+            route_request_id=f"route-preflight-{index}",
+            work_id=work.work_id,
+            subsystem_key="work",
+            task_kind=work.work_type.value,
+            route_kind=BrainRouteKind.MODEL,
+            mode=BrainRoutingMode.SHADOW,
+            policy_version=1,
+            policy_digest="a" * 64,
+            reason_codes=("deterministic_abstained",),
+            created_at_epoch=float(100 - index),
+            selected_action="expected_action",
+            model_decision_id=f"decision-preflight-{index}",
+            model_target_id="work.chatgpt_plan.default",
+            goal_complete=False,
+            needs_owner=False,
+            parameters_digest=canonical_digest({}),
+            reasoner_contract_digest="b" * 64,
+        )
+        attempt = RoutingAttempt(
+            attempt_id=f"attempt-preflight-{index}",
+            decision_id=f"decision-preflight-{index}",
+            work_id=work.work_id,
+            target_id="work.chatgpt_plan.default",
+            attempt_ordinal=1,
+            started_at_epoch=float(index),
+            ended_at_epoch=float(index) + 0.5,
+            kind=RoutingAttemptKind.PRIMARY,
+            provider_id="chatgpt_plan",
+            model_id="reviewed-model",
+            response_contract_result=ResponseContractResult.VALID,
+        )
+        return (
+            route.created_at_epoch,
+            work,
+            (),
+            route,
+            {"reasoner_contract_digest": "b" * 64},
+            attempt,
+        )
+
+    candidates = tuple(
+        _candidate(work, index) for index, work in enumerate(works, start=1)
+    )
+    monkeypatch.setattr(
+        c6,
+        "_replay_candidates",
+        lambda *args, **kwargs: (
+            candidates,
+            {
+                "model_routes_seen": len(candidates),
+                "missing_decision_provenance": 0,
+                "missing_context_snapshot": 0,
+                "missing_route_contract_lineage": 0,
+                "route_snapshot_contract_mismatch": 0,
+                "missing_exact_model_lineage": 0,
+                "non_chatgpt_plan_lineage": 0,
+                "different_model_lineage": 0,
+            },
+        ),
+    )
+
+    @dataclass(frozen=True)
+    class _Replay:
+        context_mode: WorkContextMode = WorkContextMode.APPLY
+
+    monkeypatch.setattr(
+        c6,
+        "reconstruct_recorded_context_request",
+        lambda **kwargs: _Replay(),
+    )
+    monkeypatch.setattr(
+        c6,
+        "_work_input_payload",
+        lambda request: (
+            {"payload": "x" * 100}
+            if request.context_mode is WorkContextMode.SHADOW
+            else {"payload": "x"}
+        ),
+    )
+
+    def _forbidden_provider():
+        raise AssertionError("replay preflight must not initialize provider state")
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _forbidden_provider)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _forbidden_provider)
+
+    result = await c6._run_decision_replay(
+        store=store,
+        route_store=route_store,
+        model="reviewed-model",
+        max_cases=2,
+        min_equivalent_cases=2,
+        preflight_only=True,
+    )
+
+    assert result["replay_preflight_only"] is True
+    assert result["replay_preflight_ready"] is True
+    assert result["replayed_cases"] == 0
+    assert result["representative_corpus_covered"] is True
+    assert len(result["planned_cases"]) == 2
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert result["provider_circuit_updated"] is False
 
