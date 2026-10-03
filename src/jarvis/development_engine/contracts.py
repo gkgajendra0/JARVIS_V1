@@ -97,7 +97,10 @@ class DevelopmentUsageV1:
             value = getattr(self, field_name)
             if type(value) is not int or value < 0:
                 raise ValueError(f"{field_name} must be a non-negative integer")
-        if self.total_tokens and self.total_tokens < self.input_tokens + self.output_tokens:
+        if (
+            self.total_tokens
+            and self.total_tokens < self.input_tokens + self.output_tokens
+        ):
             raise ValueError(
                 "total_tokens cannot be smaller than input_tokens + output_tokens"
             )
@@ -441,9 +444,7 @@ class DevelopmentResultV1:
             "reason": reason_text,
             "thread_id": _optional_text(thread_id, field="thread_id"),
             "candidate_revision": candidate,
-            "changed_files": list(
-                _tokens(tuple(changed_files), field="changed_file")
-            ),
+            "changed_files": list(_tokens(tuple(changed_files), field="changed_file")),
             "test_evidence_refs": list(tests),
             "evidence_refs": list(evidence),
             "requested_dependencies": list(dependencies),
@@ -461,7 +462,9 @@ class DevelopmentResultV1:
             engine_version=str(payload["engine_version"]),
             summary=str(payload["summary"]),
             reason=reason_text,
-            thread_id=payload["thread_id"] if isinstance(payload["thread_id"], str) else None,
+            thread_id=payload["thread_id"]
+            if isinstance(payload["thread_id"], str)
+            else None,
             candidate_revision=candidate,
             changed_files=tuple(payload["changed_files"]),  # type: ignore[arg-type]
             test_evidence_refs=tests,
@@ -499,15 +502,9 @@ class DevelopmentResultV1:
             engine_id=str(payload["engine_id"]),
             engine_version=str(payload["engine_version"]),
             summary=str(payload["summary"]),
-            reason=(
-                None
-                if payload.get("reason") is None
-                else str(payload["reason"])
-            ),
+            reason=(None if payload.get("reason") is None else str(payload["reason"])),
             thread_id=(
-                None
-                if payload.get("thread_id") is None
-                else str(payload["thread_id"])
+                None if payload.get("thread_id") is None else str(payload["thread_id"])
             ),
             candidate_revision=(
                 None
