@@ -283,6 +283,43 @@ class WorkExecutorDevelopmentToolPort:
             )
         return work
 
+    def _allowed_write_paths(self) -> tuple[str, ...]:
+        return tuple(
+            ref.removeprefix("path:").replace("\\", "/").strip("/")
+            for ref in self._ticket.repository_context_refs
+            if ref.startswith("path:") and ref.removeprefix("path:").strip()
+        )
+
+    def _guard_write_path(self, parameters: Mapping[str, Any]) -> None:
+        raw = str(parameters.get("path") or "").strip().replace("\\", "/")
+        pure = PurePosixPath(raw)
+        if (
+            not raw
+            or pure.is_absolute()
+            or PureWindowsPath(raw).is_absolute()
+            or ".." in pure.parts
+        ):
+            raise DevelopmentToolDenied(
+                "development write path must remain inside the isolated worktree"
+            )
+        normalized = str(pure).replace("\\", "/").strip("/")
+        allowed = self._allowed_write_paths()
+        if not allowed:
+            raise DevelopmentToolDenied(
+                "development ticket has no owner-approved write paths"
+            )
+        if not any(
+            normalized == candidate
+            or (
+                candidate.endswith("/")
+                and normalized.startswith(candidate)
+            )
+            for candidate in allowed
+        ):
+            raise DevelopmentToolDenied(
+                f"development write is outside owner-approved paths: {normalized}"
+            )
+
     def _guard_commit(self) -> None:
         steps = self._store.list_steps(self._ticket.work_id)
         last_write = max(
@@ -339,6 +376,8 @@ class WorkExecutorDevelopmentToolPort:
 
         work = self._require_active_work()
         action = _TOOL_TO_ACTION[name]
+        if action == "dev_write_file":
+            self._guard_write_path(parameters)
         if action == "dev_commit":
             self._guard_commit()
 
