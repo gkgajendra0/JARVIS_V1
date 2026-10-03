@@ -30,6 +30,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", "true")
     monkeypatch.setenv("JARVIS_GLOBAL_BRAIN_ROUTER_MODE", " APPLY ")
     monkeypatch.setenv("JARVIS_WORK_CONTEXT_MODE", " APPLY ")
+    monkeypatch.setenv("JARVIS_WORK_PROMPT_COMPRESSION_MODE", " SHADOW ")
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "off")
     monkeypatch.setenv("JARVIS_STARTUP_GREETING", "off")
     monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
@@ -64,6 +65,7 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.tts_project_billing_isolation_verified is True
     assert config.global_brain_router_mode == "apply"
     assert config.work_context_mode == "apply"
+    assert config.work_prompt_compression_mode == "shadow"
     assert config.show_transcript is False
     assert config.startup_greeting_enabled is False
     assert config.wake_model_path == "C:\\models\\jarvis.onnx"
@@ -261,6 +263,19 @@ def test_work_context_defaults_to_shadow_and_validates_mode() -> None:
 
     with pytest.raises(ValueError, match="work_context_mode"):
         JarvisConfig(work_context_mode="automatic")
+
+
+def test_work_prompt_compression_defaults_off_and_validates_mode() -> None:
+    assert JarvisConfig().work_prompt_compression_mode == "off"
+    assert (
+        JarvisConfig(
+            work_prompt_compression_mode=" APPLY "
+        ).work_prompt_compression_mode
+        == "apply"
+    )
+
+    with pytest.raises(ValueError, match="work_prompt_compression_mode"):
+        JarvisConfig(work_prompt_compression_mode="automatic")
 
 
 def test_global_brain_router_defaults_to_shadow_and_validates_mode() -> None:
