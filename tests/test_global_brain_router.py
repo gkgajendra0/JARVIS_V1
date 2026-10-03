@@ -344,6 +344,51 @@ async def test_shadow_retry_preserves_snapshot_from_older_reasoning_contract(
 
 
 @pytest.mark.asyncio
+async def test_shadow_retry_preserves_snapshot_when_context_projection_changes(
+    tmp_path: Path,
+) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    _, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    first_pack = WorkContextAssembler().build(work=work, steps=())
+    first_request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=first_pack,
+    )
+
+    first = await router.decide(first_request)
+    record = route_store.list_for_work(work.work_id)[0]
+    original = route_store.get_context_snapshot(record.route_request_id)
+    assert original is not None
+
+    changed_pack = WorkContextAssembler().build(
+        work=work,
+        steps=(),
+        evidence=({"ref": "new-context-evidence"},),
+    )
+    changed_request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=changed_pack,
+    )
+    second = await router.decide(changed_request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    assert changed_pack.evidence != first_pack.evidence
+    assert route_store.get_context_snapshot(record.route_request_id) == original
+
+
+@pytest.mark.asyncio
 async def test_shadow_mode_records_mismatch_without_overriding_model(
     tmp_path: Path,
 ) -> None:
