@@ -57,9 +57,16 @@ def test_historical_attempt_requires_one_exact_successful_model_result() -> None
         )
         == accepted
     )
+    repeated = c6._successful_historical_attempt(
+        _AttemptStore(_attempt(1), _attempt(2)),
+        decision_id="decision-c6",
+    )
+    assert repeated is not None
+    assert repeated.model_id == "reviewed-model"
+
     assert (
         c6._successful_historical_attempt(
-            _AttemptStore(_attempt(1), _attempt(2)),
+            _AttemptStore(_attempt(1), _attempt(2, model="different-model")),
             decision_id="decision-c6",
         )
         is None
