@@ -18,6 +18,12 @@ from jarvis.capability_registry.contracts import (
     CapabilityPackageV1,
     parse_capability_package_v1,
 )
+from jarvis.development_engine.contracts import DevelopmentDisposition
+from jarvis.development_engine.phase9 import (
+    PHASE9_DEVELOPMENT_ENGINE_ACTION,
+    development_result_from_work,
+    phase9_revision_disposition,
+)
 from jarvis.engineering_change.models import (
     ChangeArtifact,
     ChangeConflict,
@@ -27,12 +33,6 @@ from jarvis.engineering_change.models import (
 )
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
-from jarvis.development_engine.contracts import DevelopmentDisposition
-from jarvis.development_engine.phase9 import (
-    PHASE9_DEVELOPMENT_ENGINE_ACTION,
-    development_result_from_work,
-    phase9_revision_disposition,
-)
 from jarvis.engineering_substrate.change_integration import (
     MANIFEST_KIND,
     EngineeringSubstrateChangeService,
