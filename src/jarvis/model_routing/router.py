@@ -409,20 +409,10 @@ class ModelRouter:
             record = self.routing_store.get_health(target.target_id)
             if record is None:
                 continue
+            # Expiry only makes the target eligible for one probe. It must not
+            # erase the failure streak: only a successful provider invocation may
+            # reset consecutive_failures via _mark_target_recovered().
             effective = record.effective_state(now_epoch=now_epoch)
-            if effective is not record.state:
-                recovered = record.recovered(now_epoch=now_epoch)
-                try:
-                    self.routing_store.save_health(
-                        recovered,
-                        expected_version=record.version,
-                    )
-                    record = recovered
-                except RoutingStoreError:
-                    refreshed = self.routing_store.get_health(target.target_id)
-                    if refreshed is not None:
-                        record = refreshed
-                        effective = record.effective_state(now_epoch=now_epoch)
             health[target.target_id] = effective
             versions[target.target_id] = record.version
 
