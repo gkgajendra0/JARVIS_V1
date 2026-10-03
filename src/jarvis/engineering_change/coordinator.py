@@ -239,14 +239,38 @@ class ChangeCoordinator:
                 change_id,
                 "architecture",
             )
-            if (
-                revision_request is not None
-                and current_architecture is not None
-                and revision_request.payload.get("previous_architecture_artifact_id")
-                == current_architecture.artifact_id
-            ):
+            if revision_request is not None:
                 requested_attempt = revision_request.payload.get("source_attempt")
-                if isinstance(requested_attempt, int) and requested_attempt > 1:
+                matching_revision_stage = next(
+                    (
+                        item
+                        for item in self.store.list_stages(change_id)
+                        if item.stage_key == source_stage.stage_key
+                        and item.attempt == requested_attempt
+                    ),
+                    None,
+                )
+                previous_architecture_id = revision_request.payload.get(
+                    "previous_architecture_artifact_id"
+                )
+                revision_is_current = (
+                    matching_revision_stage is not None
+                    or (
+                        current_architecture is not None
+                        and previous_architecture_id
+                        == current_architecture.artifact_id
+                    )
+                )
+                if (
+                    isinstance(requested_attempt, int)
+                    and requested_attempt > 1
+                    and revision_is_current
+                ):
+                    # Before the replacement architecture exists, the previous
+                    # architecture proves this is the active revision request.
+                    # After the handler has written a replacement but before the
+                    # state transition commits, the already-linked source stage
+                    # is the durable replay identity. Never fall back to attempt 1.
                     source_attempt = requested_attempt
             stage = self.submit_stage(
                 change_id,
