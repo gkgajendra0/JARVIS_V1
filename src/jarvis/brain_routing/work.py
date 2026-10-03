@@ -291,9 +291,7 @@ class GlobalBrainRouterReasoner:
                 needs_owner=(None if decision is None else decision.needs_owner),
                 owner_question=(None if decision is None else decision.owner_question),
                 parameters_digest=(
-                    None
-                    if decision is None
-                    else canonical_digest(decision.parameters)
+                    None if decision is None else canonical_digest(decision.parameters)
                 ),
                 outcome_code=outcome_code,
             )
