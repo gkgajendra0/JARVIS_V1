@@ -44,6 +44,7 @@ from jarvis.work.context_evaluation import (
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.prompt_compression import (
     DEFAULT_LLMLINGUA2_MODEL,
+    DEFAULT_LLMLINGUA2_REVISION,
     LLMLingua2WorkPayloadCompressor,
 )
 from jarvis.work.reasoner import (
@@ -1063,6 +1064,7 @@ async def _run_llmlingua_fixture_benchmark(
         "model": model,
         "compressor": "llmlingua2",
         "compressor_model": compressor_model,
+        "compressor_revision": DEFAULT_LLMLINGUA2_REVISION,
         "compression_rate": compression_rate,
         "device_map": device_map,
         "requested_case_ids": requested_ids,
