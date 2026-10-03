@@ -506,6 +506,47 @@ async def test_waiting_for_owner_does_not_fabricate_progress(
     assert store.require(item.work_id).state is WorkState.COMPLETED
 
 
+@pytest.mark.asyncio
+async def test_model_owner_request_handler_can_supersede_generic_owner_prompt(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    handled: list[tuple[str, str]] = []
+
+    def handle_owner_request(work: WorkItem, question: str) -> str | None:
+        handled.append((work.work_id, question))
+        return "superseded by governed architecture revision research"
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((ConcurrentExecutor(),)),
+        model_owner_request_handler=handle_owner_request,
+    )
+    item = create_item(store, request="Acquire media-player capability")
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(
+            action=None,
+            summary="Approved architecture needs revision",
+            needs_owner=True,
+            owner_question="Missing supported device transport.",
+        )
+    ]
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.CANCELLED
+    assert handled == [(item.work_id, "Missing supported device transport.")]
+    assert store.require(item.work_id).status_detail == (
+        "superseded by governed architecture revision research"
+    )
+    assert not any(
+        delivery.kind is WorkDeliveryKind.OWNER_INPUT
+        for delivery in store.list_pending_deliveries(limit=20)
+    )
+
+
 def test_failed_work_retry_preserves_canonical_identity_and_history(
     tmp_path: Path,
 ) -> None:
