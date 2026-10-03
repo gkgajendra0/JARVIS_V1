@@ -238,6 +238,16 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     assert snapshot["history_step_count"] == 0
     assert snapshot["recent_step_ids"] == []
     assert snapshot["context_version"] == context_pack.version
+    assert snapshot["context_selected_step_ids"] == []
+    assert snapshot["context_evidence_count"] == 0
+    assert snapshot["context_evidence_digest"] == canonical_digest([])
+    assert snapshot["context_pack_digest"] == canonical_digest(
+        {
+            "recent_steps": context_pack.recent_steps_payload(),
+            "evidence": list(context_pack.evidence),
+            "history_manifest": context_pack.history_manifest_payload(),
+        }
+    )
     assert snapshot["history_step_ids_digest"] == canonical_digest([])
     assert snapshot["allowed_actions"][0]["name"] == "dev_prepare_workspace"
     assert store.list_steps(work.work_id) == ()
@@ -279,6 +289,14 @@ async def test_shadow_retry_backfills_missing_context_snapshot(tmp_path: Path) -
     assert restored is not None
     assert restored["work_version"] == work.version
     assert restored["history_step_ids_digest"] == canonical_digest([])
+    assert restored["context_evidence_digest"] == canonical_digest([])
+    assert restored["context_pack_digest"] == canonical_digest(
+        {
+            "recent_steps": context_pack.recent_steps_payload(),
+            "evidence": list(context_pack.evidence),
+            "history_manifest": context_pack.history_manifest_payload(),
+        }
+    )
 
 
 @pytest.mark.asyncio
