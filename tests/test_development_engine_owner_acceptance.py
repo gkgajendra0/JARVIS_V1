@@ -144,7 +144,6 @@ def test_owner_preflight_checks_model_after_subscription_cooldown(
     assert state["remaining_seconds"] == 0.0
 
 
-
 def test_owner_main_resolves_persisted_production_configuration(
     monkeypatch,
     capsys,
