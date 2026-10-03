@@ -18,7 +18,7 @@ from jarvis.work.context_evaluation import (
     compare_recorded_context_decision,
     reconstruct_recorded_context_request,
 )
-from jarvis.work.models import WorkItem, WorkStep, WorkType
+from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
 from jarvis.work.reasoner import _work_input_payload
 
 
