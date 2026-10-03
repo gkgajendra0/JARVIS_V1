@@ -119,6 +119,8 @@ def test_session_persists_thread_and_exact_result(tmp_path) -> None:
         sessions.reusable_result(
             ticket=ticket,
             reasoning_fingerprint=fingerprint,
+            engine_id="codex_plan",
+            engine_version="0.160.0",
         )
         == result
     )
@@ -152,10 +154,16 @@ def test_changed_reasoning_fingerprint_invalidates_reuse(tmp_path) -> None:
         result=result,
         reasoning_fingerprint=first,
     )
+    sessions.bind_thread(
+        ticket_digest=ticket.digest,
+        thread_id="thr_same_engine",
+    )
     assert (
         sessions.reusable_result(
             ticket=ticket,
             reasoning_fingerprint=first,
+            engine_id="codex_plan",
+            engine_version="0.160.0",
         )
         == result
     )
@@ -172,14 +180,70 @@ def test_changed_reasoning_fingerprint_invalidates_reuse(tmp_path) -> None:
     )
 
     assert reopened.state is DevelopmentSessionState.ACTIVE
+    assert reopened.thread_id == "thr_same_engine"
     assert reopened.last_result_digest is None
     assert (
         sessions.reusable_result(
             ticket=ticket,
             reasoning_fingerprint=second,
+            engine_id="codex_plan",
+            engine_version="0.160.0",
         )
         is None
     )
+
+
+def test_engine_generation_change_invalidates_result_and_thread(tmp_path) -> None:
+    ticket = _ticket()
+    store = _store(tmp_path)
+    sessions = DevelopmentSessionStore(store)
+    fingerprint = build_development_reasoning_fingerprint(ticket)
+    sessions.begin(
+        ticket=ticket,
+        engine_id="codex_plan",
+        engine_version="0.160.0",
+        reasoning_fingerprint=fingerprint,
+    )
+    sessions.bind_thread(
+        ticket_digest=ticket.digest,
+        thread_id="thr_codex_generation",
+    )
+    result = DevelopmentResultV1.create(
+        ticket=ticket,
+        disposition=DevelopmentDisposition.NEEDS_RESEARCH,
+        engine_id="codex_plan",
+        engine_version="0.160.0",
+        summary="Current engine needs more evidence.",
+        reason="The current evidence is insufficient.",
+    )
+    sessions.record_result(
+        ticket=ticket,
+        result=result,
+        reasoning_fingerprint=fingerprint,
+    )
+
+    assert (
+        sessions.reusable_result(
+            ticket=ticket,
+            reasoning_fingerprint=fingerprint,
+            engine_id="replacement_engine",
+            engine_version="2",
+        )
+        is None
+    )
+
+    reopened = sessions.begin(
+        ticket=ticket,
+        engine_id="replacement_engine",
+        engine_version="2",
+        reasoning_fingerprint=fingerprint,
+    )
+
+    assert reopened.state is DevelopmentSessionState.ACTIVE
+    assert reopened.engine_id == "replacement_engine"
+    assert reopened.engine_version == "2"
+    assert reopened.thread_id is None
+    assert reopened.last_result_digest is None
 
 
 def test_resource_blocker_is_never_reused(tmp_path) -> None:
@@ -212,6 +276,8 @@ def test_resource_blocker_is_never_reused(tmp_path) -> None:
         sessions.reusable_result(
             ticket=ticket,
             reasoning_fingerprint=fingerprint,
+            engine_id="codex_plan",
+            engine_version="0.160.0",
         )
         is None
     )
