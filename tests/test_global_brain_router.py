@@ -372,7 +372,7 @@ async def test_shadow_retry_preserves_snapshot_from_older_reasoning_contract(
         action="dev_prepare_workspace",
         summary="Model agrees",
     )
-    store, work, route_store, _, model, router = _router(
+    _, work, route_store, _, model, router = _router(
         tmp_path,
         mode="shadow",
         model_decision=model_decision,
