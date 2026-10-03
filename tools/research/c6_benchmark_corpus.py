@@ -188,7 +188,7 @@ def _development_repair_case(
                         "    # representative source context\n"
                         "    return value\n"
                     )
-                    * 18,
+                    * 80,
                     "truncated": False,
                 },
             )
@@ -253,7 +253,7 @@ def _development_repair_case(
                         "def test_whitespace_only():\n"
                         "    assert normalize('   ') == ''\n"
                     )
-                    * 20,
+                    * 130,
                     "truncated": False,
                 },
             ),
@@ -302,7 +302,7 @@ def _development_repair_case(
                         "+    cleaned = value.strip()\n"
                         "+    return cleaned\n"
                     )
-                    * 12,
+                    * 80,
                     "truncated": False,
                 },
             ),
@@ -374,7 +374,7 @@ def _development_commit_case(
                         "    def evaluate(self, value):\n"
                         "        return value\n"
                     )
-                    * 16,
+                    * 90,
                     "truncated": False,
                 },
             )
@@ -443,7 +443,7 @@ def _development_commit_case(
                         "+def accepted(value):\n"
                         "+    return bool(value)\n"
                     )
-                    * 14,
+                    * 90,
                     "truncated": False,
                 },
             ),
@@ -526,7 +526,7 @@ def _research_reresolve_case(
                         "Authoritative documentation describes a bounded local-control "
                         "integration and the required pairing/security constraints. "
                     )
-                    * 12,
+                    * 75,
                     "evidence_refs": [f"evidence-{number}"],
                 },
             )
@@ -597,7 +597,7 @@ def _research_reresolve_case(
                         "New authoritative evidence indicates the exact SDK version is "
                         "verifiable and may allow reuse instead of custom build. "
                     )
-                    * 14,
+                    * 85,
                     "evidence_refs": ["evidence-new-authoritative"],
                 },
             ),
