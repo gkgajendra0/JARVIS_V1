@@ -484,7 +484,6 @@ async def _run_paired_decision_benchmark(
     }
 
 
-
 def _prepare_fixture_benchmark(
     *,
     max_cases: int,
@@ -1055,13 +1054,19 @@ def _parser() -> argparse.ArgumentParser:
         "--max-cases",
         type=int,
         default=3,
-        help="Maximum number of sequential decision replay calls.",
+        help=(
+            "Maximum benchmark cases. Historical recorded-decision replay permits up "
+            "to 5; paired and fixture A/B modes are hard-capped at 3 cases."
+        ),
     )
     parser.add_argument(
         "--min-equivalent-cases",
         type=int,
         default=3,
-        help="Minimum equivalent replay cases required to mark decision equivalence proven.",
+        help=(
+            "Minimum equivalent cases required to mark C6 decision equivalence "
+            "proven."
+        ),
     )
     return parser
 
@@ -1079,10 +1084,13 @@ def main() -> int:
         )
         return 2
     if (
-        args.paired_decision_preflight or args.paired_decision_benchmark
+        args.paired_decision_preflight
+        or args.paired_decision_benchmark
+        or args.fixture_decision_preflight
+        or args.fixture_decision_benchmark
     ) and args.max_cases > _MAX_PAIRED_BENCHMARK_CASES:
         print(
-            "ERROR: paired benchmark --max-cases cannot exceed "
+            "ERROR: paired/fixture benchmark --max-cases cannot exceed "
             f"{_MAX_PAIRED_BENCHMARK_CASES} ({_MAX_PAIRED_BENCHMARK_CASES * 2} "
             "maximum model calls).",
             file=sys.stderr,
