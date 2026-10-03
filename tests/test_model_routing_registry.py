@@ -19,6 +19,7 @@ from jarvis.model_routing.registry import (
     UnknownModelTargetError,
     UnknownRoutingStrategyError,
 )
+from jarvis.model_routing.router import build_default_work_targets
 
 
 class DummyAdapter:
@@ -255,3 +256,48 @@ def test_model_target_registry_digest_changes_with_target_contract() -> None:
     second = ModelTargetRegistry(adapters, (changed,))
 
     assert first.digest() != second.digest()
+
+
+
+def test_chatgpt_plan_work_pool_has_no_paid_fallback_by_default() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            DummyAdapter("chatgpt_plan"),
+            DummyAdapter("gemini"),
+        )
+    )
+
+    targets = build_default_work_targets(
+        configured_provider="gemini",
+        configured_model="gemini-test",
+        adapter_registry=adapters,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-plan-test",
+    )
+
+    assert tuple(target.target_id for target in targets.registry.all()) == (
+        "work.chatgpt_plan.default",
+    )
+
+
+def test_chatgpt_plan_paid_fallback_requires_explicit_opt_in() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            DummyAdapter("chatgpt_plan"),
+            DummyAdapter("gemini"),
+        )
+    )
+
+    targets = build_default_work_targets(
+        configured_provider="gemini",
+        configured_model="gemini-test",
+        adapter_registry=adapters,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-plan-test",
+        paid_fallback_enabled=True,
+    )
+
+    assert tuple(target.target_id for target in targets.registry.all()) == (
+        "work.chatgpt_plan.default",
+        "work.gemini.default",
+    )
