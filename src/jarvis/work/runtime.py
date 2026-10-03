@@ -163,6 +163,7 @@ from jarvis.work.estimates import estimate_work
 from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.prompt_compression import LLMLingua2WorkPayloadCompressor
 from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError, default_work_store_path
@@ -630,6 +631,7 @@ def build_work_runtime(
     paid_fallback_enabled: bool = False,
     provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
     work_context_mode: str = "shadow",
+    work_prompt_compression_mode: str = "off",
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -713,6 +715,7 @@ def build_work_runtime(
         "browser": 1,
         "desktop": 1,
         "provider_api": 1,
+        "prompt_compression": 1,
         "development_intelligence": 1,
         **engineering_resource_capacities(),
     }
@@ -739,6 +742,12 @@ def build_work_runtime(
         eligibility_policy=EligibilityPolicy(),
         credential_available=_credential_available,
     )
+    compression_mode = str(work_prompt_compression_mode).strip().casefold()
+    prompt_compressor = (
+        None
+        if compression_mode == "off"
+        else LLMLingua2WorkPayloadCompressor()
+    )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
@@ -746,6 +755,10 @@ def build_work_runtime(
         provider_circuit_registry=provider_circuits,
         resources=resources,
         resource_keys=("provider_api",),
+        prompt_compressor=prompt_compressor,
+        prompt_compression_mode=compression_mode,
+        prompt_compression_work_types=frozenset({WorkType.RESEARCH}),
+        prompt_compression_resource_keys=("cpu", "prompt_compression"),
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
