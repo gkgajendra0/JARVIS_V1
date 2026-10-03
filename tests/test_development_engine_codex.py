@@ -10,6 +10,7 @@ from jarvis.development_engine import (
     DevelopmentDisposition,
     DevelopmentSessionStore,
     DevelopmentTicketV1,
+    DevelopmentToolOwnerInputRequired,
     DevelopmentToolSpecV1,
     DevelopmentUsageV1,
 )
@@ -758,3 +759,57 @@ async def test_codex_terminal_result_cannot_request_more_tools(tmp_path) -> None
 
     assert result.disposition is DevelopmentDisposition.FAILED
     assert tools.calls == []
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_propagates_governed_owner_input_boundary(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_owner_boundary",
+        [
+            _response(
+                {
+                    "kind": "tool_batch",
+                    "summary": "Use the governed tool that requires owner input.",
+                    "tool_calls": [
+                        {
+                            "call_id": "read",
+                            "tool_name": "read_file",
+                            "parameters_json": json.dumps({"path": "src/jarvis/demo.py"}),
+                        }
+                    ],
+                    "disposition": None,
+                    "reason": None,
+                    "requested_dependencies": [],
+                    "evidence_refs": [],
+                    "blocker_code": None,
+                },
+                25,
+            )
+        ],
+    )
+
+    class OwnerBoundaryTools(FakeTools):
+        async def invoke(self, tool_name: str, parameters):
+            del tool_name, parameters
+            raise DevelopmentToolOwnerInputRequired(
+                "Provide the protected pairing value.",
+                sensitive=True,
+                input_key="pairing_pin",
+                resume_context={"kind": "pin"},
+            )
+
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    with pytest.raises(DevelopmentToolOwnerInputRequired) as captured:
+        await engine.execute(ticket, tools=OwnerBoundaryTools(ticket.allowed_tools))
+
+    assert captured.value.sensitive is True
+    assert captured.value.input_key == "pairing_pin"
