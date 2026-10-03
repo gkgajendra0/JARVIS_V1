@@ -154,6 +154,22 @@ def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> No
     assert settings["JARVIS_DEV_TEST_DOCKER_IMAGE"] == "jarvis-dev-tests:local"
 
 
+def test_development_test_image_alias_can_be_persisted(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
+        },
+        path,
+    )
+
+    settings = load_machine_settings(path)
+    assert (
+        settings["JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE"]
+        == "jarvis-dev-tests:local"
+    )
+
+
 def test_work_database_url_cannot_be_persisted(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="may not be persisted"):
         save_machine_settings(
