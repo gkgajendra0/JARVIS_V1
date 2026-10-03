@@ -267,6 +267,100 @@ def test_reconcile_waiting_owner_is_idempotent_for_pending_prompt(
     assert pending[0].delivery_id == delivery.delivery_id
 
 
+def test_reconcile_waiting_model_owner_request_migrates_legacy_wait(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Build governed TV control")
+    running = item.transition(
+        WorkState.RUNNING,
+        status_detail="developing capability",
+    )
+    running = store.save(running, expected_version=item.version)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Approve revising the media-player architecture?",
+    )
+    waiting = store.save(waiting, expected_version=running.version)
+
+    handled: list[tuple[str, str]] = []
+
+    def handle(work: WorkItem, question: str) -> str | None:
+        handled.append((work.work_id, question))
+        return "superseded by governed architecture revision research"
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry(()),
+        model_owner_request_handler=handle,
+    )
+
+    reconciled = engine.reconcile_waiting_model_owner_requests()
+
+    assert reconciled == (waiting.work_id,)
+    assert handled == [
+        (
+            waiting.work_id,
+            "Approve revising the media-player architecture?",
+        )
+    ]
+    migrated = store.require(waiting.work_id)
+    assert migrated.state is WorkState.CANCELLED
+    assert (
+        migrated.status_detail
+        == "superseded by governed architecture revision research"
+    )
+
+
+def test_reconcile_waiting_model_owner_request_preserves_typed_executor_wait(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = create_item(store, request="Pair with the TV")
+    running = item.transition(WorkState.RUNNING, status_detail="pairing")
+    running = store.save(running, expected_version=item.version)
+
+    step = WorkStep(
+        work_id=item.work_id,
+        kind="tv_pair",
+        summary="Pair with the physical TV",
+        input_data={},
+    )
+    store.add_step(step)
+    completed_step = step.start().complete(
+        {
+            "needs_owner": True,
+            "question": "Enter the PIN shown on the TV.",
+            "sensitive": True,
+            "input_key": "tv_pin",
+        }
+    )
+    store.save_step(completed_step)
+    waiting = running.transition(
+        WorkState.WAITING_FOR_OWNER,
+        status_detail="Enter the PIN shown on the TV.",
+        current_step_id=step.step_id,
+    )
+    waiting = store.save(waiting, expected_version=running.version)
+
+    def must_not_handle(work: WorkItem, question: str) -> str | None:
+        del work, question
+        raise AssertionError("typed executor owner input must not be migrated")
+
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(ScriptedReasoner()),
+        actions=WorkActionRegistry(()),
+        model_owner_request_handler=must_not_handle,
+    )
+
+    assert engine.reconcile_waiting_model_owner_requests() == ()
+    preserved = store.require(waiting.work_id)
+    assert preserved.state is WorkState.WAITING_FOR_OWNER
+    assert preserved.current_step_id == step.step_id
+
+
 def test_public_work_status_preserves_canonical_owner_request(tmp_path: Path) -> None:
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
     item = WorkItem(
