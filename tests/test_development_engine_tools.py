@@ -259,10 +259,7 @@ async def test_tool_port_allows_descendants_of_approved_directory_scope(
             "text": "VALUE = 1\n",
         },
     )
-    assert (
-        written["path"]
-        == "src/jarvis/acquired_capabilities/example/provider.py"
-    )
+    assert written["path"] == "src/jarvis/acquired_capabilities/example/provider.py"
 
     with pytest.raises(DevelopmentToolDenied, match="outside DevelopmentTicket"):
         await port.invoke(
