@@ -1581,6 +1581,23 @@ def _parser() -> argparse.ArgumentParser:
             "three-case C6 benchmark corpus. No Work action is executed."
         ),
     )
+    replay_mode.add_argument(
+        "--llmlingua-fixture-preflight",
+        action="store_true",
+        help=(
+            "Load the local LLMLingua-2 compressor and validate structure-preserving "
+            "compression on the fixed C6 corpus without any ChatGPT-plan calls."
+        ),
+    )
+    replay_mode.add_argument(
+        "--llmlingua-fixture-benchmark",
+        action="store_true",
+        help=(
+            "Compare exact legacy payloads with locally LLMLingua-compressed full "
+            "context. Uses at most two ChatGPT-plan calls per selected fixture and "
+            "stops on the first semantic mismatch."
+        ),
+    )
     parser.add_argument(
         "--model",
         default=None,
@@ -1604,6 +1621,31 @@ def _parser() -> argparse.ArgumentParser:
         default=3,
         help=(
             "Minimum equivalent cases required to mark C6 decision equivalence proven."
+        ),
+    )
+    parser.add_argument(
+        "--llmlingua-model",
+        default=DEFAULT_LLMLINGUA2_MODEL,
+        help="Local LLMLingua-2 compressor model.",
+    )
+    parser.add_argument(
+        "--llmlingua-rate",
+        type=float,
+        default=0.5,
+        help="Target LLMLingua-2 compression rate in the interval (0, 1].",
+    )
+    parser.add_argument(
+        "--llmlingua-device",
+        default="cpu",
+        help="Local device_map passed to LLMLingua-2; defaults to CPU.",
+    )
+    parser.add_argument(
+        "--llmlingua-case-id",
+        action="append",
+        default=None,
+        help=(
+            "Optional fixed fixture case ID for LLMLingua modes. Repeat to select "
+            "multiple cases; omit to use all three."
         ),
     )
     return parser
@@ -1635,6 +1677,9 @@ def main() -> int:
         )
         return 2
 
+    if not 0.0 < args.llmlingua_rate <= 1.0:
+        print("ERROR: --llmlingua-rate must be within (0, 1].", file=sys.stderr)
+        return 2
     if args.min_equivalent_cases <= 0:
         print("ERROR: --min-equivalent-cases must be positive.", file=sys.stderr)
         return 2
@@ -1757,6 +1802,8 @@ def main() -> int:
         or args.fixture_remaining_benchmark
         or args.fixture_decision_preflight
         or args.fixture_decision_benchmark
+        or args.llmlingua_fixture_preflight
+        or args.llmlingua_fixture_benchmark
     ):
         settings = load_machine_settings()
         model = str(
@@ -1764,15 +1811,30 @@ def main() -> int:
             or configured_text("JARVIS_CHATGPT_PLAN_MODEL", settings, "")
             or ""
         ).strip()
-        if not model:
+        if not model and not args.llmlingua_fixture_preflight:
             print(
                 "ERROR: --model or JARVIS_CHATGPT_PLAN_MODEL is required "
-                "for replay/preflight.",
+                "for live replay/benchmark modes.",
                 file=sys.stderr,
             )
             return 2
         try:
-            if args.fixture_stability_preflight or args.fixture_stability_benchmark:
+            if args.llmlingua_fixture_preflight or args.llmlingua_fixture_benchmark:
+                replay = asyncio.run(
+                    _run_llmlingua_fixture_benchmark(
+                        model=(model or None),
+                        compressor_model=str(args.llmlingua_model).strip(),
+                        compression_rate=float(args.llmlingua_rate),
+                        device_map=str(args.llmlingua_device).strip(),
+                        case_ids=(
+                            None
+                            if not args.llmlingua_case_id
+                            else tuple(dict.fromkeys(args.llmlingua_case_id))
+                        ),
+                        preflight_only=args.llmlingua_fixture_preflight,
+                    )
+                )
+            elif args.fixture_stability_preflight or args.fixture_stability_benchmark:
                 replay = asyncio.run(
                     _run_fixture_stability_benchmark(
                         model=model,
@@ -1834,7 +1896,28 @@ def main() -> int:
             print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
 
-        if args.fixture_stability_preflight:
+        if args.llmlingua_fixture_preflight:
+            result["model_api_called"] = False
+            result["llmlingua_fixture_preflight"] = replay
+            result["c6_llmlingua_preflight_ready"] = replay["preflight_ready"]
+            result["c6_apply_decision_equivalence_proven"] = False
+            result["c6_apply_note"] = (
+                "LLMLingua local-compression preflight only; production remains SHADOW "
+                "and no ChatGPT-plan model call was made."
+            )
+            if replay["preflight_ready"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.llmlingua_fixture_benchmark:
+            result["model_api_called"] = bool(replay["model_calls"])
+            result["llmlingua_fixture_benchmark"] = replay
+            result["c6_apply_decision_equivalence_proven"] = False
+            result["c6_apply_note"] = (
+                "LLMLingua A/B evidence cannot promote C6 APPLY automatically. "
+                "Production remains SHADOW pending explicit owner acceptance."
+            )
+            if replay["all_fixture_cases_equivalent"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_stability_preflight:
             result["model_api_called"] = False
             result["fixture_stability_preflight"] = replay
             result["c6_fixture_stability_ready"] = replay["fixture_stability_ready"]
