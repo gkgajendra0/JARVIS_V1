@@ -677,32 +677,48 @@ def initialize_dbos_work_runtime(
     # DBOS workflows are durable background execution. Never run WorkEngine cycles
     # on the realtime voice loop: one slow synchronous callback in a Work executor
     # would otherwise starve microphone ingress, playout and supervisor liveness.
-    global _WORK_LOOP_RUNTIME
+    global _ENGINE, _WORK_EVENT_LOOP, _WORK_LOOP_RUNTIME
     if _WORK_LOOP_RUNTIME is not None:
         raise RuntimeError("dedicated JARVIS work event loop is already running")
     work_loop_runtime = _DedicatedWorkLoop()
     _WORK_LOOP_RUNTIME = work_loop_runtime
     configure_work_engine(engine, work_loop_runtime.loop)
 
-    config: DBOSConfig = {
-        "name": "jarvis-v1-work",
-        "application_version": application_version,
-        "enable_patching": True,
-        "system_database_url": (
-            system_database_url or default_dbos_system_database_url()
-        ),
-    }
-    DBOS(config=config)
-    DBOS.launch()
-    with ThreadPoolExecutor(
-        max_workers=1,
-        thread_name_prefix="jarvis-dbos-startup",
-    ) as pool:
-        pool.submit(
-            DBOS.register_queue,
-            _QUEUE_NAME,
-            global_concurrency=queue_concurrency,
-        ).result()
+    try:
+        config: DBOSConfig = {
+            "name": "jarvis-v1-work",
+            "application_version": application_version,
+            "enable_patching": True,
+            "system_database_url": (
+                system_database_url or default_dbos_system_database_url()
+            ),
+        }
+        DBOS(config=config)
+        DBOS.launch()
+        with ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="jarvis-dbos-startup",
+        ) as pool:
+            pool.submit(
+                DBOS.register_queue,
+                _QUEUE_NAME,
+                global_concurrency=queue_concurrency,
+            ).result()
+    except BaseException:
+        # Initialization must be all-or-nothing. A failed DBOS launch must not
+        # leave the dedicated Work loop or canonical engine globals alive.
+        _WORK_LOOP_RUNTIME = None
+        try:
+            try:
+                DBOS.destroy(workflow_completion_timeout_sec=0)
+            except Exception:
+                pass
+            work_loop_runtime.stop()
+        finally:
+            _ENGINE = None
+            _WORK_EVENT_LOOP = None
+        raise
+
     return DBOSWorkExecutionBackend(
         max_reasoning_cycles=max_reasoning_cycles,
         work_loop_thread_id=work_loop_runtime.thread_id,
