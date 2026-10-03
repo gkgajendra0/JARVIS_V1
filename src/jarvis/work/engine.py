@@ -602,7 +602,10 @@ class WorkEngine:
         self._store.enqueue_delivery(
             work=saved,
             kind=WorkDeliveryKind.RESOURCE_BLOCKER,
-            message=exc.reason,
+            message=(
+                "Background work is waiting for an approved AI provider "
+                "to become available."
+            ),
             event_key=f"routing-resource:{blocker_digest}",
         )
         return WorkAdvanceResult(
