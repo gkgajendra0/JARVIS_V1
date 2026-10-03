@@ -40,6 +40,7 @@ from jarvis.capability_acquisition.verification import (
     CapabilityAcquisitionDevelopmentCompletionHandler,
     CapabilityCandidateError,
     CapabilityCandidateVerifier,
+    validate_development_engine_completion_evidence,
 )
 from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
@@ -406,6 +407,73 @@ def _complete_candidate(
         expected_version=running.version,
     )
     return workspace.branch, commit
+
+
+def test_development_engine_completion_binds_exact_commit_and_test_step() -> None:
+    test_step = _completed_step(
+        "work-engine",
+        "dev_run_tests",
+        observation={"passed": True},
+    )
+    work = WorkItem(
+        request="build capability",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="change:engine",
+        source_turn_id="development:engine",
+        work_id="work-engine",
+        result={
+            "commit": "d" * 40,
+            "development_ticket_id": "ticket-demo",
+            "development_ticket_digest": "e" * 64,
+        },
+    )
+    engine_result = {
+        "ticket_id": "ticket-demo",
+        "ticket_digest": "e" * 64,
+        "candidate_revision": "d" * 40,
+        "test_evidence_refs": [f"workstep:{test_step.step_id}"],
+    }
+
+    validate_development_engine_completion_evidence(
+        work,
+        (test_step,),
+        engine_result,
+    )
+
+
+def test_development_engine_completion_rejects_candidate_claim_drift() -> None:
+    test_step = _completed_step(
+        "work-engine",
+        "dev_run_tests",
+        observation={"passed": True},
+    )
+    work = WorkItem(
+        request="build capability",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="change:engine",
+        source_turn_id="development:engine",
+        work_id="work-engine",
+        result={
+            "commit": "d" * 40,
+            "development_ticket_id": "ticket-demo",
+            "development_ticket_digest": "e" * 64,
+        },
+    )
+
+    with pytest.raises(
+        CapabilityCandidateError,
+        match="canonical candidate commit",
+    ):
+        validate_development_engine_completion_evidence(
+            work,
+            (test_step,),
+            {
+                "ticket_id": "ticket-demo",
+                "ticket_digest": "e" * 64,
+                "candidate_revision": "f" * 40,
+                "test_evidence_refs": [f"workstep:{test_step.step_id}"],
+            },
+        )
 
 
 def test_verification_requires_exact_approved_test_targets() -> None:
