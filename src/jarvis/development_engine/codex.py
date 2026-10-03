@@ -165,7 +165,9 @@ class _OfficialCodexThread:
         )
         final = getattr(result, "final_response", None)
         if not isinstance(final, str) or not final.strip():
-            raise RuntimeError("Codex turn completed without a structured final response")
+            raise RuntimeError(
+                "Codex turn completed without a structured final response"
+            )
         return CodexTurnResponse(
             final_response=final,
             usage=self._usage(result),
@@ -417,7 +419,9 @@ def _ticket_prompt(
             ),
         },
     }
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
 
 
 def _compact_value(value: object) -> object:
@@ -427,8 +431,7 @@ def _compact_value(value: object) -> object:
         return value[:_MAX_OBSERVATION_STRING_CHARS] + "...<truncated>"
     if isinstance(value, dict):
         return {
-            str(key): _compact_value(item)
-            for key, item in list(value.items())[:64]
+            str(key): _compact_value(item) for key, item in list(value.items())[:64]
         }
     if isinstance(value, list | tuple):
         return [_compact_value(item) for item in value[:64]]
@@ -597,9 +600,13 @@ class CodexPlanDevelopmentEngine:
         self._model = normalized_model
         self._sessions = sessions
         self._runtime_factory = runtime_factory or OfficialCodexRuntimeFactory()
-        self._state_dir = pathlib.Path(
-            state_dir or (default_work_state_dir() / "development_engine" / "codex")
-        ).expanduser().resolve()
+        self._state_dir = (
+            pathlib.Path(
+                state_dir or (default_work_state_dir() / "development_engine" / "codex")
+            )
+            .expanduser()
+            .resolve()
+        )
         self._max_turns = max_turns
         self._max_tool_calls = max_tool_calls
         self._observed_version = _DEFAULT_ENGINE_VERSION
@@ -645,13 +652,7 @@ class CodexPlanDevelopmentEngine:
             *observed,
         }
         normalized = tuple(
-            sorted(
-                {
-                    str(item).strip()
-                    for item in requested
-                    if str(item).strip()
-                }
-            )
+            sorted({str(item).strip() for item in requested if str(item).strip()})
         )
         unknown = [item for item in normalized if item not in allowed]
         if unknown:
@@ -737,7 +738,10 @@ class CodexPlanDevelopmentEngine:
                 usage=usage,
             )
 
-        if disposition is DevelopmentDisposition.NEEDS_ARCHITECTURE_REVISION and not evidence:
+        if (
+            disposition is DevelopmentDisposition.NEEDS_ARCHITECTURE_REVISION
+            and not evidence
+        ):
             return DevelopmentResultV1.create(
                 ticket=ticket,
                 disposition=DevelopmentDisposition.FAILED,
@@ -856,9 +860,7 @@ class CodexPlanDevelopmentEngine:
                         )
                         continue
                     try:
-                        parameters = json.loads(
-                            str(call.get("parameters_json") or "")
-                        )
+                        parameters = json.loads(str(call.get("parameters_json") or ""))
                     except json.JSONDecodeError:
                         tool_results.append(
                             {
@@ -881,9 +883,7 @@ class CodexPlanDevelopmentEngine:
                         continue
 
                     try:
-                        observation = dict(
-                            await tools.invoke(tool_name, parameters)
-                        )
+                        observation = dict(await tools.invoke(tool_name, parameters))
                     except DevelopmentToolOwnerInputRequired as exc:
                         return DevelopmentResultV1.create(
                             ticket=ticket,
@@ -908,7 +908,10 @@ class CodexPlanDevelopmentEngine:
                             blocker_code="local_resource_pressure",
                             usage=last_usage,
                         )
-                    except (DevelopmentToolDenied, DevelopmentToolExecutionError) as exc:
+                    except (
+                        DevelopmentToolDenied,
+                        DevelopmentToolExecutionError,
+                    ) as exc:
                         tool_results.append(
                             {
                                 "call_id": call_id,
