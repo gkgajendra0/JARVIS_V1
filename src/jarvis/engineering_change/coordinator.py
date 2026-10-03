@@ -371,6 +371,17 @@ class ChangeCoordinator:
                     change = self.store.require(change_id)
                     if terminal_state is not None:
                         if change.state is not ChangeState.DEVELOPING:
+                            if (
+                                change.state is ChangeState.RESEARCHING
+                                and terminal_state is ChangeState.RESEARCHING
+                            ):
+                                # A DEVELOPMENT completion handler may atomically
+                                # reopen governed research (for example a typed
+                                # DevelopmentEngine architecture revision). Complete
+                                # that lifecycle escalation in the same reconciliation
+                                # so the replacement source attempt is durably linked
+                                # before returning to the caller.
+                                return self.reconcile(change_id)
                             return change
                         return self.store.transition(
                             change_id,
