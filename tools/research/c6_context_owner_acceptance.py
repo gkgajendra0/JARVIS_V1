@@ -223,9 +223,7 @@ async def _run_decision_replay(
         )
 
     ready_by_type = {
-        work_type.value: sum(
-            1 for item in prepared if item[0].work_type is work_type
-        )
+        work_type.value: sum(1 for item in prepared if item[0].work_type is work_type)
         for work_type in (WorkType.RESEARCH, WorkType.DEVELOPMENT)
     }
     selected = []
