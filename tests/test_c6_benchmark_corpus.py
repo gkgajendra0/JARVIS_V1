@@ -57,7 +57,11 @@ def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
         legacy = replace(item.request, context_mode=WorkContextMode.SHADOW)
         legacy_chars = _chars(_work_input_payload(legacy))
         optimized_chars = _chars(_work_input_payload(item.request))
-        assert optimized_chars < legacy_chars
+        assert optimized_chars < legacy_chars, (
+            item.case_id,
+            legacy_chars,
+            optimized_chars,
+        )
 
 
 @pytest.mark.asyncio
