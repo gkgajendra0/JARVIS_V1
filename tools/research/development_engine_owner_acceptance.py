@@ -32,7 +32,10 @@ from jarvis.development_engine import (
     DevelopmentTicketV1,
     WorkExecutorDevelopmentToolPort,
 )
-from jarvis.development_engine.codex import OfficialCodexRuntimeFactory
+from jarvis.development_engine.codex import (
+    OfficialCodexRuntimeFactory,
+    REVIEWED_CODEX_SDK_VERSION,
+)
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
     DockerDevelopmentTestRunner,
@@ -117,9 +120,9 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
         import openai_codex  # type: ignore
 
         codex_version = str(getattr(openai_codex, "__version__", "unknown"))
-        codex_ready = True
+        codex_installed = True
     except ImportError:
-        codex_ready = False
+        codex_installed = False
 
     checks = {
         "model_configured": bool(model),
@@ -128,7 +131,10 @@ def _preflight(*, model: str, test_image: str) -> dict[str, object]:
         "docker_available": docker_ready,
         "test_image_available": image_ready,
         "chatgpt_plan_connected": chatgpt_plan_connected,
-        "openai_codex_installed": codex_ready,
+        "openai_codex_installed": codex_installed,
+        "openai_codex_reviewed_version": (
+            codex_version == REVIEWED_CODEX_SDK_VERSION
+        ),
     }
     return {
         "schema": "jarvis.development_engine_owner_preflight.v1",
@@ -207,6 +213,12 @@ async def _run_proof(
             "openai-codex is not installed. Install the JARVIS "
             "'development-codex' optional dependency before this proof."
         ) from exc
+    codex_version = str(getattr(openai_codex, "__version__", "")).strip()
+    if codex_version != REVIEWED_CODEX_SDK_VERSION:
+        raise RuntimeError(
+            "Owner proof requires reviewed openai-codex=="
+            f"{REVIEWED_CODEX_SDK_VERSION}; found {codex_version or 'unknown'}."
+        )
 
     with tempfile.TemporaryDirectory(prefix="jarvis-dev-engine-proof-") as temp:
         root = pathlib.Path(temp).resolve()
@@ -351,9 +363,7 @@ async def _run_proof(
             "schema": "jarvis.development_engine_owner_acceptance.v1",
             "passed": passed,
             "model": model,
-            "openai_codex_version": str(
-                getattr(openai_codex, "__version__", "unknown")
-            ),
+            "openai_codex_version": codex_version,
             "baseline_revision": baseline_revision,
             "source_revision_after": source_after,
             "ticket_id": ticket.ticket_id,
