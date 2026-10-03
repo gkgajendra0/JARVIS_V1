@@ -42,9 +42,8 @@ def build_development_reasoning_fingerprint(
     normalized_progress = None
     if progress_digest is not None:
         normalized_progress = str(progress_digest).strip().casefold()
-        if (
-            len(normalized_progress) != 64
-            or any(char not in "0123456789abcdef" for char in normalized_progress)
+        if len(normalized_progress) != 64 or any(
+            char not in "0123456789abcdef" for char in normalized_progress
         ):
             raise ValueError("progress_digest must be a lowercase SHA-256 digest")
     return canonical_digest(
