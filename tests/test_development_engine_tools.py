@@ -141,7 +141,7 @@ def _ticket(
         base_revision="c" * 40,
         workspace_id="workspace_demo",
         required_operations=("operation.demo",),
-        acceptance_criteria=("tests pass",),
+        acceptance_criteria=("pytest:tests/test_demo.py",),
         allowed_tools=tools,
         writable_paths=writable_paths,
     )
@@ -253,6 +253,30 @@ async def test_tool_port_denies_writes_when_ticket_has_no_writable_paths(
         await port.invoke(
             "write_file",
             {"path": "src/demo.py", "text": "VALUE = 1\n"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_tool_port_defaults_to_and_enforces_approved_test_targets(
+    tmp_path,
+) -> None:
+    store = _running_store(tmp_path)
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=_ticket(tools=("run_tests",)),
+        store=store,
+        actions=WorkActionRegistry((OwnerExecutor(),)),
+        resources=ResourceLeaseManager({"cpu": 1}),
+    )
+
+    with pytest.raises(DevelopmentToolOwnerInputRequired):
+        await port.invoke("run_tests", {})
+    step = store.list_steps("work_demo")[-1]
+    assert step.input_data["targets"] == ["tests/test_demo.py"]
+
+    with pytest.raises(DevelopmentToolDenied, match="acceptance targets"):
+        await port.invoke(
+            "run_tests",
+            {"targets": ["tests/test_unapproved.py"]},
         )
 
 
