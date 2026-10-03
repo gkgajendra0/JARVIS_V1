@@ -238,6 +238,43 @@ async def test_tool_port_enforces_exact_ticket_writable_paths(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_tool_port_allows_descendants_of_approved_directory_scope(
+    tmp_path,
+) -> None:
+    store = _running_store(tmp_path)
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=_ticket(
+            tools=("write_file",),
+            writable_paths=("src/jarvis/acquired_capabilities",),
+        ),
+        store=store,
+        actions=WorkActionRegistry((WriteExecutor(),)),
+        resources=ResourceLeaseManager({"git": 1}),
+    )
+
+    written = await port.invoke(
+        "write_file",
+        {
+            "path": "src/jarvis/acquired_capabilities/example/provider.py",
+            "text": "VALUE = 1\n",
+        },
+    )
+    assert (
+        written["path"]
+        == "src/jarvis/acquired_capabilities/example/provider.py"
+    )
+
+    with pytest.raises(DevelopmentToolDenied, match="outside DevelopmentTicket"):
+        await port.invoke(
+            "write_file",
+            {
+                "path": "src/jarvis/acquired_capability_other/provider.py",
+                "text": "VALUE = 2\n",
+            },
+        )
+
+
+@pytest.mark.asyncio
 async def test_tool_port_denies_writes_when_ticket_has_no_writable_paths(
     tmp_path,
 ) -> None:
