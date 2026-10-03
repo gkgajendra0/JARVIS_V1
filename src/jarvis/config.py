@@ -13,7 +13,11 @@ from jarvis.ai_provider import (
     normalize_tts_provider,
 )
 from jarvis.autonomy.mode import AutonomyMode
-from jarvis.machine_config import configured_text, load_machine_settings
+from jarvis.machine_config import (
+    configured_alias_text,
+    configured_text,
+    load_machine_settings,
+)
 from jarvis.runtime_lane import (
     GiccMode,
     RuntimeLane,
@@ -593,15 +597,12 @@ class JarvisConfig:
             work_global_concurrency=_configured_int(
                 "JARVIS_WORK_GLOBAL_CONCURRENCY", 4, machine
             ),
-            development_test_docker_image=(
-                _configured_optional_text(
+            development_test_docker_image=configured_alias_text(
+                (
                     "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
-                    machine,
-                )
-                or _configured_optional_text(
                     "JARVIS_DEV_TEST_DOCKER_IMAGE",
-                    machine,
-                )
+                ),
+                machine,
             ),
             github_promotion_enabled=_configured_bool(
                 "JARVIS_GITHUB_PROMOTION_ENABLED", False, machine
