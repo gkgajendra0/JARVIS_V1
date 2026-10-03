@@ -379,7 +379,6 @@ async def test_c6_fixture_stability_does_not_promote_apply_when_stable(
     assert result["c6_apply_decision_equivalence_proven"] is False
 
 
-
 @pytest.mark.asyncio
 async def test_c6_fixture_first_pair_preflight_uses_no_provider_state(
     monkeypatch: pytest.MonkeyPatch,
@@ -401,9 +400,10 @@ async def test_c6_fixture_first_pair_preflight_uses_no_provider_state(
     assert result["case"]["case_id"] == "development_repair_after_failure"
     assert result["case"]["legacy_request_digest"]
     assert result["case"]["optimized_request_digest"]
-    assert result["case"]["legacy_request_digest"] != result["case"][
-        "optimized_request_digest"
-    ]
+    assert (
+        result["case"]["legacy_request_digest"]
+        != result["case"]["optimized_request_digest"]
+    )
     assert result["case"]["optimized_chars"] < result["case"]["legacy_chars"]
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert result["actions_executed"] is False
