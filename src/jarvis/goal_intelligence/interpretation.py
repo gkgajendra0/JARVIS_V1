@@ -409,6 +409,7 @@ class GoalInterpretationShadowRuntime:
         conversation: ConversationSession,
         interpreter: GoalInterpreter,
         store: GoalStore,
+        provider_circuit: BackgroundProviderCircuit | None = None,
     ) -> None:
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
@@ -420,7 +421,7 @@ class GoalInterpretationShadowRuntime:
         self._interpreter = interpreter
         self._store = store
         self._tasks: set[asyncio.Task[None]] = set()
-        self._provider_circuit = BackgroundProviderCircuit()
+        self._provider_circuit = provider_circuit or BackgroundProviderCircuit()
         self._closed = False
 
     @property
