@@ -223,3 +223,42 @@ async def test_commit_candidate_is_guarded_by_durable_evidence(tmp_path) -> None
 
     with pytest.raises(DevelopmentToolDenied, match="staged source change"):
         await port.invoke("commit_candidate", {})
+
+
+def test_tool_port_reconstructs_progress_from_canonical_work_steps(tmp_path) -> None:
+    store = _running_store(tmp_path)
+    work_id = "work_demo"
+
+    def add(kind: str, observation: dict[str, Any]) -> None:
+        step = WorkStep(work_id=work_id, kind=kind, summary=kind)
+        store.add_step(step)
+        store.save_step(step.start().complete(observation))
+
+    add("dev_write_file", {"path": "src/jarvis/demo.py", "sha256": "a" * 64})
+    add("dev_run_tests", {"passed": True, "sandbox": "docker"})
+    add("dev_diff", {"diff": "bounded"})
+    add(
+        "dev_commit",
+        {
+            "committed": True,
+            "commit": "d" * 40,
+            "branch": "work/demo",
+            "clean": True,
+        },
+    )
+
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=_ticket(tools=("read_file",)),
+        store=store,
+        actions=WorkActionRegistry((FakeExecutor(),)),
+        resources=ResourceLeaseManager({"cpu": 1}),
+    )
+
+    snapshot = port.snapshot()
+
+    assert snapshot["schema"] == "jarvis.development_progress.v1"
+    assert snapshot["changed_files"] == ["src/jarvis/demo.py"]
+    assert snapshot["candidate_revision"] == "d" * 40
+    assert snapshot["candidate_branch"] == "work/demo"
+    assert len(snapshot["passing_test_evidence_refs"]) == 1
+    assert snapshot["completed_tool_step_count"] == 4
