@@ -43,6 +43,7 @@ from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, Brai
 from jarvis.work.context import WorkContextAssembler, WorkContextMode
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkStep, WorkType
+from jarvis.work.reasoner import work_reasoning_contract_digest
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -232,6 +233,7 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     snapshot = route_store.get_context_snapshot(record.route_request_id)
     assert snapshot is not None
     assert snapshot["schema"] == "c6_work_reasoning_snapshot.v1"
+    assert snapshot["reasoner_contract_digest"] == work_reasoning_contract_digest()
     assert snapshot["work_version"] == work.version
     assert snapshot["work_state"] == work.state.value
     assert snapshot["work_current_step_id"] is None
