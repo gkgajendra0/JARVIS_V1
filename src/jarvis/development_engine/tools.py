@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
 import pathlib
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from jarvis.work.engine import (
