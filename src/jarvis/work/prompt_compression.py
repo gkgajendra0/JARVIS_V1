@@ -51,9 +51,7 @@ def normalize_prompt_compression_mode(
     try:
         return PromptCompressionMode(str(value).strip().casefold())
     except ValueError as exc:
-        raise ValueError(
-            "prompt compression mode must be off, shadow, or apply"
-        ) from exc
+        raise ValueError("prompt compression mode must be off, shadow, or apply") from exc
 
 
 class PromptCompressionError(RuntimeError):
