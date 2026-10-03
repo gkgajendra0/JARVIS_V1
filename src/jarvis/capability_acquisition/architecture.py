@@ -469,20 +469,38 @@ def ensure_capability_acquisition_architecture_current(
         raise CapabilityAcquisitionArchitectureError(
             "capability acquisition architecture provenance drifted"
         )
-    stage = next(
-        (
-            item
-            for item in store.list_stages(change_id)
-            if item.stage_key
-            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
-        ),
-        None,
+    source_stage_key = (
+        OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
     )
-    if stage is None:
-        raise CapabilityAcquisitionArchitectureError(
-            "capability acquisition source stage is missing"
+    stage = None
+    work = None
+    for candidate_stage in reversed(store.list_stages(change_id)):
+        if candidate_stage.stage_key != source_stage_key:
+            continue
+        candidate_work = store.work.require(candidate_stage.work_id)
+        if candidate_work.state is not WorkState.COMPLETED:
+            continue
+        finalize_step = next(
+            (
+                item
+                for item in reversed(store.work.list_steps(candidate_work.work_id))
+                if item.kind == "acq_finalize"
+                and item.state.value == "completed"
+                and item.observation.get("finalized") is True
+                and item.observation.get("plan_artifact_id")
+                == plan_artifact.artifact_id
+                and item.observation.get("plan_artifact_digest") == plan_artifact.digest
+            ),
+            None,
         )
-    work = store.work.require(stage.work_id)
+        if finalize_step is not None:
+            stage = candidate_stage
+            work = candidate_work
+            break
+    if stage is None or work is None:
+        raise CapabilityAcquisitionArchitectureError(
+            "capability acquisition architecture has no matching completed source stage"
+        )
     _validate_completed_acquisition(
         store,
         change=change,
@@ -547,6 +565,37 @@ class CapabilityAcquisitionSourceCompletionHandler:
             stage=stage,
             work=work,
         )
+        revision_request = self._store.latest_artifact(
+            change.change_id,
+            "architecture_revision_request",
+        )
+        if (
+            revision_request is not None
+            and revision_request.payload.get("source_attempt") == stage.attempt
+            and revision_request.payload.get("previous_architecture_artifact_id")
+            == artifact.artifact_id
+        ):
+            no_progress_payload: dict[str, object] = {
+                "schema": "capability_acquisition_revision_no_progress.v1",
+                "source_attempt": stage.attempt,
+                "source_work_id": work.work_id,
+                "revision_request_artifact_id": revision_request.artifact_id,
+                "revision_request_digest": revision_request.digest,
+                "unchanged_architecture_artifact_id": artifact.artifact_id,
+                "unchanged_architecture_digest": artifact.digest,
+            }
+            current = self._store.latest_artifact(
+                change.change_id,
+                "architecture_revision_no_progress",
+            )
+            if current is None or current.payload != no_progress_payload:
+                self._store.add_artifact(
+                    change.change_id,
+                    kind="architecture_revision_no_progress",
+                    payload=no_progress_payload,
+                )
+            return ChangeState.FAILED
+
         ensure_capability_acquisition_architecture_current(
             self._store,
             change.change_id,
