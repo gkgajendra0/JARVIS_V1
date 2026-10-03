@@ -45,6 +45,7 @@ from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.reasoner import (
     _work_input_payload,
     evaluate_structured_work_request,
+    work_reasoning_contract_digest,
 )
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
@@ -554,6 +555,129 @@ def _prepare_fixture_benchmark(
     }
 
 
+async def _run_fixture_stability_benchmark(
+    *,
+    model: str,
+    preflight_only: bool = False,
+) -> dict[str, object]:
+    """Measure exact same-context decision stability with at most two model calls."""
+
+    prepared, candidate_stats = _prepare_fixture_benchmark(
+        max_cases=_MAX_PAIRED_BENCHMARK_CASES
+    )
+    selected = next(
+        (
+            item
+            for item in prepared
+            if item[0].case_id == "development_repair_after_failure"
+        ),
+        None,
+    )
+    ready = selected is not None
+    common: dict[str, object] = {
+        "corpus_source": "checked_in_descriptor_fixture",
+        "model": model,
+        "fixture_stability_preflight_only": bool(preflight_only),
+        "fixture_stability_ready": ready,
+        "production_routing_mutated": False,
+        "actions_executed": False,
+        "paid_fallback_enabled": False,
+        "provider_circuit_updated": False,
+        "c6_apply_decision_equivalence_proven": False,
+        "candidate_stats": candidate_stats,
+    }
+    if selected is None:
+        return {
+            **common,
+            "model_calls": 0,
+            "same_context_stable": None,
+            "case": None,
+        }
+
+    case, legacy_chars, optimized_chars = selected
+    legacy_request = replace(case.request, context_mode=WorkContextMode.SHADOW)
+    legacy_payload = _work_input_payload(legacy_request)
+    request_digest = canonical_digest(legacy_payload)
+    case_common = {
+        "case_id": case.case_id,
+        "work_id": case.request.work.work_id,
+        "work_type": case.request.work.work_type.value,
+        "legacy_chars": legacy_chars,
+        "optimized_chars": optimized_chars,
+        "same_context_request_digest": request_digest,
+        "reasoning_contract_digest": work_reasoning_contract_digest(),
+    }
+    if preflight_only:
+        return {
+            **common,
+            "model_calls": 0,
+            "same_context_stable": None,
+            "case": case_common,
+        }
+
+    circuit = BackgroundProviderCircuitRegistry().circuit(
+        provider_circuit_key(provider=CHATGPT_PLAN_PROVIDER_ID, model=model)
+    )
+    if not circuit.allow_request():
+        raise RuntimeError(
+            "ChatGPT-plan provider circuit is cooling down; "
+            f"retry after about {int(circuit.remaining_seconds)} seconds"
+        )
+
+    plan = ChatGPTPlanSessionManager()
+    if not plan.is_connected():
+        raise RuntimeError("ChatGPT-plan connection is unavailable")
+    visible = {item.slug for item in plan.list_models()}
+    if model not in visible:
+        raise RuntimeError(
+            f"C6 fixture stability model {model!r} is not visible to the connected "
+            "ChatGPT plan"
+        )
+    client = build_chatgpt_plan_structured_output_client(
+        model=model,
+        session_manager=plan,
+        provider_retries=False,
+    )
+
+    first, first_telemetry = await evaluate_structured_work_request(
+        client,
+        legacy_request,
+    )
+    # Deliberately reuse the exact same immutable BrainRequest. The transport creates
+    # independent Responses calls, so any decision-field mismatch here is provider/model
+    # variance rather than C6 context compaction.
+    second, second_telemetry = await evaluate_structured_work_request(
+        client,
+        legacy_request,
+    )
+    comparison = compare_context_decisions(first, second)
+    return {
+        **common,
+        "model_calls": 2,
+        "same_context_stable": comparison.equivalent,
+        "case": {
+            **case_common,
+            "first_action": first.action,
+            "second_action": second.action,
+            "action_equal": comparison.action_equal,
+            "first_parameters": dict(first.parameters),
+            "second_parameters": dict(second.parameters),
+            "first_parameters_digest": canonical_digest(first.parameters),
+            "second_parameters_digest": canonical_digest(second.parameters),
+            "goal_complete_equal": comparison.goal_complete_equal,
+            "needs_owner_equal": comparison.needs_owner_equal,
+            "owner_question_equal": comparison.owner_question_equal,
+            "parameters_equal": comparison.parameters_equal,
+            "first_usage": dict(first_telemetry.usage),
+            "first_usage_observed": first_telemetry.usage_observed,
+            "first_latency_ms": round(first_telemetry.latency_ms, 2),
+            "second_usage": dict(second_telemetry.usage),
+            "second_usage_observed": second_telemetry.usage_observed,
+            "second_latency_ms": round(second_telemetry.latency_ms, 2),
+        },
+    }
+
+
 async def _run_fixture_decision_benchmark(
     *,
     model: str,
@@ -1035,6 +1159,23 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     replay_mode.add_argument(
+        "--fixture-stability-preflight",
+        action="store_true",
+        help=(
+            "Validate the fixed same-context C6 stability probe without initializing "
+            "ChatGPT-plan or consuming model quota."
+        ),
+    )
+    replay_mode.add_argument(
+        "--fixture-stability-benchmark",
+        action="store_true",
+        help=(
+            "Explicitly consume exactly two ChatGPT-plan calls for the same legacy "
+            "fixture request to measure provider/model decision stability. No Work "
+            "action is executed and this cannot prove C6 APPLY equivalence."
+        ),
+    )
+    replay_mode.add_argument(
         "--fixture-decision-preflight",
         action="store_true",
         help=(
@@ -1218,6 +1359,8 @@ def main() -> int:
         or args.decision_replay_preflight
         or args.paired_decision_preflight
         or args.paired_decision_benchmark
+        or args.fixture_stability_preflight
+        or args.fixture_stability_benchmark
         or args.fixture_decision_preflight
         or args.fixture_decision_benchmark
     ):
@@ -1235,7 +1378,14 @@ def main() -> int:
             )
             return 2
         try:
-            if args.fixture_decision_preflight or args.fixture_decision_benchmark:
+            if args.fixture_stability_preflight or args.fixture_stability_benchmark:
+                replay = asyncio.run(
+                    _run_fixture_stability_benchmark(
+                        model=model,
+                        preflight_only=args.fixture_stability_preflight,
+                    )
+                )
+            elif args.fixture_decision_preflight or args.fixture_decision_benchmark:
                 replay = asyncio.run(
                     _run_fixture_decision_benchmark(
                         model=model,
@@ -1270,7 +1420,29 @@ def main() -> int:
             print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
 
-        if args.fixture_decision_preflight:
+        if args.fixture_stability_preflight:
+            result["model_api_called"] = False
+            result["fixture_stability_preflight"] = replay
+            result["c6_fixture_stability_ready"] = replay[
+                "fixture_stability_ready"
+            ]
+            result["c6_apply_note"] = (
+                "Same-context stability preflight only; no model call was made and "
+                "C6 APPLY remains unproven."
+            )
+            if replay["fixture_stability_ready"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_stability_benchmark:
+            result["model_api_called"] = bool(replay["model_calls"])
+            result["fixture_stability_benchmark"] = replay
+            result["c6_apply_decision_equivalence_proven"] = False
+            result["c6_apply_note"] = (
+                "Same-context stability is a nondeterminism diagnostic only. It does "
+                "not prove legacy-vs-optimized C6 equivalence and cannot promote APPLY."
+            )
+            if replay["same_context_stable"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_decision_preflight:
             result["model_api_called"] = False
             result["fixture_decision_preflight"] = replay
             result["c6_fixture_preflight_ready"] = replay["fixture_preflight_ready"]
