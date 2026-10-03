@@ -162,7 +162,9 @@ def reconstruct_recorded_context_request(
         else str(raw_current_step_id).strip() or None
     )
     if current_step_id is not None and current_step_id not in step_by_id:
-        raise ValueError("C6 replay current_step_id is outside the durable history prefix")
+        raise ValueError(
+            "C6 replay current_step_id is outside the durable history prefix"
+        )
     historical_work = replace(
         work,
         state=work_state,
@@ -201,16 +203,16 @@ def reconstruct_recorded_context_request(
     if evidence_count != len(context_pack.evidence):
         raise ValueError("C6 replay context evidence count differs from provenance")
 
-    expected_evidence_digest = str(
-        snapshot.get("context_evidence_digest") or ""
-    ).strip().casefold()
+    expected_evidence_digest = (
+        str(snapshot.get("context_evidence_digest") or "").strip().casefold()
+    )
     actual_evidence_digest = canonical_digest(list(context_pack.evidence))
     if expected_evidence_digest != actual_evidence_digest:
         raise ValueError("C6 replay context evidence differs from durable provenance")
 
-    expected_pack_digest = str(
-        snapshot.get("context_pack_digest") or ""
-    ).strip().casefold()
+    expected_pack_digest = (
+        str(snapshot.get("context_pack_digest") or "").strip().casefold()
+    )
     actual_pack_digest = canonical_digest(
         {
             "recent_steps": context_pack.recent_steps_payload(),
