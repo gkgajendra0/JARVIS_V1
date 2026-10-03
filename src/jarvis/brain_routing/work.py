@@ -464,16 +464,26 @@ class GlobalBrainRouterReasoner:
             request.context_mode is WorkContextMode.SHADOW
             and request.context_pack is not None
         ):
-            # Keep replay provenance restart-safe. Route provenance and its bounded
-            # C6 snapshot are separate durable writes, so a retry must idempotently
-            # backfill a snapshot if the process stopped between those writes.
-            self._route_store.record_context_snapshot(
-                route_request_id=facts.route_request_id,
-                work_id=request.work.work_id,
-                snapshot=_context_replay_snapshot(
-                    request,
-                    all_steps=all_steps,
-                ),
-                created_at_epoch=float(self._clock()),
+            # Keep replay provenance restart-safe without making optional C6
+            # benchmark evidence an availability dependency for ordinary Work.
+            # A retry may backfill a missing snapshot after a crash, but an
+            # existing snapshot produced by an older reasoning contract remains
+            # immutable. C6 replay will reject that older contract later.
+            snapshot = _context_replay_snapshot(
+                request,
+                all_steps=all_steps,
             )
+            existing_snapshot = self._route_store.get_context_snapshot(
+                facts.route_request_id
+            )
+            if existing_snapshot is None or (
+                existing_snapshot.get("reasoner_contract_digest")
+                == snapshot.get("reasoner_contract_digest")
+            ):
+                self._route_store.record_context_snapshot(
+                    route_request_id=facts.route_request_id,
+                    work_id=request.work.work_id,
+                    snapshot=snapshot,
+                    created_at_epoch=float(self._clock()),
+                )
         return actual
