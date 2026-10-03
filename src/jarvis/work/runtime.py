@@ -78,6 +78,7 @@ from jarvis.development_engine.phase9 import (
     Phase9DevelopmentControlPlaneDecider,
     Phase9DevelopmentEngineExecutor,
     Phase9DevelopmentTicketBuilder,
+    Phase9ResearchEvidenceExecutor,
     handle_phase9_model_owner_request,
     phase9_development_completion_guard,
 )
@@ -748,6 +749,7 @@ def build_work_runtime(
         diagnostic_image,
         protected_main_root=diagnostic_workspace_manager.repository_root,
     )
+    phase9_ticket_builder = Phase9DevelopmentTicketBuilder(change_store)
     executors = (
         ResearchWorkExecutor(
             research_service,
@@ -786,6 +788,7 @@ def build_work_runtime(
                 protected_main_root=workspace_manager.repository_root,
             ),
         ),
+        Phase9ResearchEvidenceExecutor(change_store, phase9_ticket_builder),
         *(
             ()
             if capability_runtime is None
@@ -817,7 +820,6 @@ def build_work_runtime(
         min_available_memory_mb=min_available_memory_mb,
     )
 
-    phase9_ticket_builder = Phase9DevelopmentTicketBuilder(change_store)
     control_plane_decider = None
     if development_engine_enabled:
         if not chatgpt_plan_enabled or chatgpt_plan_session is None:
