@@ -1,5 +1,9 @@
 """Provider-neutral engineering-development boundary for JARVIS."""
 
+from .admission import (
+    DEVELOPMENT_REASONING_POLICY_VERSION,
+    build_development_reasoning_fingerprint,
+)
 from .contracts import (
     DEVELOPMENT_ENGINE_CONTRACT_VERSION,
     DevelopmentDisposition,
@@ -8,6 +12,11 @@ from .contracts import (
     DevelopmentUsageV1,
 )
 from .protocol import DevelopmentEngine, DevelopmentToolPort, DevelopmentToolSpecV1
+from .session_store import (
+    DevelopmentSessionRecord,
+    DevelopmentSessionState,
+    DevelopmentSessionStore,
+)
 from .tools import (
     DevelopmentToolDenied,
     DevelopmentToolExecutionError,
@@ -19,9 +28,13 @@ from .tools import (
 
 __all__ = [
     "DEVELOPMENT_ENGINE_CONTRACT_VERSION",
+    "DEVELOPMENT_REASONING_POLICY_VERSION",
     "DevelopmentDisposition",
     "DevelopmentEngine",
     "DevelopmentResultV1",
+    "DevelopmentSessionRecord",
+    "DevelopmentSessionState",
+    "DevelopmentSessionStore",
     "DevelopmentTicketV1",
     "DevelopmentToolDenied",
     "DevelopmentToolExecutionError",
@@ -32,4 +45,5 @@ __all__ = [
     "DevelopmentToolSpecV1",
     "DevelopmentUsageV1",
     "WorkExecutorDevelopmentToolPort",
+    "build_development_reasoning_fingerprint",
 ]
