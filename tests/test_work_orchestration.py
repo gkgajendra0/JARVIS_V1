@@ -344,12 +344,12 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
 
     first = await engine.advance(item.work_id)
     assert first.state is WorkState.WAITING_RESOURCE
-    assert first.retry_after_seconds == 5.0
+    assert first.retry_after_seconds == 30.0
     assert "Gemini rate limit" in (store.require(item.work_id).status_detail or "")
 
     second = await engine.advance(item.work_id)
     assert second.state is WorkState.WAITING_RESOURCE
-    assert second.retry_after_seconds == 10.0
+    assert second.retry_after_seconds == 60.0
 
     recovered = await engine.advance(item.work_id)
     assert recovered.state is WorkState.RUNNING
@@ -357,7 +357,7 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
 
     reset = await engine.advance(item.work_id)
     assert reset.state is WorkState.WAITING_RESOURCE
-    assert reset.retry_after_seconds == 5.0
+    assert reset.retry_after_seconds == 30.0
 
     pressure_steps = [
         step

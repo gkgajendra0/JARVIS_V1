@@ -29,6 +29,8 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("JARVIS_GEMINI_TTS_MODEL", " gemini-3.8-flash-lite-tts ")
     monkeypatch.setenv("JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", "true")
     monkeypatch.setenv("JARVIS_GLOBAL_BRAIN_ROUTER_MODE", " APPLY ")
+    monkeypatch.setenv("JARVIS_WORK_CONTEXT_MODE", " APPLY ")
+    monkeypatch.setenv("JARVIS_WORK_PROMPT_COMPRESSION_MODE", " SHADOW ")
     monkeypatch.setenv("JARVIS_SHOW_TRANSCRIPT", "off")
     monkeypatch.setenv("JARVIS_STARTUP_GREETING", "off")
     monkeypatch.setenv("JARVIS_WAKE_MODEL_PATH", " C:\\models\\jarvis.onnx ")
@@ -62,6 +64,8 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.gemini_tts_model == "gemini-3.8-flash-lite-tts"
     assert config.tts_project_billing_isolation_verified is True
     assert config.global_brain_router_mode == "apply"
+    assert config.work_context_mode == "apply"
+    assert config.work_prompt_compression_mode == "shadow"
     assert config.show_transcript is False
     assert config.startup_greeting_enabled is False
     assert config.wake_model_path == "C:\\models\\jarvis.onnx"
@@ -78,6 +82,26 @@ def test_voice_configuration_reads_environment(monkeypatch: pytest.MonkeyPatch) 
     assert config.vision_lenovo_device_index == 2
     assert config.vision_pocket3_device_index == 4
     assert config.speaker_shadow_enabled is True
+
+
+def test_development_test_image_accepts_new_key_and_legacy_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("JARVIS_RUNTIME_ENV_OVERRIDES", "true")
+    monkeypatch.setenv(
+        "JARVIS_DEV_TEST_DOCKER_IMAGE",
+        "legacy-image:local",
+    )
+
+    legacy = JarvisConfig.from_environment()
+    assert legacy.development_test_docker_image == "legacy-image:local"
+
+    monkeypatch.setenv(
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+        "canonical-image:local",
+    )
+    canonical = JarvisConfig.from_environment()
+    assert canonical.development_test_docker_image == "canonical-image:local"
 
 
 def test_tts_defaults_to_current_quality_first_model() -> None:
@@ -197,6 +221,67 @@ def test_invalid_live_context_environment_value_fails_truthfully(
 
     with pytest.raises(ValueError, match="JARVIS_LIVE_CONTEXT_RECENT_TURNS"):
         JarvisConfig.from_environment()
+
+
+def test_development_engine_requires_chatgpt_plan_and_model() -> None:
+    assert JarvisConfig().development_engine_enabled is False
+
+    with pytest.raises(ValueError, match="CHATGPT_PLAN_ENABLED"):
+        JarvisConfig(
+            development_engine_enabled=True,
+            development_engine_model="gpt-test",
+        )
+
+    with pytest.raises(ValueError, match="DEVELOPMENT_ENGINE_MODEL"):
+        JarvisConfig(
+            chatgpt_plan_enabled=True,
+            chatgpt_plan_model=None,
+            development_engine_enabled=True,
+            development_engine_model=None,
+        )
+
+    with pytest.raises(ValueError, match="DEVELOPMENT_TEST_DOCKER_IMAGE"):
+        JarvisConfig(
+            chatgpt_plan_enabled=True,
+            chatgpt_plan_model="gpt-plan",
+            development_engine_enabled=True,
+        )
+
+    config = JarvisConfig(
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-plan",
+        development_engine_enabled=True,
+        development_test_docker_image="jarvis-dev-tests:local",
+    )
+    assert config.development_engine_enabled is True
+    assert config.chatgpt_plan_model == "gpt-plan"
+
+
+def test_work_context_defaults_to_shadow_and_validates_mode() -> None:
+    assert JarvisConfig().work_context_mode == "shadow"
+    assert JarvisConfig(work_context_mode=" APPLY ").work_context_mode == "apply"
+
+    with pytest.raises(ValueError, match="work_context_mode"):
+        JarvisConfig(work_context_mode="automatic")
+
+
+def test_work_prompt_compression_defaults_off_and_validates_mode() -> None:
+    assert JarvisConfig().work_prompt_compression_mode == "off"
+    assert (
+        JarvisConfig(
+            work_prompt_compression_mode=" APPLY "
+        ).work_prompt_compression_mode
+        == "apply"
+    )
+
+    with pytest.raises(ValueError, match="work_prompt_compression_mode"):
+        JarvisConfig(work_prompt_compression_mode="automatic")
+
+    with pytest.raises(ValueError, match="combined-context acceptance"):
+        JarvisConfig(
+            work_context_mode="apply",
+            work_prompt_compression_mode="apply",
+        )
 
 
 def test_global_brain_router_defaults_to_shadow_and_validates_mode() -> None:

@@ -119,7 +119,9 @@ def _waiting_resource_delay(payload: dict[str, Any]) -> float:
         return 0.25
     if delay <= 0:
         return 0.25
-    return min(delay, 60.0)
+    # WAITING_RESOURCE uses a wakeable DBOS.recv timeout, so preserving the
+    # provider's full durable cooldown no longer harms graceful shutdown.
+    return delay
 
 
 def _durable_interruptible_wait(seconds: float, *, patch_name: str) -> None:
@@ -285,6 +287,7 @@ class DBOSWorkExecutionBackend:
     _ACTIVE_DBOS_STATES = frozenset({"PENDING", "ENQUEUED", "DELAYED"})
     _RESUMABLE_DBOS_STATES = frozenset({"CANCELLED", "MAX_RECOVERY_ATTEMPTS_EXCEEDED"})
     _TERMINAL_DBOS_STATES = frozenset({"SUCCESS", "ERROR"})
+    _RECOVERABLE_TERMINAL_DBOS_STATES = frozenset({"ERROR"})
 
     def __init__(
         self,
@@ -386,6 +389,43 @@ class DBOSWorkExecutionBackend:
                 f"terminal: {normalized} ({state})"
             )
         raise RuntimeError(f"unsupported DBOS workflow state for {normalized}: {state}")
+
+    def recover_execution(
+        self,
+        execution_id: str,
+        *,
+        work_id: str,
+        priority: WorkPriority,
+        recovery_token: str,
+    ) -> str:
+        """Recover one canonical-active execution without replaying side effects.
+
+        This hook is called only after WorkEngine startup reconciliation. Any
+        executor step that was in-flight at process loss has therefore already
+        been marked INTERRUPTED and moved to WAITING_FOR_OWNER. A terminal ERROR
+        can then be rebound to a fresh DBOS workflow ID for the same canonical
+        WorkItem without silently replaying the unverified step.
+        """
+
+        self._require_accepting_work()
+        normalized = str(execution_id).strip()
+        if not normalized:
+            raise ValueError("execution id must not be empty")
+        status = _run_dbos_sync(DBOS.get_workflow_status, normalized)
+        state = self._classify_existing_status(status)
+        if state is None:
+            if normalized != work_id:
+                raise RuntimeError(
+                    f"durable execution is missing from DBOS: {normalized}"
+                )
+            return self.submit(work_id, priority=priority)
+        if state in self._RECOVERABLE_TERMINAL_DBOS_STATES:
+            return self.restart(
+                work_id,
+                priority=priority,
+                retry_token=recovery_token,
+            )
+        return self.reconcile_execution(normalized)
 
     def park_for_shutdown(self, execution_ids: tuple[str, ...]) -> tuple[str, ...]:
         """Durably park active executions so process shutdown can drain safely."""

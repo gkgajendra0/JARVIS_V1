@@ -70,6 +70,18 @@ from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_PROVIDER_ID,
     ChatGPTPlanSessionManager,
 )
+from jarvis.development_engine.codex import CodexPlanDevelopmentEngine
+from jarvis.development_engine.coordinator import DevelopmentEngineCoordinator
+from jarvis.development_engine.phase9 import (
+    Phase9DevelopmentControlPlaneDecider,
+    Phase9DevelopmentEngineExecutor,
+    Phase9DevelopmentTicketBuilder,
+    Phase9ResearchControlPlaneDecider,
+    Phase9ResearchEvidenceExecutor,
+    handle_phase9_model_owner_request,
+    phase9_development_completion_guard,
+)
+from jarvis.development_engine.session_store import DevelopmentSessionStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.store import ChangeStore
@@ -129,6 +141,10 @@ from jarvis.promotion.runtime_composition import (
     PromotionRuntimeConfig,
 )
 from jarvis.promotion.store import PromotionStore
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -147,6 +163,7 @@ from jarvis.work.estimates import estimate_work
 from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.prompt_compression import LLMLingua2WorkPayloadCompressor
 from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError, default_work_store_path
@@ -609,6 +626,12 @@ def build_work_runtime(
     model: str | None = None,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    development_engine_enabled: bool = False,
+    development_engine_model: str | None = None,
+    paid_fallback_enabled: bool = False,
+    provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
+    work_context_mode: str = "shadow",
+    work_prompt_compression_mode: str = "off",
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -675,11 +698,31 @@ def build_work_runtime(
         adapter_registry=adapter_registry,
         chatgpt_plan_enabled=chatgpt_plan_enabled,
         chatgpt_plan_model=chatgpt_plan_model,
+        paid_fallback_enabled=paid_fallback_enabled,
     )
+    provider_circuits = provider_circuit_registry or BackgroundProviderCircuitRegistry()
     routing_store = ModelRoutingStore(store)
     brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
+
+    resource_capacities = {
+        "work": max(1, global_concurrency),
+        "cpu": max(1, min(2, global_concurrency)),
+        "git": 1,
+        "network": max(1, global_concurrency),
+        "gpu": 1,
+        "browser": 1,
+        "desktop": 1,
+        "provider_api": 1,
+        "prompt_compression": 1,
+        "development_intelligence": 1,
+        **engineering_resource_capacities(),
+    }
+    resources = ResourceLeaseManager(
+        resource_capacities,
+        min_available_memory_mb=min_available_memory_mb,
+    )
 
     def _credential_available(target) -> bool:
         if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
@@ -699,10 +742,21 @@ def build_work_runtime(
         eligibility_policy=EligibilityPolicy(),
         credential_available=_credential_available,
     )
+    compression_mode = str(work_prompt_compression_mode).strip().casefold()
+    prompt_compressor = (
+        None if compression_mode == "off" else LLMLingua2WorkPayloadCompressor()
+    )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
+        provider_circuit_registry=provider_circuits,
+        resources=resources,
+        resource_keys=("provider_api",),
+        prompt_compressor=prompt_compressor,
+        prompt_compression_mode=compression_mode,
+        prompt_compression_work_types=frozenset({WorkType.RESEARCH}),
+        prompt_compression_resource_keys=("cpu", "prompt_compression"),
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
@@ -736,6 +790,7 @@ def build_work_runtime(
         diagnostic_image,
         protected_main_root=diagnostic_workspace_manager.repository_root,
     )
+    phase9_ticket_builder = Phase9DevelopmentTicketBuilder(change_store)
     executors = (
         ResearchWorkExecutor(
             research_service,
@@ -774,6 +829,7 @@ def build_work_runtime(
                 protected_main_root=workspace_manager.repository_root,
             ),
         ),
+        Phase9ResearchEvidenceExecutor(change_store, phase9_ticket_builder),
         *(
             ()
             if capability_runtime is None
@@ -787,26 +843,72 @@ def build_work_runtime(
             test_runner=build_development_test_runner(development_test_image),
         ),
     )
-    actions = WorkActionRegistry(tuple(executors))
-    resource_capacities = {
-        "work": max(1, global_concurrency),
-        "cpu": max(1, min(2, global_concurrency)),
-        "git": 1,
-        "network": max(1, global_concurrency),
-        "gpu": 1,
-        "browser": 1,
-        "desktop": 1,
-        "provider_api": 1,
-        **engineering_resource_capacities(),
-    }
-    resources = ResourceLeaseManager(
-        resource_capacities,
-        min_available_memory_mb=min_available_memory_mb,
-    )
+    base_actions = WorkActionRegistry(tuple(executors))
+
+    control_plane_decider = None
+    if development_engine_enabled:
+        if not chatgpt_plan_enabled or chatgpt_plan_session is None:
+            raise ValueError(
+                "DevelopmentEngine requires Sign in with ChatGPT to be enabled"
+            )
+        development_model = str(
+            development_engine_model or chatgpt_plan_model or ""
+        ).strip()
+        if not development_model:
+            raise ValueError(
+                "DevelopmentEngine requires an explicit ChatGPT-plan coding model"
+            )
+        development_sessions = DevelopmentSessionStore(store)
+        development_specialist = CodexPlanDevelopmentEngine(
+            chatgpt_plan=chatgpt_plan_session,
+            model=development_model,
+            sessions=development_sessions,
+            provider_circuit=provider_circuits.circuit(
+                provider_circuit_key(
+                    provider=CHATGPT_PLAN_PROVIDER_ID,
+                    model=development_model,
+                )
+            ),
+        )
+        development_coordinator = DevelopmentEngineCoordinator(
+            engine=development_specialist,
+            sessions=development_sessions,
+            resources=resources,
+            resource_keys=("development_intelligence", "provider_api"),
+        )
+        phase9_engine_executor = Phase9DevelopmentEngineExecutor(
+            builder=phase9_ticket_builder,
+            coordinator=development_coordinator,
+            actions=base_actions,
+            resources=resources,
+            change_store=change_store,
+        )
+        actions = WorkActionRegistry((*executors, phase9_engine_executor))
+        phase9_research_decider = Phase9ResearchControlPlaneDecider(
+            phase9_ticket_builder
+        )
+        phase9_development_decider = Phase9DevelopmentControlPlaneDecider(
+            phase9_ticket_builder
+        )
+
+        def control_plane_decider(work, available_actions, steps):
+            research = phase9_research_decider(work, available_actions, steps)
+            if research is not None:
+                return research
+            return phase9_development_decider(work, available_actions, steps)
+    else:
+        actions = base_actions
 
     def _completion_guard(work: WorkItem, steps):
         if work.work_type is WorkType.EXTERNAL_ACCEPTANCE:
             return external_acceptance_completion_guard(steps)
+        development_engine_guard = phase9_development_completion_guard(
+            change_store,
+            work,
+            steps,
+        )
+        if development_engine_guard is not None:
+            return development_engine_guard
         stage = change_store.stage_for_work(work.work_id)
         if stage is None:
             return None
@@ -859,8 +961,23 @@ def build_work_runtime(
         base_resource_keys=("work",),
         action_admission=change_store.work_admitted,
         completion_guard=_completion_guard,
+        model_owner_request_handler=lambda work, question: (
+            handle_phase9_model_owner_request(
+                change_store,
+                work,
+                question,
+            )
+        ),
+        control_plane_decider=control_plane_decider,
+        context_mode=work_context_mode,
     )
     engine.reconcile_interrupted_steps()
+    reconciled_model_owner = engine.reconcile_waiting_model_owner_requests()
+    if reconciled_model_owner:
+        LOGGER.info(
+            "Migrated stale Phase-9 model owner waits into governed research: %s",
+            ", ".join(reconciled_model_owner),
+        )
     reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
     if reconciled_owner_deliveries:
         LOGGER.info(

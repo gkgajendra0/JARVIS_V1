@@ -241,3 +241,239 @@ Implemented in this slice:
 - zero-cloud owner-machine history acceptance harness.
 
 Production model input remains legacy while C6 is in shadow.
+
+
+## Owner-machine paired acceptance update — 2026-10-04
+
+The current PR #252 acceptance sequence has now produced three fixed
+legacy-vs-optimized pair results:
+
+1. `development_repair_after_failure`
+   - equivalent after the fixture pinned the exact required commit message;
+   - action, parameters, completion and owner/safety fields matched;
+   - optimized context materially reduced input usage.
+2. `development_ready_for_local_commit`
+   - equivalent;
+   - 22.96% serialized-context reduction;
+   - action/parameters/completion/owner fields all matched.
+3. `research_requires_reresolution_after_new_evidence`
+   - action remained `acq_record_candidate`;
+   - `goal_complete`, `needs_owner` and owner-question fields matched;
+   - parameters did **not** match;
+   - 76.94% serialized-context reduction.
+
+The research mismatch is material for C6 because the differing parameters contain
+verification/acceptance semantics, not merely summary wording.
+
+Therefore:
+
+- production C6 remains **SHADOW**;
+- `JARVIS_WORK_CONTEXT_MODE=APPLY` is not authorized;
+- do not weaken the strict action-parameter equivalence gate to obtain a pass;
+- next diagnosis should be zero-model first: identify which omitted/reshaped research
+  evidence caused the parameter divergence and determine whether those parameters should
+  be preserved in ContextPack or constructed canonically/deterministically downstream;
+- only after that correction should the affected research pair be re-run.
+
+The same acceptance also reinforces the model-routing direction in
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`: context reduction and model
+tiering are complementary, and neither may trade away decision quality.
+
+
+## Zero-model research-mismatch diagnosis — 2026-10-04
+
+Repository inspection after the failed research pair shows:
+
+- the fixed research fixture contains an original owner goal, nine earlier research
+  observations, an unverified SDK candidate, a prior resolve, a prior finalize and then
+  newer authoritative evidence;
+- the C6 RESEARCH selector explicitly retains the latest step per kind, the latest
+  research observations and critical `acq_inspect_goal`, `acq_resolve`,
+  `acq_finalize` and `research_web` milestones;
+- therefore the mismatch is not evidence that C6 simply dropped the candidate,
+  re-resolution/finalization state or newest evidence;
+- `acq_record_candidate` currently asks the model to generate free-form
+  `verification_requirements` and optional free-form
+  `external_acceptance_requirements`, and those strings participate in the canonical
+  candidate digest.
+
+The owner-machine mismatch is consistent with two context projections causing the model
+to phrase/choose different safety requirements even though both selected the same source,
+version, operations, evidence and action. The optimized output also surfaced owner-goal
+constraints such as activation approval/no broad scanning that were not present in the
+legacy parameter set.
+
+Do **not** solve this by ignoring parameter differences. These fields affect candidate
+identity and governance semantics.
+
+Preferred architecture investigation:
+
+1. move workflow invariants such as "re-resolve after verification" into deterministic
+   control-plane/completion-guard logic rather than model prose;
+2. derive mandatory owner-goal constraints (for example activation approval or discovery
+   restrictions) from canonical goal/Authority state;
+3. replace safety-critical free-form requirement strings with typed/versioned requirement
+   IDs or another canonical representation where practical;
+4. leave model-generated narrative advisory rather than authority-bearing;
+5. then re-run only the affected research legacy-vs-optimized pair.
+
+This is a stronger safety design than weakening C6 equivalence and should also make lower
+model tiers more viable because less governance meaning depends on exact model wording.
+
+
+## Market-solution direction — LLMLingua family (2026-10-04)
+
+Do not build a bespoke Markdown/token-pruning compressor before benchmarking existing
+prompt-compression technology.
+
+Fresh research identifies Microsoft's open-source LLMLingua family as the strongest first
+candidate for C6:
+
+- LLMLingua is explicitly designed to compress prompts before sending them to a stronger
+  black-box LLM;
+- LongLLMLingua adds question-conditioned long-context selection/reordering and is aimed at
+  long-context/RAG workloads;
+- LLMLingua-2 replaces a generative compressor with a much smaller token-classification
+  encoder, is task-agnostic, and the project reports materially faster compression than
+  the original LLMLingua;
+- the implementation supports structured JSON compression and force-preserved tokens /
+  uncompressed regions, which is important for JARVIS canonical IDs, owner constraints,
+  action names, digests and safety contracts;
+- the official BERT-base multilingual LLMLingua-2 checkpoint is approximately 709 MB,
+  making a fully local compressor practical on the owner machine without consuming
+  ChatGPT-plan quota.
+
+Primary references:
+- https://github.com/microsoft/LLMLingua
+- https://www.microsoft.com/en-us/research/project/llmlingua/llmlingua/
+- https://huggingface.co/microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank
+- https://aclanthology.org/2024.findings-acl.57/
+- https://aclanthology.org/2024.acl-long.91/
+
+### Revised C6 experiment
+
+Before adding more custom ContextPack heuristics, compare three payloads on the same fixed
+decision corpus:
+
+A. legacy full canonical provider payload;
+B. current hand-selected C6 ContextPack;
+C. canonical payload passed through a local LLMLingua-2/LongLLMLingua adapter with
+   mandatory JARVIS fields force-preserved.
+
+Measure:
+- exact semantic decision equivalence;
+- safety/owner/parameter equivalence;
+- input tokens;
+- serialized size;
+- compressor latency;
+- compressor CPU/GPU memory;
+- whether canonical IDs/digests/constraints survive byte-for-value;
+- fallback behavior if the compressor is unavailable.
+
+LLMLingua output is model input only. It never becomes canonical JARVIS state.
+
+If C preserves more decision semantics than B at similar/lower token usage, prefer the
+existing compressor technology over additional home-grown summarization rules.
+
+## LLMLingua implementation status — pending owner-machine acceptance
+
+Implementation is complete on PR #252 for the bounded experiment and is intentionally
+not production-enabled yet.
+
+Implemented:
+
+- optional `context-compression` dependency group with `llmlingua==0.2.2`;
+- local LLMLingua-2 BERT-base compressor using the reviewed
+  `microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank` model;
+- reviewed Hugging Face model revision pinned to `5f0c827`;
+- CPU is the default compression device so the experiment does not depend on the normal
+  JARVIS local-brain/GPU runtime;
+- JARVIS JSON structure is preserved exactly;
+- Work identity/request, purpose, allowed action catalog/schema, IDs, versions, digests,
+  source/code `text`, errors and other non-target leaves remain exact;
+- only sufficiently long natural-language evidence fields such as `summary`, `content`,
+  `body`, `rationale` and non-action `description` are candidates;
+- a replacement is used only when it is non-empty and smaller than the original leaf;
+- post-compression validation fails closed if object keys, list lengths, types or any
+  protected value change;
+- model-facing override is explicit and does not mutate canonical `BrainRequest`,
+  WorkStore or execution state;
+- owner harness supports a zero-ChatGPT local preflight and a bounded live A/B;
+- the default LLMLingua proof targets only
+  `research_requires_reresolution_after_new_evidence`, the case that failed the
+  hand-selected C6 comparison;
+- the live default uses at most two ChatGPT-plan calls and stops on mismatch;
+- LLMLingua evidence can never automatically set global C6 APPLY.
+
+The implementation deliberately does not use LLMLingua's `compress_json` path. Upstream
+has an open LLMLingua-2 `compress_json` failure report; JARVIS instead owns JSON
+traversal/validation and gives LLMLingua only selected string leaves.
+
+### Owner-machine acceptance sequence
+
+From an exact clean branch head:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[context-compression]"
+```
+
+Then run the zero-ChatGPT local preflight:
+
+```powershell
+.\.venv\Scripts\python.exe tools\research\c6_context_owner_acceptance.py `
+    --llmlingua-fixture-preflight
+```
+
+The first run may download the pinned ~713 MB model into the normal Hugging Face cache.
+It must report `c6_llmlingua_preflight_ready=true`, zero model calls and a real size
+reduction before any ChatGPT-plan A/B is attempted.
+
+Only after preflight passes, run the bounded research-pair comparison:
+
+```powershell
+.\.venv\Scripts\python.exe tools\research\c6_context_owner_acceptance.py `
+    --llmlingua-fixture-benchmark `
+    --model gpt-6-astra
+```
+
+Default live budget: exactly two model calls if both requests execute.
+
+Acceptance requires:
+- same action;
+- exact same parameters;
+- same `goal_complete`;
+- same `needs_owner`;
+- same owner question;
+- lower actual provider input-token usage for the compressed request;
+- no action execution, routing mutation, provider-circuit mutation or paid fallback.
+
+A pass is evidence to design/promote the compressor path; it is not permission for this
+benchmark command itself to flip production C6 APPLY.
+
+### Production integration gate
+
+The same compressor is now wired into the real `RoutedWorkReasoner`, not only the
+benchmark harness. The production-facing setting is:
+
+`JARVIS_WORK_PROMPT_COMPRESSION_MODE=off|shadow|apply`
+
+Safety behavior:
+
+- default is `off`, so current production behavior is unchanged;
+- `shadow` locally compresses eligible RESEARCH payloads and records/logs the metrics
+  while still sending the exact legacy payload to the model;
+- `apply` sends the compressed payload only when the structure-preserving compressor
+  reports a real reduction;
+- compressor initialization/inference/validation failure falls back to the exact
+  legacy payload rather than blocking Work or sending partially compressed data;
+- initial runtime eligibility is RESEARCH only; DEVELOPMENT remains on its already
+  tested C6 path and source/diff text is never token-pruned by LLMLingua;
+- compression runs through a serialized local `prompt_compression`/CPU resource lease
+  so concurrent WorkItems cannot stampede one local transformer;
+- routing/replay identity remains based on canonical BrainRequest/Work state;
+- `JARVIS_WORK_CONTEXT_MODE=apply` and
+  `JARVIS_WORK_PROMPT_COMPRESSION_MODE=apply` are rejected together until a combined
+  compression acceptance exists.
+
+The runtime integration is code-complete but remains `off` by default. The owner-machine
+preflight and A/B decision test above are the admission gate before any setting change.

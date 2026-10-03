@@ -1,5 +1,7 @@
 import asyncio
+import copy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel
@@ -31,6 +33,7 @@ from jarvis.model_routing.router import (
 )
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
+from jarvis.provider_circuit import BackgroundProviderCircuitRegistry
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
@@ -39,7 +42,13 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
 )
 from jarvis.work.models import WorkItem, WorkType
-from jarvis.work.reasoner import _SYSTEM_PROMPT, RoutedWorkReasoner, _WorkDecisionModel
+from jarvis.work.reasoner import (
+    _SYSTEM_PROMPT,
+    RoutedWorkReasoner,
+    _WorkDecisionModel,
+    evaluate_structured_work_request,
+)
+from jarvis.work.resources import ResourceLeaseManager
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -96,6 +105,55 @@ class FakeStructuredClient:
     ) -> BaseModel:
         self.calls.append((system_prompt, input_payload, response_model))
         return response_model(value="ok")
+
+
+class FakeWorkDecisionClient:
+    provider_name = "fake"
+    model_name = "fake-work-model"
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt: str,
+        input_payload: dict,
+        response_model: type[BaseModel],
+    ) -> StructuredOutputTelemetry:
+        assert system_prompt == _SYSTEM_PROMPT
+        assert input_payload["work"]["type"] == "development"
+        return StructuredOutputTelemetry(
+            parsed=response_model(
+                action="do_step",
+                summary="Execute the bounded step.",
+                parameters_json='{"value":1}',
+                goal_complete=False,
+                needs_owner=False,
+                owner_question=None,
+            ),
+            usage={"input_tokens": 40, "output_tokens": 10, "total_tokens": 50},
+            usage_observed=True,
+            latency_ms=12.5,
+        )
+
+
+@pytest.mark.asyncio
+async def test_structured_work_evaluator_does_not_execute_or_route(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "evaluator.sqlite")
+    work = _work(store)
+    request = _brain_request(work)
+
+    decision, telemetry = await evaluate_structured_work_request(
+        FakeWorkDecisionClient(),
+        request,
+    )
+
+    assert decision.action == "do_step"
+    assert decision.parameters == {"value": 1}
+    assert decision.goal_complete is False
+    assert decision.needs_owner is False
+    assert telemetry.usage["total_tokens"] == 50
+    assert store.list_steps(work.work_id) == ()
 
 
 @pytest.mark.asyncio
@@ -273,6 +331,9 @@ def _routed_reasoner(
     adapter: ReasoningAdapter | None = None,
     provider_id: str = "fake",
     cost_profile: CostProfile | None = None,
+    resources: ResourceLeaseManager | None = None,
+    prompt_compressor=None,
+    prompt_compression_mode: str = "off",
 ) -> tuple[
     SQLiteWorkStore,
     ModelRoutingStore,
@@ -309,8 +370,200 @@ def _routed_reasoner(
         invoker=ModelInvoker(adapters),
         primary_target_id="work.fake.default",
         clock=lambda: 101.0,
+        resources=resources,
+        resource_keys=(() if resources is None else ("provider_api",)),
+        prompt_compressor=prompt_compressor,
+        prompt_compression_mode=prompt_compression_mode,
     )
     return work_store, routing_store, reasoner, selected_adapter
+
+
+class _FakePayloadCompressor:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.calls = 0
+
+    def compress_payload(self, payload):
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("compressor unavailable")
+        compressed = copy.deepcopy(payload)
+        compressed["compression_probe"] = "compressed"
+        original_chars = len(str(payload))
+        compressed_chars = max(1, original_chars - 10)
+        return SimpleNamespace(
+            payload=compressed,
+            reduced=True,
+            original_chars=original_chars,
+            compressed_chars=compressed_chars,
+            reduction_percent=10.0,
+            compressed_strings=1,
+            latency_ms=1.0,
+        )
+
+
+class _PayloadCapturingAdapter(ReasoningAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.payloads: list[dict] = []
+
+    async def invoke_structured_with_telemetry(
+        self,
+        *,
+        target: ModelTarget,
+        system_prompt: str,
+        input_payload: dict,
+        response_model: type[BaseModel],
+        request_context: ModelInvocationContext,
+    ) -> StructuredOutputTelemetry:
+        self.payloads.append(copy.deepcopy(input_payload))
+        return await super().invoke_structured_with_telemetry(
+            target=target,
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+            request_context=request_context,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "compressed_sent"),
+    [("shadow", False), ("apply", True)],
+)
+async def test_routed_prompt_compression_shadow_and_apply_modes(
+    tmp_path: Path,
+    mode: str,
+    compressed_sent: bool,
+) -> None:
+    compressor = _FakePayloadCompressor()
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode=mode,
+    )
+    work = WorkItem(
+        request="Research one bounded source.",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-compression",
+        source_turn_id=f"turn-{mode}",
+    )
+    work_store.create(work)
+
+    await reasoner.decide(_brain_request(work))
+
+    assert compressor.calls == 1
+    assert len(adapter.payloads) == 1
+    assert ("compression_probe" in adapter.payloads[0]) is compressed_sent
+
+
+@pytest.mark.asyncio
+async def test_routed_prompt_compression_failure_falls_back_to_legacy(
+    tmp_path: Path,
+) -> None:
+    compressor = _FakePayloadCompressor(fail=True)
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode="apply",
+    )
+    work = WorkItem(
+        request="Research one bounded source.",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-compression-fallback",
+        source_turn_id="turn-compression-fallback",
+    )
+    work_store.create(work)
+
+    decision = await reasoner.decide(_brain_request(work))
+
+    assert decision.action == "do_step"
+    assert compressor.calls == 1
+    assert len(adapter.payloads) == 1
+    assert "compression_probe" not in adapter.payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_routed_prompt_compression_is_research_only_by_default(
+    tmp_path: Path,
+) -> None:
+    compressor = _FakePayloadCompressor()
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode="apply",
+    )
+    work = _work(work_store)
+
+    await reasoner.decide(_brain_request(work))
+
+    assert compressor.calls == 0
+    assert len(adapter.payloads) == 1
+    assert "compression_probe" not in adapter.payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_shared_provider_resource_serializes_parallel_reasoning(
+    tmp_path: Path,
+) -> None:
+    class ConcurrencyAdapter(ReasoningAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active = 0
+            self.max_active = 0
+
+        async def invoke_structured_with_telemetry(
+            self,
+            *,
+            target: ModelTarget,
+            system_prompt: str,
+            input_payload: dict,
+            response_model: type[BaseModel],
+            request_context: ModelInvocationContext,
+        ) -> StructuredOutputTelemetry:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            try:
+                await asyncio.sleep(0.02)
+                return await super().invoke_structured_with_telemetry(
+                    target=target,
+                    system_prompt=system_prompt,
+                    input_payload=input_payload,
+                    response_model=response_model,
+                    request_context=request_context,
+                )
+            finally:
+                self.active -= 1
+
+    resources = ResourceLeaseManager({"provider_api": 1})
+    adapter = ConcurrencyAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        resources=resources,
+    )
+    first = _work(work_store)
+    second = WorkItem(
+        request="Perform another bounded engineering step",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="session-route",
+        source_turn_id="turn-route-2",
+    )
+    work_store.create(second)
+
+    await asyncio.gather(
+        reasoner.decide(_brain_request(first)),
+        reasoner.decide(_brain_request(second)),
+    )
+
+    assert len(adapter.calls) == 2
+    assert adapter.max_active == 1
 
 
 @pytest.mark.asyncio
@@ -560,7 +813,7 @@ async def test_chatgpt_plan_subscription_limit_falls_back_to_paid_provider(
         "work.chatgpt_plan.default",
         "work.gemini.default",
     ]
-    assert attempts[0].failure_class == "rate_limited"
+    assert attempts[0].failure_class == "quota_exhausted"
     assert attempts[1].failure_class is None
 
 
@@ -593,3 +846,52 @@ async def test_single_target_rate_limit_becomes_routing_resource_blocker(
     attempts = routing_store.list_attempts(persisted.decision.decision_id)
     assert len(attempts) == 1
     assert attempts[0].failure_class == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_routed_reasoner_honors_shared_circuit_before_same_target_retry(
+    tmp_path: Path,
+) -> None:
+    class ServiceUnavailable(RuntimeError):
+        status_code = 503
+
+    now = 1000.0
+    work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    routing_store = ModelRoutingStore(work_store)
+    adapter = ReasoningAdapter(
+        routing_store=routing_store,
+        error=ServiceUnavailable("503 temporarily unavailable"),
+    )
+    adapters = ModelAdapterRegistry((adapter,))
+    targets = ModelTargetRegistry(
+        adapters,
+        (_target("work.fake.default"),),
+    )
+    router = ModelRouter(
+        target_registry=targets,
+        adapter_registry=adapters,
+        strategy_registry=RoutingStrategyRegistry((EngineeringStageStrategy(),)),
+        routing_store=routing_store,
+        eligibility_policy=EligibilityPolicy(),
+        credential_available=lambda target: True,
+        clock=lambda: now,
+    )
+    circuits = BackgroundProviderCircuitRegistry(
+        path=tmp_path / "provider-circuits.json",
+        clock=lambda: now,
+    )
+    reasoner = RoutedWorkReasoner(
+        router=router,
+        invoker=ModelInvoker(adapters),
+        primary_target_id="work.fake.default",
+        clock=lambda: now,
+        provider_circuit_registry=circuits,
+    )
+
+    with pytest.raises(RoutingResourceBlocked):
+        await reasoner.decide(_brain_request(_work(work_store)))
+
+    assert len(adapter.calls) == 1
+    circuit = circuits.circuit("fake:fake-model")
+    assert circuit.allow_request() is False
+    assert circuit.failed_attempts == 1

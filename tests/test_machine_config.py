@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 from jarvis.config import JarvisConfig
-from jarvis.machine_config import load_machine_settings, save_machine_settings
+from jarvis.machine_config import (
+    configured_alias_text,
+    load_machine_settings,
+    save_machine_settings,
+)
 
 
 def test_machine_config_round_trip(tmp_path: Path) -> None:
@@ -134,12 +138,61 @@ def test_environment_is_used_when_machine_setting_is_absent(
     assert JarvisConfig.from_environment().ai_provider == "gemini"
 
 
+def test_alias_resolution_preserves_machine_first_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    names = (
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+        "JARVIS_DEV_TEST_DOCKER_IMAGE",
+    )
+    settings = {
+        "JARVIS_DEV_TEST_DOCKER_IMAGE": "persisted-legacy:local",
+    }
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+    monkeypatch.setenv(
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+        "stale-shell:local",
+    )
+
+    assert configured_alias_text(names, settings) == "persisted-legacy:local"
+
+    monkeypatch.setenv("JARVIS_RUNTIME_ENV_OVERRIDES", "true")
+    assert configured_alias_text(names, settings) == "stale-shell:local"
+
+
+def test_jarvis_config_preserves_machine_precedence_across_image_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_DEV_TEST_DOCKER_IMAGE": "persisted-legacy:local",
+        },
+        path,
+    )
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+    monkeypatch.setenv(
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+        "stale-shell:local",
+    )
+
+    config = JarvisConfig.from_environment()
+
+    assert config.development_test_docker_image == "persisted-legacy:local"
+
+
 def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> None:
     path = tmp_path / "machine.json"
     save_machine_settings(
         {
             "JARVIS_WORK_ORCHESTRATION_ENABLED": "true",
             "JARVIS_WORK_ORCHESTRATION_MODEL": "model-x",
+            "JARVIS_WORK_PAID_FALLBACK_ENABLED": "false",
+            "JARVIS_DEVELOPMENT_ENGINE_ENABLED": "true",
+            "JARVIS_DEVELOPMENT_ENGINE_MODEL": "gpt-reviewed",
+            "JARVIS_WORK_CONTEXT_MODE": "shadow",
             "JARVIS_GLOBAL_BRAIN_ROUTER_MODE": "shadow",
             "JARVIS_WORK_GLOBAL_CONCURRENCY": "4",
             "JARVIS_DEV_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
@@ -149,9 +202,26 @@ def test_work_runtime_non_secret_settings_can_be_persisted(tmp_path: Path) -> No
     settings = load_machine_settings(path)
     assert settings["JARVIS_WORK_ORCHESTRATION_ENABLED"] == "true"
     assert settings["JARVIS_WORK_ORCHESTRATION_MODEL"] == "model-x"
+    assert settings["JARVIS_WORK_PAID_FALLBACK_ENABLED"] == "false"
+    assert settings["JARVIS_DEVELOPMENT_ENGINE_ENABLED"] == "true"
+    assert settings["JARVIS_DEVELOPMENT_ENGINE_MODEL"] == "gpt-reviewed"
+    assert settings["JARVIS_WORK_CONTEXT_MODE"] == "shadow"
     assert settings["JARVIS_GLOBAL_BRAIN_ROUTER_MODE"] == "shadow"
     assert settings["JARVIS_WORK_GLOBAL_CONCURRENCY"] == "4"
     assert settings["JARVIS_DEV_TEST_DOCKER_IMAGE"] == "jarvis-dev-tests:local"
+
+
+def test_development_test_image_alias_can_be_persisted(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
+        },
+        path,
+    )
+
+    settings = load_machine_settings(path)
+    assert settings["JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE"] == "jarvis-dev-tests:local"
 
 
 def test_work_database_url_cannot_be_persisted(tmp_path: Path) -> None:

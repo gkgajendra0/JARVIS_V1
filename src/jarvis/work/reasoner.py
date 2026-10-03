@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -13,7 +14,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
-from jarvis.hands.provider_adapters import build_structured_output_client
+from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.hands.provider_adapters import (
+    StructuredOutputClient,
+    StructuredOutputTelemetry,
+    build_structured_output_client,
+)
 from jarvis.model_routing.cost import estimate_usage_cost_usd
 from jarvis.model_routing.health import (
     HealthAction,
@@ -34,9 +40,20 @@ from jarvis.model_routing.router import (
     build_work_routing_request,
 )
 from jarvis.model_routing.store import RoutingStoreError
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.provider_resilience import classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 from jarvis.work.context import WorkContextMode, build_context_shadow_report
+from jarvis.work.models import WorkType
+from jarvis.work.prompt_compression import (
+    PromptCompressionMode,
+    WorkPayloadCompressor,
+    normalize_prompt_compression_mode,
+)
+from jarvis.work.resources import ResourceLeaseManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +86,15 @@ secret or discovery substrate requirements, satisfy the supplied Phase-5 substra
 actions rather than using shell/package-manager shortcuts. Resolve exact approved Python
 dependencies through dev_resolve_python_dependency, bind the capability manifest, and
 after passing sandbox tests record current substrate verification before completion.
+For governed capability-development work, never ask the owner to approve, reopen,
+revise, or review architecture through ordinary owner input. Architecture approval is
+owned by the EngineeringChange gate. If recorded evidence proves the approved
+architecture itself cannot safely continue, set needs_owner only as a lifecycle
+escalation signal and make owner_question a concise factual revision reason, not an
+approval request; JARVIS will return the change to research and surface a canonical gate
+only after a replacement architecture exists. Factual pairing/credential input must come
+from the typed executor boundary rather than free-form model approval.
+
 If an acquired executor needs owner pairing input at runtime, return CapabilityResult
 status=partial with data.owner_input_request containing kind=pin or confirmation, a
 bounded human prompt, and an optional safe parameter name. Never persist the supplied
@@ -164,6 +190,17 @@ class _WorkDecisionModel(BaseModel):
     owner_question: str | None
 
 
+def work_reasoning_contract_digest() -> str:
+    """Bind C6 replay evidence to the exact Work prompt and response contract."""
+
+    return canonical_digest(
+        {
+            "system_prompt": _SYSTEM_PROMPT,
+            "response_schema": _WorkDecisionModel.model_json_schema(),
+        }
+    )
+
+
 def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
     legacy = {
         "work": {
@@ -212,12 +249,24 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
         optimized_payload=optimized,
         pack=pack,
     )
+    apply_optimized = (
+        request.context_mode is WorkContextMode.APPLY
+        and report.optimized_chars < report.legacy_chars
+        and report.optimized_estimated_tokens < report.legacy_estimated_tokens
+    )
+    applied_payload = "optimized" if apply_optimized else "legacy"
+    fallback_reason = (
+        "none"
+        if apply_optimized or request.context_mode is not WorkContextMode.APPLY
+        else "no_reduction"
+    )
     LOGGER.info(
         (
             "c6_work_context mode=%s work_id=%s legacy_chars=%d "
             "optimized_chars=%d legacy_estimated_tokens=%d "
             "optimized_estimated_tokens=%d reduction_percent=%.2f "
-            "selected_steps=%d omitted_steps=%d"
+            "selected_steps=%d omitted_steps=%d applied_payload=%s "
+            "fallback_reason=%s"
         ),
         request.context_mode.value,
         request.work.work_id,
@@ -228,10 +277,10 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
         report.reduction_percent,
         report.selected_step_count,
         report.omitted_step_count,
+        applied_payload,
+        fallback_reason,
     )
-    if request.context_mode is WorkContextMode.APPLY:
-        return optimized
-    return legacy
+    return optimized if apply_optimized else legacy
 
 
 def _brain_decision(
@@ -259,6 +308,38 @@ def _brain_decision(
     if decision.action is not None and decision.action not in allowed:
         raise ValueError("work reasoner selected an action outside the JARVIS catalog")
     return decision
+
+
+async def evaluate_structured_work_request(
+    client: StructuredOutputClient,
+    request: BrainRequest,
+    *,
+    provider_payload_override: dict[str, Any] | None = None,
+) -> tuple[BrainDecision, StructuredOutputTelemetry]:
+    """Evaluate one Work request without routing persistence or action execution.
+
+    The optional override is an explicit benchmark/integration seam. Canonical request
+    and decision validation still use request; only temporary provider input may change.
+    """
+
+    if provider_payload_override is not None and not isinstance(
+        provider_payload_override, dict
+    ):
+        raise TypeError("provider_payload_override must be an object")
+
+    result = await client.parse_with_telemetry(
+        system_prompt=_SYSTEM_PROMPT,
+        input_payload=(
+            _work_input_payload(request)
+            if provider_payload_override is None
+            else provider_payload_override
+        ),
+        response_model=_WorkDecisionModel,
+    )
+    parsed = result.parsed
+    if not isinstance(parsed, _WorkDecisionModel):
+        raise TypeError("work reasoner returned unexpected response type")
+    return _brain_decision(request, parsed), result
 
 
 def _attempt_id(decision_id: str, ordinal: int) -> str:
@@ -319,6 +400,14 @@ class RoutedWorkReasoner:
         invoker: ModelInvoker,
         primary_target_id: str,
         clock: Callable[[], float] = time.time,
+        provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
+        resources: ResourceLeaseManager | None = None,
+        resource_keys: tuple[str, ...] = (),
+        prompt_compressor: WorkPayloadCompressor | None = None,
+        prompt_compression_mode: PromptCompressionMode
+        | str = PromptCompressionMode.OFF,
+        prompt_compression_work_types: frozenset[WorkType] | None = None,
+        prompt_compression_resource_keys: tuple[str, ...] = (),
     ) -> None:
         self._router = router
         self._invoker = invoker
@@ -326,6 +415,103 @@ class RoutedWorkReasoner:
         if not self._primary_target_id:
             raise ValueError("primary_target_id must not be empty")
         self._clock = clock
+        self._provider_circuit_registry = provider_circuit_registry
+        self._resources = resources
+        self._resource_keys = (
+            () if resources is None else resources.normalize(resource_keys)
+        )
+        self._prompt_compression_mode = normalize_prompt_compression_mode(
+            prompt_compression_mode
+        )
+        self._prompt_compressor = prompt_compressor
+        if (
+            self._prompt_compression_mode is not PromptCompressionMode.OFF
+            and self._prompt_compressor is None
+        ):
+            raise ValueError(
+                "prompt compression mode requires a configured Work payload compressor"
+            )
+        eligible_types = (
+            frozenset({WorkType.RESEARCH})
+            if prompt_compression_work_types is None
+            else frozenset(prompt_compression_work_types)
+        )
+        if not all(isinstance(item, WorkType) for item in eligible_types):
+            raise TypeError(
+                "prompt_compression_work_types must contain WorkType values"
+            )
+        self._prompt_compression_work_types = eligible_types
+        self._prompt_compression_resource_keys = (
+            ()
+            if resources is None
+            else resources.normalize(prompt_compression_resource_keys)
+        )
+
+    async def _provider_payload(self, request: BrainRequest) -> dict[str, Any]:
+        legacy_payload = _work_input_payload(request)
+        compressor = self._prompt_compressor
+        if (
+            self._prompt_compression_mode is PromptCompressionMode.OFF
+            or compressor is None
+            or request.work.work_type not in self._prompt_compression_work_types
+        ):
+            return legacy_payload
+
+        try:
+            if self._resources is not None and self._prompt_compression_resource_keys:
+                async with self._resources.lease(
+                    self._prompt_compression_resource_keys
+                ):
+                    result = await asyncio.to_thread(
+                        compressor.compress_payload,
+                        legacy_payload,
+                    )
+            else:
+                result = await asyncio.to_thread(
+                    compressor.compress_payload,
+                    legacy_payload,
+                )
+        except Exception as exc:
+            LOGGER.warning(
+                "C6 local prompt compression unavailable; exact legacy payload retained: "
+                "work_id=%s work_type=%s error=%s",
+                request.work.work_id,
+                request.work.work_type.value,
+                type(exc).__name__,
+            )
+            return legacy_payload
+
+        LOGGER.info(
+            "C6 local prompt compression: work_id=%s work_type=%s mode=%s "
+            "reduced=%s original_chars=%s compressed_chars=%s reduction_percent=%s "
+            "compressed_strings=%s latency_ms=%.2f",
+            request.work.work_id,
+            request.work.work_type.value,
+            self._prompt_compression_mode.value,
+            result.reduced,
+            result.original_chars,
+            result.compressed_chars,
+            result.reduction_percent,
+            result.compressed_strings,
+            result.latency_ms,
+        )
+        if (
+            self._prompt_compression_mode is PromptCompressionMode.APPLY
+            and result.reduced
+        ):
+            return result.payload
+        return legacy_payload
+
+    def _provider_circuit(self, target):
+        registry = self._provider_circuit_registry
+        if registry is None:
+            return None
+        return registry.circuit(
+            provider_circuit_key(
+                provider=target.provider_id,
+                model=target.model_id,
+            )
+        )
 
     @property
     def provider_name(self) -> str:
@@ -422,24 +608,54 @@ class RoutedWorkReasoner:
                 health is not None
                 and health.effective_state(now_epoch=now_epoch).value == "degraded"
             ):
-                return self._router.target_registry.require(last_target_id)
+                target = self._router.target_registry.require(last_target_id)
+                circuit = self._provider_circuit(target)
+                if circuit is None or circuit.allow_request():
+                    return target
 
-        failed_target_ids = {
-            attempt.target_id
-            for attempt in attempts
-            if attempt.failure_class is not None
-        }
         allowed_ids = decision.ordered_target_ids[: 1 + decision.fallback_budget]
         for target_id in allowed_ids:
-            if target_id in failed_target_ids:
-                continue
             health = self._router.routing_store.get_health(target_id)
             if health is not None and health.effective_state(
                 now_epoch=now_epoch
             ).value in {"cooldown", "unavailable", "disabled"}:
                 continue
-            return self._router.target_registry.require(target_id)
+            target = self._router.target_registry.require(target_id)
+            circuit = self._provider_circuit(target)
+            if circuit is not None and not circuit.allow_request():
+                continue
+            # A historical failure does not permanently blacklist a target.
+            # Cooldown expiry intentionally admits one recovery probe while
+            # preserving the failure streak; only a successful invocation resets
+            # that streak. Health + the shared provider circuit are the capacity
+            # authorities for whether this target may be tried now.
+            return target
         return None
+
+    def _target_capacity_retry_after(
+        self,
+        target_ids: tuple[str, ...],
+        *,
+        now_epoch: float,
+    ) -> float:
+        target_waits: list[float] = []
+        for target_id in target_ids:
+            constraints: list[float] = []
+            record = self._router.routing_store.get_health(target_id)
+            if record is not None and record.cooldown_until_epoch is not None:
+                remaining = record.cooldown_until_epoch - now_epoch
+                if remaining > 0:
+                    constraints.append(remaining)
+            target = self._router.target_registry.require(target_id)
+            circuit = self._provider_circuit(target)
+            if circuit is not None and circuit.remaining_seconds > 0:
+                constraints.append(circuit.remaining_seconds)
+            if constraints:
+                # A target becomes eligible only after all active capacity
+                # constraints have expired. Across targets, retry when the first
+                # target can actually be probed without violating any cooldown.
+                target_waits.append(max(constraints))
+        return max(1.0, min(target_waits)) if target_waits else 30.0
 
     def _blocked_retry_after(
         self,
@@ -447,17 +663,13 @@ class RoutedWorkReasoner:
         *,
         now_epoch: float,
     ) -> float:
-        waits: list[float] = []
-        for target_id in selection.decision.ordered_target_ids[
+        target_ids = selection.decision.ordered_target_ids[
             : 1 + selection.decision.fallback_budget
-        ]:
-            record = self._router.routing_store.get_health(target_id)
-            if record is None or record.cooldown_until_epoch is None:
-                continue
-            remaining = record.cooldown_until_epoch - now_epoch
-            if remaining > 0:
-                waits.append(remaining)
-        return max(1.0, min(waits)) if waits else 30.0
+        ]
+        return self._target_capacity_retry_after(
+            target_ids,
+            now_epoch=now_epoch,
+        )
 
     async def decide(self, request: BrainRequest) -> BrainDecision:
         routing_request = build_work_routing_request(
@@ -470,8 +682,12 @@ class RoutedWorkReasoner:
             raise RoutingResourceBlocked(
                 routing_request_id=routing_request.routing_request_id,
                 reason="no approved routing target is currently eligible",
-                retry_after_seconds=30.0,
+                retry_after_seconds=self._target_capacity_retry_after(
+                    exc.snapshot.considered_target_ids,
+                    now_epoch=float(self._clock()),
+                ),
             ) from exc
+        provider_payload = await self._provider_payload(request)
         attempts = list(
             self._router.routing_store.list_attempts(selection.decision.decision_id)
         )
@@ -508,13 +724,25 @@ class RoutedWorkReasoner:
             started = float(self._clock())
             new_attempts += 1
             try:
-                invocation = await self._invoker.invoke_structured_with_telemetry(
-                    target=target,
-                    system_prompt=_SYSTEM_PROMPT,
-                    input_payload=_work_input_payload(request),
-                    response_model=_WorkDecisionModel,
-                    request_context=context,
-                )
+                if self._resources is not None and self._resource_keys:
+                    async with self._resources.lease(self._resource_keys):
+                        invocation = (
+                            await self._invoker.invoke_structured_with_telemetry(
+                                target=target,
+                                system_prompt=_SYSTEM_PROMPT,
+                                input_payload=provider_payload,
+                                response_model=_WorkDecisionModel,
+                                request_context=context,
+                            )
+                        )
+                else:
+                    invocation = await self._invoker.invoke_structured_with_telemetry(
+                        target=target,
+                        system_prompt=_SYSTEM_PROMPT,
+                        input_payload=provider_payload,
+                        response_model=_WorkDecisionModel,
+                        request_context=context,
+                    )
                 parsed = invocation.parsed
             except Exception as exc:
                 ended = float(self._clock())
@@ -522,6 +750,9 @@ class RoutedWorkReasoner:
                     exc,
                     provider=target.provider_id,
                 )
+                circuit = self._provider_circuit(target)
+                if circuit is not None:
+                    circuit.record_failure(exc)
                 attempt = RoutingAttempt(
                     attempt_id=attempt_id,
                     decision_id=selection.decision.decision_id,
@@ -587,6 +818,9 @@ class RoutedWorkReasoner:
             )
             self._router.routing_store.record_attempt(attempt)
             self._mark_target_recovered(target.target_id, now_epoch=ended)
+            circuit = self._provider_circuit(target)
+            if circuit is not None:
+                circuit.record_success()
             return _brain_decision(request, parsed)
 
         now = float(self._clock())

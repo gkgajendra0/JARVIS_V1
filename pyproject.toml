@@ -132,6 +132,13 @@ device-hands = [
     "winrt-Windows.Devices.Bluetooth==3.2.1; platform_system == 'Windows'",
 ]
 development-hands = ["dulwich==1.2.12"]
+development-codex = ["openai-codex==0.160.0"]
+context-compression = [
+    "llmlingua==0.2.2",
+    "accelerate>=0.26,<2",
+    "tiktoken>=0.7,<1",
+    "nltk>=3.8,<4",
+]
 hands = [
     "pywin32==312; platform_system == 'Windows'",
     "pycaw==20251023; platform_system == 'Windows'",

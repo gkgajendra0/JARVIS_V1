@@ -40,6 +40,7 @@ from jarvis.capability_acquisition.verification import (
     CapabilityAcquisitionDevelopmentCompletionHandler,
     CapabilityCandidateError,
     CapabilityCandidateVerifier,
+    validate_development_engine_completion_evidence,
 )
 from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
@@ -408,6 +409,73 @@ def _complete_candidate(
     return workspace.branch, commit
 
 
+def test_development_engine_completion_binds_exact_commit_and_test_step() -> None:
+    test_step = _completed_step(
+        "work-engine",
+        "dev_run_tests",
+        observation={"passed": True},
+    )
+    work = WorkItem(
+        request="build capability",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="change:engine",
+        source_turn_id="development:engine",
+        work_id="work-engine",
+        result={
+            "commit": "d" * 40,
+            "development_ticket_id": "ticket-demo",
+            "development_ticket_digest": "e" * 64,
+        },
+    )
+    engine_result = {
+        "ticket_id": "ticket-demo",
+        "ticket_digest": "e" * 64,
+        "candidate_revision": "d" * 40,
+        "test_evidence_refs": [f"workstep:{test_step.step_id}"],
+    }
+
+    validate_development_engine_completion_evidence(
+        work,
+        (test_step,),
+        engine_result,
+    )
+
+
+def test_development_engine_completion_rejects_candidate_claim_drift() -> None:
+    test_step = _completed_step(
+        "work-engine",
+        "dev_run_tests",
+        observation={"passed": True},
+    )
+    work = WorkItem(
+        request="build capability",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id="change:engine",
+        source_turn_id="development:engine",
+        work_id="work-engine",
+        result={
+            "commit": "d" * 40,
+            "development_ticket_id": "ticket-demo",
+            "development_ticket_digest": "e" * 64,
+        },
+    )
+
+    with pytest.raises(
+        CapabilityCandidateError,
+        match="canonical candidate commit",
+    ):
+        validate_development_engine_completion_evidence(
+            work,
+            (test_step,),
+            {
+                "ticket_id": "ticket-demo",
+                "ticket_digest": "e" * 64,
+                "candidate_revision": "f" * 40,
+                "test_evidence_refs": [f"workstep:{test_step.step_id}"],
+            },
+        )
+
+
 def test_verification_requires_exact_approved_test_targets() -> None:
     work = WorkItem(
         request="build capability",
@@ -593,6 +661,94 @@ def test_valid_candidate_binds_package_git_architecture_and_acceptance(
     gate = gates.present(change_id, GateKind.ACCEPTANCE, acceptance.artifact_id)
     assert gate.artifact_digest == acceptance.digest
     assert store.require(change_id).state is ChangeState.WAITING_OWNER_ACCEPTANCE
+
+
+def test_development_engine_revision_reopens_phase9_research_end_to_end(
+    tmp_path: Path,
+    acquisition_repo: tuple[Path, str],
+) -> None:
+    repository_root, revision = acquisition_repo
+    (
+        work_store,
+        store,
+        coordinator,
+        _,
+        _,
+        change_id,
+        architecture,
+        development_work,
+    ) = _build_change(tmp_path, repository_root, revision)
+
+    engine_result = {
+        "ticket_id": "dev_ticket_revision",
+        "ticket_digest": "e" * 64,
+        "disposition": "needs_architecture_revision",
+        "engine_id": "codex_plan",
+        "engine_version": "0.160.0",
+        "summary": "Approved transport cannot satisfy the required operation.",
+        "reason": "Current transport lacks the required operation.",
+        "thread_id": "thread-revision",
+        "candidate_revision": None,
+        "changed_files": [],
+        "test_evidence_refs": [],
+        "evidence_refs": ["owner-goal"],
+        "requested_dependencies": [],
+        "blocker_code": None,
+        "usage": None,
+        "contract_version": 1,
+    }
+    engine_step = _completed_step(
+        development_work.work_id,
+        "dev_engine_execute",
+        observation={
+            "ticket_id": "dev_ticket_revision",
+            "ticket_digest": "e" * 64,
+            "reasoning_fingerprint": "f" * 64,
+            "reasoning_reused": False,
+            "development_result": engine_result,
+        },
+    )
+    work_store.add_step(engine_step)
+    running = work_store.save(
+        development_work.transition(WorkState.RUNNING),
+        expected_version=development_work.version,
+    )
+    work_store.save(
+        running.transition(
+            WorkState.COMPLETED,
+            result={
+                "summary": engine_result["summary"],
+                "development_engine": engine_result,
+                "development_ticket_id": "dev_ticket_revision",
+                "development_ticket_digest": "e" * 64,
+            },
+        ),
+        expected_version=running.version,
+    )
+
+    reopened = coordinator.reconcile_for_work(development_work.work_id)
+
+    assert reopened is not None
+    assert reopened.state is ChangeState.RESEARCHING
+    revision_request = store.latest_artifact(
+        change_id,
+        "architecture_revision_request",
+    )
+    assert revision_request is not None
+    assert (
+        revision_request.payload["previous_architecture_artifact_id"]
+        == architecture.artifact_id
+    )
+    outcome = store.latest_artifact(change_id, "development_engine_outcome")
+    assert outcome is not None
+    assert outcome.payload["engine_step_id"] == engine_step.step_id
+    research_stages = [
+        stage
+        for stage in store.list_stages(change_id)
+        if stage.stage_key
+        == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+    ]
+    assert [stage.attempt for stage in research_stages] == [1, 2]
 
 
 def test_core_source_package_fails_candidate_verification(

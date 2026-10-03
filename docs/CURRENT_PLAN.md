@@ -252,3 +252,73 @@ Historical experiments, old acceptance transcripts and superseded research remai
 ## Immediate next action
 
 **Start the JARVIS Cost Optimization interlude from Slice C0 in `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`. Do not purchase the ₹400–₹500 paid-brain experiment balance until the documented pre-credit gate passes. Preserve production SHADOW, existing Authority, accepted Phase-4 routing contracts and the deferred Phase-9 blind external lifecycle. Phase 11 remains next in the autonomous-engineering sequence after this bounded interlude unless the owner changes priority.**
+
+
+## 2026-10-04 active routing/C6 decision
+
+The owner has explicitly directed that JARVIS must not use Astra-class reasoning as the
+routine/default coding path merely because it is available. The durable decision is
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`.
+
+The intended future ladder is deterministic/bounded/local -> economical cloud ->
+balanced/strong cloud -> frontier escalation, with concrete models selected through the
+existing registry, JARVIS-specific benchmarks, health/quota evidence and explicit
+escalation reasons. DevelopmentEngine/Codex is the preferred coherent coding-agent
+boundary; normal ChatGPT UI automation is not the target architecture.
+
+Current C6 owner-machine evidence has two equivalent development pairs and one
+non-equivalent research pair. The research pair chose the same action and matched
+owner/completion fields but produced materially different action parameters. C6 therefore
+remains SHADOW and APPLY promotion is blocked pending a zero-model root-cause diagnosis
+and corrected research-pair acceptance.
+
+
+## 2026-10-04 context-compression/local-development research update
+
+Before implementing more custom C6 compression logic, benchmark Microsoft's LLMLingua
+family as an existing local prompt-compression solution. LLMLingua-2's small official
+checkpoint is suitable for an owner-machine local experiment and supports structured
+compression/forced preservation. Compare legacy vs current C6 vs LLMLingua-assisted
+payloads under the same strict semantic-equivalence gate.
+
+For capability creation, also evaluate an ephemeral local coding-brain mode using the
+existing Ollama/local-residency substrate: evict the ordinary local model when required,
+load a benchmark-qualified coding model for the DevelopmentEngine mission, unload and
+verify VRAM release afterward, then restore ordinary JARVIS routing. The first practical
+8-GB-GPU candidate is Qwen2.5-Coder 7B; Qwen3-Coder 30B is too large for the intended
+fully-resident owner-machine tier.
+
+These are research/benchmark directions only. C6 remains SHADOW and no new production
+model route is authorized until owner-machine quality/resource evidence passes.
+
+
+## 2026-10-04 priority clarification — compression first
+
+The owner has explicitly deferred the ephemeral local capability-development brain.
+Do not implement or benchmark a dedicated local coding model in the current slice.
+
+Current order:
+1. integrate and benchmark local prompt compression (LLMLingua-2 first);
+2. measure semantic equivalence and real ChatGPT-plan token reduction;
+3. retain normal existing JARVIS local-brain behavior unchanged;
+4. revisit a temporary local coding brain only if compression plus existing/cloud model
+   routing still leaves capability-development cost or quota pressure materially high.
+
+This prevents solving a problem that prompt compression may already remove.
+
+## 2026-10-04 LLMLingua implementation checkpoint
+
+The compression-first experiment is now implemented on draft PR #252 and is pending
+owner-machine acceptance only.
+
+The active first proof is the previously failing C6 research fixture, using a local,
+structure-preserving LLMLingua-2 compressor and at most two ChatGPT-plan A/B calls after
+a zero-cloud preflight. Production remains SHADOW. The dedicated local coding-brain idea
+remains deferred and must not be started unless compression/model-routing evidence later
+shows it is still needed.
+
+
+Runtime integration is also present behind
+`JARVIS_WORK_PROMPT_COMPRESSION_MODE`, which defaults to `off`. The first accepted
+scope is RESEARCH only. No production setting change is authorized until the local
+preflight plus strict legacy-vs-compressed owner-machine A/B passes.

@@ -144,6 +144,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/logging_config.py",
                 "src/jarvis/machine_config.py",
                 "src/jarvis/preflight.py",
+                "src/jarvis/provider_circuit.py",
                 "src/jarvis/setup.py",
             ),
             parent_component_id="jarvis",
@@ -713,6 +714,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "%LOCALAPPDATA%/JARVIS/work/work.sqlite3",
                 "%LOCALAPPDATA%/JARVIS/work/dbos.sqlite3",
             ),
+            config_keys=("JARVIS_WORK_CONTEXT_MODE",),
             logger_prefixes=("jarvis.work", "jarvis.voice.work_tools"),
         ),
         C(
@@ -763,6 +765,31 @@ def build_default_self_model() -> SelfModelRegistry:
             ("src/jarvis/work/development.py", "tools/development-sandbox"),
             parent_component_id="work",
             logger_prefixes=("jarvis.work.development",),
+        ),
+        C(
+            "work.development_engine",
+            "Provider-neutral engineering specialist boundary with JARVIS-owned "
+            "development authority and durable session lineage.",
+            (
+                "src/jarvis/development_engine",
+                "tools/research/development_engine_owner_acceptance.py",
+            ),
+            parent_component_id="work",
+            tests=(
+                "tests/test_development_engine_contracts.py",
+                "tests/test_development_engine_tools.py",
+                "tests/test_development_engine_session_store.py",
+                "tests/test_development_engine_codex.py",
+                "tests/test_development_engine_coordinator.py",
+                "tests/test_development_engine_phase9.py",
+                "tests/test_development_engine_work_control.py",
+            ),
+            config_keys=(
+                "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+                "JARVIS_DEVELOPMENT_ENGINE_MODEL",
+            ),
+            logger_prefixes=("jarvis.development_engine",),
+            docs=("docs/DEVELOPMENT_ENGINE_CONTROL_PLANE_ARCHITECTURE.md",),
         ),
         C(
             "work.engineering_change",
