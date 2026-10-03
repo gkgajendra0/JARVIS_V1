@@ -966,18 +966,12 @@ class CodexPlanDevelopmentEngine:
 
                     try:
                         observation = dict(await tools.invoke(tool_name, parameters))
-                    except DevelopmentToolOwnerInputRequired as exc:
-                        return DevelopmentResultV1.create(
-                            ticket=ticket,
-                            disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
-                            engine_id=self.engine_id,
-                            engine_version=self.engine_version,
-                            summary="Development reached a governed owner boundary.",
-                            reason=exc.question,
-                            thread_id=thread.id,
-                            blocker_code="governed_owner_boundary",
-                            usage=last_usage,
-                        )
+                    except DevelopmentToolOwnerInputRequired:
+                        # Owner-only boundaries belong to the JARVIS Work control
+                        # plane, not provider/resource retry. Propagate the typed tool
+                        # boundary so the Phase-9 executor can enter canonical
+                        # WAITING_FOR_OWNER exactly once.
+                        raise
                     except DevelopmentToolResourceBlocked as exc:
                         return DevelopmentResultV1.create(
                             ticket=ticket,
