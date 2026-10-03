@@ -418,6 +418,12 @@ Canonical truth remains:
 
 If a provider thread becomes unusable, JARVIS may create a replacement thread from the canonical ticket plus current exact worktree/evidence.
 
+Provider working memory and cached DevelopmentResult reuse are valid only within the exact
+DevelopmentEngine generation (`engine_id` + `engine_version`). Changing the
+engineering provider/runtime generation must clear the saved provider thread binding and
+invalidate cached-result reuse while preserving the canonical ticket, WorkStore evidence and
+repository state needed for reconstruction.
+
 No capability lifecycle state may depend solely on provider conversation memory.
 
 ## 12. Architecture-revision behavior
@@ -523,6 +529,7 @@ Do not:
 
 - Persist ticket/result/thread lineage.
 - Add reasoning fingerprint/reuse.
+- Scope provider thread identity and result reuse to the exact engine ID/version.
 - Add shared ChatGPT-plan development admission/governor.
 - Reuse provider-circuit resource waits.
 
@@ -532,6 +539,9 @@ Do not:
 - Keep existing WorkEngine path for unrelated bounded Work where appropriate.
 - Map typed DevelopmentResult dispositions into governed transitions.
 - Preserve exact research-attempt/architecture lineage.
+- Serve development research evidence only from the exact research attempt that produced
+  the plan bound to the approved architecture; superseded attempts must never leak into a
+  later development ticket.
 
 ### D6 — C6 apply validation
 
@@ -638,7 +648,8 @@ Implemented on the draft branch:
 - provider-neutral ticket/result/tool contracts with exact digests;
 - governed adapter over JARVIS DEVELOPMENT executors;
 - restricted Codex/ChatGPT-plan engineering specialist with long coherent tool batches;
-- durable provider-thread identity, canonical progress reconstruction and exact-result reuse;
+- durable provider-thread identity, canonical progress reconstruction and engine-generation-
+  scoped exact-result reuse;
 - cumulative engineering usage telemetry;
 - one serialized `development_intelligence` resource;
 - a process-persistent shared ChatGPT-plan subscription circuit across ordinary Work
@@ -647,7 +658,8 @@ Implemented on the draft branch:
 - no automatic paid-provider fallback in the production Work composition;
 - Phase-9 DEVELOPMENT bypass of micro-step model orchestration;
 - deterministic Phase-9 research bookkeeping bypass where no model judgement is needed;
-- bounded retrieval of canonical research/discovery/SDK-verification evidence;
+- bounded retrieval of canonical research/discovery/SDK-verification evidence from the
+  exact approved architecture source attempt;
 - typed re-research / architecture-revision / dependency outcomes;
 - exact revised-research-attempt and architecture lineage;
 - restart-safe durable Work execution recovery;
