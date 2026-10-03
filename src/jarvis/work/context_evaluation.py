@@ -180,6 +180,47 @@ def reconstruct_recorded_context_request(
         steps=history,
         evidence=tuple(evidence),
     )
+
+    expected_context_version = str(snapshot.get("context_version") or "").strip()
+    if not expected_context_version:
+        raise ValueError("C6 replay snapshot is missing context version")
+    if context_pack.version != expected_context_version:
+        raise ValueError("C6 replay context version differs from durable provenance")
+
+    selected_ids_raw = snapshot.get("context_selected_step_ids")
+    if not isinstance(selected_ids_raw, list):
+        raise ValueError("C6 replay snapshot is missing selected-step lineage")
+    expected_selected_ids = tuple(str(item).strip() for item in selected_ids_raw)
+    actual_selected_ids = tuple(step.step_id for step in context_pack.selected_steps)
+    if expected_selected_ids != actual_selected_ids:
+        raise ValueError("C6 replay selected steps differ from durable provenance")
+
+    evidence_count = snapshot.get("context_evidence_count")
+    if isinstance(evidence_count, bool) or not isinstance(evidence_count, int):
+        raise ValueError("C6 replay snapshot is missing context evidence count")
+    if evidence_count != len(context_pack.evidence):
+        raise ValueError("C6 replay context evidence count differs from provenance")
+
+    expected_evidence_digest = str(
+        snapshot.get("context_evidence_digest") or ""
+    ).strip().casefold()
+    actual_evidence_digest = canonical_digest(list(context_pack.evidence))
+    if expected_evidence_digest != actual_evidence_digest:
+        raise ValueError("C6 replay context evidence differs from durable provenance")
+
+    expected_pack_digest = str(
+        snapshot.get("context_pack_digest") or ""
+    ).strip().casefold()
+    actual_pack_digest = canonical_digest(
+        {
+            "recent_steps": context_pack.recent_steps_payload(),
+            "evidence": list(context_pack.evidence),
+            "history_manifest": context_pack.history_manifest_payload(),
+        }
+    )
+    if expected_pack_digest != actual_pack_digest:
+        raise ValueError("C6 replay context pack differs from durable provenance")
+
     return BrainRequest(
         work=historical_work,
         recent_steps=recent_steps,
