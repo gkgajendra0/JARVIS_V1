@@ -19,9 +19,15 @@ from dataclasses import replace
 
 from jarvis.brain_routing.models import BrainRouteKind
 from jarvis.brain_routing.store import BrainRouteStore
-from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
+from jarvis.chatgpt_plan import CHATGPT_PLAN_PROVIDER_ID, ChatGPTPlanSessionManager
 from jarvis.hands.provider_adapters import (
     build_chatgpt_plan_structured_output_client,
+)
+from jarvis.model_routing.models import ResponseContractResult
+from jarvis.model_routing.store import ModelRoutingStore
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
 )
 from jarvis.work.context import WorkContextAssembler, WorkContextMode
 from jarvis.work.context_evaluation import (
@@ -64,13 +70,45 @@ def _legacy_steps(steps):
     ]
 
 
+def _successful_historical_attempt(
+    routing_store: ModelRoutingStore,
+    *,
+    decision_id: str | None,
+):
+    """Return the exact provider/model attempt that produced the legacy decision."""
+
+    if decision_id is None:
+        return None
+    valid = tuple(
+        attempt
+        for attempt in routing_store.list_attempts(decision_id)
+        if attempt.failure_class is None
+        and attempt.response_contract_result is ResponseContractResult.VALID
+        and attempt.provider_id is not None
+        and attempt.model_id is not None
+    )
+    if len(valid) != 1:
+        return None
+    return valid[0]
+
+
 def _replay_candidates(
     store: SQLiteWorkStore,
     route_store: BrainRouteStore,
+    routing_store: ModelRoutingStore,
     *,
+    model: str,
     limit: int,
 ):
     candidates = []
+    stats = {
+        "model_routes_seen": 0,
+        "missing_decision_provenance": 0,
+        "missing_context_snapshot": 0,
+        "missing_exact_model_lineage": 0,
+        "non_chatgpt_plan_lineage": 0,
+        "different_model_lineage": 0,
+    }
     for work in store.list(limit=500):
         if work.work_type not in {WorkType.DEVELOPMENT, WorkType.RESEARCH}:
             continue
@@ -78,14 +116,30 @@ def _replay_candidates(
         for route in route_store.list_for_work(work.work_id):
             if route.route_kind is not BrainRouteKind.MODEL:
                 continue
+            stats["model_routes_seen"] += 1
             if (
                 route.goal_complete is None
                 or route.needs_owner is None
                 or route.parameters_digest is None
             ):
+                stats["missing_decision_provenance"] += 1
                 continue
             snapshot = route_store.get_context_snapshot(route.route_request_id)
             if snapshot is None:
+                stats["missing_context_snapshot"] += 1
+                continue
+            attempt = _successful_historical_attempt(
+                routing_store,
+                decision_id=route.model_decision_id,
+            )
+            if attempt is None:
+                stats["missing_exact_model_lineage"] += 1
+                continue
+            if attempt.provider_id != CHATGPT_PLAN_PROVIDER_ID:
+                stats["non_chatgpt_plan_lineage"] += 1
+                continue
+            if attempt.model_id != model:
+                stats["different_model_lineage"] += 1
                 continue
             candidates.append(
                 (
@@ -94,10 +148,11 @@ def _replay_candidates(
                     steps,
                     route,
                     snapshot,
+                    attempt,
                 )
             )
     candidates.sort(key=lambda item: (-float(item[0]), item[3].route_request_id))
-    return tuple(candidates[:limit])
+    return tuple(candidates[:limit]), stats
 
 
 async def _run_decision_replay(
@@ -108,6 +163,41 @@ async def _run_decision_replay(
     max_cases: int,
     min_equivalent_cases: int,
 ) -> dict[str, object]:
+    routing_store = ModelRoutingStore(store)
+    candidates, candidate_stats = _replay_candidates(
+        store,
+        route_store,
+        routing_store,
+        model=model,
+        limit=max_cases,
+    )
+    if len(candidates) < min_equivalent_cases:
+        return {
+            "model": model,
+            "requested_max_cases": max_cases,
+            "minimum_equivalent_cases": min_equivalent_cases,
+            "replayed_cases": 0,
+            "equivalent_cases": 0,
+            "mismatch_cases": 0,
+            "all_replayed_cases_equivalent": False,
+            "c6_apply_decision_equivalence_proven": False,
+            "production_routing_mutated": False,
+            "actions_executed": False,
+            "paid_fallback_enabled": False,
+            "provider_circuit_updated": False,
+            "candidate_stats": candidate_stats,
+            "cases": [],
+        }
+
+    circuit = BackgroundProviderCircuitRegistry().circuit(
+        provider_circuit_key(provider=CHATGPT_PLAN_PROVIDER_ID, model=model)
+    )
+    if not circuit.allow_request():
+        raise RuntimeError(
+            "ChatGPT-plan provider circuit is cooling down; "
+            f"retry after about {int(circuit.remaining_seconds)} seconds"
+        )
+
     plan = ChatGPTPlanSessionManager()
     if not plan.is_connected():
         raise RuntimeError("ChatGPT-plan connection is unavailable")
@@ -121,9 +211,8 @@ async def _run_decision_replay(
         session_manager=plan,
         provider_retries=False,
     )
-    candidates = _replay_candidates(store, route_store, limit=max_cases)
     cases: list[dict[str, object]] = []
-    for _created_at, work, steps, recorded, snapshot in candidates:
+    for _created_at, work, steps, recorded, snapshot, historical_attempt in candidates:
         replay = reconstruct_recorded_context_request(
             snapshot=snapshot,
             work=work,
@@ -133,7 +222,12 @@ async def _run_decision_replay(
             replace(replay, context_mode=WorkContextMode.SHADOW)
         )
         optimized_payload = _work_input_payload(replay)
-        optimized, telemetry = await evaluate_structured_work_request(client, replay)
+        try:
+            optimized, telemetry = await evaluate_structured_work_request(client, replay)
+        except Exception as exc:
+            circuit.record_failure(exc)
+            raise
+        circuit.record_success()
         comparison = compare_recorded_context_decision(recorded, optimized)
         if comparison is None:
             raise RuntimeError(
@@ -151,6 +245,10 @@ async def _run_decision_replay(
                 "route_request_id": recorded.route_request_id,
                 "work_id": work.work_id,
                 "work_type": work.work_type.value,
+                "historical_decision_id": historical_attempt.decision_id,
+                "historical_target_id": historical_attempt.target_id,
+                "historical_provider_id": historical_attempt.provider_id,
+                "historical_model_id": historical_attempt.model_id,
                 "equivalent": comparison.equivalent,
                 "action_equal": comparison.action_equal,
                 "goal_complete_equal": comparison.goal_complete_equal,
@@ -183,6 +281,8 @@ async def _run_decision_replay(
         "production_routing_mutated": False,
         "actions_executed": False,
         "paid_fallback_enabled": False,
+        "provider_circuit_updated": bool(cases),
+        "candidate_stats": candidate_stats,
         "cases": cases,
     }
 
