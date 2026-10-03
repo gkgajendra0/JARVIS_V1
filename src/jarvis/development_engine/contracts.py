@@ -115,6 +115,7 @@ class DevelopmentTicketV1:
     """Immutable engineering assignment admitted by the JARVIS control plane."""
 
     ticket_id: str
+    request: str
     work_id: str
     engineering_change_id: str
     goal_id: str
@@ -139,6 +140,7 @@ class DevelopmentTicketV1:
     def create(
         cls,
         *,
+        request: str,
         work_id: str,
         engineering_change_id: str,
         goal_id: str,
@@ -160,6 +162,7 @@ class DevelopmentTicketV1:
         if type(attempt) is not int or attempt < 1:
             raise ValueError("attempt must be a positive integer")
         payload: dict[str, object] = {
+            "request": _text(request, field="request"),
             "work_id": _text(work_id, field="work_id"),
             "engineering_change_id": _text(
                 engineering_change_id,
@@ -238,6 +241,7 @@ class DevelopmentTicketV1:
         digest = canonical_digest(payload)
         return cls(
             ticket_id=f"dev_ticket_{digest[:16]}",
+            request=str(payload["request"]),
             work_id=str(payload["work_id"]),
             engineering_change_id=str(payload["engineering_change_id"]),
             goal_id=str(payload["goal_id"]),
@@ -273,6 +277,7 @@ class DevelopmentTicketV1:
         """Rebuild and verify a ticket from canonical durable payload."""
 
         ticket = cls.create(
+            request=str(payload["request"]),
             work_id=str(payload["work_id"]),
             engineering_change_id=str(payload["engineering_change_id"]),
             goal_id=str(payload["goal_id"]),
@@ -306,6 +311,7 @@ class DevelopmentTicketV1:
 
     def canonical_payload(self) -> dict[str, object]:
         return {
+            "request": self.request,
             "work_id": self.work_id,
             "engineering_change_id": self.engineering_change_id,
             "goal_id": self.goal_id,
