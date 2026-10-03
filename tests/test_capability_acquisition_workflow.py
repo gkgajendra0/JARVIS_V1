@@ -46,6 +46,7 @@ from jarvis.capability_registry.projection import (
 )
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.work.models import WorkPriority, WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
@@ -119,6 +120,124 @@ def _changes(tmp_path, *, handler: bool = False):
         ),
     )
     return work, store, backend, coordinator
+
+
+def _persist_plan(
+    store: ChangeStore,
+    *,
+    change_id: str,
+    goal: OwnerCapabilityGoalV1,
+    package_version: str,
+    changed_path: str,
+):
+    resolver = CapabilityAcquisitionResolver(
+        CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),))
+    )
+    resolution = resolver.resolve(goal, _empty_context())
+    candidate = resolution.selected_candidate
+    assert candidate is not None
+    evaluation = resolution.evaluation(candidate.candidate_id)
+    assert isinstance(evaluation, AcquisitionCandidateEvaluationV1)
+
+    resolution_artifact = store.latest_artifact(
+        change_id,
+        "acquisition_resolution",
+    )
+    if resolution_artifact is None:
+        resolution_artifact = store.add_artifact(
+            change_id,
+            kind="acquisition_resolution",
+            payload=resolution_payload(
+                candidates=resolution.candidates,
+                evaluations=resolution.evaluations,
+                selected_candidate_id=resolution.selected_candidate_id,
+            ),
+        )
+    plan = CapabilityAcquisitionPlanV1.create(
+        goal,
+        candidate,
+        evaluation,
+        proposed_capability_id="tv.control",
+        proposed_package_id="tv.control.custom",
+        proposed_package_version=package_version,
+        rollback_summary="Disable the package and revert the candidate release.",
+        changed_paths=(changed_path,),
+        sandbox_profile_ids=("test.offline.v1",),
+        verification_contract_ids=("tv-control-contract-v1",),
+        development_test_targets=("tests/test_tv_control.py",),
+        evidence_refs=("owner-goal",),
+    )
+    plan_artifact = store.add_artifact(
+        change_id,
+        kind="acquisition_plan",
+        payload={
+            **plan_payload(plan),
+            "resolution_artifact_id": resolution_artifact.artifact_id,
+            "resolution_artifact_digest": resolution_artifact.digest,
+            "selected_candidate": candidate_payload(candidate),
+            "selected_evaluation": evaluation_payload(evaluation),
+        },
+    )
+    return plan, plan_artifact
+
+
+def _complete_acquisition_work(
+    work: SQLiteWorkStore,
+    *,
+    work_id: str,
+    plan,
+    plan_artifact,
+) -> None:
+    item = work.require(work_id)
+    step = WorkStep(
+        work_id=work_id,
+        kind="acq_finalize",
+        summary="finalized",
+    )
+    work.add_step(step)
+    work.save_step(
+        step.start().complete(
+            {
+                "finalized": True,
+                "plan_id": plan.plan_id,
+                "plan_digest": plan.digest,
+                "plan_artifact_id": plan_artifact.artifact_id,
+                "plan_artifact_digest": plan_artifact.digest,
+            }
+        )
+    )
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    work.save(
+        running.transition(WorkState.COMPLETED, result={"summary": "done"}),
+        expected_version=running.version,
+    )
+
+
+def _approve_architecture(
+    store: ChangeStore,
+    *,
+    change_id: str,
+    architecture,
+    suffix: str,
+) -> None:
+    gates = GateService(store, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id=f"session-{suffix}",
+        source_turn_id=f"turn-{suffix}",
+        request_key=f"request-{suffix}",
+    )
 
 
 def test_admission_short_circuits_existing_ready_capability(tmp_path) -> None:
@@ -329,3 +448,185 @@ def test_completed_acquisition_derives_digest_bound_architecture(tmp_path) -> No
     ]
     assert architecture.payload["verification_targets"] == ["tests/test_tv_control.py"]
     assert architecture.payload["build_permitted"] is True
+
+
+def test_phase9_research_revision_binds_architecture_to_exact_second_attempt(
+    tmp_path,
+) -> None:
+    work, store, _, changes = _changes(tmp_path, handler=True)
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(_goal("power"), source_revision=REVISION)
+    assert admission.change is not None
+    assert admission.acquisition_work_id is not None
+    change_id = admission.change.change_id
+    goal = _goal("power")
+
+    plan1, plan_artifact1 = _persist_plan(
+        store,
+        change_id=change_id,
+        goal=goal,
+        package_version="1.0.0",
+        changed_path="src/jarvis/tv_control.py",
+    )
+    _complete_acquisition_work(
+        work,
+        work_id=admission.acquisition_work_id,
+        plan=plan1,
+        plan_artifact=plan_artifact1,
+    )
+    changes.reconcile_for_work(admission.acquisition_work_id)
+    architecture1 = ensure_capability_acquisition_architecture_current(
+        store,
+        change_id,
+    )
+    _approve_architecture(
+        store,
+        change_id=change_id,
+        architecture=architecture1,
+        suffix="architecture-1",
+    )
+    changes.reconcile(change_id)
+
+    development = next(
+        stage
+        for stage in store.list_stages(change_id)
+        if stage.stage_key
+        == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+    )
+    store.request_architecture_revision_for_work(
+        development.work_id,
+        reason="The approved device transport is insufficient.",
+    )
+    changes.reconcile(change_id)
+    source_attempts = [
+        stage
+        for stage in store.list_stages(change_id)
+        if stage.stage_key
+        == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+    ]
+    assert [stage.attempt for stage in source_attempts] == [1, 2]
+    source2 = source_attempts[-1]
+
+    plan2, plan_artifact2 = _persist_plan(
+        store,
+        change_id=change_id,
+        goal=goal,
+        package_version="1.1.0",
+        changed_path="src/jarvis/tv_control_v2.py",
+    )
+    _complete_acquisition_work(
+        work,
+        work_id=source2.work_id,
+        plan=plan2,
+        plan_artifact=plan_artifact2,
+    )
+    reconciled = changes.reconcile_for_work(source2.work_id)
+
+    assert reconciled is not None
+    assert reconciled.state is ChangeState.ARCHITECTURE_READY
+    architecture2 = ensure_capability_acquisition_architecture_current(
+        store,
+        change_id,
+    )
+    assert architecture2.artifact_id != architecture1.artifact_id
+    assert architecture2.payload["plan_artifact_id"] == plan_artifact2.artifact_id
+    assert architecture2.payload["proposed_package_version"] == "1.1.0"
+    assert architecture2.payload["allowed_paths"] == [
+        "src/jarvis/tv_control_v2.py"
+    ]
+
+    # Restart-style replay after the replacement artifact already exists must
+    # continue to resolve the exact second source attempt.
+    replayed = changes.reconcile(change_id)
+    assert replayed.state is ChangeState.ARCHITECTURE_READY
+    assert (
+        ensure_capability_acquisition_architecture_current(
+            store,
+            change_id,
+        ).artifact_id
+        == architecture2.artifact_id
+    )
+
+
+def test_phase9_revision_with_unchanged_architecture_fails_closed(
+    tmp_path,
+) -> None:
+    work, store, _, changes = _changes(tmp_path, handler=True)
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(_goal("power"), source_revision=REVISION)
+    assert admission.change is not None
+    assert admission.acquisition_work_id is not None
+    change_id = admission.change.change_id
+    goal = _goal("power")
+
+    plan1, plan_artifact1 = _persist_plan(
+        store,
+        change_id=change_id,
+        goal=goal,
+        package_version="1.0.0",
+        changed_path="src/jarvis/tv_control.py",
+    )
+    _complete_acquisition_work(
+        work,
+        work_id=admission.acquisition_work_id,
+        plan=plan1,
+        plan_artifact=plan_artifact1,
+    )
+    changes.reconcile_for_work(admission.acquisition_work_id)
+    architecture1 = ensure_capability_acquisition_architecture_current(
+        store,
+        change_id,
+    )
+    _approve_architecture(
+        store,
+        change_id=change_id,
+        architecture=architecture1,
+        suffix="same-architecture",
+    )
+    changes.reconcile(change_id)
+
+    development = next(
+        stage
+        for stage in store.list_stages(change_id)
+        if stage.stage_key
+        == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+    )
+    store.request_architecture_revision_for_work(
+        development.work_id,
+        reason="Re-research the device transport before continuing.",
+    )
+    changes.reconcile(change_id)
+    source2 = [
+        stage
+        for stage in store.list_stages(change_id)
+        if stage.stage_key
+        == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+    ][-1]
+
+    # Real acq_finalize reuses an unchanged plan artifact. Bind attempt 2 to that
+    # exact existing artifact to prove the same architecture cannot be re-approved.
+    _complete_acquisition_work(
+        work,
+        work_id=source2.work_id,
+        plan=plan1,
+        plan_artifact=plan_artifact1,
+    )
+    reconciled = changes.reconcile_for_work(source2.work_id)
+
+    assert reconciled is not None
+    assert reconciled.state is ChangeState.FAILED
+    no_progress = store.latest_artifact(
+        change_id,
+        "architecture_revision_no_progress",
+    )
+    assert no_progress is not None
+    assert no_progress.payload["source_attempt"] == 2
+    assert no_progress.payload["source_work_id"] == source2.work_id
+    assert (
+        no_progress.payload["unchanged_architecture_artifact_id"]
+        == architecture1.artifact_id
+    )
