@@ -282,7 +282,10 @@ class LLMLingua2WorkPayloadCompressor:
                 model_name=self._model_name,
                 use_llmlingua2=True,
                 device_map=self._device_map,
-                model_config={"revision": DEFAULT_LLMLINGUA2_REVISION},
+                model_config={
+                    "revision": DEFAULT_LLMLINGUA2_REVISION,
+                    "trust_remote_code": False,
+                },
             )
         except Exception as exc:
             raise PromptCompressionDependencyError(
