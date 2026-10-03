@@ -418,21 +418,27 @@ class DevelopmentResultV1:
         else:
             if not reason_text:
                 raise ValueError("non-completed development requires a reason")
-            if disposition is DevelopmentDisposition.NEEDS_ARCHITECTURE_REVISION:
-                if not evidence:
-                    raise ValueError(
-                        "architecture revision requires exact evidence references"
-                    )
-            if disposition is DevelopmentDisposition.NEEDS_DEPENDENCY:
-                if not dependencies:
-                    raise ValueError(
-                        "dependency disposition requires requested_dependencies"
-                    )
-            if disposition is DevelopmentDisposition.BLOCKED_RESOURCE:
-                if blocker is None:
-                    raise ValueError(
-                        "blocked-resource disposition requires blocker_code"
-                    )
+            if (
+                disposition is DevelopmentDisposition.NEEDS_ARCHITECTURE_REVISION
+                and not evidence
+            ):
+                raise ValueError(
+                    "architecture revision requires exact evidence references"
+                )
+            if (
+                disposition is DevelopmentDisposition.NEEDS_DEPENDENCY
+                and not dependencies
+            ):
+                raise ValueError(
+                    "dependency disposition requires requested_dependencies"
+                )
+            if (
+                disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+                and blocker is None
+            ):
+                raise ValueError(
+                    "blocked-resource disposition requires blocker_code"
+                )
 
         payload: dict[str, object] = {
             "ticket_id": ticket.ticket_id,
