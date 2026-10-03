@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
+from jarvis.provider_circuit import BackgroundProviderCircuit
 from jarvis.provider_resilience import (
     ProviderFailureKind,
     classify_provider_failure,
@@ -603,6 +604,7 @@ class CodexPlanDevelopmentEngine:
         sessions: DevelopmentSessionStore,
         runtime_factory: CodexRuntimeFactory | None = None,
         state_dir: pathlib.Path | None = None,
+        provider_circuit: BackgroundProviderCircuit | None = None,
         max_turns: int = _MAX_ENGINE_TURNS,
         max_tool_calls: int = _MAX_TOOL_CALLS_TOTAL,
     ) -> None:
@@ -619,6 +621,12 @@ class CodexPlanDevelopmentEngine:
         self._model = normalized_model
         self._sessions = sessions
         self._runtime_factory = runtime_factory or OfficialCodexRuntimeFactory()
+        if provider_circuit is not None and not isinstance(
+            provider_circuit,
+            BackgroundProviderCircuit,
+        ):
+            raise TypeError("provider_circuit must be BackgroundProviderCircuit")
+        self._provider_circuit = provider_circuit
         self._state_dir = (
             pathlib.Path(
                 state_dir or (default_work_state_dir() / "development_engine" / "codex")
@@ -803,6 +811,22 @@ class CodexPlanDevelopmentEngine:
         if tuple(sorted(tools.tool_names)) != tuple(sorted(ticket.allowed_tools)):
             raise ValueError("development tool surface does not match ticket authority")
 
+        circuit = self._provider_circuit
+        if circuit is not None and not circuit.allow_request():
+            remaining = max(1, int(circuit.remaining_seconds))
+            return DevelopmentResultV1.create(
+                ticket=ticket,
+                disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
+                engine_id=self.engine_id,
+                engine_version=self.engine_version,
+                summary="Shared ChatGPT-plan capacity is cooling down.",
+                reason=(
+                    "JARVIS is suppressing another expensive engineering request for "
+                    f"approximately {remaining} seconds after provider pressure."
+                ),
+                blocker_code="provider_circuit_open",
+            )
+
         token = self._chatgpt_plan.access_token()
         codex_home = self._state_dir / "home"
         scratch = self._state_dir / "scratch" / ticket.ticket_id
@@ -850,6 +874,8 @@ class CodexPlanDevelopmentEngine:
                 _ticket_prompt(ticket, tools),
                 output_schema=_directive_schema(),
             )
+            if circuit is not None:
+                circuit.record_success()
 
             for _turn_index in range(self._max_turns):
                 last_usage = _merge_usage(last_usage, response.usage)
@@ -1003,6 +1029,8 @@ class CodexPlanDevelopmentEngine:
                     _external_payload(ticket, results=tool_results),
                     output_schema=_directive_schema(),
                 )
+                if circuit is not None:
+                    circuit.record_success()
 
             return DevelopmentResultV1.create(
                 ticket=ticket,
@@ -1019,6 +1047,8 @@ class CodexPlanDevelopmentEngine:
                 usage=last_usage,
             )
         except Exception as exc:
+            if circuit is not None:
+                circuit.record_failure(exc)
             return _provider_result(
                 ticket=ticket,
                 engine_version=self.engine_version,
