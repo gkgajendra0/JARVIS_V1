@@ -180,6 +180,39 @@ def _validate_deterministic_decision(
     return decision
 
 
+def _context_replay_snapshot(
+    request: BrainRequest,
+    *,
+    all_steps: tuple[WorkStep, ...],
+) -> dict[str, object]:
+    """Capture only the structural facts needed to reconstruct one C6 replay."""
+
+    return {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "work_version": request.work.version,
+        "work_state": request.work.state.value,
+        "work_status_detail": request.work.status_detail,
+        "purpose": request.purpose,
+        "allowed_actions": [
+            {
+                "name": action.name,
+                "description": action.description,
+                "parameter_schema": action.parameter_schema,
+            }
+            for action in request.allowed_actions
+        ],
+        "recent_step_ids": [step.step_id for step in request.recent_steps],
+        "history_step_count": len(all_steps),
+        "history_step_ids_digest": canonical_digest(
+            [step.step_id for step in all_steps]
+        ),
+        "evidence": list(request.evidence),
+        "context_version": (
+            None if request.context_pack is None else request.context_pack.version
+        ),
+    }
+
+
 class GlobalBrainRouterReasoner:
     """Choose deterministic vs model reasoning without executing any action."""
 
@@ -400,4 +433,17 @@ class GlobalBrainRouterReasoner:
                 model_decision_id=model_decision_id,
                 model_target_id=model_target_id,
             )
+            if (
+                request.context_mode is WorkContextMode.SHADOW
+                and request.context_pack is not None
+            ):
+                self._route_store.record_context_snapshot(
+                    route_request_id=facts.route_request_id,
+                    work_id=request.work.work_id,
+                    snapshot=_context_replay_snapshot(
+                        request,
+                        all_steps=all_steps,
+                    ),
+                    created_at_epoch=float(self._clock()),
+                )
         return actual
