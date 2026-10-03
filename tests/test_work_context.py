@@ -16,6 +16,7 @@ from jarvis.work.context import (
 from jarvis.work.context_evaluation import (
     compare_context_decisions,
     compare_recorded_context_decision,
+    reconstruct_recorded_context_request,
 )
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.reasoner import _work_input_payload
@@ -313,3 +314,104 @@ def test_recorded_context_equivalence_rejects_legacy_incomplete_provenance() -> 
         )
         is None
     )
+
+
+def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
+    work = _work()
+    first = _completed_step(
+        work,
+        "dev_read_file",
+        observation={"path": "src/first.py", "text": "first"},
+    )
+    second = _completed_step(
+        work,
+        "dev_status",
+        observation={"clean": True},
+    )
+    later = _completed_step(
+        work,
+        "dev_write_file",
+        observation={"path": "src/later.py"},
+    )
+    snapshot = {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "work_version": work.version,
+        "work_state": work.state.value,
+        "work_status_detail": "historical status",
+        "purpose": "choose the next bounded step",
+        "allowed_actions": [
+            {
+                "name": "dev_status",
+                "description": "Read bounded development status",
+                "parameter_schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                },
+            }
+        ],
+        "recent_step_ids": [first.step_id, second.step_id],
+        "history_step_count": 2,
+        "history_step_ids_digest": canonical_digest(
+            [first.step_id, second.step_id]
+        ),
+        "evidence": [{"ref": "evidence:historical"}],
+        "context_version": "c6.v1",
+    }
+    advanced = work.transition(
+        WorkState.RUNNING,
+        status_detail="later live status",
+    )
+
+    replay = reconstruct_recorded_context_request(
+        snapshot=snapshot,
+        work=advanced,
+        steps=(first, second, later),
+    )
+
+    assert replay.context_mode is WorkContextMode.APPLY
+    assert replay.work.version == work.version
+    assert replay.work.state is work.state
+    assert replay.work.status_detail == "historical status"
+    assert [step.step_id for step in replay.recent_steps] == [
+        first.step_id,
+        second.step_id,
+    ]
+    assert replay.context_pack is not None
+    assert replay.context_pack.full_history_step_count == 2
+    assert replay.evidence == ({"ref": "evidence:historical"},)
+
+
+def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
+    work = _work()
+    step = _completed_step(work, "dev_status", observation={"clean": True})
+    snapshot = {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "work_version": work.version,
+        "work_state": work.state.value,
+        "work_status_detail": None,
+        "purpose": "choose the next bounded step",
+        "allowed_actions": [
+            {
+                "name": "dev_status",
+                "description": "Read bounded development status",
+                "parameter_schema": {"type": "object"},
+            }
+        ],
+        "recent_step_ids": [step.step_id],
+        "history_step_count": 1,
+        "history_step_ids_digest": "f" * 64,
+        "evidence": [],
+        "context_version": "c6.v1",
+    }
+
+    try:
+        reconstruct_recorded_context_request(
+            snapshot=snapshot,
+            work=work,
+            steps=(step,),
+        )
+    except ValueError as exc:
+        assert "history prefix" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected replay history drift to fail closed")
+
