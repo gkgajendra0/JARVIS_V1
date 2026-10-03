@@ -316,10 +316,7 @@ class Phase9ResearchEvidenceExecutor:
             raise ChangeConflict(
                 "research evidence is only available to Phase-9 DEVELOPMENT"
             )
-        ticket = self._builder.build(
-            work,
-            available_tools=("get_research_evidence",),
-        )
+        ticket = self._builder.build(work)
         requested = tuple(
             sorted(
                 {
