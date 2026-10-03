@@ -42,9 +42,7 @@ def _attempt(
         provider_id=provider,
         model_id=model,
         response_contract_result=(
-            ResponseContractResult.VALID
-            if valid
-            else ResponseContractResult.INVALID
+            ResponseContractResult.VALID if valid else ResponseContractResult.INVALID
         ),
     )
 
