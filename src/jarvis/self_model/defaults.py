@@ -144,6 +144,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/logging_config.py",
                 "src/jarvis/machine_config.py",
                 "src/jarvis/preflight.py",
+                "src/jarvis/provider_circuit.py",
                 "src/jarvis/setup.py",
             ),
             parent_component_id="jarvis",
