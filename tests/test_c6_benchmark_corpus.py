@@ -754,9 +754,7 @@ class _FakeCompressionResult:
         if self.original_chars <= 0:
             return 0.0
         return round(
-            (self.original_chars - self.compressed_chars)
-            * 100.0
-            / self.original_chars,
+            (self.original_chars - self.compressed_chars) * 100.0 / self.original_chars,
             2,
         )
 
