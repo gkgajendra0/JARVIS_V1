@@ -152,7 +152,7 @@ class FakeStore:
         return SimpleNamespace(failed_attempts=self.delivery.failed_attempts)
 
 
-async def _wait_delivery_persisted(store: "FakeStore", timeout: float = 1.0) -> None:
+async def _wait_delivery_persisted(store: FakeStore, timeout: float = 1.0) -> None:
     deadline = asyncio.get_running_loop().time() + timeout
     while not store.delivered:
         if asyncio.get_running_loop().time() >= deadline:
