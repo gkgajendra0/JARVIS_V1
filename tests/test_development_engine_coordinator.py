@@ -16,6 +16,9 @@ from jarvis.work.store import SQLiteWorkStore
 
 
 class FakeTools:
+    def __init__(self) -> None:
+        self.progress = 0
+
     @property
     def tool_names(self):
         return ("read_file",)
@@ -29,6 +32,12 @@ class FakeTools:
                 parameter_schema={"type": "object"},
             ),
         )
+
+    def snapshot(self):
+        return {
+            "schema": "test.development_progress.v1",
+            "progress": self.progress,
+        }
 
     async def invoke(self, tool_name, parameters):
         raise AssertionError("fake engine should not execute tools")
@@ -133,6 +142,41 @@ async def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
     assert first.reasoning_fingerprint != second.reasoning_fingerprint
     assert second.reused is False
     assert engine.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_tool_progress_rebinds_result_to_post_turn_fingerprint(tmp_path) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path)
+    tools = FakeTools()
+
+    class ProgressEngine(FakeEngine):
+        async def execute(self, ticket, *, tools):
+            self.calls += 1
+            tools.progress += 1
+            return DevelopmentResultV1.create(
+                ticket=ticket,
+                disposition=DevelopmentDisposition.NEEDS_RESEARCH,
+                engine_id=self.engine_id,
+                engine_version=self.engine_version,
+                summary="New canonical progress was recorded.",
+                reason="Fresh evidence is required after the recorded progress.",
+            )
+
+    engine = ProgressEngine()
+    coordinator = DevelopmentEngineCoordinator(
+        engine=engine,
+        sessions=sessions,
+    )
+
+    first = await coordinator.execute(ticket, tools=tools)
+    second = await coordinator.execute(ticket, tools=tools)
+
+    assert first.reused is False
+    assert second.reused is True
+    assert first.reasoning_fingerprint == second.reasoning_fingerprint
+    assert engine.calls == 1
+    assert tools.progress == 1
 
 
 @pytest.mark.asyncio
