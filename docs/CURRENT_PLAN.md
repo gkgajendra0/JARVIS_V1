@@ -316,3 +316,9 @@ structure-preserving LLMLingua-2 compressor and at most two ChatGPT-plan A/B cal
 a zero-cloud preflight. Production remains SHADOW. The dedicated local coding-brain idea
 remains deferred and must not be started unless compression/model-routing evidence later
 shows it is still needed.
+
+
+Runtime integration is also present behind
+`JARVIS_WORK_PROMPT_COMPRESSION_MODE`, which defaults to `off`. The first accepted
+scope is RESEARCH only. No production setting change is authorized until the local
+preflight plus strict legacy-vs-compressed owner-machine A/B passes.
