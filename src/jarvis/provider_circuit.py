@@ -126,7 +126,6 @@ class BackgroundProviderCircuit:
         )
 
 
-
 def provider_circuit_key(*, provider: str, model: str | None = None) -> str:
     """Return the durable capacity key for one provider allowance domain."""
 
