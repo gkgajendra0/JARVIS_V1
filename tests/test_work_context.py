@@ -410,6 +410,7 @@ def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
     step = _completed_step(work, "dev_status", observation={"clean": True})
     snapshot = {
         "schema": "c6_work_reasoning_snapshot.v1",
+        "reasoner_contract_digest": work_reasoning_contract_digest(),
         "work_version": work.version,
         "work_state": work.state.value,
         "work_status_detail": None,
