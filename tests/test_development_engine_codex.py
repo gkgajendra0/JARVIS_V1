@@ -11,6 +11,7 @@ from jarvis.development_engine import (
     DevelopmentSessionStore,
     DevelopmentTicketV1,
     DevelopmentToolSpecV1,
+    DevelopmentUsageV1,
 )
 from jarvis.development_engine.codex import (
     CodexPlanDevelopmentEngine,
@@ -215,15 +216,14 @@ def _sessions(tmp_path, ticket: DevelopmentTicketV1) -> DevelopmentSessionStore:
 def _response(payload: dict[str, Any], total: int) -> CodexTurnResponse:
     return CodexTurnResponse(
         final_response=json.dumps(payload),
-        usage=None
-        if total == 0
-        else __import__(
-            "jarvis.development_engine",
-            fromlist=["DevelopmentUsageV1"],
-        ).DevelopmentUsageV1(
-            input_tokens=total - 10,
-            output_tokens=10,
-            total_tokens=total,
+        usage=(
+            None
+            if total == 0
+            else DevelopmentUsageV1(
+                input_tokens=total - 10,
+                output_tokens=10,
+                total_tokens=total,
+            )
         ),
     )
 
