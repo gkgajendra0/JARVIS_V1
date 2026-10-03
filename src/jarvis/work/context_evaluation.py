@@ -100,9 +100,9 @@ def reconstruct_recorded_context_request(
     if history_count < 0 or history_count > len(steps):
         raise ValueError("C6 replay history prefix is unavailable")
     history = tuple(steps[:history_count])
-    expected_history_digest = str(
-        snapshot.get("history_step_ids_digest") or ""
-    ).strip().casefold()
+    expected_history_digest = (
+        str(snapshot.get("history_step_ids_digest") or "").strip().casefold()
+    )
     actual_history_digest = canonical_digest([step.step_id for step in history])
     if expected_history_digest != actual_history_digest:
         raise ValueError("C6 replay history prefix differs from durable provenance")
@@ -189,4 +189,3 @@ def reconstruct_recorded_context_request(
         context_pack=context_pack,
         context_mode=WorkContextMode.APPLY,
     )
-
