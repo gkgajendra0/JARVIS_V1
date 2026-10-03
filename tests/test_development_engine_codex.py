@@ -21,6 +21,10 @@ from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
+class InvalidRequestError(RuntimeError):
+    pass
+
+
 class FakePlan:
     def __init__(self) -> None:
         self.calls = 0
@@ -90,7 +94,7 @@ class FakeRuntime:
         assert model == "gpt-test"
         self.resumed.append(thread_id)
         if self.fail_resume:
-            raise RuntimeError("stale provider thread")
+            raise InvalidRequestError("thread not found")
         return self.thread
 
     async def close(self) -> None:
