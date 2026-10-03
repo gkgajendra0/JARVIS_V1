@@ -558,10 +558,11 @@ Implemented replay substrate:
   canonical only in WorkStore;
 - replay reconstruction verifies the exact append-only history prefix before creating
   an optimized APPLY BrainRequest and fails closed on provenance drift;
-- `tools/research/c6_context_owner_acceptance.py` remains zero-model by default and
-  exposes an explicit bounded `--decision-replay` mode that uses ChatGPT-plan directly,
-  never executes the selected action, has no paid fallback and does not mutate production
-  routing;
+- `tools/research/c6_context_owner_acceptance.py` remains zero-model by default,
+  exposes `--decision-replay-preflight` to prove corpus/model-lineage readiness without
+  initializing ChatGPT-plan, and exposes an explicit bounded `--decision-replay` mode
+  that uses ChatGPT-plan directly, never executes the selected action, has no paid
+  fallback and does not mutate production routing;
 - optimized replay is compared against the durable legacy decision across action,
   completion, owner-wait, owner-question and parameter fields with usage/latency recorded.
 
