@@ -310,7 +310,10 @@ def test_development_can_reopen_governed_architecture_research(tmp_path) -> None
         "architecture_revision_request",
     )
     assert revision is not None
-    assert revision.payload["previous_architecture_artifact_id"] == architecture.artifact_id
+    assert (
+        revision.payload["previous_architecture_artifact_id"]
+        == architecture.artifact_id
+    )
     assert revision.payload["source_attempt"] == 2
 
 
