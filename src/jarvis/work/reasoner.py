@@ -460,7 +460,10 @@ class RoutedWorkReasoner:
                 health is not None
                 and health.effective_state(now_epoch=now_epoch).value == "degraded"
             ):
-                return self._router.target_registry.require(last_target_id)
+                target = self._router.target_registry.require(last_target_id)
+                circuit = self._provider_circuit(target)
+                if circuit is None or circuit.allow_request():
+                    return target
 
         allowed_ids = decision.ordered_target_ids[: 1 + decision.fallback_budget]
         for target_id in allowed_ids:
