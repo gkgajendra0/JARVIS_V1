@@ -120,6 +120,46 @@ async def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_coordinator_reuses_durable_result_after_store_reopen(tmp_path) -> None:
+    ticket = _ticket()
+    first_engine = FakeEngine()
+    first = DevelopmentEngineCoordinator(
+        engine=first_engine,
+        sessions=_sessions(tmp_path),
+    )
+    first_result = await first.execute(
+        ticket,
+        tools=FakeTools(),
+        evidence_refs=("evidence:1",),
+    )
+
+    class MustNotRunEngine(FakeEngine):
+        async def execute(self, ticket, *, tools):
+            del ticket, tools
+            self.calls += 1
+            raise AssertionError("durable restart reuse must bypass the engine")
+
+    reopened_store = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    reopened_sessions = DevelopmentSessionStore(reopened_store)
+    restarted_engine = MustNotRunEngine()
+    restarted = DevelopmentEngineCoordinator(
+        engine=restarted_engine,
+        sessions=reopened_sessions,
+    )
+    restarted_result = await restarted.execute(
+        ticket,
+        tools=FakeTools(),
+        evidence_refs=("evidence:1",),
+    )
+
+    assert first_result.reused is False
+    assert restarted_result.reused is True
+    assert restarted_result.result == first_result.result
+    assert first_engine.calls == 1
+    assert restarted_engine.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_engine_generation_change_does_not_reuse_prior_result(tmp_path) -> None:
     ticket = _ticket()
     sessions = _sessions(tmp_path)
