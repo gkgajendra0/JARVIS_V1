@@ -5,12 +5,15 @@ from pathlib import Path
 import pytest
 from tools.research import c6_context_owner_acceptance as c6
 
+from jarvis.brain_routing.models import BrainRouteKind, BrainRouteRecord, BrainRoutingMode
 from jarvis.brain_routing.store import BrainRouteStore
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.model_routing.models import (
     ResponseContractResult,
     RoutingAttempt,
     RoutingAttemptKind,
 )
+from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -78,6 +81,66 @@ def test_historical_attempt_requires_one_exact_successful_model_result() -> None
         )
         is None
     )
+
+
+def test_replay_candidates_follow_global_model_routed_work_scope() -> None:
+    work = WorkItem(
+        request="Handle a generic model-routed task.",
+        work_type=WorkType.GENERIC,
+        source_session_id="session-c6",
+        source_turn_id="turn-c6",
+        work_id="work-c6",
+    )
+    route = BrainRouteRecord(
+        route_request_id="route-c6",
+        work_id=work.work_id,
+        subsystem_key="work",
+        task_kind=work.work_type.value,
+        route_kind=BrainRouteKind.MODEL,
+        mode=BrainRoutingMode.SHADOW,
+        policy_version=1,
+        policy_digest="a" * 64,
+        reason_codes=("deterministic_abstained",),
+        created_at_epoch=10.0,
+        selected_action="generic_action",
+        model_decision_id="decision-c6",
+        model_target_id="work.chatgpt_plan.default",
+        goal_complete=False,
+        needs_owner=False,
+        parameters_digest=canonical_digest({}),
+        reasoner_contract_digest="b" * 64,
+    )
+
+    class _WorkStore:
+        def list(self, *, limit: int):
+            assert limit == 500
+            return (work,)
+
+        def list_steps(self, work_id: str):
+            assert work_id == work.work_id
+            return ()
+
+    class _RouteStore:
+        def list_for_work(self, work_id: str):
+            assert work_id == work.work_id
+            return (route,)
+
+        def get_context_snapshot(self, route_request_id: str):
+            assert route_request_id == route.route_request_id
+            return {"reasoner_contract_digest": "b" * 64}
+
+    candidates, stats = c6._replay_candidates(
+        _WorkStore(),
+        _RouteStore(),
+        _AttemptStore(_attempt(1)),
+        model="reviewed-model",
+        limit=5,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0][1].work_type is WorkType.GENERIC
+    assert stats["model_routes_seen"] == 1
+    assert stats["different_model_lineage"] == 0
 
 
 @pytest.mark.asyncio
