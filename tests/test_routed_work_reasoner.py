@@ -1,5 +1,7 @@
 import asyncio
+import copy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel
@@ -330,6 +332,8 @@ def _routed_reasoner(
     provider_id: str = "fake",
     cost_profile: CostProfile | None = None,
     resources: ResourceLeaseManager | None = None,
+    prompt_compressor=None,
+    prompt_compression_mode: str = "off",
 ) -> tuple[
     SQLiteWorkStore,
     ModelRoutingStore,
@@ -368,8 +372,140 @@ def _routed_reasoner(
         clock=lambda: 101.0,
         resources=resources,
         resource_keys=(() if resources is None else ("provider_api",)),
+        prompt_compressor=prompt_compressor,
+        prompt_compression_mode=prompt_compression_mode,
     )
     return work_store, routing_store, reasoner, selected_adapter
+
+
+class _FakePayloadCompressor:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.calls = 0
+
+    def compress_payload(self, payload):
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("compressor unavailable")
+        compressed = copy.deepcopy(payload)
+        compressed["compression_probe"] = "compressed"
+        original_chars = len(str(payload))
+        compressed_chars = max(1, original_chars - 10)
+        return SimpleNamespace(
+            payload=compressed,
+            reduced=True,
+            original_chars=original_chars,
+            compressed_chars=compressed_chars,
+            reduction_percent=10.0,
+            compressed_strings=1,
+            latency_ms=1.0,
+        )
+
+
+class _PayloadCapturingAdapter(ReasoningAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.payloads: list[dict] = []
+
+    async def invoke_structured_with_telemetry(
+        self,
+        *,
+        target: ModelTarget,
+        system_prompt: str,
+        input_payload: dict,
+        response_model: type[BaseModel],
+        request_context: ModelInvocationContext,
+    ) -> StructuredOutputTelemetry:
+        self.payloads.append(copy.deepcopy(input_payload))
+        return await super().invoke_structured_with_telemetry(
+            target=target,
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+            request_context=request_context,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "compressed_sent"),
+    [("shadow", False), ("apply", True)],
+)
+async def test_routed_prompt_compression_shadow_and_apply_modes(
+    tmp_path: Path,
+    mode: str,
+    compressed_sent: bool,
+) -> None:
+    compressor = _FakePayloadCompressor()
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode=mode,
+    )
+    work = WorkItem(
+        request="Research one bounded source.",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-compression",
+        source_turn_id=f"turn-{mode}",
+    )
+    work_store.create(work)
+
+    await reasoner.decide(_brain_request(work))
+
+    assert compressor.calls == 1
+    assert len(adapter.payloads) == 1
+    assert ("compression_probe" in adapter.payloads[0]) is compressed_sent
+
+
+@pytest.mark.asyncio
+async def test_routed_prompt_compression_failure_falls_back_to_legacy(
+    tmp_path: Path,
+) -> None:
+    compressor = _FakePayloadCompressor(fail=True)
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode="apply",
+    )
+    work = WorkItem(
+        request="Research one bounded source.",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-compression-fallback",
+        source_turn_id="turn-compression-fallback",
+    )
+    work_store.create(work)
+
+    decision = await reasoner.decide(_brain_request(work))
+
+    assert decision.action == "do_step"
+    assert compressor.calls == 1
+    assert len(adapter.payloads) == 1
+    assert "compression_probe" not in adapter.payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_routed_prompt_compression_is_research_only_by_default(
+    tmp_path: Path,
+) -> None:
+    compressor = _FakePayloadCompressor()
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode="apply",
+    )
+    work = _work(work_store)
+
+    await reasoner.decide(_brain_request(work))
+
+    assert compressor.calls == 0
+    assert len(adapter.payloads) == 1
+    assert "compression_probe" not in adapter.payloads[0]
 
 
 @pytest.mark.asyncio
