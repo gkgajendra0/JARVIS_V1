@@ -443,39 +443,48 @@ class WorkRuntime:
         )
         return work
 
+    def _process_due_status_updates(self) -> None:
+        """Run the persistence-heavy status tick outside the realtime event loop."""
+
+        due = self.store.list_due_status_updates(limit=20)
+        for work_id, interval_seconds, due_at in due:
+            work = self.store.require(work_id)
+            if work.state.terminal:
+                self.store.clear_status_update_interval(work_id)
+                continue
+            estimate = estimate_work(self.store, work)
+            parts = [
+                f"Background task update: approximately {estimate.progress_percent}% complete."
+            ]
+            if work.status_detail:
+                parts.append(f"Current status: {work.status_detail}.")
+            if estimate.blocked_reason:
+                parts.append(f"Blocker: {estimate.blocked_reason}.")
+            if estimate.remaining_work:
+                parts.append(
+                    "Remaining work: "
+                    + ", ".join(estimate.remaining_work[:3])
+                    + "."
+                )
+            self.store.enqueue_delivery(
+                work=work,
+                kind=WorkDeliveryKind.PROGRESS,
+                message=" ".join(parts),
+                event_key=f"progress:{int(due_at.timestamp())}",
+            )
+            self.store.advance_status_update_interval(
+                work_id,
+                interval_seconds=interval_seconds,
+            )
+
     async def _status_update_loop(self) -> None:
         while not self._closed:
             try:
-                due = self.store.list_due_status_updates(limit=20)
-                for work_id, interval_seconds, due_at in due:
-                    work = self.store.require(work_id)
-                    if work.state.terminal:
-                        self.store.clear_status_update_interval(work_id)
-                        continue
-                    estimate = estimate_work(self.store, work)
-                    parts = [
-                        f"Background task update: approximately {estimate.progress_percent}% complete."
-                    ]
-                    if work.status_detail:
-                        parts.append(f"Current status: {work.status_detail}.")
-                    if estimate.blocked_reason:
-                        parts.append(f"Blocker: {estimate.blocked_reason}.")
-                    if estimate.remaining_work:
-                        parts.append(
-                            "Remaining work: "
-                            + ", ".join(estimate.remaining_work[:3])
-                            + "."
-                        )
-                    self.store.enqueue_delivery(
-                        work=work,
-                        kind=WorkDeliveryKind.PROGRESS,
-                        message=" ".join(parts),
-                        event_key=f"progress:{int(due_at.timestamp())}",
-                    )
-                    self.store.advance_status_update_interval(
-                        work_id,
-                        interval_seconds=interval_seconds,
-                    )
+                # SQLite uses a bounded lock timeout and may contend with DBOS /
+                # EngineeringChange writers. The status scheduler is best-effort
+                # background work, so it must never stall microphone/realtime
+                # scheduling while waiting on durable persistence.
+                await asyncio.to_thread(self._process_due_status_updates)
             except asyncio.CancelledError:
                 raise
             except Exception:
