@@ -216,12 +216,24 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
         optimized_payload=optimized,
         pack=pack,
     )
+    apply_optimized = (
+        request.context_mode is WorkContextMode.APPLY
+        and report.optimized_chars < report.legacy_chars
+        and report.optimized_estimated_tokens < report.legacy_estimated_tokens
+    )
+    applied_payload = "optimized" if apply_optimized else "legacy"
+    fallback_reason = (
+        "none"
+        if apply_optimized or request.context_mode is not WorkContextMode.APPLY
+        else "no_reduction"
+    )
     LOGGER.info(
         (
             "c6_work_context mode=%s work_id=%s legacy_chars=%d "
             "optimized_chars=%d legacy_estimated_tokens=%d "
             "optimized_estimated_tokens=%d reduction_percent=%.2f "
-            "selected_steps=%d omitted_steps=%d"
+            "selected_steps=%d omitted_steps=%d applied_payload=%s "
+            "fallback_reason=%s"
         ),
         request.context_mode.value,
         request.work.work_id,
@@ -232,10 +244,10 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
         report.reduction_percent,
         report.selected_step_count,
         report.omitted_step_count,
+        applied_payload,
+        fallback_reason,
     )
-    if request.context_mode is WorkContextMode.APPLY:
-        return optimized
-    return legacy
+    return optimized if apply_optimized else legacy
 
 
 def _brain_decision(
