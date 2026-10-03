@@ -145,13 +145,16 @@ class _OfficialCodexThread:
     @staticmethod
     def _usage(result: object) -> DevelopmentUsageV1 | None:
         usage = getattr(result, "usage", None)
-        total = getattr(usage, "total", None)
-        if total is None:
+        # Codex ThreadTokenUsage.total is cumulative across the thread. JARVIS
+        # aggregates engineering turns itself, so use the per-turn last usage
+        # to avoid double-counting prior turns every time the thread advances.
+        last = getattr(usage, "last", None)
+        if last is None:
             return None
         return DevelopmentUsageV1(
-            input_tokens=int(getattr(total, "input_tokens", 0) or 0),
-            output_tokens=int(getattr(total, "output_tokens", 0) or 0),
-            total_tokens=int(getattr(total, "total_tokens", 0) or 0),
+            input_tokens=int(getattr(last, "input_tokens", 0) or 0),
+            output_tokens=int(getattr(last, "output_tokens", 0) or 0),
+            total_tokens=int(getattr(last, "total_tokens", 0) or 0),
         )
 
     async def _run(
