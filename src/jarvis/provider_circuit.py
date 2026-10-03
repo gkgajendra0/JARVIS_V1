@@ -189,14 +189,16 @@ class BackgroundProviderCircuitRegistry:
         return result
 
     def _persist(self) -> None:
-        payload = {
-            key: {
-                "failed_attempts": circuit.failed_attempts,
-                "blocked_until": circuit.blocked_until,
-            }
-            for key, circuit in self._circuits.items()
-            if circuit.failed_attempts > 0 or circuit.blocked_until > 0
-        }
+        payload = {key: dict(value) for key, value in self._state.items()}
+        for key, circuit in self._circuits.items():
+            if circuit.failed_attempts > 0 or circuit.blocked_until > 0:
+                payload[key] = {
+                    "failed_attempts": circuit.failed_attempts,
+                    "blocked_until": circuit.blocked_until,
+                }
+            else:
+                payload.pop(key, None)
+        self._state = payload
         temporary = self._path.with_suffix(self._path.suffix + ".tmp")
         temporary.write_text(
             json.dumps(payload, sort_keys=True, separators=(",", ":")),
