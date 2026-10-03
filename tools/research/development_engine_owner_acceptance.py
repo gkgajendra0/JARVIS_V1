@@ -38,7 +38,11 @@ from jarvis.development_engine.codex import (
     REVIEWED_CODEX_SDK_VERSION,
     OfficialCodexRuntimeFactory,
 )
-from jarvis.machine_config import configured_text, load_machine_settings
+from jarvis.machine_config import (
+    configured_alias_text,
+    configured_text,
+    load_machine_settings,
+)
 from jarvis.provider_circuit import (
     BackgroundProviderCircuitRegistry,
     provider_circuit_key,
@@ -577,8 +581,13 @@ def main() -> int:
     ).strip()
     test_image = str(
         args.test_image
-        or configured_text("JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE", settings)
-        or configured_text("JARVIS_DEV_TEST_DOCKER_IMAGE", settings)
+        or configured_alias_text(
+            (
+                "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+                "JARVIS_DEV_TEST_DOCKER_IMAGE",
+            ),
+            settings,
+        )
         or ""
     ).strip()
     if not model:
