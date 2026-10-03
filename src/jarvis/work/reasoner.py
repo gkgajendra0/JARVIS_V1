@@ -34,6 +34,10 @@ from jarvis.model_routing.router import (
     build_work_routing_request,
 )
 from jarvis.model_routing.store import RoutingStoreError
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.provider_resilience import classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 from jarvis.work.context import WorkContextMode, build_context_shadow_report
@@ -319,6 +323,7 @@ class RoutedWorkReasoner:
         invoker: ModelInvoker,
         primary_target_id: str,
         clock: Callable[[], float] = time.time,
+        provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
     ) -> None:
         self._router = router
         self._invoker = invoker
@@ -326,6 +331,18 @@ class RoutedWorkReasoner:
         if not self._primary_target_id:
             raise ValueError("primary_target_id must not be empty")
         self._clock = clock
+        self._provider_circuit_registry = provider_circuit_registry
+
+    def _provider_circuit(self, target):
+        registry = self._provider_circuit_registry
+        if registry is None:
+            return None
+        return registry.circuit(
+            provider_circuit_key(
+                provider=target.provider_id,
+                model=target.model_id,
+            )
+        )
 
     @property
     def provider_name(self) -> str:
@@ -438,7 +455,11 @@ class RoutedWorkReasoner:
                 now_epoch=now_epoch
             ).value in {"cooldown", "unavailable", "disabled"}:
                 continue
-            return self._router.target_registry.require(target_id)
+            target = self._router.target_registry.require(target_id)
+            circuit = self._provider_circuit(target)
+            if circuit is not None and not circuit.allow_request():
+                continue
+            return target
         return None
 
     def _blocked_retry_after(
@@ -452,11 +473,14 @@ class RoutedWorkReasoner:
             : 1 + selection.decision.fallback_budget
         ]:
             record = self._router.routing_store.get_health(target_id)
-            if record is None or record.cooldown_until_epoch is None:
-                continue
-            remaining = record.cooldown_until_epoch - now_epoch
-            if remaining > 0:
-                waits.append(remaining)
+            if record is not None and record.cooldown_until_epoch is not None:
+                remaining = record.cooldown_until_epoch - now_epoch
+                if remaining > 0:
+                    waits.append(remaining)
+            target = self._router.target_registry.require(target_id)
+            circuit = self._provider_circuit(target)
+            if circuit is not None and circuit.remaining_seconds > 0:
+                waits.append(circuit.remaining_seconds)
         return max(1.0, min(waits)) if waits else 30.0
 
     async def decide(self, request: BrainRequest) -> BrainDecision:
@@ -522,6 +546,9 @@ class RoutedWorkReasoner:
                     exc,
                     provider=target.provider_id,
                 )
+                circuit = self._provider_circuit(target)
+                if circuit is not None:
+                    circuit.record_failure(exc)
                 attempt = RoutingAttempt(
                     attempt_id=attempt_id,
                     decision_id=selection.decision.decision_id,
@@ -587,6 +614,9 @@ class RoutedWorkReasoner:
             )
             self._router.routing_store.record_attempt(attempt)
             self._mark_target_recovered(target.target_id, now_epoch=ended)
+            circuit = self._provider_circuit(target)
+            if circuit is not None:
+                circuit.record_success()
             return _brain_decision(request, parsed)
 
         now = float(self._clock())
