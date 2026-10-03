@@ -545,7 +545,8 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Optional approved Docker image override. Defaults to the persisted "
-            "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE."
+            "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE, then legacy "
+            "JARVIS_DEV_TEST_DOCKER_IMAGE."
         ),
     )
     parser.add_argument(
@@ -577,6 +578,7 @@ def main() -> int:
     test_image = str(
         args.test_image
         or configured_text("JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE", settings)
+        or configured_text("JARVIS_DEV_TEST_DOCKER_IMAGE", settings)
         or ""
     ).strip()
     if not model:
@@ -589,7 +591,7 @@ def main() -> int:
     if not test_image:
         print(
             "ERROR: configure JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE "
-            "or pass --test-image.",
+            "(or legacy JARVIS_DEV_TEST_DOCKER_IMAGE), or pass --test-image.",
             file=sys.stderr,
         )
         return 2
