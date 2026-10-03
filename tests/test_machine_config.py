@@ -154,10 +154,7 @@ def test_alias_resolution_preserves_machine_first_precedence(
         "stale-shell:local",
     )
 
-    assert (
-        configured_alias_text(names, settings)
-        == "persisted-legacy:local"
-    )
+    assert configured_alias_text(names, settings) == "persisted-legacy:local"
 
     monkeypatch.setenv("JARVIS_RUNTIME_ENV_OVERRIDES", "true")
     assert configured_alias_text(names, settings) == "stale-shell:local"
