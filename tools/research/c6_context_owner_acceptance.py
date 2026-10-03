@@ -678,6 +678,131 @@ async def _run_fixture_stability_benchmark(
     }
 
 
+async def _run_fixture_first_pair_benchmark(
+    *,
+    model: str,
+    preflight_only: bool = False,
+) -> dict[str, object]:
+    """Compare one fixed legacy-vs-optimized fixture pair with at most two model calls."""
+
+    prepared, candidate_stats = _prepare_fixture_benchmark(
+        max_cases=_MAX_PAIRED_BENCHMARK_CASES
+    )
+    selected = next(
+        (
+            item
+            for item in prepared
+            if item[0].case_id == "development_repair_after_failure"
+        ),
+        None,
+    )
+    ready = selected is not None
+    common: dict[str, object] = {
+        "corpus_source": "checked_in_descriptor_fixture",
+        "model": model,
+        "fixture_first_pair_preflight_only": bool(preflight_only),
+        "fixture_first_pair_ready": ready,
+        "production_routing_mutated": False,
+        "actions_executed": False,
+        "paid_fallback_enabled": False,
+        "provider_circuit_updated": False,
+        # One pair is diagnostic evidence only; it can never prove global C6 APPLY.
+        "c6_apply_decision_equivalence_proven": False,
+        "candidate_stats": candidate_stats,
+    }
+    if selected is None:
+        return {
+            **common,
+            "model_calls": 0,
+            "pair_equivalent": None,
+            "case": None,
+        }
+
+    case, legacy_chars, optimized_chars = selected
+    legacy_request = replace(case.request, context_mode=WorkContextMode.SHADOW)
+    legacy_payload = _work_input_payload(legacy_request)
+    optimized_payload = _work_input_payload(case.request)
+    case_common = {
+        "case_id": case.case_id,
+        "work_id": case.request.work.work_id,
+        "work_type": case.request.work.work_type.value,
+        "legacy_chars": legacy_chars,
+        "optimized_chars": optimized_chars,
+        "reduction_percent": round(
+            (legacy_chars - optimized_chars) * 100.0 / legacy_chars,
+            2,
+        ),
+        "legacy_request_digest": canonical_digest(legacy_payload),
+        "optimized_request_digest": canonical_digest(optimized_payload),
+        "reasoning_contract_digest": work_reasoning_contract_digest(),
+    }
+    if preflight_only:
+        return {
+            **common,
+            "model_calls": 0,
+            "pair_equivalent": None,
+            "case": case_common,
+        }
+
+    circuit = BackgroundProviderCircuitRegistry().circuit(
+        provider_circuit_key(provider=CHATGPT_PLAN_PROVIDER_ID, model=model)
+    )
+    if not circuit.allow_request():
+        raise RuntimeError(
+            "ChatGPT-plan provider circuit is cooling down; "
+            f"retry after about {int(circuit.remaining_seconds)} seconds"
+        )
+
+    plan = ChatGPTPlanSessionManager()
+    if not plan.is_connected():
+        raise RuntimeError("ChatGPT-plan connection is unavailable")
+    visible = {item.slug for item in plan.list_models()}
+    if model not in visible:
+        raise RuntimeError(
+            f"C6 first-pair model {model!r} is not visible to the connected ChatGPT plan"
+        )
+    client = build_chatgpt_plan_structured_output_client(
+        model=model,
+        session_manager=plan,
+        provider_retries=False,
+    )
+
+    legacy, legacy_telemetry = await evaluate_structured_work_request(
+        client,
+        legacy_request,
+    )
+    optimized, optimized_telemetry = await evaluate_structured_work_request(
+        client,
+        case.request,
+    )
+    comparison = compare_context_decisions(legacy, optimized)
+    return {
+        **common,
+        "model_calls": 2,
+        "pair_equivalent": comparison.equivalent,
+        "case": {
+            **case_common,
+            "legacy_action": legacy.action,
+            "optimized_action": optimized.action,
+            "action_equal": comparison.action_equal,
+            "legacy_parameters": dict(legacy.parameters),
+            "optimized_parameters": dict(optimized.parameters),
+            "legacy_parameters_digest": canonical_digest(legacy.parameters),
+            "optimized_parameters_digest": canonical_digest(optimized.parameters),
+            "goal_complete_equal": comparison.goal_complete_equal,
+            "needs_owner_equal": comparison.needs_owner_equal,
+            "owner_question_equal": comparison.owner_question_equal,
+            "parameters_equal": comparison.parameters_equal,
+            "legacy_usage": dict(legacy_telemetry.usage),
+            "legacy_usage_observed": legacy_telemetry.usage_observed,
+            "legacy_latency_ms": round(legacy_telemetry.latency_ms, 2),
+            "optimized_usage": dict(optimized_telemetry.usage),
+            "optimized_usage_observed": optimized_telemetry.usage_observed,
+            "optimized_latency_ms": round(optimized_telemetry.latency_ms, 2),
+        },
+    }
+
+
 async def _run_fixture_decision_benchmark(
     *,
     model: str,
@@ -1176,6 +1301,23 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     replay_mode.add_argument(
+        "--fixture-first-pair-preflight",
+        action="store_true",
+        help=(
+            "Validate the fixed first legacy-vs-optimized C6 fixture pair without "
+            "initializing ChatGPT-plan or consuming model quota."
+        ),
+    )
+    replay_mode.add_argument(
+        "--fixture-first-pair-benchmark",
+        action="store_true",
+        help=(
+            "Explicitly consume exactly two ChatGPT-plan calls to compare the corrected "
+            "first legacy-vs-optimized fixture pair. No Work action is executed and one "
+            "pair cannot prove global C6 APPLY equivalence."
+        ),
+    )
+    replay_mode.add_argument(
         "--fixture-decision-preflight",
         action="store_true",
         help=(
@@ -1361,6 +1503,8 @@ def main() -> int:
         or args.paired_decision_benchmark
         or args.fixture_stability_preflight
         or args.fixture_stability_benchmark
+        or args.fixture_first_pair_preflight
+        or args.fixture_first_pair_benchmark
         or args.fixture_decision_preflight
         or args.fixture_decision_benchmark
     ):
@@ -1383,6 +1527,13 @@ def main() -> int:
                     _run_fixture_stability_benchmark(
                         model=model,
                         preflight_only=args.fixture_stability_preflight,
+                    )
+                )
+            elif args.fixture_first_pair_preflight or args.fixture_first_pair_benchmark:
+                replay = asyncio.run(
+                    _run_fixture_first_pair_benchmark(
+                        model=model,
+                        preflight_only=args.fixture_first_pair_preflight,
                     )
                 )
             elif args.fixture_decision_preflight or args.fixture_decision_benchmark:
@@ -1439,6 +1590,26 @@ def main() -> int:
                 "not prove legacy-vs-optimized C6 equivalence and cannot promote APPLY."
             )
             if replay["same_context_stable"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_first_pair_preflight:
+            result["model_api_called"] = False
+            result["fixture_first_pair_preflight"] = replay
+            result["c6_fixture_first_pair_ready"] = replay["fixture_first_pair_ready"]
+            result["c6_apply_note"] = (
+                "First-pair preflight only; no model call was made and C6 APPLY "
+                "remains unproven."
+            )
+            if replay["fixture_first_pair_ready"] is not True:
+                result["status"] = "INCOMPLETE"
+        elif args.fixture_first_pair_benchmark:
+            result["model_api_called"] = bool(replay["model_calls"])
+            result["fixture_first_pair_benchmark"] = replay
+            result["c6_apply_decision_equivalence_proven"] = False
+            result["c6_apply_note"] = (
+                "One corrected legacy-vs-optimized pair is diagnostic evidence only. "
+                "It cannot promote global C6 APPLY."
+            )
+            if replay["pair_equivalent"] is not True:
                 result["status"] = "INCOMPLETE"
         elif args.fixture_decision_preflight:
             result["model_api_called"] = False

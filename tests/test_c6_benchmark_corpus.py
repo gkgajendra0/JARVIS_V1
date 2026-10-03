@@ -46,6 +46,8 @@ def test_c6_owner_harness_supports_direct_script_execution() -> None:
     assert "--fixture-decision-preflight" in completed.stdout
     assert "--fixture-stability-preflight" in completed.stdout
     assert "--fixture-stability-benchmark" in completed.stdout
+    assert "--fixture-first-pair-preflight" in completed.stdout
+    assert "--fixture-first-pair-benchmark" in completed.stdout
 
 
 def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
@@ -374,4 +376,162 @@ async def test_c6_fixture_stability_does_not_promote_apply_when_stable(
     assert result["model_calls"] == 2
     assert result["same_context_stable"] is True
     assert result["case"]["parameters_equal"] is True
+    assert result["c6_apply_decision_equivalence_proven"] is False
+
+
+
+@pytest.mark.asyncio
+async def test_c6_fixture_first_pair_preflight_uses_no_provider_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _forbidden_provider():
+        raise AssertionError("first-pair preflight must not initialize provider state")
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _forbidden_provider)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _forbidden_provider)
+
+    result = await c6._run_fixture_first_pair_benchmark(
+        model="reviewed-model",
+        preflight_only=True,
+    )
+
+    assert result["fixture_first_pair_ready"] is True
+    assert result["model_calls"] == 0
+    assert result["pair_equivalent"] is None
+    assert result["case"]["case_id"] == "development_repair_after_failure"
+    assert result["case"]["legacy_request_digest"]
+    assert result["case"]["optimized_request_digest"]
+    assert result["case"]["legacy_request_digest"] != result["case"][
+        "optimized_request_digest"
+    ]
+    assert result["case"]["optimized_chars"] < result["case"]["legacy_chars"]
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert result["actions_executed"] is False
+
+
+@pytest.mark.asyncio
+async def test_c6_fixture_first_pair_reports_equivalence_without_promoting_apply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self) -> bool:
+            return True
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self) -> bool:
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **kwargs: object(),
+    )
+
+    calls: list[WorkContextMode] = []
+
+    async def _evaluate(_client, request):
+        calls.append(request.context_mode)
+        return (
+            BrainDecision(
+                action="dev_commit",
+                summary="Equivalent corrected fixture decision",
+                parameters={"message": "test(c6): repair bounded normalization"},
+            ),
+            SimpleNamespace(
+                usage={"input_tokens": len(calls)},
+                usage_observed=True,
+                latency_ms=float(len(calls)),
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_fixture_first_pair_benchmark(model="reviewed-model")
+
+    assert calls == [WorkContextMode.SHADOW, WorkContextMode.APPLY]
+    assert result["model_calls"] == 2
+    assert result["pair_equivalent"] is True
+    assert result["case"]["action_equal"] is True
+    assert result["case"]["parameters_equal"] is True
+    assert result["case"]["legacy_parameters"] == {
+        "message": "test(c6): repair bounded normalization"
+    }
+    assert result["case"]["optimized_parameters"] == result["case"]["legacy_parameters"]
+    assert result["c6_apply_decision_equivalence_proven"] is False
+    assert result["production_routing_mutated"] is False
+    assert result["actions_executed"] is False
+    assert result["provider_circuit_updated"] is False
+
+
+@pytest.mark.asyncio
+async def test_c6_fixture_first_pair_reports_parameter_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self) -> bool:
+            return True
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self) -> bool:
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **kwargs: object(),
+    )
+
+    calls = 0
+
+    async def _evaluate(_client, request):
+        nonlocal calls
+        calls += 1
+        message = (
+            "test(c6): repair bounded normalization"
+            if request.context_mode is WorkContextMode.SHADOW
+            else "test(c6): repair normalization"
+        )
+        return (
+            BrainDecision(
+                action="dev_commit",
+                summary="Intentional first-pair mismatch",
+                parameters={"message": message},
+            ),
+            SimpleNamespace(
+                usage={"input_tokens": calls},
+                usage_observed=True,
+                latency_ms=float(calls),
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_fixture_first_pair_benchmark(model="reviewed-model")
+
+    assert calls == 2
+    assert result["pair_equivalent"] is False
+    assert result["case"]["action_equal"] is True
+    assert result["case"]["parameters_equal"] is False
     assert result["c6_apply_decision_equivalence_proven"] is False
