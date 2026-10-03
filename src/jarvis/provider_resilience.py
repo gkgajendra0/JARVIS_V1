@@ -272,6 +272,32 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         kind = ProviderFailureKind.PROVIDER_SERVER_ERROR
     elif status in {502, 503}:
         kind = ProviderFailureKind.SERVICE_UNAVAILABLE
+    elif any(
+        marker in evidence
+        for marker in (
+            "serverbusyerror",
+            "retrylimitexceedederror",
+            "server overloaded",
+            "server_overloaded",
+            "too many failed attempts",
+        )
+    ):
+        # Codex app-server surfaces transient overload/retry-budget failures as
+        # typed JSON-RPC errors without an HTTP status. They must park durable
+        # engineering work rather than fail a capability change.
+        kind = ProviderFailureKind.SERVICE_UNAVAILABLE
+        if retryable is None:
+            retryable = True
+    elif "transportclosederror" in evidence:
+        # A closed local app-server transport is recoverable working-memory
+        # infrastructure, not a terminal engineering failure.
+        kind = ProviderFailureKind.CONNECTION_LOST
+        if retryable is None:
+            retryable = True
+    elif "internalrpcerror" in evidence:
+        kind = ProviderFailureKind.PROVIDER_SERVER_ERROR
+        if retryable is None:
+            retryable = True
     elif "1011" in evidence and (
         "internal error" in evidence or "internal server error" in evidence
     ):
