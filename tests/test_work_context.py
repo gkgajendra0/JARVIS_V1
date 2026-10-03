@@ -313,4 +313,3 @@ def test_recorded_context_equivalence_rejects_legacy_incomplete_provenance() -> 
         )
         is None
     )
-
