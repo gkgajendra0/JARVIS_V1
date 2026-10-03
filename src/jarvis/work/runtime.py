@@ -622,6 +622,7 @@ def build_work_runtime(
     chatgpt_plan_model: str | None = None,
     development_engine_enabled: bool = False,
     development_engine_model: str | None = None,
+    work_context_mode: str = "shadow",
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -929,6 +930,7 @@ def build_work_runtime(
             )
         ),
         control_plane_decider=control_plane_decider,
+        context_mode=work_context_mode,
     )
     engine.reconcile_interrupted_steps()
     reconciled_model_owner = engine.reconcile_waiting_model_owner_requests()
