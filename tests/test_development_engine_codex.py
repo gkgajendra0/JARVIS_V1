@@ -17,6 +17,7 @@ from jarvis.development_engine.codex import (
     CodexPlanDevelopmentEngine,
     CodexTurnResponse,
 )
+from jarvis.provider_circuit import BackgroundProviderCircuit
 from jarvis.work.models import WorkItem, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
@@ -566,4 +567,79 @@ async def test_codex_engine_reconstructs_completion_from_canonical_progress(
     assert result.test_evidence_refs == ("workstep:test_prior",)
     assert tools.calls == []
     assert runtime.resumed == ["thr_missing"]
+    assert runtime.started == 1
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_open_provider_circuit_suppresses_cloud_request(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    clock = lambda: 1000.0
+    circuit = BackgroundProviderCircuit(clock=clock)
+    trip = circuit.record_failure(
+        RuntimeError(
+            "subscription_sharing_usage_limit_exceeded: "
+            "Subscription Sharing usage limit reached"
+        )
+    )
+    assert trip is not None
+    plan = FakePlan()
+    runtime = FakeRuntime(FakeThread("thr_never", []))
+    factory = FakeRuntimeFactory(runtime)
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=plan,
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=factory,
+        state_dir=tmp_path / "codex",
+        provider_circuit=circuit,
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert result.blocker_code == "provider_circuit_open"
+    assert plan.calls == 0
+    assert factory.access_token is None
+    assert runtime.started == 0
+    assert runtime.resumed == []
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_subscription_limit_opens_shared_circuit_and_suppresses_retry(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    circuit = BackgroundProviderCircuit(clock=lambda: 1000.0)
+    plan = FakePlan()
+    runtime = FakeRuntime(
+        FakeThread("thr_never", []),
+        fail_start=RuntimeError(
+            "subscription_sharing_usage_limit_exceeded: "
+            "Subscription Sharing usage limit reached"
+        ),
+    )
+    factory = FakeRuntimeFactory(runtime)
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=plan,
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=factory,
+        state_dir=tmp_path / "codex",
+        provider_circuit=circuit,
+    )
+
+    first = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+    second = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert first.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert first.blocker_code == "quota_exhausted"
+    assert second.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert second.blocker_code == "provider_circuit_open"
+    assert circuit.allow_request() is False
+    assert circuit.failed_attempts == 1
+    assert plan.calls == 1
     assert runtime.started == 1
