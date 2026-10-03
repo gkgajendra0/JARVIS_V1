@@ -468,20 +468,26 @@ class RoutedWorkReasoner:
         *,
         now_epoch: float,
     ) -> float:
-        waits: list[float] = []
+        target_waits: list[float] = []
         for target_id in selection.decision.ordered_target_ids[
             : 1 + selection.decision.fallback_budget
         ]:
+            constraints: list[float] = []
             record = self._router.routing_store.get_health(target_id)
             if record is not None and record.cooldown_until_epoch is not None:
                 remaining = record.cooldown_until_epoch - now_epoch
                 if remaining > 0:
-                    waits.append(remaining)
+                    constraints.append(remaining)
             target = self._router.target_registry.require(target_id)
             circuit = self._provider_circuit(target)
             if circuit is not None and circuit.remaining_seconds > 0:
-                waits.append(circuit.remaining_seconds)
-        return max(1.0, min(waits)) if waits else 30.0
+                constraints.append(circuit.remaining_seconds)
+            if constraints:
+                # A target becomes eligible only after all of its active capacity
+                # constraints have expired. Across fallback targets, the soonest
+                # eligible target determines the next durable probe.
+                target_waits.append(max(constraints))
+        return max(1.0, min(target_waits)) if target_waits else 30.0
 
     async def decide(self, request: BrainRequest) -> BrainDecision:
         routing_request = build_work_routing_request(
