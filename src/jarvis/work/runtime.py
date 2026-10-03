@@ -462,9 +462,7 @@ class WorkRuntime:
                 parts.append(f"Blocker: {estimate.blocked_reason}.")
             if estimate.remaining_work:
                 parts.append(
-                    "Remaining work: "
-                    + ", ".join(estimate.remaining_work[:3])
-                    + "."
+                    "Remaining work: " + ", ".join(estimate.remaining_work[:3]) + "."
                 )
             self.store.enqueue_delivery(
                 work=work,
