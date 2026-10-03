@@ -232,6 +232,37 @@ async def test_owner_input_resolution_closes_session_before_exact_acknowledgemen
 
 
 @pytest.mark.asyncio
+async def test_owner_input_spoken_prompt_redacts_internal_entity_identity() -> None:
+    runtime = object.__new__(WorkRuntime)
+    controller = object.__new__(CanonicalActiveSpeakerRuntimeController)
+    controller._work_runtime = runtime
+    controller._shutdown = asyncio.Event()
+    controller._timeout_handle = None
+    controller._active_end = None
+    controller._state = VoiceRuntimeState.IDLE
+
+    captured: dict[str, object] = {}
+
+    async def fake_run_one_session_owned(**kwargs) -> None:
+        captured.update(kwargs)
+
+    controller._run_one_session_owned = fake_run_one_session_owned
+
+    answered = await controller._run_owner_input_interaction(
+        work_id="work-tv",
+        question=(
+            "Do you approve the target-bound adapter for "
+            "entity 80185cc24a9625821018?"
+        ),
+    )
+
+    assert answered is False
+    instructions = str(captured["initial_instructions"])
+    assert "80185cc24a9625821018" not in instructions
+    assert "the target device or service" in instructions
+
+
+@pytest.mark.asyncio
 async def test_owner_input_interaction_builds_exact_bound_conversation() -> None:
     runtime = object.__new__(WorkRuntime)
     controller = object.__new__(CanonicalActiveSpeakerRuntimeController)
