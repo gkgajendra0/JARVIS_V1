@@ -9,6 +9,8 @@ from enum import StrEnum
 from jarvis.model_routing.eligibility import TargetHealthEligibility
 from jarvis.provider_resilience import ProviderFailure, ProviderFailureKind
 
+_PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS = (1.0, 2.0, 4.0, 10.0, 20.0)
+
 
 def _token(value: object, *, field: str) -> str:
     normalized = str(value).strip().casefold()
@@ -127,7 +129,7 @@ def apply_provider_failure(
     *,
     now_epoch: float,
     base_cooldown_seconds: float = 30.0,
-    max_cooldown_seconds: float = 300.0,
+    max_cooldown_seconds: float = 600.0,
 ) -> HealthMutation:
     """Map normalized provider failures to bounded target-local health actions."""
 
@@ -182,7 +184,10 @@ def apply_provider_failure(
         ProviderFailureKind.RATE_LIMITED,
         ProviderFailureKind.QUOTA_EXHAUSTED,
     }:
-        seconds = min(cap, base * (2 ** max(0, count - 1)))
+        multiplier = _PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS[
+            min(count - 1, len(_PROVIDER_PRESSURE_BACKOFF_MULTIPLIERS) - 1)
+        ]
+        seconds = min(cap, base * multiplier)
         next_record = replace(
             record,
             state=TargetHealthEligibility.COOLDOWN,
