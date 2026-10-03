@@ -1101,6 +1101,10 @@ class CodexPlanDevelopmentEngine:
                 evidence_refs=tuple(sorted(observed_evidence)),
                 usage=last_usage,
             )
+        except DevelopmentToolOwnerInputRequired:
+            # This is a canonical JARVIS owner boundary, not a provider failure.
+            # Let Phase-9 translate it into Work WAITING_FOR_OWNER.
+            raise
         except Exception as exc:  # noqa: BLE001 - provider boundary fails closed
             if circuit is not None:
                 circuit.record_failure(exc)
