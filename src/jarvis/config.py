@@ -260,6 +260,14 @@ class JarvisConfig:
             "work_prompt_compression_mode",
             work_prompt_compression_mode,
         )
+        if (
+            work_context_mode == "apply"
+            and work_prompt_compression_mode == "apply"
+        ):
+            raise ValueError(
+                "work context and prompt compression cannot both be APPLY "
+                "until combined-context acceptance exists"
+            )
 
         brain_router_mode = str(self.global_brain_router_mode).strip().casefold()
         if brain_router_mode not in {"off", "shadow", "apply"}:
