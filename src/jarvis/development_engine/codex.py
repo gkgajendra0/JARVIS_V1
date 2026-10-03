@@ -522,6 +522,17 @@ def _parse_directive(response: CodexTurnResponse) -> dict[str, Any]:
         raise TypeError("Codex tool_calls must be an array")
     if len(calls) > _MAX_TOOL_CALLS_PER_BATCH:
         raise ValueError("Codex tool batch exceeds configured limit")
+    disposition = payload.get("disposition")
+    if kind == "tool_batch":
+        if not calls:
+            raise ValueError("Codex tool_batch must contain at least one tool call")
+        if disposition is not None:
+            raise ValueError("Codex tool_batch cannot carry a terminal disposition")
+    else:
+        if calls:
+            raise ValueError("Codex terminal result cannot carry tool calls")
+        if disposition is None:
+            raise ValueError("Codex terminal result requires a disposition")
     payload["kind"] = kind
     payload["summary"] = summary
     return payload
