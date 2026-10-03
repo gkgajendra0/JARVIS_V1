@@ -246,13 +246,15 @@ def build_default_work_targets(
     adapter_registry: ModelAdapterRegistry,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    paid_fallback_enabled: bool = False,
 ) -> DefaultWorkTargets:
     """Build the approved Work pool.
 
     Legacy mode is byte-for-byte compatible with the Phase-4 two-provider pool.
     When ChatGPT-plan usage is explicitly enabled, the subscription-backed target
-    becomes primary and the configured paid provider becomes the single bounded
-    fallback. The C5 Ollama target intentionally remains outside this durable pool.
+    becomes primary. A configured paid provider is included only when the owner has
+    explicitly enabled paid fallback. The C5 Ollama target intentionally remains
+    outside this durable pool.
     """
 
     primary_provider = normalize_ai_provider(configured_provider)
@@ -300,15 +302,15 @@ def build_default_work_targets(
         ),
         enabled=True,
     )
-    paid_fallback = _paid_work_target(
-        primary_provider,
-        configured_model=configured_model,
-    )
+    targets = (plan_target,)
+    if paid_fallback_enabled:
+        paid_fallback = _paid_work_target(
+            primary_provider,
+            configured_model=configured_model,
+        )
+        targets = (plan_target, paid_fallback)
     return DefaultWorkTargets(
-        registry=ModelTargetRegistry(
-            adapter_registry,
-            (plan_target, paid_fallback),
-        ),
+        registry=ModelTargetRegistry(adapter_registry, targets),
         primary_target_id=CHATGPT_PLAN_TARGET_ID,
     )
 
@@ -409,20 +411,10 @@ class ModelRouter:
             record = self.routing_store.get_health(target.target_id)
             if record is None:
                 continue
+            # Expiry only makes the target eligible for one probe. It must not
+            # erase the failure streak: only a successful provider invocation may
+            # reset consecutive_failures via _mark_target_recovered().
             effective = record.effective_state(now_epoch=now_epoch)
-            if effective is not record.state:
-                recovered = record.recovered(now_epoch=now_epoch)
-                try:
-                    self.routing_store.save_health(
-                        recovered,
-                        expected_version=record.version,
-                    )
-                    record = recovered
-                except RoutingStoreError:
-                    refreshed = self.routing_store.get_health(target.target_id)
-                    if refreshed is not None:
-                        record = refreshed
-                        effective = record.effective_state(now_epoch=now_epoch)
             health[target.target_id] = effective
             versions[target.target_id] = record.version
 
