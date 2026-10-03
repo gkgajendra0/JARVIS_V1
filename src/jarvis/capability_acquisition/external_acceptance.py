@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass
@@ -823,7 +824,8 @@ class ExternalAcceptanceInvokeExecutor:
             field="authority_session_id",
             limit=180,
         )
-        result = self._runtime.execute_operation(
+        result = await asyncio.to_thread(
+            self._runtime.execute_operation,
             session_id=authority_session_id,
             operation=operation,
             parameters=invoke_parameters,
