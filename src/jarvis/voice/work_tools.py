@@ -281,6 +281,7 @@ class WorkAgentTools:
             source_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
+
         def admit_capability():
             return coordinator.admit(
                 goal,
@@ -653,6 +654,7 @@ class WorkAgentTools:
         coordinator = self._runtime.changes
         if coordinator is None:
             return {"ok": False, "status": "unavailable"}
+
         def load_change_status():
             change = coordinator.store.require(change_id)
             stages: list[dict[str, object]] = []
@@ -796,10 +798,7 @@ class WorkAgentTools:
         payload: dict[str, object] = {
             "ok": True,
             "status": "listed",
-            "work": [
-                await self._public_work_async(item)
-                for item in items
-            ],
+            "work": [await self._public_work_async(item) for item in items],
         }
         if len(items) == 1:
             await self._set_owner_work_focus(items[0].work_id)
@@ -845,10 +844,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "listed",
-            "work": [
-                await self._public_work_async(item)
-                for item in items
-            ],
+            "work": [await self._public_work_async(item) for item in items],
         }
 
     @function_tool()
@@ -929,7 +925,11 @@ class WorkAgentTools:
             # resolves the pending owner-attention dependency just as definitively
             # as supplying an answer, without submitting fake owner input to DBOS.
             self._on_bound_owner_input_submitted(item)
-        return {"ok": True, "status": "cancelled", **(await self._public_work_async(item))}
+        return {
+            "ok": True,
+            "status": "cancelled",
+            **(await self._public_work_async(item)),
+        }
 
     @function_tool()
     async def pause_background_work(
@@ -971,7 +971,11 @@ class WorkAgentTools:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         except ValueError as exc:
             return {"ok": False, "status": "invalid_state", "reason": str(exc)}
-        return {"ok": True, "status": "resumed", **(await self._public_work_async(item))}
+        return {
+            "ok": True,
+            "status": "resumed",
+            **(await self._public_work_async(item)),
+        }
 
     @function_tool()
     async def reprioritize_background_work(
