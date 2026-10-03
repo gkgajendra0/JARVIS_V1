@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.hands.provider_adapters import (
     StructuredOutputClient,
     StructuredOutputTelemetry,
@@ -180,6 +181,17 @@ class _WorkDecisionModel(BaseModel):
     goal_complete: bool
     needs_owner: bool
     owner_question: str | None
+
+
+def work_reasoning_contract_digest() -> str:
+    """Bind C6 replay evidence to the exact Work prompt and response contract."""
+
+    return canonical_digest(
+        {
+            "system_prompt": _SYSTEM_PROMPT,
+            "response_schema": _WorkDecisionModel.model_json_schema(),
+        }
+    )
 
 
 def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
