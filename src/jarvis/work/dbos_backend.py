@@ -119,7 +119,9 @@ def _waiting_resource_delay(payload: dict[str, Any]) -> float:
         return 0.25
     if delay <= 0:
         return 0.25
-    return min(delay, 60.0)
+    # WAITING_RESOURCE uses a wakeable DBOS.recv timeout, so preserving the
+    # provider's full durable cooldown no longer harms graceful shutdown.
+    return delay
 
 
 def _durable_interruptible_wait(seconds: float, *, patch_name: str) -> None:
