@@ -440,6 +440,8 @@ def build_production_voice_runtime(
         projection=None if package_stack is None else package_stack.projection,
     )
 
+    provider_circuit_registry = BackgroundProviderCircuitRegistry()
+
     work_runtime = None
     if config.work_orchestration_enabled:
         deployment_metadata = DeploymentMetadataStore(default_deployment_root())
@@ -458,6 +460,7 @@ def build_production_voice_runtime(
             chatgpt_plan_enabled=config.chatgpt_plan_enabled,
             chatgpt_plan_model=config.chatgpt_plan_model,
             paid_fallback_enabled=config.work_paid_fallback_enabled,
+            provider_circuit_registry=provider_circuit_registry,
             global_brain_router_mode=config.global_brain_router_mode,
             global_concurrency=config.work_global_concurrency,
             acquisition_candidate_advisor=acquisition_candidate_advisor,
@@ -557,7 +560,6 @@ def build_production_voice_runtime(
             gicc_shadow_interpreter = None
             gicc_goal_store = None
 
-    provider_circuit_registry = BackgroundProviderCircuitRegistry()
     memory_candidate_circuit = (
         None
         if candidate_extractor is None
