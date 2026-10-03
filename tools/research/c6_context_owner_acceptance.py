@@ -120,8 +120,6 @@ def _replay_candidates(
         "different_model_lineage": 0,
     }
     for work in store.list(limit=500):
-        if work.work_type not in {WorkType.DEVELOPMENT, WorkType.RESEARCH}:
-            continue
         steps = store.list_steps(work.work_id)
         for route in route_store.list_for_work(work.work_id):
             if route.route_kind is not BrainRouteKind.MODEL:
@@ -233,15 +231,22 @@ async def _run_decision_replay(
             )
         )
 
+    ready_types = tuple(
+        sorted({item[0].work_type for item in prepared}, key=lambda value: value.value)
+    )
     ready_by_type = {
         work_type.value: sum(1 for item in prepared if item[0].work_type is work_type)
-        for work_type in (WorkType.RESEARCH, WorkType.DEVELOPMENT)
+        for work_type in ready_types
     }
     selected = []
     selected_ids: set[int] = set()
 
-    # First guarantee cross-stage coverage when the corpus contains both phases.
-    for required_type in (WorkType.RESEARCH, WorkType.DEVELOPMENT):
+    # C6 APPLY is global. Seed the bounded corpus across the Work types that actually
+    # reached model reasoning under the current contract instead of hard-coding
+    # Phase-9 RESEARCH/DEVELOPMENT, which may now be control-plane driven.
+    for required_type in ready_types:
+        if len(selected) >= max_cases:
+            break
         for index, item in enumerate(prepared):
             if index in selected_ids or item[0].work_type is not required_type:
                 continue
@@ -271,11 +276,7 @@ async def _run_decision_replay(
     prepared = selected[:max_cases]
     selected_types = {item[0].work_type for item in prepared}
     distinct_work_items = len({item[0].work_id for item in prepared})
-    representative_corpus = (
-        WorkType.RESEARCH in selected_types
-        and WorkType.DEVELOPMENT in selected_types
-        and distinct_work_items >= 2
-    )
+    representative_corpus = len(selected_types) >= 2 and distinct_work_items >= 2
 
     candidate_stats = {
         **candidate_stats,
@@ -283,7 +284,9 @@ async def _run_decision_replay(
         "context_drift_cases": context_drift_cases,
         "non_reducing_cases": non_reducing_cases,
         "replay_ready_by_work_type": ready_by_type,
+        "replay_ready_work_types": [item.value for item in ready_types],
         "selected_replay_cases": len(prepared),
+        "selected_work_types": sorted(item.value for item in selected_types),
         "selected_distinct_work_items": distinct_work_items,
         "representative_corpus_covered": representative_corpus,
     }
