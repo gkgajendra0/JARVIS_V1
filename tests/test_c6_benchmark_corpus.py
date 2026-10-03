@@ -717,7 +717,6 @@ async def test_c6_fixture_remaining_pairs_stop_on_first_mismatch(
     assert result["c6_apply_decision_equivalence_proven"] is False
 
 
-
 class _FakeCompressionResult:
     def __init__(self, payload):
         import copy
