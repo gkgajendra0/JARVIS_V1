@@ -9,6 +9,7 @@ from jarvis.development_engine.contracts import DevelopmentTicketV1
 from jarvis.development_engine.phase9 import (
     PHASE9_DEVELOPMENT_ENGINE_ACTION,
     Phase9DevelopmentControlPlaneDecider,
+    Phase9ResearchControlPlaneDecider,
     Phase9ResearchEvidenceExecutor,
     phase9_development_completion_guard,
 )
@@ -47,7 +48,13 @@ class FakeBuilder:
         self.ticket = ticket
 
     def is_phase9_development_work(self, work: WorkItem) -> bool:
-        return work.work_id == self.ticket.work_id
+        return (
+            work.work_type is WorkType.DEVELOPMENT
+            and work.work_id == self.ticket.work_id
+        )
+
+    def is_phase9_research_work(self, work: WorkItem) -> bool:
+        return work.work_type is WorkType.RESEARCH
 
     def build(self, work: WorkItem) -> DevelopmentTicketV1:
         assert self.is_phase9_development_work(work)
@@ -115,6 +122,57 @@ def _completed_step(
 ) -> WorkStep:
     step = WorkStep(work_id=work_id, kind=kind, summary=kind)
     return step.start().complete(observation)
+
+
+def test_research_control_plane_inspects_goal_without_model_reasoning() -> None:
+    work = WorkItem(
+        request="research capability",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session",
+        source_turn_id="turn",
+        work_id="work_research_control",
+    )
+    decider = Phase9ResearchControlPlaneDecider(FakeBuilder(_ticket()))
+    actions = (
+        BrainAction(name="acq_inspect_goal", description="inspect goal"),
+        BrainAction(name="research_web", description="research"),
+        BrainAction(name="acq_resolve", description="resolve"),
+    )
+
+    decision = decider(work, actions, ())
+
+    assert decision is not None
+    assert decision.action == "acq_inspect_goal"
+
+
+def test_research_control_plane_resolves_only_after_new_evidence() -> None:
+    work = WorkItem(
+        request="research capability",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session",
+        source_turn_id="turn",
+        work_id="work_research_control",
+    )
+    decider = Phase9ResearchControlPlaneDecider(FakeBuilder(_ticket()))
+    actions = (
+        BrainAction(name="acq_inspect_goal", description="inspect goal"),
+        BrainAction(name="research_web", description="research"),
+        BrainAction(name="acq_resolve", description="resolve"),
+    )
+    inspect = _completed_step(work.work_id, "acq_inspect_goal", {"goal": {}})
+    evidence = _completed_step(
+        work.work_id,
+        "research_web",
+        {"ok": True, "sources": [{"url": "https://example.com"}]},
+    )
+
+    decision = decider(work, actions, (inspect, evidence))
+
+    assert decision is not None
+    assert decision.action == "acq_resolve"
+
+    resolved = _completed_step(work.work_id, "acq_resolve", {"resolved": True})
+    assert decider(work, actions, (inspect, evidence, resolved)) is None
 
 
 def test_control_plane_bypasses_micro_step_reasoner_for_phase9() -> None:
