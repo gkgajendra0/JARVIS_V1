@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from jarvis.development_engine import (
     DevelopmentDisposition,
     DevelopmentEngineCoordinator,
@@ -82,7 +84,8 @@ def _sessions(tmp_path) -> DevelopmentSessionStore:
     return DevelopmentSessionStore(store)
 
 
-@pytest.mark.asyncio\nasync def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_coordinator_reuses_identical_reasoning_result(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
     coordinator = DevelopmentEngineCoordinator(
@@ -107,7 +110,8 @@ def _sessions(tmp_path) -> DevelopmentSessionStore:
     assert engine.calls == 1
 
 
-@pytest.mark.asyncio\nasync def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_changed_evidence_admits_new_engine_turn(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
     coordinator = DevelopmentEngineCoordinator(
@@ -131,7 +135,8 @@ def _sessions(tmp_path) -> DevelopmentSessionStore:
     assert engine.calls == 2
 
 
-@pytest.mark.asyncio\nasync def test_coordinator_can_serialize_expensive_engine_capacity(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_coordinator_can_serialize_expensive_engine_capacity(tmp_path) -> None:
     ticket = _ticket()
     engine = FakeEngine()
     coordinator = DevelopmentEngineCoordinator(
