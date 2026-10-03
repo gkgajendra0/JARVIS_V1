@@ -84,6 +84,14 @@ def run_preflight(
     _require(config.chatgpt_plan_enabled, "ChatGPT-plan reasoning is not enabled")
     _require(bool(config.chatgpt_plan_model), "ChatGPT-plan model is not configured")
     _require(
+        config.development_engine_enabled,
+        "governed DevelopmentEngine capability development is disabled",
+    )
+    development_model = str(
+        config.development_engine_model or config.chatgpt_plan_model or ""
+    ).strip()
+    _require(bool(development_model), "DevelopmentEngine coding model is not configured")
+    _require(
         config.work_orchestration_enabled, "durable Work orchestration is disabled"
     )
     _require(config.github_promotion_enabled, "governed GitHub promotion is disabled")
@@ -115,6 +123,11 @@ def run_preflight(
     _require(
         all(target.locality.value != "local" for target in all_targets),
         "production Work pool still contains a local LLM",
+    )
+    _require(
+        len(all_targets) == 1
+        and all_targets[0].provider_id == "chatgpt_plan",
+        "production Work pool must not contain an automatic paid-provider fallback",
     )
 
     _require(
@@ -149,6 +162,10 @@ def run_preflight(
         "local_llm_in_work_pool": False,
         "global_brain_router_mode": config.global_brain_router_mode,
         "work_orchestration_enabled": config.work_orchestration_enabled,
+        "development_engine_enabled": config.development_engine_enabled,
+        "development_engine_model": development_model,
+        "work_context_mode": config.work_context_mode,
+        "automatic_paid_fallback": False,
         "github_promotion_enabled": config.github_promotion_enabled,
         "github_repository": config.github_repository_full_name,
         "github_secret_descriptor_verified": True,
