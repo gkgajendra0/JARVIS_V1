@@ -713,6 +713,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "%LOCALAPPDATA%/JARVIS/work/work.sqlite3",
                 "%LOCALAPPDATA%/JARVIS/work/dbos.sqlite3",
             ),
+            config_keys=("JARVIS_WORK_CONTEXT_MODE",),
             logger_prefixes=("jarvis.work", "jarvis.voice.work_tools"),
         ),
         C(
