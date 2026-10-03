@@ -130,6 +130,7 @@ class JarvisConfig:
     autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
+    work_paid_fallback_enabled: bool = False
     development_engine_enabled: bool = False
     development_engine_model: str | None = None
     work_context_mode: str = "shadow"
@@ -220,6 +221,9 @@ class JarvisConfig:
                     "DevelopmentEngine requires JARVIS_DEVELOPMENT_ENGINE_MODEL "
                     "or JARVIS_CHATGPT_PLAN_MODEL"
                 )
+
+        if not isinstance(self.work_paid_fallback_enabled, bool):
+            raise TypeError("work_paid_fallback_enabled must be a bool")
 
         if not isinstance(self.tts_project_billing_isolation_verified, bool):
             raise TypeError("tts_project_billing_isolation_verified must be a bool")
@@ -522,6 +526,9 @@ class JarvisConfig:
             ),
             work_orchestration_model=_configured_optional_text(
                 "JARVIS_WORK_ORCHESTRATION_MODEL", machine
+            ),
+            work_paid_fallback_enabled=_configured_bool(
+                "JARVIS_WORK_PAID_FALLBACK_ENABLED", False, machine
             ),
             development_engine_enabled=_configured_bool(
                 "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
