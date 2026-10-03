@@ -72,6 +72,16 @@ from jarvis.chatgpt_plan import (
 )
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import reconcile_owner_change_gates
+from jarvis.development_engine.codex import CodexPlanDevelopmentEngine
+from jarvis.development_engine.coordinator import DevelopmentEngineCoordinator
+from jarvis.development_engine.phase9 import (
+    Phase9DevelopmentControlPlaneDecider,
+    Phase9DevelopmentEngineExecutor,
+    Phase9DevelopmentTicketBuilder,
+    handle_phase9_model_owner_request,
+    phase9_development_completion_guard,
+)
+from jarvis.development_engine.session_store import DevelopmentSessionStore
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.change_integration import (
     EngineeringSubstrateChangeService,
@@ -609,6 +619,8 @@ def build_work_runtime(
     model: str | None = None,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    development_engine_enabled: bool = False,
+    development_engine_model: str | None = None,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -787,7 +799,7 @@ def build_work_runtime(
             test_runner=build_development_test_runner(development_test_image),
         ),
     )
-    actions = WorkActionRegistry(tuple(executors))
+    base_actions = WorkActionRegistry(tuple(executors))
     resource_capacities = {
         "work": max(1, global_concurrency),
         "cpu": max(1, min(2, global_concurrency)),
@@ -797,6 +809,7 @@ def build_work_runtime(
         "browser": 1,
         "desktop": 1,
         "provider_api": 1,
+        "development_intelligence": 1,
         **engineering_resource_capacities(),
     }
     resources = ResourceLeaseManager(
@@ -804,9 +817,56 @@ def build_work_runtime(
         min_available_memory_mb=min_available_memory_mb,
     )
 
+    phase9_ticket_builder = Phase9DevelopmentTicketBuilder(change_store)
+    control_plane_decider = None
+    if development_engine_enabled:
+        if not chatgpt_plan_enabled or chatgpt_plan_session is None:
+            raise ValueError(
+                "DevelopmentEngine requires Sign in with ChatGPT to be enabled"
+            )
+        development_model = str(
+            development_engine_model or chatgpt_plan_model or ""
+        ).strip()
+        if not development_model:
+            raise ValueError(
+                "DevelopmentEngine requires an explicit ChatGPT-plan coding model"
+            )
+        development_sessions = DevelopmentSessionStore(store)
+        development_specialist = CodexPlanDevelopmentEngine(
+            chatgpt_plan=chatgpt_plan_session,
+            model=development_model,
+            sessions=development_sessions,
+        )
+        development_coordinator = DevelopmentEngineCoordinator(
+            engine=development_specialist,
+            sessions=development_sessions,
+            resources=resources,
+            resource_keys=("development_intelligence",),
+        )
+        phase9_engine_executor = Phase9DevelopmentEngineExecutor(
+            builder=phase9_ticket_builder,
+            coordinator=development_coordinator,
+            actions=base_actions,
+            resources=resources,
+            change_store=change_store,
+        )
+        actions = WorkActionRegistry((*executors, phase9_engine_executor))
+        control_plane_decider = Phase9DevelopmentControlPlaneDecider(
+            phase9_ticket_builder
+        )
+    else:
+        actions = base_actions
+
     def _completion_guard(work: WorkItem, steps):
         if work.work_type is WorkType.EXTERNAL_ACCEPTANCE:
             return external_acceptance_completion_guard(steps)
+        development_engine_guard = phase9_development_completion_guard(
+            change_store,
+            work,
+            steps,
+        )
+        if development_engine_guard is not None:
+            return development_engine_guard
         stage = change_store.stage_for_work(work.work_id)
         if stage is None:
             return None
@@ -859,8 +919,22 @@ def build_work_runtime(
         base_resource_keys=("work",),
         action_admission=change_store.work_admitted,
         completion_guard=_completion_guard,
+        model_owner_request_handler=lambda work, question: (
+            handle_phase9_model_owner_request(
+                change_store,
+                work,
+                question,
+            )
+        ),
+        control_plane_decider=control_plane_decider,
     )
     engine.reconcile_interrupted_steps()
+    reconciled_model_owner = engine.reconcile_waiting_model_owner_requests()
+    if reconciled_model_owner:
+        LOGGER.info(
+            "Migrated stale Phase-9 model owner waits into governed research: %s",
+            ", ".join(reconciled_model_owner),
+        )
     reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
     if reconciled_owner_deliveries:
         LOGGER.info(
