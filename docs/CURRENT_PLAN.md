@@ -305,3 +305,14 @@ Current order:
    routing still leaves capability-development cost or quota pressure materially high.
 
 This prevents solving a problem that prompt compression may already remove.
+
+## 2026-10-04 LLMLingua implementation checkpoint
+
+The compression-first experiment is now implemented on draft PR #252 and is pending
+owner-machine acceptance only.
+
+The active first proof is the previously failing C6 research fixture, using a local,
+structure-preserving LLMLingua-2 compressor and at most two ChatGPT-plan A/B calls after
+a zero-cloud preflight. Production remains SHADOW. The dedicated local coding-brain idea
+remains deferred and must not be started unless compression/model-routing evidence later
+shows it is still needed.
