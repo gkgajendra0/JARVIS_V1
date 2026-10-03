@@ -567,7 +567,8 @@ Implemented replay substrate:
 
 Still required before APPLY promotion:
 
-- replay a representative capability/development corpus on the owner machine;
+- replay a representative corpus of Work cycles that actually reached model reasoning
+  under the current contract, spanning at least two Work types and distinct WorkItems;
 - require the configured minimum number of comparable cases with no safety-field
   mismatches;
 - review actual context/token reduction and provider behavior;
