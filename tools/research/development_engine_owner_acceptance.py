@@ -244,9 +244,7 @@ async def _run_proof(
                     thread_id,
                     model=model,
                 )
-                thread_resumed_after_runtime_restart = (
-                    resumed_thread.id == thread_id
-                )
+                thread_resumed_after_runtime_restart = resumed_thread.id == thread_id
             finally:
                 await restarted_runtime.close()
 
