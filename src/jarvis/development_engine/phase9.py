@@ -75,6 +75,26 @@ def development_result_from_work(work: WorkItem) -> dict[str, object] | None:
     return dict(raw) if isinstance(raw, dict) else None
 
 
+def _is_phase9_stage_work(
+    store: ChangeStore,
+    work: WorkItem,
+    *,
+    work_type: WorkType,
+    stage_key: str,
+) -> bool:
+    if work.work_type is not work_type:
+        return False
+    stage = store.stage_for_work(work.work_id)
+    if stage is None:
+        return False
+    change = store.require(stage.change_id)
+    return bool(
+        change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
+        and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
+        and stage.stage_key == stage_key
+    )
+
+
 class Phase9DevelopmentTicketBuilder:
     """Derive one immutable engineering ticket from approved Phase-9 truth."""
 
@@ -84,31 +104,21 @@ class Phase9DevelopmentTicketBuilder:
         self._store = store
 
     def is_phase9_research_work(self, work: WorkItem) -> bool:
-        if work.work_type is not WorkType.RESEARCH:
-            return False
-        stage = self._store.stage_for_work(work.work_id)
-        if stage is None:
-            return False
-        change = self._store.require(stage.change_id)
-        return bool(
-            change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
-            and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
-            and stage.stage_key
-            == OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+        return _is_phase9_stage_work(
+            self._store,
+            work,
+            work_type=WorkType.RESEARCH,
+            stage_key=(
+                OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+            ),
         )
 
     def is_phase9_development_work(self, work: WorkItem) -> bool:
-        if work.work_type is not WorkType.DEVELOPMENT:
-            return False
-        stage = self._store.stage_for_work(work.work_id)
-        if stage is None:
-            return False
-        change = self._store.require(stage.change_id)
-        return bool(
-            change.process_key == OWNER_CAPABILITY_ACQUISITION_PROCESS.key
-            and change.process_version == OWNER_CAPABILITY_ACQUISITION_PROCESS.version
-            and stage.stage_key
-            == OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key
+        return _is_phase9_stage_work(
+            self._store,
+            work,
+            work_type=WorkType.DEVELOPMENT,
+            stage_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key,
         )
 
     def build(
@@ -502,8 +512,7 @@ class Phase9ResearchControlPlaneDecider:
 
         inspect = "acq_inspect_goal"
         if inspect in action_names and not any(
-            step.kind == inspect and step.state.value == "completed"
-            for step in steps
+            step.kind == inspect and step.state.value == "completed" for step in steps
         ):
             return BrainDecision(
                 action=inspect,
@@ -518,8 +527,7 @@ class Phase9ResearchControlPlaneDecider:
             (
                 index
                 for index, step in enumerate(steps)
-                if step.kind in self._EVIDENCE_KINDS
-                and step.state.value == "completed"
+                if step.kind in self._EVIDENCE_KINDS and step.state.value == "completed"
             ),
             default=-1,
         )
@@ -613,8 +621,12 @@ def phase9_development_completion_guard(
 ) -> tuple[bool, str | None] | None:
     """Allow typed non-build dispositions to reach the EngineeringChange handler."""
 
-    builder = Phase9DevelopmentTicketBuilder(store)
-    if not builder.is_phase9_development_work(work):
+    if not _is_phase9_stage_work(
+        store,
+        work,
+        work_type=WorkType.DEVELOPMENT,
+        stage_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.development_stage.stage_key,
+    ):
         return None
     latest = next(
         (
