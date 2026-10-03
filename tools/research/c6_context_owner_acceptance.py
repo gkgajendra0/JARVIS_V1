@@ -16,7 +16,10 @@ import json
 import sys
 from dataclasses import replace
 
-from tools.research.c6_benchmark_corpus import build_c6_benchmark_cases
+if __package__:
+    from tools.research.c6_benchmark_corpus import build_c6_benchmark_cases
+else:
+    from c6_benchmark_corpus import build_c6_benchmark_cases
 
 from jarvis.brain_routing.models import BrainRouteKind
 from jarvis.brain_routing.store import BrainRouteStore
