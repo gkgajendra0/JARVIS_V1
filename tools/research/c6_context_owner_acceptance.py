@@ -1003,7 +1003,11 @@ async def _run_llmlingua_fixture_benchmark(
     missing_ids = (
         []
         if case_ids is None
-        else [case_id for case_id in case_ids if case_id not in {c.case_id for c in selected}]
+        else [
+            case_id
+            for case_id in case_ids
+            if case_id not in {c.case_id for c in selected}
+        ]
     )
     if compressor_factory is None:
         compressor = LLMLingua2WorkPayloadCompressor(
@@ -1127,12 +1131,13 @@ async def _run_llmlingua_fixture_benchmark(
             legacy_request,
         )
         model_calls += 1
-        compressed_decision, compressed_telemetry = (
-            await evaluate_structured_work_request(
-                client,
-                legacy_request,
-                provider_payload_override=compressed.payload,
-            )
+        (
+            compressed_decision,
+            compressed_telemetry,
+        ) = await evaluate_structured_work_request(
+            client,
+            legacy_request,
+            provider_payload_override=compressed.payload,
         )
         model_calls += 1
         comparison = compare_context_decisions(legacy, compressed_decision)
@@ -1830,9 +1835,7 @@ def main() -> int:
                         compression_rate=float(args.llmlingua_rate),
                         device_map=str(args.llmlingua_device).strip(),
                         case_ids=(
-                            (
-                                "research_requires_reresolution_after_new_evidence",
-                            )
+                            ("research_requires_reresolution_after_new_evidence",)
                             if not args.llmlingua_case_id
                             else tuple(dict.fromkeys(args.llmlingua_case_id))
                         ),
