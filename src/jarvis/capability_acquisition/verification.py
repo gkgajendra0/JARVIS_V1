@@ -27,6 +27,12 @@ from jarvis.engineering_change.models import (
 )
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.development_engine.contracts import DevelopmentDisposition
+from jarvis.development_engine.phase9 import (
+    PHASE9_DEVELOPMENT_ENGINE_ACTION,
+    development_result_from_work,
+    phase9_revision_disposition,
+)
 from jarvis.engineering_substrate.change_integration import (
     MANIFEST_KIND,
     EngineeringSubstrateChangeService,
@@ -969,7 +975,96 @@ class CapabilityAcquisitionDevelopmentCompletionHandler:
         stage: ChangeStage,
         work: WorkItem,
     ) -> ChangeState | None:
-        del stage, work
+        engine_result = development_result_from_work(work)
+        if engine_result is not None:
+            engine_step = next(
+                (
+                    item
+                    for item in reversed(self._store.work.list_steps(work.work_id))
+                    if item.kind == PHASE9_DEVELOPMENT_ENGINE_ACTION
+                    and item.state.value == "completed"
+                    and item.observation.get("development_result") == engine_result
+                ),
+                None,
+            )
+            if engine_step is None:
+                payload = {
+                    "passed": False,
+                    "reason_code": "development_engine_result_drift",
+                    "message": (
+                        "canonical DEVELOPMENT result is not bound to an exact "
+                        "DevelopmentEngine WorkStep"
+                    ),
+                }
+                latest = self._store.latest_artifact(
+                    change.change_id,
+                    "capability_candidate_verification",
+                )
+                if latest is None or latest.payload != payload:
+                    self._store.add_artifact(
+                        change.change_id,
+                        kind="capability_candidate_verification",
+                        payload=payload,
+                    )
+                return ChangeState.FAILED
+
+            outcome_payload: dict[str, object] = {
+                "schema": "phase9_development_engine_outcome.v1",
+                "development_work_id": work.work_id,
+                "development_attempt": stage.attempt,
+                "architecture_artifact_id": stage.plan_artifact_id,
+                "engine_result": engine_result,
+                "engine_step_id": engine_step.step_id,
+            }
+            latest_outcome = self._store.latest_artifact(
+                change.change_id,
+                "development_engine_outcome",
+            )
+            if latest_outcome is None or latest_outcome.payload != outcome_payload:
+                self._store.add_artifact(
+                    change.change_id,
+                    kind="development_engine_outcome",
+                    payload=outcome_payload,
+                )
+
+            revision_disposition = phase9_revision_disposition(engine_result)
+            if revision_disposition is not None:
+                reason = " ".join(
+                    str(
+                        engine_result.get("reason")
+                        or engine_result.get("summary")
+                        or "approved architecture requires revision"
+                    ).split()
+                )
+                if revision_disposition is DevelopmentDisposition.NEEDS_DEPENDENCY:
+                    requested = tuple(
+                        str(item).strip()
+                        for item in engine_result.get("requested_dependencies", ())
+                        if str(item).strip()
+                    )
+                    if requested:
+                        reason += "; requested dependencies: " + ", ".join(requested)
+                self._store.request_architecture_revision_for_work(
+                    work.work_id,
+                    reason=reason,
+                )
+                return ChangeState.RESEARCHING
+
+            try:
+                disposition = DevelopmentDisposition(
+                    str(engine_result.get("disposition"))
+                )
+            except ValueError:
+                return ChangeState.FAILED
+            if disposition is DevelopmentDisposition.FAILED:
+                return ChangeState.FAILED
+            if disposition is DevelopmentDisposition.BLOCKED_RESOURCE:
+                # Resource blockers must remain on the WorkItem and never complete
+                # the governed development stage.
+                return ChangeState.FAILED
+            if disposition is not DevelopmentDisposition.COMPLETED:
+                return ChangeState.FAILED
+
         try:
             result = self._verifier.verify_and_persist(change.change_id)
         except CapabilityCandidateError as exc:
