@@ -113,6 +113,8 @@ def _replay_candidates(
         "model_routes_seen": 0,
         "missing_decision_provenance": 0,
         "missing_context_snapshot": 0,
+        "missing_route_contract_lineage": 0,
+        "route_snapshot_contract_mismatch": 0,
         "missing_exact_model_lineage": 0,
         "non_chatgpt_plan_lineage": 0,
         "different_model_lineage": 0,
@@ -135,6 +137,15 @@ def _replay_candidates(
             snapshot = route_store.get_context_snapshot(route.route_request_id)
             if snapshot is None:
                 stats["missing_context_snapshot"] += 1
+                continue
+            if route.reasoner_contract_digest is None:
+                stats["missing_route_contract_lineage"] += 1
+                continue
+            snapshot_contract = str(
+                snapshot.get("reasoner_contract_digest") or ""
+            ).strip().casefold()
+            if route.reasoner_contract_digest != snapshot_contract:
+                stats["route_snapshot_contract_mismatch"] += 1
                 continue
             attempt = _successful_historical_attempt(
                 routing_store,
