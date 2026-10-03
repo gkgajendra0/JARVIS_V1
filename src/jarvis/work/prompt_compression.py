@@ -17,6 +17,7 @@ from typing import Any, Callable, Protocol
 DEFAULT_LLMLINGUA2_MODEL = (
     "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank"
 )
+DEFAULT_LLMLINGUA2_REVISION = "5f0c827"
 DEFAULT_COMPRESSION_RATE = 0.5
 DEFAULT_MIN_STRING_CHARS = 600
 
@@ -282,6 +283,7 @@ class LLMLingua2WorkPayloadCompressor:
                 model_name=self._model_name,
                 use_llmlingua2=True,
                 device_map=self._device_map,
+                model_config={"revision": DEFAULT_LLMLINGUA2_REVISION},
             )
         except Exception as exc:  # noqa: BLE001 - optional dependency boundary
             raise PromptCompressionDependencyError(
@@ -397,6 +399,7 @@ class LLMLingua2WorkPayloadCompressor:
 
 __all__ = [
     "DEFAULT_LLMLINGUA2_MODEL",
+    "DEFAULT_LLMLINGUA2_REVISION",
     "LLMLingua2WorkPayloadCompressor",
     "PromptCompressionDependencyError",
     "PromptCompressionError",
