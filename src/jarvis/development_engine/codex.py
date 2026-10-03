@@ -552,6 +552,7 @@ def _provider_result(
     engine_version: str,
     thread_id: str | None,
     error: BaseException,
+    retry_after_seconds: float | None = None,
 ) -> DevelopmentResultV1:
     failure = classify_provider_failure(error, provider="chatgpt_plan")
     retryable = {
@@ -577,6 +578,7 @@ def _provider_result(
             ),
             thread_id=thread_id,
             blocker_code=failure.kind.value,
+            retry_after_seconds=retry_after_seconds,
         )
     return DevelopmentResultV1.create(
         ticket=ticket,
@@ -885,6 +887,7 @@ class CodexPlanDevelopmentEngine:
                     f"approximately {remaining} seconds after provider pressure."
                 ),
                 blocker_code="provider_circuit_open",
+                retry_after_seconds=float(remaining),
             )
 
         token = self._chatgpt_plan.access_token()
@@ -1106,13 +1109,15 @@ class CodexPlanDevelopmentEngine:
             # Let Phase-9 translate it into Work WAITING_FOR_OWNER.
             raise
         except Exception as exc:  # noqa: BLE001 - provider boundary fails closed
-            if circuit is not None:
-                circuit.record_failure(exc)
+            trip = None if circuit is None else circuit.record_failure(exc)
             return _provider_result(
                 ticket=ticket,
                 engine_version=self.engine_version,
                 thread_id=None if thread is None else thread.id,
                 error=exc,
+                retry_after_seconds=(
+                    None if trip is None else float(trip.delay_seconds)
+                ),
             )
         finally:
             if runtime is not None:
