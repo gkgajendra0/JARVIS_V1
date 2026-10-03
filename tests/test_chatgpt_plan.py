@@ -286,7 +286,9 @@ def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None
     assert failure.retryable is True
 
 
-def test_plan_enabled_work_pool_is_plan_primary_without_paid_fallback_by_default() -> None:
+def test_plan_enabled_work_pool_is_plan_primary_without_paid_fallback_by_default() -> (
+    None
+):
     adapters = ModelAdapterRegistry(
         (
             _DummyAdapter("chatgpt_plan"),
