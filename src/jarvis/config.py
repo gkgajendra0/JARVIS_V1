@@ -130,6 +130,7 @@ class JarvisConfig:
     autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
+    work_paid_fallback_enabled: bool = False
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
@@ -205,6 +206,8 @@ class JarvisConfig:
 
         if not isinstance(self.tts_project_billing_isolation_verified, bool):
             raise TypeError("tts_project_billing_isolation_verified must be a bool")
+        if not isinstance(self.work_paid_fallback_enabled, bool):
+            raise TypeError("work_paid_fallback_enabled must be a bool")
 
         if not isinstance(self.autonomy_mode, AutonomyMode):
             raise TypeError("autonomy_mode must be an AutonomyMode")
@@ -499,6 +502,9 @@ class JarvisConfig:
             ),
             work_orchestration_model=_configured_optional_text(
                 "JARVIS_WORK_ORCHESTRATION_MODEL", machine
+            ),
+            work_paid_fallback_enabled=_configured_bool(
+                "JARVIS_WORK_PAID_FALLBACK_ENABLED", False, machine
             ),
             global_brain_router_mode=_configured_required_text(
                 "JARVIS_GLOBAL_BRAIN_ROUTER_MODE",
