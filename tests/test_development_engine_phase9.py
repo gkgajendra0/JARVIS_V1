@@ -212,7 +212,8 @@ def test_research_control_plane_resolves_only_after_new_evidence() -> None:
     assert decider(work, actions, (inspect, evidence, resolved)) is None
 
 
-def test_research_control_plane_retries_exact_research_after_owner_credential_recovery() -> None:
+def test_research_control_plane_retries_exact_research_after_owner_credential_recovery(
+) -> None:
     work = WorkItem(
         request="research capability",
         work_type=WorkType.RESEARCH,
@@ -256,7 +257,8 @@ def test_research_control_plane_retries_exact_research_after_owner_credential_re
     }
 
 
-def test_research_control_plane_does_not_loop_credential_retry_without_new_owner_input() -> None:
+def test_research_control_plane_does_not_loop_credential_retry_without_new_owner_input(
+) -> None:
     work = WorkItem(
         request="research capability",
         work_type=WorkType.RESEARCH,
