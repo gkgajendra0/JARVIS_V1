@@ -24,6 +24,11 @@ _SINGLE_REVIEW = re.compile(
     r"\s*(approve|reject)\s+(architecture|acceptance|promotion)(?:\s+(?:proposal|gate))?[.!]?\s*",
     re.IGNORECASE,
 )
+_BOUND_REVIEW = re.compile(
+    r"\s*(yes|approve|proceed|go\s+ahead|continue|no|reject|decline|stop|cancel)"
+    r"(?:\s+(?:it|this|architecture|proposal|change))?[.!]?\s*",
+    re.IGNORECASE,
+)
 
 
 class ChangeService:
@@ -153,7 +158,12 @@ class ChangeService:
         store.add_artifact(change_id, kind="architecture", payload=payload)
         return self.propose_architecture(change_id, payload)
 
-    def decide_latest(self, gate_id: str) -> GateDecision:
+    def decide_latest(
+        self,
+        gate_id: str,
+        *,
+        allow_bound_decision: bool = False,
+    ) -> GateDecision:
         turn = next(
             (
                 candidate
@@ -166,7 +176,8 @@ class ChangeService:
             raise ChangeConflict("no accepted owner turn")
         match = _DECISION.fullmatch(turn.text)
         typed = _SINGLE_REVIEW.fullmatch(turn.text)
-        if match is None and typed is None:
+        bound = _BOUND_REVIEW.fullmatch(turn.text) if allow_bound_decision else None
+        if match is None and typed is None and bound is None:
             raise ChangeConflict("owner must explicitly identify the current gate")
         store = self.coordinator.store
         verification = lambda actor, source_session, source_turn, gate, digest: (
@@ -195,12 +206,14 @@ class ChangeService:
             raise ChangeConflict(
                 "promotion decisions must execute through governed Phase-7 promotion service"
             )
+        token = (match or typed or bound).group(1).casefold()
+        approved = token in {"approve", "yes", "proceed", "go ahead", "continue"}
         if (
             isinstance(gate, GateDecision)
             and gate.verification_id is not None
             and gate.source_session_id == self.session.session_id
             and gate.source_turn_id == turn.turn_id
-            and gate.approved == ((match or typed).group(1).casefold() == "approve")
+            and gate.approved == approved
             and (match is None or match.group(2) == gate_id)
             and (typed is None or typed.group(2).casefold() == challenge.kind.value)
         ):
@@ -213,7 +226,8 @@ class ChangeService:
             or gates.pending_gate_ids() != (gate_id,)
         ):
             raise ChangeConflict("spoken review is ambiguous; identify the gate ID")
-        approved = (match or typed).group(1).casefold() == "approve"
+        if bound is not None and not allow_bound_decision:
+            raise ChangeConflict("bound owner decision is unavailable in this context")
         proposal = ActionProposal.create(
             session_id=self.session.session_id,
             capability="engineering_change",
