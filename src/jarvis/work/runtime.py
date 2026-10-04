@@ -632,6 +632,7 @@ def build_work_runtime(
     provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
     work_context_mode: str = "shadow",
     work_prompt_compression_mode: str = "off",
+    work_prompt_compression_rate: float = 0.8,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -744,7 +745,11 @@ def build_work_runtime(
     )
     compression_mode = str(work_prompt_compression_mode).strip().casefold()
     prompt_compressor = (
-        None if compression_mode == "off" else LLMLingua2WorkPayloadCompressor()
+        None
+        if compression_mode == "off"
+        else LLMLingua2WorkPayloadCompressor(
+            rate=float(work_prompt_compression_rate),
+        )
     )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
