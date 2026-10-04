@@ -80,6 +80,14 @@ class _SessionToolBundle:
         conversation = self._conversation_getter()
         if conversation is None:
             return tools
+        pending_change_gate = False
+        if self._work_runtime is not None and self._work_runtime.changes is not None:
+            pending_change_gate = bool(
+                GateService(
+                    self._work_runtime.changes.store,
+                    verify_owner=lambda *_: False,
+                ).pending_gate_ids()
+            )
         if self._memory_runtime is not None:
             tools.extend(
                 MemoryAgentTools(
@@ -94,7 +102,10 @@ class _SessionToolBundle:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
-        if self._gicc_tool_factory is not None:
+        # A pending EngineeringChange decision is a protected continuation boundary.
+        # Do not expose fresh-goal admission while the owner is deciding that gate;
+        # otherwise deictic speech such as "proceed" can become a duplicate GICC goal.
+        if self._gicc_tool_factory is not None and not pending_change_gate:
             tools.extend(self._gicc_tool_factory(conversation))
         if self._work_runtime is not None:
             tools.extend(
@@ -103,6 +114,7 @@ class _SessionToolBundle:
                     conversation,
                     allow_capability_acquisition=(
                         self._allow_direct_capability_acquisition
+                        and not pending_change_gate
                     ),
                 ).tools
             )
@@ -387,8 +399,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             raise ValueError("change-gate question must not be empty")
 
         def session_tools(conversation: ConversationSession) -> list:
-            work_tools = WorkAgentTools(runtime, conversation)
-            return [work_tools.decide_change_gate]
+            work_tools = WorkAgentTools(
+                runtime,
+                conversation,
+                bound_change_gate_id=gate_id,
+                allow_capability_acquisition=False,
+            )
+            return [work_tools.decide_bound_change_gate]
 
         def gate_resolved() -> bool:
             pending = GateService(
@@ -400,11 +417,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         instructions = (
             "JARVIS has proactively opened this voice interaction because one exact "
             "EngineeringChange gate requires the owner's explicit approval or rejection. "
-            "Explain the proposal concisely without adding facts, then ask the owner to "
-            f"say exactly 'approve {gate_id}' or 'reject {gate_id}'. Do not treat a "
-            "generic yes/no as approval. Keep listening until the exact gate decision is "
-            "spoken, or the interaction ends. When the owner gives the exact phrase, call "
-            "decide_change_gate with this exact gate ID. Pending review: "
+            "The runtime has already bound this interaction to the exact gate; never ask "
+            "the owner to speak or remember an internal gate ID. Explain the proposal "
+            "concisely without adding facts, then ask a simple yes/no question. A clear "
+            "yes, approve, proceed, go ahead, or continue means approve this bound gate; "
+            "a clear no, reject, decline, stop, or cancel means reject it. Do not infer "
+            "a decision from silence or unrelated speech. When the owner clearly decides, "
+            "call decide_bound_change_gate. Pending review: "
             + normalized_question
         )
 
