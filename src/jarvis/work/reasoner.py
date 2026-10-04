@@ -332,9 +332,7 @@ def _brain_decision(
                 f"JARVIS action {decision.action!r} has an invalid parameter schema"
             ) from exc
         try:
-            Draft202012Validator(action.parameter_schema).validate(
-                decision.parameters
-            )
+            Draft202012Validator(action.parameter_schema).validate(decision.parameters)
         except ValidationError as exc:
             raise ValueError(
                 "work reasoner returned parameters outside the selected "
