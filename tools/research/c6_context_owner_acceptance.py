@@ -49,6 +49,7 @@ from jarvis.work.prompt_compression import (
     LLMLingua2WorkPayloadCompressor,
 )
 from jarvis.work.reasoner import (
+    _work_full_history_input_payload,
     _work_input_payload,
     evaluate_structured_work_request,
     work_reasoning_contract_digest,
@@ -1022,7 +1023,7 @@ async def _run_llmlingua_fixture_benchmark(
     preflight_only: bool = False,
     compressor_factory=None,
 ) -> dict[str, object]:
-    """Compare exact legacy payloads with locally compressed full-context payloads."""
+    """Compare full canonical history with its locally compressed equivalent."""
 
     selected = _llmlingua_fixture_cases(case_ids)
     requested_ids = list(case_ids or ())
@@ -1047,10 +1048,11 @@ async def _run_llmlingua_fixture_benchmark(
     prepared: list[tuple] = []
     compression_failures: list[dict[str, object]] = []
     for case in selected:
-        legacy_request = replace(case.request, context_mode=WorkContextMode.SHADOW)
-        legacy_payload = _work_input_payload(legacy_request)
+        current_request = replace(case.request, context_mode=WorkContextMode.SHADOW)
+        current_payload = _work_input_payload(current_request)
+        full_history_payload = _work_full_history_input_payload(current_request)
         try:
-            compressed = compressor.compress_payload(legacy_payload)
+            compressed = compressor.compress_payload(full_history_payload)
         except Exception as exc:  # noqa: BLE001 - explicit local-compressor boundary
             compression_failures.append(
                 {
@@ -1060,34 +1062,78 @@ async def _run_llmlingua_fixture_benchmark(
                 }
             )
             continue
-        prepared.append((case, legacy_request, legacy_payload, compressed))
 
-    all_reduced = bool(prepared) and all(item[3].reduced for item in prepared)
+        current_chars = _chars(current_payload)
+        current_estimated_tokens = max(1, (current_chars + 3) // 4)
+        beats_current = (
+            compressed.reduced
+            and compressed.compressed_chars < current_chars
+            and compressed.estimated_compressed_tokens < current_estimated_tokens
+        )
+        prepared.append(
+            (
+                case,
+                current_request,
+                current_payload,
+                full_history_payload,
+                compressed,
+                beats_current,
+            )
+        )
+
+    all_reduced = bool(prepared) and all(item[4].reduced for item in prepared)
+    all_beat_current = bool(prepared) and all(bool(item[5]) for item in prepared)
     ready = (
         bool(selected)
         and not missing_ids
         and not compression_failures
         and len(prepared) == len(selected)
         and all_reduced
+        and all_beat_current
     )
     planned_cases = [
         {
             "case_id": case.case_id,
             "work_id": case.request.work.work_id,
             "work_type": case.request.work.work_type.value,
+            "baseline_scope": "full_history",
+            "full_history_steps": len(
+                case.request.full_history_steps or case.request.recent_steps
+            ),
+            "current_recent_steps": len(case.request.recent_steps),
+            "current_chars": _chars(current_payload),
             "legacy_chars": compressed.original_chars,
+            "full_history_chars": compressed.original_chars,
             "compressed_chars": compressed.compressed_chars,
             "reduction_percent": compressed.reduction_percent,
-            "estimated_legacy_tokens": compressed.estimated_original_tokens,
+            "compressed_vs_current_reduction_percent": round(
+                (
+                    _chars(current_payload) - compressed.compressed_chars
+                )
+                * 100.0
+                / _chars(current_payload),
+                2,
+            ),
+            "estimated_full_history_tokens": compressed.estimated_original_tokens,
             "estimated_compressed_tokens": compressed.estimated_compressed_tokens,
             "candidate_strings": compressed.candidate_strings,
             "compressed_strings": compressed.compressed_strings,
             "compression_latency_ms": round(compressed.latency_ms, 2),
             "changed_paths": list(compressed.changed_paths),
-            "legacy_request_digest": canonical_digest(legacy_payload),
+            "beats_current_payload": beats_current,
+            "current_request_digest": canonical_digest(current_payload),
+            "legacy_request_digest": canonical_digest(full_history_payload),
+            "full_history_request_digest": canonical_digest(full_history_payload),
             "compressed_request_digest": canonical_digest(compressed.payload),
         }
-        for case, _request, legacy_payload, compressed in prepared
+        for (
+            case,
+            _request,
+            current_payload,
+            full_history_payload,
+            compressed,
+            beats_current,
+        ) in prepared
     ]
     common: dict[str, object] = {
         "corpus_source": "checked_in_descriptor_fixture",
@@ -1102,6 +1148,7 @@ async def _run_llmlingua_fixture_benchmark(
         "missing_case_ids": missing_ids,
         "preflight_only": bool(preflight_only),
         "preflight_ready": ready,
+        "baseline_scope": "full_history",
         "production_routing_mutated": False,
         "actions_executed": False,
         "paid_fallback_enabled": False,
@@ -1109,6 +1156,7 @@ async def _run_llmlingua_fixture_benchmark(
         "c6_apply_decision_equivalence_proven": False,
         "compression_failures": compression_failures,
         "planned_cases": planned_cases,
+        "all_full_history_payloads_beat_current": all_beat_current,
     }
     if preflight_only or not ready:
         return {
@@ -1152,10 +1200,18 @@ async def _run_llmlingua_fixture_benchmark(
 
     results: list[dict[str, object]] = []
     model_calls = 0
-    for case, legacy_request, legacy_payload, compressed in prepared:
-        legacy, legacy_telemetry = await evaluate_structured_work_request(
+    for (
+        case,
+        current_request,
+        current_payload,
+        full_history_payload,
+        compressed,
+        beats_current,
+    ) in prepared:
+        full_context, full_context_telemetry = await evaluate_structured_work_request(
             client,
-            legacy_request,
+            current_request,
+            provider_payload_override=full_history_payload,
         )
         model_calls += 1
         (
@@ -1163,33 +1219,45 @@ async def _run_llmlingua_fixture_benchmark(
             compressed_telemetry,
         ) = await evaluate_structured_work_request(
             client,
-            legacy_request,
+            current_request,
             provider_payload_override=compressed.payload,
         )
         model_calls += 1
-        comparison = compare_context_decisions(legacy, compressed_decision)
-        legacy_input_tokens = int(legacy_telemetry.usage.get("input_tokens", 0) or 0)
+        comparison = compare_context_decisions(full_context, compressed_decision)
+        full_input_tokens = int(
+            full_context_telemetry.usage.get("input_tokens", 0) or 0
+        )
         compressed_input_tokens = int(
             compressed_telemetry.usage.get("input_tokens", 0) or 0
         )
         provider_input_tokens_reduced = (
-            legacy_telemetry.usage_observed
+            full_context_telemetry.usage_observed
             and compressed_telemetry.usage_observed
-            and legacy_input_tokens > 0
-            and compressed_input_tokens < legacy_input_tokens
+            and full_input_tokens > 0
+            and compressed_input_tokens < full_input_tokens
         )
         results.append(
             {
                 "case_id": case.case_id,
                 "work_id": case.request.work.work_id,
                 "work_type": case.request.work.work_type.value,
+                "baseline_scope": "full_history",
+                "full_history_steps": len(
+                    case.request.full_history_steps or case.request.recent_steps
+                ),
+                "current_recent_steps": len(case.request.recent_steps),
                 "equivalent": comparison.equivalent,
-                "legacy_action": legacy.action,
+                "legacy_action": full_context.action,
+                "full_context_action": full_context.action,
                 "compressed_action": compressed_decision.action,
                 "action_equal": comparison.action_equal,
-                "legacy_parameters": dict(legacy.parameters),
+                "legacy_parameters": dict(full_context.parameters),
+                "full_context_parameters": dict(full_context.parameters),
                 "compressed_parameters": dict(compressed_decision.parameters),
-                "legacy_parameters_digest": canonical_digest(legacy.parameters),
+                "legacy_parameters_digest": canonical_digest(full_context.parameters),
+                "full_context_parameters_digest": canonical_digest(
+                    full_context.parameters
+                ),
                 "compressed_parameters_digest": canonical_digest(
                     compressed_decision.parameters
                 ),
@@ -1197,27 +1265,45 @@ async def _run_llmlingua_fixture_benchmark(
                 "needs_owner_equal": comparison.needs_owner_equal,
                 "owner_question_equal": comparison.owner_question_equal,
                 "parameters_equal": comparison.parameters_equal,
+                "current_chars": _chars(current_payload),
                 "legacy_chars": compressed.original_chars,
+                "full_history_chars": compressed.original_chars,
                 "compressed_chars": compressed.compressed_chars,
                 "reduction_percent": compressed.reduction_percent,
+                "compressed_vs_current_reduction_percent": round(
+                    (
+                        _chars(current_payload) - compressed.compressed_chars
+                    )
+                    * 100.0
+                    / _chars(current_payload),
+                    2,
+                ),
+                "beats_current_payload": beats_current,
                 "candidate_strings": compressed.candidate_strings,
                 "compressed_strings": compressed.compressed_strings,
                 "compression_latency_ms": round(compressed.latency_ms, 2),
                 "changed_paths": list(compressed.changed_paths),
-                "legacy_request_digest": canonical_digest(legacy_payload),
+                "current_request_digest": canonical_digest(current_payload),
+                "legacy_request_digest": canonical_digest(full_history_payload),
+                "full_history_request_digest": canonical_digest(full_history_payload),
                 "compressed_request_digest": canonical_digest(compressed.payload),
-                "legacy_usage": dict(legacy_telemetry.usage),
-                "legacy_usage_observed": legacy_telemetry.usage_observed,
-                "legacy_latency_ms": round(legacy_telemetry.latency_ms, 2),
+                "legacy_usage": dict(full_context_telemetry.usage),
+                "full_context_usage": dict(full_context_telemetry.usage),
+                "legacy_usage_observed": full_context_telemetry.usage_observed,
+                "full_context_usage_observed": full_context_telemetry.usage_observed,
+                "legacy_latency_ms": round(full_context_telemetry.latency_ms, 2),
+                "full_context_latency_ms": round(
+                    full_context_telemetry.latency_ms, 2
+                ),
                 "compressed_usage": dict(compressed_telemetry.usage),
                 "compressed_usage_observed": compressed_telemetry.usage_observed,
                 "compressed_latency_ms": round(compressed_telemetry.latency_ms, 2),
                 "provider_input_tokens_reduced": provider_input_tokens_reduced,
                 "provider_input_token_reduction_percent": (
                     round(
-                        (legacy_input_tokens - compressed_input_tokens)
+                        (full_input_tokens - compressed_input_tokens)
                         * 100.0
-                        / legacy_input_tokens,
+                        / full_input_tokens,
                         2,
                     )
                     if provider_input_tokens_reduced
@@ -1243,8 +1329,6 @@ async def _run_llmlingua_fixture_benchmark(
         "all_fixture_cases_equivalent": bool(results) and mismatch_count == 0,
         "all_fixture_cases_reduced": all_reduced,
         "all_provider_input_tokens_reduced": all_provider_input_tokens_reduced,
-        # This benchmark validates a new compressor path only. It can never silently
-        # promote the existing C6 APPLY switch.
         "c6_apply_decision_equivalence_proven": False,
         "cases": results,
     }
