@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -41,7 +42,7 @@ from jarvis.work.brain import (
     BrainRequest,
     InteractiveBrainGate,
 )
-from jarvis.work.models import WorkItem, WorkType
+from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.prompt_compression import PromptCompressionError
 from jarvis.work.reasoner import (
     _SYSTEM_PROMPT,
@@ -257,6 +258,40 @@ def _brain_request(work: WorkItem) -> BrainRequest:
     )
 
 
+def _compression_request(work: WorkItem) -> BrainRequest:
+    older = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="Collected earlier authoritative research.",
+        )
+        .start()
+        .complete({"summary": "Earlier authoritative evidence. " * 250})
+    )
+    recent = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="Collected current authoritative research.",
+        )
+        .start()
+        .complete({"summary": "Current authoritative evidence. " * 250})
+    )
+    return BrainRequest(
+        work=work,
+        recent_steps=(recent,),
+        full_history_steps=(older, recent),
+        purpose="Choose the next bounded step",
+        allowed_actions=(
+            BrainAction(
+                name="do_step",
+                description="Execute one bounded step",
+                parameter_schema={"type": "object"},
+            ),
+        ),
+    )
+
+
 class ReasoningAdapter:
     adapter_id = "fake"
 
@@ -383,22 +418,50 @@ class _FakePayloadCompressor:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
         self.calls = 0
+        self.source_step_counts: list[int] = []
+
+    @staticmethod
+    def _chars(payload) -> int:
+        return len(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+                default=str,
+            )
+        )
 
     def compress_payload(self, payload):
         self.calls += 1
+        self.source_step_counts.append(len(payload.get("recent_steps", [])))
         if self.fail:
             raise PromptCompressionError("compressor unavailable")
         compressed = copy.deepcopy(payload)
+        compressed_strings = 0
+        for step in compressed.get("recent_steps", []):
+            observation = step.get("observation")
+            if not isinstance(observation, dict):
+                continue
+            summary = observation.get("summary")
+            if isinstance(summary, str) and len(summary) > 200:
+                observation["summary"] = "compressed authoritative evidence"
+                compressed_strings += 1
         compressed["compression_probe"] = "compressed"
-        original_chars = len(str(payload))
-        compressed_chars = max(1, original_chars - 10)
+        original_chars = self._chars(payload)
+        compressed_chars = self._chars(compressed)
         return SimpleNamespace(
             payload=compressed,
-            reduced=True,
+            reduced=compressed_chars < original_chars,
             original_chars=original_chars,
             compressed_chars=compressed_chars,
-            reduction_percent=10.0,
-            compressed_strings=1,
+            estimated_original_tokens=max(1, (original_chars + 3) // 4),
+            estimated_compressed_tokens=max(1, (compressed_chars + 3) // 4),
+            reduction_percent=round(
+                (original_chars - compressed_chars) * 100.0 / original_chars,
+                2,
+            ),
+            compressed_strings=compressed_strings,
             latency_ms=1.0,
         )
 
@@ -453,11 +516,13 @@ async def test_routed_prompt_compression_shadow_and_apply_modes(
     )
     work_store.create(work)
 
-    await reasoner.decide(_brain_request(work))
+    await reasoner.decide(_compression_request(work))
 
     assert compressor.calls == 1
+    assert compressor.source_step_counts == [2]
     assert len(adapter.payloads) == 1
     assert ("compression_probe" in adapter.payloads[0]) is compressed_sent
+    assert len(adapter.payloads[0]["recent_steps"]) == (2 if compressed_sent else 1)
 
 
 @pytest.mark.asyncio
@@ -480,11 +545,13 @@ async def test_routed_prompt_compression_failure_falls_back_to_legacy(
     )
     work_store.create(work)
 
-    decision = await reasoner.decide(_brain_request(work))
+    decision = await reasoner.decide(_compression_request(work))
 
     assert decision.action == "do_step"
     assert compressor.calls == 1
+    assert compressor.source_step_counts == [2]
     assert len(adapter.payloads) == 1
+    assert len(adapter.payloads[0]["recent_steps"]) == 1
     assert "compression_probe" not in adapter.payloads[0]
 
 
