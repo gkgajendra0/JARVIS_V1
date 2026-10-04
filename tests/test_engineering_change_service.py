@@ -83,7 +83,6 @@ def test_only_explicit_canonical_owner_turn_can_decide_current_gate(tmp_path) ->
     assert len(store.list_stages(change.change_id)) == 2
 
 
-
 def test_bound_gate_session_accepts_simple_yes_for_exact_runtime_bound_gate(
     tmp_path,
 ) -> None:
