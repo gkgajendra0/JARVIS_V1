@@ -727,3 +727,17 @@ decision contract itself. The same strict action/parameter comparison remains in
 
 The next owner acceptance must use the new reasoning-contract digest/action schema; older
 full-history stability evidence is not promotable across this contract change.
+
+
+### Local action-schema enforcement
+
+The candidate-governance correction also exposed a general Work boundary gap:
+`parameters_json` was decoded and the selected action name was checked, but action
+parameters were not locally validated against the selected `BrainAction.parameter_schema`.
+
+JARVIS now validates provider-returned parameters with JSON Schema Draft 2020-12 before
+creating an executable Work decision. This means the narrowed
+`acq_record_candidate` schema is an actual runtime boundary, not merely prompt guidance.
+
+C6 equivalence therefore compares decisions that are valid under the same canonical
+action contract. Out-of-schema provider output fails rather than being silently accepted.
