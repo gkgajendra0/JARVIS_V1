@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
+
+import pytest
 
 from jarvis.capabilities.models import (
     CapabilityCatalog,
@@ -16,6 +19,7 @@ from jarvis.capability_acquisition.architecture import (
     ensure_capability_acquisition_architecture_current,
 )
 from jarvis.capability_acquisition.artifacts import (
+    candidate_from_payload,
     candidate_payload,
     evaluation_payload,
     goal_payload,
@@ -24,6 +28,7 @@ from jarvis.capability_acquisition.artifacts import (
 )
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
+    AcquisitionSourceKind,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
 )
@@ -39,7 +44,10 @@ from jarvis.capability_acquisition.source import (
 from jarvis.capability_acquisition.standard_sources import (
     CustomBuildCapabilitySourceAdapter,
 )
-from jarvis.capability_acquisition.workflow import acquisition_completion_guard
+from jarvis.capability_acquisition.workflow import (
+    AcquisitionRecordCandidateExecutor,
+    acquisition_completion_guard,
+)
 from jarvis.capability_registry.projection import (
     CapabilityInventoryEntry,
     CapabilityManagementMode,
@@ -51,6 +59,71 @@ from jarvis.work.models import WorkPriority, WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
 REVISION = "a" * 40
+
+
+class _RecordCandidateResolver:
+    def context_for(self, work_id: str):
+        assert work_id == "research-work"
+        return SimpleNamespace(work_id=work_id)
+
+
+def test_record_candidate_schema_keeps_governance_out_of_model_parameters() -> None:
+    schema = AcquisitionRecordCandidateExecutor.descriptor.parameter_schema
+    properties = set(schema["properties"])
+
+    assert set(schema["required"]) == {
+        "source_kind",
+        "source_identity",
+        "supported_operations",
+        "evidence_refs",
+    }
+    assert "verification_requirements" not in properties
+    assert "external_acceptance_requirements" not in properties
+    assert "secret_scopes" not in properties
+    assert "network_scopes" not in properties
+    assert "device_scopes" not in properties
+    assert "discovery_scopes" not in properties
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source_kind", "expected_contract"),
+    [
+        ("mcp", "mcp-tools-list-contract"),
+        ("openapi", "openapi-contract-test"),
+        ("asyncapi", "asyncapi-contract-test"),
+        ("sdk_library", "sdk-adapter-contract-test"),
+    ],
+)
+async def test_record_candidate_assigns_deterministic_verification_contract(
+    source_kind: str,
+    expected_contract: str,
+) -> None:
+    executor = AcquisitionRecordCandidateExecutor(_RecordCandidateResolver())
+
+    result = await executor.execute(
+        work=SimpleNamespace(work_id="research-work"),
+        parameters={
+            "source_kind": source_kind,
+            "source_identity": "example-source",
+            "source_version": "1.2.3",
+            "source_digest": None,
+            "supported_operations": ["launch", "pair"],
+            "evidence_refs": ["evidence-1"],
+            "license_id": "MIT",
+        },
+    )
+
+    candidate = candidate_from_payload(result["candidate"])
+    assert candidate.source_kind is AcquisitionSourceKind(source_kind)
+    assert candidate.verification_requirements == (expected_contract,)
+    assert candidate.secret_scopes == ()
+    assert candidate.network_scopes == ()
+    assert candidate.device_scopes == ()
+    assert candidate.discovery_scopes == ()
+    assert candidate.external_acceptance_requirements == ()
+    assert result["trust_assignment"] == "unverified_candidate"
+    assert result["execution_authorized"] is False
 
 
 @dataclass
