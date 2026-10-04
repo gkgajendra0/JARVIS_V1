@@ -34,7 +34,7 @@ def _request(
         work_id=f"preflight-{request_id}",
         task_kind="research",
         strategy_key="engineering_stage",
-        strategy_version=2,
+        strategy_version=1,
         required_capabilities=("engineering_reasoning", "structured_output"),
         privacy_class=PrivacyClass.STANDARD,
         locality_requirement=LocalityRequirement.ANY,
