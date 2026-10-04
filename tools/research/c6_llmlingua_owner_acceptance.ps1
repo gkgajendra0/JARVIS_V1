@@ -55,13 +55,7 @@ if (-not $SkipDependencyInstall) {
 } else {
     Write-Host "=== VERIFY LOCAL ACCEPTANCE DEPENDENCIES ==="
 
-    $jsonschemaVersion = & $python -c @'
-import importlib.metadata as metadata
-try:
-    print(metadata.version("jsonschema"))
-except metadata.PackageNotFoundError:
-    print("")
-'@
+    $jsonschemaVersion = & $python -c 'from importlib import metadata, util; print(metadata.version("jsonschema") if util.find_spec("jsonschema") else "")'
     if ($LASTEXITCODE -ne 0) {
         throw "Could not inspect jsonschema in the JARVIS virtual environment."
     }
