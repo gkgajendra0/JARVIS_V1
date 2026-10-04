@@ -1165,6 +1165,7 @@ async def _run_llmlingua_fixture_benchmark(
             "mismatch_cases": 0,
             "all_fixture_cases_equivalent": False,
             "all_fixture_cases_reduced": all_reduced,
+            "all_provider_input_tokens_reduced": False,
             "cases": [],
         }
 
@@ -2055,6 +2056,7 @@ def main() -> int:
             )
             if (
                 replay["all_fixture_cases_equivalent"] is not True
+                or replay["all_full_history_payloads_beat_current"] is not True
                 or replay["all_provider_input_tokens_reduced"] is not True
             ):
                 result["status"] = "INCOMPLETE"
