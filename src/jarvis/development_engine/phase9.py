@@ -65,20 +65,6 @@ def _strings(values: object) -> tuple[str, ...]:
     return tuple(str(item).strip() for item in values if str(item).strip())
 
 
-def _exact_sdk_version(value: object) -> str | None:
-    version = str(value or "").strip()
-    if version.startswith("=="):
-        version = version[2:].strip()
-    if (
-        not version
-        or len(version) > 80
-        or any(token in version for token in ("<", ">", "~", "*", ",", ";", "@"))
-        or any(character.isspace() for character in version)
-    ):
-        return None
-    return version
-
-
 def _result_payload(result: DevelopmentResultV1) -> dict[str, object]:
     return {
         "result_id": result.result_id,
@@ -576,7 +562,6 @@ class Phase9ResearchControlPlaneDecider:
         {
             "research_web",
             "acq_discover_local",
-            "acq_record_candidate",
             "acq_verify_pypi_sdk",
         }
     )
@@ -603,36 +588,6 @@ class Phase9ResearchControlPlaneDecider:
                 summary="Inspect the canonical capability goal before research.",
                 parameters={},
             )
-
-        verify_sdk = "acq_verify_pypi_sdk"
-        if verify_sdk in action_names:
-            verified_source_ids = {
-                str(step.observation.get("source_candidate_id") or "").strip()
-                for step in steps
-                if step.kind == verify_sdk
-                and step.state.value == "completed"
-                and step.observation.get("verified") is True
-            }
-            for step in reversed(steps):
-                if (
-                    step.kind != "acq_record_candidate"
-                    or step.state.value != "completed"
-                ):
-                    continue
-                candidate = candidate_from_payload(step.observation.get("candidate"))
-                if (
-                    candidate.source_kind.value == "sdk_library"
-                    and _exact_sdk_version(candidate.source_version) is not None
-                    and candidate.candidate_id not in verified_source_ids
-                ):
-                    return BrainDecision(
-                        action=verify_sdk,
-                        summary=(
-                            "Verify the recorded exact-version SDK before deterministic "
-                            "candidate resolution."
-                        ),
-                        parameters={"candidate_id": candidate.candidate_id},
-                    )
 
         resolve = "acq_resolve"
         if resolve not in action_names:
