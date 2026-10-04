@@ -257,20 +257,34 @@ Historical experiments, old acceptance transcripts and superseded research remai
 ## 2026-10-04 active routing/C6 decision
 
 The owner has explicitly directed that JARVIS must not use Astra-class reasoning as the
-routine/default coding path merely because it is available. The durable decision is
+routine/default path merely because it is available. The durable direction remains
 `JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`.
 
-The intended future ladder is deterministic/bounded/local -> economical cloud ->
-balanced/strong cloud -> frontier escalation, with concrete models selected through the
-existing registry, JARVIS-specific benchmarks, health/quota evidence and explicit
-escalation reasons. DevelopmentEngine/Codex is the preferred coherent coding-agent
-boundary; normal ChatGPT UI automation is not the target architecture.
+The existing model router is now being promoted to an explicit tier policy rather than
+replaced by another router:
 
-Current C6 owner-machine evidence has two equivalent development pairs and one
-non-equivalent research pair. The research pair chose the same action and matched
-owner/completion fields but produced materially different action parameters. C6 therefore
-remains SHADOW and APPLY promotion is blocked pending a zero-model root-cause diagnosis
-and corrected research-pair acceptance.
+- deterministic/bounded JARVIS control-plane decisions remain model-free where possible;
+- Luna-class ChatGPT-plan targets are the efficient tier when the connected account
+  exposes them;
+- Sol-class targets are the normal capable tier for substantial research/reasoning and
+  the default DevelopmentEngine/Codex model when no explicit development override is
+  configured;
+- Astra-class targets are frontier escalation only after repeated semantic/quality
+  failure evidence;
+- provider pressure/quota exhaustion never increases task difficulty and therefore never
+  justifies an Astra escalation;
+- the shared ChatGPT-plan provider circuit remains account/app scoped, so quota pressure
+  blocks all subscription-backed tiers together rather than hopping models to evade the
+  same allowance.
+
+The tier policy is `engineering_stage.v2`. Runtime startup reads the connected
+ChatGPT-plan model catalog and registers only tier models actually exposed to the owner
+account. If model-catalog discovery fails, JARVIS preserves the configured legacy model
+rather than inventing access.
+
+C6 is now PARKED as an optimization track. Keep prompt compression OFF in production.
+The remaining one-call C6 token probe is not required before capability-creator
+validation and must not distract from the model-router + real Phase-9 mission path.
 
 
 ## 2026-10-04 context-compression/local-development research update
@@ -292,19 +306,21 @@ These are research/benchmark directions only. C6 remains SHADOW and no new produ
 model route is authorized until owner-machine quality/resource evidence passes.
 
 
-## 2026-10-04 priority clarification — compression first
+## 2026-10-04 priority clarification — capability creator first
 
-The owner has explicitly deferred the ephemeral local capability-development brain.
-Do not implement or benchmark a dedicated local coding model in the current slice.
+This section supersedes the earlier same-day "compression first" priority.
 
 Current order:
-1. integrate and benchmark local prompt compression (LLMLingua-2 first);
-2. measure semantic equivalence and real ChatGPT-plan token reduction;
-3. retain normal existing JARVIS local-brain behavior unchanged;
-4. revisit a temporary local coding brain only if compression plus existing/cloud model
-   routing still leaves capability-development cost or quota pressure materially high.
+1. finish and verify the existing Global Model Router tier policy;
+2. keep C6 prompt compression OFF/PARKED;
+3. verify DevelopmentEngine defaults to the capable/Sol tier unless the owner explicitly
+   pins another development model;
+4. run one real Phase-9 capability-acquisition mission end to end;
+5. fix only blockers exposed by that mission;
+6. return to C6 only if measured context/quota pressure remains material after routing.
 
-This prevents solving a problem that prompt compression may already remove.
+Do not start another coding harness, local coding-brain project, or prompt-compression
+promotion before the capability creator has one real end-to-end proof.
 
 ## 2026-10-04 LLMLingua implementation checkpoint
 
