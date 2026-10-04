@@ -266,16 +266,25 @@ def test_work_context_defaults_to_shadow_and_validates_mode() -> None:
 
 
 def test_work_prompt_compression_defaults_off_and_validates_mode() -> None:
-    assert JarvisConfig().work_prompt_compression_mode == "off"
+    config = JarvisConfig()
+    assert config.work_prompt_compression_mode == "off"
+    assert config.work_prompt_compression_rate == pytest.approx(0.8)
     assert (
         JarvisConfig(
             work_prompt_compression_mode=" APPLY "
         ).work_prompt_compression_mode
         == "apply"
     )
+    assert JarvisConfig(
+        work_prompt_compression_rate=0.75
+    ).work_prompt_compression_rate == pytest.approx(0.75)
 
     with pytest.raises(ValueError, match="work_prompt_compression_mode"):
         JarvisConfig(work_prompt_compression_mode="automatic")
+    with pytest.raises(ValueError, match="work_prompt_compression_rate"):
+        JarvisConfig(work_prompt_compression_rate=0.0)
+    with pytest.raises(ValueError, match="work_prompt_compression_rate"):
+        JarvisConfig(work_prompt_compression_rate=1.01)
 
     with pytest.raises(ValueError, match="combined-context acceptance"):
         JarvisConfig(
