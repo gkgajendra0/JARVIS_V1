@@ -790,6 +790,8 @@ async def test_c6_llmlingua_preflight_uses_no_chatgpt_plan_calls(
     assert result["preflight_ready"] is True
     assert result["model_calls"] == 0
     assert result["all_fixture_cases_reduced"] is True
+    assert result["compressor_library_revision"]
+    assert result["compressor_model_revision"]
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert len(result["planned_cases"]) == 1
 
@@ -871,5 +873,7 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
     assert result["equivalent_cases"] == 1
     assert result["mismatch_cases"] == 0
     assert result["all_fixture_cases_equivalent"] is True
+    assert result["all_provider_input_tokens_reduced"] is True
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert result["cases"][0]["parameters_equal"] is True
+    assert result["cases"][0]["provider_input_tokens_reduced"] is True
