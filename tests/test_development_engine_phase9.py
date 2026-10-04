@@ -453,9 +453,7 @@ def test_research_control_plane_retries_sdk_after_owner_configures_reviewed_uv()
     assert decision.parameters == {"candidate_id": "candidate-sdk"}
 
 
-def test_research_control_plane_owner_retry_replays_uv_verification_only_once() -> (
-    None
-):
+def test_research_control_plane_owner_retry_replays_uv_verification_only_once() -> None:
     work = WorkItem(
         request="research capability",
         work_type=WorkType.RESEARCH,
