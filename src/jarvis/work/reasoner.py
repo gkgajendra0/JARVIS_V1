@@ -49,6 +49,7 @@ from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 from jarvis.work.context import WorkContextMode, build_context_shadow_report
 from jarvis.work.models import WorkType
 from jarvis.work.prompt_compression import (
+    PromptCompressionError,
     PromptCompressionMode,
     WorkPayloadCompressor,
     normalize_prompt_compression_mode,
@@ -471,7 +472,7 @@ class RoutedWorkReasoner:
                     compressor.compress_payload,
                     legacy_payload,
                 )
-        except Exception as exc:
+        except PromptCompressionError as exc:
             LOGGER.warning(
                 "C6 local prompt compression unavailable; exact legacy payload retained: "
                 "work_id=%s work_type=%s error=%s",
