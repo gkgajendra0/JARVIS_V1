@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from importlib import metadata, util
 import json
+from importlib import metadata, util
 
 
 def _distribution_version(name: str) -> str | None:
