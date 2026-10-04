@@ -602,19 +602,17 @@ class Phase9ResearchControlPlaneDecider:
                 ),
                 default=-1,
             )
-            latest_owner_recovery = max(
+            owner_recovery = next(
                 (
                     index
                     for index, step in enumerate(steps)
-                    if step.kind in {"owner_input", "owner_retry"}
+                    if index > latest_credential_block
+                    and step.kind in {"owner_input", "owner_retry"}
                     and step.state.value == "completed"
                 ),
-                default=-1,
+                -1,
             )
-            if (
-                latest_credential_block >= 0
-                and latest_owner_recovery > latest_credential_block
-            ):
+            if latest_credential_block >= 0 and owner_recovery >= 0:
                 blocked_step = steps[latest_credential_block]
                 parameters = {
                     key: value
@@ -624,7 +622,7 @@ class Phase9ResearchControlPlaneDecider:
                 query = str(parameters.get("query") or "").strip()
                 mode = parameters.get("mode")
                 matching_retry_exists = any(
-                    index > latest_owner_recovery
+                    index > owner_recovery
                     and step.kind == research
                     and step.input_data.get("query") == query
                     and step.input_data.get("mode") == mode
@@ -653,22 +651,23 @@ class Phase9ResearchControlPlaneDecider:
                 ),
                 default=-1,
             )
-            latest_owner_recovery = max(
+            owner_recovery = next(
                 (
                     index
                     for index, step in enumerate(steps)
-                    if step.kind in {"owner_input", "owner_retry"}
+                    if index > latest_uv_block
+                    and step.kind in {"owner_input", "owner_retry"}
                     and step.state.value == "completed"
                 ),
-                default=-1,
+                -1,
             )
-            if latest_uv_block >= 0 and latest_owner_recovery > latest_uv_block:
+            if latest_uv_block >= 0 and owner_recovery >= 0:
                 blocked_step = steps[latest_uv_block]
                 candidate_id = str(
                     blocked_step.input_data.get("candidate_id") or ""
                 ).strip()
                 matching_retry_exists = any(
-                    index > latest_owner_recovery
+                    index > owner_recovery
                     and step.kind == verify_sdk
                     and step.input_data.get("candidate_id") == candidate_id
                     for index, step in enumerate(steps)
