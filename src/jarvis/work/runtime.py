@@ -694,10 +694,7 @@ def build_work_runtime(
         chatgpt_plan_session_manager=chatgpt_plan_session,
     )
     chatgpt_plan_available_models: tuple[str, ...] = ()
-    if (
-        chatgpt_plan_session is not None
-        and chatgpt_plan_session.is_connected()
-    ):
+    if chatgpt_plan_session is not None and chatgpt_plan_session.is_connected():
         try:
             chatgpt_plan_available_models = tuple(
                 item.slug for item in chatgpt_plan_session.list_models()
