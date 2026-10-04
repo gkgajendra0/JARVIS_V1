@@ -120,3 +120,53 @@ def test_current_token_probe_rebuilds_exact_payload_digests(
     assert len(request.recent_steps) == 12
     assert canonical_digest(current_payload) == case["current_request_digest"]
     assert canonical_digest(compressed_payload) == case["compressed_request_digest"]
+
+
+def test_current_token_probe_runtime_lineage_accepts_exact_blobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = dict(probe._ACCEPTED_RUNTIME_BLOBS)
+
+    def _fake_git(_repo_root, *args: str) -> str:
+        if args[:1] == ("hash-object",):
+            requested = str(args[1]).replace("\\\\", "/")
+            for relative_path, blob in expected.items():
+                if requested.endswith(relative_path):
+                    return blob
+            raise AssertionError(f"unexpected hash-object path: {requested}")
+        if args == ("rev-parse", "HEAD"):
+            return "current-head"
+        raise AssertionError(f"unexpected git args: {args}")
+
+    monkeypatch.setattr(probe, "_git_output", _fake_git)
+
+    lineage = probe._validated_runtime_lineage()
+
+    assert lineage["accepted_owner_commit"] == probe._ACCEPTED_OWNER_COMMIT
+    assert lineage["current_head"] == "current-head"
+    assert lineage["runtime_lineage_matches_owner_pass"] is True
+
+
+def test_current_token_probe_runtime_lineage_rejects_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = dict(probe._ACCEPTED_RUNTIME_BLOBS)
+    first_path = next(iter(expected))
+
+    def _fake_git(_repo_root, *args: str) -> str:
+        if args[:1] == ("hash-object",):
+            requested = str(args[1]).replace("\\\\", "/")
+            if requested.endswith(first_path):
+                return "drifted"
+            for relative_path, blob in expected.items():
+                if requested.endswith(relative_path):
+                    return blob
+            raise AssertionError(f"unexpected hash-object path: {requested}")
+        if args == ("rev-parse", "HEAD"):
+            return "current-head"
+        raise AssertionError(f"unexpected git args: {args}")
+
+    monkeypatch.setattr(probe, "_git_output", _fake_git)
+
+    with pytest.raises(ValueError, match="runtime lineage drifted"):
+        probe._validated_runtime_lineage()
