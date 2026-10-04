@@ -59,7 +59,7 @@ _CAPABLE_FAILURE_SIGNALS = frozenset(
 )
 _STRATEGY_RULES = {
     "strategy": "engineering_stage",
-    "version": 1,
+    "version": 2,
     "provider_pressure_affects_difficulty": False,
     "capable_failure_threshold": 2,
     "frontier_failure_threshold": 3,
@@ -203,7 +203,7 @@ class EngineeringStageStrategy:
     """Explainable v1 strategy using stage/progress facts, never provider pressure."""
 
     strategy_key = "engineering_stage"
-    strategy_version = 1
+    strategy_version = 2
     strategy_digest = _STRATEGY_DIGEST
 
     def rank(
