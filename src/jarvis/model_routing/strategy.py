@@ -329,7 +329,7 @@ class EngineeringStageStrategy:
             )
             if not candidates:
                 raise StrategyNoCandidateError(
-                    "capable route required but no capable or frontier target is eligible"
+                    "capable route required but no capable target or frontier fallback is eligible"
                 )
             if not capable and frontier:
                 reasons.append("capable_unavailable_frontier_fallback")
