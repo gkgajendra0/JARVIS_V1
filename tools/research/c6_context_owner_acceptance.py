@@ -1228,55 +1228,165 @@ async def _run_llmlingua_fixture_benchmark(
         compressed,
         beats_current,
     ) in prepared:
-        full_context, full_context_telemetry = await evaluate_structured_work_request(
-            client,
-            current_request,
-            provider_payload_override=full_history_payload,
+        full_context_first, full_first_telemetry = (
+            await evaluate_structured_work_request(
+                client,
+                current_request,
+                provider_payload_override=full_history_payload,
+            )
         )
         model_calls += 1
-        (
+        full_context_second, full_second_telemetry = (
+            await evaluate_structured_work_request(
+                client,
+                current_request,
+                provider_payload_override=full_history_payload,
+            )
+        )
+        model_calls += 1
+        baseline_comparison = compare_context_decisions(
+            full_context_first,
+            full_context_second,
+        )
+        baseline_stable = baseline_comparison.equivalent
+        case_common = {
+            "case_id": case.case_id,
+            "work_id": case.request.work.work_id,
+            "work_type": case.request.work.work_type.value,
+            "baseline_scope": "full_history",
+            "full_history_steps": len(
+                case.request.full_history_steps or case.request.recent_steps
+            ),
+            "current_recent_steps": len(case.request.recent_steps),
+            "baseline_stable": baseline_stable,
+            "baseline_action_equal": baseline_comparison.action_equal,
+            "baseline_parameters_equal": baseline_comparison.parameters_equal,
+            "baseline_goal_complete_equal": baseline_comparison.goal_complete_equal,
+            "baseline_needs_owner_equal": baseline_comparison.needs_owner_equal,
+            "baseline_owner_question_equal": (
+                baseline_comparison.owner_question_equal
+            ),
+            "full_context_first_action": full_context_first.action,
+            "full_context_second_action": full_context_second.action,
+            "full_context_first_parameters": dict(full_context_first.parameters),
+            "full_context_second_parameters": dict(full_context_second.parameters),
+            "full_context_first_parameters_digest": canonical_digest(
+                full_context_first.parameters
+            ),
+            "full_context_second_parameters_digest": canonical_digest(
+                full_context_second.parameters
+            ),
+            "current_chars": _chars(current_payload),
+            "legacy_chars": compressed.original_chars,
+            "full_history_chars": compressed.original_chars,
+            "compressed_chars": compressed.compressed_chars,
+            "reduction_percent": compressed.reduction_percent,
+            "compressed_vs_current_reduction_percent": round(
+                (_chars(current_payload) - compressed.compressed_chars)
+                * 100.0
+                / _chars(current_payload),
+                2,
+            ),
+            "beats_current_payload": beats_current,
+            "candidate_strings": compressed.candidate_strings,
+            "compressed_strings": compressed.compressed_strings,
+            "compression_latency_ms": round(compressed.latency_ms, 2),
+            "changed_paths": list(compressed.changed_paths),
+            "current_request_digest": canonical_digest(current_payload),
+            "legacy_request_digest": canonical_digest(full_history_payload),
+            "full_history_request_digest": canonical_digest(full_history_payload),
+            "compressed_request_digest": canonical_digest(compressed.payload),
+            "full_context_first_usage": dict(full_first_telemetry.usage),
+            "full_context_first_usage_observed": (
+                full_first_telemetry.usage_observed
+            ),
+            "full_context_first_latency_ms": round(
+                full_first_telemetry.latency_ms,
+                2,
+            ),
+            "full_context_second_usage": dict(full_second_telemetry.usage),
+            "full_context_second_usage_observed": (
+                full_second_telemetry.usage_observed
+            ),
+            "full_context_second_latency_ms": round(
+                full_second_telemetry.latency_ms,
+                2,
+            ),
+        }
+        if not baseline_stable:
+            results.append(
+                {
+                    **case_common,
+                    "compressed_evaluated": False,
+                    "equivalent": False,
+                    "legacy_action": full_context_first.action,
+                    "full_context_action": full_context_first.action,
+                    "compressed_action": None,
+                    "action_equal": False,
+                    "legacy_parameters": dict(full_context_first.parameters),
+                    "full_context_parameters": dict(full_context_first.parameters),
+                    "compressed_parameters": None,
+                    "legacy_parameters_digest": canonical_digest(
+                        full_context_first.parameters
+                    ),
+                    "full_context_parameters_digest": canonical_digest(
+                        full_context_first.parameters
+                    ),
+                    "compressed_parameters_digest": None,
+                    "goal_complete_equal": False,
+                    "needs_owner_equal": False,
+                    "owner_question_equal": False,
+                    "parameters_equal": False,
+                    "compressed_usage": {},
+                    "compressed_usage_observed": False,
+                    "compressed_latency_ms": None,
+                    "provider_input_tokens_reduced": False,
+                    "provider_input_token_reduction_percent": 0.0,
+                }
+            )
+            break
+
+        compressed_decision, compressed_telemetry = (
+            await evaluate_structured_work_request(
+                client,
+                current_request,
+                provider_payload_override=compressed.payload,
+            )
+        )
+        model_calls += 1
+        comparison = compare_context_decisions(
+            full_context_first,
             compressed_decision,
-            compressed_telemetry,
-        ) = await evaluate_structured_work_request(
-            client,
-            current_request,
-            provider_payload_override=compressed.payload,
         )
-        model_calls += 1
-        comparison = compare_context_decisions(full_context, compressed_decision)
         full_input_tokens = int(
-            full_context_telemetry.usage.get("input_tokens", 0) or 0
+            full_first_telemetry.usage.get("input_tokens", 0) or 0
         )
         compressed_input_tokens = int(
             compressed_telemetry.usage.get("input_tokens", 0) or 0
         )
         provider_input_tokens_reduced = (
-            full_context_telemetry.usage_observed
+            full_first_telemetry.usage_observed
             and compressed_telemetry.usage_observed
             and full_input_tokens > 0
             and compressed_input_tokens < full_input_tokens
         )
         results.append(
             {
-                "case_id": case.case_id,
-                "work_id": case.request.work.work_id,
-                "work_type": case.request.work.work_type.value,
-                "baseline_scope": "full_history",
-                "full_history_steps": len(
-                    case.request.full_history_steps or case.request.recent_steps
-                ),
-                "current_recent_steps": len(case.request.recent_steps),
+                **case_common,
+                "compressed_evaluated": True,
                 "equivalent": comparison.equivalent,
-                "legacy_action": full_context.action,
-                "full_context_action": full_context.action,
+                "legacy_action": full_context_first.action,
+                "full_context_action": full_context_first.action,
                 "compressed_action": compressed_decision.action,
                 "action_equal": comparison.action_equal,
-                "legacy_parameters": dict(full_context.parameters),
-                "full_context_parameters": dict(full_context.parameters),
+                "legacy_parameters": dict(full_context_first.parameters),
+                "full_context_parameters": dict(full_context_first.parameters),
                 "compressed_parameters": dict(compressed_decision.parameters),
-                "legacy_parameters_digest": canonical_digest(full_context.parameters),
+                "legacy_parameters_digest": canonical_digest(
+                    full_context_first.parameters
+                ),
                 "full_context_parameters_digest": canonical_digest(
-                    full_context.parameters
+                    full_context_first.parameters
                 ),
                 "compressed_parameters_digest": canonical_digest(
                     compressed_decision.parameters
@@ -1285,35 +1395,12 @@ async def _run_llmlingua_fixture_benchmark(
                 "needs_owner_equal": comparison.needs_owner_equal,
                 "owner_question_equal": comparison.owner_question_equal,
                 "parameters_equal": comparison.parameters_equal,
-                "current_chars": _chars(current_payload),
-                "legacy_chars": compressed.original_chars,
-                "full_history_chars": compressed.original_chars,
-                "compressed_chars": compressed.compressed_chars,
-                "reduction_percent": compressed.reduction_percent,
-                "compressed_vs_current_reduction_percent": round(
-                    (_chars(current_payload) - compressed.compressed_chars)
-                    * 100.0
-                    / _chars(current_payload),
-                    2,
-                ),
-                "beats_current_payload": beats_current,
-                "candidate_strings": compressed.candidate_strings,
-                "compressed_strings": compressed.compressed_strings,
-                "compression_latency_ms": round(compressed.latency_ms, 2),
-                "changed_paths": list(compressed.changed_paths),
-                "current_request_digest": canonical_digest(current_payload),
-                "legacy_request_digest": canonical_digest(full_history_payload),
-                "full_history_request_digest": canonical_digest(full_history_payload),
-                "compressed_request_digest": canonical_digest(compressed.payload),
-                "legacy_usage": dict(full_context_telemetry.usage),
-                "full_context_usage": dict(full_context_telemetry.usage),
-                "legacy_usage_observed": full_context_telemetry.usage_observed,
-                "full_context_usage_observed": full_context_telemetry.usage_observed,
-                "legacy_latency_ms": round(full_context_telemetry.latency_ms, 2),
-                "full_context_latency_ms": round(full_context_telemetry.latency_ms, 2),
                 "compressed_usage": dict(compressed_telemetry.usage),
                 "compressed_usage_observed": compressed_telemetry.usage_observed,
-                "compressed_latency_ms": round(compressed_telemetry.latency_ms, 2),
+                "compressed_latency_ms": round(
+                    compressed_telemetry.latency_ms,
+                    2,
+                ),
                 "provider_input_tokens_reduced": provider_input_tokens_reduced,
                 "provider_input_token_reduction_percent": (
                     round(
@@ -1332,6 +1419,9 @@ async def _run_llmlingua_fixture_benchmark(
 
     equivalent_count = sum(bool(item["equivalent"]) for item in results)
     mismatch_count = len(results) - equivalent_count
+    all_baselines_stable = bool(results) and all(
+        bool(item["baseline_stable"]) for item in results
+    )
     all_provider_input_tokens_reduced = bool(results) and all(
         bool(item["provider_input_tokens_reduced"]) for item in results
     )
@@ -1342,13 +1432,15 @@ async def _run_llmlingua_fixture_benchmark(
         "fixture_cases": len(results),
         "equivalent_cases": equivalent_count,
         "mismatch_cases": mismatch_count,
-        "all_fixture_cases_equivalent": bool(results) and mismatch_count == 0,
+        "all_baselines_stable": all_baselines_stable,
+        "all_fixture_cases_equivalent": (
+            bool(results) and all_baselines_stable and mismatch_count == 0
+        ),
         "all_fixture_cases_reduced": all_reduced,
         "all_provider_input_tokens_reduced": all_provider_input_tokens_reduced,
         "c6_apply_decision_equivalence_proven": False,
         "cases": results,
     }
-
 
 async def _run_decision_replay(
     *,
@@ -2076,7 +2168,8 @@ def main() -> int:
                 "Production remains SHADOW pending explicit owner acceptance."
             )
             if (
-                replay["all_fixture_cases_equivalent"] is not True
+                replay["all_baselines_stable"] is not True
+                or replay["all_fixture_cases_equivalent"] is not True
                 or replay["all_full_history_payloads_beat_current"] is not True
                 or replay["all_provider_input_tokens_reduced"] is not True
             ):
