@@ -611,7 +611,10 @@ class Phase9ResearchControlPlaneDecider:
                 ),
                 default=-1,
             )
-            if latest_credential_block >= 0 and latest_owner_input > latest_credential_block:
+            if (
+                latest_credential_block >= 0
+                and latest_owner_input > latest_credential_block
+            ):
                 blocked_step = steps[latest_credential_block]
                 parameters = {
                     key: value
