@@ -139,6 +139,7 @@ class JarvisConfig:
     development_engine_model: str | None = None
     work_context_mode: str = "shadow"
     work_prompt_compression_mode: str = "off"
+    work_prompt_compression_rate: float = 0.8
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
@@ -259,6 +260,16 @@ class JarvisConfig:
             self,
             "work_prompt_compression_mode",
             work_prompt_compression_mode,
+        )
+        compression_rate = float(self.work_prompt_compression_rate)
+        if not 0.0 < compression_rate <= 1.0:
+            raise ValueError(
+                "work_prompt_compression_rate must be within (0, 1]"
+            )
+        object.__setattr__(
+            self,
+            "work_prompt_compression_rate",
+            compression_rate,
         )
         if work_context_mode == "apply" and work_prompt_compression_mode == "apply":
             raise ValueError(
@@ -577,6 +588,11 @@ class JarvisConfig:
             work_prompt_compression_mode=_configured_required_text(
                 "JARVIS_WORK_PROMPT_COMPRESSION_MODE",
                 "off",
+                machine,
+            ),
+            work_prompt_compression_rate=_configured_float(
+                "JARVIS_WORK_PROMPT_COMPRESSION_RATE",
+                0.8,
                 machine,
             ),
             global_brain_router_mode=_configured_required_text(
