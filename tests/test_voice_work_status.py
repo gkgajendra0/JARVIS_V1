@@ -99,7 +99,7 @@ async def test_status_reports_active_parent_change_after_child_work_completed(
     change = SimpleNamespace(
         change_id="change_tv",
         state=SimpleNamespace(value="waiting_owner_approval"),
-        goal="Acquire TV media control",
+        request="Acquire TV media control",
     )
     stage = SimpleNamespace(stage_key="research", work_id=completed.work_id)
     change_store = SimpleNamespace(
@@ -129,7 +129,7 @@ async def test_status_reports_active_parent_change_after_child_work_completed(
         {
             "change_id": "change_tv",
             "state": "waiting_owner_approval",
-            "goal": "Acquire TV media control",
+            "request": "Acquire TV media control",
             "pending_owner_approval": True,
             "stages": [
                 {
