@@ -655,3 +655,37 @@ local crossover in fine steps:
 The first rate that is at least 0.25% smaller than today's payload is selected. This
 preserves the maximum possible context while still proving a real net token win. The
 strict decision comparator is unchanged.
+
+
+## Baseline-stability correction — 2026-10-04
+
+Comparison of the two owner-machine LLMLingua runs exposed an additional validity
+requirement before attributing parameter differences to compression.
+
+The full-history baseline itself changed across separate runs even though the canonical
+fixture payload and reasoning contract did not change. The first owner run's full-context
+decision included `discovery_scopes` plus two external-acceptance requirements. The
+second run's full-context decision omitted `discovery_scopes` and emitted only one
+external-acceptance requirement.
+
+Therefore a full-vs-compressed mismatch is not attributable to LLMLingua unless the
+strong model first proves exact same-input stability for that exact full-history
+research request.
+
+The live LLMLingua gate now runs:
+
+```text
+full canonical history -> strong model #1
+full canonical history -> strong model #2
+        |
+        +-- mismatch: STOP after 2 calls; compression is not evaluated
+        |
+        +-- exact match:
+              compressed full history -> strong model #3
+              compare strictly against the stable full-history decision
+```
+
+This keeps the strict comparator unchanged and prevents provider/model variance from
+being misclassified as information loss. The bounded live gate now uses at most three
+ChatGPT-plan calls for one fixture and still executes no Work action, changes no
+production routing, enables no paid fallback and cannot promote APPLY automatically.
