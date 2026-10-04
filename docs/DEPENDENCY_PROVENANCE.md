@@ -117,3 +117,19 @@ Rollback is bounded: set `JARVIS_WORK_PROMPT_COMPRESSION_MODE=off` (the default)
 the optional extra, and JARVIS sends the existing uncompressed provider payload. No
 canonical Work data migration is required because compressed text is never canonical or
 persisted as replacement Work history.
+
+
+## jsonschema action-parameter validation — 2026-10-04
+
+- Package: `jsonschema==4.26.0`
+- Source: Python `jsonschema` project / PyPI
+- Purpose: validate provider-returned Work action parameters against the exact
+  JARVIS-owned `BrainAction.parameter_schema` before any executor sees them
+- Draft used: JSON Schema 2020-12 validator
+- Authority effect: none; this narrows accepted model output and cannot grant actions,
+  permissions, trust, or scope
+- Failure behavior: malformed/out-of-schema model parameters fail the reasoning cycle;
+  they are never passed to a Work executor
+- Reason for direct dependency: action schemas were previously prompt-visible but not
+  locally enforced, allowing a model to return forbidden additional parameters despite
+  `additionalProperties: false`
