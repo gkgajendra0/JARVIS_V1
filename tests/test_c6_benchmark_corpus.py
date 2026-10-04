@@ -951,8 +951,9 @@ async def test_c6_llmlingua_live_stops_when_full_history_baseline_is_unstable(
                     "source_kind": "sdk_library",
                     "source_identity": "example-device-sdk",
                     "source_version": "2.4.1",
-                    "verification_requirements": [
-                        "verify exact artifact",
+                    "supported_operations": ["pair", "launch", "key_input"],
+                    "evidence_refs": [
+                        "evidence-2",
                         f"baseline-variant-{calls}",
                     ],
                 },
