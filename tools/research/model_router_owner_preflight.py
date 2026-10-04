@@ -84,6 +84,24 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 - probe reports provider readiness
             catalog_error = f"{type(exc).__name__}: {exc}"
 
+    if not config.chatgpt_plan_enabled or not connected:
+        print(
+            json.dumps(
+                {
+                    "schema": "jarvis.model_router_owner_preflight.v1",
+                    "chatgpt_plan_enabled": config.chatgpt_plan_enabled,
+                    "chatgpt_plan_connected": connected,
+                    "catalog_error": catalog_error,
+                    "inference_calls": 0,
+                    "quota_consumed_by_inference": False,
+                    "passed": False,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 2
+
     adapters = build_default_model_adapter_registry(
         chatgpt_plan_session_manager=plan if connected else None,
     )
