@@ -798,6 +798,15 @@ async def test_c6_llmlingua_preflight_uses_no_chatgpt_plan_calls(
     )
     assert result["compressor_library_revision"]
     assert result["compressor_model_revision"]
+    assert set(result["runtime_dependency_versions"]) == {
+        "llmlingua",
+        "torch",
+        "transformers",
+        "accelerate",
+        "tiktoken",
+        "nltk",
+        "numpy",
+    }
     assert result["c6_apply_decision_equivalence_proven"] is False
     assert len(result["planned_cases"]) == 1
 
