@@ -56,7 +56,9 @@ class BrainRequest:
             if any(
                 step.work_id != self.work.work_id for step in self.full_history_steps
             ):
-                raise ValueError("full history steps must belong to the request WorkItem")
+                raise ValueError(
+                    "full history steps must belong to the request WorkItem"
+                )
             history_ids = [step.step_id for step in self.full_history_steps]
             if len(history_ids) != len(set(history_ids)):
                 raise ValueError("full history step IDs must be unique")
