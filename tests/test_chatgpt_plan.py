@@ -367,9 +367,9 @@ def test_plan_model_catalog_without_luna_uses_capable_primary() -> None:
     primary = targets.registry.require(targets.primary_target_id)
     assert primary.model_id == "gpt-6-sol"
     assert "capable" in primary.roles
-    assert tuple(target.model_id for target in targets.registry.for_role("frontier")) == (
-        "gpt-6-astra",
-    )
+    assert tuple(
+        target.model_id for target in targets.registry.for_role("frontier")
+    ) == ("gpt-6-astra",)
 
 
 def test_legacy_work_pool_is_unchanged_when_plan_is_disabled() -> None:
