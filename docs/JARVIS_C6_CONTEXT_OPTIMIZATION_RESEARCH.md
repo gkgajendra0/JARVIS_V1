@@ -386,7 +386,7 @@ Implemented:
   source revision `5a4c78ae18ab17a98cf997e8259354e546081d64`;
 - local LLMLingua-2 BERT-base compressor using the reviewed
   `microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank` model;
-- reviewed Hugging Face model revision pinned to `5f0c827`;
+- reviewed Hugging Face model revision pinned to `5f0c82792b7ea14c6484e015b6a072009496b7f2`;
 - CPU is the default compression device so the experiment does not depend on the normal
   JARVIS local-brain/GPU runtime;
 - JARVIS JSON structure is preserved exactly;
