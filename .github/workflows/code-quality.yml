@@ -206,6 +206,18 @@ jobs:
             throw "C6 LLMLingua owner acceptance PowerShell has parse errors."
           }
 
+      - name: Execute C6 owner dependency version probe
+        shell: pwsh
+        run: |
+          $version = & python -c 'from importlib import metadata, util; print(metadata.version("jsonschema") if util.find_spec("jsonschema") else "")'
+          if ($LASTEXITCODE -ne 0) {
+            throw "C6 owner dependency version probe failed to execute."
+          }
+          $version = ($version -join "").Trim()
+          if ($version -ne "4.26.0") {
+            throw "Expected jsonschema==4.26.0, found '$version'."
+          }
+
       - name: Run Windows multilingual Hands regressions
         run: >-
           python -m pytest -q
