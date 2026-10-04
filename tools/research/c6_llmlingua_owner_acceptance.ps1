@@ -86,7 +86,10 @@ if ($pre.preflight_ready -ne $true) {
     throw "LLMLingua preflight is not ready. See $preflightReport"
 }
 if ($pre.all_fixture_cases_reduced -ne $true) {
-    throw "LLMLingua did not reduce the selected full-context fixture."
+    throw "LLMLingua did not reduce the selected full-history fixture."
+}
+if ($pre.all_full_history_payloads_beat_current -ne $true) {
+    throw "Compressed full history is not smaller than the current model payload."
 }
 if ($pre.actions_executed -ne $false) {
     throw "Preflight unexpectedly executed a Work action."
@@ -106,9 +109,15 @@ Write-Host "Library revision : $($pre.compressor_library_revision)"
 Write-Host "Model revision   : $($pre.compressor_model_revision)"
 foreach ($item in $pre.planned_cases) {
     Write-Host ("Case             : {0}" -f $item.case_id)
-    Write-Host ("Legacy chars     : {0}" -f $item.legacy_chars)
-    Write-Host ("Compressed chars : {0}" -f $item.compressed_chars)
-    Write-Host ("Reduction         : {0}%" -f $item.reduction_percent)
+    Write-Host ("History steps     : {0}" -f $item.full_history_steps)
+    Write-Host ("Current steps     : {0}" -f $item.current_recent_steps)
+    Write-Host ("Current chars     : {0}" -f $item.current_chars)
+    Write-Host ("Full-history chars: {0}" -f $item.full_history_chars)
+    Write-Host ("Compressed chars  : {0}" -f $item.compressed_chars)
+    Write-Host ("Full reduction    : {0}%" -f $item.reduction_percent)
+    Write-Host (
+        "Vs current         : {0}%" -f $item.compressed_vs_current_reduction_percent
+    )
     Write-Host ("Candidate strings : {0}" -f $item.candidate_strings)
     Write-Host ("Compressed strings: {0}" -f $item.compressed_strings)
     Write-Host ("Compressor latency: {0} ms" -f $item.compression_latency_ms)
@@ -180,13 +189,18 @@ Write-Host "parameters_equal           : $($case.parameters_equal)"
 Write-Host "goal_complete_equal        : $($case.goal_complete_equal)"
 Write-Host "needs_owner_equal          : $($case.needs_owner_equal)"
 Write-Host "owner_question_equal       : $($case.owner_question_equal)"
-Write-Host "context_reduction_percent  : $($case.reduction_percent)"
+Write-Host "baseline_scope             : $($case.baseline_scope)"
+Write-Host "full_history_steps         : $($case.full_history_steps)"
+Write-Host "current_recent_steps       : $($case.current_recent_steps)"
+Write-Host "full_context_reduction %   : $($case.reduction_percent)"
+Write-Host "compressed_vs_current %    : $($case.compressed_vs_current_reduction_percent)"
+Write-Host "beats_current_payload      : $($case.beats_current_payload)"
 Write-Host "provider_tokens_reduced    : $($case.provider_input_tokens_reduced)"
 Write-Host "provider_token_reduction % : $($case.provider_input_token_reduction_percent)"
 Write-Host "compression_latency_ms     : $($case.compression_latency_ms)"
 Write-Host ""
-Write-Host "Legacy parameters:"
-$case.legacy_parameters | ConvertTo-Json -Depth 20
+Write-Host "Full-context parameters:"
+$case.full_context_parameters | ConvertTo-Json -Depth 20
 Write-Host "Compressed parameters:"
 $case.compressed_parameters | ConvertTo-Json -Depth 20
 Write-Host ""
@@ -195,13 +209,15 @@ Write-Host ""
 
 if (
     $bench.all_fixture_cases_equivalent -ne $true -or
+    $bench.all_full_history_payloads_beat_current -ne $true -or
     $bench.all_provider_input_tokens_reduced -ne $true -or
-    $case.parameters_equal -ne $true
+    $case.parameters_equal -ne $true -or
+    $case.beats_current_payload -ne $true
 ) {
     Write-Host "RESULT: INCOMPLETE - compressor is not eligible for promotion."
     exit 2
 }
 
-Write-Host "RESULT: PASS - compressed full-context research pair preserved strict semantics and reduced real provider input tokens."
+Write-Host "RESULT: PASS - compressed full history preserved strict semantics, beat the current payload size, and reduced real provider input tokens versus full history."
 Write-Host "Production remains unchanged; this result is evidence only."
 exit 0
