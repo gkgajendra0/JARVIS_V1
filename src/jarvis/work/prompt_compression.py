@@ -20,6 +20,9 @@ DEFAULT_LLMLINGUA2_MODEL = (
     "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank"
 )
 DEFAULT_LLMLINGUA2_REVISION = "5f0c827"
+REVIEWED_LLMLINGUA_LIBRARY_REVISION = (
+    "5a4c78ae18ab17a98cf997e8259354e546081d64"
+)
 DEFAULT_COMPRESSION_RATE = 0.5
 DEFAULT_MIN_STRING_CHARS = 600
 
@@ -427,6 +430,7 @@ __all__ = [
     "DEFAULT_LLMLINGUA2_MODEL",
     "DEFAULT_LLMLINGUA2_REVISION",
     "LLMLingua2WorkPayloadCompressor",
+    "REVIEWED_LLMLINGUA_LIBRARY_REVISION",
     "PromptCompressionMode",
     "PromptCompressionDependencyError",
     "PromptCompressionError",
