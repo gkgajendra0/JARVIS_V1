@@ -741,3 +741,38 @@ creating an executable Work decision. This means the narrowed
 
 C6 equivalence therefore compares decisions that are valid under the same canonical
 action contract. Out-of-schema provider output fails rather than being silently accepted.
+
+
+## Research-fixture routing correction — 2026-10-04
+
+The owner-machine stability run at
+`e5d66c7a8675d60b4971a1c0d0ba857ab986e5ce` proved that the prior
+`research_requires_reresolution_after_new_evidence` fixture was not a valid
+LLMLingua model-equivalence target.
+
+The full-history A/A pair disagreed before compression was evaluated: one call selected a
+zero-parameter protocol action while the other selected `acq_record_candidate`. More
+importantly, repository review showed the production `WorkEngine` asks
+`Phase9ResearchControlPlaneDecider` before invoking the model. For this fixture's
+"new evidence after prior resolve/finalize" state, production should perform deterministic
+protocol bookkeeping instead of consuming model reasoning.
+
+A second protocol inconsistency was found during that review: the production runtime
+registers `acq_verify_pypi_sdk`, and `acq_resolve` explicitly instructs exact-version
+SDK candidates to be verified first, but the deterministic research controller
+previously jumped directly from new candidate evidence to `acq_resolve`.
+
+The controller now selects `acq_verify_pypi_sdk(candidate_id=...)` first when canonical
+history contains an exact-version unverified SDK candidate without matching completed
+verification evidence. After verification, the existing deterministic re-resolve rule
+runs. Non-exact SDK versions are not force-verified.
+
+The old re-resolve fixture is therefore retired from model-equivalence promotion
+evidence. Its prior runs remain useful diagnostics, but they do not prove or disprove
+LLMLingua quality.
+
+The replacement C6 research fixture is
+`research_ready_for_digest_bound_finalize`: canonical research and deterministic
+resolution are already current, there is no newer source evidence, and the next
+`acq_finalize` step is genuinely model-owned. The owner request pins the exact bounded
+plan parameters so strict A/A and full-history-vs-compressed equality remain meaningful.
