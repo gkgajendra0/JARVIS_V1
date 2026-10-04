@@ -1228,20 +1228,22 @@ async def _run_llmlingua_fixture_benchmark(
         compressed,
         beats_current,
     ) in prepared:
-        full_context_first, full_first_telemetry = (
-            await evaluate_structured_work_request(
-                client,
-                current_request,
-                provider_payload_override=full_history_payload,
-            )
+        (
+            full_context_first,
+            full_first_telemetry,
+        ) = await evaluate_structured_work_request(
+            client,
+            current_request,
+            provider_payload_override=full_history_payload,
         )
         model_calls += 1
-        full_context_second, full_second_telemetry = (
-            await evaluate_structured_work_request(
-                client,
-                current_request,
-                provider_payload_override=full_history_payload,
-            )
+        (
+            full_context_second,
+            full_second_telemetry,
+        ) = await evaluate_structured_work_request(
+            client,
+            current_request,
+            provider_payload_override=full_history_payload,
         )
         model_calls += 1
         baseline_comparison = compare_context_decisions(
@@ -1263,9 +1265,7 @@ async def _run_llmlingua_fixture_benchmark(
             "baseline_parameters_equal": baseline_comparison.parameters_equal,
             "baseline_goal_complete_equal": baseline_comparison.goal_complete_equal,
             "baseline_needs_owner_equal": baseline_comparison.needs_owner_equal,
-            "baseline_owner_question_equal": (
-                baseline_comparison.owner_question_equal
-            ),
+            "baseline_owner_question_equal": (baseline_comparison.owner_question_equal),
             "full_context_first_action": full_context_first.action,
             "full_context_second_action": full_context_second.action,
             "full_context_first_parameters": dict(full_context_first.parameters),
@@ -1297,9 +1297,7 @@ async def _run_llmlingua_fixture_benchmark(
             "full_history_request_digest": canonical_digest(full_history_payload),
             "compressed_request_digest": canonical_digest(compressed.payload),
             "full_context_first_usage": dict(full_first_telemetry.usage),
-            "full_context_first_usage_observed": (
-                full_first_telemetry.usage_observed
-            ),
+            "full_context_first_usage_observed": (full_first_telemetry.usage_observed),
             "full_context_first_latency_ms": round(
                 full_first_telemetry.latency_ms,
                 2,
@@ -1346,21 +1344,20 @@ async def _run_llmlingua_fixture_benchmark(
             )
             break
 
-        compressed_decision, compressed_telemetry = (
-            await evaluate_structured_work_request(
-                client,
-                current_request,
-                provider_payload_override=compressed.payload,
-            )
+        (
+            compressed_decision,
+            compressed_telemetry,
+        ) = await evaluate_structured_work_request(
+            client,
+            current_request,
+            provider_payload_override=compressed.payload,
         )
         model_calls += 1
         comparison = compare_context_decisions(
             full_context_first,
             compressed_decision,
         )
-        full_input_tokens = int(
-            full_first_telemetry.usage.get("input_tokens", 0) or 0
-        )
+        full_input_tokens = int(full_first_telemetry.usage.get("input_tokens", 0) or 0)
         compressed_input_tokens = int(
             compressed_telemetry.usage.get("input_tokens", 0) or 0
         )
@@ -1441,6 +1438,7 @@ async def _run_llmlingua_fixture_benchmark(
         "c6_apply_decision_equivalence_proven": False,
         "cases": results,
     }
+
 
 async def _run_decision_replay(
     *,
