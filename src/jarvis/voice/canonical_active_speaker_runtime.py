@@ -414,22 +414,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             ).pending_gate_ids()
             return gate_id not in pending
 
+        spoken_prompt = (
+            "Sir, I have finished planning the requested engineering change. "
+            "I need your approval before development can start. "
+            "Should I proceed? Please say yes or no."
+        )
         instructions = (
-            "JARVIS has proactively opened this voice interaction because one exact "
-            "EngineeringChange gate requires the owner's explicit approval or rejection. "
-            "The runtime has already bound this interaction to the exact gate; never ask "
-            "the owner to speak or remember an internal gate ID. Explain the proposal "
-            "concisely without adding facts, then ask a simple yes/no question. A clear "
-            "yes, approve, proceed, go ahead, or continue means approve this bound gate; "
-            "a clear no, reject, decline, stop, or cancel means reject it. Do not infer "
-            "a decision from silence or unrelated speech. When the owner clearly decides, "
-            "call decide_bound_change_gate. Pending review: " + normalized_question
+            "Say exactly the following approval question and nothing else: "
+            + spoken_prompt
         )
 
         try:
             await self._run_one_session_owned(
                 initial_instructions=instructions,
                 initial_prompt_label="engineering change approval prompt",
+                fallback_prompt_text=spoken_prompt,
                 session_tool_factory=session_tools,
                 completion_predicate=gate_resolved,
                 completion_label=f"engineering change gate {gate_id}",
