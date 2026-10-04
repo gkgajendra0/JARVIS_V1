@@ -356,3 +356,21 @@ than the current payload and the owner-machine strict decision/token gate passes
 This correction is important because the previously failing research fixture's exact
 owner goal was older than the current latest-12 window. The new A/B therefore tests
 whether compression can preserve that full decision story while still reducing tokens.
+
+
+## 2026-10-04 LLMLingua first owner result
+
+The first real owner-machine LLMLingua run proved local full-history compression and real
+provider-token savings, but rate `0.50` failed strict parameter equivalence.
+
+It reduced 102,333 full-history chars to 65,031 chars and reduced actual provider input
+tokens by 34.96%, but the compressed model decision omitted owner-governance action
+fields that were present in the full-history decision. Production remains OFF/SHADOW.
+
+The active next gate is now conservative compression, not more architecture expansion:
+the owner script locally sweeps from 0.95 downward and selects the least aggressive rate
+that makes full history at least 5% smaller than today's current payload. Only that one
+rate receives the bounded two-call model A/B.
+
+`JARVIS_WORK_PROMPT_COMPRESSION_RATE` is now configurable so a passing owner rate can
+later be reproduced exactly in runtime rather than falling back to the failed 0.50 rate.
