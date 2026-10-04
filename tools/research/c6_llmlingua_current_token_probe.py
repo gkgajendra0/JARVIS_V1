@@ -10,8 +10,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from tools.research import c6_context_owner_acceptance as c6
-from tools.research.c6_benchmark_corpus import build_c6_benchmark_cases
+if __package__:
+    from tools.research import c6_context_owner_acceptance as c6
+    from tools.research.c6_benchmark_corpus import build_c6_benchmark_cases
+else:
+    import c6_context_owner_acceptance as c6
+    from c6_benchmark_corpus import build_c6_benchmark_cases
 
 from jarvis.chatgpt_plan import CHATGPT_PLAN_PROVIDER_ID, ChatGPTPlanSessionManager
 from jarvis.engineering_substrate.canonical import canonical_digest
