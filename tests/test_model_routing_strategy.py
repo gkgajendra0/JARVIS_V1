@@ -55,7 +55,7 @@ def _request(
         work_id="work-1",
         task_kind=task_kind,
         strategy_key="engineering_stage",
-        strategy_version=1,
+        strategy_version=2,
         required_capabilities=("structured_output",),
         privacy_class=PrivacyClass.STANDARD,
         locality_requirement=LocalityRequirement.ANY,
