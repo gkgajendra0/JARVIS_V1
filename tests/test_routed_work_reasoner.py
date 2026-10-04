@@ -298,6 +298,7 @@ def _target(
     adapter_id: str = "fake",
     provider_id: str = "fake",
     model_id: str = "fake-model",
+    roles: tuple[str, ...] = ("efficient", "capable"),
     cost_profile: CostProfile | None = None,
 ) -> ModelTarget:
     return ModelTarget(
@@ -307,7 +308,7 @@ def _target(
         model_id=model_id,
         locality=ModelLocality.LOCAL,
         capabilities=("engineering_reasoning", "structured_output"),
-        roles=("efficient", "capable"),
+        roles=roles,
         max_context_tokens=32_000,
         supports_structured_output=True,
         supports_tools=False,
@@ -1063,6 +1064,78 @@ async def test_chatgpt_plan_subscription_limit_falls_back_to_paid_provider(
     ]
     assert attempts[0].failure_class == "quota_exhausted"
     assert attempts[1].failure_class is None
+
+
+@pytest.mark.asyncio
+async def test_chatgpt_plan_quota_does_not_fall_through_to_astra(
+    tmp_path: Path,
+) -> None:
+    class PlanAdapter(ReasoningAdapter):
+        adapter_id = "chatgpt_plan"
+
+    now = 1000.0
+    work_store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    routing_store = ModelRoutingStore(work_store)
+    adapter = PlanAdapter(
+        routing_store=routing_store,
+        error=ChatGPTPlanHTTPError(
+            "subscription_sharing_usage_limit_exceeded",
+            code="subscription_sharing_usage_limit_exceeded",
+        ),
+    )
+    adapters = ModelAdapterRegistry((adapter,))
+    targets = ModelTargetRegistry(
+        adapters,
+        (
+            _target(
+                "work.chatgpt_plan.default.capable",
+                adapter_id="chatgpt_plan",
+                provider_id="chatgpt_plan",
+                model_id="gpt-6-sol",
+                roles=("capable",),
+            ),
+            _target(
+                "work.chatgpt_plan.default.frontier",
+                adapter_id="chatgpt_plan",
+                provider_id="chatgpt_plan",
+                model_id="gpt-6-astra",
+                roles=("frontier",),
+            ),
+        ),
+    )
+    router = ModelRouter(
+        target_registry=targets,
+        adapter_registry=adapters,
+        strategy_registry=RoutingStrategyRegistry((EngineeringStageStrategy(),)),
+        routing_store=routing_store,
+        eligibility_policy=EligibilityPolicy(),
+        credential_available=lambda target: True,
+        clock=lambda: now,
+    )
+    circuits = BackgroundProviderCircuitRegistry(
+        path=tmp_path / "provider-circuits.json",
+        clock=lambda: now,
+    )
+    reasoner = RoutedWorkReasoner(
+        router=router,
+        invoker=ModelInvoker(adapters),
+        primary_target_id="work.chatgpt_plan.default.capable",
+        clock=lambda: now,
+        provider_circuit_registry=circuits,
+    )
+
+    with pytest.raises(RoutingResourceBlocked):
+        await reasoner.decide(_brain_request(_work(work_store)))
+
+    assert len(adapter.calls) == 1
+    circuit = circuits.circuit("chatgpt_plan:subscription")
+    assert circuit.allow_request() is False
+    attempts = routing_store.list_attempts_for_work(
+        work_store.list(limit=1)[0].work_id
+    )
+    assert len(attempts) == 1
+    assert attempts[0].model_id == "gpt-6-sol"
+    assert attempts[0].failure_class == "quota_exhausted"
 
 
 @pytest.mark.asyncio
