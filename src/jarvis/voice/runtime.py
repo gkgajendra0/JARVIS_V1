@@ -1211,6 +1211,7 @@ class VoiceRuntimeController:
                         prompt_handle,
                         label=initial_prompt_label,
                     )
+                    realtime_prompt_ok = True
                     assistant_turns = [
                         turn
                         for turn in bridge.conversation.turns
@@ -1218,9 +1219,7 @@ class VoiceRuntimeController:
                     ]
                     if assistant_turns:
                         rendered = assistant_turns[-1].text.strip().casefold()
-                        realtime_prompt_ok = bool(rendered) and not rendered.startswith(
-                            "<no speech>"
-                        )
+                        realtime_prompt_ok = not rendered.startswith("<no speech>")
                 except asyncio.CancelledError:
                     raise
                 except Exception:
