@@ -466,6 +466,42 @@ class _FakePayloadCompressor:
         )
 
 
+class _ReducedButNotBetterCompressor(_FakePayloadCompressor):
+    def compress_payload(self, payload):
+        self.calls += 1
+        self.source_step_counts.append(len(payload.get("recent_steps", [])))
+        compressed = copy.deepcopy(payload)
+        first = compressed["recent_steps"][0]["observation"]
+        first["summary"] = "compressed older evidence"
+        original_chars = self._chars(payload)
+        compressed_chars = self._chars(compressed)
+        return SimpleNamespace(
+            payload=compressed,
+            reduced=True,
+            original_chars=original_chars,
+            compressed_chars=compressed_chars,
+            estimated_original_tokens=max(1, (original_chars + 3) // 4),
+            estimated_compressed_tokens=max(1, (compressed_chars + 3) // 4),
+            reduction_percent=round(
+                (original_chars - compressed_chars) * 100.0 / original_chars,
+                2,
+            ),
+            compressed_strings=1,
+            latency_ms=1.0,
+        )
+
+
+class _MismatchedSizeTelemetryCompressor(_FakePayloadCompressor):
+    def compress_payload(self, payload):
+        result = super().compress_payload(payload)
+        return SimpleNamespace(
+            **{
+                **vars(result),
+                "compressed_chars": result.compressed_chars - 1,
+            }
+        )
+
+
 class _PayloadCapturingAdapter(ReasoningAdapter):
     def __init__(self) -> None:
         super().__init__()
@@ -549,6 +585,62 @@ async def test_routed_prompt_compression_failure_falls_back_to_legacy(
 
     assert decision.action == "do_step"
     assert compressor.calls == 1
+    assert compressor.source_step_counts == [2]
+    assert len(adapter.payloads) == 1
+    assert len(adapter.payloads[0]["recent_steps"]) == 1
+    assert "compression_probe" not in adapter.payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_routed_prompt_compression_apply_requires_beating_current_payload(
+    tmp_path: Path,
+) -> None:
+    compressor = _ReducedButNotBetterCompressor()
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode="apply",
+    )
+    work = WorkItem(
+        request="Research one bounded source.",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-compression-size-gate",
+        source_turn_id="turn-compression-size-gate",
+    )
+    work_store.create(work)
+
+    await reasoner.decide(_compression_request(work))
+
+    assert compressor.source_step_counts == [2]
+    assert len(adapter.payloads) == 1
+    assert len(adapter.payloads[0]["recent_steps"]) == 1
+    assert "compression_probe" not in adapter.payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_routed_prompt_compression_rejects_size_telemetry_mismatch(
+    tmp_path: Path,
+) -> None:
+    compressor = _MismatchedSizeTelemetryCompressor()
+    adapter = _PayloadCapturingAdapter()
+    work_store, _, reasoner, _ = _routed_reasoner(
+        tmp_path,
+        adapter=adapter,
+        prompt_compressor=compressor,
+        prompt_compression_mode="apply",
+    )
+    work = WorkItem(
+        request="Research one bounded source.",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-compression-telemetry",
+        source_turn_id="turn-compression-telemetry",
+    )
+    work_store.create(work)
+
+    await reasoner.decide(_compression_request(work))
+
     assert compressor.source_step_counts == [2]
     assert len(adapter.payloads) == 1
     assert len(adapter.payloads[0]["recent_steps"]) == 1
