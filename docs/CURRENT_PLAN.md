@@ -388,3 +388,18 @@ rate `0.80` missed today's payload size by only ~0.03%. The owner test now check
 at least 0.25%. Only that selected rate consumes the bounded two Astra calls.
 
 Do not weaken parameter equality. Production compression remains OFF.
+
+
+## 2026-10-04 baseline-stability gate
+
+Before spending more quota on fine-grained LLMLingua rates, the research fixture must
+prove exact same-input stability. The two previous owner runs produced different
+full-history parameter structures despite the same canonical full-history request.
+
+The LLMLingua live gate now calls the exact full-history request twice first. If any
+strict decision field differs, it stops after two calls and does not evaluate compressed
+context. Only a stable baseline is followed by one compressed-context call, for a maximum
+of three calls total.
+
+This gate takes precedence over rate tuning. Do not interpret another compression
+mismatch until `all_baselines_stable=true`.
