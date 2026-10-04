@@ -59,6 +59,7 @@ class WorkAgentTools:
         *,
         bound_owner_input_work_id: str | None = None,
         on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
+        bound_change_gate_id: str | None = None,
         allow_capability_acquisition: bool = True,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
@@ -66,10 +67,12 @@ class WorkAgentTools:
         if not isinstance(conversation, ConversationSession):
             raise TypeError("conversation must be a ConversationSession")
         normalized_bound_work_id = str(bound_owner_input_work_id or "").strip() or None
+        normalized_bound_gate_id = str(bound_change_gate_id or "").strip() or None
         self._runtime = runtime
         self._conversation = conversation
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
+        self._bound_change_gate_id = normalized_bound_gate_id
         if not isinstance(allow_capability_acquisition, bool):
             raise TypeError("allow_capability_acquisition must be bool")
         self._allow_capability_acquisition = allow_capability_acquisition
@@ -99,6 +102,8 @@ class WorkAgentTools:
             self.decide_change_gate,
             self.get_engineering_change_status,
         ]
+        if self._bound_change_gate_id is not None:
+            tools.append(self.decide_bound_change_gate)
         if self._allow_capability_acquisition:
             tools.append(self.start_capability_acquisition)
         return tools
@@ -548,6 +553,37 @@ class WorkAgentTools:
         del context
         decision = await asyncio.to_thread(
             self._change_service().decide_latest, gate_id
+        )
+        return {
+            "ok": True,
+            "change_id": decision.challenge.change_id,
+            "gate_id": gate_id,
+            "approved": decision.approved,
+            "state": self._runtime.changes.store.require(
+                decision.challenge.change_id
+            ).state.value,
+        }
+
+    @function_tool()
+    async def decide_bound_change_gate(
+        self,
+        context: RunContext,
+    ) -> dict[str, object]:
+        """Resolve the exact gate bound by the proactive owner-approval session.
+
+        The gate identity is supplied by the trusted runtime, never by the model or
+        spoken transcript. The ChangeService still validates the latest canonical
+        USER turn and performs strong owner verification before any decision is stored.
+        """
+
+        del context
+        gate_id = self._bound_change_gate_id
+        if gate_id is None:
+            return {"ok": False, "status": "bound_change_gate_unavailable"}
+        decision = await asyncio.to_thread(
+            self._change_service().decide_latest,
+            gate_id,
+            allow_bound_decision=True,
         )
         return {
             "ok": True,
