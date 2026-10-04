@@ -840,3 +840,52 @@ Tooling:
 
 This one-call probe cannot execute Work, mutate routing, enable paid fallback, update the
 provider circuit, or automatically promote C6 APPLY.
+
+
+## Promotion-design checkpoint — 2026-10-04
+
+The successful `3749bcea09556ea48ccbbcf6c2688eb67e0588c1` LLMLingua proof is now
+followed by a dedicated promotion contract:
+
+- `JARVIS_C6_PROMOTION_PLAN.md`.
+
+The promotion decision is deliberately not "fixture PASS -> global APPLY". The accepted
+release-engineering pattern is progressive exposure with explicit health/rollback gates.
+For Jarvis the first serving canary remains RESEARCH-only; DEVELOPMENT/CODING requires
+separate evidence.
+
+The one-call current-production token probe has also been hardened so the saved PASS
+cannot be compared under silently changed reasoning/runtime code. It now verifies the
+working-tree Git blob identities for the accepted Work reasoner, prompt compressor,
+ChatGPT-plan/provider adapter, canonical digest implementation, benchmark corpus and C6
+owner-acceptance harness before making the single model call.
+
+This matters because the accepted PASS report predates the current-token probe and did
+not itself persist the Work reasoning-contract digest inside the LLMLingua benchmark
+case. The critical runtime files are unchanged between the accepted head and the current
+probe implementation, and the new probe now fails closed if that ceases to be true.
+
+### Shadow-latency finding
+
+Current `PromptCompressionMode.SHADOW` is output-safe but not latency-neutral:
+`RoutedWorkReasoner._provider_payload()` awaits local LLMLingua compression and then
+sends the unchanged current provider payload. The accepted owner run observed roughly
+16.1 seconds of CPU compression latency.
+
+Therefore do not enable a sustained interactive SHADOW soak merely to collect telemetry.
+Before that stage, either make shadow compression non-serving/asynchronous or use a
+separate bounded diagnostic harness. Production prompt compression remains OFF.
+
+### Immediate C6 gate
+
+The next paid/model action is still exactly one call:
+
+`tools/research/c6_llmlingua_current_token_probe.ps1`
+
+using the saved accepted report
+`jarvis_c6_llmlingua_live_3749bcea.json`.
+
+That probe must prove accepted compressed-full-history provider input tokens are lower
+than today's exact current-production provider input tokens. The result is necessary but
+not sufficient for canary promotion; measured local latency and broader representative
+semantic evidence remain separate gates.
