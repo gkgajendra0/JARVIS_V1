@@ -1,6 +1,7 @@
 param(
     [string]$Model = "gpt-6-astra",
-    [double]$CompressionRate = 0.5,
+    [double]$CompressionRate = 0.0,
+    [double]$MinimumVsCurrentReductionPercent = 5.0,
     [ValidateSet("cpu", "cuda")]
     [string]$Device = "cpu",
     [switch]$SkipDependencyInstall,
@@ -37,7 +38,11 @@ $head = (git rev-parse HEAD).Trim()
 Write-Host "Branch : $branch"
 Write-Host "HEAD   : $head"
 Write-Host "Device : $Device"
-Write-Host "Rate   : $CompressionRate"
+if ($CompressionRate -gt 0) {
+    Write-Host "Rate   : $CompressionRate (explicit)"
+} else {
+    Write-Host "Rate   : auto-conservative"
+}
 Write-Host ""
 
 if (-not $SkipDependencyInstall) {
@@ -50,61 +55,131 @@ if (-not $SkipDependencyInstall) {
 }
 
 $short = $head.Substring(0, [Math]::Min(8, $head.Length))
-$preflightReport = Join-Path $env:TEMP "jarvis_c6_llmlingua_preflight_$short.json"
-$liveReport = Join-Path $env:TEMP "jarvis_c6_llmlingua_live_$short.json"
+$liveReport = Join-Path $env:TEMP ("jarvis_c6_llmlingua_live_" + $short + ".json")
 
-Write-Host "=== LOCAL ZERO-CHATGPT PREFLIGHT ==="
+Write-Host "=== LOCAL ZERO-CHATGPT CONSERVATIVE PREFLIGHT ==="
 Write-Host "The first run may download the pinned LLMLingua-2 model."
+Write-Host "This stage uses zero ChatGPT-plan calls."
 Write-Host ""
 
-$preflightArgs = @(
-    "--llmlingua-fixture-preflight",
-    "--llmlingua-rate", [string]$CompressionRate,
-    "--llmlingua-device", $Device,
-    "--llmlingua-case-id", $caseId
-)
-$preflightLines = & $python $benchmark @preflightArgs
-
-$preflightExit = $LASTEXITCODE
-$preflightText = $preflightLines -join [Environment]::NewLine
-$preflightText | Set-Content $preflightReport -Encoding UTF8
-
-if ($preflightExit -eq 1) {
-    throw "LLMLingua preflight failed to execute. See $preflightReport"
+if ($CompressionRate -gt 0) {
+    if ($CompressionRate -gt 1.0) {
+        throw "CompressionRate must be within (0, 1] or zero for auto mode."
+    }
+    $candidateRates = @([double]$CompressionRate)
+} else {
+    # LLMLingua rate is the retained fraction. Start with almost all prose retained
+    # and become more aggressive only until compressed full history is usefully
+    # smaller than today's provider payload.
+    $candidateRates = @(0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.60, 0.50)
 }
 
-$preflight = $preflightText | ConvertFrom-Json
-$pre = $preflight.llmlingua_fixture_preflight
+$selectedRate = $null
+$selectedPreflight = $null
+$selectedPre = $null
+$preflightReport = $null
+$preflightAttempts = @()
 
-if ($preflight.model_api_called -ne $false) {
-    throw "Preflight unexpectedly called ChatGPT."
-}
-if ($preflight.production_routing_mutated -ne $false) {
-    throw "Preflight unexpectedly changed production routing."
-}
-if ($pre.preflight_ready -ne $true) {
-    throw "LLMLingua preflight is not ready. See $preflightReport"
-}
-if ($pre.all_fixture_cases_reduced -ne $true) {
-    throw "LLMLingua did not reduce the selected full-history fixture."
-}
-if ($pre.all_full_history_payloads_beat_current -ne $true) {
-    throw "Compressed full history is not smaller than the current model payload."
-}
-if ($pre.actions_executed -ne $false) {
-    throw "Preflight unexpectedly executed a Work action."
-}
-if ($pre.paid_fallback_enabled -ne $false) {
-    throw "Preflight unexpectedly enabled paid fallback."
-}
-if ($pre.provider_circuit_updated -ne $false) {
-    throw "Preflight unexpectedly changed the provider circuit."
-}
-if ($pre.c6_apply_decision_equivalence_proven -ne $false) {
-    throw "Preflight must never promote C6 APPLY."
+foreach ($rate in $candidateRates) {
+    Write-Host ("--- Local preflight rate {0} ---" -f $rate)
+
+    $rateTag = ([string]$rate).Replace(".", "_")
+    $attemptReport = Join-Path $env:TEMP (
+        "jarvis_c6_llmlingua_preflight_" +
+        $short +
+        "_rate_" +
+        $rateTag +
+        ".json"
+    )
+
+    $preflightArgs = @(
+        "--llmlingua-fixture-preflight",
+        "--llmlingua-rate", [string]$rate,
+        "--llmlingua-device", $Device,
+        "--llmlingua-case-id", $caseId
+    )
+    $preflightLines = & $python $benchmark @preflightArgs
+
+    $preflightExit = $LASTEXITCODE
+    $preflightText = $preflightLines -join [Environment]::NewLine
+    $preflightText | Set-Content $attemptReport -Encoding UTF8
+
+    if ($preflightExit -eq 1) {
+        throw "LLMLingua preflight failed to execute. See $attemptReport"
+    }
+
+    $attempt = $preflightText | ConvertFrom-Json
+    $attemptPre = $attempt.llmlingua_fixture_preflight
+
+    if ($attempt.model_api_called -ne $false) {
+        throw "Preflight unexpectedly called ChatGPT."
+    }
+    if ($attempt.production_routing_mutated -ne $false) {
+        throw "Preflight unexpectedly changed production routing."
+    }
+    if ($attemptPre.actions_executed -ne $false) {
+        throw "Preflight unexpectedly executed a Work action."
+    }
+    if ($attemptPre.paid_fallback_enabled -ne $false) {
+        throw "Preflight unexpectedly enabled paid fallback."
+    }
+    if ($attemptPre.provider_circuit_updated -ne $false) {
+        throw "Preflight unexpectedly changed the provider circuit."
+    }
+    if ($attemptPre.c6_apply_decision_equivalence_proven -ne $false) {
+        throw "Preflight must never promote C6 APPLY."
+    }
+
+    $item = $attemptPre.planned_cases[0]
+    if ($null -eq $item) {
+        $vsCurrent = -100.0
+    } else {
+        $vsCurrent = [double]$item.compressed_vs_current_reduction_percent
+    }
+
+    $ready = (
+        $attemptPre.preflight_ready -eq $true -and
+        $attemptPre.all_fixture_cases_reduced -eq $true -and
+        $attemptPre.all_full_history_payloads_beat_current -eq $true
+    )
+
+    $preflightAttempts += [PSCustomObject]@{
+        rate = [double]$rate
+        ready = [bool]$ready
+        reduction_vs_current_percent = $vsCurrent
+        report = $attemptReport
+    }
+
+    Write-Host (
+        "ready={0} | vs-current={1}% | report={2}" -f
+        $ready, $vsCurrent, $attemptReport
+    )
+
+    if ($ready -and $vsCurrent -ge $MinimumVsCurrentReductionPercent) {
+        $selectedRate = [double]$rate
+        $selectedPreflight = $attempt
+        $selectedPre = $attemptPre
+        $preflightReport = $attemptReport
+        break
+    }
 }
 
+if ($null -eq $selectedRate) {
+    Write-Host ""
+    Write-Host "No conservative rate met the local compression target."
+    $preflightAttempts | Format-Table -AutoSize
+    throw (
+        "No LLMLingua rate beat today's payload by at least {0}%." -f
+        $MinimumVsCurrentReductionPercent
+    )
+}
+
+$preflight = $selectedPreflight
+$pre = $selectedPre
+
+Write-Host ""
 Write-Host "PREFLIGHT PASS - zero ChatGPT-plan calls."
+Write-Host "Selected rate    : $selectedRate"
 Write-Host "Library revision : $($pre.compressor_library_revision)"
 Write-Host "Model revision   : $($pre.compressor_model_revision)"
 Write-Host "Torch             : $($pre.runtime_dependency_versions.torch)"
@@ -116,6 +191,7 @@ if ($pre.runtime_dependency_versions.torch -notlike "2.13.0*") {
 if ($pre.runtime_dependency_versions.transformers -ne "5.16.1") {
     throw "Owner acceptance requires the approved transformers==5.16.1 runtime."
 }
+
 foreach ($item in $pre.planned_cases) {
     Write-Host ("Case             : {0}" -f $item.case_id)
     Write-Host ("History steps     : {0}" -f $item.full_history_steps)
@@ -125,7 +201,8 @@ foreach ($item in $pre.planned_cases) {
     Write-Host ("Compressed chars  : {0}" -f $item.compressed_chars)
     Write-Host ("Full reduction    : {0}%" -f $item.reduction_percent)
     Write-Host (
-        "Vs current         : {0}%" -f $item.compressed_vs_current_reduction_percent
+        "Vs current         : {0}%" -f
+        $item.compressed_vs_current_reduction_percent
     )
     Write-Host ("Candidate strings : {0}" -f $item.candidate_strings)
     Write-Host ("Compressed strings: {0}" -f $item.compressed_strings)
@@ -139,7 +216,7 @@ if ($SkipLiveBenchmark) {
     exit 0
 }
 
-Write-Host "=== LIVE LEGACY VS COMPRESSED PAIR ==="
+Write-Host "=== LIVE FULL-HISTORY VS COMPRESSED PAIR ==="
 Write-Host "Maximum ChatGPT-plan calls: TWO."
 Write-Host "No Work action is executed and production settings remain unchanged."
 Write-Host ""
@@ -147,7 +224,7 @@ Write-Host ""
 $liveArgs = @(
     "--llmlingua-fixture-benchmark",
     "--model", $Model,
-    "--llmlingua-rate", [string]$CompressionRate,
+    "--llmlingua-rate", [string]$selectedRate,
     "--llmlingua-device", $Device,
     "--llmlingua-case-id", $caseId
 )
@@ -192,6 +269,7 @@ Write-Host "================================================="
 Write-Host "C6 LLMLINGUA RESULT"
 Write-Host "================================================="
 Write-Host "case                       : $($case.case_id)"
+Write-Host "selected_compression_rate  : $selectedRate"
 Write-Host "equivalent                 : $($case.equivalent)"
 Write-Host "action_equal               : $($case.action_equal)"
 Write-Host "parameters_equal           : $($case.parameters_equal)"
@@ -227,6 +305,10 @@ if (
     exit 2
 }
 
-Write-Host "RESULT: PASS - compressed full history preserved strict semantics, beat the current payload size, and reduced real provider input tokens versus full history."
+Write-Host (
+    "RESULT: PASS - conservative compressed full history preserved strict " +
+    "semantics, beat the current payload size, and reduced real provider " +
+    "input tokens versus full history."
+)
 Write-Host "Production remains unchanged; this result is evidence only."
 exit 0
