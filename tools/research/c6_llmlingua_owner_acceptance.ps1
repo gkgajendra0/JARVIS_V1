@@ -13,6 +13,7 @@ $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $python = Join-Path $repo ".venv\Scripts\python.exe"
 $benchmark = Join-Path $repo "tools\research\c6_context_owner_acceptance.py"
+$dependencyProbe = Join-Path $repo "tools\research\c6_dependency_probe.py"
 $caseId = "research_requires_reresolution_after_new_evidence"
 
 Set-Location $repo
@@ -55,12 +56,13 @@ if (-not $SkipDependencyInstall) {
 } else {
     Write-Host "=== VERIFY LOCAL ACCEPTANCE DEPENDENCIES ==="
 
-    $jsonschemaVersion = & $python -c 'from importlib import metadata, util; print(metadata.version("jsonschema") if util.find_spec("jsonschema") else "")'
+    $dependencyLines = & $python $dependencyProbe
     if ($LASTEXITCODE -ne 0) {
-        throw "Could not inspect jsonschema in the JARVIS virtual environment."
+        throw "Could not inspect C6 dependencies in the JARVIS virtual environment."
     }
+    $dependency = (($dependencyLines -join [Environment]::NewLine) | ConvertFrom-Json)
+    $jsonschemaVersion = [string]$dependency.jsonschema_version
 
-    $jsonschemaVersion = ($jsonschemaVersion -join "").Trim()
     if ($jsonschemaVersion -ne "4.26.0") {
         Write-Host (
             "Installing lightweight required dependency jsonschema==4.26.0 " +
@@ -70,12 +72,20 @@ if (-not $SkipDependencyInstall) {
         if ($LASTEXITCODE -ne 0) {
             throw "Required jsonschema==4.26.0 installation failed."
         }
+
+        $dependencyLines = & $python $dependencyProbe
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not re-check C6 dependencies after jsonschema install."
+        }
+        $dependency = (($dependencyLines -join [Environment]::NewLine) | ConvertFrom-Json)
+        if ([string]$dependency.jsonschema_version -ne "4.26.0") {
+            throw "jsonschema==4.26.0 is still unavailable after installation."
+        }
     } else {
         Write-Host "jsonschema==4.26.0 already present."
     }
 
-    & $python -c "import llmlingua"
-    if ($LASTEXITCODE -ne 0) {
+    if ($dependency.llmlingua_available -ne $true) {
         throw (
             "LLMLingua is not installed in this virtual environment. " +
             "Rerun without -SkipDependencyInstall."
