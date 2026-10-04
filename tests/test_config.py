@@ -223,6 +223,10 @@ def test_invalid_live_context_environment_value_fails_truthfully(
         JarvisConfig.from_environment()
 
 
+
+def test_wake_threshold_default_restores_conservative_owner_setting() -> None:
+    assert JarvisConfig().wake_threshold == pytest.approx(0.82)
+
 def test_development_engine_requires_chatgpt_plan_and_model() -> None:
     assert JarvisConfig().development_engine_enabled is False
 
