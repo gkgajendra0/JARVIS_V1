@@ -55,6 +55,7 @@ if ($exitCode -eq 1) {
 
 $result = $text | ConvertFrom-Json
 
+if ($result.runtime_lineage_matches_owner_pass -ne $true) { throw "Current-payload probe runtime lineage does not match the accepted owner PASS." }
 if ($result.model_calls -ne 1) { throw "Current-payload probe did not use exactly one model call." }
 if ($result.actions_executed -ne $false) { throw "Probe unexpectedly executed a Work action." }
 if ($result.production_routing_mutated -ne $false) { throw "Probe unexpectedly changed production routing." }
@@ -65,6 +66,8 @@ if ($result.c6_apply_decision_equivalence_proven -ne $false) { throw "Token prob
 Write-Host "================================================="
 Write-Host "C6 CURRENT TOKEN RESULT"
 Write-Host "================================================="
+Write-Host "accepted_owner_commit              : $($result.accepted_owner_commit)"
+Write-Host "runtime_lineage_matches_owner_pass : $($result.runtime_lineage_matches_owner_pass)"
 Write-Host "case                               : $($result.case_id)"
 Write-Host "current_provider_input_tokens      : $($result.current_provider_input_tokens)"
 Write-Host "compressed_provider_input_tokens   : $($result.accepted_compressed_provider_input_tokens)"
