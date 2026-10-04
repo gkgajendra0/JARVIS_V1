@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jarvis.capability_acquisition.sdk_verification import (
+    AcquisitionVerifyPyPiSdkExecutor,
+)
 from jarvis.capability_acquisition.workflow import (
     AcquisitionFinalizeExecutor,
     AcquisitionInspectGoalExecutor,
@@ -136,6 +139,7 @@ def _research_actions() -> tuple[BrainAction, ...]:
         ResearchWorkExecutor.descriptor,
         AcquisitionInspectGoalExecutor.descriptor,
         AcquisitionRecordCandidateExecutor.descriptor,
+        AcquisitionVerifyPyPiSdkExecutor.descriptor,
         AcquisitionResolveExecutor.descriptor,
         AcquisitionFinalizeExecutor.descriptor,
     )
@@ -551,10 +555,10 @@ def _development_commit_case(
     )
 
 
-def _research_reresolve_case(
+def _research_finalize_case(
     assembler: WorkContextAssembler,
 ) -> C6BenchmarkCase:
-    work_id = "c6_bench_research_reresolve"
+    work_id = "c6_bench_research_finalize"
     steps: list[WorkStep] = [
         _complete(
             work_id,
@@ -575,16 +579,16 @@ def _research_reresolve_case(
         )
     ]
     index = 2
-    for number in range(9):
+    for number in range(12):
         steps.append(
             _complete(
                 work_id,
                 index,
                 "research_web",
-                f"Collected bounded current evidence source {number}.",
+                f"Collected bounded authoritative evidence source {number}.",
                 input_data={
                     "query": (
-                        "official local device control protocol SDK authentication "
+                        "official local device control protocol security architecture "
                         f"source {number}"
                     )
                 },
@@ -592,99 +596,55 @@ def _research_reresolve_case(
                     "provider": "benchmark",
                     "query": f"source-{number}",
                     "summary": (
-                        "Authoritative documentation describes a bounded local-control "
-                        "integration and the required pairing/security constraints. "
+                        "Authoritative documentation confirms the bounded capability "
+                        "requirements, local-only targeting, rollback expectations, "
+                        "and sandboxed verification constraints. "
                     )
-                    * 75,
+                    * 70,
                     "evidence_refs": [f"evidence-{number}"],
                 },
             )
         )
         index += 1
-    steps.extend(
-        (
-            _complete(
-                work_id,
-                index,
-                "acq_record_candidate",
-                "Recorded an unverified SDK candidate from research.",
-                input_data={
-                    "source_kind": "sdk_library",
-                    "source_identity": "example-device-sdk",
-                    "source_version": "2.4.1",
-                    "supported_operations": ["pair", "launch", "key_input"],
-                    "evidence_refs": ["evidence-2", "evidence-4"],
-                },
-                observation={
-                    "recorded": True,
-                    "trust_class": "unverified_candidate",
-                    "candidate_id": "candidate-sdk-241",
-                },
-            ),
-            _complete(
-                work_id,
-                index + 1,
-                "acq_resolve",
-                "Resolved the then-current trusted candidate set.",
-                observation={
-                    "resolved": True,
-                    "selected_candidate_id": "candidate-custom-build",
-                    "blocked_candidates": ["candidate-sdk-241"],
-                },
-            ),
-            _complete(
-                work_id,
-                index + 2,
-                "acq_finalize",
-                "Created the initial digest-bound acquisition plan.",
-                input_data={
-                    "proposed_capability_id": "device.control",
-                    "proposed_package_id": "device.control.custom",
-                    "proposed_package_version": "1.0.0",
-                    "rollback_summary": "Disable the package and revert the candidate release.",
-                },
-                observation={
-                    "finalized": True,
-                    "plan_id": "plan-initial",
-                    "plan_digest": "c" * 64,
-                },
-            ),
-            _complete(
-                work_id,
-                index + 3,
-                "research_web",
-                "Newer authoritative evidence appeared after finalization.",
-                input_data={
-                    "query": (
-                        "official package index example-device-sdk 2.4.1 signed release "
-                        "verification"
-                    )
-                },
-                observation={
-                    "provider": "benchmark",
-                    "summary": (
-                        "New authoritative evidence indicates the exact SDK version is "
-                        "verifiable and may allow reuse instead of custom build. "
-                    )
-                    * 85,
-                    "evidence_refs": ["evidence-new-authoritative"],
-                },
-            ),
+
+    steps.append(
+        _complete(
+            work_id,
+            index,
+            "acq_resolve",
+            "Resolved the current candidate set after the latest evidence.",
+            observation={
+                "resolved": True,
+                "selected_candidate_id": "candidate-custom-build",
+                "candidate_count": 1,
+                "blocked_candidate_count": 0,
+            },
         )
     )
+
     return C6BenchmarkCase(
-        case_id="research_requires_reresolution_after_new_evidence",
+        case_id="research_ready_for_digest_bound_finalize",
         rationale=(
-            "Research/acquisition loop where new authoritative evidence arrives after "
-            "a prior resolution/finalization, matching the repository's re-resolve "
-            "completion-guard behavior."
+            "Long capability-research history whose deterministic resolution is current, "
+            "so production control-plane bookkeeping is complete and the next step is a "
+            "genuinely model-owned digest-bound acq_finalize decision."
         ),
         request=_request(
             work_id=work_id,
             request_text=(
-                "Research the safest capability acquisition path, prefer reusable "
-                "trusted technology over custom build when evidence supports it, and "
-                "produce a digest-bound plan without granting trust from model text."
+                "The current deterministic acquisition resolution is up to date and "
+                "selected the bounded custom-build path. Do not gather more evidence or "
+                "re-resolve unless newer evidence exists. The next safe step is "
+                "acq_finalize. Use exactly these parameters and no additional fields: "
+                "proposed_capability_id='device.control'; "
+                "proposed_package_id='device.control.custom'; "
+                "proposed_package_version='1.0.0'; "
+                "rollback_summary='Disable device.control.custom and restore the prior "
+                "approved capability state.'; "
+                "changed_paths=['src/jarvis/capabilities/device_control.py']; "
+                "sandbox_profile_ids=['test.offline.v1']; "
+                "verification_contract_ids=['device-control-contract-test']; "
+                "development_test_targets=['tests/test_device_control.py']."
             ),
             work_type=WorkType.RESEARCH,
             steps=tuple(steps),
@@ -704,5 +664,5 @@ def build_c6_benchmark_cases(
     return (
         _development_repair_case(context_assembler),
         _development_commit_case(context_assembler),
-        _research_reresolve_case(context_assembler),
+        _research_finalize_case(context_assembler),
     )
