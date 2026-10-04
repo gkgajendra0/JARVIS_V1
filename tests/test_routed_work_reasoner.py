@@ -1124,15 +1124,14 @@ async def test_chatgpt_plan_quota_does_not_fall_through_to_astra(
         provider_circuit_registry=circuits,
     )
 
+    work = _work(work_store)
     with pytest.raises(RoutingResourceBlocked):
-        await reasoner.decide(_brain_request(_work(work_store)))
+        await reasoner.decide(_brain_request(work))
 
     assert len(adapter.calls) == 1
     circuit = circuits.circuit("chatgpt_plan:subscription")
     assert circuit.allow_request() is False
-    attempts = routing_store.list_attempts_for_work(
-        work_store.list(limit=1)[0].work_id
-    )
+    attempts = routing_store.list_attempts_for_work(work.work_id)
     assert len(attempts) == 1
     assert attempts[0].model_id == "gpt-6-sol"
     assert attempts[0].failure_class == "quota_exhausted"
