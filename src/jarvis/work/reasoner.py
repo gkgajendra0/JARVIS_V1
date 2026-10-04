@@ -285,7 +285,6 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
     return optimized if apply_optimized else legacy
 
 
-
 def _work_full_history_input_payload(request: BrainRequest) -> dict[str, Any]:
     """Build the legacy-shaped payload over the complete available Work history."""
 
