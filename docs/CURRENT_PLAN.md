@@ -403,3 +403,17 @@ of three calls total.
 
 This gate takes precedence over rate tuning. Do not interpret another compression
 mismatch until `all_baselines_stable=true`.
+
+
+## 2026-10-04 candidate-governance stabilization
+
+The same full-history research request failed A/A stability because
+`acq_record_candidate` exposed free-form governance fields to the model.
+
+The action contract is now narrowed so the model chooses source/version/operations/evidence
+only. JARVIS assigns the existing deterministic source-type verification contract and
+does not accept model-authored secret/network/device/discovery/owner-acceptance scope at
+the unverified-candidate step.
+
+This is now the prerequisite for the next LLMLingua owner run. Strict parameter equality
+remains unchanged; production prompt compression remains OFF.
