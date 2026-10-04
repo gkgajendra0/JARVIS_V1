@@ -477,3 +477,46 @@ Safety behavior:
 
 The runtime integration is code-complete but remains `off` by default. The owner-machine
 preflight and A/B decision test above are the admission gate before any setting change.
+
+
+## LLMLingua implementation candidate — 2026-10-04
+
+PR #252 now contains the compression-first implementation candidate. This is code/CI
+status only; owner-machine acceptance remains required before any production promotion.
+
+Implemented:
+
+- optional/lazy `LLMLingua2WorkPayloadCompressor` behind a JARVIS-owned protocol;
+- exact Microsoft LLMLingua source revision and exact reviewed model revision recorded in
+  dependency provenance;
+- local CPU-first compression with `trust_remote_code=False`;
+- first admission restricted to RESEARCH Work;
+- only long natural-language `summary/content/body/rationale/description` leaves are
+  compressible;
+- owner request, purpose, action catalog/schema, source/code `text`, paths, IDs,
+  digests, evidence refs, source identity/version and JSON/list structure remain exact;
+- malformed/empty/larger compressor output is rejected or discarded;
+- compressor failure falls back to the exact legacy provider payload;
+- independent `off/shadow/apply` prompt-compression mode, default `off`;
+- C6 hand-selected context and LLMLingua compression cannot both be APPLY until a
+  combined-path acceptance exists;
+- SHADOW computes compression but sends the exact legacy payload;
+- provider retries reuse one already-prepared payload rather than recompressing;
+- local compression has its own bounded resource lease;
+- benchmark seam compares the exact legacy payload against the locally compressed copy
+  while decision validation still uses the canonical BrainRequest;
+- strict action/parameter/completion/owner equivalence remains unchanged;
+- benchmark records actual provider input-token reduction as well as chars/estimated
+  tokens/compressor latency;
+- one-command Windows owner acceptance:
+  `tools/research/c6_llmlingua_owner_acceptance.ps1`.
+
+The first owner-machine live gate intentionally targets only
+`research_requires_reresolution_after_new_evidence`, the case that failed the hand-built
+ContextPack comparison. It performs a zero-ChatGPT local preflight first and, only when
+that succeeds, at most two ChatGPT-plan calls: one exact legacy request and one
+LLMLingua-compressed request.
+
+Passing that single pair is evidence to continue the compressor evaluation; it does not
+automatically enable `JARVIS_WORK_PROMPT_COMPRESSION_MODE=apply` and does not promote
+the older `JARVIS_WORK_CONTEXT_MODE=apply` switch.
