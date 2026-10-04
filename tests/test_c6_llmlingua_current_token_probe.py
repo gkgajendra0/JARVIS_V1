@@ -129,7 +129,7 @@ def test_current_token_probe_runtime_lineage_accepts_exact_blobs(
 
     def _fake_git(_repo_root, *args: str) -> str:
         if args[:1] == ("hash-object",):
-            requested = str(args[1]).replace("\\\\", "/")
+            requested = str(args[1]).replace("\\", "/")
             for relative_path, blob in expected.items():
                 if requested.endswith(relative_path):
                     return blob
@@ -155,7 +155,7 @@ def test_current_token_probe_runtime_lineage_rejects_drift(
 
     def _fake_git(_repo_root, *args: str) -> str:
         if args[:1] == ("hash-object",):
-            requested = str(args[1]).replace("\\\\", "/")
+            requested = str(args[1]).replace("\\", "/")
             if requested.endswith(first_path):
                 return "drifted"
             for relative_path, blob in expected.items():
