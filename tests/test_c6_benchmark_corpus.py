@@ -646,7 +646,6 @@ async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
     assert result["fixture_cases"] == 2
     assert result["equivalent_cases"] == 2
     assert result["mismatch_cases"] == 0
-    assert result["all_baselines_stable"] is True
     assert result["all_fixture_cases_equivalent"] is True
     assert result["all_provider_input_tokens_reduced"] is True
     assert result["c6_apply_decision_equivalence_proven"] is False
@@ -893,6 +892,7 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
     assert result["fixture_cases"] == 1
     assert result["equivalent_cases"] == 1
     assert result["mismatch_cases"] == 0
+    assert result["all_baselines_stable"] is True
     assert result["all_fixture_cases_equivalent"] is True
     assert result["all_provider_input_tokens_reduced"] is True
     assert result["c6_apply_decision_equivalence_proven"] is False
