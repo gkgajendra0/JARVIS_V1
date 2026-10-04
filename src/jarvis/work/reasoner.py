@@ -9,6 +9,7 @@ import logging
 import re
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -284,6 +285,19 @@ def _work_input_payload(request: BrainRequest) -> dict[str, Any]:
     return optimized if apply_optimized else legacy
 
 
+
+def _work_full_history_input_payload(request: BrainRequest) -> dict[str, Any]:
+    """Build the legacy-shaped payload over the complete available Work history."""
+
+    history = request.full_history_steps or request.recent_steps
+    full_request = replace(
+        request,
+        recent_steps=history,
+        context_mode=WorkContextMode.OFF,
+    )
+    return _work_input_payload(full_request)
+
+
 def _brain_decision(
     request: BrainRequest,
     parsed: _WorkDecisionModel,
@@ -449,15 +463,16 @@ class RoutedWorkReasoner:
         )
 
     async def _provider_payload(self, request: BrainRequest) -> dict[str, Any]:
-        legacy_payload = _work_input_payload(request)
+        current_payload = _work_input_payload(request)
         compressor = self._prompt_compressor
         if (
             self._prompt_compression_mode is PromptCompressionMode.OFF
             or compressor is None
             or request.work.work_type not in self._prompt_compression_work_types
         ):
-            return legacy_payload
+            return current_payload
 
+        compression_source = _work_full_history_input_payload(request)
         try:
             if self._resources is not None and self._prompt_compression_resource_keys:
                 async with self._resources.lease(
@@ -465,43 +480,62 @@ class RoutedWorkReasoner:
                 ):
                     result = await asyncio.to_thread(
                         compressor.compress_payload,
-                        legacy_payload,
+                        compression_source,
                     )
             else:
                 result = await asyncio.to_thread(
                     compressor.compress_payload,
-                    legacy_payload,
+                    compression_source,
                 )
         except PromptCompressionError as exc:
             LOGGER.warning(
-                "C6 local prompt compression unavailable; exact legacy payload retained: "
+                "C6 local prompt compression unavailable; exact current payload retained: "
                 "work_id=%s work_type=%s error=%s",
                 request.work.work_id,
                 request.work.work_type.value,
                 type(exc).__name__,
             )
-            return legacy_payload
+            return current_payload
 
+        current_chars = len(
+            json.dumps(
+                current_payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+                default=str,
+            )
+        )
+        current_estimated_tokens = max(1, (current_chars + 3) // 4)
+        beats_current_payload = (
+            result.reduced
+            and result.compressed_chars < current_chars
+            and result.estimated_compressed_tokens < current_estimated_tokens
+        )
         LOGGER.info(
             "C6 local prompt compression: work_id=%s work_type=%s mode=%s "
-            "reduced=%s original_chars=%s compressed_chars=%s reduction_percent=%s "
+            "full_history_steps=%s source_chars=%s current_chars=%s "
+            "compressed_chars=%s reduced=%s beats_current=%s reduction_percent=%s "
             "compressed_strings=%s latency_ms=%.2f",
             request.work.work_id,
             request.work.work_type.value,
             self._prompt_compression_mode.value,
-            result.reduced,
+            len(request.full_history_steps or request.recent_steps),
             result.original_chars,
+            current_chars,
             result.compressed_chars,
+            result.reduced,
+            beats_current_payload,
             result.reduction_percent,
             result.compressed_strings,
             result.latency_ms,
         )
         if (
             self._prompt_compression_mode is PromptCompressionMode.APPLY
-            and result.reduced
+            and beats_current_payload
         ):
             return result.payload
-        return legacy_payload
+        return current_payload
 
     def _provider_circuit(self, target):
         registry = self._provider_circuit_registry
