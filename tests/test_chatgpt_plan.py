@@ -315,6 +315,37 @@ def test_plan_enabled_work_pool_is_plan_only_without_explicit_paid_fallback() ->
     assert plan.cost_profile.output_usd_per_million_tokens == 0.0
 
 
+def test_plan_model_catalog_builds_efficient_capable_and_frontier_tiers() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            _DummyAdapter("chatgpt_plan"),
+            _DummyAdapter("gemini"),
+            _DummyAdapter("openai"),
+        )
+    )
+
+    targets = build_default_work_targets(
+        configured_provider="gemini",
+        configured_model=None,
+        adapter_registry=adapters,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-6-astra",
+        chatgpt_plan_available_models=(
+            "gpt-5.6-luna",
+            "gpt-5.6-sol",
+            "gpt-6-astra",
+        ),
+    )
+
+    assert targets.primary_target_id == CHATGPT_PLAN_TARGET_ID
+    efficient = targets.registry.for_role("efficient")
+    capable = targets.registry.for_role("capable")
+    frontier = targets.registry.for_role("frontier")
+    assert tuple(target.model_id for target in efficient) == ("gpt-5.6-luna",)
+    assert tuple(target.model_id for target in capable) == ("gpt-5.6-sol",)
+    assert tuple(target.model_id for target in frontier) == ("gpt-6-astra",)
+
+
 def test_legacy_work_pool_is_unchanged_when_plan_is_disabled() -> None:
     adapters = ModelAdapterRegistry(
         (
