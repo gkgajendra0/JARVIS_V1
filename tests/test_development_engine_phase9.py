@@ -343,6 +343,77 @@ def test_research_control_plane_does_not_loop_credential_retry_without_new_owner
     assert decision.action == "acq_resolve"
 
 
+def test_research_control_plane_owner_retry_replays_recovered_search_only_once() -> (
+    None
+):
+    work = WorkItem(
+        request="research capability",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session",
+        source_turn_id="turn",
+        work_id="work_research_control",
+    )
+    decider = Phase9ResearchControlPlaneDecider(FakeBuilder(_ticket()))
+    actions = (
+        BrainAction(name="acq_inspect_goal", description="inspect goal"),
+        BrainAction(name="research_web", description="research"),
+        BrainAction(name="acq_resolve", description="resolve"),
+    )
+    inspect = _completed_step(work.work_id, "acq_inspect_goal", {"goal": {}})
+    blocked = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="research",
+            input_data={"query": "television control sdk", "mode": "authoritative"},
+        )
+        .start()
+        .complete(
+            {
+                "ok": False,
+                "status": "research_unavailable",
+                "reason": "research_credentials_missing",
+            }
+        )
+    )
+    owner_retry = _completed_step(
+        work.work_id,
+        "owner_retry",
+        {"response": "Retry the failed TV capability acquisition."},
+    )
+
+    first = decider(work, actions, (inspect, blocked, owner_retry))
+
+    assert first is not None
+    assert first.action == "research_web"
+    assert first.parameters == {
+        "query": "television control sdk",
+        "mode": "authoritative",
+    }
+
+    retry = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="retry research",
+            input_data={"query": "television control sdk", "mode": "authoritative"},
+        )
+        .start()
+        .complete(
+            {
+                "ok": False,
+                "status": "insufficient_evidence",
+                "reason": "authoritative_source_not_observed",
+            }
+        )
+    )
+
+    second = decider(work, actions, (inspect, blocked, owner_retry, retry))
+
+    assert second is not None
+    assert second.action == "acq_resolve"
+
+
 def test_research_control_plane_retries_sdk_after_owner_configures_reviewed_uv() -> (
     None
 ):
@@ -380,6 +451,66 @@ def test_research_control_plane_retries_sdk_after_owner_configures_reviewed_uv()
     assert decision is not None
     assert decision.action == "acq_verify_pypi_sdk"
     assert decision.parameters == {"candidate_id": "candidate-sdk"}
+
+
+def test_research_control_plane_owner_retry_replays_uv_verification_only_once() -> (
+    None
+):
+    work = WorkItem(
+        request="research capability",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session",
+        source_turn_id="turn",
+        work_id="work_research_control",
+    )
+    decider = Phase9ResearchControlPlaneDecider(FakeBuilder(_ticket()))
+    actions = (
+        BrainAction(name="acq_inspect_goal", description="inspect goal"),
+        BrainAction(name="acq_verify_pypi_sdk", description="verify sdk"),
+        BrainAction(name="acq_resolve", description="resolve"),
+    )
+    inspect = _completed_step(work.work_id, "acq_inspect_goal", {"goal": {}})
+    blocked = _failed_step(
+        work.work_id,
+        "acq_verify_pypi_sdk",
+        error=(
+            "DependencyResourceUnavailable: reviewed uv runtime is not configured; "
+            "persist JARVIS_UV_EXECUTABLE_PATH and JARVIS_UV_EXECUTABLE_SHA256"
+        ),
+        input_data={"candidate_id": "candidate-sdk"},
+    )
+    owner_retry = _completed_step(
+        work.work_id,
+        "owner_retry",
+        {"response": "Retry the failed TV capability acquisition."},
+    )
+
+    first = decider(work, actions, (inspect, blocked, owner_retry))
+
+    assert first is not None
+    assert first.action == "acq_verify_pypi_sdk"
+    assert first.parameters == {"candidate_id": "candidate-sdk"}
+
+    verified = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="acq_verify_pypi_sdk",
+            summary="retry sdk verification",
+            input_data={"candidate_id": "candidate-sdk"},
+        )
+        .start()
+        .complete(
+            {
+                "verified": True,
+                "source_candidate_id": "candidate-sdk",
+            }
+        )
+    )
+
+    second = decider(work, actions, (inspect, blocked, owner_retry, verified))
+
+    assert second is not None
+    assert second.action == "acq_resolve"
 
 
 def test_research_control_plane_does_not_loop_uv_retry_without_new_owner_input() -> (
