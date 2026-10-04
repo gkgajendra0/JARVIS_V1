@@ -374,3 +374,17 @@ rate receives the bounded two-call model A/B.
 
 `JARVIS_WORK_PROMPT_COMPRESSION_RATE` is now configurable so a passing owner rate can
 later be reproduced exactly in runtime rather than falling back to the failed 0.50 rate.
+
+
+## 2026-10-04 LLMLingua second owner result
+
+Rate `0.75` reduced real provider input tokens by 16.05% versus the full-history
+baseline and produced a payload 5.02% smaller than today's current 12-step prompt, but
+strict parameter equivalence still failed.
+
+The active gate is now a fine local crossover search immediately below `0.80`, because
+rate `0.80` missed today's payload size by only ~0.03%. The owner test now checks
+0.795/0.790/0.785/... and selects the least aggressive rate that beats today's payload by
+at least 0.25%. Only that selected rate consumes the bounded two Astra calls.
+
+Do not weaken parameter equality. Production compression remains OFF.
