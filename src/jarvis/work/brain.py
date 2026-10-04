@@ -36,9 +36,9 @@ class BrainRequest:
     purpose: str
     allowed_actions: tuple[BrainAction, ...]
     evidence: tuple[dict[str, Any], ...] = field(default_factory=tuple)
-    full_history_steps: tuple[WorkStep, ...] = field(default_factory=tuple)
     context_pack: WorkContextPack | None = None
     context_mode: WorkContextMode = WorkContextMode.OFF
+    full_history_steps: tuple[WorkStep, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.purpose.strip():
