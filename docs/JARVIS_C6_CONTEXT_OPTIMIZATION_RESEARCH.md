@@ -553,3 +553,68 @@ eligible only when compressed full history is smaller than today's current paylo
 passes strict decision equivalence. This preserves more decision-relevant history without
 paying a token penalty. Production remains OFF/SHADOW until owner-machine evidence is
 accepted.
+
+
+## First LLMLingua owner result — 2026-10-04
+
+Owner-machine acceptance at exact head
+`30d08bae656e14a70a56b1e884c6f09c6f1c2135` proved the local compressor/runtime
+integration works, but the default 0.50 retained-rate was too aggressive for strict
+decision equivalence.
+
+Measured on `research_requires_reresolution_after_new_evidence`:
+
+- canonical full history: 14 steps / 102,333 serialized chars;
+- today's current provider window: 12 steps / 92,506 chars;
+- LLMLingua-2 at rate 0.50: 65,031 chars;
+- reduction vs full history: 36.45%;
+- reduction vs today's current payload: 29.70%;
+- actual provider input-token reduction vs full-history baseline: 34.96%;
+- local CPU compression latency: about 12.3 seconds;
+- action/completion/owner fields matched;
+- exact action parameters did not match.
+
+The full-history decision preserved owner constraints such as no broad network scanning
+and owner approval before activation. The compressed decision omitted those optional
+action fields and rephrased verification requirements. Therefore promotion correctly
+failed.
+
+Repository inspection confirms the compressor did **not** delete the owner constraint
+list: it only compresses sufficiently long prose keys such as
+`summary/content/body/rationale/description`; canonical constraint lists, IDs,
+versions, digests, schemas, requests and action parameters remain exact. The mismatch is
+therefore evidence that 0.50 token-level compression changed model decision behavior,
+not that JARVIS corrupted canonical state.
+
+### Revised admission strategy
+
+Do not optimize for maximum compression. Full history only needs enough reduction to
+beat today's current model payload.
+
+The owner acceptance now performs a zero-cloud conservative sweep:
+
+`0.95 -> 0.90 -> 0.85 -> 0.80 -> 0.75 -> 0.70 -> 0.60 -> 0.50`
+
+It selects the **least aggressive** rate that:
+
+1. reduces the complete full-history payload;
+2. remains smaller than today's current payload;
+3. beats today's payload by at least 5% serialized size.
+
+Only the selected rate is then sent to the strong model, using at most two ChatGPT-plan
+calls for the strict full-history-vs-compressed pair.
+
+This preserves the compression benefit while minimizing semantic disturbance. Runtime
+rate is now a first-class setting:
+`JARVIS_WORK_PROMPT_COMPRESSION_RATE`, defaulting conservatively to `0.8`.
+Production compression mode remains OFF and no rate is admitted until strict owner
+acceptance passes.
+
+### 512-token warning interpretation
+
+The owner run emitted a Transformers warning because one source string tokenized above
+the encoder's declared 512-token sequence length. The reviewed LLMLingua-2 implementation
+internally chunks each context before token-classification inference using its
+`max_seq_len=512` path; upstream v0.2.2 also contains the chunk-max-sequence fix.
+The warning is retained as observable diagnostic output, but the completed compression
+run is not evidence of a 1,575-token tensor being passed directly into the encoder.
