@@ -13,9 +13,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-from importlib import metadata
 import sys
 from dataclasses import replace
+from importlib import metadata
 
 if __package__:
     from tools.research.c6_benchmark_corpus import build_c6_benchmark_cases
