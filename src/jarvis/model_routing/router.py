@@ -181,7 +181,7 @@ def build_work_routing_request(
         work_id=request.work.work_id,
         task_kind=request.work.work_type.value,
         strategy_key="engineering_stage",
-        strategy_version=2,
+        strategy_version=1,
         required_capabilities=(
             "engineering_reasoning",
             "structured_output",
