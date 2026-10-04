@@ -235,6 +235,7 @@ def reconstruct_recorded_context_request(
         purpose=purpose,
         allowed_actions=tuple(actions),
         evidence=tuple(evidence),
+        full_history_steps=history,
         context_pack=context_pack,
         context_mode=WorkContextMode.APPLY,
     )
