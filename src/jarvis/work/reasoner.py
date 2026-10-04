@@ -12,6 +12,8 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError, ValidationError
 from pydantic import BaseModel, ConfigDict, Field
 
 from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
@@ -321,6 +323,23 @@ def _brain_decision(
     allowed = {action.name: action for action in request.allowed_actions}
     if decision.action is not None and decision.action not in allowed:
         raise ValueError("work reasoner selected an action outside the JARVIS catalog")
+    if decision.action is not None:
+        action = allowed[decision.action]
+        try:
+            Draft202012Validator.check_schema(action.parameter_schema)
+        except SchemaError as exc:
+            raise ValueError(
+                f"JARVIS action {decision.action!r} has an invalid parameter schema"
+            ) from exc
+        try:
+            Draft202012Validator(action.parameter_schema).validate(
+                decision.parameters
+            )
+        except ValidationError as exc:
+            raise ValueError(
+                "work reasoner returned parameters outside the selected "
+                f"JARVIS action schema: {decision.action}"
+            ) from exc
     return decision
 
 
