@@ -212,8 +212,9 @@ def test_research_control_plane_resolves_only_after_new_evidence() -> None:
     assert decider(work, actions, (inspect, evidence, resolved)) is None
 
 
-def test_research_control_plane_retries_exact_research_after_owner_credential_recovery(
-) -> None:
+def test_research_control_plane_retries_exact_research_after_owner_credential_recovery() -> (
+    None
+):
     work = WorkItem(
         request="research capability",
         work_type=WorkType.RESEARCH,
@@ -229,17 +230,21 @@ def test_research_control_plane_retries_exact_research_after_owner_credential_re
     )
     inspect = _completed_step(work.work_id, "acq_inspect_goal", {"goal": {}})
 
-    blocked = WorkStep(
-        work_id=work.work_id,
-        kind="research_web",
-        summary="research",
-        input_data={"query": "television control sdk", "mode": "current"},
-    ).start().complete(
-        {
-            "ok": False,
-            "status": "research_unavailable",
-            "reason": "research_credentials_missing",
-        }
+    blocked = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="research",
+            input_data={"query": "television control sdk", "mode": "current"},
+        )
+        .start()
+        .complete(
+            {
+                "ok": False,
+                "status": "research_unavailable",
+                "reason": "research_credentials_missing",
+            }
+        )
     )
     owner_input = _completed_step(
         work.work_id,
@@ -257,8 +262,9 @@ def test_research_control_plane_retries_exact_research_after_owner_credential_re
     }
 
 
-def test_research_control_plane_does_not_loop_credential_retry_without_new_owner_input(
-) -> None:
+def test_research_control_plane_does_not_loop_credential_retry_without_new_owner_input() -> (
+    None
+):
     work = WorkItem(
         request="research capability",
         work_type=WorkType.RESEARCH,
@@ -273,41 +279,52 @@ def test_research_control_plane_does_not_loop_credential_retry_without_new_owner
         BrainAction(name="acq_resolve", description="resolve"),
     )
     inspect = _completed_step(work.work_id, "acq_inspect_goal", {"goal": {}})
-    blocked = WorkStep(
-        work_id=work.work_id,
-        kind="research_web",
-        summary="research",
-        input_data={"query": "television control sdk", "mode": "current"},
-    ).start().complete(
-        {
-            "ok": False,
-            "status": "research_unavailable",
-            "reason": "research_credentials_missing",
-        }
+    blocked = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="research",
+            input_data={"query": "television control sdk", "mode": "current"},
+        )
+        .start()
+        .complete(
+            {
+                "ok": False,
+                "status": "research_unavailable",
+                "reason": "research_credentials_missing",
+            }
+        )
     )
     owner_input = _completed_step(
         work.work_id,
         "owner_input",
         {"response": "The EXA API key is configured now."},
     )
-    retry_still_blocked = WorkStep(
-        work_id=work.work_id,
-        kind="research_web",
-        summary="retry research",
-        input_data={"query": "television control sdk", "mode": "current"},
-    ).start().complete(
-        {
-            "ok": False,
-            "status": "research_unavailable",
-            "reason": "research_credentials_missing",
-        }
+    retry_still_blocked = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="research_web",
+            summary="retry research",
+            input_data={"query": "television control sdk", "mode": "current"},
+        )
+        .start()
+        .complete(
+            {
+                "ok": False,
+                "status": "research_unavailable",
+                "reason": "research_credentials_missing",
+            }
+        )
     )
 
-    assert decider(
+    decision = decider(
         work,
         actions,
         (inspect, blocked, owner_input, retry_still_blocked),
-    ) is None
+    )
+
+    assert decision is not None
+    assert decision.action == "acq_resolve"
 
 
 def test_research_control_plane_leaves_recorded_candidate_for_model_verifier_choice() -> (
