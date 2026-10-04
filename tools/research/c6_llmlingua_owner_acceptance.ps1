@@ -1,7 +1,7 @@
 param(
     [string]$Model = "gpt-6-astra",
     [double]$CompressionRate = 0.0,
-    [double]$MinimumVsCurrentReductionPercent = 5.0,
+    [double]$MinimumVsCurrentReductionPercent = 0.25,
     [ValidateSet("cpu", "cuda")]
     [string]$Device = "cpu",
     [switch]$SkipDependencyInstall,
@@ -71,7 +71,11 @@ if ($CompressionRate -gt 0) {
     # LLMLingua rate is the retained fraction. Start with almost all prose retained
     # and become more aggressive only until compressed full history is usefully
     # smaller than today's provider payload.
-    $candidateRates = @(0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.60, 0.50)
+    $candidateRates = @(
+        0.95, 0.90, 0.85, 0.80,
+        0.795, 0.79, 0.785, 0.78, 0.775, 0.77, 0.765, 0.76, 0.755, 0.75,
+        0.70, 0.60, 0.50
+    )
 }
 
 $selectedRate = $null
