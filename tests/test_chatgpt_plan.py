@@ -346,6 +346,32 @@ def test_plan_model_catalog_builds_efficient_capable_and_frontier_tiers() -> Non
     assert tuple(target.model_id for target in frontier) == ("gpt-6-astra",)
 
 
+def test_plan_model_catalog_without_luna_uses_capable_primary() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            _DummyAdapter("chatgpt_plan"),
+            _DummyAdapter("gemini"),
+            _DummyAdapter("openai"),
+        )
+    )
+
+    targets = build_default_work_targets(
+        configured_provider="gemini",
+        configured_model=None,
+        adapter_registry=adapters,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-6-astra",
+        chatgpt_plan_available_models=("gpt-6-sol", "gpt-6-astra"),
+    )
+
+    primary = targets.registry.require(targets.primary_target_id)
+    assert primary.model_id == "gpt-6-sol"
+    assert "capable" in primary.roles
+    assert tuple(target.model_id for target in targets.registry.for_role("frontier")) == (
+        "gpt-6-astra",
+    )
+
+
 def test_legacy_work_pool_is_unchanged_when_plan_is_disabled() -> None:
     adapters = ModelAdapterRegistry(
         (
