@@ -350,6 +350,8 @@ def build_default_work_targets(
         )
     if capable_model is not None and capable_model != efficient_model:
         capable_target_id = f"{CHATGPT_PLAN_TARGET_ID}.capable"
+        if not plan_targets:
+            primary_target_id = capable_target_id
         plan_targets.append(
             _plan_target(
                 target_id=capable_target_id,
@@ -357,13 +359,13 @@ def build_default_work_targets(
                 roles=("capable",),
             )
         )
-        if not plan_targets:
-            primary_target_id = capable_target_id
     if frontier_model is not None and frontier_model not in {
         efficient_model,
         capable_model,
     }:
         frontier_target_id = f"{CHATGPT_PLAN_TARGET_ID}.frontier"
+        if not plan_targets:
+            primary_target_id = frontier_target_id
         plan_targets.append(
             _plan_target(
                 target_id=frontier_target_id,
@@ -371,8 +373,6 @@ def build_default_work_targets(
                 roles=("frontier",),
             )
         )
-        if not plan_targets:
-            primary_target_id = frontier_target_id
 
     if not plan_targets:
         plan_targets.append(
