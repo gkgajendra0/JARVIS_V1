@@ -743,7 +743,7 @@ class WorkAgentTools:
         }
 
         active_changes: list[dict[str, object]] = []
-        coordinator = self._runtime.changes
+        coordinator = getattr(self._runtime, "changes", None)
         if coordinator is not None:
             for change_id in coordinator.store.active_ids():
                 change = coordinator.store.require(change_id)
@@ -752,7 +752,7 @@ class WorkAgentTools:
                     {
                         "change_id": change.change_id,
                         "state": change.state.value,
-                        "goal": change.goal,
+                        "request": change.request,
                         "pending_owner_approval": (
                             change.state.value == "waiting_owner_approval"
                         ),
