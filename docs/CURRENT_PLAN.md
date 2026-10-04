@@ -341,3 +341,18 @@ strict decision fields while reducing actual provider input tokens.
 
 Do not enable prompt-compression APPLY or reopen the deferred local coding-brain idea
 before this evidence is reviewed.
+
+
+## 2026-10-04 full-history compression correction
+
+The LLMLingua acceptance target is now explicitly **complete canonical RESEARCH history**,
+not merely compression of the existing latest-12 provider window.
+
+SHADOW keeps sending the exact current payload. The local compressor receives the complete
+available Work history only as an experiment/source view. A future APPLY may substitute
+the compressed full-history payload only when JARVIS independently proves it is smaller
+than the current payload and the owner-machine strict decision/token gate passes.
+
+This correction is important because the previously failing research fixture's exact
+owner goal was older than the current latest-12 window. The new A/B therefore tests
+whether compression can preserve that full decision story while still reducing tokens.
