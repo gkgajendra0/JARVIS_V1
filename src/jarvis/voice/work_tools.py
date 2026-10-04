@@ -601,7 +601,7 @@ class WorkAgentTools:
     ) -> dict[str, object]:
         """Read canonical change state and linked WorkItems for an engineering goal."""
         del context
-        coordinator = self._runtime.changes
+        coordinator = getattr(self._runtime, "changes", None)
         if coordinator is None:
             return {"ok": False, "status": "unavailable"}
         change = coordinator.store.require(change_id)
