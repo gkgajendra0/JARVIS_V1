@@ -762,10 +762,11 @@ registers `acq_verify_pypi_sdk`, and `acq_resolve` explicitly instructs exact-ve
 SDK candidates to be verified first, but the deterministic research controller
 previously jumped directly from new candidate evidence to `acq_resolve`.
 
-The controller now selects `acq_verify_pypi_sdk(candidate_id=...)` first when canonical
-history contains an exact-version unverified SDK candidate without matching completed
-verification evidence. After verification, the existing deterministic re-resolve rule
-runs. Non-exact SDK versions are not force-verified.
+The controller no longer auto-resolves immediately after `acq_record_candidate`.
+A recorded candidate is a model-owned staging point so the model can select the
+appropriate registered verifier when the evidence supports it. Jarvis does not infer
+that generic `sdk_library` means PyPI/Python. Once `acq_verify_pypi_sdk` produces
+canonical verification evidence, the existing deterministic re-resolve rule runs.
 
 The old re-resolve fixture is therefore retired from model-equivalence promotion
 evidence. Its prior runs remain useful diagnostics, but they do not prove or disprove
