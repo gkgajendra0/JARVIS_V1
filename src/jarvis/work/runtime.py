@@ -693,12 +693,28 @@ def build_work_runtime(
     adapter_registry = build_default_model_adapter_registry(
         chatgpt_plan_session_manager=chatgpt_plan_session,
     )
+    chatgpt_plan_available_models: tuple[str, ...] = ()
+    if (
+        chatgpt_plan_session is not None
+        and chatgpt_plan_session.is_connected()
+    ):
+        try:
+            chatgpt_plan_available_models = tuple(
+                item.slug for item in chatgpt_plan_session.list_models()
+            )
+        except Exception as exc:  # noqa: BLE001 - catalog failure keeps legacy route
+            LOGGER.warning(
+                "ChatGPT-plan model catalog unavailable; using configured single "
+                "model routing: %s",
+                type(exc).__name__,
+            )
     work_targets = build_default_work_targets(
         configured_provider=provider,
         configured_model=model,
         adapter_registry=adapter_registry,
         chatgpt_plan_enabled=chatgpt_plan_enabled,
         chatgpt_plan_model=chatgpt_plan_model,
+        chatgpt_plan_available_models=chatgpt_plan_available_models,
         paid_fallback_enabled=paid_fallback_enabled,
     )
     provider_circuits = provider_circuit_registry or BackgroundProviderCircuitRegistry()
@@ -856,12 +872,26 @@ def build_work_runtime(
             raise ValueError(
                 "DevelopmentEngine requires Sign in with ChatGPT to be enabled"
             )
-        development_model = str(
-            development_engine_model or chatgpt_plan_model or ""
-        ).strip()
+        development_model = str(development_engine_model or "").strip()
+        if not development_model:
+            capable_plan_targets = tuple(
+                target
+                for target in work_targets.registry.for_role("capable")
+                if target.provider_id == CHATGPT_PLAN_PROVIDER_ID
+            )
+            if capable_plan_targets:
+                development_model = capable_plan_targets[0].model_id
+            else:
+                primary_target = work_targets.registry.require(
+                    work_targets.primary_target_id
+                )
+                if primary_target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
+                    development_model = primary_target.model_id
+                else:
+                    development_model = str(chatgpt_plan_model or "").strip()
         if not development_model:
             raise ValueError(
-                "DevelopmentEngine requires an explicit ChatGPT-plan coding model"
+                "DevelopmentEngine requires an available ChatGPT-plan coding model"
             )
         development_sessions = DevelopmentSessionStore(store)
         development_specialist = CodexPlanDevelopmentEngine(
