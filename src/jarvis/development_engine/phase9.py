@@ -606,8 +606,7 @@ class Phase9ResearchControlPlaneDecider:
                 (
                     index
                     for index, step in enumerate(steps)
-                    if step.kind == "owner_input"
-                    and step.state.value == "completed"
+                    if step.kind == "owner_input" and step.state.value == "completed"
                 ),
                 default=-1,
             )
