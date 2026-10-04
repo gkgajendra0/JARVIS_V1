@@ -254,6 +254,28 @@ Historical experiments, old acceptance transcripts and superseded research remai
 **Start the JARVIS Cost Optimization interlude from Slice C0 in `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`. Do not purchase the ₹400–₹500 paid-brain experiment balance until the documented pre-credit gate passes. Preserve production SHADOW, existing Authority, accepted Phase-4 routing contracts and the deferred Phase-9 blind external lifecycle. Phase 11 remains next in the autonomous-engineering sequence after this bounded interlude unless the owner changes priority.**
 
 
+## 2026-10-04 D7 DevelopmentEngine owner-machine acceptance
+
+D7 is ACCEPTED on the owner Windows machine.
+
+Evidence from the real isolated DevelopmentEngine proof:
+
+- model: `gpt-5.6-sol`;
+- reviewed Codex SDK: `openai-codex==0.160.0`;
+- disposition: `completed`;
+- owner acceptance: `passed=true`;
+- one cloud DevelopmentEngine mission, six provider model turns and seven governed tool
+  calls;
+- Docker test evidence passed;
+- only the approved disposable path changed;
+- candidate commit was produced;
+- identical second execution reused the durable result without another cloud turn;
+- restart reconstruction reused the durable result before creating another Codex runtime;
+- protected JARVIS source revision and source tree remained unchanged/clean.
+
+D7 is no longer a blocker. The next milestone is D8 blind natural-goal capability
+acceptance. C6 remains PARKED/OFF and PR #252 remains draft/unmerged.
+
 ## 2026-10-04 active routing/C6 decision
 
 The owner has explicitly directed that JARVIS must not use Astra-class reasoning as the
