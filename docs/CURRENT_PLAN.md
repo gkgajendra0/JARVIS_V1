@@ -434,3 +434,27 @@ The active LLMLingua owner gate now targets
 `research_ready_for_digest_bound_finalize`: the canonical acquisition resolution is
 current and the next digest-bound `acq_finalize` decision is genuinely model-owned.
 Strict same-input stability remains mandatory before compressed context is evaluated.
+
+
+## 2026-10-04 LLMLingua semantic PASS
+
+The corrected model-routed owner gate PASSED at
+`3749bcea09556ea48ccbbcf6c2688eb67e0588c1`.
+
+`research_ready_for_digest_bound_finalize` produced a stable full-history A/A baseline
+and the rate-0.85 compressed full-history request produced the exact same action,
+parameters, completion state and owner state.
+
+Observed: 14 full-history steps, 12 current steps, 9.40% serialized reduction versus raw
+full history, 1.27% smaller serialized payload than today's current window, and 12.47%
+real provider input-token reduction versus raw full history. CPU compression took about
+16.1 seconds.
+
+Production prompt compression remains OFF. The active gate is now a one-call provider
+token probe that reuses the saved PASS report and measures accepted compressed-full-history
+tokens directly against today's current production payload. This avoids rerunning the
+already accepted three-call semantic proof.
+
+If compressed full history also beats current production in real provider input tokens,
+the next decision is deployment economics/canary design, including whether the extra full
+history is worth the measured local compression latency.
