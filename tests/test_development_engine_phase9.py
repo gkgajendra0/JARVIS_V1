@@ -423,11 +423,14 @@ def test_research_control_plane_does_not_loop_uv_retry_without_new_owner_input()
         input_data={"candidate_id": "candidate-sdk"},
     )
 
-    assert decider(
-        work,
-        actions,
-        (inspect, first_block, owner_input, retry_block),
-    ) is None
+    assert (
+        decider(
+            work,
+            actions,
+            (inspect, first_block, owner_input, retry_block),
+        )
+        is None
+    )
 
 
 def test_research_control_plane_leaves_recorded_candidate_for_model_verifier_choice() -> (
