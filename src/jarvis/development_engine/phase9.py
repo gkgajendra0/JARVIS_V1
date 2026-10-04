@@ -630,6 +630,42 @@ class Phase9ResearchControlPlaneDecider:
                         parameters=parameters,
                     )
 
+        verify_sdk = "acq_verify_pypi_sdk"
+        if verify_sdk in action_names:
+            latest_uv_block = max(
+                (
+                    index
+                    for index, step in enumerate(steps)
+                    if step.kind == verify_sdk
+                    and step.state.value == "failed"
+                    and "reviewed uv runtime is not configured"
+                    in str(step.error or "").casefold()
+                ),
+                default=-1,
+            )
+            latest_owner_input = max(
+                (
+                    index
+                    for index, step in enumerate(steps)
+                    if step.kind == "owner_input" and step.state.value == "completed"
+                ),
+                default=-1,
+            )
+            if latest_uv_block >= 0 and latest_owner_input > latest_uv_block:
+                blocked_step = steps[latest_uv_block]
+                candidate_id = str(
+                    blocked_step.input_data.get("candidate_id") or ""
+                ).strip()
+                if candidate_id:
+                    return BrainDecision(
+                        action=verify_sdk,
+                        summary=(
+                            "Retry the exact SDK verification after owner-configured "
+                            "reviewed uv runtime recovery."
+                        ),
+                        parameters={"candidate_id": candidate_id},
+                    )
+
         resolve = "acq_resolve"
         if resolve not in action_names:
             return None
