@@ -45,8 +45,8 @@ from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.prompt_compression import (
     DEFAULT_LLMLINGUA2_MODEL,
     DEFAULT_LLMLINGUA2_REVISION,
-    LLMLingua2WorkPayloadCompressor,
     REVIEWED_LLMLINGUA_LIBRARY_REVISION,
+    LLMLingua2WorkPayloadCompressor,
 )
 from jarvis.work.reasoner import (
     _work_input_payload,
