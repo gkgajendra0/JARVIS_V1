@@ -47,8 +47,8 @@ from jarvis.work.prompt_compression import PromptCompressionError
 from jarvis.work.reasoner import (
     _SYSTEM_PROMPT,
     RoutedWorkReasoner,
-    _WorkDecisionModel,
     _brain_decision,
+    _WorkDecisionModel,
     evaluate_structured_work_request,
 )
 from jarvis.work.resources import ResourceLeaseManager
