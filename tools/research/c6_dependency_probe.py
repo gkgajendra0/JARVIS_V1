@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.metadata as metadata
-import importlib.util as util
+from importlib import metadata, util
 import json
 
 
