@@ -8,8 +8,6 @@ deterministic EngineeringStageStrategy for routine, capable, and frontier cases.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
-
 from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
 from jarvis.config import JarvisConfig
 from jarvis.model_routing.invoker import build_default_model_adapter_registry
