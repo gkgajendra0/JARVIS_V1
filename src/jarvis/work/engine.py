@@ -981,6 +981,7 @@ class WorkEngine:
                             "choose the next bounded step for this JARVIS-owned work item"
                         ),
                         allowed_actions=actions,
+                        full_history_steps=steps,
                         context_pack=context_pack,
                         context_mode=self._context_mode,
                     )
