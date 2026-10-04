@@ -164,7 +164,7 @@ class JarvisConfig:
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
     wake_model_path: str | None = None
-    wake_threshold: float = 0.68
+    wake_threshold: float = 0.82
     wake_debounce_seconds: float = 2.0
     audio_input_device: str | None = None
     audio_output_device: str | None = None
@@ -685,7 +685,7 @@ class JarvisConfig:
             wake_model_path=_configured_optional_text(
                 "JARVIS_WAKE_MODEL_PATH", machine
             ),
-            wake_threshold=_configured_float("JARVIS_WAKE_THRESHOLD", 0.68, machine),
+            wake_threshold=_configured_float("JARVIS_WAKE_THRESHOLD", 0.82, machine),
             wake_debounce_seconds=_configured_float(
                 "JARVIS_WAKE_DEBOUNCE_SECONDS", 2.0, machine
             ),
