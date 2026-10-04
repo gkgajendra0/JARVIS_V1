@@ -458,3 +458,30 @@ already accepted three-call semantic proof.
 If compressed full history also beats current production in real provider input tokens,
 the next decision is deployment economics/canary design, including whether the extra full
 history is worth the measured local compression latency.
+
+
+## 2026-10-04 C6 promotion checkpoint
+
+C6 now has an explicit staged promotion design in
+`JARVIS_C6_PROMOTION_PLAN.md`.
+
+Current facts:
+
+- first valid model-owned LLMLingua semantic PASS remains bound to
+  `3749bcea09556ea48ccbbcf6c2688eb67e0588c1`;
+- production prompt compression remains OFF;
+- PR #252 remains draft/unmerged;
+- the current branch adds only admission/probe/docs/CI work after that accepted runtime;
+- the one-call current-production token probe is runtime-lineage guarded and is the next
+  owner-machine model action;
+- do not rerun the already passing three-call finalize fixture unless accepted runtime
+  lineage changes;
+- do not jump directly to global APPLY;
+- first serving exposure, if justified, is a bounded RESEARCH-only canary;
+- DEVELOPMENT/CODING compression requires separate acceptance;
+- sustained prompt-compression SHADOW is blocked until its current ~16-second
+  compression wait is removed from the serving path or isolated in a diagnostic harness.
+
+The next decision is economic/operational as well as semantic: measure real provider
+input-token savings versus today's current payload, then decide whether those savings
+justify local compression latency before investing in additional canary implementation.
