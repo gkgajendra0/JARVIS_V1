@@ -277,7 +277,7 @@ replaced by another router:
   blocks all subscription-backed tiers together rather than hopping models to evade the
   same allowance.
 
-The tier policy is `engineering_stage.v2`. Runtime startup reads the connected
+The tier policy remains the accepted `engineering_stage.v1` contract; its policy digest now captures the tiered behavior. Runtime startup reads the connected
 ChatGPT-plan model catalog and registers only tier models actually exposed to the owner
 account. If model-catalog discovery fails, JARVIS preserves the configured legacy model
 rather than inventing access.
