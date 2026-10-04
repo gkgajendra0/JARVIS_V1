@@ -590,24 +590,51 @@ async def test_proactive_prompt_suspends_initial_request_timeout_until_playout()
 
 
 @pytest.mark.asyncio
-async def test_wake_only_pause_gets_one_brief_realtime_acknowledgement(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_proactive_prompt_uses_local_fallback_for_explicit_no_speech() -> None:
+    session = FakeSession(auto_finish_replies=False)
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    local_speech = FakeLocalStatusSpeech()
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+        local_status_speech=local_speech,  # type: ignore[arg-type]
+    )
+
+    task = asyncio.create_task(
+        runtime._run_one_session(
+            initial_instructions="Ask exactly one approval question.",
+            initial_prompt_label="engineering change approval prompt",
+            fallback_prompt_text="Should I proceed? Please say yes or no.",
+        )
+    )
+    await session.started.wait()
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    conversation.accept_turn(
+        ConversationRole.ASSISTANT,
+        "<no speech>{pause}",
+    )
+    session.reply_release.set()
+
+    await asyncio.wait_for(local_speech.started.wait(), timeout=1)
+    assert local_speech.spoken == ["Should I proceed? Please say yes or no."]
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_wake_only_pause_stays_silent_until_owner_turn() -> None:
     runtime, session, _, audio, _ = runtime_with_session(initial_timeout=1)
-    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
 
     task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
     await session.started.wait()
-    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    await asyncio.sleep(0.05)
 
     assert audio.pre_roll_after_monotonic == 42.0
-    assert len(session.generated_replies) == 1
-    reply = session.generated_replies[0]
-    assert "invoked you and then paused" in reply["instructions"]
-    assert "exactly one very short, natural acknowledgement" in reply["instructions"]
-    assert "do not use or imitate a fixed phrase list" in reply["instructions"]
-    assert reply["allow_interruptions"] is True
-    assert reply["input_modality"] == "text"
+    assert session.generated_replies == []
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
@@ -633,10 +660,8 @@ async def test_immediate_owner_speech_suppresses_wake_acknowledgement(
 
 
 @pytest.mark.asyncio
-async def test_owner_speech_uses_native_barge_in_after_acknowledgement_started(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    session = FakeSession(auto_finish_replies=False)
+async def test_owner_speech_after_silent_wake_uses_no_programmatic_interrupt() -> None:
+    session = FakeSession()
     conversation = ConversationSession()
     bridge = _bridge(session, conversation)
     audio = FakeAudio()
@@ -645,20 +670,16 @@ async def test_owner_speech_uses_native_barge_in_after_acknowledgement_started(
         audio,  # type: ignore[arg-type]
         session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
     )
-    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
 
     task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=42.0))
     await session.started.wait()
-    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
 
     session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
     await asyncio.sleep(0)
 
-    # Server-side Gemini/LiveKit activity handling owns the interruption. JARVIS
-    # must not issue a second programmatic interrupt that can cancel the real turn.
+    assert session.generated_replies == []
     assert session.interrupt_calls == []
 
-    session.reply_release.set()
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
 
