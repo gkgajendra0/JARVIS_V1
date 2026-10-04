@@ -1292,6 +1292,11 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         threshold=config.wake_threshold,
         debounce_seconds=config.wake_debounce_seconds,
     )
+    LOGGER.info(
+        "Wake detector configured: decision_threshold=%.2f debounce_seconds=%.2f",
+        config.wake_threshold,
+        config.wake_debounce_seconds,
+    )
 
     owner_context_state: OwnerContextState | None = None
     evidence_observer = None
