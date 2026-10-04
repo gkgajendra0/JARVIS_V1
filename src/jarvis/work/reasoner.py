@@ -506,11 +506,33 @@ class RoutedWorkReasoner:
                 default=str,
             )
         )
+        actual_compressed_chars = len(
+            json.dumps(
+                result.payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+                default=str,
+            )
+        )
+        if actual_compressed_chars != result.compressed_chars:
+            LOGGER.warning(
+                "C6 compressor size telemetry mismatch; exact current payload retained: "
+                "work_id=%s reported_chars=%s actual_chars=%s",
+                request.work.work_id,
+                result.compressed_chars,
+                actual_compressed_chars,
+            )
+            return current_payload
         current_estimated_tokens = max(1, (current_chars + 3) // 4)
+        actual_compressed_estimated_tokens = max(
+            1,
+            (actual_compressed_chars + 3) // 4,
+        )
         beats_current_payload = (
             result.reduced
-            and result.compressed_chars < current_chars
-            and result.estimated_compressed_tokens < current_estimated_tokens
+            and actual_compressed_chars < current_chars
+            and actual_compressed_estimated_tokens < current_estimated_tokens
         )
         LOGGER.info(
             "C6 local prompt compression: work_id=%s work_type=%s mode=%s "
@@ -523,7 +545,7 @@ class RoutedWorkReasoner:
             len(request.full_history_steps or request.recent_steps),
             result.original_chars,
             current_chars,
-            result.compressed_chars,
+            actual_compressed_chars,
             result.reduced,
             beats_current_payload,
             result.reduction_percent,
