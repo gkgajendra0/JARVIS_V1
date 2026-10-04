@@ -42,7 +42,7 @@ _CASE_ID = "research_ready_for_digest_bound_finalize"
 def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(value, dict):
-        raise ValueError("evidence report must contain a JSON object")
+        raise TypeError("evidence report must contain a JSON object")
     return value
 
 
@@ -57,7 +57,7 @@ def _validated_prior_evidence(
         raise ValueError("prior LLMLingua evidence must have status PASS")
     benchmark = report.get("llmlingua_fixture_benchmark")
     if not isinstance(benchmark, dict):
-        raise ValueError("prior report is missing llmlingua_fixture_benchmark")
+        raise TypeError("prior report is missing llmlingua_fixture_benchmark")
     if benchmark.get("preflight_only") is not False:
         raise ValueError("prior evidence must be a live LLMLingua benchmark")
     if benchmark.get("all_baselines_stable") is not True:
@@ -200,7 +200,7 @@ async def _run_probe(
     current_input_tokens = int(telemetry.usage.get("input_tokens", 0) or 0)
     prior_usage = prior_case.get("compressed_usage")
     if not isinstance(prior_usage, dict):
-        raise ValueError("prior evidence is missing compressed provider usage")
+        raise TypeError("prior evidence is missing compressed provider usage")
     compressed_input_tokens = int(prior_usage.get("input_tokens", 0) or 0)
     if (
         not telemetry.usage_observed
