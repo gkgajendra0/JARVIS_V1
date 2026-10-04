@@ -193,17 +193,25 @@ class AcquisitionInspectGoalExecutor:
         }
 
 
+_UNVERIFIED_VERIFICATION_CONTRACT_BY_SOURCE_KIND = {
+    AcquisitionSourceKind.MCP: "mcp-tools-list-contract",
+    AcquisitionSourceKind.OPENAPI: "openapi-contract-test",
+    AcquisitionSourceKind.ASYNCAPI: "asyncapi-contract-test",
+    AcquisitionSourceKind.SDK_LIBRARY: "sdk-adapter-contract-test",
+}
+
+
 class AcquisitionRecordCandidateExecutor:
-    """Record research-discovered source metadata without assigning trust."""
+    """Record unverified source identity/evidence; JARVIS owns governance contracts."""
 
     descriptor = BrainAction(
         name="acq_record_candidate",
         description=(
-            "Record one research-discovered capability source candidate and its "
-            "proposed dependency/network/device/acceptance requirements. This action "
-            "always stores the source as UNVERIFIED; model text cannot grant trust. "
-            "For a Python sdk_library intended for PyPI verification, source_identity "
-            "must be the distribution name and source_version should be exact."
+            "Record one research-discovered reusable source as UNVERIFIED. Provide only "
+            "source identity/version, supported semantic operations, evidence refs, and "
+            "optional source digest/license metadata. JARVIS deterministically assigns "
+            "the source-type verification contract; model text cannot invent trust, "
+            "network/device/discovery scope, or owner-acceptance policy."
         ),
         parameter_schema={
             "type": "object",
@@ -237,37 +245,6 @@ class AcquisitionRecordCandidateExecutor:
                     "minItems": 1,
                     "maxItems": 50,
                 },
-                "verification_requirements": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "minItems": 1,
-                    "maxItems": 30,
-                },
-                "secret_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 240},
-                    "maxItems": 30,
-                },
-                "network_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "device_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "discovery_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "external_acceptance_requirements": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
                 "license_id": {
                     "type": ["string", "null"],
                     "maxLength": 240,
@@ -278,7 +255,6 @@ class AcquisitionRecordCandidateExecutor:
                 "source_identity",
                 "supported_operations",
                 "evidence_refs",
-                "verification_requirements",
             ],
             "additionalProperties": False,
         },
@@ -324,16 +300,9 @@ class AcquisitionRecordCandidateExecutor:
             supported_operations=tuple(parameters.get("supported_operations") or ()),
             strategy=strategy,
             evidence_refs=tuple(parameters.get("evidence_refs") or ()),
-            secret_scopes=tuple(parameters.get("secret_scopes") or ()),
-            network_scopes=tuple(parameters.get("network_scopes") or ()),
-            device_scopes=tuple(parameters.get("device_scopes") or ()),
-            discovery_scopes=tuple(parameters.get("discovery_scopes") or ()),
             license_id=parameters.get("license_id"),
-            verification_requirements=tuple(
-                parameters.get("verification_requirements") or ()
-            ),
-            external_acceptance_requirements=tuple(
-                parameters.get("external_acceptance_requirements") or ()
+            verification_requirements=(
+                _UNVERIFIED_VERIFICATION_CONTRACT_BY_SOURCE_KIND[source_kind],
             ),
             reason_codes=("research_discovered_unverified",),
         )
