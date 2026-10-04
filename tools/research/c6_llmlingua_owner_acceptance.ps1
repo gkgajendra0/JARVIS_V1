@@ -221,7 +221,8 @@ if ($SkipLiveBenchmark) {
 }
 
 Write-Host "=== LIVE FULL-HISTORY VS COMPRESSED PAIR ==="
-Write-Host "Maximum ChatGPT-plan calls: TWO."
+Write-Host "Maximum ChatGPT-plan calls: THREE."
+Write-Host "Calls 1-2 test identical full-history stability; compression is called only if stable."
 Write-Host "No Work action is executed and production settings remain unchanged."
 Write-Host ""
 
@@ -245,8 +246,8 @@ if ($liveExit -eq 1) {
 $live = $liveText | ConvertFrom-Json
 $bench = $live.llmlingua_fixture_benchmark
 
-if ($bench.model_calls -gt 2) {
-    throw "Benchmark unexpectedly used more than two model calls."
+if ($bench.model_calls -gt 3) {
+    throw "Benchmark unexpectedly used more than three model calls."
 }
 if ($bench.fixture_cases -ne 1) {
     throw "Expected exactly one research fixture pair."
@@ -274,6 +275,8 @@ Write-Host "C6 LLMLINGUA RESULT"
 Write-Host "================================================="
 Write-Host "case                       : $($case.case_id)"
 Write-Host "selected_compression_rate  : $selectedRate"
+Write-Host "baseline_stable            : $($case.baseline_stable)"
+Write-Host "compressed_evaluated       : $($case.compressed_evaluated)"
 Write-Host "equivalent                 : $($case.equivalent)"
 Write-Host "action_equal               : $($case.action_equal)"
 Write-Host "parameters_equal           : $($case.parameters_equal)"
@@ -290,22 +293,33 @@ Write-Host "provider_tokens_reduced    : $($case.provider_input_tokens_reduced)"
 Write-Host "provider_token_reduction % : $($case.provider_input_token_reduction_percent)"
 Write-Host "compression_latency_ms     : $($case.compression_latency_ms)"
 Write-Host ""
-Write-Host "Full-context parameters:"
-$case.full_context_parameters | ConvertTo-Json -Depth 20
-Write-Host "Compressed parameters:"
-$case.compressed_parameters | ConvertTo-Json -Depth 20
+Write-Host "Full-context first parameters:"
+$case.full_context_first_parameters | ConvertTo-Json -Depth 20
+Write-Host "Full-context second parameters:"
+$case.full_context_second_parameters | ConvertTo-Json -Depth 20
+if ($case.compressed_evaluated -eq $true) {
+    Write-Host "Compressed parameters:"
+    $case.compressed_parameters | ConvertTo-Json -Depth 20
+} else {
+    Write-Host "Compressed parameters: NOT EVALUATED because baseline was unstable."
+}
 Write-Host ""
 Write-Host "Live report: $liveReport"
 Write-Host ""
 
 if (
+    $bench.all_baselines_stable -ne $true -or
     $bench.all_fixture_cases_equivalent -ne $true -or
     $bench.all_full_history_payloads_beat_current -ne $true -or
     $bench.all_provider_input_tokens_reduced -ne $true -or
     $case.parameters_equal -ne $true -or
     $case.beats_current_payload -ne $true
 ) {
-    Write-Host "RESULT: INCOMPLETE - compressor is not eligible for promotion."
+    if ($bench.all_baselines_stable -ne $true) {
+        Write-Host "RESULT: INCOMPLETE - full-history baseline is not strictly stable; compression cannot be judged yet."
+    } else {
+        Write-Host "RESULT: INCOMPLETE - compressor is not eligible for promotion."
+    }
     exit 2
 }
 
