@@ -72,6 +72,78 @@ async def test_active_work_status_surfaces_recent_failure_when_none_remains_acti
 
 
 @pytest.mark.asyncio
+async def test_status_reports_active_parent_change_after_child_work_completed(
+    tmp_path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = WorkItem(
+        request="Acquire TV media control",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-tv",
+        source_turn_id="turn-tv",
+    )
+    store.create(item)
+    running = store.save(
+        item.transition(WorkState.RUNNING, status_detail="researching"),
+        expected_version=item.version,
+    )
+    completed = store.save(
+        running.transition(
+            WorkState.COMPLETED,
+            status_detail="research complete",
+            result={"ok": True},
+        ),
+        expected_version=running.version,
+    )
+
+    change = SimpleNamespace(
+        change_id="change_tv",
+        state=SimpleNamespace(value="waiting_owner_approval"),
+        goal="Acquire TV media control",
+    )
+    stage = SimpleNamespace(stage_key="research", work_id=completed.work_id)
+    change_store = SimpleNamespace(
+        active_ids=lambda: ("change_tv",),
+        require=lambda change_id: change,
+        list_stages=lambda change_id: (stage,),
+        work=store,
+    )
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.orchestrator = SimpleNamespace(list_active=lambda *, limit: ())
+    runtime.changes = SimpleNamespace(store=change_store)
+    runtime._owner_work_focus_id = None
+
+    conversation = ConversationSession()
+    conversation.start()
+    tools = WorkAgentTools(runtime, conversation)
+
+    result = await tools.list_background_work(None)  # type: ignore[arg-type]
+
+    assert result["work"] == []
+    assert "recent_terminal_work" not in result
+    changes = result["active_engineering_changes"]
+    assert isinstance(changes, list)
+    assert changes == [
+        {
+            "change_id": "change_tv",
+            "state": "waiting_owner_approval",
+            "goal": "Acquire TV media control",
+            "pending_owner_approval": True,
+            "stages": [
+                {
+                    "stage": "research",
+                    "work_id": completed.work_id,
+                    "work_state": "completed",
+                }
+            ],
+        }
+    ]
+    assert "parent engineering work is still active" in str(result["truth_note"])
+
+
+@pytest.mark.asyncio
 async def test_status_focus_survives_new_voice_session_and_binds_deictic_retry(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
