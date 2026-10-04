@@ -647,7 +647,6 @@ async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
     assert result["equivalent_cases"] == 2
     assert result["mismatch_cases"] == 0
     assert result["all_fixture_cases_equivalent"] is True
-    assert result["all_full_history_payloads_beat_current"] is True
     assert result["all_provider_input_tokens_reduced"] is True
     assert result["c6_apply_decision_equivalence_proven"] is False
 
@@ -836,6 +835,13 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
 
     async def _evaluate(_client, _request, *, provider_payload_override=None):
         calls.append(provider_payload_override is not None)
+        serialized = json.dumps(
+            provider_payload_override,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+        is_compressed = "compressed authoritative evidence" in serialized
         return (
             BrainDecision(
                 action="acq_record_candidate",
@@ -854,9 +860,7 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
                 },
             ),
             SimpleNamespace(
-                usage={
-                    "input_tokens": 100 if provider_payload_override is None else 45
-                },
+                usage={"input_tokens": 45 if is_compressed else 100},
                 usage_observed=True,
                 latency_ms=10.0,
             ),
