@@ -646,6 +646,7 @@ async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
     assert result["fixture_cases"] == 2
     assert result["equivalent_cases"] == 2
     assert result["mismatch_cases"] == 0
+    assert result["all_baselines_stable"] is True
     assert result["all_fixture_cases_equivalent"] is True
     assert result["all_provider_input_tokens_reduced"] is True
     assert result["c6_apply_decision_equivalence_proven"] is False
@@ -887,8 +888,8 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
         compressor_factory=_FakeCompressor,
     )
 
-    assert calls == [True, True]
-    assert result["model_calls"] == 2
+    assert calls == [True, True, True]
+    assert result["model_calls"] == 3
     assert result["fixture_cases"] == 1
     assert result["equivalent_cases"] == 1
     assert result["mismatch_cases"] == 0
@@ -901,5 +902,87 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
         result["cases"][0]["full_history_steps"]
         > result["cases"][0]["current_recent_steps"]
     )
+    assert result["cases"][0]["baseline_stable"] is True
+    assert result["cases"][0]["compressed_evaluated"] is True
     assert result["cases"][0]["beats_current_payload"] is True
     assert result["cases"][0]["provider_input_tokens_reduced"] is True
+
+
+@pytest.mark.asyncio
+async def test_c6_llmlingua_live_stops_when_full_history_baseline_is_unstable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Circuit:
+        remaining_seconds = 0.0
+
+        def allow_request(self):
+            return True
+
+    class _CircuitRegistry:
+        def circuit(self, _key):
+            return _Circuit()
+
+    class _Plan:
+        def is_connected(self):
+            return True
+
+        def list_models(self):
+            return (SimpleNamespace(slug="reviewed-model"),)
+
+    monkeypatch.setattr(c6, "BackgroundProviderCircuitRegistry", _CircuitRegistry)
+    monkeypatch.setattr(c6, "ChatGPTPlanSessionManager", _Plan)
+    monkeypatch.setattr(
+        c6,
+        "build_chatgpt_plan_structured_output_client",
+        lambda **_kwargs: object(),
+    )
+
+    calls = 0
+
+    async def _evaluate(_client, _request, *, provider_payload_override=None):
+        nonlocal calls
+        calls += 1
+        assert provider_payload_override is not None
+        return (
+            BrainDecision(
+                action="acq_record_candidate",
+                summary="Baseline research decision",
+                parameters={
+                    "source_kind": "sdk_library",
+                    "source_identity": "example-device-sdk",
+                    "source_version": "2.4.1",
+                    "verification_requirements": [
+                        "verify exact artifact",
+                        f"baseline-variant-{calls}",
+                    ],
+                },
+            ),
+            SimpleNamespace(
+                usage={"input_tokens": 100},
+                usage_observed=True,
+                latency_ms=10.0,
+            ),
+        )
+
+    monkeypatch.setattr(c6, "evaluate_structured_work_request", _evaluate)
+
+    result = await c6._run_llmlingua_fixture_benchmark(
+        model="reviewed-model",
+        compressor_model="fake-compressor",
+        compression_rate=0.5,
+        device_map="cpu",
+        case_ids=("research_requires_reresolution_after_new_evidence",),
+        preflight_only=False,
+        compressor_factory=_FakeCompressor,
+    )
+
+    assert calls == 2
+    assert result["model_calls"] == 2
+    assert result["fixture_cases"] == 1
+    assert result["all_baselines_stable"] is False
+    assert result["all_fixture_cases_equivalent"] is False
+    assert result["all_provider_input_tokens_reduced"] is False
+    assert result["cases"][0]["baseline_stable"] is False
+    assert result["cases"][0]["baseline_parameters_equal"] is False
+    assert result["cases"][0]["compressed_evaluated"] is False
+    assert result["cases"][0]["compressed_parameters"] is None
