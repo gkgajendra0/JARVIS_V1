@@ -424,9 +424,11 @@ remains unchanged; production prompt compression remains OFF.
 The previous LLMLingua owner fixture was exercising a Phase-9 state that production
 should handle through the deterministic research control plane, not Astra.
 
-Phase-9 now deterministically verifies an exact-version unverified PyPI SDK candidate
-before re-resolving. The old re-resolve fixture is retired from model-equivalence
-promotion evidence.
+Phase-9 now leaves the verifier choice model-owned after a candidate is recorded rather
+than auto-resolving immediately. This gives the registered verifier action a real chance
+to run without making the unsafe assumption that every generic SDK candidate is PyPI.
+Verified evidence still triggers deterministic re-resolution. The old re-resolve fixture
+is retired from model-equivalence promotion evidence.
 
 The active LLMLingua owner gate now targets
 `research_ready_for_digest_bound_finalize`: the canonical acquisition resolution is
