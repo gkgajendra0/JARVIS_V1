@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,16 @@ from jarvis.work.reasoner import (
 )
 
 _CASE_ID = "research_ready_for_digest_bound_finalize"
+_ACCEPTED_OWNER_COMMIT = "3749bcea09556ea48ccbbcf6c2688eb67e0588c1"
+_ACCEPTED_RUNTIME_BLOBS = {
+    "src/jarvis/work/reasoner.py": "32c197b55732729236ec9b93b408b4b69d7d2105",
+    "src/jarvis/work/prompt_compression.py": "5a879c95b709847b58af42652cbcabf164ba8002",
+    "src/jarvis/hands/provider_adapters.py": "131befe250983ace29b26043490649ee7ada48f2",
+    "src/jarvis/chatgpt_plan.py": "4bde709975eef39b0dadbc79362f2637a70acfe4",
+    "src/jarvis/engineering_substrate/canonical.py": "dc5dbe65cf662d0e8283548b2f62812ff9805f1c",
+    "tools/research/c6_benchmark_corpus.py": "d0cda8ea0e2b8313cf0fb4831af4c1758ab2b837",
+    "tools/research/c6_context_owner_acceptance.py": "1717f16e8707c215919fe9ac148b7940d8f9a49a",
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -48,6 +59,49 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _git_output(repo_root: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _validated_runtime_lineage() -> dict[str, Any]:
+    """Bind the one-call token comparison to the runtime that produced the PASS."""
+
+    repo_root = Path(__file__).resolve().parents[2]
+    mismatches: list[str] = []
+    actual_blobs: dict[str, str] = {}
+    for relative_path, expected_blob in _ACCEPTED_RUNTIME_BLOBS.items():
+        path = repo_root / relative_path
+        if not path.is_file():
+            mismatches.append(f"{relative_path}:missing")
+            continue
+        actual_blob = _git_output(repo_root, "hash-object", str(path))
+        actual_blobs[relative_path] = actual_blob
+        if actual_blob != expected_blob:
+            mismatches.append(
+                f"{relative_path}:expected={expected_blob}:actual={actual_blob}"
+            )
+    if mismatches:
+        raise ValueError(
+            "C6 accepted runtime lineage drifted since owner PASS: "
+            + "; ".join(mismatches)
+        )
+
+    return {
+        "accepted_owner_commit": _ACCEPTED_OWNER_COMMIT,
+        "current_head": _git_output(repo_root, "rev-parse", "HEAD"),
+        "accepted_runtime_blobs": dict(_ACCEPTED_RUNTIME_BLOBS),
+        "actual_runtime_blobs": actual_blobs,
+        "runtime_lineage_matches_owner_pass": True,
+    }
 
 
 def _validated_prior_evidence(
@@ -152,6 +206,7 @@ async def _run_probe(
     evidence_report: Path,
     model_override: str | None,
 ) -> dict[str, Any]:
+    lineage = _validated_runtime_lineage()
     report = _read_json(evidence_report)
     benchmark, prior_case = _validated_prior_evidence(report)
     current_request, current_payload, _compressed_payload = _rebuild_payloads(
@@ -231,6 +286,7 @@ async def _run_probe(
 
     return {
         "status": "PASS" if compressed_beats_current else "INCOMPLETE",
+        **lineage,
         "evidence_report": str(evidence_report),
         "evidence_report_sha256": _sha256_file(evidence_report),
         "model": model,
