@@ -618,3 +618,40 @@ internally chunks each context before token-classification inference using its
 `max_seq_len=512` path; upstream v0.2.2 also contains the chunk-max-sequence fix.
 The warning is retained as observable diagnostic output, but the completed compression
 run is not evidence of a 1,575-token tensor being passed directly into the encoder.
+
+
+## Second LLMLingua owner result — 2026-10-04
+
+The conservative auto-selection run chose rate `0.75`, the first coarse rate that
+made compressed full history at least 5% smaller than today's current provider payload.
+
+Observed:
+
+- full canonical history: 14 steps / 102,333 chars;
+- current provider window: 12 steps / 92,506 chars;
+- rate 0.75 compressed full history: 87,860 chars;
+- reduction vs full history: 14.14%;
+- reduction vs current payload: 5.02%;
+- actual provider input-token reduction vs full-history baseline: 16.05%;
+- strict action equality: PASS;
+- strict goal/owner-state equality: PASS;
+- strict parameter equality: FAIL.
+
+The mismatch is narrower than the 0.50 run. Both outputs retain the same evidence refs,
+source identity/kind/version, supported operations and the same underlying verification
+intent. However, the full-history decision emitted an explicit
+`external_acceptance_requirements` field while the compressed decision incorporated
+owner approval into a verification requirement instead. Because C6 admission requires
+exact parameter equality, this remains a valid failure and APPLY stays blocked.
+
+### Fine-grained crossover strategy
+
+The zero-cloud sweep showed rate `0.80` was only about 0.03% larger than today's current
+payload. Therefore the next acceptance does not jump directly to 0.75. It searches the
+local crossover in fine steps:
+
+`0.800, 0.795, 0.790, 0.785, 0.780, 0.775, 0.770, 0.765, 0.760, 0.755, 0.750`
+
+The first rate that is at least 0.25% smaller than today's payload is selected. This
+preserves the maximum possible context while still proving a real net token win. The
+strict decision comparator is unchanged.
