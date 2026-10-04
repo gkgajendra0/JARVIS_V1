@@ -9,7 +9,6 @@ from livekit.agents import RunContext, function_tool
 
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
-from jarvis.engineering_change.gates import GateService
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
 from jarvis.work.estimates import estimate_work
@@ -746,12 +745,6 @@ class WorkAgentTools:
         active_changes: list[dict[str, object]] = []
         coordinator = self._runtime.changes
         if coordinator is not None:
-            pending_gate_ids = set(
-                GateService(
-                    coordinator.store,
-                    verify_owner=lambda *_: False,
-                ).pending_gate_ids()
-            )
             for change_id in coordinator.store.active_ids():
                 change = coordinator.store.require(change_id)
                 stages = coordinator.store.list_stages(change_id)
@@ -760,16 +753,8 @@ class WorkAgentTools:
                         "change_id": change.change_id,
                         "state": change.state.value,
                         "goal": change.goal,
-                        "pending_owner_approval": any(
-                            gate.challenge.change_id == change.change_id
-                            for gate_id in pending_gate_ids
-                            if (
-                                gate := GateService(
-                                    coordinator.store,
-                                    verify_owner=lambda *_: False,
-                                ).get(gate_id)
-                            )
-                            is not None
+                        "pending_owner_approval": (
+                            change.state.value == "waiting_owner_approval"
                         ),
                         "stages": [
                             {
