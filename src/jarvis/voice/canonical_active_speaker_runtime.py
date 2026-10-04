@@ -423,8 +423,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             "yes, approve, proceed, go ahead, or continue means approve this bound gate; "
             "a clear no, reject, decline, stop, or cancel means reject it. Do not infer "
             "a decision from silence or unrelated speech. When the owner clearly decides, "
-            "call decide_bound_change_gate. Pending review: "
-            + normalized_question
+            "call decide_bound_change_gate. Pending review: " + normalized_question
         )
 
         try:
