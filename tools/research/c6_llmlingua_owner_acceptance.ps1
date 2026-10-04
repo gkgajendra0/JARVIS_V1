@@ -14,7 +14,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $python = Join-Path $repo ".venv\Scripts\python.exe"
 $benchmark = Join-Path $repo "tools\research\c6_context_owner_acceptance.py"
 $dependencyProbe = Join-Path $repo "tools\research\c6_dependency_probe.py"
-$caseId = "research_requires_reresolution_after_new_evidence"
+$caseId = "research_ready_for_digest_bound_finalize"
 
 Set-Location $repo
 
