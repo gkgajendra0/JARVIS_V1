@@ -7,11 +7,13 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 import jarvis.chatgpt_plan as chatgpt_plan_module
+import jarvis.chatgpt_plan_cli as chatgpt_plan_cli_module
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_REQUIRED_SCOPE,
     CHATGPT_PLAN_TARGET_ID,
     ChatGPTPlanCredentials,
     ChatGPTPlanHTTPError,
+    ChatGPTPlanModel,
     ChatGPTPlanResponse,
     ChatGPTPlanSessionManager,
     ChatGPTPlanUsageUnavailable,
@@ -370,6 +372,46 @@ def test_plan_model_catalog_without_luna_uses_capable_primary() -> None:
     assert tuple(
         target.model_id for target in targets.registry.for_role("frontier")
     ) == ("gpt-6-astra",)
+
+
+def test_catalog_unavailable_refuses_astra_as_routine_fallback() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            _DummyAdapter("chatgpt_plan"),
+            _DummyAdapter("gemini"),
+            _DummyAdapter("openai"),
+        )
+    )
+
+    with pytest.raises(ValueError, match="refusing routine Astra fallback"):
+        build_default_work_targets(
+            configured_provider="gemini",
+            configured_model=None,
+            adapter_registry=adapters,
+            chatgpt_plan_enabled=True,
+            chatgpt_plan_model="gpt-6-astra",
+            chatgpt_plan_available_models=(),
+        )
+
+
+def test_signin_default_prefers_sol_over_astra(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Manager:
+        def list_models(self) -> tuple[ChatGPTPlanModel, ...]:
+            return (
+                ChatGPTPlanModel("gpt-6-astra", "GPT-6-Astra"),
+                ChatGPTPlanModel("gpt-5.6-sol", "GPT-5.6-Sol"),
+                ChatGPTPlanModel("gpt-5.6-luna", "GPT-5.6-Luna"),
+            )
+
+    monkeypatch.setattr(
+        chatgpt_plan_cli_module,
+        "_configured_model",
+        lambda: "gpt-6-astra",
+    )
+
+    selected = chatgpt_plan_cli_module._select_model(_Manager(), None)
+
+    assert selected == "gpt-5.6-sol"
 
 
 def test_legacy_work_pool_is_unchanged_when_plan_is_disabled() -> None:
