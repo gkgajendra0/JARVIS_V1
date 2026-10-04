@@ -52,6 +52,43 @@ if (-not $SkipDependencyInstall) {
         throw "Optional context-compression dependency installation failed."
     }
     Write-Host ""
+} else {
+    Write-Host "=== VERIFY LOCAL ACCEPTANCE DEPENDENCIES ==="
+
+    $jsonschemaVersion = & $python -c @'
+import importlib.metadata as metadata
+try:
+    print(metadata.version("jsonschema"))
+except metadata.PackageNotFoundError:
+    print("")
+'@
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect jsonschema in the JARVIS virtual environment."
+    }
+
+    $jsonschemaVersion = ($jsonschemaVersion -join "").Trim()
+    if ($jsonschemaVersion -ne "4.26.0") {
+        Write-Host (
+            "Installing lightweight required dependency jsonschema==4.26.0 " +
+            "(current='$jsonschemaVersion')."
+        )
+        & $python -m pip install "jsonschema==4.26.0"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Required jsonschema==4.26.0 installation failed."
+        }
+    } else {
+        Write-Host "jsonschema==4.26.0 already present."
+    }
+
+    & $python -c "import llmlingua"
+    if ($LASTEXITCODE -ne 0) {
+        throw (
+            "LLMLingua is not installed in this virtual environment. " +
+            "Rerun without -SkipDependencyInstall."
+        )
+    }
+    Write-Host "LLMLingua already present; heavy optional reinstall skipped."
+    Write-Host ""
 }
 
 $short = $head.Substring(0, [Math]::Min(8, $head.Length))
