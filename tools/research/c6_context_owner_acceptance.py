@@ -920,6 +920,16 @@ async def _run_fixture_decision_benchmark(
             case.request,
         )
         comparison = compare_context_decisions(legacy, optimized)
+        legacy_input_tokens = int(legacy_telemetry.usage.get("input_tokens", 0) or 0)
+        optimized_input_tokens = int(
+            optimized_telemetry.usage.get("input_tokens", 0) or 0
+        )
+        provider_input_tokens_reduced = (
+            legacy_telemetry.usage_observed
+            and optimized_telemetry.usage_observed
+            and legacy_input_tokens > 0
+            and optimized_input_tokens < legacy_input_tokens
+        )
         results.append(
             {
                 "case_id": case.case_id,
@@ -949,6 +959,17 @@ async def _run_fixture_decision_benchmark(
                 "optimized_usage": dict(optimized_telemetry.usage),
                 "optimized_usage_observed": optimized_telemetry.usage_observed,
                 "optimized_latency_ms": round(optimized_telemetry.latency_ms, 2),
+                "provider_input_tokens_reduced": provider_input_tokens_reduced,
+                "provider_input_token_reduction_percent": (
+                    round(
+                        (legacy_input_tokens - optimized_input_tokens)
+                        * 100.0
+                        / legacy_input_tokens,
+                        2,
+                    )
+                    if provider_input_tokens_reduced
+                    else 0.0
+                ),
             }
         )
         if not comparison.equivalent:
@@ -956,6 +977,9 @@ async def _run_fixture_decision_benchmark(
 
     equivalent_count = sum(bool(item["equivalent"]) for item in results)
     mismatch_count = len(results) - equivalent_count
+    all_provider_input_tokens_reduced = bool(results) and all(
+        bool(item["provider_input_tokens_reduced"]) for item in results
+    )
     apply_equivalence_proven = (
         not subset_mode
         and len(results) >= min_equivalent_cases
@@ -970,6 +994,7 @@ async def _run_fixture_decision_benchmark(
         "mismatch_cases": mismatch_count,
         "all_fixture_cases_equivalent": bool(results) and mismatch_count == 0,
         "all_fixture_cases_reduced": True,
+        "all_provider_input_tokens_reduced": all_provider_input_tokens_reduced,
         "c6_apply_decision_equivalence_proven": apply_equivalence_proven,
         "planned_cases": planned_cases,
         "cases": results,
