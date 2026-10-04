@@ -19,7 +19,7 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.audio import LocalAudioOutput
