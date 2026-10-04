@@ -322,3 +322,22 @@ Runtime integration is also present behind
 `JARVIS_WORK_PROMPT_COMPRESSION_MODE`, which defaults to `off`. The first accepted
 scope is RESEARCH only. No production setting change is authorized until the local
 preflight plus strict legacy-vs-compressed owner-machine A/B passes.
+
+
+## 2026-10-04 compression implementation status
+
+The compression-first C6 implementation candidate is now on draft PR #252.
+
+It wraps Microsoft LLMLingua-2 locally behind a replaceable JARVIS adapter, preserves
+canonical Work state, defaults prompt compression to OFF, limits the first runtime
+admission to RESEARCH, falls back to the exact legacy payload on compressor failure, and
+adds strict legacy-vs-compressed decision/token benchmarks.
+
+The remaining acceptance boundary is owner-machine execution of
+`tools/research/c6_llmlingua_owner_acceptance.ps1`: install/load the reviewed optional
+compressor, prove zero-cloud local reduction on the previously failing research fixture,
+then use at most two ChatGPT-plan calls to prove the compressed request preserves all
+strict decision fields while reducing actual provider input tokens.
+
+Do not enable prompt-compression APPLY or reopen the deferred local coding-brain idea
+before this evidence is reviewed.
