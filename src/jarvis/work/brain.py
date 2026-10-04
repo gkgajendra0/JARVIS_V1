@@ -36,6 +36,7 @@ class BrainRequest:
     purpose: str
     allowed_actions: tuple[BrainAction, ...]
     evidence: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    full_history_steps: tuple[WorkStep, ...] = field(default_factory=tuple)
     context_pack: WorkContextPack | None = None
     context_mode: WorkContextMode = WorkContextMode.OFF
 
@@ -51,6 +52,17 @@ class BrainRequest:
         names = [item.name for item in self.allowed_actions]
         if len(names) != len(set(names)):
             raise ValueError("brain action names must be unique")
+        if self.full_history_steps:
+            if any(
+                step.work_id != self.work.work_id for step in self.full_history_steps
+            ):
+                raise ValueError("full history steps must belong to the request WorkItem")
+            history_ids = [step.step_id for step in self.full_history_steps]
+            if len(history_ids) != len(set(history_ids)):
+                raise ValueError("full history step IDs must be unique")
+            history_id_set = set(history_ids)
+            if any(step.step_id not in history_id_set for step in self.recent_steps):
+                raise ValueError("recent steps must be contained in full history")
 
 
 @dataclass(frozen=True, slots=True)
