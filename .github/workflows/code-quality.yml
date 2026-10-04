@@ -191,6 +191,21 @@ jobs:
           import dulwich; import uroman; import jellyfish;
           print('Unified Windows Hands Python dependencies ready')"
 
+      - name: Parse C6 LLMLingua owner acceptance PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/research/c6_llmlingua_owner_acceptance.ps1").Path,
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "C6 LLMLingua owner acceptance PowerShell has parse errors."
+          }
+
       - name: Run Windows multilingual Hands regressions
         run: >-
           python -m pytest -q
