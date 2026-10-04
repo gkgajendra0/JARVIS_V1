@@ -602,17 +602,18 @@ class Phase9ResearchControlPlaneDecider:
                 ),
                 default=-1,
             )
-            latest_owner_input = max(
+            latest_owner_recovery = max(
                 (
                     index
                     for index, step in enumerate(steps)
-                    if step.kind == "owner_input" and step.state.value == "completed"
+                    if step.kind in {"owner_input", "owner_retry"}
+                    and step.state.value == "completed"
                 ),
                 default=-1,
             )
             if (
                 latest_credential_block >= 0
-                and latest_owner_input > latest_credential_block
+                and latest_owner_recovery > latest_credential_block
             ):
                 blocked_step = steps[latest_credential_block]
                 parameters = {
@@ -620,11 +621,20 @@ class Phase9ResearchControlPlaneDecider:
                     for key, value in blocked_step.input_data.items()
                     if key in {"query", "mode"}
                 }
-                if str(parameters.get("query") or "").strip():
+                query = str(parameters.get("query") or "").strip()
+                mode = parameters.get("mode")
+                matching_retry_exists = any(
+                    index > latest_owner_recovery
+                    and step.kind == research
+                    and step.input_data.get("query") == query
+                    and step.input_data.get("mode") == mode
+                    for index, step in enumerate(steps)
+                )
+                if query and not matching_retry_exists:
                     return BrainDecision(
                         action=research,
                         summary=(
-                            "Retry the exact web research after owner-supplied "
+                            "Retry the exact web research once after owner-supplied "
                             "credential recovery."
                         ),
                         parameters=parameters,
@@ -643,25 +653,32 @@ class Phase9ResearchControlPlaneDecider:
                 ),
                 default=-1,
             )
-            latest_owner_input = max(
+            latest_owner_recovery = max(
                 (
                     index
                     for index, step in enumerate(steps)
-                    if step.kind == "owner_input" and step.state.value == "completed"
+                    if step.kind in {"owner_input", "owner_retry"}
+                    and step.state.value == "completed"
                 ),
                 default=-1,
             )
-            if latest_uv_block >= 0 and latest_owner_input > latest_uv_block:
+            if latest_uv_block >= 0 and latest_owner_recovery > latest_uv_block:
                 blocked_step = steps[latest_uv_block]
                 candidate_id = str(
                     blocked_step.input_data.get("candidate_id") or ""
                 ).strip()
-                if candidate_id:
+                matching_retry_exists = any(
+                    index > latest_owner_recovery
+                    and step.kind == verify_sdk
+                    and step.input_data.get("candidate_id") == candidate_id
+                    for index, step in enumerate(steps)
+                )
+                if candidate_id and not matching_retry_exists:
                     return BrainDecision(
                         action=verify_sdk,
                         summary=(
-                            "Retry the exact SDK verification after owner-configured "
-                            "reviewed uv runtime recovery."
+                            "Retry the exact SDK verification once after "
+                            "owner-configured reviewed uv runtime recovery."
                         ),
                         parameters={"candidate_id": candidate_id},
                     )
