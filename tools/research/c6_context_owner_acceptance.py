@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from importlib import metadata
 import sys
 from dataclasses import replace
 
@@ -1003,6 +1004,25 @@ async def _run_fixture_decision_benchmark(
     }
 
 
+def _installed_compressor_versions() -> dict[str, str | None]:
+    packages = (
+        "llmlingua",
+        "torch",
+        "transformers",
+        "accelerate",
+        "tiktoken",
+        "nltk",
+        "numpy",
+    )
+    versions: dict[str, str | None] = {}
+    for package in packages:
+        try:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
 def _llmlingua_fixture_cases(
     case_ids: tuple[str, ...] | None,
 ):
@@ -1140,6 +1160,7 @@ async def _run_llmlingua_fixture_benchmark(
         "compressor_model": compressor_model,
         "compressor_library_revision": REVIEWED_LLMLINGUA_LIBRARY_REVISION,
         "compressor_model_revision": DEFAULT_LLMLINGUA2_REVISION,
+        "runtime_dependency_versions": _installed_compressor_versions(),
         "compression_rate": compression_rate,
         "device_map": device_map,
         "requested_case_ids": requested_ids,
