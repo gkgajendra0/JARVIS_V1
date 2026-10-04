@@ -689,3 +689,41 @@ This keeps the strict comparator unchanged and prevents provider/model variance 
 being misclassified as information loss. The bounded live gate now uses at most three
 ChatGPT-plan calls for one fixture and still executes no Work action, changes no
 production routing, enables no paid fallback and cannot promote APPLY automatically.
+
+
+## Deterministic acquisition-governance correction — 2026-10-04
+
+The stability-first owner run proved the exact same full-history research request was not
+strictly stable: Astra produced different free-form `verification_requirements` on two
+identical calls. Compression was correctly not evaluated.
+
+Root-cause review found `acq_record_candidate` allowed the model to author
+`verification_requirements`, `secret_scopes`, `network_scopes`,
+`device_scopes`, `discovery_scopes`, and
+`external_acceptance_requirements`. Those values flowed into
+`AcquisitionCandidateV1` and later into canonical acquisition-plan contracts/digests.
+
+That conflicts with the existing Phase-9 invariant that selectable/blocking conditions
+are deterministic and free-form model text cannot complete acquisition.
+
+The unverified-candidate action is now narrowed:
+
+- model-owned: source kind, source identity, optional exact version/digest/license,
+  supported semantic operations, evidence refs;
+- JARVIS-owned: verification contract;
+- model may no longer invent trust/governance scope or owner-acceptance policy in
+  `acq_record_candidate`.
+
+JARVIS reuses the source-type verification contracts already used by standard trusted
+source evidence:
+
+- MCP -> `mcp-tools-list-contract`;
+- OpenAPI -> `openapi-contract-test`;
+- AsyncAPI -> `asyncapi-contract-test`;
+- SDK library -> `sdk-adapter-contract-test`.
+
+This is not a relaxed C6 comparator. It removes nondeterministic prose from the canonical
+decision contract itself. The same strict action/parameter comparison remains in place.
+
+The next owner acceptance must use the new reasoning-contract digest/action schema; older
+full-history stability evidence is not promotable across this contract change.
