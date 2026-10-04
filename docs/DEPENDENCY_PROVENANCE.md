@@ -52,6 +52,9 @@ Removal is bounded: replace the wrapper implementation or dependency, preserve t
 - Reviewed source revision: `5a4c78ae18ab17a98cf997e8259354e546081d64`
 - Acquisition: optional `context-compression` project extra from the exact Git revision;
   it is not part of the base JARVIS install
+- Approved major ML runtime for this experiment: `torch==2.13.0` and
+  `transformers==5.16.1`; the owner report also records the resolved versions of
+  LLMLingua, Accelerate, tiktoken, NLTK and NumPy
 - Upstream license: MIT
 - Compressor model identity:
   `microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank`
