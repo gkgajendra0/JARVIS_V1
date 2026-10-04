@@ -110,8 +110,8 @@ Write-Host "Model revision   : $($pre.compressor_model_revision)"
 Write-Host "Torch             : $($pre.runtime_dependency_versions.torch)"
 Write-Host "Transformers      : $($pre.runtime_dependency_versions.transformers)"
 
-if ($pre.runtime_dependency_versions.torch -ne "2.13.0") {
-    throw "Owner acceptance requires the approved torch==2.13.0 runtime."
+if ($pre.runtime_dependency_versions.torch -notlike "2.13.0*") {
+    throw "Owner acceptance requires the approved torch 2.13.0 runtime."
 }
 if ($pre.runtime_dependency_versions.transformers -ne "5.16.1") {
     throw "Owner acceptance requires the approved transformers==5.16.1 runtime."
