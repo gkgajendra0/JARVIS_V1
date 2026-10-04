@@ -417,3 +417,18 @@ the unverified-candidate step.
 
 This is now the prerequisite for the next LLMLingua owner run. Strict parameter equality
 remains unchanged; production prompt compression remains OFF.
+
+
+## 2026-10-04 model-routed C6 research correction
+
+The previous LLMLingua owner fixture was exercising a Phase-9 state that production
+should handle through the deterministic research control plane, not Astra.
+
+Phase-9 now deterministically verifies an exact-version unverified PyPI SDK candidate
+before re-resolving. The old re-resolve fixture is retired from model-equivalence
+promotion evidence.
+
+The active LLMLingua owner gate now targets
+`research_ready_for_digest_bound_finalize`: the canonical acquisition resolution is
+current and the next digest-bound `acq_finalize` decision is genuinely model-owned.
+Strict same-input stability remains mandatory before compressed context is evaluated.
