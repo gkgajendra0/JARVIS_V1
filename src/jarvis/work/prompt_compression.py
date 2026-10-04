@@ -427,11 +427,11 @@ class LLMLingua2WorkPayloadCompressor:
 __all__ = [
     "DEFAULT_LLMLINGUA2_MODEL",
     "DEFAULT_LLMLINGUA2_REVISION",
-    "LLMLingua2WorkPayloadCompressor",
     "REVIEWED_LLMLINGUA_LIBRARY_REVISION",
-    "PromptCompressionMode",
+    "LLMLingua2WorkPayloadCompressor",
     "PromptCompressionDependencyError",
     "PromptCompressionError",
+    "PromptCompressionMode",
     "PromptCompressionResult",
     "WorkPayloadCompressor",
     "normalize_prompt_compression_mode",
