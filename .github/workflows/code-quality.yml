@@ -191,19 +191,33 @@ jobs:
           import dulwich; import uroman; import jellyfish;
           print('Unified Windows Hands Python dependencies ready')"
 
-      - name: Parse C6 LLMLingua owner acceptance PowerShell
+      - name: Parse C6 LLMLingua owner PowerShell
         shell: powershell
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path "tools/research/c6_llmlingua_owner_acceptance.ps1").Path,
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            throw "C6 LLMLingua owner acceptance PowerShell has parse errors."
+          $scripts = @(
+            "tools/research/c6_llmlingua_owner_acceptance.ps1",
+            "tools/research/c6_llmlingua_current_token_probe.ps1"
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "C6 owner PowerShell has parse errors: $script"
+            }
+          }
+
+      - name: Probe C6 current-token direct script execution
+        shell: powershell
+        run: |
+          & python tools/research/c6_llmlingua_current_token_probe.py --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "C6 current-token probe failed direct script import/argument parsing."
           }
 
       - name: Execute C6 owner dependency version probe
