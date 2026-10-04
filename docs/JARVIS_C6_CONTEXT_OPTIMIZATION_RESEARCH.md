@@ -382,7 +382,8 @@ not production-enabled yet.
 
 Implemented:
 
-- optional `context-compression` dependency group with `llmlingua==0.2.2`;
+- optional `context-compression` dependency group pinned to Microsoft LLMLingua
+  source revision `5a4c78ae18ab17a98cf997e8259354e546081d64`;
 - local LLMLingua-2 BERT-base compressor using the reviewed
   `microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank` model;
 - reviewed Hugging Face model revision pinned to `5f0c827`;
@@ -460,12 +461,14 @@ benchmark harness. The production-facing setting is:
 Safety behavior:
 
 - default is `off`, so current production behavior is unchanged;
-- `shadow` locally compresses eligible RESEARCH payloads and records/logs the metrics
-  while still sending the exact legacy payload to the model;
-- `apply` sends the compressed payload only when the structure-preserving compressor
-  reports a real reduction;
-- compressor initialization/inference/validation failure falls back to the exact
-  legacy payload rather than blocking Work or sending partially compressed data;
+- `shadow` locally compresses the complete available canonical RESEARCH history and
+  records/logs the metrics while still sending the exact current provider payload;
+- `apply` may send compressed full history only when JARVIS independently verifies that
+  it is smaller than the current provider payload as well as smaller than the raw full
+  history;
+- compressor initialization/inference/validation/size-telemetry failure falls back to
+  the exact current provider payload rather than blocking Work or sending partially
+  compressed data;
 - initial runtime eligibility is RESEARCH only; DEVELOPMENT remains on its already
   tested C6 path and source/diff text is never token-pruned by LLMLingua;
 - compression runs through a serialized local `prompt_compression`/CPU resource lease
@@ -503,8 +506,11 @@ Implemented:
 - SHADOW computes compression but sends the exact legacy payload;
 - provider retries reuse one already-prepared payload rather than recompressing;
 - local compression has its own bounded resource lease;
-- benchmark seam compares the exact legacy payload against the locally compressed copy
-  while decision validation still uses the canonical BrainRequest;
+- benchmark seam compares the complete canonical full-history payload against its locally
+  compressed full-history copy while decision validation still uses the canonical
+  BrainRequest;
+- the benchmark separately proves compressed full history is smaller than today's
+  current provider payload, so preserving more history cannot increase routine token use;
 - strict action/parameter/completion/owner equivalence remains unchanged;
 - benchmark records actual provider input-token reduction as well as chars/estimated
   tokens/compressor latency;
@@ -514,9 +520,36 @@ Implemented:
 The first owner-machine live gate intentionally targets only
 `research_requires_reresolution_after_new_evidence`, the case that failed the hand-built
 ContextPack comparison. It performs a zero-ChatGPT local preflight first and, only when
-that succeeds, at most two ChatGPT-plan calls: one exact legacy request and one
-LLMLingua-compressed request.
+that succeeds, at most two ChatGPT-plan calls: one exact full-history request and one
+LLMLingua-compressed full-history request.
 
 Passing that single pair is evidence to continue the compressor evaluation; it does not
 automatically enable `JARVIS_WORK_PROMPT_COMPRESSION_MODE=apply` and does not promote
 the older `JARVIS_WORK_CONTEXT_MODE=apply` switch.
+
+
+### Full-history correction — 2026-10-04
+
+Repository review found that the pre-C6 provider payload called "legacy" above was not
+the complete Work history; it carried only the latest 12 WorkSteps. In the research
+fixture, the original `acq_inspect_goal` step containing owner constraints was older
+than that window. The hand-selected ContextPack restored that goal, which explains why
+the earlier optimized decision surfaced constraints absent from the legacy parameters.
+
+The LLMLingua proof is therefore intentionally stronger than the old C6 A/B:
+
+```text
+canonical full Work history
+        |
+        +--> exact full-history provider payload --------> strong model (baseline)
+        |
+        +--> local LLMLingua-2 compression
+                    |
+                    +--> compressed full-history payload -> strong model
+```
+
+Production SHADOW still sends today's exact current payload. A future compressor APPLY is
+eligible only when compressed full history is smaller than today's current payload and
+passes strict decision equivalence. This preserves more decision-relevant history without
+paying a token penalty. Production remains OFF/SHADOW until owner-machine evidence is
+accepted.
