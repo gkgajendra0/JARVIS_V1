@@ -1107,9 +1107,7 @@ async def _run_llmlingua_fixture_benchmark(
             "compressed_chars": compressed.compressed_chars,
             "reduction_percent": compressed.reduction_percent,
             "compressed_vs_current_reduction_percent": round(
-                (
-                    _chars(current_payload) - compressed.compressed_chars
-                )
+                (_chars(current_payload) - compressed.compressed_chars)
                 * 100.0
                 / _chars(current_payload),
                 2,
@@ -1271,9 +1269,7 @@ async def _run_llmlingua_fixture_benchmark(
                 "compressed_chars": compressed.compressed_chars,
                 "reduction_percent": compressed.reduction_percent,
                 "compressed_vs_current_reduction_percent": round(
-                    (
-                        _chars(current_payload) - compressed.compressed_chars
-                    )
+                    (_chars(current_payload) - compressed.compressed_chars)
                     * 100.0
                     / _chars(current_payload),
                     2,
@@ -1292,9 +1288,7 @@ async def _run_llmlingua_fixture_benchmark(
                 "legacy_usage_observed": full_context_telemetry.usage_observed,
                 "full_context_usage_observed": full_context_telemetry.usage_observed,
                 "legacy_latency_ms": round(full_context_telemetry.latency_ms, 2),
-                "full_context_latency_ms": round(
-                    full_context_telemetry.latency_ms, 2
-                ),
+                "full_context_latency_ms": round(full_context_telemetry.latency_ms, 2),
                 "compressed_usage": dict(compressed_telemetry.usage),
                 "compressed_usage_observed": compressed_telemetry.usage_observed,
                 "compressed_latency_ms": round(compressed_telemetry.latency_ms, 2),
