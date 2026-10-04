@@ -1,6 +1,6 @@
 # JARVIS C6 Retrieval / Context Optimization Research
 
-Status: **RESEARCH COMPLETE / ARCHITECTURE APPROVED BY CONTINUATION SCOPE / SHADOW IMPLEMENTATION ACTIVE**
+Status: **SEMANTIC COMPRESSION ACCEPTANCE PASSED / CURRENT-PAYLOAD TOKEN DELTA PENDING / PRODUCTION APPLY OFF**
 
 Date: 2026-09-29
 
@@ -375,7 +375,7 @@ LLMLingua output is model input only. It never becomes canonical JARVIS state.
 If C preserves more decision semantics than B at similar/lower token usage, prefer the
 existing compressor technology over additional home-grown summarization rules.
 
-## LLMLingua implementation status — pending owner-machine acceptance
+## LLMLingua implementation status — semantic owner acceptance passed
 
 Implementation is complete on PR #252 for the bounded experiment and is intentionally
 not production-enabled yet.
@@ -400,10 +400,12 @@ Implemented:
 - model-facing override is explicit and does not mutate canonical `BrainRequest`,
   WorkStore or execution state;
 - owner harness supports a zero-ChatGPT local preflight and a bounded live A/B;
-- the default LLMLingua proof targets only
-  `research_requires_reresolution_after_new_evidence`, the case that failed the
-  hand-selected C6 comparison;
-- the live default uses at most two ChatGPT-plan calls and stops on mismatch;
+- the active LLMLingua proof targets
+  `research_ready_for_digest_bound_finalize`, a genuinely model-routed RESEARCH
+  decision after deterministic acquisition bookkeeping is complete;
+- the live semantic gate uses at most three ChatGPT-plan calls: two identical
+  full-history calls for A/A stability, followed by one compressed call only when the
+  baseline is strictly stable;
 - LLMLingua evidence can never automatically set global C6 APPLY.
 
 The implementation deliberately does not use LLMLingua's `compress_json` path. Upstream
@@ -437,7 +439,7 @@ Only after preflight passes, run the bounded research-pair comparison:
     --model gpt-6-astra
 ```
 
-Default live budget: exactly two model calls if both requests execute.
+Default live semantic budget: at most three model calls; compression is not evaluated unless the two identical full-history calls are strictly stable.
 
 Acceptance requires:
 - same action;
@@ -777,3 +779,64 @@ The replacement C6 research fixture is
 resolution are already current, there is no newer source evidence, and the next
 `acq_finalize` step is genuinely model-owned. The owner request pins the exact bounded
 plan parameters so strict A/A and full-history-vs-compressed equality remain meaningful.
+
+
+## Accepted model-routed LLMLingua result — 2026-10-04
+
+Owner-machine acceptance at exact head
+`3749bcea09556ea48ccbbcf6c2688eb67e0588c1` PASSED on the production-real
+`research_ready_for_digest_bound_finalize` fixture.
+
+Measured:
+
+- full canonical history: 14 steps / 144,459 serialized chars;
+- today's current provider window: 12 steps / 132,570 serialized chars;
+- selected LLMLingua retained rate: 0.85;
+- compressed full history: 130,887 serialized chars;
+- reduction vs raw full history: 9.40%;
+- compressed full history is 1.27% smaller than today's current serialized payload;
+- full-history A/A baseline stability: PASS;
+- compressed decision evaluated: PASS;
+- action equality: PASS;
+- exact parameter equality: PASS;
+- goal-complete equality: PASS;
+- needs-owner equality: PASS;
+- owner-question equality: PASS;
+- actual provider input-token reduction vs raw full-history baseline: 12.47%;
+- local CPU compression latency: about 16.1 seconds;
+- no Work action executed;
+- no production routing mutation;
+- no provider-circuit mutation;
+- no paid fallback;
+- production remains unchanged.
+
+This is the first valid model-routed LLMLingua semantic PASS for C6 after retiring the
+deterministic re-resolve fixture. It proves that the complete 14-step history can be
+compressed locally while preserving the exact important decision produced by Astra.
+
+### Remaining admission measurement
+
+Do **not** enable production APPLY yet.
+
+The accepted run measured real provider-token savings against the raw full-history
+baseline, but today's production payload is the 12-step current window. Serialized size
+shows the accepted compressed full history is 1.27% smaller than that current payload,
+but real provider tokenization can differ from character count.
+
+The final bounded measurement therefore reuses the saved PASS evidence and makes only
+one new Astra call with today's exact current payload. It validates the saved request
+digests and compressor/runtime lineage locally, then compares:
+
+```text
+accepted compressed-full-history provider input tokens
+vs
+today's current-production provider input tokens
+```
+
+Tooling:
+
+- `tools/research/c6_llmlingua_current_token_probe.py`;
+- `tools/research/c6_llmlingua_current_token_probe.ps1`.
+
+This one-call probe cannot execute Work, mutate routing, enable paid fallback, update the
+provider circuit, or automatically promote C6 APPLY.
