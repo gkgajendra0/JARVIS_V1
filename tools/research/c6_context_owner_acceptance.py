@@ -2077,7 +2077,7 @@ def main() -> int:
                         compression_rate=float(args.llmlingua_rate),
                         device_map=str(args.llmlingua_device).strip(),
                         case_ids=(
-                            ("research_requires_reresolution_after_new_evidence",)
+                            ("research_ready_for_digest_bound_finalize",)
                             if not args.llmlingua_case_id
                             else tuple(dict.fromkeys(args.llmlingua_case_id))
                         ),
@@ -2107,7 +2107,7 @@ def main() -> int:
                         preflight_only=args.fixture_remaining_preflight,
                         case_ids=(
                             "development_ready_for_local_commit",
-                            "research_requires_reresolution_after_new_evidence",
+                            "research_ready_for_digest_bound_finalize",
                         ),
                     )
                 )
