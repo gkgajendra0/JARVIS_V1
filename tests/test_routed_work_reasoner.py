@@ -48,6 +48,7 @@ from jarvis.work.reasoner import (
     _SYSTEM_PROMPT,
     RoutedWorkReasoner,
     _WorkDecisionModel,
+    _brain_decision,
     evaluate_structured_work_request,
 )
 from jarvis.work.resources import ResourceLeaseManager
@@ -79,6 +80,93 @@ def test_work_decision_schema_is_strict_output_compatible() -> None:
         properties = node.get("properties")
         if isinstance(properties, dict):
             assert set(node.get("required", ())) == set(properties)
+
+
+def test_work_reasoner_rejects_parameters_outside_selected_action_schema() -> None:
+    work = WorkItem(
+        request="research a bounded source",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-schema",
+        source_turn_id="turn-schema",
+    )
+    request = BrainRequest(
+        work=work,
+        recent_steps=(),
+        purpose="Choose one bounded action",
+        allowed_actions=(
+            BrainAction(
+                name="record_source",
+                description="Record bounded source metadata",
+                parameter_schema={
+                    "type": "object",
+                    "properties": {
+                        "source_identity": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["source_identity"],
+                    "additionalProperties": False,
+                },
+            ),
+        ),
+    )
+
+    parsed = _WorkDecisionModel(
+        action="record_source",
+        summary="Record the source.",
+        parameters_json=json.dumps(
+            {
+                "source_identity": "example-sdk",
+                "forbidden_governance": "owner approval prose",
+            }
+        ),
+        goal_complete=False,
+        needs_owner=False,
+        owner_question=None,
+    )
+
+    with pytest.raises(ValueError, match="outside the selected JARVIS action schema"):
+        _brain_decision(request, parsed)
+
+
+def test_work_reasoner_accepts_parameters_matching_selected_action_schema() -> None:
+    work = WorkItem(
+        request="research a bounded source",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-schema-ok",
+        source_turn_id="turn-schema-ok",
+    )
+    request = BrainRequest(
+        work=work,
+        recent_steps=(),
+        purpose="Choose one bounded action",
+        allowed_actions=(
+            BrainAction(
+                name="record_source",
+                description="Record bounded source metadata",
+                parameter_schema={
+                    "type": "object",
+                    "properties": {
+                        "source_identity": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["source_identity"],
+                    "additionalProperties": False,
+                },
+            ),
+        ),
+    )
+
+    decision = _brain_decision(
+        request,
+        _WorkDecisionModel(
+            action="record_source",
+            summary="Record the source.",
+            parameters_json='{"source_identity":"example-sdk"}',
+            goal_complete=False,
+            needs_owner=False,
+            owner_question=None,
+        ),
+    )
+
+    assert decision.parameters == {"source_identity": "example-sdk"}
 
 
 def test_work_reasoner_never_uses_owner_as_execution_fallback() -> None:
