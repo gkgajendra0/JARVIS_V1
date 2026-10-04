@@ -589,6 +589,45 @@ class Phase9ResearchControlPlaneDecider:
                 parameters={},
             )
 
+        research = "research_web"
+        if research in action_names:
+            latest_credential_block = max(
+                (
+                    index
+                    for index, step in enumerate(steps)
+                    if step.kind == research
+                    and step.state.value == "completed"
+                    and step.observation.get("ok") is False
+                    and step.observation.get("reason") == "research_credentials_missing"
+                ),
+                default=-1,
+            )
+            latest_owner_input = max(
+                (
+                    index
+                    for index, step in enumerate(steps)
+                    if step.kind == "owner_input"
+                    and step.state.value == "completed"
+                ),
+                default=-1,
+            )
+            if latest_credential_block >= 0 and latest_owner_input > latest_credential_block:
+                blocked_step = steps[latest_credential_block]
+                parameters = {
+                    key: value
+                    for key, value in blocked_step.input_data.items()
+                    if key in {"query", "mode"}
+                }
+                if str(parameters.get("query") or "").strip():
+                    return BrainDecision(
+                        action=research,
+                        summary=(
+                            "Retry the exact web research after owner-supplied "
+                            "credential recovery."
+                        ),
+                        parameters=parameters,
+                    )
+
         resolve = "acq_resolve"
         if resolve not in action_names:
             return None
