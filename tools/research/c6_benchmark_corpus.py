@@ -111,6 +111,7 @@ def _request(
         recent_steps=steps[-12:],
         purpose=_PURPOSE,
         allowed_actions=actions,
+        full_history_steps=steps,
         context_pack=pack,
         context_mode=WorkContextMode.APPLY,
     )
