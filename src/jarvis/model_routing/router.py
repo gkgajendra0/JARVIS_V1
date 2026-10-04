@@ -375,6 +375,14 @@ def build_default_work_targets(
         )
 
     if not plan_targets:
+        # Catalog discovery can fail independently of authentication. Never let a
+        # saved frontier/Astra model become the routine fallback in that case.
+        # Failing closed preserves the owner's escalation-only policy.
+        if "astra" in plan_model.casefold():
+            raise ValueError(
+                "ChatGPT-plan model catalog is unavailable and the configured "
+                "fallback is frontier/Astra-class; refusing routine Astra fallback"
+            )
         plan_targets.append(
             _plan_target(
                 target_id=CHATGPT_PLAN_TARGET_ID,
