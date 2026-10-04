@@ -9,6 +9,7 @@ from livekit.agents import RunContext, function_tool
 
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.engineering_change.gates import GateService
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
 from jarvis.work.estimates import estimate_work
@@ -741,10 +742,65 @@ class WorkAgentTools:
             "status": "listed",
             "work": [_public_work(item, self._runtime) for item in items],
         }
+
+        active_changes: list[dict[str, object]] = []
+        coordinator = self._runtime.changes
+        if coordinator is not None:
+            pending_gate_ids = set(
+                GateService(
+                    coordinator.store,
+                    verify_owner=lambda *_: False,
+                ).pending_gate_ids()
+            )
+            for change_id in coordinator.store.active_ids():
+                change = coordinator.store.require(change_id)
+                stages = coordinator.store.list_stages(change_id)
+                active_changes.append(
+                    {
+                        "change_id": change.change_id,
+                        "state": change.state.value,
+                        "goal": change.goal,
+                        "pending_owner_approval": any(
+                            gate.challenge.change_id == change.change_id
+                            for gate_id in pending_gate_ids
+                            if (
+                                gate := GateService(
+                                    coordinator.store,
+                                    verify_owner=lambda *_: False,
+                                ).get(gate_id)
+                            )
+                            is not None
+                        ),
+                        "stages": [
+                            {
+                                "stage": stage.stage_key,
+                                "work_id": stage.work_id,
+                                "work_state": coordinator.store.work.require(
+                                    stage.work_id
+                                ).state.value,
+                            }
+                            for stage in stages
+                        ],
+                    }
+                )
+        if active_changes:
+            payload["active_engineering_changes"] = active_changes
+            payload["overall_task_truth"] = (
+                "one or more parent EngineeringChange objectives are still active; "
+                "a completed child WorkItem does not mean the overall task is complete"
+            )
+
         if len(items) == 1:
             self._runtime.set_owner_work_focus(items[0].work_id)
         elif items:
             self._runtime.set_owner_work_focus(None)
+        elif active_changes:
+            self._runtime.set_owner_work_focus(None)
+            payload["truth_note"] = (
+                "no child WorkItem is currently running, but parent engineering work "
+                "is still active; report the parent change state and any owner approval "
+                "blocker instead of saying there is no active task"
+            )
         else:
             recent = self._runtime.store.list_recent(limit=1)
             if recent and recent[0].state.terminal:
