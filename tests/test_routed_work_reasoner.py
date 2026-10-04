@@ -42,6 +42,7 @@ from jarvis.work.brain import (
     InteractiveBrainGate,
 )
 from jarvis.work.models import WorkItem, WorkType
+from jarvis.work.prompt_compression import PromptCompressionError
 from jarvis.work.reasoner import (
     _SYSTEM_PROMPT,
     RoutedWorkReasoner,
@@ -386,7 +387,7 @@ class _FakePayloadCompressor:
     def compress_payload(self, payload):
         self.calls += 1
         if self.fail:
-            raise RuntimeError("compressor unavailable")
+            raise PromptCompressionError("compressor unavailable")
         compressed = copy.deepcopy(payload)
         compressed["compression_probe"] = "compressed"
         original_chars = len(str(payload))
