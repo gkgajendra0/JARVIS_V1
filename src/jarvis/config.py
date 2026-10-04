@@ -260,10 +260,7 @@ class JarvisConfig:
             "work_prompt_compression_mode",
             work_prompt_compression_mode,
         )
-        if (
-            work_context_mode == "apply"
-            and work_prompt_compression_mode == "apply"
-        ):
+        if work_context_mode == "apply" and work_prompt_compression_mode == "apply":
             raise ValueError(
                 "work context and prompt compression cannot both be APPLY "
                 "until combined-context acceptance exists"
