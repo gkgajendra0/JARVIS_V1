@@ -30,6 +30,21 @@ def _chars(value: object) -> int:
     )
 
 
+def _research_finalize_parameters() -> dict[str, object]:
+    return {
+        "proposed_capability_id": "device.control",
+        "proposed_package_id": "device.control.custom",
+        "proposed_package_version": "1.0.0",
+        "rollback_summary": (
+            "Disable device.control.custom and restore the prior approved capability state."
+        ),
+        "changed_paths": ["src/jarvis/capabilities/device_control.py"],
+        "sandbox_profile_ids": ["test.offline.v1"],
+        "verification_contract_ids": ["device-control-contract-test"],
+        "development_test_targets": ["tests/test_device_control.py"],
+    }
+
+
 def test_c6_owner_harness_supports_direct_script_execution() -> None:
     repo_root = pathlib.Path(__file__).resolve().parents[1]
     script = repo_root / "tools" / "research" / "c6_context_owner_acceptance.py"
@@ -61,7 +76,7 @@ def test_c6_fixture_corpus_is_fixed_representative_and_reducing() -> None:
     assert [item.case_id for item in first] == [
         "development_repair_after_failure",
         "development_ready_for_local_commit",
-        "research_requires_reresolution_after_new_evidence",
+        "research_ready_for_digest_bound_finalize",
     ]
     assert [item.case_id for item in second] == [item.case_id for item in first]
     assert {item.request.work.work_type for item in first} == {
@@ -558,7 +573,7 @@ async def test_c6_fixture_remaining_preflight_selects_only_uncovered_pairs(
         preflight_only=True,
         case_ids=(
             "development_ready_for_local_commit",
-            "research_requires_reresolution_after_new_evidence",
+            "research_ready_for_digest_bound_finalize",
         ),
     )
 
@@ -567,7 +582,7 @@ async def test_c6_fixture_remaining_preflight_selects_only_uncovered_pairs(
     assert result["fixture_cases"] == 0
     assert [case["case_id"] for case in result["planned_cases"]] == [
         "development_ready_for_local_commit",
-        "research_requires_reresolution_after_new_evidence",
+        "research_ready_for_digest_bound_finalize",
     ]
     assert result["c6_apply_decision_equivalence_proven"] is False
 
@@ -613,9 +628,9 @@ async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
             )
         else:
             decision = BrainDecision(
-                action="acquisition_resolve",
+                action="acq_finalize",
                 summary="Equivalent research decision",
-                parameters={},
+                parameters=_research_finalize_parameters(),
             )
         return (
             decision,
@@ -638,7 +653,7 @@ async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
         min_equivalent_cases=2,
         case_ids=(
             "development_ready_for_local_commit",
-            "research_requires_reresolution_after_new_evidence",
+            "research_ready_for_digest_bound_finalize",
         ),
     )
 
@@ -711,7 +726,7 @@ async def test_c6_fixture_remaining_pairs_stop_on_first_mismatch(
         min_equivalent_cases=2,
         case_ids=(
             "development_ready_for_local_commit",
-            "research_requires_reresolution_after_new_evidence",
+            "research_ready_for_digest_bound_finalize",
         ),
     )
 
@@ -782,7 +797,7 @@ async def test_c6_llmlingua_preflight_uses_no_chatgpt_plan_calls(
         compressor_model="fake-compressor",
         compression_rate=0.5,
         device_map="cpu",
-        case_ids=("research_requires_reresolution_after_new_evidence",),
+        case_ids=("research_ready_for_digest_bound_finalize",),
         preflight_only=True,
         compressor_factory=_FakeCompressor,
     )
@@ -853,20 +868,9 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
         is_compressed = "compressed authoritative evidence" in serialized
         return (
             BrainDecision(
-                action="acq_record_candidate",
+                action="acq_finalize",
                 summary="Equivalent research decision",
-                parameters={
-                    "source_kind": "sdk_library",
-                    "source_identity": "example-device-sdk",
-                    "source_version": "2.4.1",
-                    "supported_operations": ["pair", "launch", "key_input"],
-                    "evidence_refs": [
-                        "evidence-2",
-                        "evidence-4",
-                        "evidence-new-authoritative",
-                    ],
-                    "verification_requirements": ["verify exact artifact"],
-                },
+                parameters=_research_finalize_parameters(),
             ),
             SimpleNamespace(
                 usage={"input_tokens": 45 if is_compressed else 100},
@@ -882,7 +886,7 @@ async def test_c6_llmlingua_live_pair_preserves_strict_decision_equivalence(
         compressor_model="fake-compressor",
         compression_rate=0.5,
         device_map="cpu",
-        case_ids=("research_requires_reresolution_after_new_evidence",),
+        case_ids=("research_ready_for_digest_bound_finalize",),
         preflight_only=False,
         compressor_factory=_FakeCompressor,
     )
@@ -945,17 +949,11 @@ async def test_c6_llmlingua_live_stops_when_full_history_baseline_is_unstable(
         assert provider_payload_override is not None
         return (
             BrainDecision(
-                action="acq_record_candidate",
+                action="acq_finalize",
                 summary="Baseline research decision",
                 parameters={
-                    "source_kind": "sdk_library",
-                    "source_identity": "example-device-sdk",
-                    "source_version": "2.4.1",
-                    "supported_operations": ["pair", "launch", "key_input"],
-                    "evidence_refs": [
-                        "evidence-2",
-                        f"baseline-variant-{calls}",
-                    ],
+                    **_research_finalize_parameters(),
+                    "rollback_summary": f"baseline-variant-{calls}",
                 },
             ),
             SimpleNamespace(
@@ -972,7 +970,7 @@ async def test_c6_llmlingua_live_stops_when_full_history_baseline_is_unstable(
         compressor_model="fake-compressor",
         compression_rate=0.5,
         device_map="cpu",
-        case_ids=("research_requires_reresolution_after_new_evidence",),
+        case_ids=("research_ready_for_digest_bound_finalize",),
         preflight_only=False,
         compressor_factory=_FakeCompressor,
     )
