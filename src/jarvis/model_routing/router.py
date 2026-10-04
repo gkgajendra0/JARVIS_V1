@@ -246,6 +246,7 @@ def build_default_work_targets(
     adapter_registry: ModelAdapterRegistry,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    chatgpt_plan_available_models: tuple[str, ...] = (),
     paid_fallback_enabled: bool = False,
 ) -> DefaultWorkTargets:
     """Build the approved Work pool.
@@ -273,45 +274,126 @@ def build_default_work_targets(
         raise ValueError(
             "chatgpt_plan_model is required when ChatGPT-plan routing is enabled"
         )
-    plan_target = ModelTarget(
-        target_id=CHATGPT_PLAN_TARGET_ID,
-        adapter_id=CHATGPT_PLAN_PROVIDER_ID,
-        provider_id=CHATGPT_PLAN_PROVIDER_ID,
-        model_id=plan_model,
-        locality=ModelLocality.CLOUD,
-        capabilities=(
-            "engineering_reasoning",
-            "structured_output",
-        ),
-        roles=("efficient", "capable"),
-        max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
-        supports_structured_output=True,
-        supports_tools=False,
-        supports_streaming=True,
-        latency_class="standard",
-        benchmark_status=BenchmarkStatus.ACCEPTED,
-        registry_version=1,
-        endpoint_ref=CHATGPT_PLAN_RESOURCE,
-        credential_ref=None,
-        cost_profile=CostProfile(
-            profile_id="chatgpt-plan-subscription-2026-09",
-            version=1,
-            effective_from_epoch=0.0,
-            input_usd_per_million_tokens=0.0,
-            output_usd_per_million_tokens=0.0,
-        ),
-        enabled=True,
+
+    available = {
+        str(model).strip().casefold()
+        for model in chatgpt_plan_available_models
+        if str(model).strip()
+    }
+
+    def _first_available(*models: str) -> str | None:
+        if not available:
+            return None
+        for candidate in models:
+            if candidate.casefold() in available:
+                return candidate
+        return None
+
+    # Prefer the cheapest sufficient subscription-backed models when the
+    # connected account exposes them. If catalog discovery is unavailable we
+    # preserve the previously configured single-model behavior rather than
+    # guessing model access.
+    efficient_model = _first_available("gpt-6-luna", "gpt-5.6-luna")
+    capable_model = _first_available(
+        "gpt-6.1-sol",
+        "gpt-6-sol",
+        "gpt-5.6-sol",
     )
-    targets = (plan_target,)
+    frontier_model = _first_available("gpt-6-astra")
+
+    def _plan_target(
+        *,
+        target_id: str,
+        model_id: str,
+        roles: tuple[str, ...],
+    ) -> ModelTarget:
+        return ModelTarget(
+            target_id=target_id,
+            adapter_id=CHATGPT_PLAN_PROVIDER_ID,
+            provider_id=CHATGPT_PLAN_PROVIDER_ID,
+            model_id=model_id,
+            locality=ModelLocality.CLOUD,
+            capabilities=(
+                "engineering_reasoning",
+                "structured_output",
+            ),
+            roles=roles,
+            max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
+            supports_structured_output=True,
+            supports_tools=False,
+            supports_streaming=True,
+            latency_class="standard",
+            benchmark_status=BenchmarkStatus.ACCEPTED,
+            registry_version=1,
+            endpoint_ref=CHATGPT_PLAN_RESOURCE,
+            credential_ref=None,
+            cost_profile=CostProfile(
+                profile_id="chatgpt-plan-subscription-2026-10",
+                version=1,
+                effective_from_epoch=0.0,
+                input_usd_per_million_tokens=0.0,
+                output_usd_per_million_tokens=0.0,
+            ),
+            enabled=True,
+        )
+
+    plan_targets: list[ModelTarget] = []
+    primary_target_id = CHATGPT_PLAN_TARGET_ID
+
+    if efficient_model is not None:
+        plan_targets.append(
+            _plan_target(
+                target_id=CHATGPT_PLAN_TARGET_ID,
+                model_id=efficient_model,
+                roles=("efficient",),
+            )
+        )
+    if capable_model is not None and capable_model != efficient_model:
+        capable_target_id = f"{CHATGPT_PLAN_TARGET_ID}.capable"
+        plan_targets.append(
+            _plan_target(
+                target_id=capable_target_id,
+                model_id=capable_model,
+                roles=("capable",),
+            )
+        )
+        if not plan_targets:
+            primary_target_id = capable_target_id
+    if frontier_model is not None and frontier_model not in {
+        efficient_model,
+        capable_model,
+    }:
+        frontier_target_id = f"{CHATGPT_PLAN_TARGET_ID}.frontier"
+        plan_targets.append(
+            _plan_target(
+                target_id=frontier_target_id,
+                model_id=frontier_model,
+                roles=("frontier",),
+            )
+        )
+        if not plan_targets:
+            primary_target_id = frontier_target_id
+
+    if not plan_targets:
+        plan_targets.append(
+            _plan_target(
+                target_id=CHATGPT_PLAN_TARGET_ID,
+                model_id=plan_model,
+                roles=("efficient", "capable"),
+            )
+        )
+        primary_target_id = CHATGPT_PLAN_TARGET_ID
+
+    targets: tuple[ModelTarget, ...] = tuple(plan_targets)
     if paid_fallback_enabled:
         paid_fallback = _paid_work_target(
             primary_provider,
             configured_model=configured_model,
         )
-        targets = (plan_target, paid_fallback)
+        targets = (*targets, paid_fallback)
     return DefaultWorkTargets(
         registry=ModelTargetRegistry(adapter_registry, targets),
-        primary_target_id=CHATGPT_PLAN_TARGET_ID,
+        primary_target_id=primary_target_id,
     )
 
 
