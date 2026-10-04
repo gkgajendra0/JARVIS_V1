@@ -212,7 +212,9 @@ def test_research_control_plane_resolves_only_after_new_evidence() -> None:
     assert decider(work, actions, (inspect, evidence, resolved)) is None
 
 
-def test_research_control_plane_leaves_recorded_candidate_for_model_verifier_choice() -> None:
+def test_research_control_plane_leaves_recorded_candidate_for_model_verifier_choice() -> (
+    None
+):
     work = WorkItem(
         request="research capability",
         work_type=WorkType.RESEARCH,
