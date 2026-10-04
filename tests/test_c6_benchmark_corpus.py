@@ -622,9 +622,7 @@ async def test_c6_fixture_remaining_pairs_pass_but_do_not_promote_apply(
             SimpleNamespace(
                 usage={
                     "input_tokens": (
-                        100
-                        if request.context_mode is WorkContextMode.SHADOW
-                        else 50
+                        100 if request.context_mode is WorkContextMode.SHADOW else 50
                     )
                 },
                 usage_observed=True,
