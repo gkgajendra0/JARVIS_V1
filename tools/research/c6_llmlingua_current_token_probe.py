@@ -65,13 +65,24 @@ def _validated_prior_evidence(
     if benchmark.get("all_fixture_cases_equivalent") is not True:
         raise ValueError("prior compressed decision was not strictly equivalent")
     if benchmark.get("all_full_history_payloads_beat_current") is not True:
-        raise ValueError("prior compressed payload did not beat current serialized size")
+        raise ValueError(
+            "prior compressed payload did not beat current serialized size"
+        )
     if benchmark.get("all_provider_input_tokens_reduced") is not True:
-        raise ValueError("prior compressed payload did not beat full-history provider tokens")
-    if benchmark.get("compressor_library_revision") != REVIEWED_LLMLINGUA_LIBRARY_REVISION:
-        raise ValueError("prior LLMLingua library revision does not match reviewed revision")
+        raise ValueError(
+            "prior compressed payload did not beat full-history provider tokens"
+        )
+    if (
+        benchmark.get("compressor_library_revision")
+        != REVIEWED_LLMLINGUA_LIBRARY_REVISION
+    ):
+        raise ValueError(
+            "prior LLMLingua library revision does not match reviewed revision"
+        )
     if benchmark.get("compressor_model_revision") != DEFAULT_LLMLINGUA2_REVISION:
-        raise ValueError("prior LLMLingua model revision does not match reviewed revision")
+        raise ValueError(
+            "prior LLMLingua model revision does not match reviewed revision"
+        )
 
     cases = benchmark.get("cases")
     if not isinstance(cases, list) or len(cases) != 1 or not isinstance(cases[0], dict):
@@ -129,7 +140,9 @@ def _rebuild_payloads(
     previous_versions = benchmark.get("runtime_dependency_versions")
     current_versions = c6._installed_compressor_versions()
     if previous_versions != current_versions:
-        raise ValueError("local compressor dependency versions drifted since PASS evidence")
+        raise ValueError(
+            "local compressor dependency versions drifted since PASS evidence"
+        )
 
     return current_request, current_payload, compressed.payload
 
@@ -149,7 +162,9 @@ async def _run_probe(
     evidence_model = str(benchmark.get("model") or "").strip()
     model = str(model_override or evidence_model).strip()
     if not model:
-        raise ValueError("model is missing from prior evidence and no override was supplied")
+        raise ValueError(
+            "model is missing from prior evidence and no override was supplied"
+        )
     if evidence_model and model != evidence_model:
         raise ValueError("model override does not match prior PASS evidence model")
 
