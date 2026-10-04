@@ -70,6 +70,6 @@ def test_pending_change_gate_suppresses_fresh_gicc_goal_tools(tmp_path) -> None:
         allow_direct_capability_acquisition=True,
     )
 
-    bundle.tools
+    _ = bundle.tools
 
     assert gicc_calls == []
