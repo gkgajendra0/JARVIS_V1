@@ -263,9 +263,7 @@ class JarvisConfig:
         )
         compression_rate = float(self.work_prompt_compression_rate)
         if not 0.0 < compression_rate <= 1.0:
-            raise ValueError(
-                "work_prompt_compression_rate must be within (0, 1]"
-            )
+            raise ValueError("work_prompt_compression_rate must be within (0, 1]")
         object.__setattr__(
             self,
             "work_prompt_compression_rate",
