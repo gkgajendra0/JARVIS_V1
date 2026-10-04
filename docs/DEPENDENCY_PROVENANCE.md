@@ -55,7 +55,7 @@ Removal is bounded: replace the wrapper implementation or dependency, preserve t
 - Upstream license: MIT
 - Compressor model identity:
   `microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank`
-- Reviewed model revision: `5f0c827`
+- Reviewed model revision: `5f0c82792b7ea14c6484e015b6a072009496b7f2`
 - Model license: Apache-2.0
 - Published model size at review: approximately 713 MB total; `model.safetensors`
   approximately 709 MB
