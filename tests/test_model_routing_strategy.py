@@ -124,6 +124,35 @@ def test_repeated_quality_failures_escalate_to_capable() -> None:
     assert "repeated_quality_failure" in result.reason_codes
 
 
+def test_three_quality_failures_escalate_to_frontier() -> None:
+    frontier = _target("frontier-a", roles=("frontier",))
+    signals = derive_work_step_signals(
+        tuple(
+            WorkStep(
+                work_id="work-1",
+                kind=f"verification_test_{index}",
+                summary="Verification failed",
+            )
+            .start()
+            .fail("controlled failure")
+            for index in range(3)
+        )
+    )
+
+    result = EngineeringStageStrategy().rank(
+        request=_request(
+            failures=signals.failure_signals,
+            features=signals.routing_features,
+        ),
+        eligible_targets=(*_targets(), frontier),
+    )
+
+    assert signals.routing_features["quality_failure_count"] == 3
+    assert result.selected_role == "frontier"
+    assert result.ordered_target_ids == ("frontier-a",)
+    assert "repeated_capable_tier_failure" in result.reason_codes
+
+
 def test_provider_pressure_alone_does_not_make_task_harder() -> None:
     pressure = (
         WorkStep(
