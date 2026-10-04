@@ -98,6 +98,23 @@ def main() -> int:
     target_values = targets.registry.all()
     strategy = EngineeringStageStrategy()
 
+    development_override = str(config.development_engine_model or "").strip()
+    capable_plan_targets = tuple(
+        target
+        for target in targets.registry.for_role("capable")
+        if target.provider_id == "chatgpt_plan"
+    )
+    if development_override:
+        effective_development_model = development_override
+        development_model_source = "explicit_override"
+    elif capable_plan_targets:
+        effective_development_model = capable_plan_targets[0].model_id
+        development_model_source = "capable_tier"
+    else:
+        primary = targets.registry.require(targets.primary_target_id)
+        effective_development_model = primary.model_id
+        development_model_source = "primary_fallback"
+
     report = {
         "schema": "jarvis.model_router_owner_preflight.v1",
         "chatgpt_plan_enabled": config.chatgpt_plan_enabled,
@@ -114,6 +131,17 @@ def main() -> int:
             for target in target_values
         ],
         "primary_target_id": targets.primary_target_id,
+        "development_engine": {
+            "configured_override": development_override or None,
+            "effective_model": effective_development_model,
+            "selection_source": development_model_source,
+            "warning": (
+                "DevelopmentEngine is explicitly pinned to Astra; clear "
+                "JARVIS_DEVELOPMENT_ENGINE_MODEL to use automatic capable-tier routing."
+                if development_override.casefold().endswith("astra")
+                else None
+            ),
+        },
         "cases": {
             "routine": _selection(
                 strategy,
