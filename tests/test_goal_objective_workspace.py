@@ -244,6 +244,9 @@ def test_objective_workspace_projects_one_canonical_goal_reality(
     projected_work = workspace.work_items[0]
     assert projected_work.state == WorkState.WAITING_RESOURCE.value
     assert projected_work.status_detail == "provider temporarily unavailable"
+    assert projected_work.system_outcome.kind == "temporary_resource"
+    assert projected_work.system_outcome.terminal is False
+    assert projected_work.system_outcome.owner_action_required is False
 
     assert workspace.current_architecture_refs == (state["architecture"].artifact_id,)
     assert f"capability_gap:{state['gap'].gap_id}:open" in workspace.observed_blockers
