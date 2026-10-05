@@ -49,7 +49,7 @@ def _scenario(path: Path):
             source_session_id="owner-session",
             source_turn_id="owner-tv-turn",
             exact_owner_request="Open Hotstar, search The Martian and play it.",
-            goal_kind=GoalKind.ACTION,
+            goal_kind=GoalKind.ONE_SHOT,
             desired_outcome="Play The Martian on the owner's Hisense television.",
             completion_predicates=("movie_playing_on_target_tv",),
             referenced_entity_ids=(entity.entity_id,),
