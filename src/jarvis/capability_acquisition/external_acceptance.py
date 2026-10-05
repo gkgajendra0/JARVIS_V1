@@ -230,15 +230,14 @@ class ExternalAcceptanceContextResolver:
             change_id,
             "capability_lifecycle_activation",
         )
-        latest_architecture = self._store.latest_artifact(change_id, "architecture")
+        latest_change = self._store.require(change_id)
         latest_manifest = self._store.latest_artifact(change_id, MANIFEST_KIND)
         if (
             latest_candidate is None
             or latest_candidate.artifact_id != candidate.artifact_id
             or latest_activation is None
             or latest_activation.artifact_id != activation.artifact_id
-            or latest_architecture is None
-            or latest_architecture.artifact_id != architecture.artifact_id
+            or latest_change.current_architecture_artifact_id != architecture.artifact_id
             or latest_manifest is None
             or latest_manifest.artifact_id != manifest.artifact_id
         ):
@@ -315,7 +314,11 @@ class ExternalAcceptanceCoordinator:
             "capability_candidate",
         )
         activation = self._changes.get_artifact(str(activation_artifact_id).strip())
-        architecture = self._changes.latest_artifact(change.change_id, "architecture")
+        architecture = (
+            None
+            if change.current_architecture_artifact_id is None
+            else self._changes.get_artifact(change.current_architecture_artifact_id)
+        )
         manifest = self._changes.latest_artifact(change.change_id, MANIFEST_KIND)
         goal_artifact = self._changes.latest_artifact(
             change.change_id,
@@ -739,14 +742,18 @@ class ExternalAcceptanceInvokeExecutor:
             )
         decision = _normalize_owner_reply(authority_reply[0])
         if decision in _NEGATIVE:
-            return {
-                "invoked": False,
-                "owner_declined": True,
-                "request_id": request_id,
-                "request_digest": request_digest,
-                "operation": operation,
-                "owner_input_step_id": authority_reply[1],
-            }
+            raise WorkOwnerInputRequired(
+                (
+                    "The real external acceptance test is still pending. "
+                    "Reply yes whenever you want me to run this exact live test."
+                ),
+                input_key=authority_key,
+                resume_context={
+                    "kind": "live_acceptance_authorization",
+                    "request_id": request_id,
+                    "operation": operation,
+                },
+            )
         if decision not in _AFFIRMATIVE:
             raise WorkOwnerInputRequired(
                 "Please reply yes to run the real external test, or no to decline.",
@@ -1083,7 +1090,7 @@ def external_acceptance_completion_guard(
     if invoked is None:
         return False, "external acceptance requires a live capability invocation"
     if invoked.observation.get("owner_declined") is True:
-        return True, None
+        return False, "external acceptance remains pending after owner decline"
     if invoked.observation.get("invoked") is not True:
         return False, "external acceptance live invocation has not succeeded"
     recorded = _latest_step(
