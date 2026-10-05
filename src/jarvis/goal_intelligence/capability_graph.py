@@ -16,6 +16,7 @@ from .models import (
 )
 from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .store import GoalStore
+from .world import canonical_world_entity_type
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,15 +89,25 @@ class CapabilityGraphResolver:
         if inventory is None:
             return False
 
+        requirement_target = (
+            canonical_world_entity_type(requirement.target_entity_type)
+            if requirement.target_entity_type
+            else None
+        )
+        semantic_targets = {
+            canonical_world_entity_type(item)
+            for item in semantic.target_entity_types
+            if str(item).strip()
+        }
+
         if inventory.management_mode is CapabilityManagementMode.PACKAGE_MANAGED:
             if semantic.semantic_capability_family != requirement.semantic_capability:
                 return False
             return not (
-                requirement.target_entity_type
+                requirement_target
                 and (
-                    not semantic.target_entity_types
-                    or requirement.target_entity_type
-                    not in semantic.target_entity_types
+                    not semantic_targets
+                    or requirement_target not in semantic_targets
                 )
             )
 
@@ -106,9 +117,9 @@ class CapabilityGraphResolver:
         ):
             return False
         return not (
-            requirement.target_entity_type
-            and semantic.target_entity_types
-            and requirement.target_entity_type not in semantic.target_entity_types
+            requirement_target
+            and semantic_targets
+            and requirement_target not in semantic_targets
         )
 
     @staticmethod
