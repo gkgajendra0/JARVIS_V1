@@ -791,30 +791,33 @@ async def test_codex_tool_batch_cannot_smuggle_terminal_disposition(tmp_path) ->
     thread = FakeThread(
         "thr_invalid_batch",
         [
-            _response(
-                {
-                    "kind": "tool_batch",
-                    "summary": "Invalid mixed directive.",
-                    "tool_calls": [
-                        {
-                            "call_id": "write",
-                            "tool_name": "write_file",
-                            "parameters_json": json.dumps(
-                                {
-                                    "path": "src/jarvis/demo.py",
-                                    "text": "VALUE = 1\n",
-                                }
-                            ),
-                        }
-                    ],
-                    "disposition": "completed",
-                    "reason": None,
-                    "requested_dependencies": [],
-                    "evidence_refs": [],
-                    "blocker_code": None,
-                },
-                25,
-            )
+            *[
+                _response(
+                    {
+                        "kind": "tool_batch",
+                        "summary": "Invalid mixed directive.",
+                        "tool_calls": [
+                            {
+                                "call_id": "write",
+                                "tool_name": "write_file",
+                                "parameters_json": json.dumps(
+                                    {
+                                        "path": "src/jarvis/demo.py",
+                                        "text": "VALUE = 1\n",
+                                    }
+                                ),
+                            }
+                        ],
+                        "disposition": "completed",
+                        "reason": None,
+                        "requested_dependencies": [],
+                        "evidence_refs": [],
+                        "blocker_code": None,
+                    },
+                    25,
+                )
+                for _ in range(3)
+            ]
         ],
     )
     tools = FakeTools(ticket.allowed_tools)
@@ -839,27 +842,33 @@ async def test_codex_terminal_result_cannot_request_more_tools(tmp_path) -> None
     thread = FakeThread(
         "thr_invalid_result",
         [
-            _response(
-                {
-                    "kind": "result",
-                    "summary": "Invalid terminal directive.",
-                    "tool_calls": [
-                        {
-                            "call_id": "write",
-                            "tool_name": "write_file",
-                            "parameters_json": json.dumps(
-                                {"path": "src/jarvis/demo.py", "text": "VALUE = 2\n"}
-                            ),
-                        }
-                    ],
-                    "disposition": "failed",
-                    "reason": "synthetic",
-                    "requested_dependencies": [],
-                    "evidence_refs": [],
-                    "blocker_code": None,
-                },
-                25,
-            )
+            *[
+                _response(
+                    {
+                        "kind": "result",
+                        "summary": "Invalid terminal directive.",
+                        "tool_calls": [
+                            {
+                                "call_id": "write",
+                                "tool_name": "write_file",
+                                "parameters_json": json.dumps(
+                                    {
+                                        "path": "src/jarvis/demo.py",
+                                        "text": "VALUE = 2\n",
+                                    }
+                                ),
+                            }
+                        ],
+                        "disposition": "failed",
+                        "reason": "synthetic",
+                        "requested_dependencies": [],
+                        "evidence_refs": [],
+                        "blocker_code": None,
+                    },
+                    25,
+                )
+                for _ in range(3)
+            ]
         ],
     )
     tools = FakeTools(ticket.allowed_tools)
