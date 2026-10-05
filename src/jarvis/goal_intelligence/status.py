@@ -673,9 +673,7 @@ class OwnerObjectiveStatusResolver:
                 ObjectivePhase.EXTERNAL_ACCEPTANCE,
                 ObjectiveBlocker(
                     kind="external_acceptance",
-                    blocker_id=(
-                        change.external_acceptance_work_id or change.change_id
-                    ),
+                    blocker_id=(change.external_acceptance_work_id or change.change_id),
                     owner_action_required=False,
                     detail=(
                         "The capability is enabled but still requires passing "
