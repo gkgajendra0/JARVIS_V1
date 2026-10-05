@@ -6,7 +6,9 @@ from types import SimpleNamespace
 import pytest
 
 from jarvis.capability_acquisition.external_acceptance import (
+    ExternalAcceptanceError,
     ExternalAcceptanceInvokeExecutor,
+    _require_activation_authority,
     external_acceptance_completion_guard,
 )
 from jarvis.work.engine import (
@@ -185,6 +187,31 @@ def test_sensitive_owner_input_is_cleared_on_cancel(tmp_path) -> None:
 
     assert cancelled.state is WorkState.CANCELLED
     assert store.pop_sensitive_input(item.work_id, "pairing_pin") is None
+
+
+def test_external_acceptance_authority_must_match_activation_artifact() -> None:
+    activation = SimpleNamespace(
+        payload={
+            "authority_session_id": "owner-session",
+            "source_turn_id": "owner-turn",
+        }
+    )
+
+    assert _require_activation_authority(
+        activation,
+        authority_session_id="owner-session",
+        source_turn_id="owner-turn",
+    ) == ("owner-session", "owner-turn")
+
+    with pytest.raises(
+        ExternalAcceptanceError,
+        match="does not match the exact activation artifact",
+    ):
+        _require_activation_authority(
+            activation,
+            authority_session_id="different-session",
+            source_turn_id="owner-turn",
+        )
 
 
 def test_external_acceptance_guard_keeps_owner_decline_pending() -> None:
