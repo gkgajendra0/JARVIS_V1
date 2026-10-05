@@ -139,6 +139,67 @@ async def test_status_delegates_overall_truth_to_objective_projection(
 
 
 @pytest.mark.asyncio
+async def test_specific_completed_work_status_keeps_active_owner_objective_context(
+    tmp_path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    item = WorkItem(
+        request="Acquire TV media control",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-tv",
+        source_turn_id="turn-tv",
+    )
+    store.create(item)
+    running = store.save(
+        item.transition(WorkState.RUNNING, status_detail="researching"),
+        expected_version=item.version,
+    )
+    completed = store.save(
+        running.transition(
+            WorkState.COMPLETED,
+            status_detail="research complete",
+            result={"ok": True},
+        ),
+        expected_version=running.version,
+    )
+    objective_payload = {
+        "goal_id": "goal_tv",
+        "overall_state": "waiting_owner",
+        "phase": "waiting_owner_approval",
+        "verified_completion": False,
+    }
+    objective = SimpleNamespace(public_payload=lambda: objective_payload)
+    objective_status = SimpleNamespace(
+        find_active_by_work_id=lambda work_id: (
+            objective if work_id == completed.work_id else None
+        )
+    )
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.orchestrator = SimpleNamespace(get=lambda work_id: store.require(work_id))
+    runtime._owner_work_focus_id = None
+
+    conversation = ConversationSession()
+    conversation.start()
+    tools = WorkAgentTools(
+        runtime,
+        conversation,
+        objective_status=objective_status,  # type: ignore[arg-type]
+    )
+
+    result = await tools.get_background_work_status(
+        None,  # type: ignore[arg-type]
+        completed.work_id,
+    )
+
+    assert result["state"] == "completed"
+    assert result["owner_objective"] == objective_payload
+    assert result["owner_objective"]["verified_completion"] is False
+    assert "Do not equate" in str(result["overall_task_truth"])
+
+
+@pytest.mark.asyncio
 async def test_status_focus_survives_new_voice_session_and_binds_deictic_retry(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
