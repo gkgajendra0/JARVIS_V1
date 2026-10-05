@@ -1055,6 +1055,20 @@ def build_work_runtime(
     configure_terminal_reconciliation(_reconcile_terminal_change)
     changes.reconcile_active()
 
+    recovered_revision_research = (
+        change_store.reopen_recoverable_architecture_revision_failures(
+            recovery_generation="phase9-research-provider-sdk-v1",
+        )
+    )
+    for change_id in recovered_revision_research:
+        changes.reconcile(change_id)
+    if recovered_revision_research:
+        LOGGER.warning(
+            "Recovered compatible architecture-revision research failure(s) with "
+            "fresh source attempts: %s",
+            ", ".join(recovered_revision_research),
+        )
+
     recovered_development = change_store.reopen_recoverable_development_engine_failures(
         recovery_generation="codex-contract-repair-v1",
     )
