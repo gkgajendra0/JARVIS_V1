@@ -131,9 +131,10 @@ class ProgressLedgerV1:
     def __post_init__(self) -> None:
         if self.schema != "progress_ledger.v1":
             raise ValueError("unsupported ProgressLedger schema")
-        if self.digest != "pending" and canonical_digest(
-            self.canonical_payload()
-        ) != self.digest:
+        if (
+            self.digest != "pending"
+            and canonical_digest(self.canonical_payload()) != self.digest
+        ):
             raise ValueError("ProgressLedger digest mismatch")
 
 
