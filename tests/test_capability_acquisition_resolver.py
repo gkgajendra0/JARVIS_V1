@@ -12,6 +12,7 @@ from jarvis.capabilities.models import (
 from jarvis.capability_acquisition import (
     AcquisitionCandidateV1,
     AcquisitionContextV1,
+    AcquisitionDisposition,
     AcquisitionResolutionError,
     AcquisitionSourceKind,
     AcquisitionStrategy,
