@@ -328,6 +328,26 @@ class ChangeCoordinator:
                     "architecture",
                 )
                 if architecture is not None:
+                    revision_request = self.store.latest_artifact(
+                        change_id,
+                        "architecture_revision_request",
+                    )
+                    produced_by_attempt = not (
+                        revision_request is not None
+                        and revision_request.payload.get("source_attempt") == stage.attempt
+                        and revision_request.payload.get(
+                            "previous_architecture_artifact_id"
+                        )
+                        == architecture.artifact_id
+                    )
+                    if produced_by_attempt:
+                        self.store.record_stage_outcome(
+                            change_id,
+                            stage.stage_key,
+                            stage.attempt,
+                            produced_artifact_id=architecture.artifact_id,
+                            accepted=True,
+                        )
                     change = self.store.require(change_id)
                     return self.store.transition(
                         change_id,
