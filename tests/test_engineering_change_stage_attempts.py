@@ -16,7 +16,9 @@ def _research_item(change_id: str, attempt: int) -> WorkItem:
     )
 
 
-def test_replacement_stage_attempt_supersedes_without_rewriting_history(tmp_path) -> None:
+def test_replacement_stage_attempt_supersedes_without_rewriting_history(
+    tmp_path,
+) -> None:
     path = tmp_path / "work.sqlite3"
     work = SQLiteWorkStore(path)
     changes = ChangeStore(work)
