@@ -14,10 +14,36 @@ from jarvis.capability_acquisition.lineage import (
 class FakeStore:
     def __init__(self) -> None:
         self.artifacts = {}
+        self.current_architecture = None
+
+    def require(self, change_id: str):
+        assert change_id == "change-tv"
+        return SimpleNamespace(
+            current_architecture_artifact_id=(
+                None
+                if self.current_architecture is None
+                else self.current_architecture.artifact_id
+            )
+        )
 
     def latest_artifact(self, change_id: str, kind: str):
         assert change_id == "change-tv"
         return self.artifacts.get(kind)
+
+    def get_artifact(self, artifact_id: str):
+        if (
+            self.current_architecture is not None
+            and self.current_architecture.artifact_id == artifact_id
+        ):
+            return self.current_architecture
+        return next(
+            (
+                artifact
+                for artifact in self.artifacts.values()
+                if artifact.artifact_id == artifact_id
+            ),
+            None,
+        )
 
 
 def _artifact(
@@ -71,6 +97,18 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
             "effective_enabled": True,
         },
     )
+    architecture = _artifact(
+        "architecture",
+        "h",
+        {
+            "owner_acceptance_contract_ids": (
+                [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT]
+                if external_required
+                else []
+            )
+        },
+    )
+    store.current_architecture = architecture
     store.artifacts = {
         "gicc_capability_gap_link": _artifact(
             "link",
@@ -88,17 +126,7 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
         "capability_candidate": candidate,
         "capability_package_admission": admission,
         "capability_lifecycle_activation": activation,
-        "architecture": _artifact(
-            "architecture",
-            "h",
-            {
-                "owner_acceptance_contract_ids": (
-                    [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT]
-                    if external_required
-                    else []
-                )
-            },
-        ),
+        "architecture": architecture,
     }
     return store
 
@@ -122,6 +150,26 @@ def test_lineage_verifier_returns_exact_current_chain() -> None:
     assert result.package_version == "1.0.0"
     assert result.package_digest == "p" * 64
     assert result.external_acceptance_required is False
+
+
+def test_lineage_verifier_uses_authoritative_architecture_not_newest_artifact() -> None:
+    store = _current_store(external_required=True)
+    store.artifacts["architecture"] = _artifact(
+        "unbound-newer-architecture",
+        "z",
+        {"owner_acceptance_contract_ids": []},
+        created_at="2026-10-03T10:05:00+00:00",
+    )
+
+    assert (
+        verify_capability_acquisition_completion(
+            store,
+            change_id="change-tv",
+            motivating_goal_id="goal-tv",
+            gap_id="gap-tv",
+        )
+        is None
+    )
 
 
 def test_lineage_verifier_returns_none_until_activation_is_effective() -> None:
