@@ -431,12 +431,7 @@ async def test_status_then_natural_yes_uses_exact_contextual_change_gate(
     calls: list[tuple[str, bool]] = []
 
     class _FakeService:
-        def decide_latest(
-            self,
-            gate_id: str,
-            *,
-            allow_bound_decision: bool = False,
-        ):
+        def decide_latest(self, gate_id: str, *, allow_bound_decision: bool = False):
             calls.append((gate_id, allow_bound_decision))
             return SimpleNamespace(
                 challenge=SimpleNamespace(change_id=change.change_id),
