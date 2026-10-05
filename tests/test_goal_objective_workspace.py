@@ -776,7 +776,7 @@ class _SupervisorCutoverBackend:
     def submit(self, work_id, *, priority):
         del priority
         self.submissions.append(work_id)
-        return f"cutover:{work_id}"
+        return work_id
 
 
 def _direct_goal_change_ready_for_architecture(state):
