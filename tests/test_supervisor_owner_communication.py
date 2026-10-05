@@ -84,6 +84,47 @@ def test_change_gate_message_preserves_exact_authority_binding() -> None:
     assert "work-1" not in first.message
 
 
+def test_change_gate_voice_is_not_architecture_specific() -> None:
+    acceptance = OwnerCommunicationIntentV1.create(
+        kind=OwnerCommunicationKind.CHANGE_GATE,
+        event_key="change-gate:acceptance",
+        summary="Acceptance review is required.",
+        change_id="change-1",
+        work_id="work-1",
+        gate_id="gate-accept",
+        artifact_digest="b" * 64,
+        artifact_revision=1,
+        proposal_summary={
+            "review_kind": "acceptance",
+            "commit": "abc123",
+        },
+    )
+    promotion = OwnerCommunicationIntentV1.create(
+        kind=OwnerCommunicationKind.CHANGE_GATE,
+        event_key="change-gate:promotion",
+        summary="Promotion review is required.",
+        change_id="change-1",
+        work_id="work-1",
+        gate_id="gate-promote",
+        artifact_digest="c" * 64,
+        artifact_revision=1,
+        proposal_summary={
+            "review_kind": "promotion",
+            "pr_number": 252,
+        },
+    )
+
+    acceptance_message = SupervisorOwnerCommunication.compile(acceptance)
+    promotion_message = SupervisorOwnerCommunication.compile(promotion)
+
+    assert acceptance_message is not None
+    assert promotion_message is not None
+    assert "acceptance evidence is ready" in acceptance_message.message
+    assert "promotion evidence is ready" in promotion_message.message
+    assert "approve gate-accept" in acceptance_message.message
+    assert "approve gate-promote" in promotion_message.message
+
+
 def test_terminal_failure_is_owner_visible_as_system_failure() -> None:
     intent = OwnerCommunicationIntentV1.create(
         kind=OwnerCommunicationKind.FAILURE,
