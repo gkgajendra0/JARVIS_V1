@@ -18,6 +18,7 @@ from jarvis.development_engine import (
 from jarvis.development_engine.codex import (
     CodexPlanDevelopmentEngine,
     CodexTurnResponse,
+    _DevelopmentResponseContractError,
     _OfficialCodexThread,
 )
 from jarvis.provider_circuit import BackgroundProviderCircuit
@@ -887,6 +888,37 @@ async def test_codex_engine_propagates_governed_owner_input_boundary(tmp_path) -
 
     assert captured.value.sensitive is True
     assert captured.value.input_key == "pairing_pin"
+
+
+def test_official_codex_thread_recovers_commentary_agent_message() -> None:
+    payload = '{"kind":"tool_batch","summary":"Inspect source","tool_calls":[]}'
+    result = SimpleNamespace(
+        final_response=None,
+        items=[
+            SimpleNamespace(
+                root=SimpleNamespace(
+                    type="agentMessage",
+                    text=payload,
+                    phase=SimpleNamespace(value="commentary"),
+                )
+            )
+        ],
+    )
+
+    assert _OfficialCodexThread._structured_response_text(result) == payload
+
+
+def test_official_codex_thread_rejects_completed_turn_without_agent_message() -> None:
+    result = SimpleNamespace(
+        final_response=None,
+        items=[SimpleNamespace(root=SimpleNamespace(type="reasoning", text="hidden"))],
+    )
+
+    with pytest.raises(
+        _DevelopmentResponseContractError,
+        match="without a structured agent response",
+    ):
+        _OfficialCodexThread._structured_response_text(result)
 
 
 def test_official_codex_usage_uses_last_turn_not_cumulative_thread_total() -> None:
