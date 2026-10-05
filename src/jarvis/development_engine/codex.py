@@ -47,6 +47,7 @@ _DEFAULT_ENGINE_VERSION = REVIEWED_CODEX_SDK_VERSION
 _MAX_ENGINE_TURNS = 24
 _MAX_TOOL_CALLS_PER_BATCH = 8
 _MAX_TOOL_CALLS_TOTAL = 64
+_MAX_CONTRACT_REPAIRS = 2
 _MAX_EXTERNAL_OBSERVATION_CHARS = 32_000
 _MAX_OBSERVATION_STRING_CHARS = 8_000
 
@@ -481,6 +482,35 @@ def _ticket_prompt(
     }
     return json.dumps(
         payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+
+
+def _contract_repair_payload(
+    ticket: DevelopmentTicketV1,
+    *,
+    reason: str,
+) -> str:
+    """Ask the same Codex thread to repair structure without granting new authority."""
+
+    normalized_reason = " ".join(str(reason).split()).strip()[:400]
+    payload = {
+        "contract": "jarvis.development_response_repair.v1",
+        "ticket_id": ticket.ticket_id,
+        "status": "previous_response_rejected",
+        "reason": normalized_reason or "structured response contract was invalid",
+        "instructions": (
+            "Return a fresh response that satisfies the exact output schema. "
+            "Do not claim any tool execution or evidence that JARVIS has not supplied. "
+            "If implementation work is needed, return kind=tool_batch with at least "
+            "one authorized tool call. If a terminal disposition is justified, return "
+            "kind=result with no tool calls."
+        ),
+    }
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
     )
 
 
@@ -1007,16 +1037,69 @@ class CodexPlanDevelopmentEngine:
                     f"{self.engine_version}, found {runtime_version or 'unknown'}."
                 )
             thread = await self._thread(runtime, ticket)
-            response = await thread.run_user(
-                _ticket_prompt(ticket, tools),
-                output_schema=_directive_schema(),
-            )
-            if circuit is not None:
-                circuit.record_success()
+            contract_repairs = 0
+            try:
+                response = await thread.run_user(
+                    _ticket_prompt(ticket, tools),
+                    output_schema=_directive_schema(),
+                )
+            except _DevelopmentResponseContractError as exc:
+                response = None
+                last_contract_error: _DevelopmentResponseContractError | None = exc
+            else:
+                last_contract_error = None
+                if circuit is not None:
+                    circuit.record_success()
 
             for _turn_index in range(self._max_turns):
-                last_usage = _merge_usage(last_usage, response.usage)
-                directive = _parse_directive(response)
+                while True:
+                    if response is None:
+                        contract_error = last_contract_error
+                    else:
+                        last_usage = _merge_usage(last_usage, response.usage)
+                        try:
+                            directive = _parse_directive(response)
+                        except _DevelopmentResponseContractError as exc:
+                            contract_error = exc
+                        else:
+                            contract_error = None
+
+                    if contract_error is None:
+                        break
+                    if contract_repairs >= _MAX_CONTRACT_REPAIRS:
+                        raise _DevelopmentResponseContractError(
+                            "Codex development response remained invalid after "
+                            f"{contract_repairs} bounded repair attempt(s): "
+                            f"{contract_error}"
+                        ) from contract_error
+
+                    contract_repairs += 1
+                    LOGGER.warning(
+                        "DevelopmentEngine rejected Codex response contract and is "
+                        "requesting bounded repair | ticket_id=%s repair=%s/%s "
+                        "reason=%s thread_id=%s",
+                        ticket.ticket_id,
+                        contract_repairs,
+                        _MAX_CONTRACT_REPAIRS,
+                        " ".join(str(contract_error).split())[:240],
+                        thread.id,
+                    )
+                    try:
+                        response = await thread.run_external(
+                            _contract_repair_payload(
+                                ticket,
+                                reason=str(contract_error),
+                            ),
+                            output_schema=_directive_schema(),
+                        )
+                    except _DevelopmentResponseContractError as exc:
+                        response = None
+                        last_contract_error = exc
+                    else:
+                        last_contract_error = None
+                        if circuit is not None:
+                            circuit.record_success()
+
                 if directive["kind"] == "result":
                     try:
                         return self._terminal_result(
@@ -1189,14 +1272,21 @@ class CodexPlanDevelopmentEngine:
             failure = classify_provider_failure(exc, provider="chatgpt_plan")
             LOGGER.warning(
                 "DevelopmentEngine Codex boundary failed | ticket_id=%s "
-                "exception_type=%s failure_kind=%s retryable=%s thread_id=%s",
+                "exception_type=%s failure_kind=%s retryable=%s reason=%s "
+                "thread_id=%s",
                 ticket.ticket_id,
                 type(exc).__name__,
                 failure.kind.value,
                 failure.retryable,
+                " ".join(str(exc).split())[:400],
                 None if thread is None else thread.id,
             )
-            trip = None if circuit is None else circuit.record_failure(exc)
+            trip = (
+                None
+                if circuit is None
+                or failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID
+                else circuit.record_failure(exc)
+            )
             return _provider_result(
                 ticket=ticket,
                 engine_version=self.engine_version,
