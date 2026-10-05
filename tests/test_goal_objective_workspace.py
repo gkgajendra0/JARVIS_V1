@@ -4,16 +4,22 @@ from pathlib import Path
 import pytest
 
 from jarvis.autonomy import (
+    AutonomyMode,
     GlobalSupervisor,
     ShadowAgreement,
     ShadowFaultKind,
     SupervisorAction,
+    SupervisorCutoverController,
+    SupervisorCutoverDisposition,
     SupervisorProposalV1,
     SupervisorShadowRunner,
     supervisor_context_from_workspace,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
+from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.ledgers import (
     build_progress_ledger,
@@ -761,3 +767,263 @@ def test_supervisor_shadow_detects_specialist_loop_without_acting(
     assert state["work"].require(state["research"].work_id).version == (
         state["research"].version
     )
+
+
+class _SupervisorCutoverBackend:
+    def __init__(self) -> None:
+        self.submissions: list[str] = []
+
+    def submit(self, work_id, *, priority):
+        del priority
+        self.submissions.append(work_id)
+        return f"cutover:{work_id}"
+
+
+def _direct_goal_change_ready_for_architecture(state):
+    backend = _SupervisorCutoverBackend()
+    coordinator = ChangeCoordinator(state["changes"], backend)
+    change = coordinator.start(
+        "Implement the exact owner objective through governed engineering.",
+        state["goal"].source_session_id,
+        state["goal"].source_turn_id,
+    )
+    source = next(
+        stage
+        for stage in state["changes"].list_stages(change.change_id)
+        if stage.stage_key == "research"
+    )
+    queued = state["work"].require(source.work_id)
+    running = state["work"].save(
+        queued.transition(WorkState.RUNNING),
+        expected_version=queued.version,
+    )
+    state["work"].save(
+        running.transition(
+            WorkState.COMPLETED,
+            status_detail="Research evidence accepted.",
+        ),
+        expected_version=running.version,
+    )
+    architecture = state["changes"].add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "schema": "supervisor_cutover_test_architecture.v1",
+            "strategy": "existing_governed_coordinator",
+            "allowed_paths": ["src/jarvis/"],
+        },
+    )
+    ready = coordinator.reconcile(change.change_id)
+    assert ready.state is ChangeState.ARCHITECTURE_READY
+    return backend, coordinator, ready, architecture, source
+
+
+def test_supervisor_cutover_defaults_to_shadow_without_mutation(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "cutover-shadow.sqlite3")
+    backend = _SupervisorCutoverBackend()
+    coordinator = ChangeCoordinator(state["changes"], backend)
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    before = projector.project(state["goal"].goal_id)
+
+    result = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+    ).coordinate(state["goal"].goal_id)
+
+    assert result.mode is AutonomyMode.SHADOW
+    assert result.disposition is SupervisorCutoverDisposition.SHADOW_ONLY
+    assert result.action is SupervisorAction.WAIT_RESOURCE
+    assert result.accepted is True
+    assert result.mutation_performed is False
+    assert result.before_workspace_digest == before.digest
+    assert result.after_workspace_digest == before.digest
+    assert backend.submissions == []
+
+
+def test_supervisor_cutover_assisted_waits_for_runtime_without_mutation(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "cutover-wait.sqlite3")
+    backend = _SupervisorCutoverBackend()
+    coordinator = ChangeCoordinator(state["changes"], backend)
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+
+    result = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+    ).coordinate(state["goal"].goal_id)
+
+    assert result.disposition is SupervisorCutoverDisposition.AWAIT_RUNTIME
+    assert result.action is SupervisorAction.WAIT_RESOURCE
+    assert result.mutation_performed is False
+    assert state["changes"].require(state["change"].change_id).state is (
+        ChangeState.RESEARCHING
+    )
+    assert backend.submissions == []
+
+
+def test_supervisor_cutover_surfaces_gate_but_cannot_approve_it(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "cutover-gate.sqlite3")
+    backend, coordinator, change, architecture, source = (
+        _direct_goal_change_ready_for_architecture(state)
+    )
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    controller = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+    )
+
+    result = controller.coordinate(state["goal"].goal_id)
+
+    persisted = state["changes"].require(change.change_id)
+    assert result.action is SupervisorAction.CONTINUE
+    assert result.disposition is SupervisorCutoverDisposition.RECONCILED_CHANGE
+    assert persisted.state is ChangeState.WAITING_OWNER_APPROVAL
+    assert len(result.surfaced_gate_ids) == 1
+    gate_id = result.surfaced_gate_ids[0]
+    gate = GateService(state["changes"], verify_owner=lambda *_: False).get(gate_id)
+    assert gate is not None
+    assert gate.challenge.artifact_digest == architecture.digest
+    assert state["changes"].list_stages(change.change_id) == (source,)
+    assert all(
+        stage.stage_key != "development"
+        for stage in state["changes"].list_stages(change.change_id)
+    )
+    assert backend.submissions == [source.work_id]
+
+
+def test_supervisor_cutover_starts_development_only_after_existing_owner_gate(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "cutover-development.sqlite3")
+    backend, coordinator, change, architecture, source = (
+        _direct_goal_change_ready_for_architecture(state)
+    )
+    gate_id = reconcile_owner_change_gates(
+        coordinator,
+        change_ids=(change.change_id,),
+    )[0]
+    gates = GateService(state["changes"], verify_owner=lambda *_: True)
+    gates.decide(
+        gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="owner-verified-session",
+        source_turn_id="owner-verified-turn",
+        request_key="owner-verified-request",
+    )
+    assert state["changes"].require(change.change_id).state is (
+        ChangeState.APPROVED_FOR_BUILD
+    )
+
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    result = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+    ).coordinate(state["goal"].goal_id)
+
+    persisted = state["changes"].require(change.change_id)
+    development = [
+        stage
+        for stage in state["changes"].list_stages(change.change_id)
+        if stage.stage_key == "development"
+    ]
+    assert result.action is SupervisorAction.RESUME_DEVELOPMENT
+    assert result.disposition is SupervisorCutoverDisposition.RECONCILED_CHANGE
+    assert result.mutation_performed is True
+    assert persisted.state is ChangeState.DEVELOPING
+    assert len(development) == 1
+    assert development[0].plan_artifact_id == architecture.artifact_id
+    assert development[0].work_id in backend.submissions
+    assert source.work_id in backend.submissions
+
+
+def test_supervisor_cutover_revalidates_and_rejects_stale_decision(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "cutover-stale.sqlite3")
+    backend, coordinator, change, architecture, _ = (
+        _direct_goal_change_ready_for_architecture(state)
+    )
+    gate_id = reconcile_owner_change_gates(
+        coordinator,
+        change_ids=(change.change_id,),
+    )[0]
+    GateService(state["changes"], verify_owner=lambda *_: True).decide(
+        gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="owner-stale-session",
+        source_turn_id="owner-stale-turn",
+        request_key="owner-stale-request",
+    )
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    old_workspace = projector.project(state["goal"].goal_id)
+    old_decision = GlobalSupervisor().evaluate(old_workspace)
+    assert old_decision.proposal.action is SupervisorAction.RESUME_DEVELOPMENT
+
+    state["changes"].add_artifact(
+        change.change_id,
+        kind="cutover_test_observation",
+        payload={"schema": "cutover_test_observation.v1", "value": "new canonical fact"},
+    )
+    before_stage_count = len(state["changes"].list_stages(change.change_id))
+
+    result = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+    ).coordinate(
+        state["goal"].goal_id,
+        decision=old_decision,
+    )
+
+    assert result.disposition is SupervisorCutoverDisposition.REJECTED
+    assert result.accepted is False
+    assert "workspace_digest_mismatch" in result.reason_codes
+    assert result.mutation_performed is False
+    assert len(state["changes"].list_stages(change.change_id)) == before_stage_count
+    assert state["changes"].require(change.change_id).state is (
+        ChangeState.APPROVED_FOR_BUILD
+    )
+
+
+def test_supervisor_cutover_rejects_active_bounded_mode(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "cutover-active.sqlite3")
+    coordinator = ChangeCoordinator(
+        state["changes"],
+        _SupervisorCutoverBackend(),
+    )
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+
+    with pytest.raises(ValueError, match="ACTIVE_BOUNDED"):
+        SupervisorCutoverController(
+            projector=projector,
+            change_coordinator=coordinator,
+            mode=AutonomyMode.ACTIVE_BOUNDED,
+        )
