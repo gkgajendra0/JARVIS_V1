@@ -453,13 +453,10 @@ def test_revision_research_compatibility_recovery_starts_fresh_attempt(
         "architecture_revision_request",
     )
     assert before_revision is not None
-    assert (
-        changes.reopen_recoverable_architecture_revision_failures(
-            recovery_generation="phase9-research-provider-sdk-v1",
-            dry_run=True,
-        )
-        == (change.change_id,)
-    )
+    assert changes.reopen_recoverable_architecture_revision_failures(
+        recovery_generation="phase9-research-provider-sdk-v1",
+        dry_run=True,
+    ) == (change.change_id,)
     assert changes.require(change.change_id).state is ChangeState.FAILED
     assert (
         changes.latest_artifact(
@@ -627,13 +624,10 @@ def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -
     )
 
     stages_before_dry_run = changes.list_stages(change.change_id)
-    assert (
-        changes.reopen_recoverable_development_engine_failures(
-            recovery_generation="codex-contract-repair-v1",
-            dry_run=True,
-        )
-        == (change.change_id,)
-    )
+    assert changes.reopen_recoverable_development_engine_failures(
+        recovery_generation="codex-contract-repair-v1",
+        dry_run=True,
+    ) == (change.change_id,)
     assert changes.require(change.change_id).state is ChangeState.FAILED
     assert changes.list_stages(change.change_id) == stages_before_dry_run
 
