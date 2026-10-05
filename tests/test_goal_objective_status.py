@@ -244,3 +244,35 @@ def test_failed_external_acceptance_blocks_objective_projection(tmp_path) -> Non
     assert phase is ObjectivePhase.BLOCKED
     assert blocker is not None
     assert blocker.kind == "external_acceptance_failed"
+
+
+def test_lifecycle_proposal_makes_observing_change_wait_for_owner_activation(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    resolver = OwnerObjectiveStatusResolver(
+        goals=GoalStore(work),
+        changes=ChangeStore(work),
+    )
+    change = ObjectiveChangeStatus(
+        change_id="change_activation",
+        state=ChangeState.OBSERVING.value,
+        work=(),
+        pending_gate_ids=(),
+        lifecycle_proposal_present=True,
+        activation_present=False,
+        external_acceptance_required=True,
+        external_acceptance_work_id=None,
+        external_acceptance_work_state=None,
+        external_acceptance_verdict=None,
+        lineage_complete=False,
+        lineage_error=None,
+    )
+
+    overall, phase, blocker = resolver._status_for_change(change)
+
+    assert overall is ObjectiveOverallState.WAITING_OWNER
+    assert phase is ObjectivePhase.WAITING_ACTIVATION
+    assert blocker is not None
+    assert blocker.kind == "capability_activation"
+    assert blocker.owner_action_required is True
