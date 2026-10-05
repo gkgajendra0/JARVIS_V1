@@ -319,7 +319,12 @@ class ChangeCoordinator:
                 if s.stage_key == development_stage.stage_key
             ]
             matching = next(
-                (s for s in attempts if s.plan_artifact_id == architecture.artifact_id),
+                (
+                    stage
+                    for stage in reversed(attempts)
+                    if stage.plan_artifact_id == architecture.artifact_id
+                    and not self.store.work.require(stage.work_id).state.terminal
+                ),
                 None,
             )
             self.submit_stage(
@@ -327,7 +332,7 @@ class ChangeCoordinator:
                 development_stage.stage_key,
                 matching.attempt
                 if matching is not None
-                else max((s.attempt for s in attempts), default=0) + 1,
+                else max((stage.attempt for stage in attempts), default=0) + 1,
             )
             return self.store.transition(
                 change_id, ChangeState.DEVELOPING, expected_version=change.version
