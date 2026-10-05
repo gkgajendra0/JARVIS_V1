@@ -393,7 +393,8 @@ class EntityResolver:
                         continue
                     if (
                         expected
-                        and canonical_world_entity_type(entity.entity_type) not in expected
+                        and canonical_world_entity_type(entity.entity_type)
+                        not in expected
                     ):
                         continue
                     self._registry.register_entity(entity)
