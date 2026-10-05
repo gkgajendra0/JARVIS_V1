@@ -364,35 +364,45 @@ def _authoritative_work(
 ) -> WorkspaceWorkV1 | None:
     if change is None:
         return None
-    preferred_stage = (
-        "development"
-        if change.state
-        in {
-            "approved_for_build",
-            "developing",
-            "verifying",
-            "waiting_owner_acceptance",
-            "ready_for_promotion",
-            "waiting_promotion_approval",
-            "promoted",
-            "observing",
-        }
-        else None
-    )
-    authoritative = [item for item in change.stages if item.authoritative]
-    if preferred_stage is not None:
-        matching = [
-            item for item in authoritative if item.stage_key == preferred_stage
-        ]
-        if matching:
-            authoritative = matching
-    if not authoritative:
+    work_by_id = {item.work_id: item for item in workspace.work_items}
+    candidates = [
+        (stage, work_by_id.get(stage.work_id))
+        for stage in change.stages
+        if stage.authoritative
+    ]
+    candidates = [(stage, work) for stage, work in candidates if work is not None]
+    if not candidates:
         return None
-    stage = max(authoritative, key=lambda item: (item.attempt, item.stage_key))
-    return next(
-        (item for item in workspace.work_items if item.work_id == stage.work_id),
-        None,
+
+    if change.state == "researching":
+        research = [
+            pair
+            for pair in candidates
+            if pair[1].work_type in {"research", "diagnostics"}
+        ]
+        if research:
+            candidates = research
+    elif change.state in {
+        "approved_for_build",
+        "developing",
+        "verifying",
+        "waiting_owner_acceptance",
+        "ready_for_promotion",
+        "waiting_promotion_approval",
+        "promoted",
+        "observing",
+    }:
+        development = [
+            pair for pair in candidates if pair[1].work_type == "development"
+        ]
+        if development:
+            candidates = development
+
+    _, work = max(
+        candidates,
+        key=lambda pair: (pair[0].attempt, pair[0].stage_key),
     )
+    return work
 
 
 def _specialist(
