@@ -75,8 +75,7 @@ def inspect_existing_objective(
     family = " ".join(str(expected_capability_family or "").split()).strip()
     if family and family not in snapshot.capability_families:
         raise ExistingObjectiveLineageError(
-            "expected capability family is not canonical for this objective: "
-            + family
+            "expected capability family is not canonical for this objective: " + family
         )
 
     return {
@@ -113,9 +112,7 @@ def main() -> int:
         goal_id=args.goal_id,
         gap_id=args.gap_id,
         change_id=args.change_id,
-        historical_architecture_artifact_id=(
-            args.historical_architecture_artifact_id
-        ),
+        historical_architecture_artifact_id=(args.historical_architecture_artifact_id),
         historical_gate_id=args.historical_gate_id,
     )
     try:
