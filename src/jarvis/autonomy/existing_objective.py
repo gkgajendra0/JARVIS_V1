@@ -133,7 +133,9 @@ class ExistingObjectiveResumeSnapshotV1:
         if self.schema != "existing_objective_resume_snapshot.v1":
             raise ValueError("unsupported existing-objective resume snapshot schema")
         if not isinstance(self.resume_disposition, ExistingObjectiveResumeDisposition):
-            raise TypeError("resume_disposition must be ExistingObjectiveResumeDisposition")
+            raise TypeError(
+                "resume_disposition must be ExistingObjectiveResumeDisposition"
+            )
         if (
             self.digest != "pending"
             and canonical_digest(self.canonical_payload()) != self.digest
@@ -247,14 +249,20 @@ class ExistingObjectiveResumeController:
         progress = build_progress_ledger(workspace)
 
         startup_recovery_kinds: list[str] = []
-        if lineage.change_id in self._changes.reopen_recoverable_architecture_revision_failures(
-            recovery_generation="phase9-research-provider-sdk-v1",
-            dry_run=True,
+        if (
+            lineage.change_id
+            in self._changes.reopen_recoverable_architecture_revision_failures(
+                recovery_generation="phase9-research-provider-sdk-v1",
+                dry_run=True,
+            )
         ):
             startup_recovery_kinds.append("phase9-research-provider-sdk-v1")
-        if lineage.change_id in self._changes.reopen_recoverable_development_engine_failures(
-            recovery_generation="codex-contract-repair-v1",
-            dry_run=True,
+        if (
+            lineage.change_id
+            in self._changes.reopen_recoverable_development_engine_failures(
+                recovery_generation="codex-contract-repair-v1",
+                dry_run=True,
+            )
         ):
             startup_recovery_kinds.append("codex-contract-repair-v1")
 
