@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jarvis.autonomy import SupervisorAction, SupervisorCutoverDisposition
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityDescriptor,
@@ -182,6 +183,7 @@ def _runtime(
     *,
     replan_controller=None,
     change_store=None,
+    supervisor_cutover=None,
 ) -> GiccApplyRuntime:
     dispatcher = GoalPlanDispatcher(
         store=store,
@@ -199,6 +201,7 @@ def _runtime(
         replan_controller=replan_controller,
         change_store=change_store,
         capability_runtime=capability_runtime,  # type: ignore[arg-type]
+        supervisor_cutover=supervisor_cutover,
     )
 
 
@@ -717,3 +720,58 @@ async def test_background_capability_continuation_uses_same_dispatcher(
     ]
     assert len(goal_deliveries) == 1
     assert "Open Calculator." in goal_deliveries[0].message
+
+
+class RecordingSupervisorCutover:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def coordinate(self, goal_id: str):
+        self.calls.append(goal_id)
+        return SimpleNamespace(
+            action=SupervisorAction.WAIT_RESOURCE,
+            disposition=SupervisorCutoverDisposition.AWAIT_RUNTIME,
+            accepted=True,
+            mutation_performed=False,
+            decision_digest="shadow-decision-digest",
+        )
+
+
+@pytest.mark.asyncio
+async def test_waiting_capability_runs_supervisor_before_legacy_continuation(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-supervisor-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:13:00+00:00",
+        )
+    )
+    changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
+    coordinator = CapabilityContinuationCoordinator(store)
+    cutover = RecordingSupervisorCutover()
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        change_store=changes,
+        supervisor_cutover=cutover,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    assert advanced == 0
+    assert cutover.calls == [goal.goal_id]
+    assert coordinator.calls == 0
+    latest = store.get_goal(goal.goal_id)
+    assert latest is not None
+    assert latest.state is GoalState.WAITING_CAPABILITY
