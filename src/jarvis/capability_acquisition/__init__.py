@@ -95,7 +95,6 @@ from .workflow import (
 )
 
 __all__ = [
-    "OWNER_CAPABILITY_ACQUISITION_PROCESS",
     "AcquisitionCandidateEvaluationV1",
     "AcquisitionCandidateV1",
     "AcquisitionContextProvider",
@@ -109,6 +108,7 @@ __all__ = [
     "AcquisitionTrustClass",
     "AcquisitionWorkContextResolver",
     "AsyncApiCapabilitySourceAdapter",
+    "CandidateTargetCompatibilityV1",
     "CapabilityAcquisitionAdmission",
     "CapabilityAcquisitionAdmissionDisposition",
     "CapabilityAcquisitionArchitectureError",
@@ -128,7 +128,6 @@ __all__ = [
     "CapabilityCandidateEvidenceV1",
     "CapabilityCandidateVerification",
     "CapabilityCandidateVerifier",
-    "CandidateTargetCompatibilityV1",
     "CapabilityLifecycleProposalV1",
     "CapabilityRuntimeAcquisitionContextProvider",
     "CapabilitySourceAdapter",
@@ -136,6 +135,7 @@ __all__ = [
     "CustomBuildCapabilitySourceAdapter",
     "ExistingCapabilitySourceAdapter",
     "McpCapabilitySourceAdapter",
+    "OWNER_CAPABILITY_ACQUISITION_PROCESS",
     "OpenApiCapabilitySourceAdapter",
     "OwnerCapabilityGoalV1",
     "OwnerConfiguredCapabilitySourceAdapter",
