@@ -84,7 +84,9 @@ def test_pending_change_gate_suppresses_fresh_gicc_goal_tools(tmp_path) -> None:
     assert read_tool in tools
 
 
-def test_bound_change_gate_before_owner_turn_fails_closed_without_exception(tmp_path) -> None:
+def test_bound_change_gate_before_owner_turn_fails_closed_without_exception(
+    tmp_path,
+) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     store = ChangeStore(work)
     coordinator = ChangeCoordinator(store, RecordingBackend())
