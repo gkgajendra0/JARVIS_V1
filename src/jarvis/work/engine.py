@@ -236,19 +236,25 @@ class WorkEngine:
         terminal: bool = False,
         system_outcome_kind: str | None = None,
     ):
-        communication_kind = {
-            WorkDeliveryKind.OWNER_INPUT: OwnerCommunicationKind.OWNER_INPUT,
-            WorkDeliveryKind.RESOURCE_BLOCKER: OwnerCommunicationKind.BLOCKER,
-            WorkDeliveryKind.PROGRESS: OwnerCommunicationKind.PROGRESS,
-            WorkDeliveryKind.COMPLETION: OwnerCommunicationKind.COMPLETION,
-            WorkDeliveryKind.FAILURE: OwnerCommunicationKind.FAILURE,
-        }.get(kind)
+        governed_child = self._governed_child(work)
+        if kind is WorkDeliveryKind.RESOURCE_BLOCKER:
+            communication_kind = (
+                OwnerCommunicationKind.BLOCKER
+                if governed_child
+                else OwnerCommunicationKind.PROGRESS
+            )
+        else:
+            communication_kind = {
+                WorkDeliveryKind.OWNER_INPUT: OwnerCommunicationKind.OWNER_INPUT,
+                WorkDeliveryKind.PROGRESS: OwnerCommunicationKind.PROGRESS,
+                WorkDeliveryKind.COMPLETION: OwnerCommunicationKind.COMPLETION,
+                WorkDeliveryKind.FAILURE: OwnerCommunicationKind.FAILURE,
+            }.get(kind)
         if communication_kind is None:
             raise ValueError(
                 f"unsupported WorkEngine owner delivery kind: {kind.value}"
             )
 
-        governed_child = self._governed_child(work)
         if governed_child and communication_kind in {
             OwnerCommunicationKind.COMPLETION,
             OwnerCommunicationKind.FAILURE,
