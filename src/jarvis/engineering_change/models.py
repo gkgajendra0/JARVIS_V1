@@ -221,3 +221,24 @@ class ChangeStage:
     attempt: int
     work_id: str
     plan_artifact_id: str | None = None
+
+
+class StageAttemptStatus(str, Enum):
+    CURRENT = "current"
+    ACCEPTED = "accepted"
+    SUPERSEDED = "superseded"
+    REPLACED = "replaced"
+    HISTORICAL = "historical"
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeStageAttempt:
+    change_id: str
+    stage_key: str
+    attempt: int
+    work_id: str
+    status: StageAttemptStatus
+    authoritative: bool
+    superseded_by_attempt: int | None = None
+    produced_artifact_ids: tuple[str, ...] = ()
+    plan_artifact_id: str | None = None
