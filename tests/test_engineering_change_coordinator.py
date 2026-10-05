@@ -412,9 +412,7 @@ def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -
     )
     work.add_step(bookkeeping)
     work.save_step(
-        bookkeeping.start().complete(
-            {"status": "owner_notification_enqueued"}
-        )
+        bookkeeping.start().complete({"status": "owner_notification_enqueued"})
     )
 
     failed = work.save(
