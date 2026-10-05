@@ -8,6 +8,7 @@ from jarvis.autonomy import (
     ExistingObjectiveLineageError,
     ExistingObjectiveLineageV1,
     ExistingObjectiveResumeController,
+    ExistingObjectiveResumeDisposition,
     GlobalSupervisor,
     ShadowAgreement,
     ShadowFaultKind,
@@ -1207,3 +1208,148 @@ def test_blocked_capability_continuation_outranks_newer_direct_change(
     )
     assert snapshot.change_id == state["change"].change_id
     assert snapshot.current_phase == "research"
+
+
+def test_failed_gap_linked_change_remains_governing_and_retryable(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "failed-governing-change.sqlite3")
+    research = state["work"].require(state["research"].work_id)
+    failed_work = state["work"].save(
+        research.transition(
+            WorkState.FAILED,
+            status_detail="research servers are currently overloaded",
+        ),
+        expected_version=research.version,
+    )
+    current_change = state["changes"].require(state["change"].change_id)
+    failed_change = state["changes"].transition(
+        current_change.change_id,
+        ChangeState.FAILED,
+        expected_version=current_change.version,
+    )
+    competing = state["changes"].create(
+        request="Unrelated newer direct engineering change.",
+        process_key=state["changes"].DEFAULT_PROCESS.key,
+        process_version=state["changes"].DEFAULT_PROCESS.version,
+        source_session_id=state["goal"].source_session_id,
+        source_turn_id=state["goal"].source_turn_id,
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    progress = build_progress_ledger(workspace)
+
+    assert failed_change.state is ChangeState.FAILED
+    assert competing.change_id != failed_change.change_id
+    assert progress.active_change_id == failed_change.change_id
+    assert progress.active_work_id == failed_work.work_id
+    assert progress.blocker_kind == "retryable"
+    assert progress.next_legal_actions == ("RETRY",)
+
+    _, controller = _existing_resume_controller(state)
+    snapshot = controller.inspect(
+        ExistingObjectiveLineageV1(
+            goal_id=state["goal"].goal_id,
+            gap_id=state["gap"].gap_id,
+            change_id=state["change"].change_id,
+            historical_architecture_artifact_id=state["architecture"].artifact_id,
+        )
+    )
+    assert snapshot.requested_change_is_progress_active is True
+    assert snapshot.progress_active_change_id == state["change"].change_id
+    assert (
+        snapshot.resume_disposition
+        is ExistingObjectiveResumeDisposition.FAILED_GOVERNING_CHANGE
+    )
+
+
+def test_supervisor_assisted_retry_uses_attached_canonical_retry(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "supervisor-retry.sqlite3")
+    research = state["work"].require(state["research"].work_id)
+    state["work"].save(
+        research.transition(
+            WorkState.FAILED,
+            status_detail="research servers are currently overloaded",
+        ),
+        expected_version=research.version,
+    )
+    current_change = state["changes"].require(state["change"].change_id)
+    state["changes"].transition(
+        current_change.change_id,
+        ChangeState.FAILED,
+        expected_version=current_change.version,
+    )
+    backend = _SupervisorCutoverBackend()
+    coordinator = ChangeCoordinator(state["changes"], backend)
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    retried: list[str] = []
+
+    def retry(work_id: str) -> None:
+        retried.append(work_id)
+        state["changes"].reopen_failed_stage_for_retry(work_id)
+        item = state["work"].require(work_id)
+        state["work"].save(
+            item.transition(
+                WorkState.RETRYING,
+                status_detail="retry requested by global_supervisor",
+            ),
+            expected_version=item.version,
+        )
+
+    result = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+        retry_failed_work=retry,
+    ).coordinate(state["goal"].goal_id)
+
+    assert result.action is SupervisorAction.RETRY
+    assert result.disposition is SupervisorCutoverDisposition.RETRIED_WORK
+    assert result.mutation_performed is True
+    assert retried == [state["research"].work_id]
+    assert state["changes"].require(state["change"].change_id).state is (
+        ChangeState.RESEARCHING
+    )
+    assert state["work"].require(state["research"].work_id).state is WorkState.RETRYING
+
+
+def test_objective_workspace_projects_phase9_external_acceptance_work(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "external-acceptance-workspace.sqlite3")
+    external = state["work"].create(
+        WorkItem(
+            request="Run real Hisense external acceptance.",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id=f"phase9-external:{state['change'].change_id}",
+            source_turn_id="activation:test",
+            state=WorkState.WAITING_FOR_OWNER,
+            status_detail="Confirm the physical TV result.",
+        )
+    )
+    state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_external_acceptance_binding",
+        payload={
+            "schema": "capability_external_acceptance_binding.v1",
+            "work_id": external.work_id,
+        },
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    projected = {item.work_id: item for item in workspace.work_items}
+    assert external.work_id in projected
+    assert projected[external.work_id].work_type == WorkType.EXTERNAL_ACCEPTANCE.value
+    assert projected[external.work_id].state == WorkState.WAITING_FOR_OWNER.value
