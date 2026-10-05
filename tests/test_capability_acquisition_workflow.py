@@ -126,6 +126,27 @@ async def test_record_candidate_assigns_deterministic_verification_contract(
     assert result["execution_authorized"] is False
 
 
+@pytest.mark.asyncio
+async def test_record_sdk_candidate_normalizes_pypi_project_url() -> None:
+    executor = AcquisitionRecordCandidateExecutor(_RecordCandidateResolver())
+
+    result = await executor.execute(
+        work=SimpleNamespace(work_id="research-work"),
+        parameters={
+            "source_kind": "sdk_library",
+            "source_identity": "https://pypi.org/project/samsungtvws/2.4.0/",
+            "source_version": "2.4.0",
+            "source_digest": None,
+            "supported_operations": ["issue_supported_control"],
+            "evidence_refs": ["https://pypi.org/project/samsungtvws/2.4.0/"],
+            "license_id": "MIT",
+        },
+    )
+
+    candidate = candidate_from_payload(result["candidate"])
+    assert candidate.source_identity == "samsungtvws"
+
+
 @dataclass
 class Backend:
     submitted: list[str]
