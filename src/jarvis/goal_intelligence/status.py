@@ -326,8 +326,7 @@ class OwnerObjectiveStatusResolver:
             return None
         for objective in self.list_active(limit=limit):
             if any(
-                change.change_id == target
-                for change in objective.engineering_changes
+                change.change_id == target for change in objective.engineering_changes
             ):
                 return objective
         return None
