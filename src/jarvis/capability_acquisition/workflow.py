@@ -24,6 +24,7 @@ from jarvis.capability_acquisition.models import (
     AcquisitionTrustClass,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
+    normalize_python_distribution_identity,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import (
@@ -291,9 +292,15 @@ class AcquisitionRecordCandidateExecutor:
             AcquisitionSourceKind.ASYNCAPI: AcquisitionStrategy.GENERATE_CONTRACT_CLIENT,
             AcquisitionSourceKind.SDK_LIBRARY: AcquisitionStrategy.ADAPT_SDK,
         }[source_kind]
+        source_identity = str(parameters.get("source_identity") or "")
+        if source_kind is AcquisitionSourceKind.SDK_LIBRARY:
+            try:
+                source_identity = normalize_python_distribution_identity(source_identity)
+            except ValueError as exc:
+                raise AcquisitionProtocolError(str(exc)) from exc
         candidate = AcquisitionCandidateV1.create(
             source_kind=source_kind,
-            source_identity=str(parameters.get("source_identity") or ""),
+            source_identity=source_identity,
             source_version=parameters.get("source_version"),
             source_digest=parameters.get("source_digest"),
             trust_class=AcquisitionTrustClass.UNVERIFIED_CANDIDATE,
