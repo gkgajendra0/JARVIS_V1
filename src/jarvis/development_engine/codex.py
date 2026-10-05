@@ -169,6 +169,39 @@ class _OfficialCodexThread:
             model_turns=1,
         )
 
+    @staticmethod
+    def _structured_response_text(result: object) -> str:
+        """Return the structured assistant payload from one completed Codex turn.
+
+        The official Python SDK's final_response intentionally ignores commentary-phase
+        agent messages. JARVIS uses a multi-turn structured protocol, so an intermediate
+        tool directive may legitimately be returned as commentary. The turn-level
+        output schema still constrains that message, and JARVIS performs its own strict
+        directive validation immediately afterward.
+        """
+
+        final = getattr(result, "final_response", None)
+        if isinstance(final, str) and final.strip():
+            return final
+
+        raw_items = getattr(result, "items", ())
+        if isinstance(raw_items, (list, tuple)):
+            for item in reversed(raw_items):
+                candidate = getattr(item, "root", item)
+                if str(getattr(candidate, "type", "")).strip() != "agentMessage":
+                    continue
+                text_value = getattr(candidate, "text", None)
+                if isinstance(text_value, str) and text_value.strip():
+                    LOGGER.info(
+                        "DevelopmentEngine recovered structured Codex payload from "
+                        "agentMessage items because SDK final_response was empty"
+                    )
+                    return text_value
+
+        raise _DevelopmentResponseContractError(
+            "Codex turn completed without a structured agent response"
+        )
+
     async def _run(
         self,
         value: object,
@@ -182,13 +215,8 @@ class _OfficialCodexThread:
             output_schema=output_schema,
             source="jarvis_development_engine",
         )
-        final = getattr(result, "final_response", None)
-        if not isinstance(final, str) or not final.strip():
-            raise RuntimeError(
-                "Codex turn completed without a structured final response"
-            )
         return CodexTurnResponse(
-            final_response=final,
+            final_response=self._structured_response_text(result),
             usage=self._usage(result),
         )
 
