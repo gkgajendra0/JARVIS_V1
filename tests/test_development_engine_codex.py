@@ -325,6 +325,54 @@ async def test_codex_engine_preserves_unclassified_runtime_failure_for_retry(
 
 
 @pytest.mark.asyncio
+async def test_codex_engine_repairs_one_malformed_directive_in_same_thread(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_repair",
+        [
+            CodexTurnResponse(
+                final_response="not-json",
+                usage=DevelopmentUsageV1(total_tokens=10, model_turns=1),
+            ),
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "Fresh research is required.",
+                    "tool_calls": [],
+                    "disposition": "needs_research",
+                    "reason": "The protocol evidence is insufficient.",
+                    "requested_dependencies": [],
+                    "evidence_refs": ["research:approved"],
+                    "blocker_code": None,
+                },
+                20,
+            ),
+        ],
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.NEEDS_RESEARCH
+    assert len(thread.user_messages) == 1
+    assert len(thread.external_messages) == 1
+    repair = json.loads(thread.external_messages[0])
+    assert repair["contract"] == "jarvis.development_response_repair.v1"
+    assert repair["status"] == "previous_response_rejected"
+
+
+
+
+@pytest.mark.asyncio
 async def test_codex_engine_runs_coherent_tool_batches_and_derives_completion(
     tmp_path,
 ) -> None:
