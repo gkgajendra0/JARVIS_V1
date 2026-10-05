@@ -407,6 +407,30 @@ def _current_architecture(
     )
 
 
+_ARCHITECTURE_APPROVED_STATES = frozenset(
+    {
+        "approved_for_build",
+        "developing",
+        "verifying",
+        "waiting_owner_acceptance",
+        "ready_for_promotion",
+        "waiting_promotion_approval",
+        "promoted",
+        "observing",
+        "closed",
+    }
+)
+
+
+def _approved_architecture(
+    workspace: ObjectiveWorkspaceV1,
+) -> SpecialistArtifactRefV1 | None:
+    change = _current_change(workspace)
+    if change is None or change.state not in _ARCHITECTURE_APPROVED_STATES:
+        return None
+    return _current_architecture(workspace)
+
+
 def _superseded_work_ids(workspace: ObjectiveWorkspaceV1) -> tuple[str, ...]:
     return tuple(
         sorted(
@@ -512,7 +536,7 @@ def build_development_context(
         success_criteria=task.success_criteria,
         targets=task.targets,
         accepted_facts=task.accepted_facts,
-        approved_architecture=_current_architecture(workspace),
+        approved_architecture=_approved_architecture(workspace),
         current_assignment=development_ref,
         authoritative_dependency_ids=(
             () if development_ref is None else development_ref.dependencies
