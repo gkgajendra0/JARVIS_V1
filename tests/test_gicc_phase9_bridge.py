@@ -426,7 +426,9 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     admitted = bridge.admit_gap(gap, goal)
 
     assert len(artifacts.records) == 2
-    by_kind = {kind: (change_id, payload) for change_id, kind, payload in artifacts.records}
+    by_kind = {
+        kind: (change_id, payload) for change_id, kind, payload in artifacts.records
+    }
 
     change_id, payload = by_kind["gicc_capability_gap_link"]
     assert change_id == "change-phase9"
