@@ -560,8 +560,7 @@ class ChangeStore:
                     continue
 
                 event_key = (
-                    "development-engine-compat-recovery:"
-                    f"{generation}:{work.work_id}"
+                    f"development-engine-compat-recovery:{generation}:{work.work_id}"
                 )
                 if (
                     db.execute(
@@ -609,7 +608,6 @@ class ChangeStore:
                 )
                 recovered.append(change.change_id)
         return tuple(recovered)
-
 
     def reopen_failed_stage_for_retry(
         self,
