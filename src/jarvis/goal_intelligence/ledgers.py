@@ -199,12 +199,38 @@ def _artifact_by_id(
 def _current_architecture(
     workspace: ObjectiveWorkspaceV1,
 ) -> WorkspaceArtifactV1 | None:
+    governing = _active_change(workspace)
+    if governing is not None and governing.current_architecture_artifact_id is not None:
+        return next(
+            (
+                artifact
+                for artifact in governing.artifacts
+                if artifact.artifact_id
+                == governing.current_architecture_artifact_id
+                and artifact.kind == "architecture"
+            ),
+            None,
+        )
+
     candidates = [
         item
         for artifact_id in workspace.current_architecture_refs
         if (item := _artifact_by_id(workspace, artifact_id)) is not None
     ]
-    return None if not candidates else max(candidates, key=lambda item: item.revision)
+    if not candidates:
+        return None
+    change_by_architecture = {
+        change.current_architecture_artifact_id: change
+        for change in workspace.changes
+        if change.current_architecture_artifact_id is not None
+    }
+    return max(
+        candidates,
+        key=lambda item: (
+            change_by_architecture[item.artifact_id].updated_at,
+            item.artifact_id,
+        ),
+    )
 
 
 def _strategy(architecture: WorkspaceArtifactV1 | None) -> tuple[str, ...]:
