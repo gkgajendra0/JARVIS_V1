@@ -7,6 +7,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.model_routing.router import RoutingResourceBlocked
 from jarvis.work.brain import (
     BrainAction,
@@ -215,6 +220,58 @@ class WorkEngine:
         self._control_plane_decider = control_plane_decider
         self._context_assembler = context_assembler or WorkContextAssembler()
         self._context_mode = normalize_work_context_mode(context_mode)
+
+    @staticmethod
+    def _governed_child(work: WorkItem) -> bool:
+        return work.source_session_id.startswith(("change:", "gicc:"))
+
+    def _enqueue_owner_delivery(
+        self,
+        *,
+        work: WorkItem,
+        kind: WorkDeliveryKind,
+        summary: str,
+        event_key: str,
+        owner_action_required: bool = False,
+        terminal: bool = False,
+        system_outcome_kind: str | None = None,
+    ):
+        communication_kind = {
+            WorkDeliveryKind.OWNER_INPUT: OwnerCommunicationKind.OWNER_INPUT,
+            WorkDeliveryKind.RESOURCE_BLOCKER: OwnerCommunicationKind.BLOCKER,
+            WorkDeliveryKind.PROGRESS: OwnerCommunicationKind.PROGRESS,
+            WorkDeliveryKind.COMPLETION: OwnerCommunicationKind.COMPLETION,
+            WorkDeliveryKind.FAILURE: OwnerCommunicationKind.FAILURE,
+        }.get(kind)
+        if communication_kind is None:
+            raise ValueError(f"unsupported WorkEngine owner delivery kind: {kind.value}")
+
+        governed_child = self._governed_child(work)
+        if governed_child and communication_kind in {
+            OwnerCommunicationKind.COMPLETION,
+            OwnerCommunicationKind.FAILURE,
+        }:
+            return None
+
+        intent = OwnerCommunicationIntentV1.create(
+            kind=communication_kind,
+            event_key=event_key,
+            summary=summary,
+            owner_action_required=owner_action_required,
+            terminal=terminal,
+            work_id=work.work_id,
+            system_outcome_kind=system_outcome_kind,
+            technical_detail=work.status_detail,
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        if owner_message is None:
+            return None
+        return self._store.enqueue_delivery(
+            work=work,
+            kind=kind,
+            message=owner_message.message,
+            event_key=owner_message.event_key,
+        )
 
     def _check_action_admission(self, work: WorkItem) -> WorkAdvanceResult | None:
         if self._action_admission is None or self._action_admission(work.work_id):
