@@ -45,6 +45,30 @@ control capability and then execute the natural goal through JARVIS Hands/planni
 ChatGPT-plan reasoning is the primary strong model lane for this validation, removing the
 Gemini/OpenAI quota blocker that stopped the 2026-09-28 Phase-9 external run.
 
+### 2026-10-05 supervisor/control-plane priority correction
+
+The live D8 TV capability run is now **FROZEN before further local patching** while the
+existing JARVIS supervisor/control-plane is hardened at the system level. The owner has
+explicitly required that Research, Architecture, Development and Verification behave as
+internal contributors to one JARVIS system with one shared current truth, and that only
+the JARVIS Supervisor communicates with the owner.
+
+The governing research/architecture/implementation plan is:
+
+`GLOBAL_SUPERVISOR_GOVERNED_BLACKBOARD_RESEARCH_AND_PLAN_2026-10-05.md`.
+
+This is **not** authorization to replace GICC, WorkEngine, EngineeringChange, DBOS,
+DevelopmentEngine, Authority, gates or the capability lifecycle with a generic multi-agent
+framework. The direction is to upgrade the supervisor already present in those systems
+with a governed ObjectiveWorkspace/Blackboard, Task Ledger, Progress Ledger,
+current/superseded attempt semantics, authoritative dependency selection, typed failure
+propagation and manager-only owner communication.
+
+The immediate next implementation step is **S1 system scenario replay/fault harness**.
+Do not resume the live TV lifecycle until that replay safety net exists. Preserve the
+existing TV goal and EngineeringChange lineage; do not create a replacement TV goal.
+PR #252 remains draft/unmerged unless the owner explicitly authorizes merge.
+
 ## North-star program architecture
 
 The owner-approved **whole-JARVIS product north star** is defined by:
