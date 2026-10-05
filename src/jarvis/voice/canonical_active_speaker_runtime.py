@@ -23,6 +23,7 @@ from jarvis.conversation import (
     ConversationStatus,
 )
 from jarvis.engineering_change.gates import GateService
+from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -61,6 +62,7 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        objective_status: OwnerObjectiveStatusResolver | None = None,
         gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
     ) -> None:
@@ -71,6 +73,7 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._objective_status = objective_status
         self._gicc_tool_factory = gicc_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
@@ -112,6 +115,7 @@ class _SessionToolBundle:
                 WorkAgentTools(
                     self._work_runtime,
                     conversation,
+                    objective_status=self._objective_status,
                     allow_capability_acquisition=(
                         self._allow_direct_capability_acquisition
                         and not pending_change_gate
@@ -255,6 +259,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 research_service=research_service,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
+                objective_status=(
+                    None
+                    if gicc_runtime is None
+                    else getattr(gicc_runtime, "objective_status", None)
+                ),
                 gicc_tool_factory=gicc_tool_factory,
                 allow_direct_capability_acquisition=(
                     allow_direct_capability_acquisition
