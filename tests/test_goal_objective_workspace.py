@@ -423,23 +423,23 @@ def test_global_supervisor_rejects_illegal_and_stale_proposals(tmp_path: Path) -
     assert "action_not_legal" in illegal_decision.rejection_codes
     assert "terminal_not_proven" in illegal_decision.rejection_codes
 
-    stale = SupervisorProposalV1(
-        schema=illegal.schema,
-        goal_id=illegal.goal_id,
+    valid_wait = SupervisorProposalV1.create(
+        context,
         action=SupervisorAction.WAIT_RESOURCE,
         rationale="Wait for the provider.",
+        target_change_id=state["change"].change_id,
+        target_work_id=state["research"].work_id,
+    )
+    stale_payload = valid_wait.canonical_payload()
+    stale_payload["workspace_digest"] = "0" * 64
+    stale_payload["target_change_id"] = "change_stale"
+    stale_payload["target_work_id"] = "work_stale"
+    stale = replace(
+        valid_wait,
         workspace_digest="0" * 64,
-        task_ledger_digest=illegal.task_ledger_digest,
-        progress_ledger_digest=illegal.progress_ledger_digest,
         target_change_id="change_stale",
         target_work_id="work_stale",
-        bounded_question=None,
-        evidence_refs=(),
-        digest="pending",
-    )
-    stale = replace(
-        stale,
-        digest=canonical_digest(stale.canonical_payload()),
+        digest=canonical_digest(stale_payload),
     )
     stale_decision = GlobalSupervisor.validate(context, stale)
 
