@@ -60,6 +60,40 @@ def _normalize(value: str) -> str:
     return " ".join(str(value).strip().casefold().split())
 
 
+_WORLD_ENTITY_TYPE_ALIASES = {
+    "tv": "media_player",
+    "television": "media_player",
+    "smart_tv": "media_player",
+    "smart_television": "media_player",
+    "media": "media_player",
+    "media_player": "media_player",
+    "pc": "computer",
+    "desktop": "computer",
+    "laptop": "computer",
+    "computer": "computer",
+    "monitor": "display",
+    "screen": "display",
+    "display": "display",
+    "webcam": "camera",
+    "security_camera": "camera",
+    "camera": "camera",
+    "door": "entrance",
+    "gate": "entrance",
+    "entrance": "entrance",
+    "room": "room",
+    "generic_external_resource": "generic_external_resource",
+}
+
+
+def canonical_world_entity_type(value: object) -> str:
+    """Normalize resource labels onto JARVIS's stable world ontology."""
+
+    normalized = _normalize(str(value or "")).replace("-", "_").replace(" ", "_")
+    if not normalized:
+        return ""
+    return _WORLD_ENTITY_TYPE_ALIASES.get(normalized, normalized)
+
+
 def _generic_reference_types(mention: str) -> tuple[str, ...]:
     normalized = _normalize(mention)
     tokens = set(normalized.replace("-", " ").split())
@@ -165,12 +199,19 @@ class EntityResolver:
         expected_entity_types: tuple[str, ...],
         require_live_binding: bool,
     ) -> tuple[WorldEntityRefV1, ...]:
-        expected = {item.casefold() for item in expected_entity_types if item.strip()}
+        expected = {
+            canonical_world_entity_type(item)
+            for item in expected_entity_types
+            if str(item).strip()
+        }
         result = []
         for entity in self._registry.entities():
             if entity.lifecycle_state is not EntityLifecycleState.ACTIVE:
                 continue
-            if expected and entity.entity_type not in expected:
+            if (
+                expected
+                and canonical_world_entity_type(entity.entity_type) not in expected
+            ):
                 continue
             if require_live_binding and not self._registry.bindings(
                 entity_id=entity.entity_id
@@ -245,7 +286,7 @@ class EntityResolver:
         expected = tuple(
             sorted(
                 {
-                    _normalize(item)
+                    canonical_world_entity_type(item)
                     for item in expected_entity_types
                     if str(item).strip()
                 }
@@ -326,7 +367,9 @@ class EntityResolver:
         inferred_types = set(expected or _generic_reference_types(query))
         if inferred_types:
             typed = tuple(
-                entity for entity in candidates if entity.entity_type in inferred_types
+                entity
+                for entity in candidates
+                if canonical_world_entity_type(entity.entity_type) in inferred_types
             )
             if typed:
                 return self._result(
@@ -348,7 +391,10 @@ class EntityResolver:
                 ):
                     if entity.lifecycle_state is not EntityLifecycleState.ACTIVE:
                         continue
-                    if expected and entity.entity_type not in expected:
+                    if (
+                        expected
+                        and canonical_world_entity_type(entity.entity_type) not in expected
+                    ):
                         continue
                     self._registry.register_entity(entity)
                     discovered.append(entity)
