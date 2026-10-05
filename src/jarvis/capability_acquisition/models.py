@@ -23,7 +23,9 @@ def normalize_python_distribution_identity(value: object) -> str:
     parsed = urlparse(raw)
     if parsed.scheme or parsed.netloc:
         host = parsed.netloc.casefold()
-        parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
+        parts = [
+            unquote(part).strip() for part in parsed.path.split("/") if part.strip()
+        ]
         if (
             parsed.scheme.casefold() not in {"http", "https"}
             or host not in {"pypi.org", "www.pypi.org"}
