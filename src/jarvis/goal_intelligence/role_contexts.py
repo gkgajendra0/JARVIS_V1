@@ -21,7 +21,6 @@ from .ledgers import (
 )
 from .workspace import (
     ObjectiveWorkspaceV1,
-    WorkspaceArtifactV1,
     WorkspaceChangeV1,
     WorkspaceWorkV1,
 )
