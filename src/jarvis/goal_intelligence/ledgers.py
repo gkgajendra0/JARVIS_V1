@@ -81,9 +81,10 @@ class TaskLedgerV1:
     def __post_init__(self) -> None:
         if self.schema != "task_ledger.v1":
             raise ValueError("unsupported TaskLedger schema")
-        if self.digest != "pending" and canonical_digest(
-            self.canonical_payload()
-        ) != self.digest:
+        if (
+            self.digest != "pending"
+            and canonical_digest(self.canonical_payload()) != self.digest
+        ):
             raise ValueError("TaskLedger digest mismatch")
 
 
@@ -307,8 +308,7 @@ def _rejections(workspace: ObjectiveWorkspaceV1) -> tuple[LedgerRejectionV1, ...
                 )
                 output[(candidate_id, reason_codes)] = item
     return tuple(
-        output[key]
-        for key in sorted(output, key=lambda item: (item[0], item[1]))
+        output[key] for key in sorted(output, key=lambda item: (item[0], item[1]))
     )
 
 
@@ -528,8 +528,7 @@ def build_progress_ledger(workspace: ObjectiveWorkspaceV1) -> ProgressLedgerV1:
     owner_action_required = outcome_owner_action or owner_gate
     terminal_work = bool(work is not None and work.system_outcome.terminal)
     terminal_change = bool(
-        change is not None
-        and change.state in {"failed", "rejected", "rolled_back"}
+        change is not None and change.state in {"failed", "rejected", "rolled_back"}
     )
     making_progress = bool(
         work is not None
@@ -547,11 +546,7 @@ def build_progress_ledger(workspace: ObjectiveWorkspaceV1) -> ProgressLedgerV1:
             if work is None
             else work.status_detail
             or next(
-                (
-                    step.summary
-                    for step in reversed(work.steps)
-                    if step.summary.strip()
-                ),
+                (step.summary for step in reversed(work.steps) if step.summary.strip()),
                 None,
             )
         ),
