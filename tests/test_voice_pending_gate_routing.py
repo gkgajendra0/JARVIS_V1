@@ -82,3 +82,48 @@ def test_pending_change_gate_suppresses_fresh_gicc_goal_tools(tmp_path) -> None:
     assert action_calls == []
     assert read_calls == ["called"]
     assert read_tool in tools
+
+
+def test_bound_change_gate_before_owner_turn_fails_closed_without_exception(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    store = ChangeStore(work)
+    coordinator = ChangeCoordinator(store, RecordingBackend())
+    change = coordinator.start("Build generic capability", "session", "turn")
+    research = store.list_stages(change.change_id)[0]
+    _complete(work, research.work_id)
+    architecture = store.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"strategy": "build_custom"},
+    )
+    coordinator.reconcile(change.change_id)
+    gate = GateService(store, verify_owner=lambda *_: False).present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = coordinator
+
+    conversation = ConversationSession(session_id="owner-session")
+    conversation.start()
+
+    from jarvis.voice.work_tools import WorkAgentTools
+
+    tools = WorkAgentTools(
+        runtime,
+        conversation,
+        bound_change_gate_id=gate.gate_id,
+        allow_capability_acquisition=False,
+    )
+
+    import asyncio
+
+    result = asyncio.run(tools.decide_bound_change_gate(None))  # type: ignore[arg-type]
+
+    assert result["ok"] is False
+    assert result["status"] == "awaiting_owner_turn"
+    assert GateService(store, verify_owner=lambda *_: False).pending_gate_ids() == (
+        gate.gate_id,
+    )
