@@ -19,7 +19,7 @@ from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_P
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import reconcile_owner_change_gates
-from jarvis.engineering_change.gates import GateKind, GateService
+from jarvis.engineering_change.gates import GateService
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.ledgers import (
     build_progress_ledger,
@@ -960,7 +960,7 @@ def test_supervisor_cutover_revalidates_and_rejects_stale_decision(
     tmp_path: Path,
 ) -> None:
     state = _scenario(tmp_path / "cutover-stale.sqlite3")
-    backend, coordinator, change, architecture, _ = (
+    _backend, coordinator, change, architecture, _ = (
         _direct_goal_change_ready_for_architecture(state)
     )
     gate_id = reconcile_owner_change_gates(
