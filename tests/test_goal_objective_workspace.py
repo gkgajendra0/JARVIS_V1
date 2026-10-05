@@ -1,9 +1,18 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from jarvis.autonomy import (
+    GlobalSupervisor,
+    SupervisorAction,
+    SupervisorProposalV1,
+    supervisor_context_from_workspace,
+)
+
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.ledgers import (
     build_progress_ledger,
     build_task_ledger,
@@ -364,5 +373,121 @@ def test_ledgers_are_restart_deterministic(tmp_path: Path) -> None:
         build_task_ledger(reopened_workspace),
         build_progress_ledger(reopened_workspace),
     )
+
+    assert reopened == first
+
+
+def test_global_supervisor_accepts_only_current_legal_action(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "supervisor-legal.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    context = supervisor_context_from_workspace(workspace)
+    decision = GlobalSupervisor().evaluate(workspace)
+
+    assert context.goal_id == state["goal"].goal_id
+    assert context.workspace_digest == workspace.digest
+    assert context.task_ledger.source_workspace_digest == workspace.digest
+    assert context.progress_ledger.source_workspace_digest == workspace.digest
+    assert context.allowed_actions == (
+        SupervisorAction.WAIT_RESOURCE,
+        SupervisorAction.RETRY,
+    )
+    assert decision.accepted is True
+    assert decision.rejection_codes == ()
+    assert decision.proposal.action is SupervisorAction.WAIT_RESOURCE
+    assert decision.proposal.target_change_id == state["change"].change_id
+    assert decision.proposal.target_work_id == state["research"].work_id
+
+
+def test_global_supervisor_rejects_illegal_and_stale_proposals(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "supervisor-reject.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    context = supervisor_context_from_workspace(workspace)
+
+    illegal = SupervisorProposalV1.create(
+        context,
+        action=SupervisorAction.TERMINAL,
+        rationale="Stop the objective because the research provider is unavailable.",
+        target_change_id=state["change"].change_id,
+        target_work_id=state["research"].work_id,
+    )
+    illegal_decision = GlobalSupervisor.validate(context, illegal)
+
+    assert illegal_decision.accepted is False
+    assert "action_not_legal" in illegal_decision.rejection_codes
+    assert "terminal_not_proven" in illegal_decision.rejection_codes
+
+    stale = SupervisorProposalV1(
+        schema=illegal.schema,
+        goal_id=illegal.goal_id,
+        action=SupervisorAction.WAIT_RESOURCE,
+        rationale="Wait for the provider.",
+        workspace_digest="0" * 64,
+        task_ledger_digest=illegal.task_ledger_digest,
+        progress_ledger_digest=illegal.progress_ledger_digest,
+        target_change_id="change_stale",
+        target_work_id="work_stale",
+        bounded_question=None,
+        evidence_refs=(),
+        digest="pending",
+    )
+    stale = replace(
+        stale,
+        digest=canonical_digest(stale.canonical_payload()),
+    )
+    stale_decision = GlobalSupervisor.validate(context, stale)
+
+    assert stale_decision.accepted is False
+    assert "workspace_digest_mismatch" in stale_decision.rejection_codes
+    assert "change_binding_mismatch" in stale_decision.rejection_codes
+    assert "work_binding_mismatch" in stale_decision.rejection_codes
+
+
+def test_global_supervisor_cannot_ask_owner_for_internal_resource_pressure(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "supervisor-owner.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    context = supervisor_context_from_workspace(workspace)
+
+    proposal = SupervisorProposalV1.create(
+        context,
+        action=SupervisorAction.ASK_OWNER,
+        rationale="Ask the owner what to do about temporary provider pressure.",
+        target_change_id=state["change"].change_id,
+        target_work_id=state["research"].work_id,
+    )
+    decision = GlobalSupervisor.validate(context, proposal)
+
+    assert decision.accepted is False
+    assert "action_not_legal" in decision.rejection_codes
+    assert "owner_attention_not_required" in decision.rejection_codes
+
+
+def test_global_supervisor_decision_is_restart_deterministic(tmp_path: Path) -> None:
+    path = tmp_path / "supervisor-restart.sqlite3"
+    state = _scenario(path)
+    first_workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    first = GlobalSupervisor().evaluate(first_workspace)
+
+    work, goals, changes = _stores(path)
+    reopened_workspace = ObjectiveWorkspaceProjector(
+        goal_store=goals,
+        change_store=changes,
+        work_store=work,
+    ).project(state["goal"].goal_id)
+    reopened = GlobalSupervisor().evaluate(reopened_workspace)
 
     assert reopened == first
