@@ -625,7 +625,7 @@ class WorkAgentTools:
                     "eta_confidence": estimate.eta_confidence,
                 }
             )
-        return {
+        payload: dict[str, object] = {
             "ok": True,
             "change_id": change_id,
             "state": change.state.value,
@@ -643,6 +643,16 @@ class WorkAgentTools:
             ],
             "stages": stages,
         }
+        if self._objective_status is not None:
+            objective = self._objective_status.find_active_by_change_id(change_id)
+            if objective is not None:
+                payload["owner_objective"] = objective.public_payload()
+                payload["overall_task_truth"] = (
+                    "This EngineeringChange belongs to an active owner objective. "
+                    "Only the objective's verified_completion field is overall "
+                    "completion authority."
+                )
+        return payload
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -828,7 +838,20 @@ class WorkAgentTools:
         except WorkStoreError:
             return {"ok": False, "status": "unknown_work_id", "work_id": work_id}
         self._runtime.set_owner_work_focus(item.work_id)
-        return {"ok": True, "status": "found", **_public_work(item, self._runtime)}
+        payload = {
+            "ok": True,
+            "status": "found",
+            **_public_work(item, self._runtime),
+        }
+        if self._objective_status is not None:
+            objective = self._objective_status.find_active_by_work_id(item.work_id)
+            if objective is not None:
+                payload["owner_objective"] = objective.public_payload()
+                payload["overall_task_truth"] = (
+                    "This WorkItem is a child of an active owner objective. "
+                    "Do not equate this child's state with overall task completion."
+                )
+        return payload
 
     @function_tool()
     async def cancel_background_work(
