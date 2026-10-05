@@ -1208,6 +1208,12 @@ def test_blocked_capability_continuation_outranks_newer_direct_change(
     task = build_task_ledger(workspace)
     assert "strategy:vidaa_mqtt_tls" in task.current_strategy
     assert not any("unrelated_strategy" in item for item in task.current_strategy)
+    research_context = build_research_context(workspace)
+    assert research_context.current_architecture is not None
+    assert (
+        research_context.current_architecture.artifact_id
+        == state["architecture"].artifact_id
+    )
 
     _, controller = _existing_resume_controller(state)
     snapshot = controller.inspect(
@@ -1365,6 +1371,13 @@ def test_objective_workspace_projects_phase9_external_acceptance_work(
     assert external.work_id in projected
     assert projected[external.work_id].work_type == WorkType.EXTERNAL_ACCEPTANCE.value
     assert projected[external.work_id].state == WorkState.WAITING_FOR_OWNER.value
+
+    progress = build_progress_ledger(workspace)
+    assert progress.active_change_id == state["change"].change_id
+    assert progress.active_work_id == external.work_id
+    assert progress.blocker_kind == "needs_owner"
+    assert progress.owner_action_required is True
+    assert progress.next_legal_actions == ("ASK_OWNER",)
 
 
 def test_superseded_failed_work_is_not_an_objective_blocker(tmp_path: Path) -> None:
