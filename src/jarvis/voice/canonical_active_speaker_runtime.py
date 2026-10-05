@@ -63,7 +63,8 @@ class _SessionToolBundle:
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
         objective_status: OwnerObjectiveStatusResolver | None = None,
-        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
     ) -> None:
         self._vision_tools = vision_tools
@@ -74,7 +75,8 @@ class _SessionToolBundle:
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
         self._objective_status = objective_status
-        self._gicc_tool_factory = gicc_tool_factory
+        self._gicc_action_tool_factory = gicc_action_tool_factory
+        self._gicc_read_tool_factory = gicc_read_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
     @property
@@ -106,10 +108,12 @@ class _SessionToolBundle:
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
         # A pending EngineeringChange decision is a protected continuation boundary.
-        # Do not expose fresh-goal admission while the owner is deciding that gate;
-        # otherwise deictic speech such as "proceed" can become a duplicate GICC goal.
-        if self._gicc_tool_factory is not None and not pending_change_gate:
-            tools.extend(self._gicc_tool_factory(conversation))
+        # Keep read-only objective awareness available, but suppress goal-changing
+        # GICC actions so deictic speech such as "proceed" cannot become a new goal.
+        if self._gicc_read_tool_factory is not None:
+            tools.extend(self._gicc_read_tool_factory(conversation))
+        if self._gicc_action_tool_factory is not None and not pending_change_gate:
+            tools.extend(self._gicc_action_tool_factory(conversation))
         if self._work_runtime is not None:
             tools.extend(
                 WorkAgentTools(
@@ -138,7 +142,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         gicc_runtime: _ManagedBackgroundRuntime | None = None,
-        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -249,7 +254,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             or research_service is not None
             or capability_runtime is not None
             or work_runtime is not None
-            or gicc_tool_factory is not None
+            or gicc_action_tool_factory is not None
+            or gicc_read_tool_factory is not None
         ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
@@ -264,7 +270,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     if gicc_runtime is None
                     else getattr(gicc_runtime, "objective_status", None)
                 ),
-                gicc_tool_factory=gicc_tool_factory,
+                gicc_action_tool_factory=gicc_action_tool_factory,
+                gicc_read_tool_factory=gicc_read_tool_factory,
                 allow_direct_capability_acquisition=(
                     allow_direct_capability_acquisition
                 ),
