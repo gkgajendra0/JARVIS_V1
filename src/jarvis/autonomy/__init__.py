@@ -44,6 +44,7 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "ExistingObjectiveLineageError",
             "ExistingObjectiveLineageV1",
             "ExistingObjectiveResumeController",
+            "ExistingObjectiveResumeDisposition",
             "ExistingObjectiveResumeSnapshotV1",
         ),
     ),
