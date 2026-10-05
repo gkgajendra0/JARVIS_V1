@@ -1075,7 +1075,9 @@ def test_existing_objective_resume_inspects_exact_canonical_lineage(
     assert snapshot.gap_id == state["gap"].gap_id
     assert snapshot.change_id == state["change"].change_id
     assert snapshot.change_state == ChangeState.RESEARCHING.value
-    assert snapshot.current_architecture_artifact_id == state["architecture"].artifact_id
+    assert (
+        snapshot.current_architecture_artifact_id == state["architecture"].artifact_id
+    )
     assert snapshot.current_architecture_digest == state["architecture"].digest
     assert snapshot.current_phase == "research"
     assert snapshot.next_legal_actions == ("WAIT_RESOURCE", "RETRY")
@@ -1124,18 +1126,17 @@ def test_existing_objective_resume_has_no_creation_fallback(tmp_path: Path) -> N
         item.goal_id for item in state["goals"].list_active_goals(limit=100)
     )
     before_changes = state["changes"].active_ids()
-    before_work = tuple(
-        item.work_id for item in state["work"].list(limit=100)
-    )
+    before_work = tuple(item.work_id for item in state["work"].list(limit=100))
 
     snapshot, result = controller.coordinate_once(lineage)
 
     assert snapshot.goal_id == lineage.goal_id
     assert result.disposition is SupervisorCutoverDisposition.SHADOW_ONLY
     assert result.mutation_performed is False
-    assert tuple(
-        item.goal_id for item in state["goals"].list_active_goals(limit=100)
-    ) == before_goals
+    assert (
+        tuple(item.goal_id for item in state["goals"].list_active_goals(limit=100))
+        == before_goals
+    )
     assert state["changes"].active_ids() == before_changes
     assert tuple(item.work_id for item in state["work"].list(limit=100)) == before_work
     assert backend.submissions == []
