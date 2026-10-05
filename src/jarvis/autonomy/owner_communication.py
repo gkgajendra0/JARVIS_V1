@@ -246,7 +246,9 @@ class SupervisorOwnerCommunication:
             return f"I need your help to continue: {intent.summary}"
         if intent.kind is OwnerCommunicationKind.COMPLETION:
             return f"Completed: {intent.summary}"
-        return f"I can't continue with this objective: {intent.summary}"
+        if intent.goal_id is not None:
+            return f"I can't continue with this objective: {intent.summary}"
+        return f"A background task stopped: {intent.summary}"
 
 
 def _optional(value: object) -> str | None:
