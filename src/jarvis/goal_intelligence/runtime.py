@@ -164,7 +164,7 @@ class GiccApplyRuntime:
     dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
     capability_runtime: CapabilityRuntime
-    objective_status: OwnerObjectiveStatusResolver
+    objective_status: OwnerObjectiveStatusResolver | None = None
     replan_controller: ReplanController | None = None
     change_store: ChangeStore | None = None
     monitor_processor: MonitorEventProcessor | None = None
