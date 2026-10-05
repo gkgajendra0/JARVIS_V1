@@ -439,18 +439,37 @@ class CapabilityAcquisitionReleaseBridge:
                 "Phase-9 candidate has no canonical development WorkItem",
             )
         development_work = self._changes.work.require(development_work_id)
+        event_key = f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"
+        owner_message = SupervisorOwnerCommunication.compile(
+            OwnerCommunicationIntentV1.create(
+                kind=OwnerCommunicationKind.OWNER_INPUT,
+                event_key=event_key,
+                summary=(
+                    f"Capability acquisition {change_id} is deployed and package "
+                    f"{package_id}@{package_version} passed Phase-8 admission. It "
+                    "remains disabled by design. Lifecycle proposal SHA-256: "
+                    f"{lifecycle_artifact.digest}. Explicit owner activation is "
+                    "required. Say "
+                    f"'activate acquired capability {change_id}' to continue, or "
+                    "leave it disabled."
+                ),
+                owner_action_required=True,
+                change_id=change_id,
+                work_id=development_work.work_id,
+                system_outcome_kind="needs_owner",
+                technical_detail="explicit lifecycle activation authority required",
+            )
+        )
+        if owner_message is None:
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "owner_activation_message_suppressed",
+                "Supervisor communication suppressed required lifecycle authority",
+            )
         self._changes.work.enqueue_delivery(
             work=development_work,
             kind=WorkDeliveryKind.OWNER_INPUT,
-            message=(
-                f"Capability acquisition {change_id} is deployed and package "
-                f"{package_id}@{package_version} passed Phase-8 admission. It remains "
-                f"disabled by design. Lifecycle proposal SHA-256: "
-                f"{lifecycle_artifact.digest}. Explicit owner activation is required. "
-                f"Say 'activate acquired capability {change_id}' to continue, or leave "
-                f"it disabled."
-            ),
-            event_key=(f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"),
+            message=owner_message.message,
+            event_key=owner_message.event_key,
         )
         return CapabilityAcquisitionReleaseBridgeResult(
             admission=result,
