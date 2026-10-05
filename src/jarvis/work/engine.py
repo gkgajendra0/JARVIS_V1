@@ -87,6 +87,28 @@ class WorkResourceBlocked(RuntimeError):
         self.observation = dict(observation or {})
 
 
+class WorkTerminalFailure(RuntimeError):
+    """An executor reached a typed terminal failure that must fail canonical Work."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        failure_code: str,
+        observation: dict[str, Any] | None = None,
+    ) -> None:
+        normalized = " ".join(str(reason).split()).strip()
+        code = str(failure_code).strip().casefold()
+        if not normalized:
+            raise ValueError("terminal work failure reason must not be empty")
+        if not code:
+            raise ValueError("terminal work failure code must not be empty")
+        super().__init__(normalized)
+        self.reason = normalized
+        self.failure_code = code
+        self.observation = dict(observation or {})
+
+
 class WorkActionExecutor(Protocol):
     descriptor: BrainAction
     work_types: frozenset[WorkType]
@@ -1330,6 +1352,40 @@ class WorkEngine:
                 saved.state,
                 progressed=True,
                 retry_after_seconds=exc.retry_after_seconds,
+            )
+        except WorkTerminalFailure as exc:
+            failure_observation: dict[str, Any] = {
+                "terminal_failure": True,
+                "reason": exc.reason,
+                "failure_code": exc.failure_code,
+                **exc.observation,
+            }
+            failed_step = running_step.complete(failure_observation)
+            self._store.save_step(failed_step)
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            failed = latest.transition(
+                WorkState.FAILED,
+                status_detail=exc.reason,
+                current_step_id=step.step_id,
+            )
+            saved = self._store.save(failed, expected_version=latest.version)
+            self._store.clear_sensitive_inputs(saved.work_id)
+            self._store.enqueue_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.FAILURE,
+                message=exc.reason,
+                event_key=f"failure:{saved.version}",
+            )
+            return WorkAdvanceResult(
+                saved.work_id,
+                saved.state,
+                progressed=True,
             )
         except WorkOwnerInputRequired as exc:
             waiting_observation: dict[str, Any] = {
