@@ -9,7 +9,6 @@ from jarvis.autonomy import (
     SupervisorProposalV1,
     supervisor_context_from_workspace,
 )
-
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
