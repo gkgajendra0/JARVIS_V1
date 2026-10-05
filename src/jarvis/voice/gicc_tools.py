@@ -76,19 +76,28 @@ class GiccAgentTools:
         self._telemetry = telemetry
 
     @property
-    def tools(self) -> list:
-        tools = [
+    def action_tools(self) -> list:
+        """Goal-changing tools that may be suppressed at protected decision boundaries."""
+
+        return [
             self.pursue_owner_goal,
             self.resolve_goal_information,
         ]
-        if self._objective_status is not None:
-            tools.extend(
-                [
-                    self.list_owner_objectives,
-                    self.get_owner_objective_status,
-                ]
-            )
-        return tools
+
+    @property
+    def read_tools(self) -> list:
+        """Read-only owner-objective awareness tools; safe during approval gates."""
+
+        if self._objective_status is None:
+            return []
+        return [
+            self.list_owner_objectives,
+            self.get_owner_objective_status,
+        ]
+
+    @property
+    def tools(self) -> list:
+        return [*self.action_tools, *self.read_tools]
 
     @function_tool()
     async def list_owner_objectives(
