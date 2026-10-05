@@ -33,7 +33,9 @@ def reconcile_owner_change_gates(
     selected_change_ids = (
         store.active_ids()
         if change_ids is None
-        else tuple(dict.fromkeys(str(item).strip() for item in change_ids if str(item).strip()))
+        else tuple(
+            dict.fromkeys(str(item).strip() for item in change_ids if str(item).strip())
+        )
     )
 
     for change_id in selected_change_ids:
