@@ -835,6 +835,15 @@ def build_gicc_apply_runtime(
         projector=supervisor_projector,
         change_coordinator=work_runtime.changes,
         mode=supervisor_mode,
+        retry_failed_work=lambda work_id: (
+            work_runtime.retry_failed_work_from_supervisor(
+                work_id,
+                reason=(
+                    "Global Supervisor selected RETRY from the deterministic "
+                    "Progress Ledger."
+                ),
+            )
+        ),
     )
     existing_objective_resume = ExistingObjectiveResumeController(
         projector=supervisor_projector,
