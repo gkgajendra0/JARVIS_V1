@@ -111,6 +111,49 @@ def test_bound_gate_session_accepts_simple_yes_for_exact_runtime_bound_gate(
     assert store.require(change.change_id).state is ChangeState.DEVELOPING
 
 
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Yes, Jarvis, proceed.",
+        "Approved",
+        "Jarvis, yes",
+        "Yes, please proceed",
+        "Go ahead",
+    ],
+)
+def test_bound_gate_session_accepts_natural_affirmative_reply(
+    tmp_path,
+    reply: str,
+) -> None:
+    session = ConversationSession(session_id="owner-session")
+    session.start()
+    initial = session.accept_turn(ConversationRole.USER, "Build generic capability")
+    store = ChangeStore(SQLiteWorkStore(tmp_path / "work.sqlite3"))
+    service = _service(store, session)
+    change = service.start(initial)
+    research = store.list_stages(change.change_id)[0]
+    item = store.work.require(research.work_id)
+    running = store.work.save(
+        item.transition(WorkState.RUNNING), expected_version=item.version
+    )
+    store.work.save(
+        running.transition(WorkState.COMPLETED), expected_version=running.version
+    )
+    gate = service.propose_architecture(
+        change.change_id,
+        {"plan": "bounded generic adapter"},
+    )
+
+    session.accept_turn(ConversationRole.USER, reply)
+    decision = service.decide_latest(gate.gate_id, allow_bound_decision=True)
+
+    assert decision.approved
+    assert decision.challenge.gate_id == gate.gate_id
+    assert store.require(change.change_id).state is ChangeState.DEVELOPING
+
+
+
 def test_model_cannot_use_an_older_matching_turn_for_a_new_gate(tmp_path) -> None:
     session = ConversationSession(session_id="owner-session")
     session.start()
