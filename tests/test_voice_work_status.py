@@ -380,7 +380,11 @@ async def test_status_then_natural_yes_uses_exact_contextual_change_gate(
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     change_store = ChangeStore(work)
     coordinator = ChangeCoordinator(change_store, _RecordingChangeBackend())
-    change = coordinator.start("Build a future capability", "source-session", "source-turn")
+    change = coordinator.start(
+        "Build a future capability",
+        "source-session",
+        "source-turn",
+    )
     research = change_store.list_stages(change.change_id)[0]
     _complete_change_stage(work, research.work_id)
     architecture = change_store.add_artifact(
@@ -427,7 +431,12 @@ async def test_status_then_natural_yes_uses_exact_contextual_change_gate(
     calls: list[tuple[str, bool]] = []
 
     class _FakeService:
-        def decide_latest(self, gate_id: str, *, allow_bound_decision: bool = False):
+        def decide_latest(
+            self,
+            gate_id: str,
+            *,
+            allow_bound_decision: bool = False,
+        ):
             calls.append((gate_id, allow_bound_decision))
             return SimpleNamespace(
                 challenge=SimpleNamespace(change_id=change.change_id),
