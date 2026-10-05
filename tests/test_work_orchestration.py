@@ -395,7 +395,6 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
     assert store.list_pending_deliveries() == ()
 
 
-
 @pytest.mark.asyncio
 async def test_typed_executor_terminal_failure_fails_work_and_emits_failure(
     tmp_path: Path,
