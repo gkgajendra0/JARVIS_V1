@@ -67,11 +67,16 @@ def verify_capability_acquisition_completion(
     goal_key = _text(motivating_goal_id, field="motivating_goal_id")
     gap_key = _text(gap_id, field="gap_id")
 
+    change = store.require(change_key)
     link = store.latest_artifact(change_key, "gicc_capability_gap_link")
     candidate = store.latest_artifact(change_key, "capability_candidate")
     admission = store.latest_artifact(change_key, "capability_package_admission")
     activation = store.latest_artifact(change_key, "capability_lifecycle_activation")
-    architecture = store.latest_artifact(change_key, "architecture")
+    architecture = (
+        None
+        if change.current_architecture_artifact_id is None
+        else store.get_artifact(change.current_architecture_artifact_id)
+    )
     if any(
         artifact is None
         for artifact in (link, candidate, admission, activation, architecture)
