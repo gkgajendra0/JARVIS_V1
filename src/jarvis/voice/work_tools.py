@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 
 from livekit.agents import RunContext, function_tool
@@ -17,6 +18,31 @@ from jarvis.work.estimates import estimate_work
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
+
+
+
+_ACTIVATE_ACQUIRED_CAPABILITY_INTENT = re.compile(
+    r"\b(?:activate|enable)\b|\bturn\s+(?:it|this|that|the\s+capability)\s+on\b|"
+    r"\bstart\s+using\b",
+    re.IGNORECASE,
+)
+_DISABLE_ACQUIRED_CAPABILITY_INTENT = re.compile(
+    r"\b(?:disable|deactivate)\b|\bturn\s+(?:it|this|that|the\s+capability)\s+off\b|"
+    r"\bstop\s+using\b",
+    re.IGNORECASE,
+)
+
+
+def _explicit_capability_lifecycle_intent(text: str, *, activate: bool) -> bool:
+    normalized = " ".join(str(text).split()).strip()
+    if not normalized:
+        return False
+    pattern = (
+        _ACTIVATE_ACQUIRED_CAPABILITY_INTENT
+        if activate
+        else _DISABLE_ACQUIRED_CAPABILITY_INTENT
+    )
+    return pattern.search(normalized) is not None
 
 
 class WorkToolGroundingError(ValueError):
@@ -315,7 +341,28 @@ class WorkAgentTools:
         lifecycle = self._runtime.capability_lifecycle
         if lifecycle is None:
             return {"ok": False, "status": "capability_lifecycle_unavailable"}
+        acceptance = self._runtime.capability_external_acceptance
+        if acceptance is None:
+            return {
+                "ok": False,
+                "status": "capability_external_acceptance_unavailable",
+                "reason": (
+                    "Phase-9 acquired capabilities may not be activated without the "
+                    "governed external-acceptance runtime."
+                ),
+            }
         turn = self._latest_user_turn()
+        if not _explicit_capability_lifecycle_intent(turn.text, activate=True):
+            return {
+                "ok": False,
+                "status": "explicit_owner_activation_required",
+                "change_id": change_id,
+                "canonical_user_turn_id": turn.turn_id,
+                "reason": (
+                    "the latest canonical owner turn does not explicitly request "
+                    "activation or enablement"
+                ),
+            }
         result = await asyncio.to_thread(
             lifecycle.activate,
             change_id,
@@ -323,17 +370,12 @@ class WorkAgentTools:
             source_turn_id=turn.turn_id,
         )
         self._runtime.refresh_capability_catalog()
-        acceptance = self._runtime.capability_external_acceptance
-        acceptance_work = (
-            None
-            if acceptance is None
-            else await asyncio.to_thread(
-                acceptance.start,
-                change_id,
-                activation_artifact_id=result.artifact.artifact_id,
-                authority_session_id=self._conversation.session_id,
-                source_turn_id=turn.turn_id,
-            )
+        acceptance_work = await asyncio.to_thread(
+            acceptance.start,
+            change_id,
+            activation_artifact_id=result.artifact.artifact_id,
+            authority_session_id=self._conversation.session_id,
+            source_turn_id=turn.turn_id,
         )
         return {
             "ok": True,
@@ -371,6 +413,17 @@ class WorkAgentTools:
         if lifecycle is None:
             return {"ok": False, "status": "capability_lifecycle_unavailable"}
         turn = self._latest_user_turn()
+        if not _explicit_capability_lifecycle_intent(turn.text, activate=False):
+            return {
+                "ok": False,
+                "status": "explicit_owner_disable_required",
+                "change_id": change_id,
+                "canonical_user_turn_id": turn.turn_id,
+                "reason": (
+                    "the latest canonical owner turn does not explicitly request "
+                    "disablement"
+                ),
+            }
         result = await asyncio.to_thread(
             lifecycle.disable,
             change_id,
