@@ -710,8 +710,7 @@ class ChangeStore:
                 if (
                     not previous_architecture_id
                     or current_architecture is None
-                    or current_architecture["artifact_id"]
-                    != previous_architecture_id
+                    or current_architecture["artifact_id"] != previous_architecture_id
                 ):
                     continue
 
