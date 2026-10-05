@@ -87,6 +87,10 @@ from jarvis.development_engine.phase9 import (
     phase9_development_completion_guard,
 )
 from jarvis.development_engine.session_store import DevelopmentSessionStore
+from jarvis.engineering_change import (
+    SystemOutcomeKind,
+    classify_work_system_outcome,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.store import ChangeStore
@@ -424,6 +428,51 @@ class WorkRuntime:
                             else "unknown"
                         ),
                     )
+            raise
+
+    def retry_failed_work_from_supervisor(
+        self,
+        work_id: str,
+        *,
+        reason: str,
+    ) -> WorkItem:
+        """Retry only canonical failures already classified retryable by JARVIS."""
+
+        work = self.store.require(str(work_id).strip())
+        if work.state is not WorkState.FAILED:
+            raise ValueError("Supervisor retry requires a failed WorkItem")
+        outcome = classify_work_system_outcome(
+            work,
+            steps=self.store.list_steps(work.work_id),
+        )
+        if outcome.kind is not SystemOutcomeKind.RETRYABLE:
+            raise ValueError(
+                "Supervisor retry is allowed only for deterministic retryable outcomes"
+            )
+        if self.changes is None:
+            raise RuntimeError("Supervisor retry requires EngineeringChange runtime")
+
+        reopened_change = self.changes.prepare_failed_work_retry(work.work_id)
+        try:
+            return self.orchestrator.retry_failed_system(
+                work.work_id,
+                reason=reason,
+                source="global_supervisor",
+            )
+        except Exception:
+            try:
+                self.changes.reconcile_for_work(work.work_id)
+            except Exception:
+                LOGGER.exception(
+                    "Failed to reconcile EngineeringChange after Supervisor retry "
+                    "submission failure | work_id=%s | change_id=%s",
+                    work.work_id,
+                    (
+                        reopened_change.change_id
+                        if reopened_change is not None
+                        else "unknown"
+                    ),
+                )
             raise
 
     def resolve_status_target(self, work_id: str | None = None) -> WorkItem:
