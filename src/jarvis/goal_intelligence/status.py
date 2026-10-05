@@ -96,6 +96,7 @@ class ObjectiveChangeStatus:
     state: str
     work: tuple[ObjectiveWorkStatus, ...]
     pending_gate_ids: tuple[str, ...]
+    lifecycle_proposal_present: bool
     activation_present: bool
     external_acceptance_required: bool
     external_acceptance_work_id: str | None
@@ -110,6 +111,7 @@ class ObjectiveChangeStatus:
             "state": self.state,
             "work": [item.public_payload() for item in self.work],
             "pending_gate_ids": list(self.pending_gate_ids),
+            "lifecycle_proposal_present": self.lifecycle_proposal_present,
             "activation_present": self.activation_present,
             "external_acceptance_required": self.external_acceptance_required,
             "external_acceptance_work_id": self.external_acceptance_work_id,
@@ -360,6 +362,10 @@ class OwnerObjectiveStatusResolver:
                 if challenge.change_id == change_id:
                     gates.append(gate_id)
 
+            lifecycle_proposal = self._changes.latest_artifact(
+                change_id,
+                "capability_lifecycle_proposal",
+            )
             activation = self._changes.latest_artifact(
                 change_id,
                 "capability_lifecycle_activation",
@@ -453,6 +459,7 @@ class OwnerObjectiveStatusResolver:
                     state=change.state.value,
                     work=tuple(stage_work),
                     pending_gate_ids=tuple(sorted(gates)),
+                    lifecycle_proposal_present=lifecycle_proposal is not None,
                     activation_present=activation_present,
                     external_acceptance_required=external_required,
                     external_acceptance_work_id=external_work_id,
@@ -645,6 +652,38 @@ class OwnerObjectiveStatusResolver:
                 None,
             )
 
+        if change.lifecycle_proposal_present and not change.activation_present:
+            return (
+                ObjectiveOverallState.WAITING_OWNER,
+                ObjectivePhase.WAITING_ACTIVATION,
+                ObjectiveBlocker(
+                    kind="capability_activation",
+                    blocker_id=change.change_id,
+                    owner_action_required=True,
+                    detail=(
+                        "The promoted capability package is admitted but intentionally "
+                        "disabled until the owner authorizes activation."
+                    ),
+                ),
+            )
+
+        if change.activation_present and change.external_acceptance_required:
+            return (
+                ObjectiveOverallState.WAITING_EXTERNAL,
+                ObjectivePhase.EXTERNAL_ACCEPTANCE,
+                ObjectiveBlocker(
+                    kind="external_acceptance",
+                    blocker_id=(
+                        change.external_acceptance_work_id or change.change_id
+                    ),
+                    owner_action_required=False,
+                    detail=(
+                        "The capability is enabled but still requires passing "
+                        "real-world external acceptance evidence."
+                    ),
+                ),
+            )
+
         if state is ChangeState.CLOSED:
             if not change.activation_present:
                 return (
@@ -657,22 +696,6 @@ class OwnerObjectiveStatusResolver:
                         detail=(
                             "Engineering is complete, but the acquired capability "
                             "is not effectively enabled yet."
-                        ),
-                    ),
-                )
-            if change.external_acceptance_required:
-                return (
-                    ObjectiveOverallState.WAITING_EXTERNAL,
-                    ObjectivePhase.EXTERNAL_ACCEPTANCE,
-                    ObjectiveBlocker(
-                        kind="external_acceptance",
-                        blocker_id=(
-                            change.external_acceptance_work_id or change.change_id
-                        ),
-                        owner_action_required=False,
-                        detail=(
-                            "The enabled capability still requires real-world "
-                            "external acceptance evidence."
                         ),
                     ),
                 )
