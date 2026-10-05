@@ -603,7 +603,9 @@ class WorkAgentTools:
             }
 
         user_turns = [
-            turn for turn in self._conversation.turns if turn.role is ConversationRole.USER
+            turn
+            for turn in self._conversation.turns
+            if turn.role is ConversationRole.USER
         ]
         current = user_turns[-1] if user_turns else None
         if (
