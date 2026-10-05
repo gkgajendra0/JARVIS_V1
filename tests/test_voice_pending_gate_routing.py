@@ -52,11 +52,17 @@ def test_pending_change_gate_suppresses_fresh_gicc_goal_tools(tmp_path) -> None:
 
     conversation = ConversationSession(session_id="owner-session")
     conversation.start()
-    gicc_calls: list[str] = []
+    action_calls: list[str] = []
+    read_calls: list[str] = []
+    read_tool = object()
 
-    def gicc_tools(_conversation: ConversationSession) -> list:
-        gicc_calls.append("called")
+    def gicc_action_tools(_conversation: ConversationSession) -> list:
+        action_calls.append("called")
         return [object()]
+
+    def gicc_read_tools(_conversation: ConversationSession) -> list:
+        read_calls.append("called")
+        return [read_tool]
 
     bundle = _SessionToolBundle(
         None,
@@ -66,10 +72,13 @@ def test_pending_change_gate_suppresses_fresh_gicc_goal_tools(tmp_path) -> None:
         research_service=None,
         capability_runtime=None,
         work_runtime=runtime,
-        gicc_tool_factory=gicc_tools,
+        gicc_action_tool_factory=gicc_action_tools,
+        gicc_read_tool_factory=gicc_read_tools,
         allow_direct_capability_acquisition=True,
     )
 
-    _ = bundle.tools
+    tools = bundle.tools
 
-    assert gicc_calls == []
+    assert action_calls == []
+    assert read_calls == ["called"]
+    assert read_tool in tools
