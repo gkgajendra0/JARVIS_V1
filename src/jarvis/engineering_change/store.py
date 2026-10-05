@@ -1641,6 +1641,38 @@ class ChangeStore:
                     "stage",
                     {"work_id": item.work_id, "plan_artifact_id": plan_artifact_id},
                 )
+                previous = connection.execute(
+                    """SELECT attempt, work_id FROM engineering_change_stages
+                    WHERE change_id=? AND stage_key=? AND attempt<?
+                    ORDER BY attempt DESC LIMIT 1""",
+                    (change_id, stage_key, attempt),
+                ).fetchone()
+                if previous is not None:
+                    supersession_key = (
+                        "stage-attempt-superseded:"
+                        f"{stage_key}:{previous['attempt']}:{attempt}"
+                    )
+                    if (
+                        connection.execute(
+                            """SELECT 1 FROM engineering_change_events
+                            WHERE change_id=? AND event_key=?""",
+                            (change_id, supersession_key),
+                        ).fetchone()
+                        is None
+                    ):
+                        self._event(
+                            connection,
+                            change_id,
+                            supersession_key,
+                            "stage_attempt_superseded",
+                            {
+                                "stage_key": stage_key,
+                                "attempt": int(previous["attempt"]),
+                                "work_id": previous["work_id"],
+                                "superseded_by_attempt": int(attempt),
+                                "superseded_by_work_id": item.work_id,
+                            },
+                        )
             except sqlite3.IntegrityError as exc:
                 raise ChangeConflict("stage WorkItem link violates identity") from exc
             return ChangeStage(
