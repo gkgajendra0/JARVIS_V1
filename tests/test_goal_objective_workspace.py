@@ -17,6 +17,12 @@ from jarvis.goal_intelligence.ledgers import (
     build_progress_ledger,
     build_task_ledger,
 )
+from jarvis.goal_intelligence.role_contexts import (
+    build_architecture_context,
+    build_development_context,
+    build_research_context,
+    build_verification_context,
+)
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
@@ -489,5 +495,122 @@ def test_global_supervisor_decision_is_restart_deterministic(tmp_path: Path) -> 
         work_store=work,
     ).project(state["goal"].goal_id)
     reopened = GlobalSupervisor().evaluate(reopened_workspace)
+
+    assert reopened == first
+
+
+def test_role_contexts_share_workspace_but_remain_role_bounded(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "role-contexts.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    research = build_research_context(workspace)
+    architecture = build_architecture_context(workspace)
+    development = build_development_context(workspace)
+    verification = build_verification_context(workspace)
+
+    contexts = (research, architecture, development, verification)
+    assert {item.source_workspace_digest for item in contexts} == {workspace.digest}
+    assert {item.task_ledger_digest for item in contexts} == {
+        build_task_ledger(workspace).digest
+    }
+    assert {item.progress_ledger_digest for item in contexts} == {
+        build_progress_ledger(workspace).digest
+    }
+
+    assert research.current_assignment is not None
+    assert research.current_assignment.work_id == state["research"].work_id
+    assert "exact VIDAA pairing handshake" in research.bounded_questions
+    assert research.current_architecture is not None
+    assert research.current_architecture.artifact_id == state["architecture"].artifact_id
+
+    assert architecture.research_assignment is not None
+    assert architecture.research_assignment.work_id == state["research"].work_id
+    assert architecture.current_architecture is not None
+
+    # An architecture artifact can exist during research, but build/verification roles
+    # must not see it as approved until the governed approval state proves that.
+    assert development.approved_architecture is None
+    assert verification.approved_architecture is None
+    assert development.current_assignment is None
+    assert verification.development_assignment is None
+
+
+def test_role_contexts_exclude_superseded_research_from_current_truth(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "role-supersession.sqlite3")
+    old = state["work"].require(state["research"].work_id)
+    failed = state["work"].save(
+        old.transition(
+            WorkState.FAILED,
+            status_detail="Historical provider overload.",
+        ),
+        expected_version=old.version,
+    )
+    replacement = WorkItem(
+        request="Research exact VIDAA pairing evidence with recovered provider.",
+        work_type=WorkType.RESEARCH,
+        source_session_id=f"change:{state['change'].change_id}",
+        source_turn_id="acquisition:2",
+    )
+    replacement_stage = state["changes"].link_work(
+        state["change"].change_id,
+        "acquisition",
+        2,
+        replacement,
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    research = build_research_context(workspace)
+    architecture = build_architecture_context(workspace)
+    development = build_development_context(workspace)
+    verification = build_verification_context(workspace)
+
+    assert failed.work_id in research.superseded_work_ids
+    assert failed.work_id in architecture.superseded_work_ids
+    assert failed.work_id in development.superseded_work_ids
+    assert failed.work_id in verification.superseded_work_ids
+
+    assert research.current_assignment is not None
+    assert research.current_assignment.work_id == replacement_stage.work_id
+    assert architecture.research_assignment is not None
+    assert architecture.research_assignment.work_id == replacement_stage.work_id
+    assert research.current_assignment.work_id != failed.work_id
+    assert architecture.research_assignment.work_id != failed.work_id
+
+
+def test_role_contexts_are_restart_deterministic(tmp_path: Path) -> None:
+    path = tmp_path / "role-restart.sqlite3"
+    state = _scenario(path)
+    first_workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    first = (
+        build_research_context(first_workspace),
+        build_architecture_context(first_workspace),
+        build_development_context(first_workspace),
+        build_verification_context(first_workspace),
+    )
+
+    work, goals, changes = _stores(path)
+    reopened_workspace = ObjectiveWorkspaceProjector(
+        goal_store=goals,
+        change_store=changes,
+        work_store=work,
+    ).project(state["goal"].goal_id)
+    reopened = (
+        build_research_context(reopened_workspace),
+        build_architecture_context(reopened_workspace),
+        build_development_context(reopened_workspace),
+        build_verification_context(reopened_workspace),
+    )
 
     assert reopened == first
