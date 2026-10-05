@@ -556,7 +556,6 @@ class ChangeStore:
                 recovered.append(change.change_id)
         return tuple(recovered)
 
-
     def reopen_failed_stage_for_retry(
         self,
         work_id: str,
