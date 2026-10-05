@@ -5,7 +5,7 @@ import pytest
 from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
-from jarvis.work.models import WorkState
+from jarvis.work.models import WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -340,3 +340,95 @@ def test_failed_research_is_recorded_without_starting_development(tmp_path) -> N
     coordinator.reconcile_for_work(research.work_id)
     assert changes.require(change.change_id).state is ChangeState.FAILED
     assert len(changes.list_stages(change.change_id)) == 1
+
+
+def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = coordinator.start("Build media adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    coordinator.reconcile_for_work(research.work_id)
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"transport": "approved"},
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+    )
+    coordinator.reconcile(change.change_id)
+
+    development = changes.list_stages(change.change_id)[1]
+    item = work.require(development.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    step = WorkStep(
+        work_id=running.work_id,
+        kind="phase9_development_engine",
+        summary="Run DevelopmentEngine",
+    )
+    work.add_step(step)
+    completed_step = step.start().complete(
+        {
+            "development_result": {
+                "disposition": "failed",
+                "reason": (
+                    "The approved ChatGPT-plan/Codex engineering target returned a "
+                    "non-retryable failure (response_contract_invalid)."
+                ),
+            }
+        }
+    )
+    work.save_step(completed_step)
+    failed = work.save(
+        running.transition(
+            WorkState.FAILED,
+            status_detail="response contract invalid",
+            current_step_id=step.step_id,
+        ),
+        expected_version=running.version,
+    )
+    coordinator.reconcile_for_work(failed.work_id)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+
+    recovered = changes.reopen_recoverable_development_engine_failures(
+        recovery_generation="codex-contract-repair-v1",
+    )
+    assert recovered == (change.change_id,)
+
+    coordinator.reconcile(change.change_id)
+    stages = changes.list_stages(change.change_id)
+    assert len(stages) == 3
+    assert stages[-1].stage_key == development.stage_key
+    assert stages[-1].attempt == development.attempt + 1
+    assert stages[-1].work_id != development.work_id
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+    # The same runtime generation cannot silently reopen the same historical failure
+    # again on another restart.
+    assert (
+        changes.reopen_recoverable_development_engine_failures(
+            recovery_generation="codex-contract-repair-v1",
+        )
+        == ()
+    )
