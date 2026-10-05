@@ -323,6 +323,7 @@ async def test_codex_engine_preserves_unclassified_runtime_failure_for_retry(
     assert result.retry_after_seconds is None
     assert "RuntimeError" in (result.reason or "")
 
+
 @pytest.mark.asyncio
 async def test_codex_engine_repairs_one_malformed_directive_in_same_thread(
     tmp_path,
@@ -367,8 +368,6 @@ async def test_codex_engine_repairs_one_malformed_directive_in_same_thread(
     repair = json.loads(thread.external_messages[0])
     assert repair["contract"] == "jarvis.development_response_repair.v1"
     assert repair["status"] == "previous_response_rejected"
-
-
 
 
 @pytest.mark.asyncio
