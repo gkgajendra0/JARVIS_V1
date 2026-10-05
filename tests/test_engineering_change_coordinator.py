@@ -436,7 +436,17 @@ def test_revision_research_compatibility_recovery_starts_fresh_attempt(
         expected_version=running.version,
     )
     coordinator.reconcile_for_work(source2.work_id)
-    assert changes.require(change.change_id).state is ChangeState.FAILED
+    active = changes.require(change.change_id)
+    assert active.state is ChangeState.RESEARCHING
+
+    # Compatibility recovery remains a migration for already-persisted legacy bad
+    # states. Recreate that old parent state explicitly; normal S5 behavior above no
+    # longer promotes this recoverable child failure to FAILED.
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=active.version,
+    )
 
     recovered = changes.reopen_recoverable_architecture_revision_failures(
         recovery_generation="phase9-research-provider-sdk-v1",
@@ -581,9 +591,19 @@ def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -
     assert failed.state is WorkState.FAILED
     assert changes.require(change.change_id).state is ChangeState.DEVELOPING
 
-    # Runtime startup must reconcile canonical parent truth before migrations.
+    # Runtime startup classifies response-contract failure as retryable and keeps the
+    # governing EngineeringChange active for the future Supervisor.
     coordinator.reconcile_active()
-    assert changes.require(change.change_id).state is ChangeState.FAILED
+    active = changes.require(change.change_id)
+    assert active.state is ChangeState.DEVELOPING
+
+    # Compatibility recovery still proves already-persisted legacy FAILED state can be
+    # migrated safely after an upgrade.
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=active.version,
+    )
 
     recovered = changes.reopen_recoverable_development_engine_failures(
         recovery_generation="codex-contract-repair-v1",
