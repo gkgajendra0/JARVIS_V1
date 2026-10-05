@@ -135,9 +135,7 @@ class ChangeCoordinator:
                         "evidence. Revision reason: " + reason
                     )
                 previous_id = str(
-                    revision_request.payload.get(
-                        "previous_architecture_artifact_id"
-                    )
+                    revision_request.payload.get("previous_architecture_artifact_id")
                     or ""
                 ).strip()
                 previous = (
