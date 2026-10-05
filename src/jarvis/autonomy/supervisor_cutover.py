@@ -7,6 +7,7 @@ change. Gates, policy, Work/DBOS, verification and promotion remain authoritativ
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
@@ -33,6 +34,7 @@ class SupervisorCutoverDisposition(StrEnum):
     AWAIT_RUNTIME = "await_runtime"
     AWAIT_OWNER = "await_owner"
     RECONCILED_CHANGE = "reconciled_change"
+    RETRIED_WORK = "retried_work"
     TERMINAL_OBSERVED = "terminal_observed"
     GOAL_RUNTIME_REQUIRED = "goal_runtime_required"
 
@@ -115,6 +117,7 @@ class SupervisorCutoverController:
         change_coordinator: ChangeCoordinator,
         supervisor: GlobalSupervisor | None = None,
         mode: AutonomyMode = AutonomyMode.SHADOW,
+        retry_failed_work: Callable[[str], object] | None = None,
     ) -> None:
         if not isinstance(projector, ObjectiveWorkspaceProjector):
             raise TypeError("projector must be ObjectiveWorkspaceProjector")
@@ -128,8 +131,11 @@ class SupervisorCutoverController:
             )
         self._projector = projector
         self._changes = change_coordinator
+        if retry_failed_work is not None and not callable(retry_failed_work):
+            raise TypeError("retry_failed_work must be callable when provided")
         self._supervisor = supervisor or GlobalSupervisor()
         self._mode = mode
+        self._retry_failed_work = retry_failed_work
 
     @staticmethod
     def _change_state(
@@ -178,7 +184,10 @@ class SupervisorCutoverController:
                 surfaced_gate_ids=(),
             )
 
-        change_bound_actions = _RECONCILE_ACTIONS | {SupervisorAction.ASK_OWNER}
+        change_bound_actions = _RECONCILE_ACTIONS | {
+            SupervisorAction.ASK_OWNER,
+            SupervisorAction.RETRY,
+        }
         if (
             action in change_bound_actions
             and change_id is not None
@@ -211,12 +220,42 @@ class SupervisorCutoverController:
                 surfaced_gate_ids=(),
             )
 
-        if action in {SupervisorAction.WAIT_RESOURCE, SupervisorAction.RETRY}:
+        if action is SupervisorAction.WAIT_RESOURCE:
             return self._result(
                 before=before,
                 after=before,
                 action=action,
                 disposition=SupervisorCutoverDisposition.AWAIT_RUNTIME,
+                accepted=True,
+                reason_codes=(),
+                decision_digest=revalidated.digest,
+                change_id=change_id,
+                change_state_before=before_state,
+                surfaced_gate_ids=(),
+            )
+
+        if action is SupervisorAction.RETRY:
+            work_id = context.progress_ledger.active_work_id
+            if self._retry_failed_work is None or work_id is None:
+                return self._result(
+                    before=before,
+                    after=before,
+                    action=action,
+                    disposition=SupervisorCutoverDisposition.AWAIT_RUNTIME,
+                    accepted=True,
+                    reason_codes=("retry_runtime_not_attached",),
+                    decision_digest=revalidated.digest,
+                    change_id=change_id,
+                    change_state_before=before_state,
+                    surfaced_gate_ids=(),
+                )
+            self._retry_failed_work(work_id)
+            after = self._projector.project(goal_id)
+            return self._result(
+                before=before,
+                after=after,
+                action=action,
+                disposition=SupervisorCutoverDisposition.RETRIED_WORK,
                 accepted=True,
                 reason_codes=(),
                 decision_digest=revalidated.digest,
