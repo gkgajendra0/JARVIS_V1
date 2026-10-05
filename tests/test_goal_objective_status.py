@@ -229,6 +229,7 @@ def test_failed_external_acceptance_blocks_objective_projection(tmp_path) -> Non
         state=ChangeState.OBSERVING.value,
         work=(),
         pending_gate_ids=(),
+        lifecycle_proposal_present=True,
         activation_present=True,
         external_acceptance_required=True,
         external_acceptance_work_id="work_acceptance",
