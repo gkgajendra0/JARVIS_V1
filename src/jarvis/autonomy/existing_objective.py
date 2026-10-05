@@ -136,7 +136,9 @@ class ExistingObjectiveResumeController:
 
         workspace = self._projector.project(lineage.goal_id)
         if workspace.goal.record_id != lineage.goal_id:
-            raise ExistingObjectiveLineageError("goal identity changed during projection")
+            raise ExistingObjectiveLineageError(
+                "goal identity changed during projection"
+            )
 
         gap = next(
             (
@@ -152,11 +154,7 @@ class ExistingObjectiveResumeController:
             )
 
         change = next(
-            (
-                item
-                for item in workspace.changes
-                if item.change_id == lineage.change_id
-            ),
+            (item for item in workspace.changes if item.change_id == lineage.change_id),
             None,
         )
         if change is None:
@@ -171,11 +169,8 @@ class ExistingObjectiveResumeController:
                 if artifact.kind == "gicc_capability_gap_link"
                 and str(artifact.payload.get("motivating_goal_id") or "").strip()
                 == lineage.goal_id
-                and str(artifact.payload.get("gap_id") or "").strip()
-                == lineage.gap_id
-                and str(
-                    artifact.payload.get("engineering_change_id") or ""
-                ).strip()
+                and str(artifact.payload.get("gap_id") or "").strip() == lineage.gap_id
+                and str(artifact.payload.get("engineering_change_id") or "").strip()
                 == lineage.change_id
             ),
             None,
@@ -191,8 +186,7 @@ class ExistingObjectiveResumeController:
         if lineage.historical_architecture_artifact_id is not None:
             historical_architecture_verified = any(
                 artifact.kind == "architecture"
-                and artifact.artifact_id
-                == lineage.historical_architecture_artifact_id
+                and artifact.artifact_id == lineage.historical_architecture_artifact_id
                 for artifact in change.artifacts
             )
             if not historical_architecture_verified:
@@ -208,8 +202,7 @@ class ExistingObjectiveResumeController:
             ).get(lineage.historical_gate_id)
             challenge = None if gate is None else getattr(gate, "challenge", gate)
             historical_gate_verified = bool(
-                challenge is not None
-                and challenge.change_id == lineage.change_id
+                challenge is not None and challenge.change_id == lineage.change_id
             )
             if not historical_gate_verified:
                 raise ExistingObjectiveLineageError(
@@ -227,8 +220,7 @@ class ExistingObjectiveResumeController:
             (
                 artifact
                 for artifact in change.artifacts
-                if artifact.artifact_id
-                in set(workspace.current_architecture_refs)
+                if artifact.artifact_id in set(workspace.current_architecture_refs)
                 and artifact.kind == "architecture"
             ),
             None,
@@ -258,7 +250,9 @@ class ExistingObjectiveResumeController:
                 sorted(
                     {
                         str(
-                            target.canonical_name or target.entity_id or target.target_key
+                            target.canonical_name
+                            or target.entity_id
+                            or target.target_key
                         ).strip()
                         for target in workspace.targets
                     }
