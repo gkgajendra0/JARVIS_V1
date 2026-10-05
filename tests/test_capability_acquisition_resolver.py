@@ -410,3 +410,119 @@ def test_target_specific_goal_reuses_only_explicitly_scoped_capability() -> None
     assert result.selected_candidate is not None
     assert result.selected_candidate.source_identity == descriptor.key
     assert result.selected_candidate.strategy is AcquisitionStrategy.REUSE
+
+
+def _targeted_goal() -> OwnerCapabilityGoalV1:
+    return OwnerCapabilityGoalV1.create(
+        request="Acquire control for my Hisense VIDAA television",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television",),
+        source_session_id="session-target-compat",
+        source_turn_id="turn-target-compat",
+        now_epoch=100.0,
+    )
+
+
+def _targeted_sdk(
+    *,
+    identity: str,
+    device_scopes: tuple[str, ...] = (),
+) -> AcquisitionCandidateV1:
+    return AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.SDK_LIBRARY,
+        source_identity=identity,
+        source_version="1.0.0",
+        source_digest="d" * 64,
+        trust_class=AcquisitionTrustClass.VERIFIED_OFFICIAL_REMOTE,
+        supported_operations=("power",),
+        strategy=AcquisitionStrategy.ADAPT_SDK,
+        evidence_refs=(f"pypi:{identity}",),
+        verification_requirements=("sdk-adapter-contract-test",),
+        device_scopes=device_scopes,
+    )
+
+
+def _targeted_custom_build(goal: OwnerCapabilityGoalV1) -> AcquisitionCandidateV1:
+    return AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.CUSTOM_BUILD,
+        source_identity=f"owner-goal:{goal.goal_id}",
+        source_version="1",
+        source_digest=goal.digest,
+        trust_class=AcquisitionTrustClass.OWNER_CONFIGURED,
+        supported_operations=goal.required_operations,
+        strategy=AcquisitionStrategy.BUILD_CUSTOM,
+        evidence_refs=(f"owner-goal-sha256:{goal.digest}",),
+        verification_requirements=("phase6-candidate-verification",),
+    )
+
+
+def test_target_incompatible_samsung_candidate_cannot_win_hisense_vidaa_goal() -> None:
+    goal = _targeted_goal()
+    samsung = _targeted_sdk(
+        identity="samsungtvws",
+        device_scopes=(
+            "entity_type:television",
+            "vendor:samsung",
+            "platform:tizen",
+        ),
+    )
+    custom = _targeted_custom_build(goal)
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (samsung, custom),
+        _core_context(),
+        canonical_target_hints=("vendor:hisense", "platform:vidaa"),
+    )
+
+    samsung_evaluation = result.evaluation(samsung.candidate_id)
+    assert samsung_evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_incompatible" in samsung_evaluation.reason_codes
+    assert "target_conflict_vendor" in samsung_evaluation.reason_codes
+    assert "target_conflict_platform" in samsung_evaluation.reason_codes
+    assert result.selected_candidate_id == custom.candidate_id
+
+
+def test_target_specific_external_candidate_requires_structured_target_proof() -> None:
+    goal = _targeted_goal()
+    unscoped = _targeted_sdk(identity="generic-tv-sdk")
+    custom = _targeted_custom_build(goal)
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (unscoped, custom),
+        _core_context(),
+        canonical_target_hints=("vendor:hisense", "platform:vidaa"),
+    )
+
+    evaluation = result.evaluation(unscoped.candidate_id)
+    assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in evaluation.reason_codes
+    assert "target_unproven_vendor" in evaluation.reason_codes
+    assert "target_unproven_platform" in evaluation.reason_codes
+    assert result.selected_candidate_id == custom.candidate_id
+
+
+def test_matching_target_proof_keeps_verified_sdk_selectable() -> None:
+    goal = _targeted_goal()
+    matching = _targeted_sdk(
+        identity="vidaa-control",
+        device_scopes=(
+            "entity_type:television",
+            "vendor:hisense",
+            "platform:vidaa",
+        ),
+    )
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (matching,),
+        _core_context(),
+        canonical_target_hints=("vendor:hisense", "platform:vidaa"),
+    )
+
+    evaluation = result.evaluation(matching.candidate_id)
+    assert evaluation.disposition is AcquisitionDisposition.SELECTABLE
+    assert "target_compatible" in evaluation.reason_codes
+    assert result.selected_candidate_id == matching.candidate_id
