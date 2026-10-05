@@ -85,6 +85,12 @@ class CodexTurnResponse:
     usage: DevelopmentUsageV1 | None
 
 
+class _DevelopmentResponseContractError(RuntimeError):
+    """Codex output violated the bounded DevelopmentEngine response contract."""
+
+    response_contract_invalid = True
+
+
 class CodexThreadPort(Protocol):
     @property
     def id(self) -> str: ...
@@ -517,31 +523,49 @@ def _parse_directive(response: CodexTurnResponse) -> dict[str, Any]:
     try:
         payload = json.loads(response.final_response)
     except json.JSONDecodeError as exc:
-        raise ValueError("Codex development response was not valid JSON") from exc
+        raise _DevelopmentResponseContractError(
+            "Codex development response was not valid JSON"
+        ) from exc
     if not isinstance(payload, dict):
-        raise TypeError("Codex development response must be an object")
+        raise _DevelopmentResponseContractError(
+            "Codex development response must be an object"
+        )
     kind = str(payload.get("kind") or "").strip().casefold()
     if kind not in {"tool_batch", "result"}:
-        raise ValueError("Codex development response kind is invalid")
+        raise _DevelopmentResponseContractError(
+            "Codex development response kind is invalid"
+        )
     summary = str(payload.get("summary") or "").strip()
     if not summary:
-        raise ValueError("Codex development response summary is required")
+        raise _DevelopmentResponseContractError(
+            "Codex development response summary is required"
+        )
     calls = payload.get("tool_calls")
     if not isinstance(calls, list):
-        raise TypeError("Codex tool_calls must be an array")
+        raise _DevelopmentResponseContractError("Codex tool_calls must be an array")
     if len(calls) > _MAX_TOOL_CALLS_PER_BATCH:
-        raise ValueError("Codex tool batch exceeds configured limit")
+        raise _DevelopmentResponseContractError(
+            "Codex tool batch exceeds configured limit"
+        )
     disposition = payload.get("disposition")
     if kind == "tool_batch":
         if not calls:
-            raise ValueError("Codex tool_batch must contain at least one tool call")
+            raise _DevelopmentResponseContractError(
+                "Codex tool_batch must contain at least one tool call"
+            )
         if disposition is not None:
-            raise ValueError("Codex tool_batch cannot carry a terminal disposition")
+            raise _DevelopmentResponseContractError(
+                "Codex tool_batch cannot carry a terminal disposition"
+            )
     else:
         if calls:
-            raise ValueError("Codex terminal result cannot carry tool calls")
+            raise _DevelopmentResponseContractError(
+                "Codex terminal result cannot carry tool calls"
+            )
         if disposition is None:
-            raise ValueError("Codex terminal result requires a disposition")
+            raise _DevelopmentResponseContractError(
+                "Codex terminal result requires a disposition"
+            )
     payload["kind"] = kind
     payload["summary"] = summary
     return payload
@@ -566,6 +590,26 @@ def _provider_result(
         ProviderFailureKind.CONNECTION_LOST,
         ProviderFailureKind.LOCAL_RESOURCE_PRESSURE,
     }
+    if (
+        failure.kind is ProviderFailureKind.UNKNOWN
+        and failure.retryable is not False
+    ):
+        return DevelopmentResultV1.create(
+            ticket=ticket,
+            disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
+            engine_id=_CODEX_ENGINE_ID,
+            engine_version=engine_version,
+            summary="Engineering intelligence hit an unclassified runtime blocker.",
+            reason=(
+                "JARVIS could not safely classify the engineering runtime failure. "
+                f"The {type(error).__name__} boundary was preserved for retry instead "
+                "of being treated as a completed or terminal capability outcome."
+            ),
+            thread_id=thread_id,
+            blocker_code="development_engine_unclassified",
+            retry_after_seconds=retry_after_seconds,
+        )
+
     if failure.kind in retryable:
         return DevelopmentResultV1.create(
             ticket=ticket,
@@ -949,16 +993,19 @@ class CodexPlanDevelopmentEngine:
                 last_usage = _merge_usage(last_usage, response.usage)
                 directive = _parse_directive(response)
                 if directive["kind"] == "result":
-                    return self._terminal_result(
-                        ticket=ticket,
-                        directive=directive,
-                        thread_id=thread.id,
-                        usage=last_usage,
-                        observed_evidence=observed_evidence,
-                        changed_files=changed_files,
-                        passing_tests=passing_tests,
-                        candidate_revision=candidate_revision,
-                    )
+                    try:
+                        return self._terminal_result(
+                            ticket=ticket,
+                            directive=directive,
+                            thread_id=thread.id,
+                            usage=last_usage,
+                            observed_evidence=observed_evidence,
+                            changed_files=changed_files,
+                            passing_tests=passing_tests,
+                            candidate_revision=candidate_revision,
+                        )
+                    except (TypeError, ValueError) as exc:
+                        raise _DevelopmentResponseContractError(str(exc)) from exc
 
                 calls = directive.get("tool_calls")
                 if not isinstance(calls, list) or not calls:
@@ -1114,6 +1161,16 @@ class CodexPlanDevelopmentEngine:
             # Let Phase-9 translate it into Work WAITING_FOR_OWNER.
             raise
         except Exception as exc:  # noqa: BLE001 - provider boundary fails closed
+            failure = classify_provider_failure(exc, provider="chatgpt_plan")
+            LOGGER.warning(
+                "DevelopmentEngine Codex boundary failed | ticket_id=%s "
+                "exception_type=%s failure_kind=%s retryable=%s thread_id=%s",
+                ticket.ticket_id,
+                type(exc).__name__,
+                failure.kind.value,
+                failure.retryable,
+                None if thread is None else thread.id,
+            )
             trip = None if circuit is None else circuit.record_failure(exc)
             return _provider_result(
                 ticket=ticket,
