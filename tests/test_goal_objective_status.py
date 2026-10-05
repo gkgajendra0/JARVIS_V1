@@ -277,3 +277,85 @@ def test_lifecycle_proposal_makes_observing_change_wait_for_owner_activation(
     assert blocker is not None
     assert blocker.kind == "capability_activation"
     assert blocker.owner_action_required is True
+
+
+def _change_status(
+    *,
+    change_id: str,
+    state: ChangeState,
+    lineage_error: str | None = None,
+) -> ObjectiveChangeStatus:
+    return ObjectiveChangeStatus(
+        change_id=change_id,
+        state=state.value,
+        work=(),
+        pending_gate_ids=(),
+        lifecycle_proposal_present=False,
+        activation_present=False,
+        external_acceptance_required=False,
+        external_acceptance_work_id=None,
+        external_acceptance_work_state=None,
+        external_acceptance_verdict=None,
+        lineage_complete=False,
+        lineage_error=lineage_error,
+    )
+
+
+def test_multi_capability_goal_prioritizes_hard_blocker_over_owner_wait(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    resolver = OwnerObjectiveStatusResolver(
+        goals=GoalStore(work),
+        changes=ChangeStore(work),
+    )
+    blocked = _change_status(
+        change_id="change_blocked",
+        state=ChangeState.OBSERVING,
+        lineage_error="CapabilityAcquisitionLineageError",
+    )
+    waiting_owner = _change_status(
+        change_id="change_waiting",
+        state=ChangeState.WAITING_OWNER_APPROVAL,
+    )
+
+    overall, phase, blocker = resolver._derive_status(
+        goal_state=GoalState.WAITING_CAPABILITY,
+        needs=(),
+        continuations=(),
+        change_statuses=(waiting_owner, blocked),
+    )
+
+    assert overall is ObjectiveOverallState.BLOCKED
+    assert phase is ObjectivePhase.BLOCKED
+    assert blocker is not None
+    assert blocker.blocker_id == "change_blocked"
+
+
+def test_multi_capability_goal_reports_least_advanced_active_dependency(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    resolver = OwnerObjectiveStatusResolver(
+        goals=GoalStore(work),
+        changes=ChangeStore(work),
+    )
+    developing = _change_status(
+        change_id="change_developing",
+        state=ChangeState.DEVELOPING,
+    )
+    promoted = _change_status(
+        change_id="change_promoted",
+        state=ChangeState.PROMOTED,
+    )
+
+    overall, phase, blocker = resolver._derive_status(
+        goal_state=GoalState.WAITING_CAPABILITY,
+        needs=(),
+        continuations=(),
+        change_statuses=(promoted, developing),
+    )
+
+    assert overall is ObjectiveOverallState.ACTIVE
+    assert phase is ObjectivePhase.DEVELOPING
+    assert blocker is None
