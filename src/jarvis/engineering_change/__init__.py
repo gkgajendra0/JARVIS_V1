@@ -13,6 +13,11 @@ from .models import (
     StageAttemptStatus,
     UnsupportedProcess,
 )
+from .outcomes import (
+    SystemOutcomeKind,
+    SystemOutcomeV1,
+    classify_work_system_outcome,
+)
 from .store import ChangeStore
 
 __all__ = [
@@ -27,5 +32,8 @@ __all__ = [
     "ProcessStageContract",
     "ProcessStageRole",
     "StageAttemptStatus",
+    "SystemOutcomeKind",
+    "SystemOutcomeV1",
+    "classify_work_system_outcome",
     "UnsupportedProcess",
 ]
