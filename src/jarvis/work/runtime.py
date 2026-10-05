@@ -1044,16 +1044,18 @@ def build_work_runtime(
             ),
         ),
     )
-    recovered_legacy_development = (
-        change_store.reopen_legacy_unclassified_development_engine_failures()
+    recovered_development = (
+        change_store.reopen_recoverable_development_engine_failures(
+            recovery_generation="codex-contract-repair-v1",
+        )
     )
-    for change_id in recovered_legacy_development:
+    for change_id in recovered_development:
         changes.reconcile(change_id)
-    if recovered_legacy_development:
+    if recovered_development:
         LOGGER.warning(
-            "Recovered legacy unclassified DevelopmentEngine failure(s) under "
-            "their existing approved architecture: %s",
-            ", ".join(recovered_legacy_development),
+            "Recovered compatible DevelopmentEngine failure(s) under their existing "
+            "approved architecture: %s",
+            ", ".join(recovered_development),
         )
 
     capability_acquisition = CapabilityAcquisitionCoordinator(
