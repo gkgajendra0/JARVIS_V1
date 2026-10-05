@@ -34,7 +34,11 @@ from .planning import GoalPlanner, PlanValidationContext
 from .requirements import RequirementDerivationResult, RequirementDeriver
 from .store import GoalStore
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
-from .world import EntityResolutionState, EntityResolver
+from .world import (
+    EntityResolutionState,
+    EntityResolver,
+    canonical_world_entity_type,
+)
 
 _WORLD_RESOURCE_TYPES = frozenset(
     {
@@ -80,10 +84,12 @@ def _entity_candidate(value: str) -> tuple[str | None, str]:
         return None, raw
     proposed_type, mention = raw.split("::", 1)
     normalized_type = proposed_type.strip().casefold()
-    return (
-        None if normalized_type in {"", "unresolved"} else normalized_type,
-        mention.strip(),
+    canonical_type = (
+        None
+        if normalized_type in {"", "unresolved"}
+        else canonical_world_entity_type(normalized_type)
     )
+    return canonical_type, mention.strip()
 
 
 def _task_specific_values(
@@ -284,7 +290,10 @@ class GoalIntelligenceCoordinator:
                             if ambiguous
                             else f"Which {mention} should I use?"
                         ),
-                        answer_schema={"type": "entity_id"},
+                        answer_schema={
+                            "type": "entity_id",
+                            "entity_type": entity_type,
+                        },
                     )
                 )
                 self._telemetry.emit(
