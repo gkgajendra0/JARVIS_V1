@@ -106,7 +106,10 @@ class SupervisorShadowObservationV1:
             ShadowAgreement.ADVISOR_ERROR,
         }:
             raise ValueError("accepted shadow observation has invalid agreement")
-        if canonical_digest(self.canonical_payload()) != self.digest:
+        if (
+            self.digest != "pending"
+            and canonical_digest(self.canonical_payload()) != self.digest
+        ):
             raise ValueError("Supervisor shadow observation digest mismatch")
 
 
