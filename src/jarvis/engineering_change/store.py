@@ -515,29 +515,33 @@ class ChangeStore:
                             recovery_kind = "legacy_unclassified_completed_child"
 
                 elif work.state is WorkState.FAILED:
-                    step_row = db.execute(
+                    step_rows = db.execute(
                         """SELECT * FROM work_steps
                         WHERE work_id=? AND state=?
-                        ORDER BY created_at DESC, step_id DESC LIMIT 1""",
+                        ORDER BY created_at DESC, step_id DESC""",
                         (work.work_id, "completed"),
-                    ).fetchone()
-                    if step_row is not None:
+                    ).fetchall()
+                    engine_result = None
+                    for step_row in step_rows:
                         step = self.work._step_from_row(step_row)
-                        engine_result = step.observation.get("development_result")
-                        if isinstance(engine_result, dict):
-                            disposition = (
-                                str(engine_result.get("disposition") or "")
-                                .strip()
-                                .casefold()
-                            )
-                            reason = " ".join(
-                                str(engine_result.get("reason") or "").split()
-                            ).casefold()
-                            if (
-                                disposition == "failed"
-                                and "response_contract_invalid" in reason
-                            ):
-                                recovery_kind = "response_contract_invalid"
+                        candidate = step.observation.get("development_result")
+                        if isinstance(candidate, dict):
+                            engine_result = candidate
+                            break
+                    if isinstance(engine_result, dict):
+                        disposition = (
+                            str(engine_result.get("disposition") or "")
+                            .strip()
+                            .casefold()
+                        )
+                        reason = " ".join(
+                            str(engine_result.get("reason") or "").split()
+                        ).casefold()
+                        if (
+                            disposition == "failed"
+                            and "response_contract_invalid" in reason
+                        ):
+                            recovery_kind = "response_contract_invalid"
 
                 if recovery_kind is None:
                     continue
