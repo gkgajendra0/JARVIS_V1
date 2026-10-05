@@ -356,6 +356,42 @@ def _active_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
     candidates = [item for item in workspace.changes if item.state in nonterminal]
     if not candidates:
         return None
+
+    # A blocked continuation is stronger authority than generic change recency.
+    # In particular, a goal waiting on one capability gap must continue through the
+    # EngineeringChange canonically linked to that exact gap, even if another direct
+    # EngineeringChange for the same owner turn was updated more recently.
+    blocked_gap_ids = {
+        str(item.payload.get("blocked_by_id") or "").strip()
+        for item in workspace.continuations
+        if str(item.payload.get("state") or "").strip() == "blocked"
+        and str(item.payload.get("blocked_by_type") or "").strip()
+        == "capability_acquisition"
+        and str(item.payload.get("blocked_by_id") or "").strip()
+    }
+    if blocked_gap_ids:
+        continuation_bound = [
+            change
+            for change in candidates
+            if any(
+                artifact.kind == "gicc_capability_gap_link"
+                and str(artifact.payload.get("motivating_goal_id") or "").strip()
+                == workspace.goal.record_id
+                and str(artifact.payload.get("gap_id") or "").strip()
+                in blocked_gap_ids
+                and str(
+                    artifact.payload.get("engineering_change_id") or ""
+                ).strip()
+                == change.change_id
+                for artifact in change.artifacts
+            )
+        ]
+        if continuation_bound:
+            return max(
+                continuation_bound,
+                key=lambda item: (item.updated_at, item.change_id),
+            )
+
     return max(candidates, key=lambda item: (item.updated_at, item.change_id))
 
 
