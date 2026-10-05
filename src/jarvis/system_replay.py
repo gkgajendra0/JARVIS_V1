@@ -231,9 +231,7 @@ def global_supervisor_s1_replay_corpus_digest() -> str:
 def validate_global_supervisor_s1_replay_corpus() -> None:
     if len(GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1) != 20:
         raise ValueError("Global Supervisor S1 replay corpus must contain 20 cases")
-    identities = tuple(
-        item.case_id for item in GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1
-    )
+    identities = tuple(item.case_id for item in GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1)
     if len(set(identities)) != len(identities):
         raise ValueError("Global Supervisor S1 replay case IDs must be unique")
 
