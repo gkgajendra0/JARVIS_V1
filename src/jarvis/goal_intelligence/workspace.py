@@ -237,12 +237,8 @@ class ObjectiveWorkspaceV1:
                 else self.requirement_graph.to_payload()
             ),
             "plan": None if self.plan is None else self.plan.to_payload(),
-            "capability_gaps": [
-                item.to_payload() for item in self.capability_gaps
-            ],
-            "information_needs": [
-                item.to_payload() for item in self.information_needs
-            ],
+            "capability_gaps": [item.to_payload() for item in self.capability_gaps],
+            "information_needs": [item.to_payload() for item in self.information_needs],
             "continuations": [item.to_payload() for item in self.continuations],
             "changes": [item.to_payload() for item in self.changes],
             "work_items": [item.to_payload() for item in self.work_items],
@@ -278,7 +274,9 @@ class ObjectiveWorkspaceProjector:
         if not isinstance(selected_work, SQLiteWorkStore):
             raise TypeError("work_store must be SQLiteWorkStore")
         if selected_work.path != goal_store.work.path:
-            raise ValueError("ObjectiveWorkspace stores must share canonical Work storage")
+            raise ValueError(
+                "ObjectiveWorkspace stores must share canonical Work storage"
+            )
         if change_store.work.path != selected_work.path:
             raise ValueError("EngineeringChange must share canonical Work storage")
         self._goals = goal_store
@@ -488,9 +486,7 @@ class ObjectiveWorkspaceProjector:
                     error=step.error,
                     created_at=step.created_at.isoformat(),
                     started_at=(
-                        None
-                        if step.started_at is None
-                        else step.started_at.isoformat()
+                        None if step.started_at is None else step.started_at.isoformat()
                     ),
                     completed_at=(
                         None
