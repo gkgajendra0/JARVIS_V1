@@ -590,10 +590,7 @@ def _provider_result(
         ProviderFailureKind.CONNECTION_LOST,
         ProviderFailureKind.LOCAL_RESOURCE_PRESSURE,
     }
-    if (
-        failure.kind is ProviderFailureKind.UNKNOWN
-        and failure.retryable is not False
-    ):
+    if failure.kind is ProviderFailureKind.UNKNOWN and failure.retryable is not False:
         return DevelopmentResultV1.create(
             ticket=ticket,
             disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
