@@ -182,6 +182,14 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.supervisor_cutover",
+        (
+            "SupervisorCutoverController",
+            "SupervisorCutoverDisposition",
+            "SupervisorCutoverResultV1",
+        ),
+    ),
+    (
         "jarvis.autonomy.supervisor",
         (
             "DeterministicSupervisorAdvisor",
