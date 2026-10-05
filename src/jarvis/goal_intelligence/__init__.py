@@ -20,6 +20,14 @@ from .interpretation import (
     ShadowInformationNeedCandidate,
     build_goal_interpreter,
 )
+from .ledgers import (
+    LedgerFactV1,
+    LedgerRejectionV1,
+    ProgressLedgerV1,
+    TaskLedgerV1,
+    build_progress_ledger,
+    build_task_ledger,
+)
 from .models import (
     CapabilityGapState,
     CapabilityGapV1,
@@ -73,8 +81,12 @@ from .world import (
 )
 
 __all__ = [
-    "BoundInformationInteraction",
     "BoundedEntityDiscovery",
+    "BoundInformationInteraction",
+    "build_default_goal_store",
+    "build_goal_interpreter",
+    "build_progress_ledger",
+    "build_task_ledger",
     "CapabilityGapState",
     "CapabilityGapV1",
     "CapabilityRequirementGraphV1",
@@ -104,6 +116,8 @@ __all__ = [
     "InformationResolutionState",
     "InformationResolutionStrategy",
     "InformationResolver",
+    "LedgerFactV1",
+    "LedgerRejectionV1",
     "MonitorPredicateV1",
     "ObjectiveWorkspaceProjector",
     "ObjectiveWorkspaceV1",
@@ -113,11 +127,14 @@ __all__ = [
     "PlanNodeType",
     "PlanNodeV1",
     "PlanState",
+    "ProgressLedgerV1",
     "ResourceBindingV1",
+    "restore_bound_information_interaction",
     "ShadowCapabilityRequirement",
     "ShadowEntityCandidate",
     "ShadowGoalInterpretationOutput",
     "ShadowInformationNeedCandidate",
+    "TaskLedgerV1",
     "WorkspaceArtifactV1",
     "WorkspaceChangeV1",
     "WorkspaceEventV1",
@@ -129,7 +146,4 @@ __all__ = [
     "WorkspaceWorkV1",
     "WorldEntityRefV1",
     "WorldRegistry",
-    "build_default_goal_store",
-    "build_goal_interpreter",
-    "restore_bound_information_interaction",
 ]
