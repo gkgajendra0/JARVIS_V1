@@ -247,7 +247,11 @@ async def test_external_acceptance_decline_waits_for_same_owner_authorization(
 
         def context_for(self, work_id):
             assert work_id == item.work_id
-            return SimpleNamespace()
+            return SimpleNamespace(
+                binding=SimpleNamespace(
+                    payload={"authority_session_id": "test-authority-session"}
+                )
+            )
 
     class Runtime:
         def __init__(self):
