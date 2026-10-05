@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Protocol
 
 from jarvis.work.execution import ensure_durable_execution
@@ -132,6 +133,58 @@ class ChangeCoordinator:
                         "continue during governed development. Re-research the capability "
                         "and derive a complete replacement architecture from current "
                         "evidence. Revision reason: " + reason
+                    )
+                previous_id = str(
+                    revision_request.payload.get(
+                        "previous_architecture_artifact_id"
+                    )
+                    or ""
+                ).strip()
+                previous = (
+                    None if not previous_id else self.store.get_artifact(previous_id)
+                )
+                if previous is not None:
+                    continuity_keys = (
+                        "goal_artifact_id",
+                        "goal_artifact_digest",
+                        "plan_id",
+                        "plan_digest",
+                        "selected_candidate",
+                        "selected_evaluation",
+                        "proposed_capability_id",
+                        "proposed_package_id",
+                        "proposed_package_version",
+                        "dependency_refs",
+                        "secret_scopes",
+                        "network_scopes",
+                        "device_scopes",
+                        "discovery_scopes",
+                        "verification_contract_ids",
+                        "owner_acceptance_contract_ids",
+                        "allowed_paths",
+                        "allowed_components",
+                    )
+                    continuity = {
+                        key: previous.payload[key]
+                        for key in continuity_keys
+                        if key in previous.payload
+                    }
+                    request += (
+                        "\nCanonical previous approved architecture context: "
+                        + json.dumps(
+                            {
+                                "artifact_id": previous.artifact_id,
+                                "digest": previous.digest,
+                                "context": continuity,
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            default=str,
+                        )
+                        + ". Preserve the owner target semantics while replacing only "
+                        "the architecture elements that current evidence proves cannot "
+                        "continue."
                     )
             dependencies: tuple[str, ...] = ()
         elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
