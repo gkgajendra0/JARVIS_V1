@@ -6,7 +6,6 @@ from jarvis.autonomy import (
     ShadowFaultKind,
     validate_global_supervisor_s11_fault_matrix,
 )
-
 from jarvis.system_replay import (
     GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1,
     SystemReplayStatus,
