@@ -431,6 +431,132 @@ class ChangeStore:
             for row in rows
         )
 
+    def reopen_legacy_unclassified_development_engine_failures(
+        self,
+    ) -> tuple[str, ...]:
+        """Recover the old completed-child/failed-change DevelopmentEngine bug once.
+
+        Older Phase-9 code could persist an unclassified DevelopmentEngine failure as
+        a COMPLETED development WorkItem and only then fail its EngineeringChange.
+        That state cannot use the normal owner retry path because the child is not
+        FAILED. Reopen only this exact legacy shape, only under the still-current
+        strongly approved architecture. The preserved completed attempt remains
+        immutable evidence; the coordinator will create a fresh development attempt.
+        """
+
+        recovered: list[str] = []
+        with self.work._lock, self.work._connect() as db:
+            rows = db.execute(
+                """SELECT * FROM engineering_changes
+                WHERE state=? ORDER BY created_at, change_id""",
+                (ChangeState.FAILED.value,),
+            ).fetchall()
+            for row in rows:
+                change = self._from_row(row)
+                process = self.process_contract(
+                    change.process_key,
+                    change.process_version,
+                )
+                development = process.development_stage
+                architecture = db.execute(
+                    """SELECT artifact_id, digest
+                    FROM engineering_change_artifacts
+                    WHERE change_id=? AND kind='architecture'
+                    ORDER BY revision DESC LIMIT 1""",
+                    (change.change_id,),
+                ).fetchone()
+                if architecture is None:
+                    continue
+
+                stage = db.execute(
+                    """SELECT * FROM engineering_change_stages
+                    WHERE change_id=? AND stage_key=? AND plan_artifact_id=?
+                    ORDER BY attempt DESC LIMIT 1""",
+                    (
+                        change.change_id,
+                        development.stage_key,
+                        architecture["artifact_id"],
+                    ),
+                ).fetchone()
+                if stage is None:
+                    continue
+
+                work_row = db.execute(
+                    "SELECT * FROM work_items WHERE work_id=?",
+                    (stage["work_id"],),
+                ).fetchone()
+                if work_row is None:
+                    continue
+                work = self.work._item_from_row(work_row)
+                if work.state is not WorkState.COMPLETED:
+                    continue
+
+                engine_result = work.result.get("development_engine")
+                if not isinstance(engine_result, dict):
+                    continue
+                if str(engine_result.get("disposition") or "").strip().casefold() != (
+                    "failed"
+                ):
+                    continue
+                reason = " ".join(
+                    str(engine_result.get("reason") or "").split()
+                ).casefold()
+                if "non-retryable failure (unknown)" not in reason:
+                    continue
+
+                approval = db.execute(
+                    """SELECT d.gate_id
+                    FROM engineering_change_gates AS g
+                    JOIN engineering_change_decisions AS d ON d.gate_id=g.gate_id
+                    WHERE g.change_id=? AND g.kind='architecture'
+                    AND g.artifact_id=? AND g.artifact_digest=?
+                    AND d.approved=1 AND d.verification_id IS NOT NULL
+                    ORDER BY d.decided_at DESC LIMIT 1""",
+                    (
+                        change.change_id,
+                        architecture["artifact_id"],
+                        architecture["digest"],
+                    ),
+                ).fetchone()
+                if approval is None:
+                    continue
+
+                timestamp = _now()
+                cursor = db.execute(
+                    """UPDATE engineering_changes
+                    SET state=?, version=version+1, updated_at=?
+                    WHERE change_id=? AND version=? AND state=?""",
+                    (
+                        ChangeState.APPROVED_FOR_BUILD.value,
+                        timestamp,
+                        change.change_id,
+                        change.version,
+                        ChangeState.FAILED.value,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise ChangeConflict(
+                        "stale legacy DevelopmentEngine recovery transition"
+                    )
+                self._event(
+                    db,
+                    change.change_id,
+                    f"legacy-unclassified-development-recovery:{work.work_id}",
+                    "legacy_unclassified_development_reopened",
+                    {
+                        "work_id": work.work_id,
+                        "stage_key": development.stage_key,
+                        "attempt": int(stage["attempt"]),
+                        "architecture_artifact_id": architecture["artifact_id"],
+                        "approval_gate_id": approval["gate_id"],
+                        "from": ChangeState.FAILED.value,
+                        "to": ChangeState.APPROVED_FOR_BUILD.value,
+                    },
+                )
+                recovered.append(change.change_id)
+        return tuple(recovered)
+
+
     def reopen_failed_stage_for_retry(
         self,
         work_id: str,
