@@ -377,11 +377,8 @@ def _active_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
                 artifact.kind == "gicc_capability_gap_link"
                 and str(artifact.payload.get("motivating_goal_id") or "").strip()
                 == workspace.goal.record_id
-                and str(artifact.payload.get("gap_id") or "").strip()
-                in blocked_gap_ids
-                and str(
-                    artifact.payload.get("engineering_change_id") or ""
-                ).strip()
+                and str(artifact.payload.get("gap_id") or "").strip() in blocked_gap_ids
+                and str(artifact.payload.get("engineering_change_id") or "").strip()
                 == change.change_id
                 for artifact in change.artifacts
             )
