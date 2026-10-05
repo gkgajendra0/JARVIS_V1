@@ -533,11 +533,7 @@ class GiccApplyRuntime:
             return False
 
         completed = goal.state is GoalState.COMPLETED
-        kind = (
-            WorkDeliveryKind.COMPLETION
-            if completed
-            else WorkDeliveryKind.FAILURE
-        )
+        kind = WorkDeliveryKind.COMPLETION if completed else WorkDeliveryKind.FAILURE
         event_key = f"gicc-goal:{goal.goal_id}:{goal.state.value}"
         intent = OwnerCommunicationIntentV1.create(
             kind=(
