@@ -96,7 +96,7 @@ def _scenario(path: Path):
     node = PlanNodeV1.create(
         plan_identity=goal.goal_id,
         ordinal=0,
-        node_type=PlanNodeType.ACT,
+        node_type=PlanNodeType.ACQUIRE_CAPABILITY,
         summary="Acquire and use TV control.",
         gap_id=gap.gap_id,
     )
