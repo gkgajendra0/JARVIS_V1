@@ -478,7 +478,10 @@ async def test_repeated_same_routing_blocker_is_spoken_once_per_work(
     deliveries = store.list_pending_deliveries()
     assert len(deliveries) == 1
     assert deliveries[0].kind is WorkDeliveryKind.RESOURCE_BLOCKER
-    assert deliveries[0].message == "approved reasoning targets are unavailable"
+    assert (
+        deliveries[0].message
+        == "Update: approved reasoning targets are unavailable"
+    )
 
 
 @pytest.mark.asyncio
