@@ -1365,3 +1365,38 @@ def test_objective_workspace_projects_phase9_external_acceptance_work(
     assert external.work_id in projected
     assert projected[external.work_id].work_type == WorkType.EXTERNAL_ACCEPTANCE.value
     assert projected[external.work_id].state == WorkState.WAITING_FOR_OWNER.value
+
+
+def test_superseded_failed_work_is_not_an_objective_blocker(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "superseded-blocker.sqlite3")
+    first = state["work"].require(state["research"].work_id)
+    state["work"].save(
+        first.transition(
+            WorkState.FAILED,
+            status_detail="historical provider failure",
+        ),
+        expected_version=first.version,
+    )
+    replacement = WorkItem(
+        request="Retry acquisition with current evidence.",
+        work_type=WorkType.RESEARCH,
+        source_session_id=f"change:{state['change'].change_id}",
+        source_turn_id="acquisition:2",
+        state=WorkState.QUEUED,
+    )
+    second = state["changes"].link_work(
+        state["change"].change_id,
+        "acquisition",
+        2,
+        replacement,
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    by_id = {item.work_id: item for item in workspace.work_items}
+
+    assert by_id[first.work_id].system_outcome.kind == "superseded"
+    assert by_id[second.work_id].system_outcome.kind == "in_progress"
+    assert f"work:{first.work_id}:failed" not in workspace.observed_blockers
