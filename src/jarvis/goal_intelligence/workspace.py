@@ -146,6 +146,10 @@ class WorkspaceStageV1:
     stage_key: str
     attempt: int
     work_id: str
+    status: str
+    authoritative: bool
+    superseded_by_attempt: int | None
+    produced_artifact_ids: tuple[str, ...]
     plan_artifact_id: str | None
 
     def to_payload(self) -> dict[str, object]:
@@ -153,6 +157,10 @@ class WorkspaceStageV1:
             "stage_key": self.stage_key,
             "attempt": self.attempt,
             "work_id": self.work_id,
+            "status": self.status,
+            "authoritative": self.authoritative,
+            "superseded_by_attempt": self.superseded_by_attempt,
+            "produced_artifact_ids": list(self.produced_artifact_ids),
             "plan_artifact_id": self.plan_artifact_id,
         }
 
@@ -424,9 +432,13 @@ class ObjectiveWorkspaceProjector:
                 stage_key=item.stage_key,
                 attempt=item.attempt,
                 work_id=item.work_id,
+                status=item.status.value,
+                authoritative=item.authoritative,
+                superseded_by_attempt=item.superseded_by_attempt,
+                produced_artifact_ids=item.produced_artifact_ids,
                 plan_artifact_id=item.plan_artifact_id,
             )
-            for item in self._changes.list_stages(change.change_id)
+            for item in self._changes.list_stage_attempts(change.change_id)
         )
         events = tuple(
             WorkspaceEventV1(
