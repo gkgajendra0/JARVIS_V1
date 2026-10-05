@@ -229,17 +229,26 @@ class SupervisorOwnerCommunication:
             assert intent.gate_id is not None
             assert intent.artifact_digest is not None
             assert intent.artifact_revision is not None
+            review_kind = (
+                str(intent.proposal_summary.get("review_kind") or "architecture")
+                .strip()
+                .casefold()
+            )
+            review_label = {
+                "architecture": "architecture",
+                "acceptance": "acceptance evidence",
+                "promotion": "promotion evidence",
+            }.get(review_kind, "change review")
             proposal = json.dumps(
                 intent.proposal_summary,
                 ensure_ascii=False,
                 sort_keys=True,
             )
             return (
-                "The architecture is ready for your approval before I start "
-                f"development. Proposal: {proposal}. Revision "
-                f"{intent.artifact_revision}; artifact SHA-256: "
-                f"{intent.artifact_digest}. Say 'approve {intent.gate_id}' to "
-                f"approve it or 'reject {intent.gate_id}' to reject it."
+                f"The {review_label} is ready for your approval before I continue. "
+                f"Proposal: {proposal}. Revision {intent.artifact_revision}; artifact "
+                f"SHA-256: {intent.artifact_digest}. Say 'approve {intent.gate_id}' "
+                f"to approve it or 'reject {intent.gate_id}' to reject it."
             )
         if intent.kind is OwnerCommunicationKind.OWNER_INPUT:
             return f"I need your input before I can continue: {intent.summary}"
