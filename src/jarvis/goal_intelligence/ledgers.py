@@ -208,8 +208,7 @@ def _current_architecture(
             (
                 artifact
                 for artifact in governing.artifacts
-                if artifact.artifact_id
-                == governing.current_architecture_artifact_id
+                if artifact.artifact_id == governing.current_architecture_artifact_id
                 and artifact.kind == "architecture"
             ),
             None,
