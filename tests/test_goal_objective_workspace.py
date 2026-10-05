@@ -524,7 +524,9 @@ def test_role_contexts_share_workspace_but_remain_role_bounded(tmp_path: Path) -
     assert research.current_assignment.work_id == state["research"].work_id
     assert "exact VIDAA pairing handshake" in research.bounded_questions
     assert research.current_architecture is not None
-    assert research.current_architecture.artifact_id == state["architecture"].artifact_id
+    assert (
+        research.current_architecture.artifact_id == state["architecture"].artifact_id
+    )
 
     assert architecture.research_assignment is not None
     assert architecture.research_assignment.work_id == state["research"].work_id
