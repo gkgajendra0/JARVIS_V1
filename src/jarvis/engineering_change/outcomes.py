@@ -199,6 +199,13 @@ def classify_work_system_outcome(
             owner_action_required=True,
         )
 
+    if work.state is WorkState.CANCELLED:
+        return _create(
+            work,
+            kind=SystemOutcomeKind.TERMINAL,
+            reason=work.status_detail or "Work was cancelled.",
+        )
+
     development, development_evidence = _development_result(work, steps)
     if development is not None:
         disposition = _normalized(development.get("disposition")).casefold()
