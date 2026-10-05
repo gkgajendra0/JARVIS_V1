@@ -101,7 +101,9 @@ class ReviewedLocalServiceEntityDiscovery:
         if not 0.25 <= self._timeout_seconds <= 10:
             raise ValueError("GICC discovery timeout must be within reviewed bounds")
         if not 1 <= self._max_results <= 32:
-            raise ValueError("GICC discovery max_results must be within reviewed bounds")
+            raise ValueError(
+                "GICC discovery max_results must be within reviewed bounds"
+            )
 
     def _scopes(
         self,
@@ -221,14 +223,8 @@ class ReviewedLocalServiceEntityDiscovery:
             )
             provenance = tuple(
                 sorted(
-                    {
-                        f"discovery:{item.observation_id}"
-                        for item in group
-                    }
-                    | {
-                        f"discovery_evidence:{item.evidence_digest}"
-                        for item in group
-                    }
+                    {f"discovery:{item.observation_id}" for item in group}
+                    | {f"discovery_evidence:{item.evidence_digest}" for item in group}
                 )
             )
             entities.append(
@@ -271,16 +267,13 @@ class EntityInformationProbe:
                 resolution_ref=None,
                 reason="information need is not an entity identity",
             )
-        entity_type = canonical_world_entity_type(
-            need.answer_schema.get("entity_type")
-        )
+        entity_type = canonical_world_entity_type(need.answer_schema.get("entity_type"))
         resolution = self._resolver.resolve(
             need.subject,
             expected_entity_types=((entity_type,) if entity_type else ()),
             require_live_binding=False,
             allow_discovery=(
-                self.strategy
-                is InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY
+                self.strategy is InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY
             ),
         )
         if resolution.state is not EntityResolutionState.RESOLVED:
