@@ -21,6 +21,7 @@ from jarvis.work.engine import (
     WorkActionRegistry,
     WorkOwnerInputRequired,
     WorkResourceBlocked,
+    WorkTerminalFailure,
 )
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 from jarvis.work.resources import ResourceLeaseManager
@@ -552,6 +553,12 @@ class Phase9DevelopmentEngineExecutor:
                 blocker_code=result.blocker_code or "development_engine_resource",
                 observation=observation,
             )
+        if result.disposition is DevelopmentDisposition.FAILED:
+            raise WorkTerminalFailure(
+                result.reason or result.summary,
+                failure_code=result.blocker_code or "development_engine_failed",
+                observation=observation,
+            )
         return observation
 
 
@@ -730,19 +737,27 @@ class Phase9DevelopmentControlPlaneDecider:
         if PHASE9_DEVELOPMENT_ENGINE_ACTION not in action_names:
             return None
 
-        latest = next(
+        latest_index = next(
             (
-                step
-                for step in reversed(steps)
-                if step.kind == PHASE9_DEVELOPMENT_ENGINE_ACTION
-                and step.state.value == "completed"
+                index
+                for index in range(len(steps) - 1, -1, -1)
+                if steps[index].kind == PHASE9_DEVELOPMENT_ENGINE_ACTION
+                and steps[index].state.value == "completed"
             ),
             None,
         )
-        if latest is None or latest.observation.get("resource_blocked") is True:
+        if latest_index is None:
             return BrainDecision(
                 action=PHASE9_DEVELOPMENT_ENGINE_ACTION,
                 summary="Run the governed Phase-9 engineering specialist.",
+                parameters={},
+            )
+
+        latest = steps[latest_index]
+        if latest.observation.get("resource_blocked") is True:
+            return BrainDecision(
+                action=PHASE9_DEVELOPMENT_ENGINE_ACTION,
+                summary="Retry the resource-blocked engineering specialist.",
                 parameters={},
             )
 
@@ -767,6 +782,19 @@ class Phase9DevelopmentControlPlaneDecider:
                 summary="Retry the resource-blocked engineering specialist.",
                 parameters={},
             )
+        if disposition is DevelopmentDisposition.FAILED:
+            owner_retry_after_failure = any(
+                index > latest_index
+                and step.kind == "owner_retry"
+                and step.state.value == "completed"
+                for index, step in enumerate(steps)
+            )
+            if owner_retry_after_failure:
+                return BrainDecision(
+                    action=PHASE9_DEVELOPMENT_ENGINE_ACTION,
+                    summary="Retry the failed governed engineering specialist.",
+                    parameters={},
+                )
 
         summary = str(raw_result.get("summary") or "").strip()
         return BrainDecision(
