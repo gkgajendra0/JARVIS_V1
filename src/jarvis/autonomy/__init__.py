@@ -161,6 +161,19 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.supervisor",
+        (
+            "DeterministicSupervisorAdvisor",
+            "GlobalSupervisor",
+            "SupervisorAction",
+            "SupervisorAdvisor",
+            "SupervisorContextV1",
+            "SupervisorDecisionV1",
+            "SupervisorProposalV1",
+            "supervisor_context_from_workspace",
+        ),
+    ),
+    (
         "jarvis.autonomy.system_state",
         (
             "SYSTEM_STATE_PRODUCER_VERSION",
