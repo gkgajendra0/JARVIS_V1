@@ -76,9 +76,7 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
         "h",
         {
             "owner_acceptance_contract_ids": (
-                [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT]
-                if external_required
-                else []
+                [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT] if external_required else []
             )
         },
     )
