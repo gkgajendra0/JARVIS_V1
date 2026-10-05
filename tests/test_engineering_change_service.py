@@ -111,7 +111,6 @@ def test_bound_gate_session_accepts_simple_yes_for_exact_runtime_bound_gate(
     assert store.require(change.change_id).state is ChangeState.DEVELOPING
 
 
-
 @pytest.mark.parametrize(
     "reply",
     [
