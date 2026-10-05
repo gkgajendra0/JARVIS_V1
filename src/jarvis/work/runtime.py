@@ -720,6 +720,12 @@ def build_work_runtime(
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
+    if capability_lifecycle_service is not None and capability_runtime is None:
+        raise ValueError(
+            "capability lifecycle service requires governed capability runtime "
+            "for Phase-9 external acceptance"
+        )
+
     loop = event_loop or asyncio.get_running_loop()
     resolved_store_path = Path(store_path or default_work_store_path())
     payload_codec = build_default_work_payload_codec(resolved_store_path)
