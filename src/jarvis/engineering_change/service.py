@@ -55,9 +55,7 @@ class ChangeService:
     ) -> None:
         intent = OwnerCommunicationIntentV1.create(
             kind=OwnerCommunicationKind.CHANGE_GATE,
-            event_key=(
-                f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}"
-            ),
+            event_key=(f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}"),
             summary=summary,
             change_id=change_id,
             work_id=work.work_id,
