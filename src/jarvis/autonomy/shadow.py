@@ -193,7 +193,9 @@ def validate_global_supervisor_s11_fault_matrix() -> None:
     expected = set(ShadowFaultKind)
     actual = {item.fault_kind for item in GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1}
     if actual != expected:
-        raise ValueError("S11 fault matrix must cover every ShadowFaultKind exactly once")
+        raise ValueError(
+            "S11 fault matrix must cover every ShadowFaultKind exactly once"
+        )
     if len(GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1) != len(actual):
         raise ValueError("S11 fault matrix contains duplicate fault kinds")
 
