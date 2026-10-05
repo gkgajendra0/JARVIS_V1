@@ -34,6 +34,6 @@ __all__ = [
     "StageAttemptStatus",
     "SystemOutcomeKind",
     "SystemOutcomeV1",
-    "classify_work_system_outcome",
     "UnsupportedProcess",
+    "classify_work_system_outcome",
 ]
