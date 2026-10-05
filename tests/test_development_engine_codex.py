@@ -323,8 +323,6 @@ async def test_codex_engine_preserves_unclassified_runtime_failure_for_retry(
     assert "RuntimeError" in (result.reason or "")
 
 
-
-
 @pytest.mark.asyncio
 async def test_codex_engine_runs_coherent_tool_batches_and_derives_completion(
     tmp_path,
