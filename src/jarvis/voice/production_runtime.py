@@ -699,6 +699,7 @@ def build_production_voice_runtime(
                     conversation,
                     gicc_apply_runtime.store,
                     execution_runtime=gicc_apply_runtime,
+                    objective_status=gicc_apply_runtime.objective_status,
                     telemetry=gicc_apply_runtime.telemetry,
                 ).tools
             )
