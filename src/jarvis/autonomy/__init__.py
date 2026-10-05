@@ -39,6 +39,15 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.existing_objective",
+        (
+            "ExistingObjectiveLineageError",
+            "ExistingObjectiveLineageV1",
+            "ExistingObjectiveResumeController",
+            "ExistingObjectiveResumeSnapshotV1",
+        ),
+    ),
+    (
         "jarvis.autonomy.mode",
         ("AutonomyMode",),
     ),
