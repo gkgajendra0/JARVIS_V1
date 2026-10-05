@@ -31,11 +31,15 @@ def test_system_outcome_classifies_provider_pressure_as_retryable() -> None:
         state=WorkState.FAILED,
         detail="ChatGPTPlanHTTPError: Our servers are currently overloaded.",
     )
-    failed_step = WorkStep(
-        work_id=work.work_id,
-        kind="brain_reasoning",
-        summary="Reasoning provider call",
-    ).start().fail("Our servers are currently overloaded. Please try again later.")
+    failed_step = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="brain_reasoning",
+            summary="Reasoning provider call",
+        )
+        .start()
+        .fail("Our servers are currently overloaded. Please try again later.")
+    )
 
     outcome = classify_work_system_outcome(work, steps=(failed_step,))
 
@@ -65,18 +69,22 @@ def test_system_outcome_maps_typed_specialist_contracts() -> None:
         source_turn_id="development",
         state=WorkState.COMPLETED,
     )
-    step = WorkStep(
-        work_id=research_work.work_id,
-        kind="phase9_development_engine",
-        summary="Run DevelopmentEngine",
-    ).start().complete(
-        {
-            "development_result": {
-                "disposition": "needs_research",
-                "summary": "Pairing behavior needs exact evidence.",
-                "reason": "VIDAA certificate behavior is not sufficiently evidenced.",
+    step = (
+        WorkStep(
+            work_id=research_work.work_id,
+            kind="phase9_development_engine",
+            summary="Run DevelopmentEngine",
+        )
+        .start()
+        .complete(
+            {
+                "development_result": {
+                    "disposition": "needs_research",
+                    "summary": "Pairing behavior needs exact evidence.",
+                    "reason": "VIDAA certificate behavior is not sufficiently evidenced.",
+                }
             }
-        }
+        )
     )
 
     outcome = classify_work_system_outcome(research_work, steps=(step,))
@@ -102,7 +110,9 @@ def test_system_outcome_owner_and_superseded_are_nonterminal() -> None:
     assert superseded.terminal is False
 
 
-def test_recoverable_research_failure_does_not_fail_engineering_change(tmp_path) -> None:
+def test_recoverable_research_failure_does_not_fail_engineering_change(
+    tmp_path,
+) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     changes = ChangeStore(work)
     coordinator = ChangeCoordinator(changes, RecordingBackend())
