@@ -93,6 +93,41 @@ def _normalize_owner_reply(value: str) -> str:
     return " ".join(value.strip().casefold().rstrip(".!?").split())
 
 
+def _require_activation_authority(
+    activation: ChangeArtifact,
+    *,
+    authority_session_id: str,
+    source_turn_id: str,
+) -> tuple[str, str]:
+    """Bind live acceptance to the exact owner authority that activated the package."""
+
+    supplied_session = _bounded_text(
+        authority_session_id,
+        field="authority_session_id",
+        limit=180,
+    )
+    supplied_turn = _bounded_text(
+        source_turn_id,
+        field="source_turn_id",
+        limit=180,
+    )
+    activation_session = _bounded_text(
+        activation.payload.get("authority_session_id"),
+        field="activation.authority_session_id",
+        limit=180,
+    )
+    activation_turn = _bounded_text(
+        activation.payload.get("source_turn_id"),
+        field="activation.source_turn_id",
+        limit=180,
+    )
+    if supplied_session != activation_session or supplied_turn != activation_turn:
+        raise ExternalAcceptanceError(
+            "external acceptance authority does not match the exact activation artifact"
+        )
+    return activation_session, activation_turn
+
+
 def _owner_reply(
     steps: tuple[WorkStep, ...],
     *,
@@ -362,6 +397,14 @@ class ExternalAcceptanceCoordinator:
                 "activated capability has no required external acceptance contract"
             )
 
+        bound_authority_session_id, bound_source_turn_id = (
+            _require_activation_authority(
+                activation,
+                authority_session_id=authority_session_id,
+                source_turn_id=source_turn_id,
+            )
+        )
+
         source_session = f"phase9-external:{change.change_id}"
         existing = self._changes.work.find_by_source_turn(
             source_session_id=source_session,
@@ -436,16 +479,8 @@ class ExternalAcceptanceCoordinator:
                 "acceptance_contract_id": (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT),
                 "device_identity": device_identity,
                 "target_hints": list(target_hints),
-                "authority_session_id": _bounded_text(
-                    authority_session_id,
-                    field="authority_session_id",
-                    limit=180,
-                ),
-                "source_turn_id": _bounded_text(
-                    source_turn_id,
-                    field="source_turn_id",
-                    limit=180,
-                ),
+                "authority_session_id": bound_authority_session_id,
+                "source_turn_id": bound_source_turn_id,
             },
         )
         try:
