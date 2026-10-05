@@ -11,6 +11,7 @@ from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
+from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.work.estimates import estimate_work
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
@@ -60,6 +61,7 @@ class WorkAgentTools:
         bound_owner_input_work_id: str | None = None,
         on_bound_owner_input_submitted: Callable[[WorkItem], None] | None = None,
         bound_change_gate_id: str | None = None,
+        objective_status: OwnerObjectiveStatusResolver | None = None,
         allow_capability_acquisition: bool = True,
     ) -> None:
         if not isinstance(runtime, WorkRuntime):
@@ -73,6 +75,7 @@ class WorkAgentTools:
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
         self._bound_change_gate_id = normalized_bound_gate_id
+        self._objective_status = objective_status
         if not isinstance(allow_capability_acquisition, bool):
             raise TypeError("allow_capability_acquisition must be bool")
         self._allow_capability_acquisition = allow_capability_acquisition
@@ -742,49 +745,30 @@ class WorkAgentTools:
             "work": [_public_work(item, self._runtime) for item in items],
         }
 
-        active_changes: list[dict[str, object]] = []
-        coordinator = getattr(self._runtime, "changes", None)
-        if coordinator is not None:
-            for change_id in coordinator.store.active_ids():
-                change = coordinator.store.require(change_id)
-                stages = coordinator.store.list_stages(change_id)
-                active_changes.append(
-                    {
-                        "change_id": change.change_id,
-                        "state": change.state.value,
-                        "request": change.request,
-                        "pending_owner_approval": (
-                            change.state.value == "waiting_owner_approval"
-                        ),
-                        "stages": [
-                            {
-                                "stage": stage.stage_key,
-                                "work_id": stage.work_id,
-                                "work_state": coordinator.store.work.require(
-                                    stage.work_id
-                                ).state.value,
-                            }
-                            for stage in stages
-                        ],
-                    }
-                )
-        if active_changes:
-            payload["active_engineering_changes"] = active_changes
+        objectives = (
+            ()
+            if self._objective_status is None
+            else self._objective_status.list_active(limit=50)
+        )
+        if objectives:
+            payload["owner_objectives"] = [
+                objective.public_payload() for objective in objectives
+            ]
             payload["overall_task_truth"] = (
-                "one or more parent EngineeringChange objectives are still active; "
-                "a completed child WorkItem does not mean the overall task is complete"
+                "owner-level objective status is canonical across GICC, Work, "
+                "EngineeringChange, activation, and external acceptance"
             )
 
         if len(items) == 1:
             self._runtime.set_owner_work_focus(items[0].work_id)
         elif items:
             self._runtime.set_owner_work_focus(None)
-        elif active_changes:
+        elif objectives:
             self._runtime.set_owner_work_focus(None)
             payload["truth_note"] = (
-                "no child WorkItem is currently running, but parent engineering work "
-                "is still active; report the parent change state and any owner approval "
-                "blocker instead of saying there is no active task"
+                "no child WorkItem is currently running, but one or more canonical "
+                "owner objectives remain active. Report the objective phase/blocker; "
+                "never say there is no active task merely because child work finished."
             )
         else:
             recent = self._runtime.store.list_recent(limit=1)
