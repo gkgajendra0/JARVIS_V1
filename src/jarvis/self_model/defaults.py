@@ -46,6 +46,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 ".github/workflows/code-quality.yml",
                 ".github/workflows/step4-self-knowledge-sbom.yml",
                 ".github/workflows/step4-sqlcipher-417-windows.yml",
+                "src/jarvis/system_replay.py",
                 "tests",
             ),
             parent_component_id="jarvis",
