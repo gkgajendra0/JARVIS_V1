@@ -319,21 +319,17 @@ def _validate_context_digest(
 
 
 def _current_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
-    active = [
-        change
-        for change in workspace.changes
-        if change.state
-        not in {
-            "closed",
-            "rejected",
-            "failed",
-            "superseded",
-            "rolled_back",
-        }
-    ]
-    if not active:
+    governing_change_id = build_progress_ledger(workspace).active_change_id
+    if governing_change_id is None:
         return None
-    return max(active, key=lambda item: (item.updated_at, item.change_id))
+    return next(
+        (
+            change
+            for change in workspace.changes
+            if change.change_id == governing_change_id
+        ),
+        None,
+    )
 
 
 def _work_by_type(
@@ -387,17 +383,20 @@ def _specialist_work_ref(work: WorkspaceWorkV1 | None) -> SpecialistWorkRefV1 | 
 def _current_architecture(
     workspace: ObjectiveWorkspaceV1,
 ) -> SpecialistArtifactRefV1 | None:
-    refs = set(workspace.current_architecture_refs)
-    candidates: list[WorkspaceArtifactV1] = []
-    for change in workspace.changes:
-        candidates.extend(
-            artifact
-            for artifact in change.artifacts
-            if artifact.artifact_id in refs and artifact.kind == "architecture"
-        )
-    if not candidates:
+    change = _current_change(workspace)
+    if change is None or change.current_architecture_artifact_id is None:
         return None
-    artifact = max(candidates, key=lambda item: (item.revision, item.artifact_id))
+    artifact = next(
+        (
+            item
+            for item in change.artifacts
+            if item.artifact_id == change.current_architecture_artifact_id
+            and item.kind == "architecture"
+        ),
+        None,
+    )
+    if artifact is None:
+        return None
     return SpecialistArtifactRefV1(
         artifact_id=artifact.artifact_id,
         kind=artifact.kind,
