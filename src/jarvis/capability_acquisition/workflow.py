@@ -295,7 +295,9 @@ class AcquisitionRecordCandidateExecutor:
         source_identity = str(parameters.get("source_identity") or "")
         if source_kind is AcquisitionSourceKind.SDK_LIBRARY:
             try:
-                source_identity = normalize_python_distribution_identity(source_identity)
+                source_identity = normalize_python_distribution_identity(
+                    source_identity
+                )
             except ValueError as exc:
                 raise AcquisitionProtocolError(str(exc)) from exc
         candidate = AcquisitionCandidateV1.create(
