@@ -5,6 +5,9 @@ import pytest
 
 from jarvis.autonomy import (
     AutonomyMode,
+    ExistingObjectiveLineageError,
+    ExistingObjectiveLineageV1,
+    ExistingObjectiveResumeController,
     GlobalSupervisor,
     ShadowAgreement,
     ShadowFaultKind,
@@ -1029,4 +1032,130 @@ def test_supervisor_cutover_rejects_active_bounded_mode(tmp_path: Path) -> None:
             projector=projector,
             change_coordinator=coordinator,
             mode=AutonomyMode.ACTIVE_BOUNDED,
+        )
+
+
+def _existing_resume_controller(state, *, mode=AutonomyMode.SHADOW):
+    backend = _SupervisorCutoverBackend()
+    coordinator = ChangeCoordinator(state["changes"], backend)
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    cutover = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=mode,
+    )
+    return (
+        backend,
+        ExistingObjectiveResumeController(
+            projector=projector,
+            change_store=state["changes"],
+            cutover=cutover,
+        ),
+    )
+
+
+def test_existing_objective_resume_inspects_exact_canonical_lineage(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "existing-resume.sqlite3")
+    _, controller = _existing_resume_controller(state)
+    lineage = ExistingObjectiveLineageV1(
+        goal_id=state["goal"].goal_id,
+        gap_id=state["gap"].gap_id,
+        change_id=state["change"].change_id,
+        historical_architecture_artifact_id=state["architecture"].artifact_id,
+    )
+
+    snapshot = controller.inspect(lineage)
+
+    assert snapshot.goal_id == state["goal"].goal_id
+    assert snapshot.gap_id == state["gap"].gap_id
+    assert snapshot.change_id == state["change"].change_id
+    assert snapshot.change_state == ChangeState.RESEARCHING.value
+    assert snapshot.current_architecture_artifact_id == state["architecture"].artifact_id
+    assert snapshot.current_architecture_digest == state["architecture"].digest
+    assert snapshot.current_phase == "research"
+    assert snapshot.next_legal_actions == ("WAIT_RESOURCE", "RETRY")
+    assert snapshot.active_work_id == state["research"].work_id
+    assert snapshot.target_names == ("Hisense U7N",)
+    assert snapshot.capability_families == ("media_player.control",)
+    assert snapshot.historical_architecture_verified is True
+    assert snapshot.historical_gate_verified is True
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (
+        ("goal_id", "goal_not_this_objective"),
+        ("gap_id", "gap_not_this_objective"),
+        ("change_id", "change_not_this_objective"),
+    ),
+)
+def test_existing_objective_resume_refuses_identity_drift(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+) -> None:
+    state = _scenario(tmp_path / f"existing-resume-drift-{field}.sqlite3")
+    _, controller = _existing_resume_controller(state)
+    payload = {
+        "goal_id": state["goal"].goal_id,
+        "gap_id": state["gap"].gap_id,
+        "change_id": state["change"].change_id,
+    }
+    payload[field] = replacement
+
+    with pytest.raises((ExistingObjectiveLineageError, GoalStoreError)):
+        controller.inspect(ExistingObjectiveLineageV1(**payload))
+
+
+def test_existing_objective_resume_has_no_creation_fallback(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "existing-resume-no-create.sqlite3")
+    backend, controller = _existing_resume_controller(state)
+    lineage = ExistingObjectiveLineageV1(
+        goal_id=state["goal"].goal_id,
+        gap_id=state["gap"].gap_id,
+        change_id=state["change"].change_id,
+    )
+    before_goals = tuple(
+        item.goal_id for item in state["goals"].list_active_goals(limit=100)
+    )
+    before_changes = state["changes"].active_ids()
+    before_work = tuple(
+        item.work_id for item in state["work"].list(limit=100)
+    )
+
+    snapshot, result = controller.coordinate_once(lineage)
+
+    assert snapshot.goal_id == lineage.goal_id
+    assert result.disposition is SupervisorCutoverDisposition.SHADOW_ONLY
+    assert result.mutation_performed is False
+    assert tuple(
+        item.goal_id for item in state["goals"].list_active_goals(limit=100)
+    ) == before_goals
+    assert state["changes"].active_ids() == before_changes
+    assert tuple(item.work_id for item in state["work"].list(limit=100)) == before_work
+    assert backend.submissions == []
+
+
+def test_existing_objective_resume_rejects_wrong_historical_architecture(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "existing-resume-architecture.sqlite3")
+    _, controller = _existing_resume_controller(state)
+
+    with pytest.raises(
+        ExistingObjectiveLineageError,
+        match="historical architecture anchor",
+    ):
+        controller.inspect(
+            ExistingObjectiveLineageV1(
+                goal_id=state["goal"].goal_id,
+                gap_id=state["gap"].gap_id,
+                change_id=state["change"].change_id,
+                historical_architecture_artifact_id="artifact_not_in_change",
+            )
         )
