@@ -72,7 +72,7 @@ async def test_active_work_status_surfaces_recent_failure_when_none_remains_acti
 
 
 @pytest.mark.asyncio
-async def test_status_reports_active_parent_change_after_child_work_completed(
+async def test_status_delegates_overall_truth_to_objective_projection(
     tmp_path,
 ) -> None:
     store = SQLiteWorkStore(tmp_path / "work.sqlite")
@@ -96,51 +96,46 @@ async def test_status_reports_active_parent_change_after_child_work_completed(
         expected_version=running.version,
     )
 
-    change = SimpleNamespace(
-        change_id="change_tv",
-        state=SimpleNamespace(value="waiting_owner_approval"),
-        request="Acquire TV media control",
+    objective_payload = {
+        "goal_id": "goal_tv",
+        "overall_state": "waiting_owner",
+        "phase": "waiting_owner_approval",
+        "verified_completion": False,
+        "work": [
+            {
+                "work_id": completed.work_id,
+                "state": "completed",
+                "status_detail": "research complete",
+            }
+        ],
+    }
+    objective = SimpleNamespace(
+        public_payload=lambda: objective_payload,
     )
-    stage = SimpleNamespace(stage_key="research", work_id=completed.work_id)
-    change_store = SimpleNamespace(
-        active_ids=lambda: ("change_tv",),
-        require=lambda change_id: change,
-        list_stages=lambda change_id: (stage,),
-        work=store,
+    objective_status = SimpleNamespace(
+        list_active=lambda *, limit: (objective,),
     )
 
     runtime = object.__new__(WorkRuntime)
     runtime.store = store
     runtime.orchestrator = SimpleNamespace(list_active=lambda *, limit: ())
-    runtime.changes = SimpleNamespace(store=change_store)
     runtime._owner_work_focus_id = None
 
     conversation = ConversationSession()
     conversation.start()
-    tools = WorkAgentTools(runtime, conversation)
+    tools = WorkAgentTools(
+        runtime,
+        conversation,
+        objective_status=objective_status,  # type: ignore[arg-type]
+    )
 
     result = await tools.list_background_work(None)  # type: ignore[arg-type]
 
     assert result["work"] == []
     assert "recent_terminal_work" not in result
-    changes = result["active_engineering_changes"]
-    assert isinstance(changes, list)
-    assert changes == [
-        {
-            "change_id": "change_tv",
-            "state": "waiting_owner_approval",
-            "request": "Acquire TV media control",
-            "pending_owner_approval": True,
-            "stages": [
-                {
-                    "stage": "research",
-                    "work_id": completed.work_id,
-                    "work_state": "completed",
-                }
-            ],
-        }
-    ]
-    assert "parent engineering work is still active" in str(result["truth_note"])
+    assert result["owner_objectives"] == [objective_payload]
+    assert "owner objectives remain active" in str(result["truth_note"])
+    assert "canonical across GICC" in str(result["overall_task_truth"])
 
 
 @pytest.mark.asyncio
