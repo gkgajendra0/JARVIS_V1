@@ -113,6 +113,58 @@ class AcquisitionWorkContextResolver:
             if step.state.value == "completed"
         )
 
+    def canonical_target_hints(
+        self,
+        context: AcquisitionWorkContext,
+    ) -> tuple[str, ...]:
+        """Project structured target facts without changing the immutable Phase-9 goal."""
+
+        hints = {
+            " ".join(str(item).split()).strip().casefold()
+            for item in context.goal.target_hints
+            if str(item).strip()
+        }
+
+        link = self._store.latest_artifact(
+            context.change_id,
+            "gicc_capability_gap_link",
+        )
+        if link is not None:
+            target_type = str(link.payload.get("target_entity_type") or "").strip()
+            if target_type:
+                hints.add(f"entity_type:{target_type}".casefold())
+
+        target_context = self._store.latest_artifact(
+            context.change_id,
+            "gicc_target_context",
+        )
+        if target_context is not None:
+            for item in target_context.payload.get("target_hints", ()):
+                normalized = " ".join(str(item).split()).strip().casefold()
+                if normalized:
+                    hints.add(normalized)
+
+        architecture = self._store.latest_artifact(
+            context.change_id,
+            "architecture",
+        )
+        if architecture is not None:
+            fields = {
+                "target_entity_type": "entity_type",
+                "target_vendor": "vendor",
+                "target_platform": "platform",
+                "target_protocol": "protocol",
+                "target_model": "model",
+            }
+            for key, dimension in fields.items():
+                value = " ".join(
+                    str(architecture.payload.get(key) or "").split()
+                ).strip()
+                if value:
+                    hints.add(f"{dimension}:{value}".casefold())
+
+        return tuple(sorted(hints))
+
 
 def recorded_unverified_candidates(
     steps: tuple[WorkStep, ...],
@@ -383,9 +435,11 @@ class AcquisitionResolveExecutor:
         del parameters
         context = self._resolver.context_for(work.work_id)
         acquisition_context = self._context_provider.current()
+        target_hints = self._resolver.canonical_target_hints(context)
         registered = self._acquisition.resolve(
             context.goal,
             acquisition_context,
+            canonical_target_hints=target_hints,
         )
         steps = self._resolver.completed_steps(work.work_id)
         research_candidates = (
@@ -396,6 +450,7 @@ class AcquisitionResolveExecutor:
             context.goal,
             (*registered.candidates, *research_candidates),
             acquisition_context,
+            canonical_target_hints=target_hints,
         )
         payload = resolution_payload(
             candidates=resolution.candidates,
