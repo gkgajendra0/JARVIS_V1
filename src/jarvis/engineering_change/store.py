@@ -597,6 +597,7 @@ class ChangeStore:
         self,
         *,
         recovery_generation: str,
+        dry_run: bool = False,
     ) -> tuple[str, ...]:
         """Reopen only known DevelopmentEngine states fixed by this runtime generation.
 
@@ -612,6 +613,8 @@ class ChangeStore:
         generation = str(recovery_generation).strip().casefold()
         if not generation:
             raise ValueError("recovery_generation must not be empty")
+        if not isinstance(dry_run, bool):
+            raise TypeError("dry_run must be bool")
 
         recovered: list[str] = []
         with self.work._lock, self.work._connect() as db:
@@ -738,6 +741,10 @@ class ChangeStore:
                 ):
                     continue
 
+                if dry_run:
+                    recovered.append(change.change_id)
+                    continue
+
                 timestamp = _now()
                 cursor = db.execute(
                     """UPDATE engineering_changes
@@ -779,6 +786,7 @@ class ChangeStore:
         self,
         *,
         recovery_generation: str,
+        dry_run: bool = False,
     ) -> tuple[str, ...]:
         """Supersede only revision-research failures fixed by this runtime generation.
 
@@ -790,6 +798,8 @@ class ChangeStore:
         generation = str(recovery_generation).strip().casefold()
         if not generation:
             raise ValueError("recovery_generation must not be empty")
+        if not isinstance(dry_run, bool):
+            raise TypeError("dry_run must be bool")
 
         recovered: list[str] = []
         with self.work._lock, self.work._connect() as db:
@@ -887,6 +897,10 @@ class ChangeStore:
                     ).fetchone()
                     is not None
                 ):
+                    continue
+
+                if dry_run:
+                    recovered.append(change.change_id)
                     continue
 
                 max_attempt = int(
