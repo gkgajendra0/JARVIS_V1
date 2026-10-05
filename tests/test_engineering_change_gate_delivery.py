@@ -62,6 +62,9 @@ def test_architecture_ready_is_surfaced_as_exact_owner_gate(tmp_path) -> None:
     assert architecture.digest in delivery.event_key
     assert f"approve {gate_id}" in delivery.message
     assert f"reject {gate_id}" in delivery.message
+    assert architecture.digest in delivery.message
+    assert "The architecture is ready for your approval" in delivery.message
+    assert change.change_id not in delivery.message
 
 
 def test_gate_reconciliation_is_idempotent_across_restart_style_rechecks(
