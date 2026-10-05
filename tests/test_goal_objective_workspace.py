@@ -1160,3 +1160,37 @@ def test_existing_objective_resume_rejects_wrong_historical_architecture(
                 historical_architecture_artifact_id="artifact_not_in_change",
             )
         )
+
+
+def test_blocked_capability_continuation_outranks_newer_direct_change(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "continuation-authority.sqlite3")
+    competing = state["changes"].create(
+        request="A newer direct change must not steal capability-continuation authority.",
+        source_session_id=state["goal"].source_session_id,
+        source_turn_id=state["goal"].source_turn_id,
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    progress = build_progress_ledger(workspace)
+
+    assert competing.change_id != state["change"].change_id
+    assert progress.active_change_id == state["change"].change_id
+    assert progress.phase == "research"
+    assert progress.active_work_id == state["research"].work_id
+
+    _, controller = _existing_resume_controller(state)
+    snapshot = controller.inspect(
+        ExistingObjectiveLineageV1(
+            goal_id=state["goal"].goal_id,
+            gap_id=state["gap"].gap_id,
+            change_id=state["change"].change_id,
+            historical_architecture_artifact_id=state["architecture"].artifact_id,
+        )
+    )
+    assert snapshot.change_id == state["change"].change_id
+    assert snapshot.current_phase == "research"
