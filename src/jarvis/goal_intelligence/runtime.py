@@ -41,7 +41,7 @@ from .composition import (
 )
 from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
-from .information import InformationResolver
+from .information import InformationResolutionStrategy, InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .models import (
     ContinuationBlockerType,
@@ -73,6 +73,10 @@ from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry
+from .world_discovery import (
+    EntityInformationProbe,
+    ReviewedLocalServiceEntityDiscovery,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -776,7 +780,23 @@ def build_gicc_apply_runtime(
 
     reasoning_client = _reasoning_client(config)
     planner = GoalPlanner(client=reasoning_client)
-    information_resolver = InformationResolver(store=store)
+    entity_resolver = EntityResolver(
+        world,
+        discoveries=(ReviewedLocalServiceEntityDiscovery(),),
+    )
+    information_resolver = InformationResolver(
+        store=store,
+        probes=(
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
+            ),
+        ),
+    )
     phase9_bridge = Phase9GoalBridge(
         coordinator=work_runtime.capability_acquisition,
         change_store=work_runtime.changes.store,
@@ -786,7 +806,7 @@ def build_gicc_apply_runtime(
     coordinator = GoalIntelligenceCoordinator(
         store=store,
         interpreter=interpreter,
-        entity_resolver=EntityResolver(world),
+        entity_resolver=entity_resolver,
         requirement_deriver=RequirementDeriver(client=reasoning_client),
         capability_context=capability_context,
         capability_graph_resolver=CapabilityGraphResolver(store=store),
