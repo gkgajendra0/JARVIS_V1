@@ -11,7 +11,10 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.engineering_change import ChangeStore
+from jarvis.engineering_change import (
+    ChangeStore,
+    classify_work_system_outcome,
+)
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.models import WorkState
 from jarvis.work.store import SQLiteWorkStore
@@ -90,6 +93,28 @@ class WorkspaceStepV1:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkspaceOutcomeV1:
+    kind: str
+    terminal: bool
+    reason: str | None
+    owner_action_required: bool
+    retry_after_seconds: float | None
+    evidence_refs: tuple[str, ...]
+    digest: str
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            "terminal": self.terminal,
+            "reason": self.reason,
+            "owner_action_required": self.owner_action_required,
+            "retry_after_seconds": self.retry_after_seconds,
+            "evidence_refs": list(self.evidence_refs),
+            "digest": self.digest,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class WorkspaceWorkV1:
     work_id: str
     work_type: str
@@ -103,6 +128,7 @@ class WorkspaceWorkV1:
     created_at: str
     updated_at: str
     steps: tuple[WorkspaceStepV1, ...]
+    system_outcome: WorkspaceOutcomeV1
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -118,6 +144,7 @@ class WorkspaceWorkV1:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "steps": [item.to_payload() for item in self.steps],
+            "system_outcome": self.system_outcome.to_payload(),
         }
 
 
@@ -473,6 +500,7 @@ class ObjectiveWorkspaceProjector:
         self,
         *,
         seed_work_ids: set[str],
+        superseded_work_ids: set[str],
     ) -> tuple[WorkspaceWorkV1, ...]:
         pending = sorted(seed_work_ids)
         loaded: dict[str, WorkspaceWorkV1] = {}
@@ -487,6 +515,7 @@ class ObjectiveWorkspaceProjector:
             for dependency_id in work.dependencies:
                 if dependency_id not in loaded:
                     pending.append(dependency_id)
+            work_steps = self._work.list_steps(work.work_id)
             steps = tuple(
                 WorkspaceStepV1(
                     step_id=step.step_id,
@@ -506,7 +535,12 @@ class ObjectiveWorkspaceProjector:
                         else step.completed_at.isoformat()
                     ),
                 )
-                for step in self._work.list_steps(work.work_id)
+                for step in work_steps
+            )
+            classified = classify_work_system_outcome(
+                work,
+                steps=work_steps,
+                superseded=work.work_id in superseded_work_ids,
             )
             loaded[work.work_id] = WorkspaceWorkV1(
                 work_id=work.work_id,
@@ -521,6 +555,15 @@ class ObjectiveWorkspaceProjector:
                 created_at=work.created_at.isoformat(),
                 updated_at=work.updated_at.isoformat(),
                 steps=steps,
+                system_outcome=WorkspaceOutcomeV1(
+                    kind=classified.kind.value,
+                    terminal=classified.terminal,
+                    reason=classified.reason,
+                    owner_action_required=classified.owner_action_required,
+                    retry_after_seconds=classified.retry_after_seconds,
+                    evidence_refs=classified.evidence_refs,
+                    digest=classified.digest,
+                ),
             )
 
         return tuple(loaded[key] for key in sorted(loaded))
@@ -551,7 +594,16 @@ class ObjectiveWorkspaceProjector:
                 work_id = str(artifact.payload.get("acquisition_work_id") or "").strip()
                 if work_id:
                     seed_work_ids.add(work_id)
-        work_items = self._work_snapshots(seed_work_ids=seed_work_ids)
+        superseded_work_ids = {
+            stage.work_id
+            for change in change_snapshots
+            for stage in change.stages
+            if not stage.authoritative
+        }
+        work_items = self._work_snapshots(
+            seed_work_ids=seed_work_ids,
+            superseded_work_ids=superseded_work_ids,
+        )
 
         blockers: set[str] = set()
         questions: set[str] = set()
