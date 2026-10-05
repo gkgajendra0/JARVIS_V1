@@ -1025,7 +1025,6 @@ def build_work_runtime(
         max_reasoning_cycles=max_reasoning_cycles,
     )
     orchestrator = WorkOrchestrator(store, backend)
-    orchestrator.reconcile_active()
     changes = ChangeCoordinator(
         change_store,
         backend,
@@ -1044,6 +1043,18 @@ def build_work_runtime(
             ),
         ),
     )
+
+    def _reconcile_terminal_change(work_id: str) -> None:
+        changes.reconcile_for_work(work_id)
+        reconcile_owner_change_gates(changes)
+
+    # DBOS may recover an existing workflow as soon as it launches. Install the
+    # EngineeringChange terminal bridge immediately after its coordinator exists,
+    # then repair any parent/child drift that occurred in the startup window before
+    # running compatibility migrations.
+    configure_terminal_reconciliation(_reconcile_terminal_change)
+    changes.reconcile_active()
+
     recovered_development = change_store.reopen_recoverable_development_engine_failures(
         recovery_generation="codex-contract-repair-v1",
     )
@@ -1157,11 +1168,9 @@ def build_work_runtime(
 
         release_bridge_task = loop.create_task(reconcile_release_bridge())
 
-    def _reconcile_terminal_change(work_id: str) -> None:
-        changes.reconcile_for_work(work_id)
-        reconcile_owner_change_gates(changes)
-
-    configure_terminal_reconciliation(_reconcile_terminal_change)
+    # Resume/repair ordinary active Work only after terminal parent reconciliation
+    # and compatibility recovery are in place.
+    orchestrator.reconcile_active()
     changes.reconcile_active()
     surfaced_change_gates = reconcile_owner_change_gates(changes)
     if surfaced_change_gates:
