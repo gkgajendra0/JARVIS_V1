@@ -462,7 +462,7 @@ class ObjectiveWorkspaceProjector:
         *,
         seed_work_ids: set[str],
     ) -> tuple[WorkspaceWorkV1, ...]:
-        pending = list(sorted(seed_work_ids))
+        pending = sorted(seed_work_ids)
         loaded: dict[str, WorkspaceWorkV1] = {}
 
         while pending:
