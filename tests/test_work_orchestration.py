@@ -23,6 +23,7 @@ from jarvis.work.engine import (
     WorkActionRegistry,
     WorkEngine,
     WorkOwnerInputRequired,
+    WorkTerminalFailure,
 )
 from jarvis.work.models import (
     DeliveryPolicy,
@@ -126,6 +127,28 @@ class ConcurrentExecutor:
             return {"work_id": work.work_id, "verified": True}
         finally:
             self.active -= 1
+
+
+class TerminalFailureExecutor:
+    descriptor = BrainAction(
+        name="terminal_failure",
+        description="Emit one typed terminal failure",
+        parameter_schema={"type": "object"},
+    )
+    work_types = frozenset({WorkType.GENERIC})
+
+    async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+        del work, parameters
+        raise WorkTerminalFailure(
+            "Engineering specialist reached a terminal failure.",
+            failure_code="development_engine_failed",
+            observation={
+                "development_result": {
+                    "disposition": "failed",
+                    "summary": "Engineering specialist failed.",
+                }
+            },
+        )
 
 
 class FakeBackend:
@@ -370,6 +393,42 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
         step.state.value == "failed" for step in store.list_steps(item.work_id)
     )
     assert store.list_pending_deliveries() == ()
+
+
+
+@pytest.mark.asyncio
+async def test_typed_executor_terminal_failure_fails_work_and_emits_failure(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((TerminalFailureExecutor(),)),
+    )
+    item = create_item(store, request="Run a governed engineering specialist")
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(
+            action="terminal_failure",
+            summary="Run the governed engineering specialist.",
+        )
+    ]
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.FAILED
+    failed = store.require(item.work_id)
+    assert failed.state is WorkState.FAILED
+    assert "terminal failure" in (failed.status_detail or "").casefold()
+    steps = store.list_steps(item.work_id)
+    assert len(steps) == 1
+    assert steps[0].state.value == "completed"
+    assert steps[0].observation["terminal_failure"] is True
+    assert steps[0].observation["failure_code"] == "development_engine_failed"
+    deliveries = store.list_pending_deliveries()
+    assert len(deliveries) == 1
+    assert deliveries[0].kind is WorkDeliveryKind.FAILURE
 
 
 def test_work_state_rejects_invalid_terminal_transition() -> None:
