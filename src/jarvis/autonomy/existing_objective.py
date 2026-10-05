@@ -258,9 +258,7 @@ class ExistingObjectiveResumeController:
                 sorted(
                     {
                         str(
-                            target.canonical_name
-                            or target.payload.get("canonical_name")
-                            or target.entity_id
+                            target.canonical_name or target.entity_id or target.target_key
                         ).strip()
                         for target in workspace.targets
                     }
