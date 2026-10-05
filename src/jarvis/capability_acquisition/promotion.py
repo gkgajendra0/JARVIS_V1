@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.verification import (
     ensure_capability_candidate_acceptance_current,
