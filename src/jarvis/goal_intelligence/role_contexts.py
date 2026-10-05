@@ -470,9 +470,11 @@ def build_research_context(workspace: ObjectiveWorkspaceV1) -> ResearchContextV1
     task, progress = _task_progress(workspace)
     work = _work_by_type(workspace, work_type="research")
     questions = set(workspace.open_questions)
-    if progress.blocker_kind in {"evidence_insufficient", "needs_research"}:
-        if progress.blocker_reason:
-            questions.add(progress.blocker_reason)
+    if (
+        progress.blocker_kind in {"evidence_insufficient", "needs_research"}
+        and progress.blocker_reason
+    ):
+        questions.add(progress.blocker_reason)
     context = ResearchContextV1(
         schema="research_context.v1",
         goal_id=task.goal_id,
