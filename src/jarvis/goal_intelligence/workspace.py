@@ -10,6 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import (
     ChangeStore,
@@ -589,11 +592,16 @@ class ObjectiveWorkspaceProjector:
         for change in change_snapshots:
             seed_work_ids.update(stage.work_id for stage in change.stages)
             for artifact in change.artifacts:
-                if artifact.kind != "gicc_capability_gap_link":
-                    continue
-                work_id = str(artifact.payload.get("acquisition_work_id") or "").strip()
-                if work_id:
-                    seed_work_ids.add(work_id)
+                if artifact.kind == "gicc_capability_gap_link":
+                    work_id = str(
+                        artifact.payload.get("acquisition_work_id") or ""
+                    ).strip()
+                    if work_id:
+                        seed_work_ids.add(work_id)
+                elif artifact.kind == EXTERNAL_ACCEPTANCE_BINDING_KIND:
+                    work_id = str(artifact.payload.get("work_id") or "").strip()
+                    if work_id:
+                        seed_work_ids.add(work_id)
         superseded_work_ids = {
             stage.work_id
             for change in change_snapshots
