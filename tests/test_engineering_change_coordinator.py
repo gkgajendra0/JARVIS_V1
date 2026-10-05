@@ -373,6 +373,8 @@ def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -
         source_session_id="session",
         source_turn_id="approval",
         request_key="session:approval",
+        verification_id="verification_demo",
+        verifier_id="test_verifier",
     )
     coordinator.reconcile(change.change_id)
 
