@@ -433,6 +433,160 @@ class ChangeStore:
             for row in rows
         )
 
+    def list_stage_attempts(self, change_id: str) -> tuple[ChangeStageAttempt, ...]:
+        """Project explicit current/historical authority over immutable stage history."""
+
+        stages = self.list_stages(change_id)
+        events = self.list_events(change_id)
+        superseded: dict[tuple[str, int], int] = {}
+        accepted: set[tuple[str, int]] = set()
+        outputs: dict[tuple[str, int], list[str]] = {}
+
+        for event in events:
+            kind = str(event["kind"])
+            detail = event["detail"]
+            if not isinstance(detail, dict):
+                continue
+            stage_key = str(detail.get("stage_key") or "").strip().lower()
+            attempt = detail.get("attempt")
+            if not stage_key or not isinstance(attempt, int):
+                continue
+            key = (stage_key, attempt)
+            if kind == "stage_attempt_superseded":
+                replacement = detail.get("superseded_by_attempt")
+                if isinstance(replacement, int) and replacement > attempt:
+                    superseded[key] = replacement
+            elif kind == "stage_attempt_outcome":
+                artifact_id = str(detail.get("produced_artifact_id") or "").strip()
+                if artifact_id:
+                    outputs.setdefault(key, []).append(artifact_id)
+                if detail.get("accepted") is True:
+                    accepted.add(key)
+
+        by_stage: dict[str, list[ChangeStage]] = {}
+        for stage in stages:
+            by_stage.setdefault(stage.stage_key, []).append(stage)
+
+        projected: list[ChangeStageAttempt] = []
+        for stage_key in sorted(by_stage):
+            ordered = sorted(by_stage[stage_key], key=lambda item: item.attempt)
+            for index, stage in enumerate(ordered):
+                key = (stage.stage_key, stage.attempt)
+                replacement = superseded.get(key)
+                if replacement is None and index < len(ordered) - 1:
+                    replacement = ordered[index + 1].attempt
+                if replacement is not None:
+                    status = StageAttemptStatus.SUPERSEDED
+                    authoritative = False
+                elif key in accepted:
+                    status = StageAttemptStatus.ACCEPTED
+                    authoritative = True
+                elif index == len(ordered) - 1:
+                    status = StageAttemptStatus.CURRENT
+                    authoritative = True
+                else:
+                    status = StageAttemptStatus.HISTORICAL
+                    authoritative = False
+                projected.append(
+                    ChangeStageAttempt(
+                        change_id=stage.change_id,
+                        stage_key=stage.stage_key,
+                        attempt=stage.attempt,
+                        work_id=stage.work_id,
+                        status=status,
+                        authoritative=authoritative,
+                        superseded_by_attempt=replacement,
+                        produced_artifact_ids=tuple(dict.fromkeys(outputs.get(key, ()))),
+                        plan_artifact_id=stage.plan_artifact_id,
+                    )
+                )
+        return tuple(projected)
+
+    def current_stage_attempt(
+        self,
+        change_id: str,
+        stage_key: str,
+    ) -> ChangeStageAttempt | None:
+        normalized = str(stage_key).strip().lower()
+        matches = [
+            item
+            for item in self.list_stage_attempts(change_id)
+            if item.stage_key == normalized and item.authoritative
+        ]
+        return None if not matches else max(matches, key=lambda item: item.attempt)
+
+    def record_stage_outcome(
+        self,
+        change_id: str,
+        stage_key: str,
+        attempt: int,
+        *,
+        produced_artifact_id: str | None = None,
+        accepted: bool = False,
+    ) -> ChangeStageAttempt:
+        """Append an idempotent stage-output binding without rewriting history."""
+
+        normalized = str(stage_key).strip().lower()
+        artifact_id = (
+            None
+            if produced_artifact_id is None
+            else str(produced_artifact_id).strip() or None
+        )
+        event_key = (
+            f"stage-attempt-outcome:{normalized}:{attempt}:"
+            f"{artifact_id or 'none'}:{int(bool(accepted))}"
+        )
+        detail: dict[str, object] = {
+            "stage_key": normalized,
+            "attempt": int(attempt),
+            "produced_artifact_id": artifact_id,
+            "accepted": bool(accepted),
+        }
+
+        with self.work._lock, self.work._connect() as db:
+            stage = db.execute(
+                """SELECT * FROM engineering_change_stages
+                WHERE change_id=? AND stage_key=? AND attempt=?""",
+                (change_id, normalized, attempt),
+            ).fetchone()
+            if stage is None:
+                raise ChangeConflict("unknown change stage attempt")
+            if artifact_id is not None:
+                artifact = db.execute(
+                    """SELECT 1 FROM engineering_change_artifacts
+                    WHERE change_id=? AND artifact_id=?""",
+                    (change_id, artifact_id),
+                ).fetchone()
+                if artifact is None:
+                    raise ChangeConflict("stage output artifact does not belong to change")
+            existing = db.execute(
+                """SELECT detail FROM engineering_change_events
+                WHERE change_id=? AND event_key=?""",
+                (change_id, event_key),
+            ).fetchone()
+            if existing is None:
+                self._event(
+                    db,
+                    change_id,
+                    event_key,
+                    "stage_attempt_outcome",
+                    detail,
+                )
+            elif self.work._decode_json(existing["detail"]) != detail:
+                raise ChangeConflict("stage outcome event conflicts with canonical history")
+
+        match = next(
+            (
+                item
+                for item in self.list_stage_attempts(change_id)
+                if item.stage_key == normalized and item.attempt == attempt
+            ),
+            None,
+        )
+        if match is None:  # pragma: no cover - transaction validation owns existence
+            raise ChangeConflict("stage attempt disappeared during outcome projection")
+        return match
+
     def reopen_recoverable_development_engine_failures(
         self,
         *,
