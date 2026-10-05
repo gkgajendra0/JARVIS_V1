@@ -674,7 +674,18 @@ class WorkAgentTools:
         if gate_id is None:
             return {"ok": False, "status": "bound_change_gate_unavailable"}
 
-        turn = self._latest_user_turn()
+        try:
+            turn = self._latest_user_turn()
+        except WorkToolGroundingError:
+            return {
+                "ok": False,
+                "status": "awaiting_owner_turn",
+                "reason": (
+                    "the bound approval interaction has not received an accepted "
+                    "owner utterance yet"
+                ),
+            }
+
         if self._last_gate_decision_attempt_turn_id == turn.turn_id:
             return {
                 "ok": False,
