@@ -59,6 +59,16 @@ class SystemOutcomeV1:
     def terminal(self) -> bool:
         return self.kind not in _NONTERMINAL_KINDS
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, SystemOutcomeKind):
+            raise TypeError("kind must be SystemOutcomeKind")
+        if not self.source_work_id.strip():
+            raise ValueError("source_work_id must not be empty")
+        if not self.source_work_state.strip():
+            raise ValueError("source_work_state must not be empty")
+        if canonical_digest(self.canonical_payload()) != self.digest:
+            raise ValueError("system outcome digest mismatch")
+
     def canonical_payload(self) -> dict[str, object]:
         return {
             "kind": self.kind.value,
