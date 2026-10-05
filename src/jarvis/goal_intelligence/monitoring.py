@@ -13,6 +13,11 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Protocol
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
@@ -33,6 +38,33 @@ from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 LOGGER = logging.getLogger("jarvis.gicc.monitoring")
 
 GICC_MONITOR_EVENT_CONTRACT = "gicc.monitor_observation.v1"
+
+
+def _monitor_owner_message(
+    *,
+    kind: OwnerCommunicationKind,
+    event_key: str,
+    summary: str,
+    goal_id: str,
+    work_id: str,
+    terminal: bool,
+    system_outcome_kind: str,
+) -> str:
+    message = SupervisorOwnerCommunication.compile(
+        OwnerCommunicationIntentV1.create(
+            kind=kind,
+            event_key=event_key,
+            summary=summary,
+            owner_action_required=False,
+            terminal=terminal,
+            goal_id=goal_id,
+            work_id=work_id,
+            system_outcome_kind=system_outcome_kind,
+        )
+    )
+    if message is None:
+        raise RuntimeError("Supervisor suppressed required monitoring owner message")
+    return message.message
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,11 +514,23 @@ class MonitorEventProcessor:
                     "observation_digest": digest,
                 },
             )
+            timeout_event_key = f"gicc-monitor:{predicate.predicate_id}:timeout"
             self._work.enqueue_delivery(
                 work=work,
                 kind=WorkDeliveryKind.FAILURE,
-                message="Monitoring stopped because the condition was not verified in time.",
-                event_key=f"gicc-monitor:{predicate.predicate_id}:timeout",
+                message=_monitor_owner_message(
+                    kind=OwnerCommunicationKind.FAILURE,
+                    event_key=timeout_event_key,
+                    summary=(
+                        "Monitoring stopped because the condition was not verified "
+                        "in time."
+                    ),
+                    goal_id=predicate.goal_id,
+                    work_id=work.work_id,
+                    terminal=True,
+                    system_outcome_kind="terminal",
+                ),
+                event_key=timeout_event_key,
             )
             self._advance_bound_plan(
                 predicate=predicate,
@@ -602,10 +646,29 @@ class MonitorEventProcessor:
         )
         work = self._work.require(str(state["work_id"]))
         if predicate.notification_policy != "none":
+            completes_goal = predicate.completion_policy == "complete_once"
             self._work.enqueue_delivery(
                 work=work,
-                kind=WorkDeliveryKind.COMPLETION,
-                message=str(notification_message).strip(),
+                kind=(
+                    WorkDeliveryKind.COMPLETION
+                    if completes_goal
+                    else WorkDeliveryKind.PROGRESS
+                ),
+                message=_monitor_owner_message(
+                    kind=(
+                        OwnerCommunicationKind.COMPLETION
+                        if completes_goal
+                        else OwnerCommunicationKind.PROGRESS
+                    ),
+                    event_key=event_key,
+                    summary=str(notification_message).strip(),
+                    goal_id=predicate.goal_id,
+                    work_id=work.work_id,
+                    terminal=completes_goal,
+                    system_outcome_kind=(
+                        "completed" if completes_goal else "in_progress"
+                    ),
+                ),
                 event_key=event_key,
             )
         updated = self._goals.update_monitor_runtime_state(
