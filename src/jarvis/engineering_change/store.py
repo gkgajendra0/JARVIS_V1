@@ -431,18 +431,25 @@ class ChangeStore:
             for row in rows
         )
 
-    def reopen_legacy_unclassified_development_engine_failures(
+    def reopen_recoverable_development_engine_failures(
         self,
+        *,
+        recovery_generation: str,
     ) -> tuple[str, ...]:
-        """Recover the old completed-child/failed-change DevelopmentEngine bug once.
+        """Reopen only known DevelopmentEngine states fixed by this runtime generation.
 
-        Older Phase-9 code could persist an unclassified DevelopmentEngine failure as
-        a COMPLETED development WorkItem and only then fail its EngineeringChange.
-        That state cannot use the normal owner retry path because the child is not
-        FAILED. Reopen only this exact legacy shape, only under the still-current
-        strongly approved architecture. The preserved completed attempt remains
-        immutable evidence; the coordinator will create a fresh development attempt.
+        This is compatibility recovery for prior JARVIS bugs, not a generic retry of
+        failed engineering. Recovery requires the still-current strongly approved
+        architecture and one of two exact historical shapes:
+        - old completed-child + unclassified DevelopmentEngine failure; or
+        - failed development caused solely by response_contract_invalid.
+
+        The generation key makes each compatibility recovery one-shot across restarts.
         """
+
+        generation = str(recovery_generation).strip().casefold()
+        if not generation:
+            raise ValueError("recovery_generation must not be empty")
 
         recovered: list[str] = []
         with self.work._lock, self.work._connect() as db:
@@ -488,20 +495,51 @@ class ChangeStore:
                 if work_row is None:
                     continue
                 work = self.work._item_from_row(work_row)
-                if work.state is not WorkState.COMPLETED:
-                    continue
 
-                engine_result = work.result.get("development_engine")
-                if not isinstance(engine_result, dict):
-                    continue
-                if str(engine_result.get("disposition") or "").strip().casefold() != (
-                    "failed"
-                ):
-                    continue
-                reason = " ".join(
-                    str(engine_result.get("reason") or "").split()
-                ).casefold()
-                if "non-retryable failure (unknown)" not in reason:
+                recovery_kind: str | None = None
+                if work.state is WorkState.COMPLETED:
+                    engine_result = work.result.get("development_engine")
+                    if isinstance(engine_result, dict):
+                        disposition = (
+                            str(engine_result.get("disposition") or "")
+                            .strip()
+                            .casefold()
+                        )
+                        reason = " ".join(
+                            str(engine_result.get("reason") or "").split()
+                        ).casefold()
+                        if (
+                            disposition == "failed"
+                            and "non-retryable failure (unknown)" in reason
+                        ):
+                            recovery_kind = "legacy_unclassified_completed_child"
+
+                elif work.state is WorkState.FAILED:
+                    step_row = db.execute(
+                        """SELECT * FROM work_steps
+                        WHERE work_id=? AND state=?
+                        ORDER BY created_at DESC, step_id DESC LIMIT 1""",
+                        (work.work_id, "completed"),
+                    ).fetchone()
+                    if step_row is not None:
+                        step = self.work._step_from_row(step_row)
+                        engine_result = step.observation.get("development_result")
+                        if isinstance(engine_result, dict):
+                            disposition = (
+                                str(engine_result.get("disposition") or "")
+                                .strip()
+                                .casefold()
+                            )
+                            reason = " ".join(
+                                str(engine_result.get("reason") or "").split()
+                            ).casefold()
+                            if (
+                                disposition == "failed"
+                                and "response_contract_invalid" in reason
+                            ):
+                                recovery_kind = "response_contract_invalid"
+
+                if recovery_kind is None:
                     continue
 
                 approval = db.execute(
@@ -521,6 +559,20 @@ class ChangeStore:
                 if approval is None:
                     continue
 
+                event_key = (
+                    "development-engine-compat-recovery:"
+                    f"{generation}:{work.work_id}"
+                )
+                if (
+                    db.execute(
+                        """SELECT 1 FROM engineering_change_events
+                        WHERE change_id=? AND event_key=?""",
+                        (change.change_id, event_key),
+                    ).fetchone()
+                    is not None
+                ):
+                    continue
+
                 timestamp = _now()
                 cursor = db.execute(
                     """UPDATE engineering_changes
@@ -536,14 +588,16 @@ class ChangeStore:
                 )
                 if cursor.rowcount != 1:
                     raise ChangeConflict(
-                        "stale legacy DevelopmentEngine recovery transition"
+                        "stale DevelopmentEngine compatibility recovery transition"
                     )
                 self._event(
                     db,
                     change.change_id,
-                    f"legacy-unclassified-development-recovery:{work.work_id}",
-                    "legacy_unclassified_development_reopened",
+                    event_key,
+                    "development_engine_compatibility_reopened",
                     {
+                        "generation": generation,
+                        "recovery_kind": recovery_kind,
                         "work_id": work.work_id,
                         "stage_key": development.stage_key,
                         "attempt": int(stage["attempt"]),
@@ -555,6 +609,7 @@ class ChangeStore:
                 )
                 recovered.append(change.change_id)
         return tuple(recovered)
+
 
     def reopen_failed_stage_for_retry(
         self,
