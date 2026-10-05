@@ -1,5 +1,5 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 from jarvis.system_replay import (
     GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1,
