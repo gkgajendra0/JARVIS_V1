@@ -265,14 +265,45 @@ _CHANGE_PHASE: dict[
 }
 
 _OVERALL_PRIORITY = {
-    ObjectiveOverallState.WAITING_OWNER: 50,
-    ObjectiveOverallState.WAITING_EXTERNAL: 40,
-    ObjectiveOverallState.BLOCKED: 30,
+    ObjectiveOverallState.BLOCKED: 50,
+    ObjectiveOverallState.WAITING_OWNER: 40,
+    ObjectiveOverallState.WAITING_EXTERNAL: 30,
     ObjectiveOverallState.PAUSED: 20,
     ObjectiveOverallState.ACTIVE: 10,
     ObjectiveOverallState.COMPLETED: 0,
     ObjectiveOverallState.FAILED: 0,
     ObjectiveOverallState.CANCELLED: 0,
+}
+
+_PHASE_PROGRESS = {
+    ObjectivePhase.RECEIVED: 0,
+    ObjectivePhase.RESOLVING: 10,
+    ObjectivePhase.WAITING_INFORMATION: 15,
+    ObjectivePhase.REQUIREMENTS_READY: 20,
+    ObjectivePhase.ACQUIRING_CAPABILITY: 30,
+    ObjectivePhase.ARCHITECTURE_READY: 40,
+    ObjectivePhase.WAITING_OWNER_APPROVAL: 45,
+    ObjectivePhase.READY_FOR_BUILD: 50,
+    ObjectivePhase.DEVELOPING: 60,
+    ObjectivePhase.ENGINEERING_VERIFYING: 70,
+    ObjectivePhase.WAITING_OWNER_ACCEPTANCE: 75,
+    ObjectivePhase.READY_FOR_PROMOTION: 80,
+    ObjectivePhase.WAITING_PROMOTION_APPROVAL: 82,
+    ObjectivePhase.PROMOTED: 85,
+    ObjectivePhase.OBSERVING: 88,
+    ObjectivePhase.WAITING_ACTIVATION: 90,
+    ObjectivePhase.EXTERNAL_ACCEPTANCE: 95,
+    ObjectivePhase.CAPABILITY_READY: 100,
+    ObjectivePhase.PLANNED: 30,
+    ObjectivePhase.EXECUTING: 60,
+    ObjectivePhase.MONITORING: 80,
+    ObjectivePhase.VERIFYING_OUTCOME: 90,
+    ObjectivePhase.WAITING_DEPENDENCY: 50,
+    ObjectivePhase.PAUSED: 50,
+    ObjectivePhase.BLOCKED: 0,
+    ObjectivePhase.COMPLETED: 100,
+    ObjectivePhase.FAILED: 0,
+    ObjectivePhase.CANCELLED: 0,
 }
 
 
@@ -580,7 +611,11 @@ class OwnerObjectiveStatusResolver:
             if candidates:
                 return max(
                     candidates,
-                    key=lambda item: _OVERALL_PRIORITY[item[0]],
+                    key=lambda item: (
+                        _OVERALL_PRIORITY[item[0]],
+                        -_PHASE_PROGRESS[item[1]],
+                        "" if item[2] is None else item[2].blocker_id,
+                    ),
                 )
             return (
                 ObjectiveOverallState.ACTIVE,
