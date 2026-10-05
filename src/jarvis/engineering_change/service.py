@@ -26,7 +26,8 @@ _SINGLE_REVIEW = re.compile(
 )
 _BOUND_REVIEW = re.compile(
     r"\s*(?:jarvis[\s,:-]+)?"
-    r"(yes|approve|approved|proceed|go\s+ahead|continue|no|reject|rejected|decline|declined|stop|cancel)"
+    r"(yes|approve|approved|proceed|go\s+ahead|continue|no|reject|rejected|"
+    r"decline|declined|stop|cancel)"
     r"(?:[\s,;:-]+(?:jarvis|please|it|this|the|architecture|proposal|change|"
     r"yes|approve|approved|proceed|go\s+ahead|continue))*[.!]?\s*",
     re.IGNORECASE,
