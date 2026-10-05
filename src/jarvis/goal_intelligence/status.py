@@ -630,9 +630,7 @@ class OwnerObjectiveStatusResolver:
                 ObjectivePhase.BLOCKED,
                 ObjectiveBlocker(
                     kind="external_acceptance_failed",
-                    blocker_id=(
-                        change.external_acceptance_work_id or change.change_id
-                    ),
+                    blocker_id=(change.external_acceptance_work_id or change.change_id),
                     owner_action_required=False,
                     detail=(
                         "Real-world capability acceptance did not produce a passing "
