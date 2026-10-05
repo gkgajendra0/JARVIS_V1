@@ -9,6 +9,7 @@ from livekit.agents import RunContext, function_tool
 
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.engineering_change.gates import GateDecision, GateKind, GateService
 from jarvis.engineering_change.models import ChangeConflict
 from jarvis.engineering_change.service import ChangeService
 from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
@@ -75,6 +76,9 @@ class WorkAgentTools:
         self._bound_owner_input_work_id = normalized_bound_work_id
         self._on_bound_owner_input_submitted = on_bound_owner_input_submitted
         self._bound_change_gate_id = normalized_bound_gate_id
+        self._contextual_change_gate_id: str | None = None
+        self._contextual_change_gate_source_turn_id: str | None = None
+        self._last_gate_decision_attempt_turn_id: str | None = None
         self._objective_status = objective_status
         if not isinstance(allow_capability_acquisition, bool):
             raise TypeError("allow_capability_acquisition must be bool")
@@ -103,6 +107,7 @@ class WorkAgentTools:
             self.prepare_change_promotion,
             self.execute_change_promotion,
             self.decide_change_gate,
+            self.decide_contextual_change_gate,
             self.get_engineering_change_status,
         ]
         if self._bound_change_gate_id is not None:
@@ -548,15 +553,99 @@ class WorkAgentTools:
     async def decide_change_gate(
         self, context: RunContext, gate_id: str
     ) -> dict[str, object]:
-        """Record the latest canonical owner's explicit 'approve gate_ID' or 'reject gate_ID'.
+        """Record an owner decision that explicitly names an engineering gate.
 
-        Never call this from a generic yes, model-generated reply, WorkItem input,
-        or an earlier USER turn. The service independently checks the accepted turn.
+        Use only when the latest canonical USER turn itself identifies the exact gate
+        or review type. Do not use this tool for a short "yes", "approved", "proceed",
+        or "no" after JARVIS has just surfaced a pending approval through status; use
+        decide_contextual_change_gate for that conversational continuation instead.
         """
         del context
         decision = await asyncio.to_thread(
             self._change_service().decide_latest, gate_id
         )
+        return {
+            "ok": True,
+            "change_id": decision.challenge.change_id,
+            "gate_id": gate_id,
+            "approved": decision.approved,
+            "state": self._runtime.changes.store.require(
+                decision.challenge.change_id
+            ).state.value,
+        }
+
+    @function_tool()
+    async def decide_contextual_change_gate(
+        self,
+        context: RunContext,
+    ) -> dict[str, object]:
+        """Resolve the exact approval surfaced in the immediately prior status turn.
+
+        This is a bounded conversational continuation, not a generic approval shortcut.
+        A status tool must first have observed exactly one pending non-promotion
+        EngineeringChange gate in this same voice session. The latest USER turn must be
+        the very next USER turn after that status request and must itself be an explicit
+        affirmative or rejection. The gate identity comes only from trusted runtime
+        state; the model and owner never need to speak an internal gate ID. Strong owner
+        verification is still required before any decision is persisted.
+        """
+        del context
+        gate_id = self._contextual_change_gate_id
+        source_turn_id = self._contextual_change_gate_source_turn_id
+        if gate_id is None or source_turn_id is None:
+            return {
+                "ok": False,
+                "status": "contextual_change_gate_unavailable",
+                "reason": (
+                    "no exact engineering approval was bound by the immediately "
+                    "preceding status interaction"
+                ),
+            }
+
+        user_turns = [
+            turn
+            for turn in self._conversation.turns
+            if turn.role is ConversationRole.USER
+        ]
+        current = user_turns[-1] if user_turns else None
+        if (
+            current is None
+            or len(user_turns) < 2
+            or user_turns[-2].turn_id != source_turn_id
+        ):
+            self._clear_contextual_change_gate()
+            return {
+                "ok": False,
+                "status": "contextual_change_gate_expired",
+                "reason": (
+                    "the approval context is no longer the owner's immediate "
+                    "follow-up to the status interaction"
+                ),
+            }
+
+        if self._last_gate_decision_attempt_turn_id == current.turn_id:
+            return {
+                "ok": False,
+                "status": "approval_already_attempted_for_turn",
+                "reason": "wait for a new explicit owner turn before retrying",
+            }
+        self._last_gate_decision_attempt_turn_id = current.turn_id
+
+        try:
+            decision = await asyncio.to_thread(
+                self._change_service().decide_latest,
+                gate_id,
+                allow_bound_decision=True,
+            )
+        except ChangeConflict as exc:
+            return {
+                "ok": False,
+                "status": "approval_not_understood",
+                "reason": str(exc),
+                "retry_requires_new_owner_turn": True,
+            }
+
+        self._clear_contextual_change_gate()
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
@@ -575,19 +664,39 @@ class WorkAgentTools:
         """Resolve the exact gate bound by the proactive owner-approval session.
 
         The gate identity is supplied by the trusted runtime, never by the model or
-        spoken transcript. The ChangeService still validates the latest canonical
-        USER turn and performs strong owner verification before any decision is stored.
+        spoken transcript. Natural replies such as "yes", "approved", "proceed",
+        "yes Jarvis proceed", and their rejection equivalents are accepted only in
+        this exact bound interaction. Strong owner verification remains mandatory.
+        Never retry this tool twice for the same USER turn.
         """
-
         del context
         gate_id = self._bound_change_gate_id
         if gate_id is None:
             return {"ok": False, "status": "bound_change_gate_unavailable"}
-        decision = await asyncio.to_thread(
-            self._change_service().decide_latest,
-            gate_id,
-            allow_bound_decision=True,
-        )
+
+        turn = self._latest_user_turn()
+        if self._last_gate_decision_attempt_turn_id == turn.turn_id:
+            return {
+                "ok": False,
+                "status": "approval_already_attempted_for_turn",
+                "reason": "wait for a new explicit owner turn before retrying",
+            }
+        self._last_gate_decision_attempt_turn_id = turn.turn_id
+
+        try:
+            decision = await asyncio.to_thread(
+                self._change_service().decide_latest,
+                gate_id,
+                allow_bound_decision=True,
+            )
+        except ChangeConflict as exc:
+            return {
+                "ok": False,
+                "status": "approval_not_understood",
+                "reason": str(exc),
+                "retry_requires_new_owner_turn": True,
+            }
+
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
@@ -652,7 +761,42 @@ class WorkAgentTools:
                     "Only the objective's verified_completion field is overall "
                     "completion authority."
                 )
+        if self._bind_contextual_change_gate_from_status():
+            payload["approval_reply_context"] = (
+                "Exactly one pending engineering approval is bound to this status "
+                "conversation. The owner's immediately next explicit approval or "
+                "rejection may be resolved with decide_contextual_change_gate."
+            )
         return payload
+
+    def _clear_contextual_change_gate(self) -> None:
+        self._contextual_change_gate_id = None
+        self._contextual_change_gate_source_turn_id = None
+
+    def _bind_contextual_change_gate_from_status(self) -> bool:
+        """Bind one exact pending non-promotion gate to this status conversation only."""
+
+        self._clear_contextual_change_gate()
+        coordinator = getattr(self._runtime, "changes", None)
+        if coordinator is None:
+            return False
+
+        gates = GateService(coordinator.store, verify_owner=lambda *_: False)
+        candidates: list[str] = []
+        for gate_id in gates.pending_gate_ids():
+            gate = gates.get(gate_id)
+            challenge = gate.challenge if isinstance(gate, GateDecision) else gate
+            if challenge is not None and challenge.kind is not GateKind.PROMOTION:
+                candidates.append(gate_id)
+
+        if len(candidates) != 1:
+            return False
+
+        source_turn = self._latest_user_turn()
+        self._contextual_change_gate_id = candidates[0]
+        self._contextual_change_gate_source_turn_id = source_turn.turn_id
+        self._last_gate_decision_attempt_turn_id = None
+        return True
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -794,6 +938,13 @@ class WorkAgentTools:
                 )
             else:
                 self._runtime.set_owner_work_focus(None)
+        if self._bind_contextual_change_gate_from_status():
+            payload["approval_reply_context"] = (
+                "Exactly one pending engineering approval is bound to this status "
+                "conversation. If the owner's immediately next turn clearly approves "
+                "or rejects it, use decide_contextual_change_gate; do not ask for or "
+                "invent an internal gate ID."
+            )
         return payload
 
     @function_tool()
@@ -851,6 +1002,12 @@ class WorkAgentTools:
                     "This WorkItem is a child of an active owner objective. "
                     "Do not equate this child's state with overall task completion."
                 )
+        if self._bind_contextual_change_gate_from_status():
+            payload["approval_reply_context"] = (
+                "Exactly one pending engineering approval is bound to this status "
+                "conversation. The owner's immediately next explicit approval or "
+                "rejection may be resolved with decide_contextual_change_gate."
+            )
         return payload
 
     @function_tool()
