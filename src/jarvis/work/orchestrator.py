@@ -297,15 +297,17 @@ class WorkOrchestrator:
             raise
         return saved
 
-    def retry_failed(
+    def _retry_failed(
         self,
         work_id: str,
         *,
-        owner_request: str,
-        source_session_id: str,
-        source_turn_id: str,
+        step_kind: str,
+        step_summary: str,
+        step_input: dict[str, object],
+        step_observation: dict[str, object],
+        status_detail: str,
     ) -> WorkItem:
-        """Retry failed canonical work without losing its identity or evidence."""
+        """Restart failed canonical work while preserving identity and evidence."""
 
         item = self._store.require(work_id)
         if item.state is not WorkState.FAILED:
@@ -314,25 +316,19 @@ class WorkOrchestrator:
             raise ValueError(
                 "event-driven monitoring retry requires the owning goal to be re-armed"
             )
-        normalized = owner_request.strip()
-        if not normalized:
-            raise ValueError("retry request must not be empty")
 
         retry_step = WorkStep(
             work_id=item.work_id,
-            kind="owner_retry",
-            summary="Owner requested retry of failed work",
-            input_data={
-                "source_session_id": source_session_id,
-                "source_turn_id": source_turn_id,
-            },
+            kind=step_kind,
+            summary=step_summary,
+            input_data=step_input,
         )
         self._store.add_step(retry_step)
-        self._store.save_step(retry_step.start().complete({"response": normalized}))
+        self._store.save_step(retry_step.start().complete(step_observation))
 
         retrying = item.transition(
             WorkState.RETRYING,
-            status_detail="retry requested by owner",
+            status_detail=status_detail,
             current_step_id=None,
         )
         saved = self._store.save(retrying, expected_version=item.version)
@@ -357,6 +353,55 @@ class WorkOrchestrator:
             )
             raise
         return saved
+
+    def retry_failed(
+        self,
+        work_id: str,
+        *,
+        owner_request: str,
+        source_session_id: str,
+        source_turn_id: str,
+    ) -> WorkItem:
+        """Retry failed canonical work from an explicit owner request."""
+
+        normalized = owner_request.strip()
+        if not normalized:
+            raise ValueError("retry request must not be empty")
+        return self._retry_failed(
+            work_id,
+            step_kind="owner_retry",
+            step_summary="Owner requested retry of failed work",
+            step_input={
+                "source_session_id": source_session_id,
+                "source_turn_id": source_turn_id,
+            },
+            step_observation={"response": normalized},
+            status_detail="retry requested by owner",
+        )
+
+    def retry_failed_system(
+        self,
+        work_id: str,
+        *,
+        reason: str,
+        source: str = "global_supervisor",
+    ) -> WorkItem:
+        """Retry deterministic-retryable failed work without forging owner intent."""
+
+        normalized_reason = " ".join(str(reason).split()).strip()
+        normalized_source = str(source).strip().casefold()
+        if not normalized_reason:
+            raise ValueError("system retry reason must not be empty")
+        if not normalized_source:
+            raise ValueError("system retry source must not be empty")
+        return self._retry_failed(
+            work_id,
+            step_kind="system_retry",
+            step_summary="JARVIS requested retry of retryable failed work",
+            step_input={"source": normalized_source},
+            step_observation={"reason": normalized_reason},
+            status_detail=f"retry requested by {normalized_source}",
+        )
 
     def reprioritize(self, work_id: str, priority: WorkPriority) -> WorkItem:
         item = self._store.require(work_id)
