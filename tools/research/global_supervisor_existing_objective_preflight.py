@@ -75,8 +75,7 @@ def inspect_existing_objective(
     if target:
         target_key = target.casefold()
         target_matches = any(
-            target_key in candidate.casefold()
-            or candidate.casefold() in target_key
+            target_key in candidate.casefold() or candidate.casefold() in target_key
             for candidate in snapshot.target_names
         )
         if not target_matches:
