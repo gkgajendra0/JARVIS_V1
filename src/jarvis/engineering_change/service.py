@@ -25,8 +25,10 @@ _SINGLE_REVIEW = re.compile(
     re.IGNORECASE,
 )
 _BOUND_REVIEW = re.compile(
-    r"\s*(yes|approve|proceed|go\s+ahead|continue|no|reject|decline|stop|cancel)"
-    r"(?:\s+(?:it|this|architecture|proposal|change))?[.!]?\s*",
+    r"\s*(?:jarvis[\s,:-]+)?"
+    r"(yes|approve|approved|proceed|go\s+ahead|continue|no|reject|rejected|decline|declined|stop|cancel)"
+    r"(?:[\s,;:-]+(?:jarvis|please|it|this|the|architecture|proposal|change|"
+    r"yes|approve|approved|proceed|go\s+ahead|continue))*[.!]?\s*",
     re.IGNORECASE,
 )
 
@@ -207,7 +209,14 @@ class ChangeService:
                 "promotion decisions must execute through governed Phase-7 promotion service"
             )
         token = (match or typed or bound).group(1).casefold()
-        approved = token in {"approve", "yes", "proceed", "go ahead", "continue"}
+        approved = token in {
+            "approve",
+            "approved",
+            "yes",
+            "proceed",
+            "go ahead",
+            "continue",
+        }
         if (
             isinstance(gate, GateDecision)
             and gate.verification_id is not None
