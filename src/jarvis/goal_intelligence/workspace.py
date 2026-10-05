@@ -633,6 +633,8 @@ class ObjectiveWorkspaceProjector:
                     f"{continuation.blocked_by_id}"
                 )
         for work in work_items:
+            if work.system_outcome.kind == "superseded":
+                continue
             if work.state in {
                 WorkState.WAITING_RESOURCE.value,
                 WorkState.WAITING_DEPENDENCY.value,
