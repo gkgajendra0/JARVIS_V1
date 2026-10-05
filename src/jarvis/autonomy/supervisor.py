@@ -67,9 +67,10 @@ class SupervisorContextV1:
             raise ValueError("TaskLedger is stale for Supervisor workspace")
         if self.progress_ledger.source_workspace_digest != self.workspace_digest:
             raise ValueError("ProgressLedger is stale for Supervisor workspace")
-        if self.digest != "pending" and canonical_digest(
-            self.canonical_payload()
-        ) != self.digest:
+        if (
+            self.digest != "pending"
+            and canonical_digest(self.canonical_payload()) != self.digest
+        ):
             raise ValueError("SupervisorContext digest mismatch")
 
 
@@ -284,8 +285,7 @@ class GlobalSupervisor:
             rejection_codes.append("action_not_legal")
         if (
             proposal.target_change_id is not None
-            and proposal.target_change_id
-            != context.progress_ledger.active_change_id
+            and proposal.target_change_id != context.progress_ledger.active_change_id
         ):
             rejection_codes.append("change_binding_mismatch")
         if (
