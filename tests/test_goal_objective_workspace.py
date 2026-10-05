@@ -17,12 +17,6 @@ from jarvis.goal_intelligence.ledgers import (
     build_progress_ledger,
     build_task_ledger,
 )
-from jarvis.goal_intelligence.role_contexts import (
-    build_architecture_context,
-    build_development_context,
-    build_research_context,
-    build_verification_context,
-)
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
@@ -39,6 +33,12 @@ from jarvis.goal_intelligence.models import (
     WorldEntityRefV1,
 )
 from jarvis.goal_intelligence.phase9 import Phase9AcquisitionRequestV2
+from jarvis.goal_intelligence.role_contexts import (
+    build_architecture_context,
+    build_development_context,
+    build_research_context,
+    build_verification_context,
+)
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreError
 from jarvis.goal_intelligence.workspace import ObjectiveWorkspaceProjector
 from jarvis.work.models import WorkItem, WorkState, WorkType
