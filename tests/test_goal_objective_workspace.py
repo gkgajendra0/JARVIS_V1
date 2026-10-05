@@ -186,7 +186,9 @@ def _scenario(path: Path):
     }
 
 
-def test_objective_workspace_projects_one_canonical_goal_reality(tmp_path: Path) -> None:
+def test_objective_workspace_projects_one_canonical_goal_reality(
+    tmp_path: Path,
+) -> None:
     state = _scenario(tmp_path / "work.sqlite3")
 
     workspace = ObjectiveWorkspaceProjector(
@@ -230,9 +232,9 @@ def test_objective_workspace_projects_one_canonical_goal_reality(tmp_path: Path)
     assert projected_change.current_architecture_artifact_id == (
         state["architecture"].artifact_id
     )
-    assert [(item.stage_key, item.attempt, item.work_id) for item in projected_change.stages] == [
-        ("acquisition", 1, state["research"].work_id)
-    ]
+    assert [
+        (item.stage_key, item.attempt, item.work_id) for item in projected_change.stages
+    ] == [("acquisition", 1, state["research"].work_id)]
     assert "created" in {item.kind for item in projected_change.events}
     assert "artifact" in {item.kind for item in projected_change.events}
 
@@ -243,13 +245,8 @@ def test_objective_workspace_projects_one_canonical_goal_reality(tmp_path: Path)
     assert projected_work.state == WorkState.WAITING_RESOURCE.value
     assert projected_work.status_detail == "provider temporarily unavailable"
 
-    assert workspace.current_architecture_refs == (
-        state["architecture"].artifact_id,
-    )
-    assert (
-        f"capability_gap:{state['gap'].gap_id}:open"
-        in workspace.observed_blockers
-    )
+    assert workspace.current_architecture_refs == (state["architecture"].artifact_id,)
+    assert f"capability_gap:{state['gap'].gap_id}:open" in workspace.observed_blockers
     assert (
         f"work:{state['research'].work_id}:waiting_resource"
         in workspace.observed_blockers
