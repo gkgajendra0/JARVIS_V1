@@ -496,7 +496,9 @@ class ChangeStore:
                         status=status,
                         authoritative=authoritative,
                         superseded_by_attempt=replacement,
-                        produced_artifact_ids=tuple(dict.fromkeys(outputs.get(key, ()))),
+                        produced_artifact_ids=tuple(
+                            dict.fromkeys(outputs.get(key, ()))
+                        ),
                         plan_artifact_id=stage.plan_artifact_id,
                     )
                 )
@@ -558,7 +560,9 @@ class ChangeStore:
                     (change_id, artifact_id),
                 ).fetchone()
                 if artifact is None:
-                    raise ChangeConflict("stage output artifact does not belong to change")
+                    raise ChangeConflict(
+                        "stage output artifact does not belong to change"
+                    )
             existing = db.execute(
                 """SELECT detail FROM engineering_change_events
                 WHERE change_id=? AND event_key=?""",
@@ -573,7 +577,9 @@ class ChangeStore:
                     detail,
                 )
             elif self.work._decode_json(existing["detail"]) != detail:
-                raise ChangeConflict("stage outcome event conflicts with canonical history")
+                raise ChangeConflict(
+                    "stage outcome event conflicts with canonical history"
+                )
 
         match = next(
             (
