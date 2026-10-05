@@ -15,6 +15,7 @@ from .models import (
     ProcessStageRole,
     UnsupportedProcess,
 )
+from .outcomes import classify_work_system_outcome
 from .store import ChangeStore
 
 
@@ -307,9 +308,17 @@ class ChangeCoordinator:
             )
             source_work = self.store.work.require(stage.work_id)
             if source_work.state in {WorkState.FAILED, WorkState.CANCELLED}:
-                return self.store.transition(
-                    change_id, ChangeState.FAILED, expected_version=change.version
+                outcome = classify_work_system_outcome(
+                    source_work,
+                    steps=self.store.work.list_steps(source_work.work_id),
                 )
+                if outcome.terminal:
+                    return self.store.transition(
+                        change_id,
+                        ChangeState.FAILED,
+                        expected_version=change.version,
+                    )
+                return self.store.require(change_id)
             if source_work.state is WorkState.COMPLETED:
                 handler = self._source_completion_handlers.get(
                     (change.process_key, change.process_version)
@@ -407,9 +416,17 @@ class ChangeCoordinator:
                 raise ChangeConflict("developing change has no WorkItem")
             item = self.store.work.require(stage.work_id)
             if item.state in {WorkState.FAILED, WorkState.CANCELLED}:
-                return self.store.transition(
-                    change_id, ChangeState.FAILED, expected_version=change.version
+                outcome = classify_work_system_outcome(
+                    item,
+                    steps=self.store.work.list_steps(item.work_id),
                 )
+                if outcome.terminal:
+                    return self.store.transition(
+                        change_id,
+                        ChangeState.FAILED,
+                        expected_version=change.version,
+                    )
+                return self.store.require(change_id)
             if item.state is WorkState.COMPLETED:
                 with self.store.work._lock, self.store.work._connect() as db:
                     self.store._admit_stage(
