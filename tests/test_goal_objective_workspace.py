@@ -326,10 +326,7 @@ def test_task_and_progress_ledgers_derive_from_same_workspace(tmp_path: Path) ->
     assert task.targets[0]["canonical_name"] == "Hisense U7N"
     assert "strategy:vidaa_mqtt_tls" in task.current_strategy
     assert "exact VIDAA pairing handshake" in task.assumptions
-    assert (
-        "architecture approvals remain artifact-bound"
-        in task.authority_boundaries
-    )
+    assert "architecture approvals remain artifact-bound" in task.authority_boundaries
     assert task.source_workspace_digest == workspace.digest
     assert len(task.digest) == 64
 
