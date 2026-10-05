@@ -1,6 +1,12 @@
 import re
 from pathlib import Path
 
+from jarvis.autonomy import (
+    GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1,
+    ShadowFaultKind,
+    validate_global_supervisor_s11_fault_matrix,
+)
+
 from jarvis.system_replay import (
     GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1,
     SystemReplayStatus,
@@ -94,3 +100,35 @@ def test_global_supervisor_s1_replay_is_observational_only() -> None:
         "08-target-incompatible-candidate": "S6",
         "20-tv-goal-full-lifecycle": "S13",
     }
+
+
+def test_global_supervisor_s11_fault_matrix_is_complete() -> None:
+    validate_global_supervisor_s11_fault_matrix()
+
+    assert tuple(item.fault_kind for item in GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1) == (
+        ShadowFaultKind.PROVIDER_OUTAGE,
+        ShadowFaultKind.MALFORMED_RESPONSE,
+        ShadowFaultKind.STALE_ARTIFACT,
+        ShadowFaultKind.DUPLICATE_EVENT,
+        ShadowFaultKind.PROCESS_CRASH,
+        ShadowFaultKind.IRRELEVANT_CANDIDATE,
+        ShadowFaultKind.SPECIALIST_LOOP,
+        ShadowFaultKind.FAILED_DEPENDENCY,
+    )
+
+
+def test_global_supervisor_s11_fault_evidence_nodes_exist() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+
+    for case in GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1:
+        for node_id in case.evidence_tests:
+            relative_path, test_name = node_id.split("::", 1)
+            source_path = repo_root / relative_path
+            assert source_path.is_file(), node_id
+
+            source = source_path.read_text(encoding="utf-8")
+            pattern = re.compile(
+                rf"^(?:async\s+)?def\s+{re.escape(test_name)}\s*\(",
+                re.MULTILINE,
+            )
+            assert pattern.search(source), node_id
