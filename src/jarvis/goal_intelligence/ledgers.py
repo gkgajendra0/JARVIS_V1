@@ -353,14 +353,13 @@ def _active_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
         "observing",
         "blocked_external",
     }
-    candidates = [item for item in workspace.changes if item.state in nonterminal]
-    if not candidates:
-        return None
 
-    # A blocked continuation is stronger authority than generic change recency.
-    # In particular, a goal waiting on one capability gap must continue through the
-    # EngineeringChange canonically linked to that exact gap, even if another direct
-    # EngineeringChange for the same owner turn was updated more recently.
+    # A blocked continuation is the strongest operational authority signal. It binds
+    # the unresolved owner objective to one exact capability gap and, through the
+    # persisted GICC link, to one exact EngineeringChange. Preserve that governing
+    # relationship even when the child change is FAILED/CLOSED/SUPERSEDED: terminal
+    # child execution state is evidence for recovery/replan, not permission to forget
+    # which engineering lifecycle owns the still-blocked objective.
     current_plan_id = None if workspace.plan is None else workspace.plan.record_id
     blocked_gap_ids = {
         str(item.payload.get("blocked_by_id") or "").strip()
@@ -377,7 +376,7 @@ def _active_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
     if blocked_gap_ids:
         continuation_bound = [
             change
-            for change in candidates
+            for change in workspace.changes
             if any(
                 artifact.kind == "gicc_capability_gap_link"
                 and str(artifact.payload.get("motivating_goal_id") or "").strip()
@@ -394,6 +393,9 @@ def _active_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
                 key=lambda item: (item.updated_at, item.change_id),
             )
 
+    candidates = [item for item in workspace.changes if item.state in nonterminal]
+    if not candidates:
+        return None
     return max(candidates, key=lambda item: (item.updated_at, item.change_id))
 
 
