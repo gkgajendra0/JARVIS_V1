@@ -20,7 +20,6 @@ from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
 
 
-
 _ACTIVATE_ACQUIRED_CAPABILITY_INTENT = re.compile(
     r"\b(?:activate|enable)\b|\bturn\s+(?:it|this|that|the\s+capability)\s+on\b|"
     r"\bstart\s+using\b",
