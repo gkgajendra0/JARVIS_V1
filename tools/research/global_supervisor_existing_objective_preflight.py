@@ -232,14 +232,33 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--change-id", required=True)
     parser.add_argument("--historical-architecture-artifact-id")
     parser.add_argument("--historical-gate-id")
-    parser.add_argument("--expected-target")
+    parser.add_argument(
+        "--blind-target-resolution",
+        action="store_true",
+        help=(
+            "Verify lineage without supplying an external device/resource answer. "
+            "This is the required mode for blind capability-acquisition acceptance."
+        ),
+    )
+    parser.add_argument(
+        "--expected-target",
+        help=(
+            "Optional diagnostic assertion against already-canonical target state. "
+            "Do not use with --blind-target-resolution."
+        ),
+    )
     parser.add_argument("--expected-capability-family")
     parser.add_argument("--output", type=pathlib.Path)
     return parser
 
 
 def main() -> int:
-    args = _parser().parse_args()
+    parser = _parser()
+    args = parser.parse_args()
+    if args.blind_target_resolution and args.expected_target:
+        parser.error(
+            "--blind-target-resolution cannot be combined with --expected-target"
+        )
     lineage = ExistingObjectiveLineageV1(
         goal_id=args.goal_id,
         gap_id=args.gap_id,
