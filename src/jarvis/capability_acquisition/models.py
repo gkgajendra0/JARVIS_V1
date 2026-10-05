@@ -6,12 +6,46 @@ import math
 import re
 import time
 from dataclasses import dataclass
+from urllib.parse import unquote, urlparse
 from enum import Enum
 
 from jarvis.capability_registry.contracts import StrictSemVer
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_PYTHON_DISTRIBUTION = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
+
+
+def normalize_python_distribution_identity(value: object) -> str:
+    """Return one safe Python distribution identity, accepting canonical PyPI URLs."""
+
+    raw = _text(value, field="package_identity")
+    parsed = urlparse(raw)
+    if parsed.scheme or parsed.netloc:
+        host = parsed.netloc.casefold()
+        parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
+        if (
+            parsed.scheme.casefold() not in {"http", "https"}
+            or host not in {"pypi.org", "www.pypi.org"}
+            or len(parts) < 2
+            or parts[0].casefold() != "project"
+        ):
+            raise ValueError(
+                "SDK package identity must be a Python distribution name or PyPI project URL"
+            )
+        raw = parts[1]
+
+    normalized = raw.strip().casefold()
+    if (
+        not normalized
+        or len(normalized) > 160
+        or "/" in normalized
+        or "\\" in normalized
+        or "@" in normalized
+        or _PYTHON_DISTRIBUTION.fullmatch(normalized) is None
+    ):
+        raise ValueError("SDK package identity must be a Python distribution name")
+    return normalized
 
 
 def _text(value: object, *, field: str) -> str:
