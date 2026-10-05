@@ -65,6 +65,7 @@ class _SessionToolBundle:
         objective_status: OwnerObjectiveStatusResolver | None = None,
         gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
         gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
     ) -> None:
         self._vision_tools = vision_tools
@@ -75,7 +76,15 @@ class _SessionToolBundle:
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
         self._objective_status = objective_status
-        self._gicc_action_tool_factory = gicc_action_tool_factory
+        if gicc_action_tool_factory is not None and gicc_tool_factory is not None:
+            raise ValueError(
+                "use either gicc_action_tool_factory or legacy gicc_tool_factory, not both"
+            )
+        self._gicc_action_tool_factory = (
+            gicc_action_tool_factory
+            if gicc_action_tool_factory is not None
+            else gicc_tool_factory
+        )
         self._gicc_read_tool_factory = gicc_read_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
