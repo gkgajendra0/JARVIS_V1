@@ -20,14 +20,23 @@ from .gates import GateKind, GateService
 from .models import ChangeState
 
 
-def reconcile_owner_change_gates(coordinator: ChangeCoordinator) -> tuple[str, ...]:
-    """Present/recover durable owner gates for active architecture-ready changes."""
+def reconcile_owner_change_gates(
+    coordinator: ChangeCoordinator,
+    *,
+    change_ids: tuple[str, ...] | None = None,
+) -> tuple[str, ...]:
+    """Present/recover durable owner gates for selected architecture-ready changes."""
 
     surfaced: list[str] = []
     store = coordinator.store
     gates = GateService(store, verify_owner=lambda *_: False)
+    selected_change_ids = (
+        store.active_ids()
+        if change_ids is None
+        else tuple(dict.fromkeys(str(item).strip() for item in change_ids if str(item).strip()))
+    )
 
-    for change_id in store.active_ids():
+    for change_id in selected_change_ids:
         change = store.require(change_id)
         if change.state not in {
             ChangeState.ARCHITECTURE_READY,
