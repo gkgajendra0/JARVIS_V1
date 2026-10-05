@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from collections.abc import Callable
+from re import IGNORECASE, compile as re_compile
 
 from livekit.agents import RunContext, function_tool
 
@@ -20,22 +20,22 @@ from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
 
 
-_ACTIVATE_ACQUIRED_CAPABILITY_INTENT = re.compile(
+_ACTIVATE_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\b(?:activate|enable)\b|"
     r"\bturn\s+(?:(?:it|this|that|the\s+capability)\s+on|on\s+(?:it|this|that|the\s+capability))\b|"
     r"\bstart\s+using\b",
-    re.IGNORECASE,
+    IGNORECASE,
 )
-_DISABLE_ACQUIRED_CAPABILITY_INTENT = re.compile(
+_DISABLE_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\b(?:disable|deactivate)\b|"
     r"\bturn\s+(?:(?:it|this|that|the\s+capability)\s+off|off\s+(?:it|this|that|the\s+capability))\b|"
     r"\bstop\s+using\b",
-    re.IGNORECASE,
+    IGNORECASE,
 )
-_NEGATED_ACQUIRED_CAPABILITY_INTENT = re.compile(
+_NEGATED_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\b(?:do\s+not|don['’]?t|dont|never|not\s+now)\b.{0,48}"
     r"\b(?:activate|enable|disable|deactivate|turn|start|stop)\b",
-    re.IGNORECASE,
+    IGNORECASE,
 )
 
 
