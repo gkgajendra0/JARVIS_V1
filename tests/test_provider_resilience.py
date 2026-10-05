@@ -370,6 +370,16 @@ def test_local_resource_pressure_is_classified_for_immediate_fallback() -> None:
     assert "local gpu resources" in failure.spoken_message.casefold()
 
 
+def test_chatgpt_plan_plural_server_overload_is_retryable_service_unavailable() -> None:
+    failure = classify_provider_failure(
+        RuntimeError("Our servers are currently overloaded. Please try again later."),
+        provider="chatgpt_plan",
+    )
+
+    assert failure.kind is ProviderFailureKind.SERVICE_UNAVAILABLE
+    assert failure.retryable is True
+
+
 def test_codex_model_capacity_is_retryable_service_unavailable() -> None:
     failure = classify_provider_failure(
         RuntimeError("Selected model is at capacity. Please try a different model."),
