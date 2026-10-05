@@ -48,10 +48,7 @@ def test_global_supervisor_s1_replay_corpus_is_locked_and_complete() -> None:
 
 
 def test_global_supervisor_s1_replay_corpus_tracks_known_gaps_explicitly() -> None:
-    assert global_supervisor_s1_known_gap_ids() == (
-        "07-superseded-work-cannot-poison-current-work",
-        "08-target-incompatible-candidate",
-    )
+    assert global_supervisor_s1_known_gap_ids() == ()
 
     live_cases = tuple(
         case.case_id
@@ -65,7 +62,7 @@ def test_global_supervisor_s1_replay_corpus_tracks_known_gaps_explicitly() -> No
         for case in GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1
         if case.status is SystemReplayStatus.COVERED
     )
-    assert len(covered) == 17
+    assert len(covered) == 19
 
 
 def test_global_supervisor_s1_replay_evidence_nodes_exist() -> None:
@@ -84,21 +81,26 @@ def test_global_supervisor_s1_replay_evidence_nodes_exist() -> None:
         assert pattern.search(source), node_id
 
 
-def test_global_supervisor_s1_replay_is_observational_only() -> None:
-    assert all(
-        case.owning_phase == "S1"
-        for case in GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1
-        if case.status is SystemReplayStatus.COVERED
-    )
-    assert {
+def test_global_supervisor_s1_replay_tracks_remediation_ownership() -> None:
+    ownership = {
         case.case_id: case.owning_phase
         for case in GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1
-        if case.status is not SystemReplayStatus.COVERED
-    } == {
+        if case.owning_phase != "S1"
+    }
+    assert ownership == {
         "07-superseded-work-cannot-poison-current-work": "S3-S4",
         "08-target-incompatible-candidate": "S6",
         "20-tv-goal-full-lifecycle": "S13",
     }
+    assert all(
+        case.status is SystemReplayStatus.COVERED
+        for case in GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1
+        if case.case_id
+        in {
+            "07-superseded-work-cannot-poison-current-work",
+            "08-target-incompatible-candidate",
+        }
+    )
 
 
 def test_global_supervisor_s11_fault_matrix_is_complete() -> None:
