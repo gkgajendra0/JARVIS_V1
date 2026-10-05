@@ -8,7 +8,10 @@ import pytest
 
 from jarvis.conversation import ConversationSession
 from jarvis.voice.agent import INSTRUCTIONS, build_instructions
-from jarvis.voice.work_tools import WorkAgentTools
+from jarvis.voice.work_tools import (
+    WorkAgentTools,
+    _explicit_capability_lifecycle_intent,
+)
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
 
@@ -200,3 +203,42 @@ def test_work_tools_can_hide_direct_capability_acquisition_in_apply() -> None:
     assert "start_capability_acquisition" not in [tool.id for tool in apply_tools]
     assert "activate_acquired_capability" in [tool.id for tool in apply_tools]
     assert "disable_acquired_capability" in [tool.id for tool in apply_tools]
+
+
+@pytest.mark.parametrize(
+    ("text", "activate", "expected"),
+    (
+        ("Activate it.", True, True),
+        ("Please enable the acquired capability.", True, True),
+        ("Turn the capability on.", True, True),
+        ("Start using it now.", True, True),
+        ("Yes, proceed.", True, False),
+        ("What is its status?", True, False),
+        ("Disable it.", False, True),
+        ("Deactivate the capability.", False, True),
+        ("Turn it off.", False, True),
+        ("Stop using it.", False, True),
+        ("Yes, proceed.", False, False),
+    ),
+)
+def test_phase9_lifecycle_intent_is_explicit_and_deterministic(
+    text: str,
+    activate: bool,
+    expected: bool,
+) -> None:
+    assert _explicit_capability_lifecycle_intent(text, activate=activate) is expected
+
+
+def test_work_runtime_rejects_phase9_lifecycle_without_capability_runtime() -> None:
+    with pytest.raises(
+        ValueError,
+        match="requires governed capability runtime",
+    ):
+        from jarvis.work.runtime import build_work_runtime
+
+        build_work_runtime(
+            provider="test",
+            research_service=object(),  # type: ignore[arg-type]
+            capability_runtime=None,
+            capability_lifecycle_service=object(),  # type: ignore[arg-type]
+        )
