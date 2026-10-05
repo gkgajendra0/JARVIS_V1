@@ -690,7 +690,7 @@ def build_production_voice_runtime(
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
         gicc_runtime=gicc_apply_runtime,
-        gicc_tool_factory=(
+        gicc_action_tool_factory=(
             None
             if gicc_apply_runtime is None
             else lambda conversation: (
@@ -701,7 +701,21 @@ def build_production_voice_runtime(
                     execution_runtime=gicc_apply_runtime,
                     objective_status=gicc_apply_runtime.objective_status,
                     telemetry=gicc_apply_runtime.telemetry,
-                ).tools
+                ).action_tools
+            )
+        ),
+        gicc_read_tool_factory=(
+            None
+            if gicc_apply_runtime is None
+            else lambda conversation: (
+                GiccAgentTools(
+                    gicc_apply_runtime.coordinator,
+                    conversation,
+                    gicc_apply_runtime.store,
+                    execution_runtime=gicc_apply_runtime,
+                    objective_status=gicc_apply_runtime.objective_status,
+                    telemetry=gicc_apply_runtime.telemetry,
+                ).read_tools
             )
         ),
         allow_direct_capability_acquisition=gicc_apply_runtime is None,
