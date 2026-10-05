@@ -152,7 +152,7 @@ GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1: tuple[ShadowFaultCaseV1, ...] = (
         "Repeated observation of identical canonical state must be idempotent and visible as duplicate shadow state.",
         (
             "tests/test_goal_objective_workspace.py::test_supervisor_shadow_detects_duplicate_state_and_restart_consistency",
-            "tests/test_work_dbos.py::test_duplicate_workflow_invocation_is_idempotent",
+            "tests/test_work_dbos.py::test_dbos_control_messages_use_idempotency_keys",
         ),
     ),
     ShadowFaultCaseV1(
@@ -182,7 +182,7 @@ GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1: tuple[ShadowFaultCaseV1, ...] = (
         ShadowFaultKind.FAILED_DEPENDENCY,
         "Historical failed dependencies must not poison the current authoritative development path.",
         (
-            "tests/test_engineering_change_authoritative_dependencies.py::test_development_depends_only_on_authoritative_source_attempt",
+            "tests/test_engineering_change_authoritative_dependencies.py::test_development_depends_only_on_authoritative_research_attempt",
             "tests/test_work_orchestration.py::test_failed_dependency_fails_only_dependent_work",
         ),
     ),
