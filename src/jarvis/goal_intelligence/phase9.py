@@ -286,6 +286,47 @@ class Phase9GoalBridge:
                 raise GoalStoreConflict(
                     "Phase-9 change is already linked to a different GICC gap"
                 )
+
+            target_hints = [f"entity_type:{request.target_entity_type}"]
+            target_entity = (
+                None
+                if request.target_entity_id is None
+                else self._goals.get_entity(request.target_entity_id)
+            )
+            target_payload: dict[str, object] = {
+                "schema": "gicc_target_context.v1",
+                "motivating_goal_id": request.motivating_goal_id,
+                "gap_id": request.gap_id,
+                "target_entity_type": request.target_entity_type,
+                "target_entity_id": request.target_entity_id,
+                "canonical_name": (
+                    None if target_entity is None else target_entity.canonical_name
+                ),
+                "aliases": (
+                    [] if target_entity is None else list(target_entity.aliases)
+                ),
+                "provenance_refs": (
+                    []
+                    if target_entity is None
+                    else list(target_entity.provenance_refs)
+                ),
+                "target_hints": target_hints,
+            }
+            if target_entity is not None:
+                target_payload["target_hints"] = [
+                    *target_hints,
+                    f"entity_name:{target_entity.canonical_name}",
+                ]
+            current_target = self._changes.latest_artifact(
+                admission.change.change_id,
+                "gicc_target_context",
+            )
+            if current_target is None or current_target.payload != target_payload:
+                self._changes.add_artifact(
+                    admission.change.change_id,
+                    kind="gicc_target_context",
+                    payload=target_payload,
+                )
         return Phase9GapAdmission(
             request=request,
             phase9_goal=phase9_goal,
