@@ -105,10 +105,7 @@ class CapabilityGraphResolver:
                 return False
             return not (
                 requirement_target
-                and (
-                    not semantic_targets
-                    or requirement_target not in semantic_targets
-                )
+                and (not semantic_targets or requirement_target not in semantic_targets)
             )
 
         if (
