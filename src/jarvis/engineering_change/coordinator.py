@@ -144,38 +144,13 @@ class ChangeCoordinator:
                     None if not previous_id else self.store.get_artifact(previous_id)
                 )
                 if previous is not None:
-                    continuity_keys = (
-                        "goal_artifact_id",
-                        "goal_artifact_digest",
-                        "plan_id",
-                        "plan_digest",
-                        "selected_candidate",
-                        "selected_evaluation",
-                        "proposed_capability_id",
-                        "proposed_package_id",
-                        "proposed_package_version",
-                        "dependency_refs",
-                        "secret_scopes",
-                        "network_scopes",
-                        "device_scopes",
-                        "discovery_scopes",
-                        "verification_contract_ids",
-                        "owner_acceptance_contract_ids",
-                        "allowed_paths",
-                        "allowed_components",
-                    )
-                    continuity = {
-                        key: previous.payload[key]
-                        for key in continuity_keys
-                        if key in previous.payload
-                    }
                     request += (
                         "\nCanonical previous approved architecture context: "
                         + json.dumps(
                             {
                                 "artifact_id": previous.artifact_id,
                                 "digest": previous.digest,
-                                "context": continuity,
+                                "payload": previous.payload,
                             },
                             ensure_ascii=False,
                             sort_keys=True,
