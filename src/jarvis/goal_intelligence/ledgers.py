@@ -361,12 +361,17 @@ def _active_change(workspace: ObjectiveWorkspaceV1) -> WorkspaceChangeV1 | None:
     # In particular, a goal waiting on one capability gap must continue through the
     # EngineeringChange canonically linked to that exact gap, even if another direct
     # EngineeringChange for the same owner turn was updated more recently.
+    current_plan_id = None if workspace.plan is None else workspace.plan.record_id
     blocked_gap_ids = {
         str(item.payload.get("blocked_by_id") or "").strip()
         for item in workspace.continuations
         if str(item.payload.get("state") or "").strip() == "blocked"
         and str(item.payload.get("blocked_by_type") or "").strip()
         == "capability_acquisition"
+        and (
+            current_plan_id is None
+            or str(item.payload.get("plan_id") or "").strip() == current_plan_id
+        )
         and str(item.payload.get("blocked_by_id") or "").strip()
     }
     if blocked_gap_ids:
