@@ -287,13 +287,42 @@ async def test_codex_engine_rejects_unreviewed_runtime_generation(tmp_path) -> N
 
     result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
 
-    assert result.disposition is DevelopmentDisposition.FAILED
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert result.blocker_code == "development_engine_unclassified"
     assert result.engine_version == "0.160.0"
     assert runtime.started == 0
     assert runtime.resumed == []
     record = sessions.get(ticket.digest)
     assert record is not None
     assert record.thread_id is None
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_preserves_unclassified_runtime_failure_for_retry(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    runtime = FakeRuntime(
+        FakeThread("thr_unused", []),
+        fail_start=RuntimeError("synthetic runtime boundary"),
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(runtime),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert result.blocker_code == "development_engine_unclassified"
+    assert result.retry_after_seconds is None
+    assert "RuntimeError" in (result.reason or "")
+
+
 
 
 @pytest.mark.asyncio
