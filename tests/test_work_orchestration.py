@@ -645,6 +645,43 @@ def test_failed_change_work_retry_reopens_same_governing_stage(
     assert any(step.kind == "owner_retry" for step in store.list_steps(work.work_id))
 
 
+def test_supervisor_retry_reopens_same_change_without_forging_owner_intent(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    changes = ChangeStore(store)
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Acquire TV control", "session-tv", "turn-tv")
+    stage = changes.list_stages(change.change_id)[0]
+    work = store.require(stage.work_id)
+    failed = work.transition(
+        WorkState.FAILED,
+        status_detail="research servers are currently overloaded",
+    )
+    store.save(failed, expected_version=work.version)
+    coordinator.reconcile_for_work(work.work_id)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.orchestrator = WorkOrchestrator(store, backend)
+    runtime.changes = coordinator
+
+    retried = runtime.retry_failed_work_from_supervisor(
+        work.work_id,
+        reason="Progress Ledger classified this failure as retryable.",
+    )
+
+    assert retried.work_id == work.work_id
+    assert retried.state is WorkState.RETRYING
+    assert changes.require(change.change_id).state is ChangeState.RESEARCHING
+    assert backend.restarted == [(work.work_id, f"v{retried.version}")]
+    steps = store.list_steps(work.work_id)
+    assert any(step.kind == "system_retry" for step in steps)
+    assert not any(step.kind == "owner_retry" for step in steps)
+
+
 def test_failed_change_retry_submission_failure_restores_failed_change(
     tmp_path: Path,
 ) -> None:
