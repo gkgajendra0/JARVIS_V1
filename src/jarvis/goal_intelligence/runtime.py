@@ -8,6 +8,11 @@ import logging
 from dataclasses import dataclass, field, replace
 
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
@@ -527,20 +532,34 @@ class GiccApplyRuntime:
         if not work_ids:
             return False
 
+        completed = goal.state is GoalState.COMPLETED
         kind = (
             WorkDeliveryKind.COMPLETION
-            if goal.state is GoalState.COMPLETED
+            if completed
             else WorkDeliveryKind.FAILURE
         )
-        message = (
-            f"Goal completed: {goal.exact_owner_request}"
-            if goal.state is GoalState.COMPLETED
-            else (
-                "JARVIS could not verify completion of the goal: "
-                f"{goal.exact_owner_request}"
-            )
-        )
         event_key = f"gicc-goal:{goal.goal_id}:{goal.state.value}"
+        intent = OwnerCommunicationIntentV1.create(
+            kind=(
+                OwnerCommunicationKind.COMPLETION
+                if completed
+                else OwnerCommunicationKind.FAILURE
+            ),
+            event_key=event_key,
+            summary=(
+                goal.exact_owner_request
+                if completed
+                else (
+                    "I could not verify the required outcome for "
+                    f"{goal.exact_owner_request}"
+                )
+            ),
+            goal_id=goal.goal_id,
+            terminal=not completed,
+            system_outcome_kind=("completed" if completed else "terminal"),
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        assert owner_message is not None
         for work_id in work_ids:
             work = self.store.work.get(work_id)
             if work is None:
@@ -548,8 +567,8 @@ class GiccApplyRuntime:
             delivery = self.store.work.enqueue_delivery(
                 work=work,
                 kind=kind,
-                message=message,
-                event_key=event_key,
+                message=owner_message.message,
+                event_key=owner_message.event_key,
             )
             if delivery is not None:
                 self.telemetry.emit(
