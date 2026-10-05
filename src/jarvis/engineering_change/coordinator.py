@@ -183,14 +183,6 @@ class ChangeCoordinator:
                 raise ChangeConflict(
                     "authoritative architecture-source work is not completed"
                 )
-            if (
-                authoritative_source.produced_artifact_ids
-                and architecture.artifact_id
-                not in authoritative_source.produced_artifact_ids
-            ):
-                raise ChangeConflict(
-                    "authoritative architecture-source work does not own current architecture"
-                )
             dependencies = (authoritative_source.work_id,)
         else:  # pragma: no cover - ProcessContract validation owns known roles
             raise ChangeConflict("unregistered change stage role")
