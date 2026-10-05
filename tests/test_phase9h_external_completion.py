@@ -250,10 +250,15 @@ async def test_external_acceptance_decline_waits_for_same_owner_authorization(
             return SimpleNamespace()
 
     class Runtime:
-        def execute_operation(self, **kwargs):
-            raise AssertionError(f"declined live effect must not execute: {kwargs}")
+        def __init__(self):
+            self.called = False
 
-    executor = ExternalAcceptanceInvokeExecutor(Resolver(), Runtime())
+        def execute_operation(self, **kwargs):
+            self.called = True
+            raise RuntimeError(f"live-call-reached: {kwargs}")
+
+    runtime = Runtime()
+    executor = ExternalAcceptanceInvokeExecutor(Resolver(), runtime)
 
     with pytest.raises(WorkOwnerInputRequired) as exc:
         await executor.execute(
@@ -261,8 +266,27 @@ async def test_external_acceptance_decline_waits_for_same_owner_authorization(
             parameters={"operation": "play", "parameters": {}},
         )
 
+    assert runtime.called is False
     assert exc.value.input_key == "external_acceptance_authorize:request-demo"
     assert exc.value.resume_context["kind"] == "live_acceptance_authorization"
+
+    newer_owner = _completed_step(
+        item.work_id,
+        "owner_input",
+        {
+            "input_key": "external_acceptance_authorize:request-demo",
+            "response": "yes",
+        },
+    )
+    store.add_step(newer_owner)
+
+    with pytest.raises(RuntimeError, match="live-call-reached"):
+        await executor.execute(
+            work=item,
+            parameters={"operation": "play", "parameters": {}},
+        )
+
+    assert runtime.called is True
 
 
 def test_external_acceptance_guard_requires_durable_real_world_evidence() -> None:
