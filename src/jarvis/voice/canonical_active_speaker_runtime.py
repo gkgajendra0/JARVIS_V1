@@ -447,6 +447,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         instructions = (
             "Say exactly the following approval question and nothing else: "
             + spoken_prompt
+            + " After the owner answers, use only the bound change-gate decision tool. "
+            "Natural affirmative or rejection wording is valid because the trusted "
+            "runtime already bound this session to one exact gate. Call the decision "
+            "tool at most once for each canonical USER turn. If the tool says the "
+            "answer was not understood, ask one concise yes-or-no clarification and "
+            "wait for a new USER turn; never retry the same turn."
         )
 
         try:
