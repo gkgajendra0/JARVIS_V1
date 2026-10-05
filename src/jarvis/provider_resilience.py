@@ -282,6 +282,8 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
             "retrylimitexceedederror",
             "server overloaded",
             "server_overloaded",
+            "selected model is at capacity",
+            "model is at capacity",
             "too many failed attempts",
         )
     ):
