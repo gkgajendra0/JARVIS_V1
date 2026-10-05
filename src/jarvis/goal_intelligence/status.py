@@ -363,11 +363,11 @@ class OwnerObjectiveStatusResolver:
                         stage.change_id
                     )
 
-        gates = GateService(
+        gate_service = GateService(
             self._changes,
             verify_owner=lambda *_: False,
         )
-        pending_gate_ids = gates.pending_gate_ids()
+        pending_gate_ids = gate_service.pending_gate_ids()
 
         change_statuses: list[ObjectiveChangeStatus] = []
         for change_id in sorted(set(continuation_change_ids.values())):
@@ -383,14 +383,14 @@ class OwnerObjectiveStatusResolver:
                 work_by_id[item.work_id] = status
                 stage_work.append(status)
 
-            gates: list[str] = []
+            change_gate_ids: list[str] = []
             for gate_id in pending_gate_ids:
-                gate = gates.get(gate_id)
+                gate = gate_service.get(gate_id)
                 if gate is None:
                     continue
                 challenge = getattr(gate, "challenge", gate)
                 if challenge.change_id == change_id:
-                    gates.append(gate_id)
+                    change_gate_ids.append(gate_id)
 
             lifecycle_proposal = self._changes.latest_artifact(
                 change_id,
@@ -488,7 +488,7 @@ class OwnerObjectiveStatusResolver:
                     change_id=change_id,
                     state=change.state.value,
                     work=tuple(stage_work),
-                    pending_gate_ids=tuple(sorted(gates)),
+                    pending_gate_ids=tuple(sorted(change_gate_ids)),
                     lifecycle_proposal_present=lifecycle_proposal is not None,
                     activation_present=activation_present,
                     external_acceptance_required=external_required,
