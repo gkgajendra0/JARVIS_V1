@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import (
     DeliveryPolicy,
@@ -62,6 +67,32 @@ class WorkOrchestrator:
     def __init__(self, store: SQLiteWorkStore, backend: WorkExecutionBackend) -> None:
         self._store = store
         self._backend = backend
+
+    @staticmethod
+    def _governed_child(work: WorkItem) -> bool:
+        return work.source_session_id.startswith(("change:", "gicc:"))
+
+    def _enqueue_failure_delivery(self, work: WorkItem, summary: str) -> None:
+        if self._governed_child(work):
+            return
+        intent = OwnerCommunicationIntentV1.create(
+            kind=OwnerCommunicationKind.FAILURE,
+            event_key=f"failure:{work.version}",
+            summary=summary,
+            terminal=True,
+            work_id=work.work_id,
+            system_outcome_kind="terminal",
+            technical_detail=work.status_detail,
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        if owner_message is None:
+            return
+        self._store.enqueue_delivery(
+            work=work,
+            kind=WorkDeliveryKind.FAILURE,
+            message=owner_message.message,
+            event_key=owner_message.event_key,
+        )
 
     def start(
         self,
@@ -126,12 +157,7 @@ class WorkOrchestrator:
                 status_detail=reason,
             )
             failed = self._store.save(failed, expected_version=item.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=reason,
-                event_key=f"failure:{failed.version}",
-            )
+            self._enqueue_failure_delivery(failed, reason)
             raise
         return WorkSubmission(work=item, execution_id=execution_id)
 
@@ -325,11 +351,9 @@ class WorkOrchestrator:
                 current_step_id=latest.current_step_id,
             )
             failed = self._store.save(failed, expected_version=latest.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=failed.status_detail or "Background work retry failed.",
-                event_key=f"failure:{failed.version}",
+            self._enqueue_failure_delivery(
+                failed,
+                failed.status_detail or "Background work retry failed.",
             )
             raise
         return saved
