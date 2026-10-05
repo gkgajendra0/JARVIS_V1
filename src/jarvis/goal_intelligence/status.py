@@ -100,7 +100,9 @@ class ObjectiveChangeStatus:
     external_acceptance_required: bool
     external_acceptance_work_id: str | None
     external_acceptance_work_state: str | None
+    external_acceptance_verdict: str | None
     lineage_complete: bool
+    lineage_error: str | None
 
     def public_payload(self) -> dict[str, object]:
         return {
@@ -112,7 +114,9 @@ class ObjectiveChangeStatus:
             "external_acceptance_required": self.external_acceptance_required,
             "external_acceptance_work_id": self.external_acceptance_work_id,
             "external_acceptance_work_state": self.external_acceptance_work_state,
+            "external_acceptance_verdict": self.external_acceptance_verdict,
             "lineage_complete": self.lineage_complete,
+            "lineage_integrity_ok": self.lineage_error is None,
         }
 
 
@@ -327,10 +331,11 @@ class OwnerObjectiveStatusResolver:
                         stage.change_id
                     )
 
-        pending_gate_ids = GateService(
+        gates = GateService(
             self._changes,
             verify_owner=lambda *_: False,
-        ).pending_gate_ids()
+        )
+        pending_gate_ids = gates.pending_gate_ids()
 
         change_statuses: list[ObjectiveChangeStatus] = []
         for change_id in sorted(set(continuation_change_ids.values())):
@@ -348,10 +353,7 @@ class OwnerObjectiveStatusResolver:
 
             gates: list[str] = []
             for gate_id in pending_gate_ids:
-                gate = GateService(
-                    self._changes,
-                    verify_owner=lambda *_: False,
-                ).get(gate_id)
+                gate = gates.get(gate_id)
                 if gate is None:
                     continue
                 challenge = getattr(gate, "challenge", gate)
@@ -399,6 +401,16 @@ class OwnerObjectiveStatusResolver:
                 if binding is None
                 else str(binding.payload.get("work_id") or "").strip() or None
             )
+            external_result = self._changes.latest_artifact(
+                change_id,
+                EXTERNAL_ACCEPTANCE_RESULT_KIND,
+            )
+            external_verdict = (
+                None
+                if external_result is None
+                else str(external_result.payload.get("verdict") or "").strip() or None
+            )
+
             external_work_state = None
             if external_work_id is not None:
                 external_work = self._changes.work.require(external_work_id)
@@ -418,6 +430,7 @@ class OwnerObjectiveStatusResolver:
                 is ContinuationBlockerType.CAPABILITY_ACQUISITION
             ]
             lineage_complete = False
+            lineage_error = None
             for continuation in linked_continuations:
                 try:
                     lineage = verify_capability_acquisition_completion(
@@ -426,10 +439,12 @@ class OwnerObjectiveStatusResolver:
                         motivating_goal_id=goal.goal_id,
                         gap_id=continuation.blocked_by_id,
                     )
-                except CapabilityAcquisitionLineageError:
+                except CapabilityAcquisitionLineageError as exc:
+                    lineage_error = type(exc).__name__
                     lineage = None
                 if lineage is not None:
                     lineage_complete = True
+                    lineage_error = None
                     break
 
             change_statuses.append(
@@ -442,13 +457,14 @@ class OwnerObjectiveStatusResolver:
                     external_acceptance_required=external_required,
                     external_acceptance_work_id=external_work_id,
                     external_acceptance_work_state=external_work_state,
+                    external_acceptance_verdict=external_verdict,
                     lineage_complete=lineage_complete,
+                    lineage_error=lineage_error,
                 )
             )
 
         overall, phase, blocker = self._derive_status(
             goal_state=goal.state,
-            goal_id=goal.goal_id,
             needs=needs,
             continuations=continuations,
             change_statuses=tuple(change_statuses),
@@ -477,7 +493,6 @@ class OwnerObjectiveStatusResolver:
         self,
         *,
         goal_state: GoalState,
-        goal_id: str,
         needs,
         continuations,
         change_statuses: tuple[ObjectiveChangeStatus, ...],
@@ -592,6 +607,39 @@ class OwnerObjectiveStatusResolver:
         change: ObjectiveChangeStatus,
     ) -> tuple[ObjectiveOverallState, ObjectivePhase, ObjectiveBlocker | None]:
         state = ChangeState(change.state)
+        if change.lineage_error is not None:
+            return (
+                ObjectiveOverallState.BLOCKED,
+                ObjectivePhase.BLOCKED,
+                ObjectiveBlocker(
+                    kind="lineage_integrity",
+                    blocker_id=change.change_id,
+                    owner_action_required=False,
+                    detail=(
+                        "Canonical capability lineage failed an integrity check. "
+                        "The objective cannot be reported as complete or safely advanced."
+                    ),
+                ),
+            )
+        if (
+            change.external_acceptance_verdict is not None
+            and change.external_acceptance_verdict.casefold() != "pass"
+        ):
+            return (
+                ObjectiveOverallState.BLOCKED,
+                ObjectivePhase.BLOCKED,
+                ObjectiveBlocker(
+                    kind="external_acceptance_failed",
+                    blocker_id=(
+                        change.external_acceptance_work_id or change.change_id
+                    ),
+                    owner_action_required=False,
+                    detail=(
+                        "Real-world capability acceptance did not produce a passing "
+                        "verdict."
+                    ),
+                ),
+            )
         if change.lineage_complete:
             return (
                 ObjectiveOverallState.ACTIVE,
