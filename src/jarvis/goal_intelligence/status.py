@@ -301,6 +301,37 @@ class OwnerObjectiveStatusResolver:
             for goal in self._goals.list_active_goals(limit=limit)
         )
 
+    def find_active_by_work_id(
+        self,
+        work_id: str,
+        *,
+        limit: int = 100,
+    ) -> OwnerObjectiveStatus | None:
+        target = str(work_id).strip()
+        if not target:
+            return None
+        for objective in self.list_active(limit=limit):
+            if any(item.work_id == target for item in objective.work):
+                return objective
+        return None
+
+    def find_active_by_change_id(
+        self,
+        change_id: str,
+        *,
+        limit: int = 100,
+    ) -> OwnerObjectiveStatus | None:
+        target = str(change_id).strip()
+        if not target:
+            return None
+        for objective in self.list_active(limit=limit):
+            if any(
+                change.change_id == target
+                for change in objective.engineering_changes
+            ):
+                return objective
+        return None
+
     def resolve(self, goal_id: str) -> OwnerObjectiveStatus:
         goal = self._goals.get_goal(str(goal_id).strip())
         if goal is None:
