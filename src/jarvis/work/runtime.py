@@ -1044,10 +1044,8 @@ def build_work_runtime(
             ),
         ),
     )
-    recovered_development = (
-        change_store.reopen_recoverable_development_engine_failures(
-            recovery_generation="codex-contract-repair-v1",
-        )
+    recovered_development = change_store.reopen_recoverable_development_engine_failures(
+        recovery_generation="codex-contract-repair-v1",
     )
     for change_id in recovered_development:
         changes.reconcile(change_id)
