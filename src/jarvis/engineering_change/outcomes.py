@@ -220,7 +220,9 @@ def classify_work_system_outcome(
     if development is not None:
         disposition = _normalized(development.get("disposition")).casefold()
         reason = _normalized(
-            development.get("reason") or development.get("summary") or work.status_detail
+            development.get("reason")
+            or development.get("summary")
+            or work.status_detail
         )
         blocker = _normalized(development.get("blocker_code")).casefold()
         retry_after_raw = development.get("retry_after_seconds")
