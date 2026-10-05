@@ -1185,6 +1185,15 @@ def test_blocked_capability_continuation_outranks_newer_direct_change(
         source_session_id=state["goal"].source_session_id,
         source_turn_id=state["goal"].source_turn_id,
     )
+    for ordinal in range(3):
+        state["changes"].add_artifact(
+            competing.change_id,
+            kind="architecture",
+            payload={
+                "schema": "unrelated_architecture.v1",
+                "strategy": f"unrelated_strategy_{ordinal}",
+            },
+        )
 
     workspace = ObjectiveWorkspaceProjector(
         goal_store=state["goals"],
@@ -1196,6 +1205,9 @@ def test_blocked_capability_continuation_outranks_newer_direct_change(
     assert progress.active_change_id == state["change"].change_id
     assert progress.phase == "research"
     assert progress.active_work_id == state["research"].work_id
+    task = build_task_ledger(workspace)
+    assert "strategy:vidaa_mqtt_tls" in task.current_strategy
+    assert not any("unrelated_strategy" in item for item in task.current_strategy)
 
     _, controller = _existing_resume_controller(state)
     snapshot = controller.inspect(
