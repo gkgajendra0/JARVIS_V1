@@ -896,7 +896,7 @@ def test_supervisor_cutover_surfaces_gate_but_cannot_approve_it(
     gate_id = result.surfaced_gate_ids[0]
     gate = GateService(state["changes"], verify_owner=lambda *_: False).get(gate_id)
     assert gate is not None
-    assert gate.challenge.artifact_digest == architecture.digest
+    assert gate.artifact_digest == architecture.digest
     assert state["changes"].list_stages(change.change_id) == (source,)
     assert all(
         stage.stage_key != "development"
