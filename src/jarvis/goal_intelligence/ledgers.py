@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+)
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .workspace import (
@@ -432,6 +435,26 @@ def _authoritative_work(
     if change is None:
         return None
     work_by_id = {item.work_id: item for item in workspace.work_items}
+
+    # Post-activation external acceptance is durable Work owned by the capability
+    # lifecycle, not an EngineeringChange stage. The exact binding artifact makes it
+    # authoritative for progress while the owner objective is still blocked on this
+    # capability lineage.
+    external_bindings = [
+        artifact
+        for artifact in change.artifacts
+        if artifact.kind == EXTERNAL_ACCEPTANCE_BINDING_KIND
+    ]
+    if external_bindings:
+        binding = max(
+            external_bindings,
+            key=lambda artifact: (artifact.revision, artifact.artifact_id),
+        )
+        external_work_id = str(binding.payload.get("work_id") or "").strip()
+        external_work = work_by_id.get(external_work_id)
+        if external_work is not None:
+            return external_work
+
     candidates = [
         (stage, work_by_id.get(stage.work_id))
         for stage in change.stages
@@ -483,6 +506,8 @@ def _specialist(
             return "DevelopmentEngine"
         if work.work_type == "diagnostics":
             return "Research"
+        if work.work_type == "external_acceptance":
+            return "Verification"
     return {
         "architecture": "Architecture",
         "verification": "Verification",
