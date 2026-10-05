@@ -161,6 +161,15 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.owner_communication",
+        (
+            "OwnerCommunicationIntentV1",
+            "OwnerCommunicationKind",
+            "SupervisorOwnerCommunication",
+            "SupervisorOwnerMessageV1",
+        ),
+    ),
+    (
         "jarvis.autonomy.supervisor",
         (
             "DeterministicSupervisorAdvisor",
