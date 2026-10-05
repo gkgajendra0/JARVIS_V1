@@ -170,6 +170,18 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.shadow",
+        (
+            "GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1",
+            "ShadowAgreement",
+            "ShadowFaultCaseV1",
+            "ShadowFaultKind",
+            "SupervisorShadowObservationV1",
+            "SupervisorShadowRunner",
+            "validate_global_supervisor_s11_fault_matrix",
+        ),
+    ),
+    (
         "jarvis.autonomy.supervisor",
         (
             "DeterministicSupervisorAdvisor",
