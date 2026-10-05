@@ -497,7 +497,7 @@ def _legal_actions(
         "external_blocker": ("WAIT_RESOURCE",),
         "superseded": ("CONTINUE",),
         "terminal": ("REPLAN", "TERMINAL"),
-        "completed": (),
+        "completed": ("CONTINUE",),
     }
     return by_phase.get(phase, ("CONTINUE",))
 
