@@ -306,9 +306,7 @@ class Phase9GoalBridge:
                     [] if target_entity is None else list(target_entity.aliases)
                 ),
                 "provenance_refs": (
-                    []
-                    if target_entity is None
-                    else list(target_entity.provenance_refs)
+                    [] if target_entity is None else list(target_entity.provenance_refs)
                 ),
                 "target_hints": target_hints,
             }
