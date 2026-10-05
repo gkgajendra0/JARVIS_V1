@@ -5,8 +5,11 @@ import pytest
 
 from jarvis.autonomy import (
     GlobalSupervisor,
+    ShadowAgreement,
+    ShadowFaultKind,
     SupervisorAction,
     SupervisorProposalV1,
+    SupervisorShadowRunner,
     supervisor_context_from_workspace,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
@@ -615,3 +618,146 @@ def test_role_contexts_are_restart_deterministic(tmp_path: Path) -> None:
     )
 
     assert reopened == first
+
+
+def test_supervisor_shadow_matches_provider_outage_action_without_writes(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "shadow-provider.sqlite3")
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    before_change_version = state["changes"].require(state["change"].change_id).version
+    before_work_version = state["work"].require(state["research"].work_id).version
+
+    observation = SupervisorShadowRunner().project_and_evaluate(
+        projector,
+        state["goal"].goal_id,
+        fault_kind=ShadowFaultKind.PROVIDER_OUTAGE,
+    )
+
+    assert observation.mutation_authority is False
+    assert observation.accepted is True
+    assert observation.agreement is ShadowAgreement.PRIMARY_MATCH
+    assert observation.primary_expected_action is SupervisorAction.WAIT_RESOURCE
+    assert observation.proposed_action is SupervisorAction.WAIT_RESOURCE
+    assert observation.expected_actions == (
+        SupervisorAction.WAIT_RESOURCE,
+        SupervisorAction.RETRY,
+    )
+    assert state["changes"].require(state["change"].change_id).version == (
+        before_change_version
+    )
+    assert state["work"].require(state["research"].work_id).version == (
+        before_work_version
+    )
+
+
+def test_supervisor_shadow_contains_malformed_advisor_output(tmp_path: Path) -> None:
+    class MalformedAdvisor:
+        def propose(self, context):
+            del context
+            return {"action": "WAIT_RESOURCE"}
+
+    state = _scenario(tmp_path / "shadow-malformed.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    observation = SupervisorShadowRunner(MalformedAdvisor()).evaluate(
+        workspace,
+        fault_kind=ShadowFaultKind.MALFORMED_RESPONSE,
+    )
+
+    assert observation.mutation_authority is False
+    assert observation.accepted is False
+    assert observation.agreement is ShadowAgreement.ADVISOR_ERROR
+    assert observation.rejection_codes == ("advisor_error",)
+    assert observation.error_type == "TypeError"
+    assert observation.proposal_digest is None
+    assert state["work"].require(state["research"].work_id).version == (
+        state["research"].version
+    )
+
+
+def test_supervisor_shadow_rejects_stale_proposal_without_writes(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "shadow-stale.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    observation = SupervisorShadowRunner().evaluate_stale_proposal(workspace)
+
+    assert observation.mutation_authority is False
+    assert observation.fault_kind is ShadowFaultKind.STALE_ARTIFACT
+    assert observation.accepted is False
+    assert observation.agreement is ShadowAgreement.REJECTED
+    assert "workspace_digest_mismatch" in observation.rejection_codes
+    assert state["changes"].require(state["change"].change_id).version == (
+        state["change"].version
+    )
+
+
+def test_supervisor_shadow_detects_duplicate_state_and_restart_consistency(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "shadow-restart.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    runner = SupervisorShadowRunner()
+
+    first = runner.evaluate(workspace)
+    duplicate = runner.evaluate(
+        workspace,
+        history=(first,),
+        fault_kind=ShadowFaultKind.DUPLICATE_EVENT,
+    )
+    restarted = SupervisorShadowRunner().evaluate(
+        workspace,
+        fault_kind=ShadowFaultKind.PROCESS_CRASH,
+    )
+
+    assert first.duplicate_state is False
+    assert duplicate.duplicate_state is True
+    assert duplicate.proposal_digest == first.proposal_digest
+    assert duplicate.decision_digest == first.decision_digest
+    assert restarted.proposal_digest == first.proposal_digest
+    assert restarted.decision_digest == first.decision_digest
+    assert restarted.workspace_digest == first.workspace_digest
+    assert restarted.mutation_authority is False
+
+
+def test_supervisor_shadow_detects_specialist_loop_without_acting(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "shadow-loop.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    runner = SupervisorShadowRunner()
+
+    first = runner.evaluate(workspace)
+    second = runner.evaluate(workspace, history=(first,))
+    third = runner.evaluate(
+        workspace,
+        history=(first, second),
+        fault_kind=ShadowFaultKind.SPECIALIST_LOOP,
+    )
+
+    assert first.loop_detected is False
+    assert second.loop_detected is False
+    assert third.loop_detected is True
+    assert third.accepted is True
+    assert third.proposed_action is SupervisorAction.WAIT_RESOURCE
+    assert third.mutation_authority is False
+    assert state["work"].require(state["research"].work_id).version == (
+        state["research"].version
+    )
