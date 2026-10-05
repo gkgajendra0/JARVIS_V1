@@ -9,7 +9,12 @@ Global Supervisor is allowed to coordinate that lineage.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from enum import StrEnum
 
+from jarvis.capability_acquisition.lineage import (
+    CapabilityAcquisitionLineageError,
+    verify_capability_acquisition_completion,
+)
 from jarvis.engineering_change.gates import GateService
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -24,6 +29,15 @@ from .supervisor_cutover import (
 
 class ExistingObjectiveLineageError(RuntimeError):
     """Requested resume identifiers do not match canonical existing lineage."""
+
+
+class ExistingObjectiveResumeDisposition(StrEnum):
+    ACTIVE_CURRENT = "active_current"
+    STARTUP_RECOVERY_REQUIRED = "startup_recovery_required"
+    CAPABILITY_COMPLETE = "capability_complete"
+    FAILED_GOVERNING_CHANGE = "failed_governing_change"
+    INACTIVE_LINKED_CHANGE = "inactive_linked_change"
+    LINEAGE_CONFLICT = "lineage_conflict"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +71,16 @@ class ExistingObjectiveResumeSnapshotV1:
     desired_outcome: str
     target_names: tuple[str, ...]
     capability_families: tuple[str, ...]
+    goal_state: str
+    gap_state: str
     change_state: str
+    progress_active_change_id: str | None
+    requested_change_is_progress_active: bool
+    resume_disposition: ExistingObjectiveResumeDisposition
+    startup_recovery_kinds: tuple[str, ...]
+    capability_completion_ready: bool
+    capability_completion_error: str | None
+    continuation_refs: tuple[str, ...]
     current_architecture_artifact_id: str | None
     current_architecture_digest: str | None
     current_gate_ids: tuple[str, ...]
@@ -82,7 +105,16 @@ class ExistingObjectiveResumeSnapshotV1:
             "desired_outcome": self.desired_outcome,
             "target_names": list(self.target_names),
             "capability_families": list(self.capability_families),
+            "goal_state": self.goal_state,
+            "gap_state": self.gap_state,
             "change_state": self.change_state,
+            "progress_active_change_id": self.progress_active_change_id,
+            "requested_change_is_progress_active": self.requested_change_is_progress_active,
+            "resume_disposition": self.resume_disposition.value,
+            "startup_recovery_kinds": list(self.startup_recovery_kinds),
+            "capability_completion_ready": self.capability_completion_ready,
+            "capability_completion_error": self.capability_completion_error,
+            "continuation_refs": list(self.continuation_refs),
             "current_architecture_artifact_id": self.current_architecture_artifact_id,
             "current_architecture_digest": self.current_architecture_digest,
             "current_gate_ids": list(self.current_gate_ids),
@@ -100,6 +132,8 @@ class ExistingObjectiveResumeSnapshotV1:
     def __post_init__(self) -> None:
         if self.schema != "existing_objective_resume_snapshot.v1":
             raise ValueError("unsupported existing-objective resume snapshot schema")
+        if not isinstance(self.resume_disposition, ExistingObjectiveResumeDisposition):
+            raise TypeError("resume_disposition must be ExistingObjectiveResumeDisposition")
         if (
             self.digest != "pending"
             and canonical_digest(self.canonical_payload()) != self.digest
@@ -211,10 +245,69 @@ class ExistingObjectiveResumeController:
 
         task = build_task_ledger(workspace)
         progress = build_progress_ledger(workspace)
-        if progress.active_change_id != lineage.change_id:
-            raise ExistingObjectiveLineageError(
-                "requested change is not the current authoritative change for the goal"
+
+        startup_recovery_kinds: list[str] = []
+        if lineage.change_id in self._changes.reopen_recoverable_architecture_revision_failures(
+            recovery_generation="phase9-research-provider-sdk-v1",
+            dry_run=True,
+        ):
+            startup_recovery_kinds.append("phase9-research-provider-sdk-v1")
+        if lineage.change_id in self._changes.reopen_recoverable_development_engine_failures(
+            recovery_generation="codex-contract-repair-v1",
+            dry_run=True,
+        ):
+            startup_recovery_kinds.append("codex-contract-repair-v1")
+
+        capability_completion_ready = False
+        capability_completion_error: str | None = None
+        try:
+            capability_completion_ready = (
+                verify_capability_acquisition_completion(
+                    self._changes,
+                    change_id=lineage.change_id,
+                    motivating_goal_id=lineage.goal_id,
+                    gap_id=lineage.gap_id,
+                )
+                is not None
             )
+        except CapabilityAcquisitionLineageError as exc:
+            capability_completion_error = str(exc)
+
+        requested_is_active = progress.active_change_id == lineage.change_id
+        if capability_completion_error is not None:
+            resume_disposition = ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT
+        elif capability_completion_ready:
+            resume_disposition = ExistingObjectiveResumeDisposition.CAPABILITY_COMPLETE
+        elif startup_recovery_kinds:
+            resume_disposition = (
+                ExistingObjectiveResumeDisposition.STARTUP_RECOVERY_REQUIRED
+            )
+        elif requested_is_active and change.state == "failed":
+            resume_disposition = (
+                ExistingObjectiveResumeDisposition.FAILED_GOVERNING_CHANGE
+            )
+        elif requested_is_active:
+            resume_disposition = ExistingObjectiveResumeDisposition.ACTIVE_CURRENT
+        else:
+            resume_disposition = (
+                ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE
+            )
+
+        current_plan_id = None if workspace.plan is None else workspace.plan.record_id
+        continuation_refs = tuple(
+            sorted(
+                (
+                    f"{item.record_id}|"
+                    f"{item.payload.get('state')}|"
+                    f"{item.payload.get('blocked_by_type')}|"
+                    f"{item.payload.get('blocked_by_id')}|"
+                    f"{item.payload.get('plan_id')}"
+                )
+                for item in workspace.continuations
+                if current_plan_id is None
+                or str(item.payload.get("plan_id") or "").strip() == current_plan_id
+            )
+        )
 
         architecture = next(
             (
@@ -271,7 +364,16 @@ class ExistingObjectiveResumeController:
                     }
                 )
             ),
+            goal_state=str(payload.get("state") or "").strip(),
+            gap_state=str(gap.payload.get("state") or "").strip(),
             change_state=change.state,
+            progress_active_change_id=progress.active_change_id,
+            requested_change_is_progress_active=requested_is_active,
+            resume_disposition=resume_disposition,
+            startup_recovery_kinds=tuple(startup_recovery_kinds),
+            capability_completion_ready=capability_completion_ready,
+            capability_completion_error=capability_completion_error,
+            continuation_refs=continuation_refs,
             current_architecture_artifact_id=(
                 None if architecture is None else architecture.artifact_id
             ),
@@ -300,6 +402,14 @@ class ExistingObjectiveResumeController:
         lineage: ExistingObjectiveLineageV1,
     ) -> tuple[ExistingObjectiveResumeSnapshotV1, SupervisorCutoverResultV1]:
         before = self.inspect(lineage)
+        if before.resume_disposition in {
+            ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE,
+            ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT,
+        }:
+            raise ExistingObjectiveLineageError(
+                "existing objective lineage is valid but not safe for Supervisor cutover: "
+                + before.resume_disposition.value
+            )
         result = self._cutover.coordinate(lineage.goal_id)
         # Re-run the exact lineage proof after coordination. Any accidental creation,
         # retargeting or active-change drift fails closed immediately.
