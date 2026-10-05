@@ -170,14 +170,28 @@ class ChangeCoordinator:
                 f"digest {architecture.digest}: {architecture.payload}"
             )
             source_stage = process.architecture_source_stage
-            source_work = [
-                s.work_id for s in stages if s.stage_key == source_stage.stage_key
-            ]
-            if not source_work:
+            authoritative_source = self.store.current_stage_attempt(
+                change_id,
+                source_stage.stage_key,
+            )
+            if authoritative_source is None:
                 raise ChangeConflict(
-                    "development requires completed architecture-source work"
+                    "development requires authoritative architecture-source work"
                 )
-            dependencies = tuple(source_work)
+            source_item = self.store.work.require(authoritative_source.work_id)
+            if source_item.state is not WorkState.COMPLETED:
+                raise ChangeConflict(
+                    "authoritative architecture-source work is not completed"
+                )
+            if (
+                authoritative_source.produced_artifact_ids
+                and architecture.artifact_id
+                not in authoritative_source.produced_artifact_ids
+            ):
+                raise ChangeConflict(
+                    "authoritative architecture-source work does not own current architecture"
+                )
+            dependencies = (authoritative_source.work_id,)
         else:  # pragma: no cover - ProcessContract validation owns known roles
             raise ChangeConflict("unregistered change stage role")
 
