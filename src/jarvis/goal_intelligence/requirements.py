@@ -241,9 +241,7 @@ class RequirementValidator:
                     target_entity_type=(
                         None
                         if proposal.target_entity_type is None
-                        else canonical_world_entity_type(
-                            proposal.target_entity_type
-                        )
+                        else canonical_world_entity_type(proposal.target_entity_type)
                     ),
                     required_parameters_schema=proposal.required_parameters_schema,
                     preconditions=tuple(proposal.preconditions),
