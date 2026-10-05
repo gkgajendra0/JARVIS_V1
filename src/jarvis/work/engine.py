@@ -593,11 +593,13 @@ class WorkEngine:
                 current_step_id=current_step_id,
             )
             saved = self._store.save(failed, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.FAILURE,
-                message=reason,
+                summary=reason,
                 event_key=f"failure:{saved.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
 
@@ -725,11 +727,12 @@ class WorkEngine:
         )
         saved = self._store.save(waiting, expected_version=latest.version)
         blocker_digest = hashlib.sha256(exc.reason.encode()).hexdigest()[:24]
-        self._store.enqueue_delivery(
+        self._enqueue_owner_delivery(
             work=saved,
             kind=WorkDeliveryKind.RESOURCE_BLOCKER,
-            message=exc.reason,
+            summary=exc.reason,
             event_key=f"routing-resource:{blocker_digest}",
+            system_outcome_kind="temporary_resource",
         )
         return WorkAdvanceResult(
             saved.work_id,
@@ -757,11 +760,13 @@ class WorkEngine:
                     status_detail=f"dependency is missing: {dependency_id}",
                 )
                 saved = self._store.save(failed, expected_version=work.version)
-                self._store.enqueue_delivery(
+                self._enqueue_owner_delivery(
                     work=saved,
                     kind=WorkDeliveryKind.FAILURE,
-                    message=saved.status_detail or "Background work dependency failed.",
+                    summary=saved.status_detail or "Background work dependency failed.",
                     event_key=f"failure:{saved.version}",
+                    terminal=True,
+                    system_outcome_kind="terminal",
                 )
                 return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
             dependencies.append(dependency)
@@ -778,11 +783,13 @@ class WorkEngine:
                 status_detail=f"dependency did not complete successfully: {names}",
             )
             saved = self._store.save(failed, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.FAILURE,
-                message=saved.status_detail or "Background work dependency failed.",
+                summary=saved.status_detail or "Background work dependency failed.",
                 event_key=f"failure:{saved.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
 
@@ -889,11 +896,13 @@ class WorkEngine:
             limit=10_000,
         )
         for work in waiting:
-            delivery = self._store.enqueue_delivery(
+            delivery = self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=work.status_detail or "This work needs your input.",
+                summary=work.status_detail or "This work needs your input.",
                 event_key=f"owner:{work.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
             if delivery is None:
                 continue
@@ -904,25 +913,30 @@ class WorkEngine:
 
     def _ensure_state_delivery(self, work: WorkItem) -> None:
         if work.state is WorkState.COMPLETED:
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.COMPLETION,
-                message=work.status_detail or "Background work completed.",
+                summary=work.status_detail or "Background work completed.",
                 event_key="completion",
+                system_outcome_kind="completed",
             )
         elif work.state is WorkState.FAILED:
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.FAILURE,
-                message=work.status_detail or "Background work failed.",
+                summary=work.status_detail or "Background work failed.",
                 event_key=f"failure:{work.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
         elif work.state is WorkState.WAITING_FOR_OWNER:
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=work.status_detail or "This work needs your input.",
+                summary=work.status_detail or "This work needs your input.",
                 event_key=f"owner:{work.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
 
     def reconcile_interrupted_steps(self) -> tuple[str, ...]:
@@ -1018,11 +1032,13 @@ class WorkEngine:
                 status_detail=f"no registered executor for {work.work_type.value}",
             )
             self._store.save(failed, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=failed,
                 kind=WorkDeliveryKind.FAILURE,
-                message=failed.status_detail or "Background work failed.",
+                summary=failed.status_detail or "Background work failed.",
                 event_key=f"failure:{failed.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(work.work_id, failed.state, progressed=True)
 
@@ -1183,11 +1199,12 @@ class WorkEngine:
             )
             self._store.save(completed, expected_version=work.version)
             self._store.clear_sensitive_inputs(work.work_id)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=completed,
                 kind=WorkDeliveryKind.COMPLETION,
-                message=decision.summary,
+                summary=decision.summary,
                 event_key="completion",
+                system_outcome_kind="completed",
             )
             return WorkAdvanceResult(work.work_id, completed.state, progressed=True)
 
@@ -1231,11 +1248,13 @@ class WorkEngine:
                 status_detail=owner_question,
             )
             self._store.save(waiting, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=waiting,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=owner_question,
+                summary=owner_question,
                 event_key=f"owner:{waiting.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
             return WorkAdvanceResult(
                 work.work_id,
@@ -1398,11 +1417,12 @@ class WorkEngine:
             blocker_digest = hashlib.sha256(
                 f"{exc.blocker_code}:{exc.reason}".encode()
             ).hexdigest()[:24]
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.RESOURCE_BLOCKER,
-                message=exc.reason,
+                summary=exc.reason,
                 event_key=f"executor-resource:{blocker_digest}",
+                system_outcome_kind="temporary_resource",
             )
             return WorkAdvanceResult(
                 saved.work_id,
@@ -1433,11 +1453,13 @@ class WorkEngine:
             )
             saved = self._store.save(failed, expected_version=latest.version)
             self._store.clear_sensitive_inputs(saved.work_id)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.FAILURE,
-                message=exc.reason,
+                summary=exc.reason,
                 event_key=f"failure:{saved.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(
                 saved.work_id,
@@ -1469,11 +1491,13 @@ class WorkEngine:
                 current_step_id=step.step_id,
             )
             saved = self._store.save(waiting, expected_version=latest.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=exc.question,
+                summary=exc.question,
                 event_key=f"owner:{saved.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
             return WorkAdvanceResult(
                 saved.work_id,
@@ -1532,11 +1556,13 @@ class WorkEngine:
         )
         saved = self._store.save(failed, expected_version=work.version)
         self._store.clear_sensitive_inputs(saved.work_id)
-        self._store.enqueue_delivery(
+        self._enqueue_owner_delivery(
             work=saved,
             kind=WorkDeliveryKind.FAILURE,
-            message=normalized,
+            summary=normalized,
             event_key=f"failure:{saved.version}",
+            terminal=True,
+            system_outcome_kind="terminal",
         )
         return saved
 
