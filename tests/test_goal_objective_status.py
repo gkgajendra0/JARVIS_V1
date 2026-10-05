@@ -15,6 +15,7 @@ from jarvis.goal_intelligence.models import (
     PlanNodeV1,
 )
 from jarvis.goal_intelligence.status import (
+    ObjectiveChangeStatus,
     ObjectiveOverallState,
     ObjectivePhase,
     OwnerObjectiveStatusResolver,
@@ -185,3 +186,60 @@ def test_cancelled_goal_is_not_returned_as_active_objective(tmp_path) -> None:
     resolver = OwnerObjectiveStatusResolver(goals=goals, changes=changes)
 
     assert resolver.list_active() == ()
+
+
+def test_lineage_integrity_failure_blocks_objective_projection(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    resolver = OwnerObjectiveStatusResolver(
+        goals=GoalStore(work),
+        changes=ChangeStore(work),
+    )
+    change = ObjectiveChangeStatus(
+        change_id="change_integrity",
+        state=ChangeState.OBSERVING.value,
+        work=(),
+        pending_gate_ids=(),
+        activation_present=True,
+        external_acceptance_required=True,
+        external_acceptance_work_id="work_acceptance",
+        external_acceptance_work_state="completed",
+        external_acceptance_verdict="pass",
+        lineage_complete=False,
+        lineage_error="CapabilityAcquisitionLineageError",
+    )
+
+    overall, phase, blocker = resolver._status_for_change(change)
+
+    assert overall is ObjectiveOverallState.BLOCKED
+    assert phase is ObjectivePhase.BLOCKED
+    assert blocker is not None
+    assert blocker.kind == "lineage_integrity"
+    assert blocker.owner_action_required is False
+
+
+def test_failed_external_acceptance_blocks_objective_projection(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    resolver = OwnerObjectiveStatusResolver(
+        goals=GoalStore(work),
+        changes=ChangeStore(work),
+    )
+    change = ObjectiveChangeStatus(
+        change_id="change_acceptance",
+        state=ChangeState.OBSERVING.value,
+        work=(),
+        pending_gate_ids=(),
+        activation_present=True,
+        external_acceptance_required=True,
+        external_acceptance_work_id="work_acceptance",
+        external_acceptance_work_state="completed",
+        external_acceptance_verdict="fail",
+        lineage_complete=False,
+        lineage_error=None,
+    )
+
+    overall, phase, blocker = resolver._status_for_change(change)
+
+    assert overall is ObjectiveOverallState.BLOCKED
+    assert phase is ObjectivePhase.BLOCKED
+    assert blocker is not None
+    assert blocker.kind == "external_acceptance_failed"
