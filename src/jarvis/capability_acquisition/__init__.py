@@ -95,6 +95,7 @@ from .workflow import (
 )
 
 __all__ = [
+    "OWNER_CAPABILITY_ACQUISITION_PROCESS",
     "AcquisitionCandidateEvaluationV1",
     "AcquisitionCandidateV1",
     "AcquisitionContextProvider",
@@ -135,7 +136,6 @@ __all__ = [
     "CustomBuildCapabilitySourceAdapter",
     "ExistingCapabilitySourceAdapter",
     "McpCapabilitySourceAdapter",
-    "OWNER_CAPABILITY_ACQUISITION_PROCESS",
     "OpenApiCapabilitySourceAdapter",
     "OwnerCapabilityGoalV1",
     "OwnerConfiguredCapabilitySourceAdapter",
