@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from re import IGNORECASE, compile as re_compile
+from re import IGNORECASE
+from re import compile as re_compile
 
 from livekit.agents import RunContext, function_tool
 
@@ -18,7 +19,6 @@ from jarvis.work.estimates import estimate_work
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
-
 
 _ACTIVATE_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\b(?:activate|enable)\b|"
