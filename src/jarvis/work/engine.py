@@ -244,7 +244,9 @@ class WorkEngine:
             WorkDeliveryKind.FAILURE: OwnerCommunicationKind.FAILURE,
         }.get(kind)
         if communication_kind is None:
-            raise ValueError(f"unsupported WorkEngine owner delivery kind: {kind.value}")
+            raise ValueError(
+                f"unsupported WorkEngine owner delivery kind: {kind.value}"
+            )
 
         governed_child = self._governed_child(work)
         if governed_child and communication_kind in {
