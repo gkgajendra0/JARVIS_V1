@@ -69,7 +69,10 @@ class OwnerCommunicationIntentV1:
             raise ValueError("event_key must not be empty")
         if not normalized_summary:
             raise ValueError("summary must not be empty")
-        if kind in {OwnerCommunicationKind.OWNER_INPUT, OwnerCommunicationKind.CHANGE_GATE}:
+        if kind in {
+            OwnerCommunicationKind.OWNER_INPUT,
+            OwnerCommunicationKind.CHANGE_GATE,
+        }:
             owner_action_required = True
         if kind is OwnerCommunicationKind.CHANGE_GATE:
             if not str(gate_id or "").strip():
