@@ -4,6 +4,10 @@ import pytest
 
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.goal_intelligence.ledgers import (
+    build_progress_ledger,
+    build_task_ledger,
+)
 from jarvis.goal_intelligence.models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
@@ -301,3 +305,67 @@ def test_objective_workspace_rejects_unknown_goal_and_split_truth(
             change_store=changes,
             work_store=other_work,
         )
+
+
+def test_task_and_progress_ledgers_derive_from_same_workspace(tmp_path: Path) -> None:
+    state = _scenario(tmp_path / "ledger-work.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+
+    task = build_task_ledger(workspace)
+    progress = build_progress_ledger(workspace)
+
+    assert task.goal_id == state["goal"].goal_id
+    assert task.objective == "Open Hotstar, search The Martian and play it."
+    assert task.desired_outcome == (
+        "Play The Martian on the owner's Hisense television."
+    )
+    assert task.success_criteria == ("movie_playing_on_target_tv",)
+    assert task.targets[0]["canonical_name"] == "Hisense U7N"
+    assert "strategy:vidaa_mqtt_tls" in task.current_strategy
+    assert "exact VIDAA pairing handshake" in task.assumptions
+    assert (
+        "architecture approvals remain artifact-bound"
+        in task.authority_boundaries
+    )
+    assert task.source_workspace_digest == workspace.digest
+    assert len(task.digest) == 64
+
+    assert progress.goal_id == state["goal"].goal_id
+    assert progress.phase == "research"
+    assert progress.active_specialist == "Research"
+    assert progress.active_work_id == state["research"].work_id
+    assert progress.blocker_kind == "temporary_resource"
+    assert progress.owner_action_required is False
+    assert progress.current_plan_valid is True
+    assert progress.next_legal_actions == ("WAIT_RESOURCE", "RETRY")
+    assert progress.source_workspace_digest == workspace.digest
+    assert len(progress.digest) == 64
+
+
+def test_ledgers_are_restart_deterministic(tmp_path: Path) -> None:
+    path = tmp_path / "ledger-restart.sqlite3"
+    state = _scenario(path)
+    first_workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    first = (
+        build_task_ledger(first_workspace),
+        build_progress_ledger(first_workspace),
+    )
+
+    work, goals, changes = _stores(path)
+    reopened_workspace = ObjectiveWorkspaceProjector(
+        goal_store=goals,
+        change_store=changes,
+        work_store=work,
+    ).project(state["goal"].goal_id)
+    reopened = (
+        build_task_ledger(reopened_workspace),
+        build_progress_ledger(reopened_workspace),
+    )
+
+    assert reopened == first
