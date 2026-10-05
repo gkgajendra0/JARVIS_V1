@@ -38,6 +38,10 @@ def inspect_existing_objective(
     expected_capability_family: str | None = None,
 ) -> dict[str, object]:
     path = pathlib.Path(store_path).expanduser().resolve()
+    if not path.is_file():
+        raise ExistingObjectiveLineageError(
+            f"canonical Work database does not exist: {path}"
+        )
     work = SQLiteWorkStore(
         path,
         payload_codec=build_default_work_payload_codec(path),
@@ -68,10 +72,17 @@ def inspect_existing_objective(
     snapshot = controller.inspect(lineage)
 
     target = " ".join(str(expected_target or "").split()).strip()
-    if target and target not in snapshot.target_names:
-        raise ExistingObjectiveLineageError(
-            f"expected target is not canonical for this objective: {target}"
+    if target:
+        target_key = target.casefold()
+        target_matches = any(
+            target_key in candidate.casefold()
+            or candidate.casefold() in target_key
+            for candidate in snapshot.target_names
         )
+        if not target_matches:
+            raise ExistingObjectiveLineageError(
+                f"expected target is not canonical for this objective: {target}"
+            )
     family = " ".join(str(expected_capability_family or "").split()).strip()
     if family and family not in snapshot.capability_families:
         raise ExistingObjectiveLineageError(
