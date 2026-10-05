@@ -660,7 +660,17 @@ def test_supervisor_retry_reopens_same_change_without_forging_owner_intent(
         status_detail="research servers are currently overloaded",
     )
     store.save(failed, expected_version=work.version)
-    coordinator.reconcile_for_work(work.work_id)
+
+    # Reproduce a persisted legacy state from before retryable failures stopped
+    # collapsing the parent EngineeringChange. Current coordinator behavior correctly
+    # keeps retryable work under RESEARCHING, so this historical FAILED state must be
+    # constructed explicitly for the Supervisor recovery regression.
+    current = changes.require(change.change_id)
+    changes.transition(
+        current.change_id,
+        ChangeState.FAILED,
+        expected_version=current.version,
+    )
     assert changes.require(change.change_id).state is ChangeState.FAILED
 
     runtime = object.__new__(WorkRuntime)
