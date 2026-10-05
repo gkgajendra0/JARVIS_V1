@@ -60,6 +60,7 @@ from .phase9 import Phase9GoalBridge
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
 from .service import GoalOrchestrator, SpecialistActionDispatch
+from .status import OwnerObjectiveStatusResolver
 from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .world import EntityResolver, WorldRegistry
@@ -163,6 +164,7 @@ class GiccApplyRuntime:
     dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
     capability_runtime: CapabilityRuntime
+    objective_status: OwnerObjectiveStatusResolver
     replan_controller: ReplanController | None = None
     change_store: ChangeStore | None = None
     monitor_processor: MonitorEventProcessor | None = None
@@ -790,6 +792,10 @@ def build_gicc_apply_runtime(
         coordinator=coordinator,
         dispatcher=dispatcher,
         telemetry=telemetry,
+        objective_status=OwnerObjectiveStatusResolver(
+            goals=store,
+            changes=work_runtime.changes.store,
+        ),
         replan_controller=ReplanController(
             store=store,
             planner=planner,
