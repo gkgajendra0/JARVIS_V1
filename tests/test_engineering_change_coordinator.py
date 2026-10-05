@@ -402,6 +402,21 @@ def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -
         }
     )
     work.save_step(completed_step)
+
+    # A later completed bookkeeping step must not hide the DevelopmentEngine result
+    # that actually explains why this WorkItem failed.
+    bookkeeping = WorkStep(
+        work_id=running.work_id,
+        kind="status_snapshot",
+        summary="Record terminal status bookkeeping",
+    )
+    work.add_step(bookkeeping)
+    work.save_step(
+        bookkeeping.start().complete(
+            {"status": "owner_notification_enqueued"}
+        )
+    )
+
     failed = work.save(
         running.transition(
             WorkState.FAILED,
