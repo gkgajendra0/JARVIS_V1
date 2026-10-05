@@ -321,7 +321,7 @@ class ExistingObjectiveResumeController:
             (
                 artifact
                 for artifact in change.artifacts
-                if artifact.artifact_id in set(workspace.current_architecture_refs)
+                if artifact.artifact_id == change.current_architecture_artifact_id
                 and artifact.kind == "architecture"
             ),
             None,
