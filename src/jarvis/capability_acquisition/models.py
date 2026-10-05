@@ -6,8 +6,8 @@ import math
 import re
 import time
 from dataclasses import dataclass
-from urllib.parse import unquote, urlparse
 from enum import Enum
+from urllib.parse import unquote, urlparse
 
 from jarvis.capability_registry.contracts import StrictSemVer
 from jarvis.engineering_substrate.canonical import canonical_digest
