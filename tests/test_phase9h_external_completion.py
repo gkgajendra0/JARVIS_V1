@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from jarvis.capability_acquisition.external_acceptance import (
+    ExternalAcceptanceInvokeExecutor,
     external_acceptance_completion_guard,
 )
-from jarvis.work.engine import WorkActionRegistry, WorkEngine
+from jarvis.work.engine import (
+    WorkActionRegistry,
+    WorkEngine,
+    WorkOwnerInputRequired,
+)
 from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_protected_work_payload_codec
@@ -179,7 +185,7 @@ def test_sensitive_owner_input_is_cleared_on_cancel(tmp_path) -> None:
     assert store.pop_sensitive_input(item.work_id, "pairing_pin") is None
 
 
-def test_external_acceptance_guard_allows_explicit_owner_decline() -> None:
+def test_external_acceptance_guard_keeps_owner_decline_pending() -> None:
     work_id = "work-external-decline"
     steps = (
         _completed_step(work_id, "external_acceptance_inspect", {"inspected": True}),
@@ -191,7 +197,70 @@ def test_external_acceptance_guard_allows_explicit_owner_decline() -> None:
         ),
     )
 
-    assert external_acceptance_completion_guard(steps) == (True, None)
+    assert external_acceptance_completion_guard(steps) == (
+        False,
+        "external acceptance remains pending after owner decline",
+    )
+
+
+@pytest.mark.asyncio
+async def test_external_acceptance_decline_waits_for_same_owner_authorization(
+    tmp_path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "decline.sqlite3")
+    item = store.create(
+        WorkItem(
+            request="validate a real external capability",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id="phase9-external:change-demo",
+            source_turn_id="activation-demo",
+            state=WorkState.RUNNING,
+        )
+    )
+    prepared = _completed_step(
+        item.work_id,
+        "external_acceptance_prepare",
+        {
+            "prepared": True,
+            "request_id": "request-demo",
+            "request_digest": "r" * 64,
+            "operation": "play",
+            "device_identity": "Hisense U7N",
+        },
+    )
+    store.add_step(prepared)
+    owner = _completed_step(
+        item.work_id,
+        "owner_input",
+        {
+            "input_key": "external_acceptance_authorize:request-demo",
+            "response": "no",
+        },
+    )
+    store.add_step(owner)
+
+    class Resolver:
+        def __init__(self):
+            self.store = SimpleNamespace(work=store)
+
+        def context_for(self, work_id):
+            assert work_id == item.work_id
+            return SimpleNamespace()
+
+    class Runtime:
+        def execute_operation(self, **kwargs):
+            raise AssertionError(f"declined live effect must not execute: {kwargs}")
+
+    executor = ExternalAcceptanceInvokeExecutor(Resolver(), Runtime())
+
+    with pytest.raises(WorkOwnerInputRequired) as exc:
+        await executor.execute(
+            work=item,
+            parameters={"operation": "play", "parameters": {}},
+        )
+
+    assert exc.value.input_key == "external_acceptance_authorize:request-demo"
+    assert exc.value.resume_context["kind"] == "live_acceptance_authorization"
 
 
 def test_external_acceptance_guard_requires_durable_real_world_evidence() -> None:
