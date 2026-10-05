@@ -329,6 +329,158 @@ def test_development_can_reopen_governed_architecture_research(tmp_path) -> None
     assert revision.payload["source_attempt"] == 2
 
 
+def test_revision_research_compatibility_recovery_starts_fresh_attempt(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    coordinator = ChangeCoordinator(changes, RecordingBackend())
+
+    change = coordinator.start("Build media adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "transport": "vidaa_mqtt_tls",
+            "target_vendor": "hisense",
+            "target_platform": "vidaa",
+        },
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+    )
+    coordinator.reconcile(change.change_id)
+
+    development = next(
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "development"
+    )
+    changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="The approved dependency evidence needs governed re-research.",
+    )
+    coordinator.reconcile(change.change_id)
+    source2 = [
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ][-1]
+    assert source2.attempt == 2
+
+    item = work.require(source2.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    first = WorkStep(
+        work_id=running.work_id,
+        kind="brain_reasoning",
+        summary="JARVIS brain reasoning failed",
+    )
+    work.add_step(first)
+    work.save_step(
+        first.start().fail(
+            "ChatGPTPlanHTTPError: Our servers are currently overloaded. "
+            "Please try again later."
+        )
+    )
+    second = WorkStep(
+        work_id=running.work_id,
+        kind="acq_verify_pypi_sdk",
+        summary="Verify candidate",
+    )
+    work.add_step(second)
+    work.save_step(
+        second.start().fail(
+            "DependencyPolicyError: package name must be a Python distribution "
+            "name, not a URL/path"
+        )
+    )
+    third = WorkStep(
+        work_id=running.work_id,
+        kind="brain_reasoning",
+        summary="JARVIS brain reasoning failed",
+    )
+    work.add_step(third)
+    work.save_step(
+        third.start().fail(
+            "ChatGPTPlanHTTPError: Our servers are currently overloaded. "
+            "Please try again later."
+        )
+    )
+    work.save(
+        running.transition(
+            WorkState.FAILED,
+            status_detail=(
+                "brain reasoning failed: ChatGPTPlanHTTPError: "
+                "Our servers are currently overloaded. Please try again later."
+            ),
+            current_step_id=third.step_id,
+        ),
+        expected_version=running.version,
+    )
+    coordinator.reconcile_for_work(source2.work_id)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+
+    recovered = changes.reopen_recoverable_architecture_revision_failures(
+        recovery_generation="phase9-research-provider-sdk-v1",
+    )
+    assert recovered == (change.change_id,)
+    assert changes.require(change.change_id).state is ChangeState.RESEARCHING
+
+    revision = changes.latest_artifact(
+        change.change_id,
+        "architecture_revision_request",
+    )
+    assert revision is not None
+    assert revision.payload["source_attempt"] == 3
+    recovery = revision.payload["compatibility_recovery"]
+    assert recovery["failed_work_id"] == source2.work_id
+    assert recovery["failure_kinds"] == [
+        "legacy_pypi_url_identity",
+        "provider_overload",
+    ]
+
+    coordinator.reconcile(change.change_id)
+    research_stages = [
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ]
+    assert [stage.attempt for stage in research_stages] == [1, 2, 3]
+    source3 = research_stages[-1]
+    assert source3.work_id != source2.work_id
+    assert work.require(source2.work_id).state is WorkState.FAILED
+    replacement = work.require(source3.work_id)
+    assert replacement.state is WorkState.QUEUED
+    assert '"target_vendor":"hisense"' in replacement.request
+    assert '"target_platform":"vidaa"' in replacement.request
+    assert "Preserve the owner target semantics" in replacement.request
+
+    assert (
+        changes.reopen_recoverable_architecture_revision_failures(
+            recovery_generation="phase9-research-provider-sdk-v1",
+        )
+        == ()
+    )
+
+
 def test_failed_research_is_recorded_without_starting_development(tmp_path) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     changes = ChangeStore(work)
