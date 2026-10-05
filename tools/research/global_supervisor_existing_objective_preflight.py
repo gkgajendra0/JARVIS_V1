@@ -11,6 +11,7 @@ from jarvis.autonomy.existing_objective import (
     ExistingObjectiveLineageError,
     ExistingObjectiveLineageV1,
     ExistingObjectiveResumeController,
+    ExistingObjectiveResumeDisposition,
 )
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
@@ -70,6 +71,7 @@ def inspect_existing_objective(
         cutover=cutover,
     )
     snapshot = controller.inspect(lineage)
+    workspace = projector.project(lineage.goal_id)
 
     target = " ".join(str(expected_target or "").split()).strip()
     if target:
@@ -88,11 +90,131 @@ def inspect_existing_objective(
             "expected capability family is not canonical for this objective: " + family
         )
 
+    work_by_id = {item.work_id: item for item in workspace.work_items}
+    changes_report = []
+    for item in workspace.changes:
+        exact_gap_link = any(
+            artifact.kind == "gicc_capability_gap_link"
+            and str(artifact.payload.get("motivating_goal_id") or "").strip()
+            == lineage.goal_id
+            and str(artifact.payload.get("gap_id") or "").strip() == lineage.gap_id
+            for artifact in item.artifacts
+        )
+        changes_report.append(
+            {
+                "change_id": item.change_id,
+                "process_key": item.process_key,
+                "state": item.state,
+                "updated_at": item.updated_at,
+                "current_architecture_artifact_id": (
+                    item.current_architecture_artifact_id
+                ),
+                "exact_gap_link": exact_gap_link,
+            }
+        )
+
+    requested_change = next(
+        item for item in workspace.changes if item.change_id == lineage.change_id
+    )
+    stages_report = []
+    for stage in requested_change.stages:
+        work_item = work_by_id.get(stage.work_id)
+        stages_report.append(
+            {
+                "stage_key": stage.stage_key,
+                "attempt": stage.attempt,
+                "work_id": stage.work_id,
+                "work_state": None if work_item is None else work_item.state,
+                "work_outcome": (
+                    None if work_item is None else work_item.system_outcome.kind
+                ),
+                "work_reason": (
+                    None if work_item is None else work_item.system_outcome.reason
+                ),
+                "authoritative": stage.authoritative,
+                "status": stage.status,
+                "superseded_by_attempt": stage.superseded_by_attempt,
+                "plan_artifact_id": stage.plan_artifact_id,
+                "produced_artifact_ids": list(stage.produced_artifact_ids),
+            }
+        )
+
+    milestone_kinds = (
+        "gicc_capability_gap_link",
+        "architecture",
+        "architecture_revision_request",
+        "development_engine_outcome",
+        "acceptance",
+        "capability_candidate",
+        "capability_candidate_verification",
+        "capability_package_admission",
+        "capability_lifecycle_proposal",
+        "capability_lifecycle_activation",
+        "capability_lifecycle_disable",
+        "capability_external_acceptance_binding",
+        "capability_external_acceptance",
+    )
+    milestones = {}
+    for kind in milestone_kinds:
+        artifact = changes.latest_artifact(lineage.change_id, kind)
+        milestones[kind] = (
+            None
+            if artifact is None
+            else {
+                "artifact_id": artifact.artifact_id,
+                "digest": artifact.digest,
+                "revision": artifact.revision,
+            }
+        )
+
+    continuations = [
+        {
+            "continuation_id": item.record_id,
+            "plan_id": item.payload.get("plan_id"),
+            "state": item.payload.get("state"),
+            "blocked_by_type": item.payload.get("blocked_by_type"),
+            "blocked_by_id": item.payload.get("blocked_by_id"),
+            "work_ids": list(item.payload.get("work_ids") or ()),
+        }
+        for item in workspace.continuations
+    ]
+
+    status = "PASS"
+    if snapshot.resume_disposition in {
+        ExistingObjectiveResumeDisposition.STARTUP_RECOVERY_REQUIRED,
+        ExistingObjectiveResumeDisposition.FAILED_GOVERNING_CHANGE,
+    }:
+        status = "RECOVERY_REQUIRED"
+    elif snapshot.resume_disposition in {
+        ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE,
+        ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT,
+    }:
+        status = "BLOCKED"
+
     return {
-        "status": "PASS",
+        "status": status,
         "mutation_performed": False,
         "store_path": str(path),
         "snapshot": snapshot.canonical_payload() | {"digest": snapshot.digest},
+        "diagnostics": {
+            "goal": {
+                "goal_id": workspace.goal.record_id,
+                "state": workspace.goal.payload.get("state"),
+                "current_plan_id": (
+                    None if workspace.plan is None else workspace.plan.record_id
+                ),
+                "current_plan_state": (
+                    None
+                    if workspace.plan is None
+                    else workspace.plan.payload.get("state")
+                ),
+            },
+            "linked_changes": changes_report,
+            "continuations": continuations,
+            "requested_change_stages": stages_report,
+            "requested_change_milestones": milestones,
+            "workspace_observed_blockers": list(workspace.observed_blockers),
+        },
     }
 
 
@@ -153,7 +275,7 @@ def main() -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
-    return 0
+    return 2 if report.get("status") == "BLOCKED" else 0
 
 
 if __name__ == "__main__":
