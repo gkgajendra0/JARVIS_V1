@@ -7,11 +7,14 @@ import json
 import logging
 from dataclasses import dataclass, field, replace
 
+from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
+from jarvis.autonomy.mode import AutonomyMode
 from jarvis.autonomy.owner_communication import (
     OwnerCommunicationIntentV1,
     OwnerCommunicationKind,
     SupervisorOwnerCommunication,
 )
+from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.lineage import (
@@ -68,6 +71,7 @@ from .service import GoalOrchestrator, SpecialistActionDispatch
 from .status import OwnerObjectiveStatusResolver
 from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
+from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry
 
 LOGGER = logging.getLogger(__name__)
@@ -174,6 +178,8 @@ class GiccApplyRuntime:
     change_store: ChangeStore | None = None
     monitor_processor: MonitorEventProcessor | None = None
     monitor_bus: MonitorObservationBus | None = None
+    supervisor_cutover: SupervisorCutoverController | None = None
+    existing_objective_resume: ExistingObjectiveResumeController | None = None
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _monitor_subscription_id: str | None = field(default=None, init=False, repr=False)
@@ -630,6 +636,20 @@ class GiccApplyRuntime:
         for goal in active:
             before_goal = self.store.get_goal(goal.goal_id)
             before_plan = self.store.latest_plan_for_goal(goal.goal_id)
+            if (
+                goal.state is GoalState.WAITING_CAPABILITY
+                and self.supervisor_cutover is not None
+            ):
+                cutover = self.supervisor_cutover.coordinate(goal.goal_id)
+                self.telemetry.emit(
+                    "global_supervisor_cutover_observed",
+                    goal_id=goal.goal_id,
+                    action=None if cutover.action is None else cutover.action.value,
+                    disposition=cutover.disposition.value,
+                    accepted=cutover.accepted,
+                    mutation_performed=cutover.mutation_performed,
+                    decision_digest=cutover.decision_digest,
+                )
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
@@ -801,6 +821,26 @@ def build_gicc_apply_runtime(
         store=store,
         orchestrator=orchestrator,
     )
+    supervisor_projector = ObjectiveWorkspaceProjector(
+        goal_store=store,
+        change_store=work_runtime.changes.store,
+        work_store=work_runtime.store,
+    )
+    supervisor_mode = (
+        AutonomyMode.ASSISTED
+        if config.autonomy_mode is AutonomyMode.ASSISTED
+        else AutonomyMode.SHADOW
+    )
+    supervisor_cutover = SupervisorCutoverController(
+        projector=supervisor_projector,
+        change_coordinator=work_runtime.changes,
+        mode=supervisor_mode,
+    )
+    existing_objective_resume = ExistingObjectiveResumeController(
+        projector=supervisor_projector,
+        change_store=work_runtime.changes.store,
+        cutover=supervisor_cutover,
+    )
     return GiccApplyRuntime(
         store=store,
         world=world,
@@ -819,4 +859,6 @@ def build_gicc_apply_runtime(
         monitor_processor=monitor_processor,
         monitor_bus=DEFAULT_MONITOR_OBSERVATION_BUS,
         capability_runtime=capability_runtime,
+        supervisor_cutover=supervisor_cutover,
+        existing_objective_resume=existing_objective_resume,
     )
