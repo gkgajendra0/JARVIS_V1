@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from jarvis.capability_acquisition.external_acceptance import (
     ExternalAcceptanceInvokeExecutor,
     external_acceptance_completion_guard,
