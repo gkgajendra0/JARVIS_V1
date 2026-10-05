@@ -410,7 +410,14 @@ def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -
         ),
         expected_version=running.version,
     )
-    coordinator.reconcile_for_work(failed.work_id)
+
+    # Reproduce the startup race: DBOS can finish the child before the terminal
+    # EngineeringChange callback is installed, leaving the parent temporarily stale.
+    assert failed.state is WorkState.FAILED
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+    # Runtime startup must reconcile canonical parent truth before migrations.
+    coordinator.reconcile_active()
     assert changes.require(change.change_id).state is ChangeState.FAILED
 
     recovered = changes.reopen_recoverable_development_engine_failures(
