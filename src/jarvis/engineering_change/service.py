@@ -10,6 +10,11 @@ from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.strong_approval import StrongApprovalService
 from jarvis.authority.types import ActionAttributes, ActionOrigin
 from jarvis.authority.verifier import WindowsHelloVerifier
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.work.models import WorkDeliveryKind, WorkState
 
@@ -36,6 +41,40 @@ _BOUND_REVIEW = re.compile(
 
 class ChangeService:
     """Only accepted USER turns from this session can produce gate decisions."""
+
+    @staticmethod
+    def _enqueue_gate_delivery(
+        *,
+        store,
+        work,
+        change_id: str,
+        gate: GateChallenge,
+        artifact,
+        summary: str,
+        proposal_summary: dict[str, object],
+    ) -> None:
+        intent = OwnerCommunicationIntentV1.create(
+            kind=OwnerCommunicationKind.CHANGE_GATE,
+            event_key=(
+                f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}"
+            ),
+            summary=summary,
+            change_id=change_id,
+            work_id=work.work_id,
+            gate_id=gate.gate_id,
+            artifact_digest=artifact.digest,
+            artifact_revision=artifact.revision,
+            proposal_summary=proposal_summary,
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        if owner_message is None:
+            raise ChangeConflict("Supervisor suppressed required change gate")
+        store.work.enqueue_delivery(
+            work=work,
+            kind=WorkDeliveryKind.CHANGE_GATE,
+            message=owner_message.message,
+            event_key=owner_message.event_key,
+        )
 
     def __init__(
         self,
@@ -102,17 +141,17 @@ class ChangeService:
         gate = GateService(store, verify_owner=lambda *_: False).present(
             change_id, GateKind.ARCHITECTURE, artifact.artifact_id
         )
-        store.work.enqueue_delivery(
+        self._enqueue_gate_delivery(
+            store=store,
             work=store.work.require(research.work_id),
-            kind=WorkDeliveryKind.CHANGE_GATE,
-            message=(
-                f"Review EngineeringChange {change_id} architecture revision "
-                f"{artifact.revision}: {rendered}. Digest: {artifact.digest}. "
-                f"To decide, say 'approve architecture' if this is the only pending "
-                f"review, or 'approve {gate.gate_id}' to identify it exactly. "
-                f"Say 'reject architecture' or 'reject {gate.gate_id}' to decline."
-            ),
-            event_key=f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}",
+            change_id=change_id,
+            gate=gate,
+            artifact=artifact,
+            summary="Architecture approval is required before development can start.",
+            proposal_summary={
+                "review_kind": "architecture",
+                "proposal": payload,
+            },
         )
         return gate
 
@@ -319,20 +358,23 @@ class ChangeService:
             GateKind.PROMOTION,
             promotion.artifact_id,
         )
-        store.work.enqueue_delivery(
+        self._enqueue_gate_delivery(
+            store=store,
             work=store.work.require(work_id),
-            kind=WorkDeliveryKind.CHANGE_GATE,
-            message=(
-                f"Review EngineeringChange {change_id} exact Phase-7 promotion "
-                f"evidence for PR #{evidence.pr_number}, candidate "
-                f"{evidence.candidate_head_sha}, tested merge "
-                f"{evidence.tested_merge_sha}. Evidence SHA-256: "
-                f"{evidence.digest}. Approval must execute through "
-                f"the governed PromotionAuthorityBridge; this gate alone is not an "
-                f"execution permit. Say 'approve promotion' for a single pending "
-                f"promotion, or 'approve {gate.gate_id}'."
+            change_id=change_id,
+            gate=gate,
+            artifact=promotion,
+            summary=(
+                "Promotion approval is required for the exact verified release "
+                "evidence; the gate itself is not an execution permit."
             ),
-            event_key=f"change-gate:{change_id}:{gate.gate_id}:{promotion.digest}",
+            proposal_summary={
+                "review_kind": "promotion",
+                "pr_number": evidence.pr_number,
+                "candidate_head_sha": evidence.candidate_head_sha,
+                "tested_merge_sha": evidence.tested_merge_sha,
+                "evidence_digest": evidence.digest,
+            },
         )
         return gate
 
@@ -367,17 +409,18 @@ class ChangeService:
         gate = GateService(store, verify_owner=lambda *_: False).present(
             change_id, GateKind.ACCEPTANCE, artifact.artifact_id
         )
-        store.work.enqueue_delivery(
+        self._enqueue_gate_delivery(
+            store=store,
             work=work,
-            kind=WorkDeliveryKind.CHANGE_GATE,
-            message=(
-                f"Review EngineeringChange {change_id} acceptance: branch "
-                f"{result['branch']}, commit {result['commit']}, tests passed in "
-                f"{result['verification'].get('sandbox')}. Digest: {artifact.digest}. "
-                f"Say 'approve acceptance' for a single pending review, or "
-                f"'approve {gate.gate_id}' to identify it exactly. "
-                f"Use 'reject acceptance' or 'reject {gate.gate_id}' to decline."
-            ),
-            event_key=f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}",
+            change_id=change_id,
+            gate=gate,
+            artifact=artifact,
+            summary="Acceptance approval is required for the verified candidate.",
+            proposal_summary={
+                "review_kind": "acceptance",
+                "branch": result["branch"],
+                "commit": result["commit"],
+                "sandbox": result["verification"].get("sandbox"),
+            },
         )
         return gate
