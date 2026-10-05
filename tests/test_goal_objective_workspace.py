@@ -987,7 +987,10 @@ def test_supervisor_cutover_revalidates_and_rejects_stale_decision(
     state["changes"].add_artifact(
         change.change_id,
         kind="cutover_test_observation",
-        payload={"schema": "cutover_test_observation.v1", "value": "new canonical fact"},
+        payload={
+            "schema": "cutover_test_observation.v1",
+            "value": "new canonical fact",
+        },
     )
     before_stage_count = len(state["changes"].list_stages(change.change_id))
 
