@@ -7,12 +7,12 @@ import json
 import logging
 from dataclasses import dataclass, field, replace
 
-from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.autonomy.owner_communication import (
     OwnerCommunicationIntentV1,
     OwnerCommunicationKind,
     SupervisorOwnerCommunication,
 )
+from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
