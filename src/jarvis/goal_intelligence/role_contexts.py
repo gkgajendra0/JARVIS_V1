@@ -567,7 +567,7 @@ def build_verification_context(
         success_criteria=task.success_criteria,
         targets=task.targets,
         accepted_facts=task.accepted_facts,
-        approved_architecture=_current_architecture(workspace),
+        approved_architecture=_approved_architecture(workspace),
         development_assignment=_specialist_work_ref(development),
         development_result={} if development is None else dict(development.result),
         verification_evidence_refs=_evidence_refs(development),
