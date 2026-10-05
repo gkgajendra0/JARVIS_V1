@@ -29,6 +29,7 @@ from jarvis.goal_intelligence.ledgers import (
     build_task_ledger,
 )
 from jarvis.goal_intelligence.models import (
+    CapabilityGapState,
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     CapabilityRequirementV1,
@@ -783,6 +784,16 @@ class _SupervisorCutoverBackend:
 
 
 def _direct_goal_change_ready_for_architecture(state):
+    state["goals"].update_gap_state(
+        state["gap"].gap_id,
+        CapabilityGapState.SATISFIED,
+        expected_revision=state["gap"].revision,
+    )
+    state["goals"].resume_continuation(
+        state["continuation"].continuation_id,
+        expected_revision=state["continuation"].revision,
+        resumed_at="2026-10-05T10:04:00+00:00",
+    )
     backend = _SupervisorCutoverBackend()
     coordinator = ChangeCoordinator(state["changes"], backend)
     change = coordinator.start(
@@ -1168,6 +1179,8 @@ def test_blocked_capability_continuation_outranks_newer_direct_change(
     state = _scenario(tmp_path / "continuation-authority.sqlite3")
     competing = state["changes"].create(
         request="A newer direct change must not steal capability-continuation authority.",
+        process_key=state["changes"].DEFAULT_PROCESS.key,
+        process_version=state["changes"].DEFAULT_PROCESS.version,
         source_session_id=state["goal"].source_session_id,
         source_turn_id=state["goal"].source_turn_id,
     )
