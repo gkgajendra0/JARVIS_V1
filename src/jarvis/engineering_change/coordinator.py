@@ -334,7 +334,8 @@ class ChangeCoordinator:
                     )
                     produced_by_attempt = not (
                         revision_request is not None
-                        and revision_request.payload.get("source_attempt") == stage.attempt
+                        and revision_request.payload.get("source_attempt")
+                        == stage.attempt
                         and revision_request.payload.get(
                             "previous_architecture_artifact_id"
                         )
