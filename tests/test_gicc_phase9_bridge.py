@@ -425,10 +425,11 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
 
     admitted = bridge.admit_gap(gap, goal)
 
-    assert len(artifacts.records) == 1
-    change_id, kind, payload = artifacts.records[0]
+    assert len(artifacts.records) == 2
+    by_kind = {kind: (change_id, payload) for change_id, kind, payload in artifacts.records}
+
+    change_id, payload = by_kind["gicc_capability_gap_link"]
     assert change_id == "change-phase9"
-    assert kind == "gicc_capability_gap_link"
     assert payload["schema"] == "gicc_phase9_gap_link.v2"
     assert payload["motivating_goal_id"] == goal.goal_id
     assert payload["gap_id"] == gap.gap_id
@@ -442,6 +443,14 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     assert payload["admission_disposition"] == "engineering_change"
     assert payload["bridge_source_session_id"] == f"gicc:{goal.goal_id}"
     assert payload["bridge_source_turn_id"] == f"gap:{gap.gap_id}"
+
+    target_change_id, target = by_kind["gicc_target_context"]
+    assert target_change_id == "change-phase9"
+    assert target["schema"] == "gicc_target_context.v1"
+    assert target["motivating_goal_id"] == goal.goal_id
+    assert target["gap_id"] == gap.gap_id
+    assert target["target_entity_type"] == gap.target_entity_type
+    assert target["target_hints"] == [f"entity_type:{gap.target_entity_type}"]
 
 
 def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:
