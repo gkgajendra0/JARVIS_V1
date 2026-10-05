@@ -58,9 +58,7 @@ def reconcile_owner_change_gates(coordinator: ChangeCoordinator) -> tuple[str, .
             architecture.artifact_id,
         )
         work = store.work.require(stage.work_id)
-        event_key = (
-            f"change-gate:{change_id}:{challenge.gate_id}:{architecture.digest}"
-        )
+        event_key = f"change-gate:{change_id}:{challenge.gate_id}:{architecture.digest}"
         proposal_summary = {
             key: architecture.payload[key]
             for key in (
