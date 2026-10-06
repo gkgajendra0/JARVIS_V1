@@ -1,4 +1,6 @@
-from jarvis.engineering_change import ChangeState, ChangeStore
+import pytest
+
+from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.service import ChangeService
 from jarvis.engineering_change.gates import GateKind, GateService
@@ -221,6 +223,72 @@ def test_architecture_gate_uses_authoritative_research_attempt(tmp_path) -> None
         current.work_id
     )
     assert work.require(historical.work_id).state is WorkState.FAILED
+
+
+def test_retry_rejects_superseded_research_attempt(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "superseded-retry.sqlite3")
+    changes = ChangeStore(work)
+
+    change = changes.create(
+        request="Research a governed capability.",
+        process_key="engineering.change",
+        process_version=1,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+
+    historical = changes.link_work(
+        change.change_id,
+        "research",
+        1,
+        _research(change.change_id, 1),
+    )
+    historical_item = work.require(historical.work_id)
+    historical_running = work.save(
+        historical_item.transition(WorkState.RUNNING),
+        expected_version=historical_item.version,
+    )
+    work.save(
+        historical_running.transition(
+            WorkState.FAILED,
+            status_detail="old retryable failure",
+        ),
+        expected_version=historical_running.version,
+    )
+
+    current = changes.link_work(
+        change.change_id,
+        "research",
+        2,
+        _research(change.change_id, 2),
+    )
+    current_item = work.require(current.work_id)
+    current_running = work.save(
+        current_item.transition(WorkState.RUNNING),
+        expected_version=current_item.version,
+    )
+    work.save(
+        current_running.transition(
+            WorkState.FAILED,
+            status_detail="current failure",
+        ),
+        expected_version=current_running.version,
+    )
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=change.version,
+    )
+
+    with pytest.raises(ChangeConflict, match="superseded stage attempt"):
+        changes.reopen_failed_stage_for_retry(historical.work_id)
+
+    assert changes.require(change.change_id).state is ChangeState.FAILED
 
 
 def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
