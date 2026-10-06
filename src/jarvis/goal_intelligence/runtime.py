@@ -17,6 +17,9 @@ from jarvis.autonomy.owner_communication import (
 from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
+from jarvis.capability_acquisition.hardening import (
+    inspect_capability_workspace_invariants,
+)
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
     verify_capability_acquisition_completion,
@@ -863,6 +866,13 @@ def build_gicc_apply_runtime(
                     "Progress Ledger."
                 ),
             )
+        ),
+        invariant_guard=lambda workspace: tuple(
+            finding.code.value
+            for finding in inspect_capability_workspace_invariants(
+                workspace=workspace,
+                change_store=work_runtime.changes.store,
+            ).findings
         ),
     )
     existing_objective_resume = ExistingObjectiveResumeController(
