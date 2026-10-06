@@ -1339,6 +1339,70 @@ def test_supervisor_assisted_retry_uses_attached_canonical_retry(
     assert state["work"].require(state["research"].work_id).state is WorkState.RETRYING
 
 
+def test_supervisor_does_not_repeat_retry_after_work_enters_retrying(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "supervisor-retry-idempotent.sqlite3")
+    research = state["work"].require(state["research"].work_id)
+    state["work"].save(
+        research.transition(
+            WorkState.FAILED,
+            status_detail="research servers are currently overloaded",
+        ),
+        expected_version=research.version,
+    )
+    current_change = state["changes"].require(state["change"].change_id)
+    state["changes"].transition(
+        current_change.change_id,
+        ChangeState.FAILED,
+        expected_version=current_change.version,
+    )
+    backend = _SupervisorCutoverBackend()
+    coordinator = ChangeCoordinator(state["changes"], backend)
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    retried: list[str] = []
+
+    def retry(work_id: str) -> None:
+        retried.append(work_id)
+        state["changes"].reopen_failed_stage_for_retry(work_id)
+        item = state["work"].require(work_id)
+        state["work"].save(
+            item.transition(
+                WorkState.RETRYING,
+                status_detail="retry requested by global_supervisor",
+            ),
+            expected_version=item.version,
+        )
+
+    controller = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+        retry_failed_work=retry,
+    )
+
+    first = controller.coordinate(state["goal"].goal_id)
+    second = controller.coordinate(state["goal"].goal_id)
+
+    assert first.action is SupervisorAction.RETRY
+    assert first.disposition is SupervisorCutoverDisposition.RETRIED_WORK
+    assert first.mutation_performed is True
+    assert retried == [state["research"].work_id]
+
+    assert second.action is not SupervisorAction.RETRY
+    assert second.disposition is not SupervisorCutoverDisposition.RETRIED_WORK
+    assert retried == [state["research"].work_id]
+
+    workspace = projector.project(state["goal"].goal_id)
+    progress = build_progress_ledger(workspace)
+    assert progress.blocker_kind is None
+    assert progress.making_progress is True
+    assert "RETRY" not in progress.next_legal_actions
+
+
 def test_objective_workspace_projects_phase9_external_acceptance_work(
     tmp_path: Path,
 ) -> None:
