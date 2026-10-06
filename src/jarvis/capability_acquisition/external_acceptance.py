@@ -268,14 +268,15 @@ class ExternalAcceptanceContextResolver:
             change_id,
             "capability_lifecycle_activation",
         )
-        current_architecture_id = change.current_architecture_artifact_id
+        latest_architecture = self._store.latest_artifact(change_id, "architecture")
         latest_manifest = self._store.latest_artifact(change_id, MANIFEST_KIND)
         if (
             latest_candidate is None
             or latest_candidate.artifact_id != candidate.artifact_id
             or latest_activation is None
             or latest_activation.artifact_id != activation.artifact_id
-            or current_architecture_id != architecture.artifact_id
+            or latest_architecture is None
+            or latest_architecture.artifact_id != architecture.artifact_id
             or latest_manifest is None
             or latest_manifest.artifact_id != manifest.artifact_id
         ):
@@ -447,11 +448,7 @@ class ExternalAcceptanceCoordinator:
             "capability_candidate",
         )
         activation = self._changes.get_artifact(str(activation_artifact_id).strip())
-        architecture = (
-            None
-            if change.current_architecture_artifact_id is None
-            else self._changes.get_artifact(change.current_architecture_artifact_id)
-        )
+        architecture = self._changes.latest_artifact(change.change_id, "architecture")
         manifest = self._changes.latest_artifact(change.change_id, MANIFEST_KIND)
         goal_artifact = self._changes.latest_artifact(
             change.change_id,
@@ -631,12 +628,11 @@ class ExternalAcceptanceCoordinator:
                 disabled=disabled,
             ):
                 continue
-            architecture = (
-                None
-                if change.current_architecture_artifact_id is None
-                else self._changes.get_artifact(change.current_architecture_artifact_id)
+            architecture = self._changes.latest_artifact(
+                change.change_id,
+                "architecture",
             )
-            if architecture is None or architecture.kind != "architecture":
+            if architecture is None:
                 continue
             contracts = {
                 str(item).strip().casefold()
