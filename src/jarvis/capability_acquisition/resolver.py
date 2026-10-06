@@ -149,7 +149,10 @@ class CapabilityAcquisitionResolver:
             if existing is None:
                 by_identity[key] = candidate
                 continue
-            if candidate.source_digest is not None and existing.digest != candidate.digest:
+            if (
+                candidate.source_digest is not None
+                and existing.digest != candidate.digest
+            ):
                 raise AcquisitionResolutionError(
                     "one immutable source identity produced contradictory candidate evidence"
                 )
