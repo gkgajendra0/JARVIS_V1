@@ -1,10 +1,22 @@
 # JARVIS Global Supervisor / Governed Blackboard Architecture
 
-**Status:** Research complete; implementation plan frozen for next chat  
+**Status:** S1-S12 implemented and system-hardened; S13 live owner-machine acceptance pending  
 **Date:** 2026-10-05  
 **Branch:** `feat/development-engine-control-plane`  
 **Baseline before this documentation change:** `d88906e209e40ea09827b12413d987f7d0052a51`  
 **PR:** #252 — draft / unmerged
+
+## Implementation status
+
+The governed Blackboard / Global Supervisor implementation is now integrated through
+controlled cutover and protected by cross-lifecycle invariants, replay coverage,
+manager-only owner communication, canonical retry semantics, exact-generation
+activation/external-acceptance lineage, and same-goal continuation fencing.
+
+S13 remains intentionally open until the preserved D8 owner-machine lineage completes a
+real external acceptance and the original goal resumes. The live acceptance must use the
+existing goal/gap/EngineeringChange; it is not valid to prove S13 by creating a fresh TV
+objective.
 
 ## 1. Decision
 
