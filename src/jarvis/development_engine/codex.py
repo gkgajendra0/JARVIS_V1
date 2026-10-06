@@ -1102,7 +1102,14 @@ class CodexPlanDevelopmentEngine:
                         raise _DevelopmentResponseContractError(
                             "Codex development response remained invalid after "
                             f"{contract_repairs} bounded repair attempt(s): "
-                            f"{contract_error}"
+                            f"{contract_error}",
+                            retryable_after_repairs=bool(
+                                getattr(
+                                    contract_error,
+                                    "retryable_after_repairs",
+                                    False,
+                                )
+                            ),
                         ) from contract_error
 
                     contract_repairs += 1
