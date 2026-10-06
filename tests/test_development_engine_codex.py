@@ -371,6 +371,39 @@ async def test_codex_engine_repairs_one_malformed_directive_in_same_thread(
 
 
 @pytest.mark.asyncio
+async def test_codex_engine_parks_after_bounded_contract_repairs_are_exhausted(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_contract_cooldown",
+        [
+            CodexTurnResponse(final_response="not-json-1", usage=None),
+            CodexTurnResponse(final_response="not-json-2", usage=None),
+            CodexTurnResponse(final_response="not-json-3", usage=None),
+        ],
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert result.blocker_code == "response_contract_invalid"
+    assert result.retry_after_seconds is None
+    assert "durable cooldown" in (result.reason or "")
+    assert "non-retryable" not in (result.reason or "")
+    assert len(thread.user_messages) == 1
+    assert len(thread.external_messages) == 2
+
+
+@pytest.mark.asyncio
 async def test_codex_engine_runs_coherent_tool_batches_and_derives_completion(
     tmp_path,
 ) -> None:
