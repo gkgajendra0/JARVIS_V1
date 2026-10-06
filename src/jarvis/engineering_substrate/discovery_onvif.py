@@ -124,7 +124,7 @@ def _probe_message() -> bytes:
         "</s:Header>"
         "<s:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types>"
         "</d:Probe></s:Body></s:Envelope>"
-    ).encode("utf-8")
+    ).encode()
 
 
 def _parse_probe_matches(
