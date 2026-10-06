@@ -1813,6 +1813,22 @@ class ChangeStore:
                 raise ChangeConflict("retry stage has no EngineeringChange")
             change = self._from_row(change_row)
 
+            current_stage = db.execute(
+                """SELECT work_id, attempt
+                FROM engineering_change_stages
+                WHERE change_id=? AND stage_key=?
+                ORDER BY attempt DESC LIMIT 1""",
+                (change.change_id, stage_row["stage_key"]),
+            ).fetchone()
+            if (
+                current_stage is None
+                or current_stage["work_id"] != normalized_work_id
+                or int(current_stage["attempt"]) != int(stage_row["attempt"])
+            ):
+                raise ChangeConflict(
+                    "failed work retry belongs to a superseded stage attempt"
+                )
+
             work_row = db.execute(
                 "SELECT * FROM work_items WHERE work_id=?",
                 (normalized_work_id,),
