@@ -879,17 +879,21 @@ class ChangeStore:
             detail["development_status_detail"] = work.status_detail
             if work.state is not WorkState.FAILED:
                 return rejected(detail, "development_work_not_failed")
-            if len(work.dependencies) != 1:
-                return rejected(detail, "development_dependency_count_not_one")
+            if not work.dependencies:
+                return rejected(detail, "development_dependencies_missing")
 
-            stale_dependency_id = work.dependencies[0]
-            detail["stale_dependency_work_id"] = stale_dependency_id
-            failure_reason = " ".join(str(work.status_detail or "").split()).casefold()
-            expected_failure = (
-                "dependency did not complete successfully: " + stale_dependency_id
-            ).casefold()
-            if failure_reason != expected_failure:
+            normalized_failure = " ".join(str(work.status_detail or "").split())
+            failure_prefix = "dependency did not complete successfully: "
+            if not normalized_failure.casefold().startswith(failure_prefix):
                 return rejected(detail, "development_failure_reason_mismatch")
+            stale_dependency_id = normalized_failure[len(failure_prefix) :].strip()
+            if (
+                not stale_dependency_id
+                or stale_dependency_id not in set(work.dependencies)
+                or " " in stale_dependency_id
+            ):
+                return rejected(detail, "failed_dependency_not_bound_to_development")
+            detail["stale_dependency_work_id"] = stale_dependency_id
 
             stale_stage = db.execute(
                 """SELECT change_id, stage_key, attempt, work_id
@@ -942,6 +946,56 @@ class ChangeStore:
             detail["current_source_work_state"] = current_source_work.state.value
             if current_source_work.state is not WorkState.COMPLETED:
                 return rejected(detail, "current_source_not_completed")
+
+            dependency_evaluations: list[dict[str, object]] = []
+            for dependency_id in work.dependencies:
+                dependency_work_row = db.execute(
+                    "SELECT * FROM work_items WHERE work_id=?",
+                    (dependency_id,),
+                ).fetchone()
+                if dependency_work_row is None:
+                    return rejected(detail, "development_dependency_work_missing")
+                dependency_work = self.work._item_from_row(dependency_work_row)
+                dependency_stage = db.execute(
+                    """SELECT change_id, stage_key, attempt, work_id
+                    FROM engineering_change_stages WHERE work_id=?""",
+                    (dependency_id,),
+                ).fetchone()
+                same_source_history = bool(
+                    dependency_stage is not None
+                    and dependency_stage["change_id"] == change.change_id
+                    and dependency_stage["stage_key"] == source_stage.stage_key
+                    and int(dependency_stage["attempt"])
+                    < int(current_source["attempt"])
+                )
+                is_current_source = dependency_id == current_source["work_id"]
+                dependency_evaluations.append(
+                    {
+                        "work_id": dependency_id,
+                        "work_state": dependency_work.state.value,
+                        "stage_key": (
+                            None
+                            if dependency_stage is None
+                            else dependency_stage["stage_key"]
+                        ),
+                        "attempt": (
+                            None
+                            if dependency_stage is None
+                            else int(dependency_stage["attempt"])
+                        ),
+                        "same_source_history": same_source_history,
+                        "current_source": is_current_source,
+                    }
+                )
+                if is_current_source:
+                    if dependency_work.state is not WorkState.COMPLETED:
+                        return rejected(detail, "current_source_dependency_not_completed")
+                    continue
+                if same_source_history:
+                    continue
+                if dependency_work.state is not WorkState.COMPLETED:
+                    return rejected(detail, "unrelated_dependency_not_completed")
+            detail["dependency_evaluations"] = dependency_evaluations
 
             approval = db.execute(
                 """SELECT d.gate_id
@@ -998,8 +1052,10 @@ class ChangeStore:
         The recovery is intentionally narrow and fail-closed:
         - the change must still be FAILED;
         - the latest development attempt for the current architecture must be FAILED;
-        - it must have exactly one dependency and its failure reason must name it;
-        - that dependency must be an older source-stage attempt of the same change;
+        - its failure reason must name one dependency actually bound to that work;
+        - that failed dependency must be an older source-stage attempt of the same change;
+        - historical source dependencies may remain, but unrelated dependencies must be
+          COMPLETED;
         - the current source-stage attempt must be newer and COMPLETED; and
         - the current architecture must still have its exact canonical owner approval.
         """
@@ -1056,17 +1112,19 @@ class ChangeStore:
                 if work_row is None:
                     continue
                 work = self.work._item_from_row(work_row)
-                if work.state is not WorkState.FAILED or len(work.dependencies) != 1:
+                if work.state is not WorkState.FAILED or not work.dependencies:
                     continue
 
-                stale_dependency_id = work.dependencies[0]
-                failure_reason = " ".join(
-                    str(work.status_detail or "").split()
-                ).casefold()
-                expected_failure = (
-                    "dependency did not complete successfully: " + stale_dependency_id
-                ).casefold()
-                if failure_reason != expected_failure:
+                normalized_failure = " ".join(str(work.status_detail or "").split())
+                failure_prefix = "dependency did not complete successfully: "
+                if not normalized_failure.casefold().startswith(failure_prefix):
+                    continue
+                stale_dependency_id = normalized_failure[len(failure_prefix) :].strip()
+                if (
+                    not stale_dependency_id
+                    or stale_dependency_id not in set(work.dependencies)
+                    or " " in stale_dependency_id
+                ):
                     continue
 
                 stale_stage = db.execute(
@@ -1113,6 +1171,41 @@ class ChangeStore:
                     continue
                 current_source_work = self.work._item_from_row(current_source_work_row)
                 if current_source_work.state is not WorkState.COMPLETED:
+                    continue
+
+                dependencies_safe = True
+                for dependency_id in work.dependencies:
+                    dependency_work_row = db.execute(
+                        "SELECT * FROM work_items WHERE work_id=?",
+                        (dependency_id,),
+                    ).fetchone()
+                    if dependency_work_row is None:
+                        dependencies_safe = False
+                        break
+                    dependency_work = self.work._item_from_row(dependency_work_row)
+                    dependency_stage = db.execute(
+                        """SELECT change_id, stage_key, attempt, work_id
+                        FROM engineering_change_stages WHERE work_id=?""",
+                        (dependency_id,),
+                    ).fetchone()
+                    same_source_history = bool(
+                        dependency_stage is not None
+                        and dependency_stage["change_id"] == change.change_id
+                        and dependency_stage["stage_key"] == source_stage.stage_key
+                        and int(dependency_stage["attempt"])
+                        < int(current_source["attempt"])
+                    )
+                    if dependency_id == current_source["work_id"]:
+                        if dependency_work.state is not WorkState.COMPLETED:
+                            dependencies_safe = False
+                            break
+                        continue
+                    if same_source_history:
+                        continue
+                    if dependency_work.state is not WorkState.COMPLETED:
+                        dependencies_safe = False
+                        break
+                if not dependencies_safe:
                     continue
 
                 approval = db.execute(
@@ -1178,6 +1271,11 @@ class ChangeStore:
                         "failed_development_attempt": int(stage["attempt"]),
                         "stale_dependency_work_id": stale_dependency_id,
                         "stale_source_attempt": int(stale_stage["attempt"]),
+                        "historical_dependency_work_ids": [
+                            dependency_id
+                            for dependency_id in work.dependencies
+                            if dependency_id != current_source["work_id"]
+                        ],
                         "authoritative_source_work_id": current_source["work_id"],
                         "authoritative_source_attempt": int(current_source["attempt"]),
                         "architecture_artifact_id": architecture["artifact_id"],
