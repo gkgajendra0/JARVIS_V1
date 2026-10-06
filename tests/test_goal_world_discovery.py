@@ -91,6 +91,16 @@ class _FakeBroker:
                     ),
                 ),
             )
+        if scope.protocol == "ws_discovery":
+            return (
+                _observation(
+                    scope,
+                    stable_identity="onvif:main-gate-camera",
+                    endpoints=(
+                        "http://192.168.1.70/onvif/device_service",
+                    ),
+                ),
+            )
         return ()
 
 
@@ -135,6 +145,27 @@ def test_reviewed_discovery_deduplicates_one_media_device_without_device_name() 
     assert entities[0].canonical_name == "Discovered media player 192.168.1.40"
     assert {scope.protocol for scope in broker.scopes} == {"mdns", "ssdp"}
     assert all(scope.target_hints == () for scope in broker.scopes)
+
+
+def test_reviewed_discovery_resolves_onvif_camera_as_camera_entity() -> None:
+    broker = _FakeBroker()
+    discovery = ReviewedLocalServiceEntityDiscovery(
+        broker=broker,
+        timeout_seconds=0.5,
+    )
+
+    entities = discovery.discover(
+        mention="main gate camera",
+        expected_entity_types=("camera",),
+    )
+
+    assert len(entities) == 1
+    assert entities[0].entity_type == "camera"
+    assert entities[0].canonical_name == "Discovered camera 192.168.1.70"
+    assert {scope.protocol for scope in broker.scopes} == {"ws_discovery"}
+    assert broker.scopes[-1].allowed_device_types == (
+        "network_video_transmitter",
+    )
 
 
 def test_information_resolver_uses_world_then_discovery_before_owner(
