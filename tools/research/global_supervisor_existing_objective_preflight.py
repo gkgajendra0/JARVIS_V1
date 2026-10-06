@@ -15,6 +15,10 @@ from jarvis.autonomy.existing_objective import (
 )
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
+from jarvis.capability_acquisition.hardening import (
+    CapabilitySystemInvariantCode,
+    inspect_capability_workspace_invariants,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
@@ -72,6 +76,31 @@ def inspect_existing_objective(
     )
     snapshot = controller.inspect(lineage)
     workspace = projector.project(lineage.goal_id)
+    invariant_report = inspect_capability_workspace_invariants(
+        workspace=workspace,
+        change_store=changes,
+    )
+    recoverable_invariant_codes: set[CapabilitySystemInvariantCode] = set()
+    if (
+        "phase9-authoritative-source-dependency-v1"
+        in snapshot.startup_recovery_kinds
+    ):
+        recoverable_invariant_codes.update(
+            {
+                CapabilitySystemInvariantCode.DEVELOPMENT_MISSING_AUTHORITATIVE_SOURCE,
+                CapabilitySystemInvariantCode.DEVELOPMENT_DEPENDS_ON_STALE_SOURCE,
+            }
+        )
+    recoverable_invariant_findings = tuple(
+        finding
+        for finding in invariant_report.findings
+        if finding.code in recoverable_invariant_codes
+    )
+    unsafe_invariant_findings = tuple(
+        finding
+        for finding in invariant_report.findings
+        if finding.code not in recoverable_invariant_codes
+    )
 
     target = " ".join(str(expected_target or "").split()).strip()
     if target:
@@ -186,15 +215,15 @@ def inspect_existing_objective(
 
     status = "PASS"
     if snapshot.resume_disposition in {
+        ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE,
+        ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT,
+    } or unsafe_invariant_findings:
+        status = "BLOCKED"
+    elif snapshot.resume_disposition in {
         ExistingObjectiveResumeDisposition.STARTUP_RECOVERY_REQUIRED,
         ExistingObjectiveResumeDisposition.FAILED_GOVERNING_CHANGE,
     }:
         status = "RECOVERY_REQUIRED"
-    elif snapshot.resume_disposition in {
-        ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE,
-        ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT,
-    }:
-        status = "BLOCKED"
 
     return {
         "status": status,
@@ -219,6 +248,20 @@ def inspect_existing_objective(
             "requested_change_stages": stages_report,
             "requested_change_milestones": milestones,
             "superseded_dependency_recovery": dependency_recovery,
+            "capability_system_invariants": {
+                "passed": invariant_report.passed,
+                "digest": invariant_report.digest,
+                "findings": [
+                    finding.to_payload() for finding in invariant_report.findings
+                ],
+                "recoverable_findings": [
+                    finding.to_payload()
+                    for finding in recoverable_invariant_findings
+                ],
+                "unsafe_findings": [
+                    finding.to_payload() for finding in unsafe_invariant_findings
+                ],
+            },
             "workspace_observed_blockers": list(workspace.observed_blockers),
         },
     }
