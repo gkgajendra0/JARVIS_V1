@@ -118,6 +118,7 @@ class SupervisorCutoverController:
         supervisor: GlobalSupervisor | None = None,
         mode: AutonomyMode = AutonomyMode.SHADOW,
         retry_failed_work: Callable[[str], object] | None = None,
+        invariant_guard: Callable[[ObjectiveWorkspaceV1], tuple[str, ...]] | None = None,
     ) -> None:
         if not isinstance(projector, ObjectiveWorkspaceProjector):
             raise TypeError("projector must be ObjectiveWorkspaceProjector")
@@ -133,9 +134,12 @@ class SupervisorCutoverController:
         self._changes = change_coordinator
         if retry_failed_work is not None and not callable(retry_failed_work):
             raise TypeError("retry_failed_work must be callable when provided")
+        if invariant_guard is not None and not callable(invariant_guard):
+            raise TypeError("invariant_guard must be callable when provided")
         self._supervisor = supervisor or GlobalSupervisor()
         self._mode = mode
         self._retry_failed_work = retry_failed_work
+        self._invariant_guard = invariant_guard
 
     @staticmethod
     def _change_state(
@@ -161,14 +165,39 @@ class SupervisorCutoverController:
     ) -> SupervisorCutoverResultV1:
         before = self._projector.project(goal_id)
         context = supervisor_context_from_workspace(before)
+        change_id = context.progress_ledger.active_change_id
+        before_state = self._change_state(before, change_id)
+
+        if self._mode is AutonomyMode.ASSISTED and self._invariant_guard is not None:
+            invariant_codes = tuple(
+                dict.fromkeys(
+                    normalized
+                    for item in self._invariant_guard(before)
+                    if (normalized := " ".join(str(item).split()).strip())
+                )
+            )
+            if invariant_codes:
+                return self._result(
+                    before=before,
+                    after=before,
+                    action=None,
+                    disposition=SupervisorCutoverDisposition.REJECTED,
+                    accepted=False,
+                    reason_codes=tuple(
+                        f"system_invariant:{code}" for code in invariant_codes
+                    ),
+                    decision_digest=None,
+                    change_id=change_id,
+                    change_state_before=before_state,
+                    surfaced_gate_ids=(),
+                )
+
         selected = decision or self._supervisor.evaluate(before)
         if not isinstance(selected, SupervisorDecisionV1):
             raise TypeError("decision must be SupervisorDecisionV1")
 
         revalidated = GlobalSupervisor.validate(context, selected.proposal)
         action = revalidated.proposal.action
-        change_id = context.progress_ledger.active_change_id
-        before_state = self._change_state(before, change_id)
 
         if not revalidated.accepted:
             return self._result(
