@@ -656,6 +656,8 @@ def test_valid_candidate_binds_package_git_architecture_and_acceptance(
     assert candidate.payload["package_path"] == (
         "capability_packages/tv.control.custom.json"
     )
+    assert candidate.payload["verification_contract_ids"] == ["tv-control-contract-v1"]
+    assert "tests/test_tv_control.py" not in candidate.payload["verification_contract_ids"]
     assert candidate.payload["protected_surface"]["verdict"] == "clear"
 
     gate = gates.present(change_id, GateKind.ACCEPTANCE, acceptance.artifact_id)
