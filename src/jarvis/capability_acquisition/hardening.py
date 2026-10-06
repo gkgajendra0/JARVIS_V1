@@ -11,6 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.engineering_change import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.ledgers import build_progress_ledger
@@ -366,6 +369,26 @@ def _check_external_acceptance_binding(
     work_by_id: dict[str, WorkspaceWorkV1],
     findings: list[CapabilitySystemInvariantFindingV1],
 ) -> None:
+    architecture = next(
+        (
+            item
+            for item in change.artifacts
+            if item.kind == "architecture"
+            and item.artifact_id == change.current_architecture_artifact_id
+        ),
+        None,
+    )
+    contracts = (
+        ()
+        if architecture is None
+        else tuple(architecture.payload.get("owner_acceptance_contract_ids") or ())
+    )
+    external_required = PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in {
+        str(item).strip().casefold() for item in contracts if str(item).strip()
+    }
+    if not external_required:
+        return
+
     activations = [
         item
         for item in change.artifacts
