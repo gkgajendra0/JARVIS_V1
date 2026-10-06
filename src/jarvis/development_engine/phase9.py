@@ -783,13 +783,13 @@ class Phase9DevelopmentControlPlaneDecider:
                 parameters={},
             )
         if disposition is DevelopmentDisposition.FAILED:
-            owner_retry_after_failure = any(
+            retry_after_failure = any(
                 index > latest_index
-                and step.kind == "owner_retry"
+                and step.kind in {"owner_retry", "system_retry"}
                 and step.state.value == "completed"
                 for index, step in enumerate(steps)
             )
-            if owner_retry_after_failure:
+            if retry_after_failure:
                 return BrainDecision(
                     action=PHASE9_DEVELOPMENT_ENGINE_ACTION,
                     summary="Retry the failed governed engineering specialist.",
