@@ -1189,6 +1189,15 @@ def build_work_runtime(
         if capability_runtime is None
         else ExternalAcceptanceCoordinator(change_store, backend)
     )
+    if capability_external_acceptance is not None:
+        recovered_acceptance_work = (
+            capability_external_acceptance.reconcile_current_activations()
+        )
+        if recovered_acceptance_work:
+            LOGGER.warning(
+                "Reconciled current post-activation external acceptance mission(s): %s",
+                ", ".join(recovered_acceptance_work),
+            )
     if (
         capability_lifecycle_service is not None
         and capability_deployment_metadata is None
