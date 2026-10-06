@@ -495,10 +495,12 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
                 "architecture_revision_request",
             )
             is not None
-            and (stage := self.changes.current_stage_attempt(
-                self.change_id,
-                "acquisition",
-            ))
+            and (
+                stage := self.changes.current_stage_attempt(
+                    self.change_id,
+                    "acquisition",
+                )
+            )
             is not None
             and stage.attempt > 1
             and self.work.require(stage.work_id).state is WorkState.RUNNING
