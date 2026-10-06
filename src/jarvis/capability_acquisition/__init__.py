@@ -1,3 +1,5 @@
+"""Phase-9 owner-requested capability acquisition contracts."""
+
 from .hardening import (
     CapabilitySystemInvariantCode,
     CapabilitySystemInvariantFindingV1,
@@ -5,7 +7,6 @@ from .hardening import (
     assert_capability_system_invariants,
     inspect_capability_system_invariants,
 )
-"""Phase-9 owner-requested capability acquisition contracts."""
 
 from .activation import (
     CapabilityAcquisitionLifecycleCoordinator,
