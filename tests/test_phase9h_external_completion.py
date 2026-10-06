@@ -13,6 +13,9 @@ from jarvis.capability_acquisition.external_acceptance import (
     _require_activation_authority,
     external_acceptance_completion_guard,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.store import ChangeStore
@@ -116,7 +119,7 @@ def _acceptance_recovery_state(tmp_path: Path, *, external_required: bool = True
         payload={
             "requested_operations": ["play_media"],
             "owner_acceptance_contract_ids": (
-                ["phase9.real_external_effect.v1"] if external_required else []
+                [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT] if external_required else []
             ),
         },
     )
