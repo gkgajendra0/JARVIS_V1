@@ -395,8 +395,7 @@ class ExternalAcceptanceCoordinator:
                 change_id,
                 kind=EXTERNAL_ACCEPTANCE_BINDING_KIND,
             )
-            if artifact.payload.get("activation_artifact_id")
-            == activation.artifact_id
+            if artifact.payload.get("activation_artifact_id") == activation.artifact_id
         ]
         if same_activation:
             binding = max(
@@ -592,7 +591,9 @@ class ExternalAcceptanceCoordinator:
         """Recover exact post-activation acceptance missions after restart/crash."""
 
         if type(limit) is not int or limit <= 0:
-            raise ValueError("external acceptance reconciliation limit must be positive")
+            raise ValueError(
+                "external acceptance reconciliation limit must be positive"
+            )
         work_ids: list[str] = []
         changes = self._changes.list_by_states(
             tuple(ChangeState),
