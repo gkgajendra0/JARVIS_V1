@@ -248,6 +248,18 @@ def _check_development_binding(
     work_by_id: dict[str, WorkspaceWorkV1],
     findings: list[CapabilitySystemInvariantFindingV1],
 ) -> None:
+    if change.state not in {
+        "developing",
+        "verifying",
+        "waiting_owner_acceptance",
+        "ready_for_promotion",
+        "waiting_promotion_approval",
+        "promoted",
+        "observing",
+        "closed",
+    }:
+        return
+
     development = [
         item
         for item in change.stages
