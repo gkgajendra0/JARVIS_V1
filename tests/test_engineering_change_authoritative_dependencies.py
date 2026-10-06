@@ -752,10 +752,8 @@ def test_provisional_candidate_collision_recovery_creates_fresh_source_attempt(
         dry_run=True,
     ) == (change.change_id,)
 
-    recovered = (
-        changes.reopen_recoverable_provisional_candidate_resolution_failures(
-            recovery_generation=generation,
-        )
+    recovered = changes.reopen_recoverable_provisional_candidate_resolution_failures(
+        recovery_generation=generation,
     )
     assert recovered == (change.change_id,)
     assert changes.require(change.change_id).state is ChangeState.RESEARCHING
@@ -779,8 +777,7 @@ def test_provisional_candidate_collision_recovery_creates_fresh_source_attempt(
     events = [
         event
         for event in changes.list_events(change.change_id)
-        if event["kind"]
-        == "provisional_candidate_resolution_compatibility_reopened"
+        if event["kind"] == "provisional_candidate_resolution_compatibility_reopened"
     ]
     assert len(events) == 1
     assert events[0]["detail"]["failed_source_attempt"] == 1
