@@ -10,9 +10,10 @@ from re import compile as re_compile
 from livekit.agents import RunContext, function_tool
 
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.engineering_change.gates import GateDecision, GateKind, GateService
-from jarvis.engineering_change.models import ChangeConflict
+from jarvis.engineering_change.models import ChangeConflict, ChangeState
 from jarvis.engineering_change.service import ChangeService
 from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.work.estimates import estimate_work
@@ -32,6 +33,7 @@ _DISABLE_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\bstop\s+using\b",
     IGNORECASE,
 )
+_CHANGE_ID_REFERENCE = re_compile(r"\bchange_[a-z0-9]{8,64}\b", IGNORECASE)
 _NEGATED_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\b(?:do\s+not|don['’]?t|dont|never|not\s+now)\b.{0,48}"
     r"\b(?:activate|enable|disable|deactivate|turn|start|stop)\b",
@@ -333,11 +335,133 @@ class WorkAgentTools:
             )
         return result
 
+    def _lifecycle_change_candidates(self, *, activate: bool) -> tuple[str, ...]:
+        coordinator = getattr(self._runtime, "changes", None)
+        if coordinator is None:
+            return ()
+        store = coordinator.store
+        candidates: list[str] = []
+        for change in store.list_by_states(
+            tuple(ChangeState),
+            process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+            process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+            limit=10_000,
+        ):
+            candidate = store.latest_artifact(
+                change.change_id,
+                "capability_candidate",
+            )
+            admission = store.latest_artifact(
+                change.change_id,
+                "capability_package_admission",
+            )
+            proposal = store.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_proposal",
+            )
+            if candidate is None or admission is None or proposal is None:
+                continue
+            if (
+                proposal.payload.get("authority_required") is not True
+                or proposal.payload.get("admission_artifact_id")
+                != admission.artifact_id
+                or proposal.payload.get("admission_artifact_digest")
+                != admission.digest
+                or admission.payload.get("candidate_artifact_id")
+                != candidate.artifact_id
+                or admission.payload.get("candidate_artifact_digest")
+                != candidate.digest
+            ):
+                continue
+
+            activation = store.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_activation",
+            )
+            current_activation = bool(
+                activation is not None
+                and activation.payload.get("effective_enabled") is True
+                and activation.payload.get("candidate_artifact_id")
+                == candidate.artifact_id
+                and activation.payload.get("candidate_artifact_digest")
+                == candidate.digest
+            )
+            disabled = store.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_disable",
+            )
+            disabled_after_activation = bool(
+                current_activation
+                and disabled is not None
+                and activation is not None
+                and disabled.payload.get("candidate_artifact_id")
+                == candidate.artifact_id
+                and disabled.created_at >= activation.created_at
+                and disabled.payload.get("effective_enabled") is False
+            )
+            eligible = (
+                (not current_activation or disabled_after_activation)
+                if activate
+                else (current_activation and not disabled_after_activation)
+            )
+            if eligible:
+                candidates.append(change.change_id)
+        return tuple(sorted(candidates))
+
+    def _resolve_lifecycle_change_id(
+        self,
+        *,
+        requested_change_id: str,
+        owner_text: str,
+        activate: bool,
+    ) -> str:
+        requested = str(requested_change_id or "").strip().casefold()
+        named = tuple(
+            sorted(
+                {
+                    match.group(0).casefold()
+                    for match in _CHANGE_ID_REFERENCE.finditer(owner_text)
+                }
+            )
+        )
+        eligible = self._lifecycle_change_candidates(activate=activate)
+
+        if named:
+            if len(named) != 1:
+                raise WorkToolGroundingError(
+                    "owner lifecycle request names multiple EngineeringChanges"
+                )
+            target = named[0]
+            if requested and requested != target:
+                raise WorkToolGroundingError(
+                    "model lifecycle target conflicts with the exact owner-named change"
+                )
+            if target not in eligible:
+                raise WorkToolGroundingError(
+                    "owner-named EngineeringChange is not eligible for this lifecycle action"
+                )
+            return target
+
+        if len(eligible) != 1:
+            if not eligible:
+                raise WorkToolGroundingError(
+                    "no unique eligible acquired capability is awaiting this lifecycle action"
+                )
+            raise WorkToolGroundingError(
+                "multiple acquired capabilities are eligible; owner target is ambiguous"
+            )
+        target = eligible[0]
+        if requested and requested != target:
+            raise WorkToolGroundingError(
+                "model lifecycle target conflicts with canonical pending capability state"
+            )
+        return target
+
     @function_tool()
     async def activate_acquired_capability(
         self,
         context: RunContext,
-        change_id: str,
+        change_id: str = "",
     ) -> dict[str, object]:
         """Activate the exact admitted Phase-9 package from an explicit owner turn.
 
@@ -371,16 +495,30 @@ class WorkAgentTools:
                     "activation or enablement"
                 ),
             }
+        try:
+            target_change_id = self._resolve_lifecycle_change_id(
+                requested_change_id=change_id,
+                owner_text=turn.text,
+                activate=True,
+            )
+        except WorkToolGroundingError as exc:
+            return {
+                "ok": False,
+                "status": "capability_lifecycle_target_unresolved",
+                "change_id": str(change_id or "").strip() or None,
+                "canonical_user_turn_id": turn.turn_id,
+                "reason": str(exc),
+            }
         result = await asyncio.to_thread(
             lifecycle.activate,
-            change_id,
+            target_change_id,
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
         self._runtime.refresh_capability_catalog()
         acceptance_work = await asyncio.to_thread(
             acceptance.start,
-            change_id,
+            target_change_id,
             activation_artifact_id=result.artifact.artifact_id,
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
@@ -388,7 +526,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "enabled",
-            "change_id": change_id,
+            "change_id": target_change_id,
             "capability_id": result.capability_id,
             "package_id": result.package_id,
             "package_version": result.package_version,
@@ -408,7 +546,7 @@ class WorkAgentTools:
     async def disable_acquired_capability(
         self,
         context: RunContext,
-        change_id: str,
+        change_id: str = "",
     ) -> dict[str, object]:
         """Disable the exact admitted Phase-9 package from an explicit owner turn.
 
@@ -432,9 +570,23 @@ class WorkAgentTools:
                     "disablement"
                 ),
             }
+        try:
+            target_change_id = self._resolve_lifecycle_change_id(
+                requested_change_id=change_id,
+                owner_text=turn.text,
+                activate=False,
+            )
+        except WorkToolGroundingError as exc:
+            return {
+                "ok": False,
+                "status": "capability_lifecycle_target_unresolved",
+                "change_id": str(change_id or "").strip() or None,
+                "canonical_user_turn_id": turn.turn_id,
+                "reason": str(exc),
+            }
         result = await asyncio.to_thread(
             lifecycle.disable,
-            change_id,
+            target_change_id,
             authority_session_id=self._conversation.session_id,
             source_turn_id=turn.turn_id,
         )
@@ -442,7 +594,7 @@ class WorkAgentTools:
         return {
             "ok": True,
             "status": "disabled",
-            "change_id": change_id,
+            "change_id": target_change_id,
             "capability_id": result.capability_id,
             "package_id": result.package_id,
             "package_version": result.package_version,
