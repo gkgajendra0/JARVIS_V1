@@ -272,9 +272,7 @@ class ExistingObjectiveResumeController:
                 dry_run=True,
             )
         ):
-            startup_recovery_kinds.append(
-                "phase9-authoritative-source-dependency-v1"
-            )
+            startup_recovery_kinds.append("phase9-authoritative-source-dependency-v1")
 
         capability_completion_ready = False
         capability_completion_error: str | None = None
