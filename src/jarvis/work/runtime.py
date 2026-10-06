@@ -1152,6 +1152,20 @@ def build_work_runtime(
             ", ".join(recovered_development),
         )
 
+    recovered_dependencies = (
+        change_store.reopen_recoverable_superseded_dependency_failures(
+            recovery_generation="phase9-authoritative-source-dependency-v1",
+        )
+    )
+    for change_id in recovered_dependencies:
+        changes.reconcile(change_id)
+    if recovered_dependencies:
+        LOGGER.warning(
+            "Recovered development attempt(s) poisoned by superseded architecture-"
+            "source dependencies: %s",
+            ", ".join(recovered_dependencies),
+        )
+
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,
