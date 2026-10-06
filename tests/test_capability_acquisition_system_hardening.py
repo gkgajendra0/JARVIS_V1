@@ -40,7 +40,7 @@ from jarvis.goal_intelligence.models import (
 from jarvis.goal_intelligence.phase9 import Phase9AcquisitionRequestV2
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.goal_intelligence.workspace import ObjectiveWorkspaceProjector
-from jarvis.work.models import WorkItem, WorkPriority, WorkState
+from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -486,6 +486,66 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
         source = self.changes.current_stage_attempt(self.change_id, "acquisition")
         assert source is not None
         assert source.attempt >= 2
+
+    @precondition(
+        lambda self: (
+            self._change().state is ChangeState.RESEARCHING
+            and self.changes.latest_artifact(
+                self.change_id,
+                "architecture_revision_request",
+            )
+            is not None
+            and (stage := self.changes.current_stage_attempt(
+                self.change_id,
+                "acquisition",
+            ))
+            is not None
+            and stage.attempt > 1
+            and self.work.require(stage.work_id).state is WorkState.RUNNING
+        )
+    )
+    @rule()
+    def recover_provisional_candidate_identity_collision(self) -> None:
+        stage = self.changes.current_stage_attempt(self.change_id, "acquisition")
+        assert stage is not None
+        item = self.work.require(stage.work_id)
+        contradiction = (
+            "AcquisitionResolutionError: one immutable source identity produced "
+            "contradictory candidate evidence"
+        )
+        failed_step = WorkStep(
+            work_id=item.work_id,
+            kind="acq_resolve",
+            summary="Resolve acquisition candidates",
+        )
+        self.work.add_step(failed_step)
+        self.work.save_step(failed_step.start().fail(contradiction))
+        self.work.save(
+            item.transition(
+                WorkState.FAILED,
+                status_detail=f"step failed: acq_resolve: {contradiction}",
+            ),
+            expected_version=item.version,
+        )
+        failed = self.coordinator.reconcile(self.change_id)
+        assert failed.state is ChangeState.FAILED
+
+        recovered = (
+            self.changes.reopen_recoverable_provisional_candidate_resolution_failures(
+                recovery_generation="stateful-provisional-candidate-v1",
+            )
+        )
+        assert recovered == (self.change_id,)
+        self.coordinator.reconcile(self.change_id)
+
+        replacement = self.changes.current_stage_attempt(
+            self.change_id,
+            "acquisition",
+        )
+        assert replacement is not None
+        assert replacement.attempt == stage.attempt + 1
+        assert replacement.work_id != stage.work_id
+        assert self.work.require(stage.work_id).state is WorkState.FAILED
 
     @precondition(
         lambda self: (
