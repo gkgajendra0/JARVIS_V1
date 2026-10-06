@@ -324,7 +324,7 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
 
     manifest = changes.add_artifact(
         change_id,
-        kind="engineering_manifest",
+        kind="substrate_manifest",
         payload={
             "schema": "engineering_manifest.v1",
             "manifest_id": "manifest-hardening",
