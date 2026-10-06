@@ -445,13 +445,10 @@ class CapabilityAcquisitionReleaseBridge:
                 kind=OwnerCommunicationKind.OWNER_INPUT,
                 event_key=event_key,
                 summary=(
-                    f"Capability acquisition {change_id} is deployed and package "
-                    f"{package_id}@{package_version} passed Phase-8 admission. It "
-                    "remains disabled by design. Lifecycle proposal SHA-256: "
-                    f"{lifecycle_artifact.digest}. Explicit owner activation is "
-                    "required. Say "
-                    f"'activate acquired capability {change_id}' to continue, or "
-                    "leave it disabled."
+                    "The acquired capability is ready and passed package admission. "
+                    "It remains disabled by design until you explicitly activate it. "
+                    "Say 'activate the acquired capability' to continue, or leave it "
+                    "disabled."
                 ),
                 owner_action_required=True,
                 change_id=change_id,
