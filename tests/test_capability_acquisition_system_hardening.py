@@ -327,7 +327,8 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
     @precondition(
         lambda self: (
             (item := self._active_work()) is not None
-            and item.state in {
+            and item.state
+            in {
                 WorkState.QUEUED,
                 WorkState.RETRYING,
                 WorkState.WAITING_RESOURCE,
@@ -437,17 +438,13 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
         reconciled = self.coordinator.reconcile(self.change_id)
         assert reconciled.state is ChangeState.ARCHITECTURE_READY
 
-    @precondition(
-        lambda self: self._change().state is ChangeState.ARCHITECTURE_READY
-    )
+    @precondition(lambda self: self._change().state is ChangeState.ARCHITECTURE_READY)
     @rule()
     def owner_approves_current_architecture(self) -> None:
         self._approve_current_architecture()
         assert self._change().state is ChangeState.APPROVED_FOR_BUILD
 
-    @precondition(
-        lambda self: self._change().state is ChangeState.APPROVED_FOR_BUILD
-    )
+    @precondition(lambda self: self._change().state is ChangeState.APPROVED_FOR_BUILD)
     @rule()
     def start_governed_development(self) -> None:
         change = self.coordinator.reconcile(self.change_id)
