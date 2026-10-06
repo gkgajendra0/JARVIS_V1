@@ -58,9 +58,11 @@ def _snapshot_work_store(
     snapshot_path = pathlib.Path(guard.name) / source_path.name
     source_uri = source_path.as_uri() + "?mode=ro"
     try:
-        with sqlite3.connect(source_uri, uri=True, timeout=30.0) as source:
-            with sqlite3.connect(snapshot_path, timeout=30.0) as destination:
-                source.backup(destination)
+        with (
+            sqlite3.connect(source_uri, uri=True, timeout=30.0) as source,
+            sqlite3.connect(snapshot_path, timeout=30.0) as destination,
+        ):
+            source.backup(destination)
     except Exception:
         guard.cleanup()
         raise
