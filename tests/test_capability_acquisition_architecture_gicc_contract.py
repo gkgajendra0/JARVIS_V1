@@ -4,7 +4,11 @@ import pytest
 
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionArchitectureError,
+    _effective_owner_acceptance_contract_ids,
     _gicc_semantic_contract,
+)
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 
@@ -71,3 +75,28 @@ def test_gicc_semantic_contract_rejects_unknown_future_link_version() -> None:
             change_id="change-tv",
             goal=_goal(),
         )
+
+
+def test_gicc_semantic_build_always_requires_real_external_acceptance() -> None:
+    contract = _gicc_semantic_contract(
+        FakeStore("gicc_phase9_gap_link.v2"),
+        change_id="change-tv",
+        goal=_goal(),
+    )
+    assert contract is not None
+
+    contracts = _effective_owner_acceptance_contract_ids(
+        (),
+        semantic_contract=contract,
+    )
+
+    assert contracts == (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,)
+
+
+def test_non_gicc_architecture_preserves_declared_acceptance_contracts() -> None:
+    contracts = _effective_owner_acceptance_contract_ids(
+        ("owner.manual-check.v1",),
+        semantic_contract=None,
+    )
+
+    assert contracts == ("owner.manual-check.v1",)
