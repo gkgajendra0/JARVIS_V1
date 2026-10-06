@@ -621,6 +621,13 @@ def build_progress_ledger(workspace: ObjectiveWorkspaceV1) -> ProgressLedgerV1:
     terminal_change = bool(
         change is not None and change.state in {"failed", "rejected", "rolled_back"}
     )
+    if terminal_change and blocker_kind != "retryable":
+        blocker_kind = "terminal"
+        blocker_reason = (
+            blocker_reason
+            or f"EngineeringChange is {change.state} and cannot advance directly."
+        )
+        owner_action_required = False
     making_progress = bool(
         work is not None
         and work.state in {"running", "retrying", "completed"}
