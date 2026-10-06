@@ -643,9 +643,7 @@ def test_external_acceptance_invariant_requires_binding_when_approved() -> None:
         kind="architecture",
         artifact_id="artifact_architecture_external",
         payload={
-            "owner_acceptance_contract_ids": [
-                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-            ]
+            "owner_acceptance_contract_ids": [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT]
         },
     )
     activation = SimpleNamespace(
