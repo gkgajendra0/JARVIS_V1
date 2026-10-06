@@ -599,9 +599,7 @@ def test_completed_response_contract_failure_after_system_retry_recovers_fresh_a
         summary="Run governed engineering specialist",
     )
     work.add_step(engine_step)
-    work.save_step(
-        engine_step.start().complete({"development_result": engine_result})
-    )
+    work.save_step(engine_step.start().complete({"development_result": engine_result}))
 
     system_retry = WorkStep(
         work_id=running.work_id,
