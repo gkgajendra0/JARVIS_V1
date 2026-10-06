@@ -655,3 +655,133 @@ def test_completed_response_contract_failure_after_system_retry_recovers_fresh_a
     assert attempts[1].work_id != attempts[0].work_id
     assert work.require(attempts[0].work_id).state is WorkState.COMPLETED
     assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+
+def test_provisional_candidate_collision_recovery_creates_fresh_source_attempt(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    acquisition_process = ProcessContract(
+        key="test.owner_capability_acquisition.provisional-recovery",
+        version=1,
+        stages=(
+            ProcessStageContract(
+                stage_key="acquisition",
+                work_type=WorkType.RESEARCH,
+                role=ProcessStageRole.ARCHITECTURE_SOURCE,
+            ),
+            ProcessStageContract(
+                stage_key="development",
+                work_type=WorkType.DEVELOPMENT,
+                role=ProcessStageRole.DEVELOPMENT,
+            ),
+        ),
+    )
+    changes = ChangeStore(work, processes=(acquisition_process,))
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = changes.create(
+        request="Acquire governed media control.",
+        process_key=acquisition_process.key,
+        process_version=acquisition_process.version,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"target_family": "media_player.control"},
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="architecture_revision_request",
+        payload={
+            "previous_architecture_artifact_id": architecture.artifact_id,
+            "source_attempt": 1,
+            "reason": "Development requires a replacement dependency lock.",
+        },
+    )
+
+    source = changes.link_work(
+        change.change_id,
+        "acquisition",
+        1,
+        _research(change.change_id, 1),
+    )
+    item = work.require(source.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    contradiction = (
+        "AcquisitionResolutionError: one immutable source identity produced "
+        "contradictory candidate evidence"
+    )
+    resolve_step = WorkStep(
+        work_id=running.work_id,
+        kind="acq_resolve",
+        summary="Resolve acquisition candidates",
+    )
+    work.add_step(resolve_step)
+    work.save_step(resolve_step.start().fail(contradiction))
+    work.save(
+        running.transition(
+            WorkState.FAILED,
+            status_detail=f"step failed: acq_resolve: {contradiction}",
+        ),
+        expected_version=running.version,
+    )
+
+    current = changes.require(change.change_id)
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=current.version,
+    )
+
+    generation = "phase9-provisional-candidate-resolution-test-v1"
+    assert changes.reopen_recoverable_provisional_candidate_resolution_failures(
+        recovery_generation=generation,
+        dry_run=True,
+    ) == (change.change_id,)
+
+    recovered = (
+        changes.reopen_recoverable_provisional_candidate_resolution_failures(
+            recovery_generation=generation,
+        )
+    )
+    assert recovered == (change.change_id,)
+    assert changes.require(change.change_id).state is ChangeState.RESEARCHING
+    assert work.require(source.work_id).state is WorkState.FAILED
+
+    coordinator.reconcile(change.change_id)
+
+    attempts = [
+        stage
+        for stage in changes.list_stage_attempts(change.change_id)
+        if stage.stage_key == "acquisition"
+    ]
+    assert len(attempts) == 2
+    assert attempts[0].authoritative is False
+    assert attempts[0].superseded_by_attempt == 2
+    assert attempts[1].attempt == 2
+    assert attempts[1].authoritative is True
+    assert attempts[1].work_id != attempts[0].work_id
+    assert work.require(attempts[0].work_id).state is WorkState.FAILED
+
+    events = [
+        event
+        for event in changes.list_events(change.change_id)
+        if event["kind"]
+        == "provisional_candidate_resolution_compatibility_reopened"
+    ]
+    assert len(events) == 1
+    assert events[0]["detail"]["failed_source_attempt"] == 1
+    assert events[0]["detail"]["replacement_source_attempt"] == 2
