@@ -96,9 +96,7 @@ class _FakeBroker:
                 _observation(
                     scope,
                     stable_identity="onvif:main-gate-camera",
-                    endpoints=(
-                        "http://192.168.1.70/onvif/device_service",
-                    ),
+                    endpoints=("http://192.168.1.70/onvif/device_service",),
                 ),
             )
         return ()
@@ -163,9 +161,7 @@ def test_reviewed_discovery_resolves_onvif_camera_as_camera_entity() -> None:
     assert entities[0].entity_type == "camera"
     assert entities[0].canonical_name == "Discovered camera 192.168.1.70"
     assert {scope.protocol for scope in broker.scopes} == {"ws_discovery"}
-    assert broker.scopes[-1].allowed_device_types == (
-        "network_video_transmitter",
-    )
+    assert broker.scopes[-1].allowed_device_types == ("network_video_transmitter",)
 
 
 def test_information_resolver_uses_world_then_discovery_before_owner(
