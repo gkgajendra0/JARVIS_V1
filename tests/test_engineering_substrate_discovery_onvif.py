@@ -148,9 +148,7 @@ def test_onvif_target_hint_only_narrows_results() -> None:
     observations = broker.discover(_scope(target_hints=("maingate",)))
 
     assert len(observations) == 1
-    assert observations[0].endpoints == (
-        "http://192.168.1.70/onvif/device_service",
-    )
+    assert observations[0].endpoints == ("http://192.168.1.70/onvif/device_service",)
 
 
 def test_onvif_record_rejects_public_device_service() -> None:
