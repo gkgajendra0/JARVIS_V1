@@ -644,3 +644,181 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
     assert CapabilitySystemInvariantCode.RETRYABLE_WORK_NOT_FAILED in {
         item.code for item in report.findings
     }
+
+
+def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> None:
+    """A terminal governing change must outrank a child's forward disposition."""
+
+    work = SQLiteWorkStore(tmp_path / "terminal-precedence.sqlite3")
+    goals = GoalStore(work)
+    changes = ChangeStore(
+        work,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    backend = _Backend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    entity = goals.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="television",
+            canonical_name="Terminal Precedence Television",
+        )
+    )
+    goal = goals.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="terminal-session",
+            source_turn_id="terminal-turn",
+            exact_owner_request="Control the television.",
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Television is controlled.",
+            completion_predicates=("controlled",),
+            referenced_entity_ids=(entity.entity_id,),
+        )
+    )
+    requirement = CapabilityRequirementV1.create(
+        goal_id=goal.goal_id,
+        semantic_capability="media_player.control",
+        operation="play_media",
+        target_entity_id=entity.entity_id,
+        target_entity_type="television",
+        reason="Capability is absent.",
+    )
+    graph = goals.put_requirement_graph(
+        CapabilityRequirementGraphV1.create(
+            goal_id=goal.goal_id,
+            requirements=(requirement,),
+        )
+    )
+    gap = goals.put_gap(
+        CapabilityGapV1.create(
+            goal_id=goal.goal_id,
+            requirement_ids=graph.requirement_ids,
+            reusable_capability_family="media_player.control",
+            target_entity_type="television",
+            target_entity_id=entity.entity_id,
+            minimum_required_operations=("play_media",),
+            missing_reason_codes=("capability_missing",),
+        )
+    )
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+    change = changes.create(
+        request="Acquire television control.",
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        source_session_id=request.bridge_source_session_id,
+        source_turn_id=request.bridge_source_turn_id,
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "schema": "gicc_phase9_gap_link.v2",
+            "request_id": request.request_id,
+            "request_digest": request.digest,
+            "motivating_goal_id": goal.goal_id,
+            "gap_id": gap.gap_id,
+            "engineering_change_id": change.change_id,
+        },
+    )
+    source = WorkItem(
+        request="Completed authoritative source.",
+        work_type=OWNER_CAPABILITY_ACQUISITION_PROCESS.research_type,
+        source_session_id=f"change:{change.change_id}",
+        source_turn_id="acquisition:1",
+        state=WorkState.COMPLETED,
+    )
+    changes.link_work(change.change_id, "acquisition", 1, source)
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"schema": "terminal_precedence_architecture.v1"},
+    )
+
+    decided_at = _now()
+    gate_id = "gate_" + uuid.uuid4().hex[:16]
+    with work._lock, work._connect() as db:
+        db.execute(
+            """INSERT INTO engineering_change_gates (
+            gate_id, change_id, kind, artifact_id, artifact_digest, created_at
+            ) VALUES (?, ?, 'architecture', ?, ?, ?)""",
+            (
+                gate_id,
+                change.change_id,
+                architecture.artifact_id,
+                architecture.digest,
+                decided_at,
+            ),
+        )
+        db.execute(
+            """INSERT INTO engineering_change_decisions (
+            gate_id, approved, actor_id, source_session_id, source_turn_id,
+            request_key, decided_at
+            ) VALUES (?, 1, 'owner', 'terminal-session', 'approval-turn', ?, ?)""",
+            (f"terminal:{architecture.artifact_id}", decided_at),
+        )
+        db.execute(
+            """UPDATE engineering_changes
+            SET state=?, version=version+1, updated_at=?
+            WHERE change_id=?""",
+            (
+                ChangeState.APPROVED_FOR_BUILD.value,
+                decided_at,
+                change.change_id,
+            ),
+        )
+
+    developing = coordinator.reconcile(change.change_id)
+    assert developing.state is ChangeState.DEVELOPING
+    development = changes.current_stage_attempt(change.change_id, "development")
+    assert development is not None
+    item = work.require(development.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    work.save(
+        running.transition(
+            WorkState.COMPLETED,
+            status_detail="A replacement approved dependency is required.",
+            result={
+                "development_engine": {
+                    "disposition": "needs_dependency",
+                    "reason": "The approved dependency changed.",
+                }
+            },
+        ),
+        expected_version=running.version,
+    )
+    current = changes.require(change.change_id)
+    failed = changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=current.version,
+    )
+    assert failed.state is ChangeState.FAILED
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=goals,
+        change_store=changes,
+    ).project(goal.goal_id)
+    progress = build_progress_ledger(workspace)
+
+    assert progress.phase == "terminal"
+    assert progress.blocker_kind == "terminal"
+    assert progress.current_plan_valid is False
+    assert progress.next_legal_actions == ("REPLAN", "TERMINAL")
+    assert "RESUME_DEVELOPMENT" not in progress.next_legal_actions
+
+    report = inspect_capability_system_invariants(
+        goal_store=goals,
+        change_store=changes,
+        goal_id=goal.goal_id,
+    )
+    assert CapabilitySystemInvariantCode.FAILED_CHANGE_EXPOSES_FORWARD_PROGRESS not in {
+        finding.code for finding in report.findings
+    }
