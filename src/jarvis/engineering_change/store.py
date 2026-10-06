@@ -811,7 +811,9 @@ class ChangeStore:
                 (normalized_change_id,),
             ).fetchone()
             if row is None:
-                raise ChangeConflict(f"unknown EngineeringChange: {normalized_change_id}")
+                raise ChangeConflict(
+                    f"unknown EngineeringChange: {normalized_change_id}"
+                )
 
             change = self._from_row(row)
             process = self.process_contract(
@@ -859,7 +861,9 @@ class ChangeStore:
                 ),
             ).fetchone()
             if stage is None:
-                return rejected(detail, "current_architecture_development_stage_missing")
+                return rejected(
+                    detail, "current_architecture_development_stage_missing"
+                )
             detail["development_attempt"] = int(stage["attempt"])
             detail["development_work_id"] = stage["work_id"]
 
@@ -880,9 +884,7 @@ class ChangeStore:
 
             stale_dependency_id = work.dependencies[0]
             detail["stale_dependency_work_id"] = stale_dependency_id
-            failure_reason = " ".join(
-                str(work.status_detail or "").split()
-            ).casefold()
+            failure_reason = " ".join(str(work.status_detail or "").split()).casefold()
             expected_failure = (
                 "dependency did not complete successfully: " + stale_dependency_id
             ).casefold()
