@@ -989,7 +989,9 @@ class ChangeStore:
                 )
                 if is_current_source:
                     if dependency_work.state is not WorkState.COMPLETED:
-                        return rejected(detail, "current_source_dependency_not_completed")
+                        return rejected(
+                            detail, "current_source_dependency_not_completed"
+                        )
                     continue
                 if same_source_history:
                     continue
