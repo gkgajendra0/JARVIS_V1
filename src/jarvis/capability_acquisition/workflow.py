@@ -462,11 +462,18 @@ class AcquisitionResolveExecutor:
             change_id=context.change_id,
             payload=payload,
         )
+        selected = resolution.selected_candidate
         return {
             "resolved": True,
             "resolution_artifact_id": artifact.artifact_id,
             "resolution_artifact_digest": artifact.digest,
             "selected_candidate_id": resolution.selected_candidate_id,
+            "selected_candidate_strategy": (
+                None if selected is None else selected.strategy.value
+            ),
+            "selected_candidate_source_kind": (
+                None if selected is None else selected.source_kind.value
+            ),
             "candidate_count": len(resolution.candidates),
             "blocked_candidate_count": sum(
                 item.disposition.value == "blocked" for item in resolution.evaluations
@@ -635,6 +642,37 @@ class AcquisitionFinalizeExecutor:
             raise AcquisitionProtocolError(
                 "an existing reusable capability became available; engineering build is unnecessary"
             )
+
+        completed_steps = self._resolver.completed_steps(work.work_id)
+        if candidate.strategy is AcquisitionStrategy.BUILD_CUSTOM:
+            successful_research_indexes = [
+                index
+                for index, step in enumerate(completed_steps)
+                if step.kind == "research_web"
+                and step.state.value == "completed"
+                and step.observation.get("ok") is True
+            ]
+            if not successful_research_indexes:
+                raise AcquisitionProtocolError(
+                    "custom capability development requires successful current web "
+                    "research before finalization"
+                )
+            latest_resolve_index = max(
+                (
+                    index
+                    for index, step in enumerate(completed_steps)
+                    if step.kind == "acq_resolve"
+                    and step.state.value == "completed"
+                    and step.observation.get("resolved") is True
+                ),
+                default=-1,
+            )
+            if latest_resolve_index <= successful_research_indexes[-1]:
+                raise AcquisitionProtocolError(
+                    "custom capability development must re-resolve candidates after "
+                    "the latest successful web research"
+                )
+
         changed_components = tuple(parameters.get("changed_components") or ())
         changed_paths = tuple(parameters.get("changed_paths") or ())
         if not changed_components and not changed_paths:
@@ -777,7 +815,31 @@ def acquisition_completion_guard(
     if not finalized:
         return False, "capability acquisition requires a canonical acq_finalize plan"
 
-    resolve_index, _ = resolved[-1]
+    resolve_index, resolve_step = resolved[-1]
+    selected_strategy = str(
+        resolve_step.observation.get("selected_candidate_strategy") or ""
+    ).strip()
+    if selected_strategy == AcquisitionStrategy.BUILD_CUSTOM.value:
+        successful_research = [
+            index
+            for index, step in enumerate(steps)
+            if step.kind == "research_web"
+            and step.state.value == "completed"
+            and step.observation.get("ok") is True
+        ]
+        if not successful_research:
+            return (
+                False,
+                "custom capability development requires successful current web "
+                "research before completion",
+            )
+        if successful_research[-1] >= resolve_index:
+            return (
+                False,
+                "custom capability development must re-resolve after latest "
+                "successful web research",
+            )
+
     source_evidence = {
         "research_web",
         "acq_discover_local",
