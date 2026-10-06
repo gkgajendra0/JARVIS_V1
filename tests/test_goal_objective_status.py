@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_change.models import ChangeState
@@ -165,7 +168,7 @@ def test_owner_status_ignores_external_result_from_old_activation(
         change.change_id,
         kind="architecture",
         payload={
-            "owner_acceptance_contract_ids": ["phase9.real_external_effect.v1"],
+            "owner_acceptance_contract_ids": [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT],
         },
     )
     candidate = changes.add_artifact(
