@@ -107,11 +107,7 @@ def _effective_owner_acceptance_contract_ids(
     remove that end-to-end acceptance boundary.
     """
 
-    contracts = {
-        str(item).strip()
-        for item in declared
-        if str(item).strip()
-    }
+    contracts = {str(item).strip() for item in declared if str(item).strip()}
     if semantic_contract is not None:
         contracts.add(PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT)
     return tuple(sorted(contracts))
