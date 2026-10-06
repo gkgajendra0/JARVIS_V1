@@ -367,7 +367,9 @@ def _check_external_acceptance_binding(
     findings: list[CapabilitySystemInvariantFindingV1],
 ) -> None:
     results = [
-        item for item in change.artifacts if item.kind == "capability_external_acceptance"
+        item
+        for item in change.artifacts
+        if item.kind == "capability_external_acceptance"
     ]
     if not results:
         return
