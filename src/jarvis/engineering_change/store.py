@@ -865,8 +865,7 @@ class ChangeStore:
                     str(work.status_detail or "").split()
                 ).casefold()
                 expected_failure = (
-                    "dependency did not complete successfully: "
-                    + stale_dependency_id
+                    "dependency did not complete successfully: " + stale_dependency_id
                 ).casefold()
                 if failure_reason != expected_failure:
                     continue
@@ -913,9 +912,7 @@ class ChangeStore:
                 ).fetchone()
                 if current_source_work_row is None:
                     continue
-                current_source_work = self.work._item_from_row(
-                    current_source_work_row
-                )
+                current_source_work = self.work._item_from_row(current_source_work_row)
                 if current_source_work.state is not WorkState.COMPLETED:
                     continue
 
@@ -937,8 +934,7 @@ class ChangeStore:
                     continue
 
                 event_key = (
-                    "superseded-dependency-compat-recovery:"
-                    f"{generation}:{work.work_id}"
+                    f"superseded-dependency-compat-recovery:{generation}:{work.work_id}"
                 )
                 if (
                     db.execute(
