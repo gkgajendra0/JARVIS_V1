@@ -834,7 +834,10 @@ class CapabilityCandidateVerifier:
             sorted(
                 {
                     str(item).strip().casefold()
-                    for item in architecture.payload.get("verification_targets", [])
+                    for item in architecture.payload.get(
+                        "verification_contract_ids",
+                        [],
+                    )
                     if str(item).strip()
                 }
             )
