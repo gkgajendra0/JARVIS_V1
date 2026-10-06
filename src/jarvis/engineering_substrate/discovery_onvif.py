@@ -70,7 +70,9 @@ class OnvifDeviceRecord:
         if not endpoint:
             raise ValueError("ONVIF record requires endpoint reference")
         if not (sender.is_private or sender.is_link_local or sender.is_loopback):
-            raise ValueError("ONVIF response must originate from a local/private address")
+            raise ValueError(
+                "ONVIF response must originate from a local/private address"
+            )
         safe_xaddrs = tuple(
             sorted(
                 {
@@ -82,7 +84,9 @@ class OnvifDeviceRecord:
         )
         if not safe_xaddrs:
             raise ValueError("ONVIF record requires a local/private device-service URL")
-        types = tuple(sorted({str(item).strip() for item in self.types if str(item).strip()}))
+        types = tuple(
+            sorted({str(item).strip() for item in self.types if str(item).strip()})
+        )
         scopes = tuple(
             sorted({str(item).strip() for item in self.scopes if str(item).strip()})
         )
