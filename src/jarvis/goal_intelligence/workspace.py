@@ -608,6 +608,34 @@ class ObjectiveWorkspaceProjector:
             for stage in change.stages
             if not stage.authoritative
         }
+        for change in change_snapshots:
+            activations = [
+                artifact
+                for artifact in change.artifacts
+                if artifact.kind == "capability_lifecycle_activation"
+            ]
+            latest_activation = (
+                None
+                if not activations
+                else max(
+                    activations,
+                    key=lambda artifact: (artifact.revision, artifact.artifact_id),
+                )
+            )
+            for artifact in change.artifacts:
+                if artifact.kind != EXTERNAL_ACCEPTANCE_BINDING_KIND:
+                    continue
+                if (
+                    latest_activation is not None
+                    and artifact.payload.get("activation_artifact_id")
+                    == latest_activation.artifact_id
+                    and artifact.payload.get("activation_artifact_digest")
+                    == latest_activation.digest
+                ):
+                    continue
+                work_id = str(artifact.payload.get("work_id") or "").strip()
+                if work_id:
+                    superseded_work_ids.add(work_id)
         work_items = self._work_snapshots(
             seed_work_ids=seed_work_ids,
             superseded_work_ids=superseded_work_ids,
