@@ -1398,8 +1398,13 @@ def test_supervisor_does_not_repeat_retry_after_work_enters_retrying(
 
     workspace = projector.project(state["goal"].goal_id)
     progress = build_progress_ledger(workspace)
-    assert progress.blocker_kind is None
-    assert progress.making_progress is True
+    retried_work = next(
+        item
+        for item in workspace.work
+        if item.work_id == state["research"].work_id
+    )
+    assert retried_work.state == WorkState.RETRYING.value
+    assert retried_work.system_outcome.kind == "in_progress"
     assert "RETRY" not in progress.next_legal_actions
 
 
