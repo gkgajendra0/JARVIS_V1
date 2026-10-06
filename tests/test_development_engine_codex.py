@@ -371,6 +371,112 @@ async def test_codex_engine_repairs_one_malformed_directive_in_same_thread(
 
 
 @pytest.mark.asyncio
+async def test_codex_engine_repairs_noncanonical_terminal_evidence_in_same_thread(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_evidence_repair",
+        [
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "Fresh research is required.",
+                    "tool_calls": [],
+                    "disposition": "needs_research",
+                    "reason": "More protocol evidence is required.",
+                    "requested_dependencies": [],
+                    "evidence_refs": ["research:invented"],
+                    "blocker_code": None,
+                },
+                10,
+            ),
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "Fresh research is required.",
+                    "tool_calls": [],
+                    "disposition": "needs_research",
+                    "reason": "More protocol evidence is required.",
+                    "requested_dependencies": [],
+                    "evidence_refs": ["research:approved"],
+                    "blocker_code": None,
+                },
+                20,
+            ),
+        ],
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.NEEDS_RESEARCH
+    assert result.evidence_refs == ("research:approved",)
+    assert len(thread.user_messages) == 1
+    assert len(thread.external_messages) == 1
+    repair = json.loads(thread.external_messages[0])
+    assert repair["contract"] == "jarvis.development_response_repair.v1"
+    assert "research:invented" in repair["reason"]
+    assert "research:approved" in repair["allowed_evidence_refs"]
+
+
+@pytest.mark.asyncio
+async def test_codex_engine_parks_after_repeated_noncanonical_terminal_evidence(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+
+    def invalid_response(token_count: int) -> CodexTurnResponse:
+        return _response(
+            {
+                "kind": "result",
+                "summary": "Fresh research is required.",
+                "tool_calls": [],
+                "disposition": "needs_research",
+                "reason": "More evidence is required.",
+                "requested_dependencies": [],
+                "evidence_refs": ["research:invented"],
+                "blocker_code": None,
+            },
+            token_count,
+        )
+
+    thread = FakeThread(
+        "thr_evidence_cooldown",
+        [
+            invalid_response(10),
+            invalid_response(20),
+            invalid_response(30),
+        ],
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.BLOCKED_RESOURCE
+    assert result.blocker_code == "response_contract_invalid"
+    assert "durable cooldown" in (result.reason or "")
+    assert len(thread.external_messages) == 2
+    for message in thread.external_messages:
+        repair = json.loads(message)
+        assert "research:approved" in repair["allowed_evidence_refs"]
+
+
+@pytest.mark.asyncio
 async def test_codex_engine_parks_after_bounded_contract_repairs_are_exhausted(
     tmp_path,
 ) -> None:
