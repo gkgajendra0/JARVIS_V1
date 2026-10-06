@@ -21,7 +21,7 @@ from jarvis.goal_intelligence.status import (
     OwnerObjectiveStatusResolver,
 )
 from jarvis.goal_intelligence.store import GoalStore
-from jarvis.work.models import WorkState
+from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -142,6 +142,122 @@ def test_completed_child_work_does_not_complete_owner_objective(tmp_path) -> Non
     assert status.blocker.owner_action_required is True
     assert status.engineering_changes[0].state == "waiting_owner_approval"
     assert status.work[0].state == "completed"
+
+
+def test_owner_status_ignores_external_result_from_old_activation(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "status-generation.sqlite3")
+    goals = GoalStore(work)
+    changes = ChangeStore(work)
+    coordinator = ChangeCoordinator(changes, RecordingBackend())
+
+    goal = _goal(goals)
+    change = coordinator.start(
+        goal.exact_owner_request,
+        goal.source_session_id,
+        goal.source_turn_id,
+    )
+    research = changes.list_stages(change.change_id)[0]
+    _plan_and_continuation(goals, goal, work_id=research.work_id)
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "owner_acceptance_contract_ids": ["phase9.real_external_effect.v1"],
+        },
+    )
+    candidate = changes.add_artifact(
+        change.change_id,
+        kind="capability_candidate",
+        payload={"generation": "current"},
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="capability_lifecycle_proposal",
+        payload={"authority_required": True},
+    )
+
+    old_activation = changes.add_artifact(
+        change.change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "effective_enabled": True,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "generation": 1,
+        },
+    )
+    old_work = work.create(
+        WorkItem(
+            request="Historical physical acceptance.",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id=f"phase9-external:{change.change_id}",
+            source_turn_id=old_activation.artifact_id,
+        )
+    )
+    old_binding = changes.add_artifact(
+        change.change_id,
+        kind="capability_external_acceptance_binding",
+        payload={
+            "work_id": old_work.work_id,
+            "activation_artifact_id": old_activation.artifact_id,
+            "activation_artifact_digest": old_activation.digest,
+        },
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="capability_external_acceptance",
+        payload={
+            "binding_artifact_id": old_binding.artifact_id,
+            "binding_artifact_digest": old_binding.digest,
+            "verdict": "fail",
+        },
+    )
+
+    current_activation = changes.add_artifact(
+        change.change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "effective_enabled": True,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "generation": 2,
+        },
+    )
+    current_work = work.create(
+        WorkItem(
+            request="Current physical acceptance.",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id=f"phase9-external:{change.change_id}",
+            source_turn_id=current_activation.artifact_id,
+        )
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="capability_external_acceptance_binding",
+        payload={
+            "work_id": current_work.work_id,
+            "activation_artifact_id": current_activation.artifact_id,
+            "activation_artifact_digest": current_activation.digest,
+        },
+    )
+
+    status = OwnerObjectiveStatusResolver(
+        goals=goals,
+        changes=changes,
+    ).resolve(goal.goal_id)
+
+    projected = status.engineering_changes[0]
+    assert projected.activation_present is True
+    assert projected.external_acceptance_required is True
+    assert projected.external_acceptance_work_id == current_work.work_id
+    assert projected.external_acceptance_verdict is None
+    assert projected.external_acceptance_work_id != old_work.work_id
+    assert architecture.artifact_id == changes.require(
+        change.change_id
+    ).current_architecture_artifact_id
 
 
 def test_terminal_goal_is_only_overall_completion_authority(tmp_path) -> None:
