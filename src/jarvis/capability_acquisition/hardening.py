@@ -24,20 +24,14 @@ from jarvis.goal_intelligence.workspace import (
 
 
 class CapabilitySystemInvariantCode(StrEnum):
-    MULTIPLE_AUTHORITATIVE_STAGE_ATTEMPTS = (
-        "multiple_authoritative_stage_attempts"
-    )
+    MULTIPLE_AUTHORITATIVE_STAGE_ATTEMPTS = "multiple_authoritative_stage_attempts"
     AUTHORITATIVE_STAGE_NOT_LATEST = "authoritative_stage_not_latest"
     INVALID_SUPERSESSION_DIRECTION = "invalid_supersession_direction"
     RETRYABLE_WORK_NOT_FAILED = "retryable_work_not_failed"
     RETRYING_WORK_NOT_IN_PROGRESS = "retrying_work_not_in_progress"
-    FAILED_CHANGE_EXPOSES_FORWARD_PROGRESS = (
-        "failed_change_exposes_forward_progress"
-    )
+    FAILED_CHANGE_EXPOSES_FORWARD_PROGRESS = "failed_change_exposes_forward_progress"
     DEVELOPMENT_WITHOUT_ARCHITECTURE = "development_without_architecture"
-    DEVELOPMENT_BOUND_TO_STALE_ARCHITECTURE = (
-        "development_bound_to_stale_architecture"
-    )
+    DEVELOPMENT_BOUND_TO_STALE_ARCHITECTURE = "development_bound_to_stale_architecture"
     DEVELOPMENT_WITHOUT_EXACT_APPROVAL = "development_without_exact_approval"
     DEVELOPMENT_MISSING_AUTHORITATIVE_SOURCE = (
         "development_missing_authoritative_source"
@@ -46,12 +40,8 @@ class CapabilitySystemInvariantCode(StrEnum):
     GOVERNING_CHANGE_DRIFT = "governing_change_drift"
     GAP_LINK_IDENTITY_DRIFT = "gap_link_identity_drift"
     ACTIVATION_WITHOUT_ADMISSION = "activation_without_admission"
-    EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION = (
-        "external_acceptance_without_activation"
-    )
-    RESUMED_CONTINUATION_WITH_OPEN_GAP = (
-        "resumed_continuation_with_open_gap"
-    )
+    EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION = "external_acceptance_without_activation"
+    RESUMED_CONTINUATION_WITH_OPEN_GAP = "resumed_continuation_with_open_gap"
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,10 +204,7 @@ def _check_stage_authority(
         work = work_by_id.get(stage.work_id)
         if work is None:
             continue
-        if (
-            work.system_outcome.kind == "retryable"
-            and work.state != "failed"
-        ):
+        if work.system_outcome.kind == "retryable" and work.state != "failed":
             _add(
                 findings,
                 CapabilitySystemInvariantCode.RETRYABLE_WORK_NOT_FAILED,
@@ -228,10 +215,7 @@ def _check_stage_authority(
                 change_id=change.change_id,
                 work_id=work.work_id,
             )
-        if (
-            work.state == "retrying"
-            and work.system_outcome.kind != "in_progress"
-        ):
+        if work.state == "retrying" and work.system_outcome.kind != "in_progress":
             _add(
                 findings,
                 CapabilitySystemInvariantCode.RETRYING_WORK_NOT_IN_PROGRESS,
@@ -377,14 +361,10 @@ def _check_lifecycle_order(
             "capability activation exists before package admission",
             change_id=change.change_id,
         )
-    if (
-        {
-            "capability_external_acceptance",
-            "capability_external_acceptance_binding",
-        }
-        & kinds
-        and "capability_lifecycle_activation" not in kinds
-    ):
+    if {
+        "capability_external_acceptance",
+        "capability_external_acceptance_binding",
+    } & kinds and "capability_lifecycle_activation" not in kinds:
         _add(
             findings,
             CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION,
