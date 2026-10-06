@@ -714,10 +714,7 @@ class ChangeStore:
                                 and step.kind == "system_retry"
                                 for index, step in enumerate(steps)
                             )
-                            if (
-                                latest_engine_index >= 0
-                                and system_retry_after_failure
-                            ):
+                            if latest_engine_index >= 0 and system_retry_after_failure:
                                 recovery_kind = (
                                     "system_retry_completed_child_"
                                     "response_contract_invalid"
