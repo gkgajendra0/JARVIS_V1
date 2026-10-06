@@ -1412,12 +1412,20 @@ def test_objective_workspace_projects_phase9_external_acceptance_work(
     tmp_path: Path,
 ) -> None:
     state = _scenario(tmp_path / "external-acceptance-workspace.sqlite3")
+    activation = state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "schema": "capability_acquisition_activation.v1",
+            "effective_enabled": True,
+        },
+    )
     external = state["work"].create(
         WorkItem(
             request="Run real Hisense external acceptance.",
             work_type=WorkType.EXTERNAL_ACCEPTANCE,
             source_session_id=f"phase9-external:{state['change'].change_id}",
-            source_turn_id="activation:test",
+            source_turn_id=activation.artifact_id,
             state=WorkState.WAITING_FOR_OWNER,
             status_detail="Confirm the physical TV result.",
         )
@@ -1428,6 +1436,8 @@ def test_objective_workspace_projects_phase9_external_acceptance_work(
         payload={
             "schema": "capability_external_acceptance_binding.v1",
             "work_id": external.work_id,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
         },
     )
 
@@ -1447,6 +1457,61 @@ def test_objective_workspace_projects_phase9_external_acceptance_work(
     assert progress.blocker_kind == "needs_owner"
     assert progress.owner_action_required is True
     assert progress.next_legal_actions == ("ASK_OWNER",)
+
+
+def test_progress_ledger_rejects_external_acceptance_from_old_activation(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "stale-external-acceptance-workspace.sqlite3")
+    old_activation = state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "schema": "capability_acquisition_activation.v1",
+            "effective_enabled": True,
+            "generation": 1,
+        },
+    )
+    old_external = state["work"].create(
+        WorkItem(
+            request="Historical external acceptance.",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id=f"phase9-external:{state['change'].change_id}",
+            source_turn_id=old_activation.artifact_id,
+            state=WorkState.WAITING_FOR_OWNER,
+            status_detail="Historical owner confirmation.",
+        )
+    )
+    state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_external_acceptance_binding",
+        payload={
+            "schema": "capability_external_acceptance_binding.v1",
+            "work_id": old_external.work_id,
+            "activation_artifact_id": old_activation.artifact_id,
+            "activation_artifact_digest": old_activation.digest,
+        },
+    )
+    new_activation = state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "schema": "capability_acquisition_activation.v1",
+            "effective_enabled": True,
+            "generation": 2,
+        },
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    progress = build_progress_ledger(workspace)
+
+    assert new_activation.artifact_id != old_activation.artifact_id
+    assert progress.active_change_id == state["change"].change_id
+    assert progress.active_work_id == state["research"].work_id
+    assert progress.active_work_id != old_external.work_id
 
 
 def test_superseded_failed_work_is_not_an_objective_blocker(tmp_path: Path) -> None:
