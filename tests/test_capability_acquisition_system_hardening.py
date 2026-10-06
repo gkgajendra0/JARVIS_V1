@@ -589,12 +589,13 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
             missing_reason_codes=("capability_missing",),
         )
     )
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
     change = changes.create(
         request="Acquire television control.",
         process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
         process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
-        source_session_id="bridge:test",
-        source_turn_id=gap.gap_id,
+        source_session_id=request.bridge_source_session_id,
+        source_turn_id=request.bridge_source_turn_id,
     )
     change = changes.transition(
         change.change_id,
@@ -606,6 +607,8 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
         kind="gicc_capability_gap_link",
         payload={
             "schema": "gicc_phase9_gap_link.v2",
+            "request_id": request.request_id,
+            "request_digest": request.digest,
             "motivating_goal_id": goal.goal_id,
             "gap_id": gap.gap_id,
             "engineering_change_id": change.change_id,
