@@ -14,9 +14,13 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
+from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
 from jarvis.goal_intelligence.composition import (
     GoalIntakeDisposition,
     GoalIntakeResult,
@@ -498,9 +502,31 @@ async def test_failed_verification_replans_once_and_completes(
     assert len(capability_runtime.requests) == 2
 
 
+class FakePhase9WorkStore:
+    def __init__(self) -> None:
+        self.items = {}
+        self.steps = {}
+
+    def get(self, work_id: str):
+        return self.items.get(work_id)
+
+    def list_steps(self, work_id: str):
+        return tuple(self.steps.get(work_id, ()))
+
+
+def _completed_external_step(kind: str, observation: dict[str, object]):
+    return SimpleNamespace(
+        kind=kind,
+        state=SimpleNamespace(value="completed"),
+        observation=observation,
+    )
+
+
 class FakePhase9ChangeStore:
     def __init__(self) -> None:
         self.acceptance = None
+        self.binding = None
+        self.work = FakePhase9WorkStore()
         self.candidate = SimpleNamespace(
             artifact_id="candidate-tv",
             digest="c" * 64,
@@ -508,6 +534,7 @@ class FakePhase9ChangeStore:
                 "package_id": "tv.control.package",
                 "package_version": "1.0.0",
                 "package_digest": "p" * 64,
+                "development_work_id": "work-development",
             },
         )
         self.admission = SimpleNamespace(
@@ -533,14 +560,28 @@ class FakePhase9ChangeStore:
                 "package_version": "1.0.0",
                 "package_digest": "p" * 64,
                 "effective_enabled": True,
+                "authority_session_id": "owner-session",
+                "source_turn_id": "activation-turn",
             },
         )
         self.architecture = SimpleNamespace(
+            artifact_id="architecture-tv",
+            digest="h" * 64,
             payload={
                 "owner_acceptance_contract_ids": [
                     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
                 ]
-            }
+            },
+        )
+        self.goal_artifact = SimpleNamespace(
+            artifact_id="goal-tv-artifact",
+            digest="g" * 64,
+            payload={"schema": "owner_capability_goal.v1"},
+        )
+        self.manifest = SimpleNamespace(
+            artifact_id="manifest-tv",
+            digest="m" * 64,
+            payload={"schema": "substrate_manifest.v1"},
         )
         self.link = SimpleNamespace(
             payload={
@@ -570,15 +611,59 @@ class FakePhase9ChangeStore:
             "capability_candidate": self.candidate,
             "capability_package_admission": self.admission,
             "capability_lifecycle_activation": self.activation,
+            EXTERNAL_ACCEPTANCE_BINDING_KIND: self.binding,
             "capability_external_acceptance": self.acceptance,
+            "capability_goal": self.goal_artifact,
+            MANIFEST_KIND: self.manifest,
         }.get(kind)
 
     def pass_current_acceptance(self) -> None:
+        work_id = "work-external-tv"
+        self.binding = SimpleNamespace(
+            artifact_id="external-binding-tv",
+            digest="i" * 64,
+            payload={
+                "schema": "capability_external_acceptance_binding.v1",
+                "work_id": work_id,
+                "candidate_artifact_id": self.candidate.artifact_id,
+                "candidate_artifact_digest": self.candidate.digest,
+                "activation_artifact_id": self.activation.artifact_id,
+                "activation_artifact_digest": self.activation.digest,
+                "architecture_artifact_id": self.architecture.artifact_id,
+                "architecture_artifact_digest": self.architecture.digest,
+                "manifest_artifact_id": self.manifest.artifact_id,
+                "manifest_artifact_digest": self.manifest.digest,
+                "goal_artifact_id": self.goal_artifact.artifact_id,
+                "goal_artifact_digest": self.goal_artifact.digest,
+                "acceptance_contract_id": PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+                "authority_session_id": self.activation.payload["authority_session_id"],
+                "source_turn_id": self.activation.payload["source_turn_id"],
+            },
+        )
+        self.work.items[work_id] = SimpleNamespace(
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id="phase9-external:change-tv",
+            source_turn_id=self.activation.artifact_id,
+            dependencies=(self.candidate.payload["development_work_id"],),
+            state=WorkState.COMPLETED,
+        )
+        self.work.steps[work_id] = (
+            _completed_external_step("external_acceptance_inspect", {"inspected": True}),
+            _completed_external_step("external_acceptance_prepare", {"prepared": True}),
+            _completed_external_step("external_acceptance_invoke", {"invoked": True}),
+            _completed_external_step(
+                "external_acceptance_record",
+                {"acceptance_recorded": True},
+            ),
+        )
         self.acceptance = SimpleNamespace(
             artifact_id="external-acceptance-tv",
             digest="e" * 64,
             payload={
                 "schema": "capability_external_acceptance.v1",
+                "work_id": work_id,
+                "binding_artifact_id": self.binding.artifact_id,
+                "binding_artifact_digest": self.binding.digest,
                 "verdict": "pass",
                 "candidate_artifact_id": self.candidate.artifact_id,
                 "candidate_artifact_digest": self.candidate.digest,
