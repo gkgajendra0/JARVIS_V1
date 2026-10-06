@@ -365,8 +365,7 @@ class WorkAgentTools:
                 proposal.payload.get("authority_required") is not True
                 or proposal.payload.get("admission_artifact_id")
                 != admission.artifact_id
-                or proposal.payload.get("admission_artifact_digest")
-                != admission.digest
+                or proposal.payload.get("admission_artifact_digest") != admission.digest
                 or admission.payload.get("candidate_artifact_id")
                 != candidate.artifact_id
                 or admission.payload.get("candidate_artifact_digest")
