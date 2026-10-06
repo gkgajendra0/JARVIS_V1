@@ -456,10 +456,9 @@ class OwnerObjectiveStatusResolver:
                 )
             )
 
-            architecture = (
-                None
-                if change.current_architecture_artifact_id is None
-                else self._changes.get_artifact(change.current_architecture_artifact_id)
+            architecture = self._changes.latest_artifact(
+                change_id,
+                "architecture",
             )
             contracts = (
                 set()
