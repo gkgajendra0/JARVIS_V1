@@ -264,9 +264,7 @@ class ExistingObjectiveResumeController:
                 dry_run=True,
             )
         ):
-            startup_recovery_kinds.append(
-                "phase9-provisional-candidate-resolution-v1"
-            )
+            startup_recovery_kinds.append("phase9-provisional-candidate-resolution-v1")
         if (
             lineage.change_id
             in self._changes.reopen_recoverable_development_engine_failures(
