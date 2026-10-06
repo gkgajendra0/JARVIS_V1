@@ -427,6 +427,10 @@ class OwnerObjectiveStatusResolver:
                 change_id,
                 "capability_lifecycle_proposal",
             )
+            candidate = self._changes.latest_artifact(
+                change_id,
+                "capability_candidate",
+            )
             activation = self._changes.latest_artifact(
                 change_id,
                 "capability_lifecycle_activation",
@@ -436,16 +440,29 @@ class OwnerObjectiveStatusResolver:
                 "capability_lifecycle_disable",
             )
             activation_present = bool(
-                activation is not None
+                candidate is not None
+                and activation is not None
                 and activation.payload.get("effective_enabled") is True
+                and activation.payload.get("candidate_artifact_id")
+                == candidate.artifact_id
+                and activation.payload.get("candidate_artifact_digest")
+                == candidate.digest
                 and not (
                     disabled is not None
                     and disabled.created_at >= activation.created_at
+                    and disabled.payload.get("candidate_artifact_id")
+                    == candidate.artifact_id
                     and disabled.payload.get("effective_enabled") is False
                 )
             )
 
-            architecture = self._changes.latest_artifact(change_id, "architecture")
+            architecture = (
+                None
+                if change.current_architecture_artifact_id is None
+                else self._changes.get_artifact(
+                    change.current_architecture_artifact_id
+                )
+            )
             contracts = (
                 set()
                 if architecture is None
@@ -459,19 +476,55 @@ class OwnerObjectiveStatusResolver:
                 }
             )
             external_required = PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in contracts
-            binding = self._changes.latest_artifact(
-                change_id,
-                EXTERNAL_ACCEPTANCE_BINDING_KIND,
-            )
+
+            binding = None
+            if activation_present and activation is not None:
+                bindings = [
+                    artifact
+                    for artifact in self._changes.list_artifacts(
+                        change_id,
+                        kind=EXTERNAL_ACCEPTANCE_BINDING_KIND,
+                    )
+                    if artifact.payload.get("activation_artifact_id")
+                    == activation.artifact_id
+                    and artifact.payload.get("activation_artifact_digest")
+                    == activation.digest
+                ]
+                if bindings:
+                    binding = max(
+                        bindings,
+                        key=lambda artifact: (
+                            artifact.revision,
+                            artifact.artifact_id,
+                        ),
+                    )
             external_work_id = (
                 None
                 if binding is None
                 else str(binding.payload.get("work_id") or "").strip() or None
             )
-            external_result = self._changes.latest_artifact(
-                change_id,
-                EXTERNAL_ACCEPTANCE_RESULT_KIND,
-            )
+
+            external_result = None
+            if binding is not None:
+                results = [
+                    artifact
+                    for artifact in self._changes.list_artifacts(
+                        change_id,
+                        kind=EXTERNAL_ACCEPTANCE_RESULT_KIND,
+                    )
+                    if artifact.payload.get("binding_artifact_id")
+                    == binding.artifact_id
+                    and artifact.payload.get("binding_artifact_digest")
+                    == binding.digest
+                ]
+                if results:
+                    external_result = max(
+                        results,
+                        key=lambda artifact: (
+                            artifact.revision,
+                            artifact.artifact_id,
+                        ),
+                    )
             external_verdict = (
                 None
                 if external_result is None
