@@ -366,42 +366,100 @@ def _check_external_acceptance_binding(
     work_by_id: dict[str, WorkspaceWorkV1],
     findings: list[CapabilitySystemInvariantFindingV1],
 ) -> None:
-    results = [
+    activations = [
         item
         for item in change.artifacts
-        if item.kind == "capability_external_acceptance"
+        if item.kind == "capability_lifecycle_activation"
     ]
-    if not results:
-        return
-    result = max(results, key=lambda item: (item.revision, item.artifact_id))
     bindings = [
         item
         for item in change.artifacts
         if item.kind == "capability_external_acceptance_binding"
     ]
-    if not bindings:
+    results = [
+        item
+        for item in change.artifacts
+        if item.kind == "capability_external_acceptance"
+    ]
+    if not activations:
+        return
+
+    activation = max(
+        activations,
+        key=lambda item: (item.revision, item.artifact_id),
+    )
+    current_bindings = [
+        item
+        for item in bindings
+        if item.payload.get("activation_artifact_id") == activation.artifact_id
+        and item.payload.get("activation_artifact_digest") == activation.digest
+    ]
+    if not current_bindings:
         _add(
             findings,
             CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_WITHOUT_BINDING,
-            "external acceptance result exists without a canonical acceptance binding",
+            "current capability activation has no canonical acceptance binding",
             change_id=change.change_id,
         )
         return
 
-    binding = max(bindings, key=lambda item: (item.revision, item.artifact_id))
+    binding = max(
+        current_bindings,
+        key=lambda item: (item.revision, item.artifact_id),
+    )
     work_id = str(binding.payload.get("work_id") or "").strip()
     work = work_by_id.get(work_id)
+    candidate = next(
+        (
+            item
+            for item in reversed(change.artifacts)
+            if item.kind == "capability_candidate"
+        ),
+        None,
+    )
     if (
-        result.payload.get("binding_artifact_id") != binding.artifact_id
-        or result.payload.get("binding_artifact_digest") != binding.digest
-        or result.payload.get("work_id") != work_id
-        or work is None
+        work is None
         or work.work_type != "external_acceptance"
+        or work.source_session_id != f"phase9-external:{change.change_id}"
+        or work.source_turn_id != activation.artifact_id
+        or (
+            candidate is not None
+            and (
+                binding.payload.get("candidate_artifact_id") != candidate.artifact_id
+                or binding.payload.get("candidate_artifact_digest") != candidate.digest
+            )
+        )
     ):
         _add(
             findings,
             CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_BINDING_MISMATCH,
-            "external acceptance result/work identity does not match current binding",
+            "current external acceptance binding/work identity is stale or inconsistent",
+            change_id=change.change_id,
+            work_id=work_id or None,
+        )
+        return
+
+    current_results = [
+        item
+        for item in results
+        if item.payload.get("binding_artifact_id") == binding.artifact_id
+    ]
+    if not current_results:
+        return
+    result = max(
+        current_results,
+        key=lambda item: (item.revision, item.artifact_id),
+    )
+    if (
+        result.payload.get("binding_artifact_digest") != binding.digest
+        or result.payload.get("work_id") != work_id
+        or result.payload.get("activation_artifact_id") != activation.artifact_id
+        or result.payload.get("activation_artifact_digest") != activation.digest
+    ):
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_BINDING_MISMATCH,
+            "external acceptance result does not match the current acceptance mission",
             change_id=change.change_id,
             work_id=work_id or None,
         )
