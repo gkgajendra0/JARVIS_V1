@@ -1512,6 +1512,14 @@ def test_progress_ledger_rejects_external_acceptance_from_old_activation(
     assert progress.active_change_id == state["change"].change_id
     assert progress.active_work_id == state["research"].work_id
     assert progress.active_work_id != old_external.work_id
+    projected_old = next(
+        item for item in workspace.work_items if item.work_id == old_external.work_id
+    )
+    assert projected_old.system_outcome.kind == "superseded"
+    assert (
+        f"work:{old_external.work_id}:{WorkState.WAITING_FOR_OWNER.value}"
+        not in workspace.observed_blockers
+    )
 
 
 def test_superseded_failed_work_is_not_an_objective_blocker(tmp_path: Path) -> None:
