@@ -301,6 +301,7 @@ jobs:
           python -m pytest -q
           tests/test_capability_acquisition_system_hardening.py
           tests/test_capability_acquisition_owner_flow_hardening.py
+          tests/test_capability_acquisition_completion_hardening.py
 
 
   promotion-policy:
