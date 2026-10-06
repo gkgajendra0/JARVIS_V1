@@ -240,9 +240,7 @@ class ReviewedLocalServiceEntityDiscovery:
                 )
             )
             entity_type = _observation_entity_type(group[0])
-            if any(
-                _observation_entity_type(item) != entity_type for item in group
-            ):
+            if any(_observation_entity_type(item) != entity_type for item in group):
                 continue
             host_prefix = (
                 "host:" if entity_type == "media_player" else f"{entity_type}:host:"
