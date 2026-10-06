@@ -434,7 +434,7 @@ class ExternalAcceptanceCoordinator:
         activation_artifact_id: str,
         authority_session_id: str,
         source_turn_id: str,
-    ) -> WorkItem:
+    ) -> WorkItem | None:
         change = self._changes.require(str(change_id).strip())
         if (
             change.process_key != OWNER_CAPABILITY_ACQUISITION_PROCESS.key
@@ -503,9 +503,7 @@ class ExternalAcceptanceCoordinator:
             if str(item).strip()
         )
         if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in set(contracts):
-            raise ExternalAcceptanceError(
-                "activated capability has no required external acceptance contract"
-            )
+            return None
 
         bound_authority_session_id, bound_source_turn_id = (
             _require_activation_authority(
