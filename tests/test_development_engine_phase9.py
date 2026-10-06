@@ -760,6 +760,39 @@ def test_control_plane_bypasses_micro_step_reasoner_for_phase9() -> None:
     assert decision.goal_complete is False
 
 
+def test_control_plane_system_retry_reruns_failed_engine_result() -> None:
+    work = _development_work()
+    decider = Phase9DevelopmentControlPlaneDecider(FakeBuilder(_ticket()))
+    actions = (
+        BrainAction(
+            name=PHASE9_DEVELOPMENT_ENGINE_ACTION,
+            description="run engineering specialist",
+        ),
+    )
+    failed_engine = _completed_step(
+        work.work_id,
+        PHASE9_DEVELOPMENT_ENGINE_ACTION,
+        {
+            "development_result": {
+                "disposition": "failed",
+                "summary": "Structured response was invalid.",
+                "reason": "response_contract_invalid",
+            }
+        },
+    )
+    system_retry = _completed_step(
+        work.work_id,
+        "system_retry",
+        {"reason": "Retry deterministic retryable failed work."},
+    )
+
+    decision = decider(work, actions, (failed_engine, system_retry))
+
+    assert decision is not None
+    assert decision.action == PHASE9_DEVELOPMENT_ENGINE_ACTION
+    assert decision.goal_complete is False
+
+
 def test_control_plane_completes_after_typed_engine_result() -> None:
     work = _development_work()
     decider = Phase9DevelopmentControlPlaneDecider(FakeBuilder(_ticket()))
