@@ -167,6 +167,11 @@ def inspect_existing_objective(
             }
         )
 
+    dependency_recovery = changes.diagnose_superseded_dependency_recovery(
+        lineage.change_id,
+        recovery_generation="phase9-authoritative-source-dependency-v1",
+    )
+
     continuations = [
         {
             "continuation_id": item.record_id,
@@ -213,6 +218,7 @@ def inspect_existing_objective(
             "continuations": continuations,
             "requested_change_stages": stages_report,
             "requested_change_milestones": milestones,
+            "superseded_dependency_recovery": dependency_recovery,
             "workspace_observed_blockers": list(workspace.observed_blockers),
         },
     }
