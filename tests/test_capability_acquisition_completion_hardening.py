@@ -20,7 +20,9 @@ from jarvis.capability_acquisition.lineage import (
     verify_capability_acquisition_completion,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.capability_acquisition.runtime_context import StaticAcquisitionContextProvider
+from jarvis.capability_acquisition.runtime_context import (
+    StaticAcquisitionContextProvider,
+)
 from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.capability_registry.projection import (
     CapabilityInventoryEntry,
@@ -248,9 +250,7 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
         kind="architecture",
         payload={
             "schema": "capability_acquisition_architecture.v1",
-            "owner_acceptance_contract_ids": [
-                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-            ],
+            "owner_acceptance_contract_ids": [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT],
         },
     )
     admission = changes.add_artifact(
