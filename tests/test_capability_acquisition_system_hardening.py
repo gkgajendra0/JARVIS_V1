@@ -18,6 +18,7 @@ from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
     assert_capability_system_invariants,
     inspect_capability_system_invariants,
+    inspect_capability_workspace_invariants,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change import ChangeState, ChangeStore
@@ -706,6 +707,33 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
     assert CapabilitySystemInvariantCode.RETRYABLE_WORK_NOT_FAILED in {
         item.code for item in report.findings
     }
+
+    backend = _Backend()
+    coordinator = ChangeCoordinator(changes, backend)
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=goals,
+        change_store=changes,
+    )
+    cutover = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+        invariant_guard=lambda workspace: tuple(
+            finding.code.value
+            for finding in inspect_capability_workspace_invariants(
+                workspace=workspace,
+                change_store=changes,
+            ).findings
+        ),
+    ).coordinate(goal.goal_id)
+
+    assert cutover.disposition is SupervisorCutoverDisposition.REJECTED
+    assert cutover.accepted is False
+    assert cutover.reason_codes == (
+        "system_invariant:retryable_work_not_failed",
+    )
+    assert cutover.mutation_performed is False
+    assert backend.submissions == []
 
 
 def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> None:
