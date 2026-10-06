@@ -394,8 +394,9 @@ def test_promoted_package_is_admitted_without_auto_activation(
         item for item in pending if item.event_key.startswith("phase9-lifecycle:")
     )
     assert len(lifecycle_deliveries) == 1
-    assert change.change_id in lifecycle_deliveries[0].message
-    assert result.lifecycle_artifact.digest in lifecycle_deliveries[0].message
+    assert change.change_id not in lifecycle_deliveries[0].message
+    assert result.lifecycle_artifact.digest not in lifecycle_deliveries[0].message
+    assert "activate the acquired capability" in lifecycle_deliveries[0].message
 
     repeated = CapabilityAcquisitionReleaseBridge(
         changes,
