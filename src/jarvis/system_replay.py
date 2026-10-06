@@ -219,6 +219,7 @@ GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1: tuple[SystemReplayCaseV1, ...] = (
             "tests/test_capability_acquisition_verification.py::test_development_engine_revision_reopens_phase9_research_end_to_end",
             "tests/test_goal_objective_workspace.py::test_failed_gap_linked_change_remains_governing_and_retryable",
             "tests/test_goal_objective_workspace.py::test_supervisor_assisted_retry_uses_attached_canonical_retry",
+            "tests/test_capability_acquisition_system_hardening.py::test_invariant_checker_detects_completed_retryable_work",
             "tests/test_goal_objective_workspace.py::test_objective_workspace_projects_phase9_external_acceptance_work",
             "tests/test_phase9h_external_completion.py::test_external_acceptance_decline_waits_for_same_owner_authorization",
             "tests/test_phase9h_external_completion.py::test_external_acceptance_authority_must_match_activation_artifact",
