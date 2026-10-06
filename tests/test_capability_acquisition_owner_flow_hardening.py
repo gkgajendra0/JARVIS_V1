@@ -11,7 +11,9 @@ from jarvis.capabilities.models import (
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
 from jarvis.capability_acquisition.hardening import assert_capability_system_invariants
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.capability_acquisition.runtime_context import StaticAcquisitionContextProvider
+from jarvis.capability_acquisition.runtime_context import (
+    StaticAcquisitionContextProvider,
+)
 from jarvis.capability_acquisition.source import AcquisitionContextV1
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.engineering_change import ChangeStore
