@@ -19,7 +19,7 @@ from jarvis.capability_acquisition.external_contract import (
     ExternalOwnerInputRequestV1,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict
+from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict, ChangeState
 from jarvis.engineering_change.store import ChangeStore
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
@@ -329,6 +329,102 @@ class ExternalAcceptanceCoordinator:
         self._changes = changes
         self._backend = backend
 
+    def _ensure_binding(
+        self,
+        *,
+        change_id: str,
+        item: WorkItem,
+        candidate: ChangeArtifact,
+        activation: ChangeArtifact,
+        architecture: ChangeArtifact,
+        manifest: ChangeArtifact,
+        goal_artifact: ChangeArtifact,
+        authority_session_id: str,
+        source_turn_id: str,
+    ) -> ChangeArtifact:
+        goal = goal_from_payload(goal_artifact.payload)
+        development_work_id = str(
+            candidate.payload.get("development_work_id") or ""
+        ).strip()
+        if not development_work_id:
+            raise ExternalAcceptanceError(
+                "capability candidate has no DEVELOPMENT work identity"
+            )
+        if tuple(item.dependencies) != (development_work_id,):
+            raise ExternalAcceptanceError(
+                "external acceptance WorkItem dependencies are stale"
+            )
+
+        target_hints = tuple(goal.target_hints)
+        device_identity = (
+            " | ".join(target_hints)
+            if target_hints
+            else str(candidate.payload.get("capability_id") or "external-target")
+        )
+        payload = {
+            "schema": "capability_external_acceptance_binding.v1",
+            "work_id": item.work_id,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "architecture_artifact_id": architecture.artifact_id,
+            "architecture_artifact_digest": architecture.digest,
+            "manifest_artifact_id": manifest.artifact_id,
+            "manifest_artifact_digest": manifest.digest,
+            "goal_artifact_id": goal_artifact.artifact_id,
+            "goal_artifact_digest": goal_artifact.digest,
+            "capability_id": candidate.payload.get("capability_id"),
+            "package_id": candidate.payload.get("package_id"),
+            "package_version": candidate.payload.get("package_version"),
+            "requested_operations": list(
+                architecture.payload.get("requested_operations", ())
+            ),
+            "acceptance_contract_id": PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+            "device_identity": device_identity,
+            "target_hints": list(target_hints),
+            "authority_session_id": authority_session_id,
+            "source_turn_id": source_turn_id,
+        }
+        same_activation = [
+            artifact
+            for artifact in self._changes.list_artifacts(
+                change_id,
+                kind=EXTERNAL_ACCEPTANCE_BINDING_KIND,
+            )
+            if artifact.payload.get("activation_artifact_id")
+            == activation.artifact_id
+        ]
+        if same_activation:
+            binding = max(
+                same_activation,
+                key=lambda artifact: (artifact.revision, artifact.artifact_id),
+            )
+            if binding.payload != payload:
+                raise ExternalAcceptanceError(
+                    "existing external acceptance binding is stale or inconsistent"
+                )
+            return binding
+        return self._changes.add_artifact(
+            change_id,
+            kind=EXTERNAL_ACCEPTANCE_BINDING_KIND,
+            payload=payload,
+        )
+
+    @staticmethod
+    def _disabled_after_activation(
+        *,
+        candidate: ChangeArtifact,
+        activation: ChangeArtifact,
+        disabled: ChangeArtifact | None,
+    ) -> bool:
+        return bool(
+            disabled is not None
+            and disabled.payload.get("candidate_artifact_id") == candidate.artifact_id
+            and disabled.created_at >= activation.created_at
+            and disabled.payload.get("effective_enabled") is False
+        )
+
     def start(
         self,
         change_id: str,
@@ -387,6 +483,18 @@ class ExternalAcceptanceCoordinator:
             raise ExternalAcceptanceError(
                 "activation is not bound to the current capability candidate"
             )
+        disabled = self._changes.latest_artifact(
+            change.change_id,
+            "capability_lifecycle_disable",
+        )
+        if self._disabled_after_activation(
+            candidate=candidate,
+            activation=activation,
+            disabled=disabled,
+        ):
+            raise ExternalAcceptanceError(
+                "external acceptance stopped because the capability was disabled"
+            )
         contracts = tuple(
             str(item).strip().casefold()
             for item in architecture.payload.get("owner_acceptance_contract_ids", ())
@@ -411,98 +519,145 @@ class ExternalAcceptanceCoordinator:
             source_turn_id=activation.artifact_id,
             work_type=WorkType.EXTERNAL_ACCEPTANCE,
         )
-        if existing is not None:
-            if not existing.state.terminal:
-                try:
-                    ensure_durable_execution(
-                        store=self._changes.work,
-                        backend=self._backend,
-                        item=existing,
-                    )
-                except RuntimeError as exc:
-                    if "durable backend must use work_id as execution_id" in str(exc):
-                        raise ExternalAcceptanceError(
-                            "external acceptance backend returned mismatched identity"
-                        ) from exc
-                    raise
-            return existing
-
-        goal = goal_from_payload(goal_artifact.payload)
-        development_work_id = str(
-            candidate.payload.get("development_work_id") or ""
-        ).strip()
-        if not development_work_id:
-            raise ExternalAcceptanceError(
-                "capability candidate has no DEVELOPMENT work identity"
-            )
-        item = WorkItem(
-            request=(
-                "Validate the activated acquired capability against the real external "
-                f"target. Original owner goal: {goal.request}"
-            ),
-            work_type=WorkType.EXTERNAL_ACCEPTANCE,
-            source_session_id=source_session,
-            source_turn_id=activation.artifact_id,
-            priority=WorkPriority.NORMAL,
-            delivery_policy=DeliveryPolicy.WHEN_IDLE,
-            dependencies=(development_work_id,),
-        )
-        self._changes.work.create(item)
-        target_hints = tuple(goal.target_hints)
-        device_identity = (
-            " | ".join(target_hints)
-            if target_hints
-            else str(candidate.payload.get("capability_id") or "external-target")
-        )
-        self._changes.add_artifact(
-            change.change_id,
-            kind=EXTERNAL_ACCEPTANCE_BINDING_KIND,
-            payload={
-                "schema": "capability_external_acceptance_binding.v1",
-                "work_id": item.work_id,
-                "activation_artifact_id": activation.artifact_id,
-                "activation_artifact_digest": activation.digest,
-                "candidate_artifact_id": candidate.artifact_id,
-                "candidate_artifact_digest": candidate.digest,
-                "architecture_artifact_id": architecture.artifact_id,
-                "architecture_artifact_digest": architecture.digest,
-                "manifest_artifact_id": manifest.artifact_id,
-                "manifest_artifact_digest": manifest.digest,
-                "goal_artifact_id": goal_artifact.artifact_id,
-                "goal_artifact_digest": goal_artifact.digest,
-                "capability_id": candidate.payload.get("capability_id"),
-                "package_id": candidate.payload.get("package_id"),
-                "package_version": candidate.payload.get("package_version"),
-                "requested_operations": list(
-                    architecture.payload.get("requested_operations", ())
-                ),
-                "acceptance_contract_id": (PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT),
-                "device_identity": device_identity,
-                "target_hints": list(target_hints),
-                "authority_session_id": bound_authority_session_id,
-                "source_turn_id": bound_source_turn_id,
-            },
-        )
-        try:
-            ensure_durable_execution(
-                store=self._changes.work,
-                backend=self._backend,
-                item=item,
-            )
-        except RuntimeError as exc:
-            if "durable backend must use work_id as execution_id" in str(exc):
-                failed = item.transition(
-                    WorkState.FAILED,
-                    status_detail=(
-                        "external acceptance backend returned mismatched identity"
-                    ),
-                )
-                self._changes.work.save(failed, expected_version=item.version)
+        if existing is None:
+            goal = goal_from_payload(goal_artifact.payload)
+            development_work_id = str(
+                candidate.payload.get("development_work_id") or ""
+            ).strip()
+            if not development_work_id:
                 raise ExternalAcceptanceError(
-                    "external acceptance backend returned mismatched identity"
-                ) from exc
-            raise
-        return item
+                    "capability candidate has no DEVELOPMENT work identity"
+                )
+            existing = self._changes.work.create(
+                WorkItem(
+                    request=(
+                        "Validate the activated acquired capability against the real "
+                        f"external target. Original owner goal: {goal.request}"
+                    ),
+                    work_type=WorkType.EXTERNAL_ACCEPTANCE,
+                    source_session_id=source_session,
+                    source_turn_id=activation.artifact_id,
+                    priority=WorkPriority.NORMAL,
+                    delivery_policy=DeliveryPolicy.WHEN_IDLE,
+                    dependencies=(development_work_id,),
+                )
+            )
+
+        self._ensure_binding(
+            change_id=change.change_id,
+            item=existing,
+            candidate=candidate,
+            activation=activation,
+            architecture=architecture,
+            manifest=manifest,
+            goal_artifact=goal_artifact,
+            authority_session_id=bound_authority_session_id,
+            source_turn_id=bound_source_turn_id,
+        )
+        if not existing.state.terminal:
+            try:
+                ensure_durable_execution(
+                    store=self._changes.work,
+                    backend=self._backend,
+                    item=existing,
+                )
+            except RuntimeError as exc:
+                if "durable backend must use work_id as execution_id" in str(exc):
+                    current = self._changes.work.require(existing.work_id)
+                    if not current.state.terminal:
+                        failed = current.transition(
+                            WorkState.FAILED,
+                            status_detail=(
+                                "external acceptance backend returned mismatched identity"
+                            ),
+                        )
+                        self._changes.work.save(
+                            failed,
+                            expected_version=current.version,
+                        )
+                    raise ExternalAcceptanceError(
+                        "external acceptance backend returned mismatched identity"
+                    ) from exc
+                raise
+        return self._changes.work.require(existing.work_id)
+
+    def reconcile_current_activations(
+        self,
+        *,
+        limit: int = 10_000,
+    ) -> tuple[str, ...]:
+        """Recover exact post-activation acceptance missions after restart/crash."""
+
+        if type(limit) is not int or limit <= 0:
+            raise ValueError("external acceptance reconciliation limit must be positive")
+        work_ids: list[str] = []
+        changes = self._changes.list_by_states(
+            tuple(ChangeState),
+            process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+            process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+            limit=limit,
+        )
+        for change in changes:
+            candidate = self._changes.latest_artifact(
+                change.change_id,
+                "capability_candidate",
+            )
+            activation = self._changes.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_activation",
+            )
+            if candidate is None or activation is None:
+                continue
+            if (
+                activation.payload.get("effective_enabled") is not True
+                or activation.payload.get("candidate_artifact_id")
+                != candidate.artifact_id
+                or activation.payload.get("candidate_artifact_digest")
+                != candidate.digest
+            ):
+                continue
+            disabled = self._changes.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_disable",
+            )
+            if self._disabled_after_activation(
+                candidate=candidate,
+                activation=activation,
+                disabled=disabled,
+            ):
+                continue
+            architecture = self._changes.latest_artifact(
+                change.change_id,
+                "architecture",
+            )
+            if architecture is None:
+                continue
+            contracts = {
+                str(item).strip().casefold()
+                for item in architecture.payload.get(
+                    "owner_acceptance_contract_ids",
+                    (),
+                )
+                if str(item).strip()
+            }
+            if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
+                continue
+            work = self.start(
+                change.change_id,
+                activation_artifact_id=activation.artifact_id,
+                authority_session_id=_bounded_text(
+                    activation.payload.get("authority_session_id"),
+                    field="activation.authority_session_id",
+                    limit=180,
+                ),
+                source_turn_id=_bounded_text(
+                    activation.payload.get("source_turn_id"),
+                    field="activation.source_turn_id",
+                    limit=180,
+                ),
+            )
+            work_ids.append(work.work_id)
+        return tuple(work_ids)
 
 
 class ExternalAcceptanceInspectExecutor:
