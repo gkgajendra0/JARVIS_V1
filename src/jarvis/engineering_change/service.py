@@ -110,10 +110,9 @@ class ChangeService:
             change.process_version,
         )
         source_stage = process.architecture_source_stage
-        stages = store.list_stages(change_id)
-        research = next(
-            (s for s in stages if s.stage_key == source_stage.stage_key),
-            None,
+        research = store.current_stage_attempt(
+            change_id,
+            source_stage.stage_key,
         )
         if (
             research is None
@@ -382,13 +381,13 @@ class ChangeService:
         change = store.require(change_id)
         if change.state is not ChangeState.VERIFYING:
             raise ChangeConflict("change has not reached verification")
-        stage = next(
-            (
-                s
-                for s in reversed(store.list_stages(change_id))
-                if s.stage_key == "development"
-            ),
-            None,
+        process = store.process_contract(
+            change.process_key,
+            change.process_version,
+        )
+        stage = store.current_stage_attempt(
+            change_id,
+            process.development_stage.stage_key,
         )
         if stage is None:
             raise ChangeConflict("development stage is missing")
