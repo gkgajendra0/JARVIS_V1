@@ -1,11 +1,11 @@
 from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_change.models import (
     ProcessContract,
     ProcessStageContract,
     ProcessStageRole,
 )
-from jarvis.engineering_change.coordinator import ChangeCoordinator
-from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
