@@ -1,11 +1,13 @@
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.service import ChangeService
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_change.models import (
     ProcessContract,
     ProcessStageContract,
     ProcessStageRole,
 )
+from jarvis.conversation import ConversationSession
 from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
@@ -140,6 +142,85 @@ def test_development_depends_only_on_authoritative_research_attempt(tmp_path) ->
         second.work_id
     )
     assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+
+def test_architecture_gate_uses_authoritative_research_attempt(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "gate-authority.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = changes.create(
+        request="Build governed media control.",
+        process_key="engineering.change",
+        process_version=1,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+
+    historical = changes.link_work(
+        change.change_id,
+        "research",
+        1,
+        _research(change.change_id, 1),
+    )
+    historical_item = work.require(historical.work_id)
+    historical_running = work.save(
+        historical_item.transition(WorkState.RUNNING),
+        expected_version=historical_item.version,
+    )
+    work.save(
+        historical_running.transition(
+            WorkState.FAILED,
+            status_detail="superseded historical research failure",
+        ),
+        expected_version=historical_running.version,
+    )
+
+    current = changes.link_work(
+        change.change_id,
+        "research",
+        2,
+        _research(change.change_id, 2),
+    )
+    _complete(work, work.require(current.work_id))
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"strategy": "current-authoritative-research"},
+    )
+    changes.record_stage_outcome(
+        change.change_id,
+        current.stage_key,
+        current.attempt,
+        produced_artifact_id=architecture.artifact_id,
+        accepted=True,
+    )
+    changes.transition(
+        change.change_id,
+        ChangeState.ARCHITECTURE_READY,
+        expected_version=change.version,
+    )
+
+    gate = ChangeService(
+        coordinator,
+        ConversationSession(session_id="owner-session"),
+    ).propose_architecture(
+        change.change_id,
+        architecture.payload,
+    )
+
+    assert gate.artifact_id == architecture.artifact_id
+    assert changes.current_stage_attempt(change.change_id, "research").work_id == (
+        current.work_id
+    )
+    assert work.require(historical.work_id).state is WorkState.FAILED
 
 
 def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
