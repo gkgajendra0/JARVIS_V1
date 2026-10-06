@@ -41,6 +41,8 @@ class CapabilitySystemInvariantCode(StrEnum):
     GAP_LINK_IDENTITY_DRIFT = "gap_link_identity_drift"
     ACTIVATION_WITHOUT_ADMISSION = "activation_without_admission"
     EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION = "external_acceptance_without_activation"
+    EXTERNAL_ACCEPTANCE_WITHOUT_BINDING = "external_acceptance_without_binding"
+    EXTERNAL_ACCEPTANCE_BINDING_MISMATCH = "external_acceptance_binding_mismatch"
     RESUMED_CONTINUATION_WITH_OPEN_GAP = "resumed_continuation_with_open_gap"
 
 
@@ -264,10 +266,23 @@ def _check_development_binding(
             work_id=stage.work_id,
         )
         return
-    architecture = max(
-        architectures,
-        key=lambda item: (item.revision, item.artifact_id),
+    architecture = next(
+        (
+            item
+            for item in architectures
+            if item.artifact_id == change.current_architecture_artifact_id
+        ),
+        None,
     )
+    if architecture is None:
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.DEVELOPMENT_WITHOUT_ARCHITECTURE,
+            "authoritative development cannot resolve the governing current architecture",
+            change_id=change.change_id,
+            work_id=stage.work_id,
+        )
+        return
     if stage.plan_artifact_id != architecture.artifact_id:
         _add(
             findings,
@@ -345,6 +360,51 @@ def _check_development_binding(
         )
 
 
+def _check_external_acceptance_binding(
+    *,
+    change: WorkspaceChangeV1,
+    work_by_id: dict[str, WorkspaceWorkV1],
+    findings: list[CapabilitySystemInvariantFindingV1],
+) -> None:
+    results = [
+        item for item in change.artifacts if item.kind == "capability_external_acceptance"
+    ]
+    if not results:
+        return
+    result = max(results, key=lambda item: (item.revision, item.artifact_id))
+    bindings = [
+        item
+        for item in change.artifacts
+        if item.kind == "capability_external_acceptance_binding"
+    ]
+    if not bindings:
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_WITHOUT_BINDING,
+            "external acceptance result exists without a canonical acceptance binding",
+            change_id=change.change_id,
+        )
+        return
+
+    binding = max(bindings, key=lambda item: (item.revision, item.artifact_id))
+    work_id = str(binding.payload.get("work_id") or "").strip()
+    work = work_by_id.get(work_id)
+    if (
+        result.payload.get("binding_artifact_id") != binding.artifact_id
+        or result.payload.get("binding_artifact_digest") != binding.digest
+        or result.payload.get("work_id") != work_id
+        or work is None
+        or work.work_type != "external_acceptance"
+    ):
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_BINDING_MISMATCH,
+            "external acceptance result/work identity does not match current binding",
+            change_id=change.change_id,
+            work_id=work_id or None,
+        )
+
+
 def _check_lifecycle_order(
     *,
     change: WorkspaceChangeV1,
@@ -408,6 +468,11 @@ def inspect_capability_workspace_invariants(
             findings=findings,
         )
         _check_lifecycle_order(change=change, findings=findings)
+        _check_external_acceptance_binding(
+            change=change,
+            work_by_id=work_by_id,
+            findings=findings,
+        )
 
         gap_ids = _linked_gap_ids(change)
         for artifact in (
