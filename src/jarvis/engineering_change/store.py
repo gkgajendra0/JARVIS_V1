@@ -782,6 +782,218 @@ class ChangeStore:
                 recovered.append(change.change_id)
         return tuple(recovered)
 
+    def reopen_recoverable_superseded_dependency_failures(
+        self,
+        *,
+        recovery_generation: str,
+        dry_run: bool = False,
+    ) -> tuple[str, ...]:
+        """Reopen failed development poisoned only by a superseded source dependency.
+
+        Work dependencies are immutable. Historical JARVIS builds could therefore leave
+        a current development attempt bound to an older architecture-source WorkItem
+        after a fresh source attempt superseded it. Recovery never rewrites that failed
+        WorkItem. It reopens the same approved EngineeringChange so normal coordination
+        creates a fresh development attempt against the current authoritative source.
+
+        The recovery is intentionally narrow and fail-closed:
+        - the change must still be FAILED;
+        - the latest development attempt for the current architecture must be FAILED;
+        - it must have exactly one dependency and its failure reason must name it;
+        - that dependency must be an older source-stage attempt of the same change;
+        - the current source-stage attempt must be newer and COMPLETED; and
+        - the current architecture must still have strongly verified owner approval.
+        """
+
+        generation = str(recovery_generation).strip().casefold()
+        if not generation:
+            raise ValueError("recovery_generation must not be empty")
+        if not isinstance(dry_run, bool):
+            raise TypeError("dry_run must be bool")
+
+        recovered: list[str] = []
+        with self.work._lock, self.work._connect() as db:
+            rows = db.execute(
+                """SELECT * FROM engineering_changes
+                WHERE state=? ORDER BY created_at, change_id""",
+                (ChangeState.FAILED.value,),
+            ).fetchall()
+            for row in rows:
+                change = self._from_row(row)
+                process = self.process_contract(
+                    change.process_key,
+                    change.process_version,
+                )
+                source_stage = process.architecture_source_stage
+                development = process.development_stage
+
+                architecture = db.execute(
+                    """SELECT artifact_id, digest
+                    FROM engineering_change_artifacts
+                    WHERE change_id=? AND kind='architecture'
+                    ORDER BY revision DESC LIMIT 1""",
+                    (change.change_id,),
+                ).fetchone()
+                if architecture is None:
+                    continue
+
+                stage = db.execute(
+                    """SELECT * FROM engineering_change_stages
+                    WHERE change_id=? AND stage_key=? AND plan_artifact_id=?
+                    ORDER BY attempt DESC LIMIT 1""",
+                    (
+                        change.change_id,
+                        development.stage_key,
+                        architecture["artifact_id"],
+                    ),
+                ).fetchone()
+                if stage is None:
+                    continue
+
+                work_row = db.execute(
+                    "SELECT * FROM work_items WHERE work_id=?",
+                    (stage["work_id"],),
+                ).fetchone()
+                if work_row is None:
+                    continue
+                work = self.work._item_from_row(work_row)
+                if work.state is not WorkState.FAILED or len(work.dependencies) != 1:
+                    continue
+
+                stale_dependency_id = work.dependencies[0]
+                failure_reason = " ".join(
+                    str(work.status_detail or "").split()
+                ).casefold()
+                expected_failure = (
+                    "dependency did not complete successfully: "
+                    + stale_dependency_id
+                ).casefold()
+                if failure_reason != expected_failure:
+                    continue
+
+                stale_stage = db.execute(
+                    """SELECT change_id, stage_key, attempt, work_id
+                    FROM engineering_change_stages WHERE work_id=?""",
+                    (stale_dependency_id,),
+                ).fetchone()
+                if (
+                    stale_stage is None
+                    or stale_stage["change_id"] != change.change_id
+                    or stale_stage["stage_key"] != source_stage.stage_key
+                ):
+                    continue
+
+                stale_work_row = db.execute(
+                    "SELECT * FROM work_items WHERE work_id=?",
+                    (stale_dependency_id,),
+                ).fetchone()
+                if stale_work_row is None:
+                    continue
+                stale_work = self.work._item_from_row(stale_work_row)
+                if stale_work.state not in {WorkState.FAILED, WorkState.CANCELLED}:
+                    continue
+
+                current_source = db.execute(
+                    """SELECT change_id, stage_key, attempt, work_id
+                    FROM engineering_change_stages
+                    WHERE change_id=? AND stage_key=?
+                    ORDER BY attempt DESC LIMIT 1""",
+                    (change.change_id, source_stage.stage_key),
+                ).fetchone()
+                if (
+                    current_source is None
+                    or int(current_source["attempt"]) <= int(stale_stage["attempt"])
+                    or current_source["work_id"] == stale_dependency_id
+                ):
+                    continue
+
+                current_source_work_row = db.execute(
+                    "SELECT * FROM work_items WHERE work_id=?",
+                    (current_source["work_id"],),
+                ).fetchone()
+                if current_source_work_row is None:
+                    continue
+                current_source_work = self.work._item_from_row(
+                    current_source_work_row
+                )
+                if current_source_work.state is not WorkState.COMPLETED:
+                    continue
+
+                approval = db.execute(
+                    """SELECT d.gate_id
+                    FROM engineering_change_gates AS g
+                    JOIN engineering_change_decisions AS d ON d.gate_id=g.gate_id
+                    WHERE g.change_id=? AND g.kind='architecture'
+                    AND g.artifact_id=? AND g.artifact_digest=?
+                    AND d.approved=1 AND d.verification_id IS NOT NULL
+                    ORDER BY d.decided_at DESC LIMIT 1""",
+                    (
+                        change.change_id,
+                        architecture["artifact_id"],
+                        architecture["digest"],
+                    ),
+                ).fetchone()
+                if approval is None:
+                    continue
+
+                event_key = (
+                    "superseded-dependency-compat-recovery:"
+                    f"{generation}:{work.work_id}"
+                )
+                if (
+                    db.execute(
+                        """SELECT 1 FROM engineering_change_events
+                        WHERE change_id=? AND event_key=?""",
+                        (change.change_id, event_key),
+                    ).fetchone()
+                    is not None
+                ):
+                    continue
+
+                if dry_run:
+                    recovered.append(change.change_id)
+                    continue
+
+                timestamp = _now()
+                cursor = db.execute(
+                    """UPDATE engineering_changes
+                    SET state=?, version=version+1, updated_at=?
+                    WHERE change_id=? AND version=? AND state=?""",
+                    (
+                        ChangeState.APPROVED_FOR_BUILD.value,
+                        timestamp,
+                        change.change_id,
+                        change.version,
+                        ChangeState.FAILED.value,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise ChangeConflict(
+                        "stale superseded-dependency compatibility recovery transition"
+                    )
+
+                self._event(
+                    db,
+                    change.change_id,
+                    event_key,
+                    "superseded_dependency_compatibility_reopened",
+                    {
+                        "generation": generation,
+                        "failed_development_work_id": work.work_id,
+                        "failed_development_attempt": int(stage["attempt"]),
+                        "stale_dependency_work_id": stale_dependency_id,
+                        "stale_source_attempt": int(stale_stage["attempt"]),
+                        "authoritative_source_work_id": current_source["work_id"],
+                        "authoritative_source_attempt": int(current_source["attempt"]),
+                        "architecture_artifact_id": architecture["artifact_id"],
+                        "approval_gate_id": approval["gate_id"],
+                        "from": ChangeState.FAILED.value,
+                        "to": ChangeState.APPROVED_FOR_BUILD.value,
+                    },
+                )
+                recovered.append(change.change_id)
+        return tuple(recovered)
+
     def reopen_recoverable_architecture_revision_failures(
         self,
         *,
