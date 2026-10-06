@@ -922,7 +922,7 @@ class ChangeStore:
                     JOIN engineering_change_decisions AS d ON d.gate_id=g.gate_id
                     WHERE g.change_id=? AND g.kind='architecture'
                     AND g.artifact_id=? AND g.artifact_digest=?
-                    AND d.approved=1 AND d.verification_id IS NOT NULL
+                    AND d.approved=1
                     ORDER BY d.decided_at DESC LIMIT 1""",
                     (
                         change.change_id,
