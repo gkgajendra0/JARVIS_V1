@@ -661,7 +661,7 @@ class ExternalAcceptanceCoordinator:
                         limit=180,
                     ),
                 )
-            except Exception:  # noqa: BLE001 - isolate one corrupt capability lineage
+            except Exception:
                 LOGGER.exception(
                     "Failed to reconcile current external acceptance mission | "
                     "change_id=%s activation_artifact_id=%s",
