@@ -6,11 +6,16 @@ from types import SimpleNamespace
 import pytest
 
 from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+    ExternalAcceptanceCoordinator,
     ExternalAcceptanceError,
     ExternalAcceptanceInvokeExecutor,
     _require_activation_authority,
     external_acceptance_completion_guard,
 )
+from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
+from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
+from jarvis.engineering_change.store import ChangeStore
 from jarvis.work.engine import (
     WorkActionRegistry,
     WorkEngine,
@@ -62,6 +67,152 @@ def _completed_step(
 ) -> WorkStep:
     step = WorkStep(work_id=work_id, kind=kind, summary=kind)
     return step.start().complete(observation)
+
+
+def _acceptance_recovery_state(tmp_path: Path):
+    store = SQLiteWorkStore(tmp_path / "acceptance-recovery.sqlite3")
+    changes = ChangeStore(
+        store,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    change = changes.create(
+        request="Acquire media control.",
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    development = store.create(
+        WorkItem(
+            request="Build media control.",
+            work_type=WorkType.DEVELOPMENT,
+            source_session_id=f"change:{change.change_id}",
+            source_turn_id="development:1",
+            state=WorkState.COMPLETED,
+        )
+    )
+    goal = OwnerCapabilityGoalV1.create(
+        request="Play a movie on the television.",
+        requested_capability="media_player.control",
+        required_operations=("play_media",),
+        target_hints=("Hisense U7N",),
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+        now_epoch=1.0,
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="capability_goal",
+        payload={
+            "schema": "owner_capability_goal.v1",
+            "goal_id": goal.goal_id,
+            **goal.canonical_payload(),
+            "digest": goal.digest,
+        },
+    )
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "requested_operations": ["play_media"],
+            "owner_acceptance_contract_ids": [
+                "phase9.real_external_effect.v1",
+            ],
+        },
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="substrate_manifest",
+        payload={
+            "manifest_id": "manifest-recovery",
+            "manifest_digest": "a" * 64,
+        },
+    )
+    candidate = changes.add_artifact(
+        change.change_id,
+        kind="capability_candidate",
+        payload={
+            "development_work_id": development.work_id,
+            "capability_id": "media_player_control",
+            "package_id": "media.player.control",
+            "package_version": "1.0.0",
+            "package_digest": "b" * 64,
+            "architecture_artifact_id": architecture.artifact_id,
+            "architecture_artifact_digest": architecture.digest,
+        },
+    )
+    activation = changes.add_artifact(
+        change.change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "schema": "capability_acquisition_activation.v1",
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "effective_enabled": True,
+            "authority_session_id": "owner-session",
+            "source_turn_id": "activation-turn",
+        },
+    )
+    return store, changes, change, candidate, activation, development
+
+
+def test_external_acceptance_start_repairs_crash_window_missing_binding(
+    tmp_path: Path,
+) -> None:
+    store, changes, change, _candidate, activation, development = (
+        _acceptance_recovery_state(tmp_path)
+    )
+    existing = store.create(
+        WorkItem(
+            request="Recover external acceptance after crash.",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id=f"phase9-external:{change.change_id}",
+            source_turn_id=activation.artifact_id,
+            dependencies=(development.work_id,),
+        )
+    )
+    coordinator = ExternalAcceptanceCoordinator(changes, FakeBackend())
+
+    recovered = coordinator.start(
+        change.change_id,
+        activation_artifact_id=activation.artifact_id,
+        authority_session_id="owner-session",
+        source_turn_id="activation-turn",
+    )
+
+    assert recovered.work_id == existing.work_id
+    bindings = changes.list_artifacts(
+        change.change_id,
+        kind=EXTERNAL_ACCEPTANCE_BINDING_KIND,
+    )
+    assert len(bindings) == 1
+    assert bindings[0].payload["work_id"] == existing.work_id
+    assert bindings[0].payload["activation_artifact_id"] == activation.artifact_id
+    assert bindings[0].payload["activation_artifact_digest"] == activation.digest
+
+
+def test_external_acceptance_startup_reconciliation_creates_missing_mission(
+    tmp_path: Path,
+) -> None:
+    store, changes, change, _candidate, activation, development = (
+        _acceptance_recovery_state(tmp_path)
+    )
+    coordinator = ExternalAcceptanceCoordinator(changes, FakeBackend())
+
+    recovered = coordinator.reconcile_current_activations()
+
+    assert len(recovered) == 1
+    item = store.require(recovered[0])
+    assert item.work_type is WorkType.EXTERNAL_ACCEPTANCE
+    assert item.source_session_id == f"phase9-external:{change.change_id}"
+    assert item.source_turn_id == activation.artifact_id
+    assert item.dependencies == (development.work_id,)
+    binding = changes.latest_artifact(
+        change.change_id,
+        EXTERNAL_ACCEPTANCE_BINDING_KIND,
+    )
+    assert binding is not None
+    assert binding.payload["work_id"] == item.work_id
 
 
 def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
