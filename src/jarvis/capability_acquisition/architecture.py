@@ -93,6 +93,30 @@ class SemanticCapabilityBuildContractV1:
         }
 
 
+def _effective_owner_acceptance_contract_ids(
+    declared: tuple[str, ...],
+    *,
+    semantic_contract: SemanticCapabilityBuildContractV1 | None,
+) -> tuple[str, ...]:
+    """Return deterministic acceptance contracts for the architecture.
+
+    A GICC semantic contract means this EngineeringChange exists to close a
+    reusable capability gap for an owner objective. Such a build must prove the
+    acquired capability against its real target before the original goal can
+    resume; model-provided network/device scopes may refine the plan but cannot
+    remove that end-to-end acceptance boundary.
+    """
+
+    contracts = {
+        str(item).strip()
+        for item in declared
+        if str(item).strip()
+    }
+    if semantic_contract is not None:
+        contracts.add(PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT)
+    return tuple(sorted(contracts))
+
+
 def _gicc_semantic_contract(
     store: ChangeStore,
     *,
@@ -399,7 +423,10 @@ def derive_capability_acquisition_architecture(
         device_scopes=plan.device_scopes,
         verification_contract_ids=plan.verification_contract_ids,
         verification_targets=plan.development_test_targets,
-        owner_acceptance_contract_ids=plan.owner_acceptance_contract_ids,
+        owner_acceptance_contract_ids=_effective_owner_acceptance_contract_ids(
+            plan.owner_acceptance_contract_ids,
+            semantic_contract=semantic_contract,
+        ),
         proposed_capability_id=plan.proposed_capability_id,
         proposed_package_id=plan.proposed_package_id,
         proposed_package_version=plan.proposed_package_version,
