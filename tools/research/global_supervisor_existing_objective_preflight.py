@@ -6,7 +6,8 @@ import argparse
 import json
 import os
 import pathlib
-import sqlite3
+import hashlib
+import shutil
 import sys
 import tempfile
 
@@ -41,10 +42,26 @@ class _NoMutationBackend:
         raise RuntimeError("read-only preflight may not submit durable work")
 
 
+def _database_source_fingerprint(source_path: pathlib.Path) -> tuple[tuple[str, str], ...]:
+    """Hash canonical SQLite data files without opening the database."""
+
+    members = (source_path, pathlib.Path(str(source_path) + "-wal"))
+    fingerprint: list[tuple[str, str]] = []
+    for member in members:
+        if not member.is_file():
+            continue
+        digest = hashlib.sha256()
+        with member.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        fingerprint.append((member.name, digest.hexdigest()))
+    return tuple(fingerprint)
+
+
 def _snapshot_work_store(
     source_path: pathlib.Path,
 ) -> tuple[tempfile.TemporaryDirectory[str], SQLiteWorkStore]:
-    """Open canonical state read-only and inspect only a consistent disposable copy."""
+    """Inspect a stable file snapshot without opening canonical SQLite for writes."""
 
     if os.name == "nt":
         key_path = default_work_payload_key_path(source_path)
@@ -56,13 +73,19 @@ def _snapshot_work_store(
     payload_codec = build_default_work_payload_codec(source_path)
     guard = tempfile.TemporaryDirectory(prefix="jarvis-preflight-")
     snapshot_path = pathlib.Path(guard.name) / source_path.name
-    source_uri = source_path.as_uri() + "?mode=ro"
+    source_wal = pathlib.Path(str(source_path) + "-wal")
+    snapshot_wal = pathlib.Path(str(snapshot_path) + "-wal")
+    before = _database_source_fingerprint(source_path)
     try:
-        with (
-            sqlite3.connect(source_uri, uri=True, timeout=30.0) as source,
-            sqlite3.connect(snapshot_path, timeout=30.0) as destination,
-        ):
-            source.backup(destination)
+        shutil.copyfile(source_path, snapshot_path)
+        if source_wal.is_file():
+            shutil.copyfile(source_wal, snapshot_wal)
+        after = _database_source_fingerprint(source_path)
+        if before != after:
+            raise ExistingObjectiveLineageError(
+                "canonical Work database changed during read-only snapshot; "
+                "stop JARVIS and rerun the preflight"
+            )
     except Exception:
         guard.cleanup()
         raise
