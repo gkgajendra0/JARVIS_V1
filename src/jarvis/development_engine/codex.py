@@ -91,6 +91,15 @@ class _DevelopmentResponseContractError(RuntimeError):
 
     response_contract_invalid = True
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable_after_repairs: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.retryable_after_repairs = bool(retryable_after_repairs)
+
 
 class CodexThreadPort(Protocol):
     @property
@@ -603,7 +612,8 @@ def _parse_directive(response: CodexTurnResponse) -> dict[str, Any]:
         raise _DevelopmentResponseContractError("Codex tool_calls must be an array")
     if len(calls) > _MAX_TOOL_CALLS_PER_BATCH:
         raise _DevelopmentResponseContractError(
-            "Codex tool batch exceeds configured limit"
+            "Codex tool batch exceeds configured limit",
+            retryable_after_repairs=False,
         )
     disposition = payload.get("disposition")
     if kind == "tool_batch":
@@ -613,12 +623,14 @@ def _parse_directive(response: CodexTurnResponse) -> dict[str, Any]:
             )
         if disposition is not None:
             raise _DevelopmentResponseContractError(
-                "Codex tool_batch cannot carry a terminal disposition"
+                "Codex tool_batch cannot carry a terminal disposition",
+                retryable_after_repairs=False,
             )
     else:
         if calls:
             raise _DevelopmentResponseContractError(
-                "Codex terminal result cannot carry tool calls"
+                "Codex terminal result cannot carry tool calls",
+                retryable_after_repairs=False,
             )
         if disposition is None:
             raise _DevelopmentResponseContractError(
@@ -665,7 +677,10 @@ def _provider_result(
             retry_after_seconds=retry_after_seconds,
         )
 
-    if failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID:
+    if (
+        failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID
+        and bool(getattr(error, "retryable_after_repairs", False))
+    ):
         return DevelopmentResultV1.create(
             ticket=ticket,
             disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
