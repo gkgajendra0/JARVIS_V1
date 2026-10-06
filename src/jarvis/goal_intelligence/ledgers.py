@@ -439,10 +439,28 @@ def _authoritative_work(
     # lifecycle, not an EngineeringChange stage. The exact binding artifact makes it
     # authoritative for progress while the owner objective is still blocked on this
     # capability lineage.
+    activations = [
+        artifact
+        for artifact in change.artifacts
+        if artifact.kind == "capability_lifecycle_activation"
+    ]
+    latest_activation = (
+        None
+        if not activations
+        else max(
+            activations,
+            key=lambda artifact: (artifact.revision, artifact.artifact_id),
+        )
+    )
     external_bindings = [
         artifact
         for artifact in change.artifacts
         if artifact.kind == EXTERNAL_ACCEPTANCE_BINDING_KIND
+        and latest_activation is not None
+        and artifact.payload.get("activation_artifact_id")
+        == latest_activation.artifact_id
+        and artifact.payload.get("activation_artifact_digest")
+        == latest_activation.digest
     ]
     if external_bindings:
         binding = max(
@@ -451,7 +469,11 @@ def _authoritative_work(
         )
         external_work_id = str(binding.payload.get("work_id") or "").strip()
         external_work = work_by_id.get(external_work_id)
-        if external_work is not None:
+        if (
+            external_work is not None
+            and external_work.work_type == "external_acceptance"
+            and external_work.source_turn_id == latest_activation.artifact_id
+        ):
             return external_work
 
     candidates = [
