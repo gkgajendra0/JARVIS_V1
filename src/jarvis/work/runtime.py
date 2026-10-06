@@ -1140,6 +1140,20 @@ def build_work_runtime(
             ", ".join(recovered_revision_research),
         )
 
+    recovered_provisional_resolution = (
+        change_store.reopen_recoverable_provisional_candidate_resolution_failures(
+            recovery_generation="phase9-provisional-candidate-resolution-v1",
+        )
+    )
+    for change_id in recovered_provisional_resolution:
+        changes.reconcile(change_id)
+    if recovered_provisional_resolution:
+        LOGGER.warning(
+            "Recovered provisional acquisition candidate collision(s) with fresh "
+            "source attempts: %s",
+            ", ".join(recovered_provisional_resolution),
+        )
+
     recovered_development = change_store.reopen_recoverable_development_engine_failures(
         recovery_generation="codex-contract-repair-v1",
     )
