@@ -648,7 +648,9 @@ class FakePhase9ChangeStore:
             state=WorkState.COMPLETED,
         )
         self.work.steps[work_id] = (
-            _completed_external_step("external_acceptance_inspect", {"inspected": True}),
+            _completed_external_step(
+                "external_acceptance_inspect", {"inspected": True}
+            ),
             _completed_external_step("external_acceptance_prepare", {"prepared": True}),
             _completed_external_step("external_acceptance_invoke", {"invoked": True}),
             _completed_external_step(
