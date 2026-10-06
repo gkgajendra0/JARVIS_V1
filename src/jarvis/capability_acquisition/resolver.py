@@ -129,22 +129,27 @@ class CapabilityAcquisitionResolver:
     def _deduplicate(
         candidates: tuple[AcquisitionCandidateV1, ...],
     ) -> tuple[AcquisitionCandidateV1, ...]:
-        by_identity: dict[
-            tuple[AcquisitionSourceKind, str, str | None, str | None],
-            AcquisitionCandidateV1,
-        ] = {}
+        by_identity: dict[tuple[object, ...], AcquisitionCandidateV1] = {}
         for candidate in candidates:
-            key = (
-                candidate.source_kind,
-                candidate.source_identity,
-                candidate.source_version,
-                candidate.source_digest,
-            )
+            if candidate.source_digest is None:
+                # Discovery-time candidates are provisional observations, not
+                # immutable source identities. Keep semantically distinct
+                # observations separate until verification assigns a digest,
+                # while still collapsing exact duplicate payloads.
+                key = ("provisional", candidate.digest)
+            else:
+                key = (
+                    "immutable",
+                    candidate.source_kind,
+                    candidate.source_identity,
+                    candidate.source_version,
+                    candidate.source_digest,
+                )
             existing = by_identity.get(key)
             if existing is None:
                 by_identity[key] = candidate
                 continue
-            if existing.digest != candidate.digest:
+            if candidate.source_digest is not None and existing.digest != candidate.digest:
                 raise AcquisitionResolutionError(
                     "one immutable source identity produced contradictory candidate evidence"
                 )
