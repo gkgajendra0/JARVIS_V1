@@ -118,7 +118,8 @@ class SupervisorCutoverController:
         supervisor: GlobalSupervisor | None = None,
         mode: AutonomyMode = AutonomyMode.SHADOW,
         retry_failed_work: Callable[[str], object] | None = None,
-        invariant_guard: Callable[[ObjectiveWorkspaceV1], tuple[str, ...]] | None = None,
+        invariant_guard: Callable[[ObjectiveWorkspaceV1], tuple[str, ...]]
+        | None = None,
     ) -> None:
         if not isinstance(projector, ObjectiveWorkspaceProjector):
             raise TypeError("projector must be ObjectiveWorkspaceProjector")
