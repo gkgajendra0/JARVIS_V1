@@ -26,10 +26,13 @@ _MEDIA_SSDP_SERVICE_TYPES = (
     "urn:dial-multiscreen-org:service:dial:1",
     "urn:schemas-upnp-org:device:mediarenderer:1",
 )
+_ONVIF_CAMERA_DEVICE_TYPES = ("network_video_transmitter",)
 _GENERIC_TARGET_WORDS = frozenset(
     {
         "a",
         "an",
+        "cam",
+        "camera",
         "default",
         "device",
         "display",
@@ -68,6 +71,12 @@ def _endpoint_host(endpoint: str) -> str | None:
     return None if host is None else host.casefold()
 
 
+def _observation_entity_type(observation: DiscoveryObservation) -> str:
+    if observation.adapter_id == "onvif_ws_discovery.v1":
+        return "camera"
+    return "media_player"
+
+
 def _resource_key(observation: DiscoveryObservation) -> str:
     hosts = tuple(
         sorted(
@@ -78,9 +87,11 @@ def _resource_key(observation: DiscoveryObservation) -> str:
             }
         )
     )
+    entity_type = _observation_entity_type(observation)
+    prefix = "" if entity_type == "media_player" else f"{entity_type}:"
     if hosts:
-        return "host:" + hosts[0]
-    return "identity:" + observation.stable_identity.casefold()
+        return prefix + "host:" + hosts[0]
+    return prefix + "identity:" + observation.stable_identity.casefold()
 
 
 class ReviewedLocalServiceEntityDiscovery:
@@ -116,29 +127,48 @@ class ReviewedLocalServiceEntityDiscovery:
             for item in expected_entity_types
             if str(item).strip()
         }
-        if "media_player" not in expected:
-            return ()
-
-        specs = (
-            ("mdns_dns_sd.v1", "mdns", _MEDIA_MDNS_SERVICE_TYPES),
-            ("ssdp_upnp.v1", "ssdp", _MEDIA_SSDP_SERVICE_TYPES),
-        )
         output = []
-        for adapter_id, protocol, service_types in specs:
+        if "media_player" in expected:
+            for adapter_id, protocol, service_types in (
+                ("mdns_dns_sd.v1", "mdns", _MEDIA_MDNS_SERVICE_TYPES),
+                ("ssdp_upnp.v1", "ssdp", _MEDIA_SSDP_SERVICE_TYPES),
+            ):
+                identity = {
+                    "discovery_id": self.discovery_id,
+                    "adapter_id": adapter_id,
+                    "protocol": protocol,
+                    "service_types": list(service_types),
+                    "target_hints": list(target_hints),
+                }
+                output.append(
+                    DiscoveryScope(
+                        scope_id="gicc:" + canonical_digest(identity)[:24],
+                        adapter_id=adapter_id,
+                        protocol=protocol,
+                        allowed_service_types=service_types,
+                        allowed_device_types=(),
+                        local_domain="local.",
+                        target_hints=target_hints,
+                        timeout_seconds=self._timeout_seconds,
+                        max_results=self._max_results,
+                    )
+                )
+
+        if "camera" in expected:
             identity = {
                 "discovery_id": self.discovery_id,
-                "adapter_id": adapter_id,
-                "protocol": protocol,
-                "service_types": list(service_types),
+                "adapter_id": "onvif_ws_discovery.v1",
+                "protocol": "ws_discovery",
+                "device_types": list(_ONVIF_CAMERA_DEVICE_TYPES),
                 "target_hints": list(target_hints),
             }
             output.append(
                 DiscoveryScope(
                     scope_id="gicc:" + canonical_digest(identity)[:24],
-                    adapter_id=adapter_id,
-                    protocol=protocol,
-                    allowed_service_types=service_types,
-                    allowed_device_types=(),
+                    adapter_id="onvif_ws_discovery.v1",
+                    protocol="ws_discovery",
+                    allowed_service_types=(),
+                    allowed_device_types=_ONVIF_CAMERA_DEVICE_TYPES,
                     local_domain="local.",
                     target_hints=target_hints,
                     timeout_seconds=self._timeout_seconds,
@@ -181,7 +211,7 @@ class ReviewedLocalServiceEntityDiscovery:
                 }
             )
         )
-        if "media_player" not in expected:
+        if not ({"media_player", "camera"} & set(expected)):
             return ()
 
         hints = _specific_target_hints(mention)
@@ -209,15 +239,23 @@ class ReviewedLocalServiceEntityDiscovery:
                     key=lambda item: item.observation_id,
                 )
             )
+            entity_type = _observation_entity_type(group[0])
+            if any(
+                _observation_entity_type(item) != entity_type for item in group
+            ):
+                continue
+            host_prefix = (
+                "host:" if entity_type == "media_player" else f"{entity_type}:host:"
+            )
             host = (
-                resource_key.removeprefix("host:")
-                if resource_key.startswith("host:")
+                resource_key.removeprefix(host_prefix)
+                if resource_key.startswith(host_prefix)
                 else None
             )
             identity_digest = canonical_digest(
                 {
                     "discovery_id": self.discovery_id,
-                    "entity_type": "media_player",
+                    "entity_type": entity_type,
                     "resource_key": resource_key,
                 }
             )
@@ -227,14 +265,15 @@ class ReviewedLocalServiceEntityDiscovery:
                     | {f"discovery_evidence:{item.evidence_digest}" for item in group}
                 )
             )
+            label = "camera" if entity_type == "camera" else "media player"
             entities.append(
                 WorldEntityRefV1.create(
                     entity_id="entity_discovered_" + identity_digest[:20],
-                    entity_type="media_player",
+                    entity_type=entity_type,
                     canonical_name=(
-                        f"Discovered media player {host}"
+                        f"Discovered {label} {host}"
                         if host is not None
-                        else f"Discovered media player {identity_digest[:8]}"
+                        else f"Discovered {label} {identity_digest[:8]}"
                     ),
                     provenance_refs=provenance,
                 )
