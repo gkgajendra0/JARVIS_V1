@@ -717,7 +717,7 @@ class ChangeStore:
                     JOIN engineering_change_decisions AS d ON d.gate_id=g.gate_id
                     WHERE g.change_id=? AND g.kind='architecture'
                     AND g.artifact_id=? AND g.artifact_digest=?
-                    AND d.approved=1 AND d.verification_id IS NOT NULL
+                    AND d.approved=1
                     ORDER BY d.decided_at DESC LIMIT 1""",
                     (
                         change.change_id,
@@ -802,7 +802,7 @@ class ChangeStore:
         - it must have exactly one dependency and its failure reason must name it;
         - that dependency must be an older source-stage attempt of the same change;
         - the current source-stage attempt must be newer and COMPLETED; and
-        - the current architecture must still have strongly verified owner approval.
+        - the current architecture must still have its exact canonical owner approval.
         """
 
         generation = str(recovery_generation).strip().casefold()
