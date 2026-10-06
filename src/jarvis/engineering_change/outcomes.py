@@ -190,7 +190,7 @@ def classify_work_system_outcome(
     if work.state is WorkState.RETRYING:
         return _create(
             work,
-            kind=SystemOutcomeKind.RETRYABLE,
+            kind=SystemOutcomeKind.IN_PROGRESS,
             reason=work.status_detail,
         )
 
