@@ -69,7 +69,7 @@ def _completed_step(
     return step.start().complete(observation)
 
 
-def _acceptance_recovery_state(tmp_path: Path):
+def _acceptance_recovery_state(tmp_path: Path, *, external_required: bool = True):
     store = SQLiteWorkStore(tmp_path / "acceptance-recovery.sqlite3")
     changes = ChangeStore(
         store,
@@ -115,9 +115,9 @@ def _acceptance_recovery_state(tmp_path: Path):
         kind="architecture",
         payload={
             "requested_operations": ["play_media"],
-            "owner_acceptance_contract_ids": [
-                "phase9.real_external_effect.v1",
-            ],
+            "owner_acceptance_contract_ids": (
+                ["phase9.real_external_effect.v1"] if external_required else []
+            ),
         },
     )
     changes.add_artifact(
@@ -154,6 +154,39 @@ def _acceptance_recovery_state(tmp_path: Path):
         },
     )
     return store, changes, change, candidate, activation, development
+
+
+def test_external_acceptance_is_skipped_when_architecture_does_not_require_it(
+    tmp_path: Path,
+) -> None:
+    store, changes, change, _candidate, activation, _development = (
+        _acceptance_recovery_state(tmp_path, external_required=False)
+    )
+    coordinator = ExternalAcceptanceCoordinator(changes, FakeBackend())
+
+    result = coordinator.start(
+        change.change_id,
+        activation_artifact_id=activation.artifact_id,
+        authority_session_id="owner-session",
+        source_turn_id="activation-turn",
+    )
+
+    assert result is None
+    assert (
+        changes.latest_artifact(
+            change.change_id,
+            EXTERNAL_ACCEPTANCE_BINDING_KIND,
+        )
+        is None
+    )
+    assert (
+        store.find_by_source_turn(
+            source_session_id=f"phase9-external:{change.change_id}",
+            source_turn_id=activation.artifact_id,
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        )
+        is None
+    )
 
 
 def test_external_acceptance_start_repairs_crash_window_missing_binding(
