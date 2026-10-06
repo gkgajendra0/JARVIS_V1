@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 
 from jarvis.work.models import WorkItem, WorkType
+from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -27,7 +28,10 @@ def _preflight_module():
 
 def test_preflight_snapshot_does_not_mutate_source_database(tmp_path: Path) -> None:
     source_path = tmp_path / "canonical.sqlite3"
-    source = SQLiteWorkStore(source_path)
+    source = SQLiteWorkStore(
+        source_path,
+        payload_codec=build_default_work_payload_codec(source_path),
+    )
     original = source.create(
         WorkItem(
             request="Preserve this canonical record.",
