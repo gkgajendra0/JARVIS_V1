@@ -963,6 +963,34 @@ def ensure_capability_candidate_acceptance_current(
             "Phase-9 candidate verification references stale artifacts",
         )
     payload = candidate.payload
+    candidate_verification_contracts = tuple(
+        sorted(
+            str(item).strip().casefold()
+            for item in payload.get("verification_contract_ids", ())
+            if str(item).strip()
+        )
+    )
+    architecture_verification_contracts = tuple(
+        sorted(
+            str(item).strip().casefold()
+            for item in architecture.payload.get("verification_contract_ids", ())
+            if str(item).strip()
+        )
+    )
+    candidate_owner_acceptance = tuple(
+        sorted(
+            str(item).strip().casefold()
+            for item in payload.get("owner_acceptance_contract_ids", ())
+            if str(item).strip()
+        )
+    )
+    architecture_owner_acceptance = tuple(
+        sorted(
+            str(item).strip().casefold()
+            for item in architecture.payload.get("owner_acceptance_contract_ids", ())
+            if str(item).strip()
+        )
+    )
     if (
         payload.get("architecture_artifact_id") != architecture.artifact_id
         or payload.get("architecture_digest") != architecture.digest
@@ -973,6 +1001,8 @@ def ensure_capability_candidate_acceptance_current(
         != architecture.payload.get("proposed_package_version")
         or payload.get("capability_id")
         != architecture.payload.get("proposed_capability_id")
+        or candidate_verification_contracts != architecture_verification_contracts
+        or candidate_owner_acceptance != architecture_owner_acceptance
     ):
         raise CapabilityCandidateError(
             "candidate_architecture_drift",
