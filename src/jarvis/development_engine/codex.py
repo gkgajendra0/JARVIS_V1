@@ -665,6 +665,23 @@ def _provider_result(
             retry_after_seconds=retry_after_seconds,
         )
 
+    if failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID:
+        return DevelopmentResultV1.create(
+            ticket=ticket,
+            disposition=DevelopmentDisposition.BLOCKED_RESOURCE,
+            engine_id=_CODEX_ENGINE_ID,
+            engine_version=engine_version,
+            summary="Engineering intelligence returned invalid structured output.",
+            reason=(
+                "The approved ChatGPT-plan/Codex engineering target remained outside "
+                "the bounded DevelopmentEngine response contract after repair. "
+                "JARVIS will retry the same governed work after a durable cooldown."
+            ),
+            thread_id=thread_id,
+            blocker_code=ProviderFailureKind.RESPONSE_CONTRACT_INVALID.value,
+            retry_after_seconds=retry_after_seconds,
+        )
+
     if failure.kind in retryable:
         return DevelopmentResultV1.create(
             ticket=ticket,
