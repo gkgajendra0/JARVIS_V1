@@ -81,10 +81,7 @@ def inspect_existing_objective(
         change_store=changes,
     )
     recoverable_invariant_codes: set[CapabilitySystemInvariantCode] = set()
-    if (
-        "phase9-authoritative-source-dependency-v1"
-        in snapshot.startup_recovery_kinds
-    ):
+    if "phase9-authoritative-source-dependency-v1" in snapshot.startup_recovery_kinds:
         recoverable_invariant_codes.update(
             {
                 CapabilitySystemInvariantCode.DEVELOPMENT_MISSING_AUTHORITATIVE_SOURCE,
@@ -214,10 +211,14 @@ def inspect_existing_objective(
     ]
 
     status = "PASS"
-    if snapshot.resume_disposition in {
-        ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE,
-        ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT,
-    } or unsafe_invariant_findings:
+    if (
+        snapshot.resume_disposition
+        in {
+            ExistingObjectiveResumeDisposition.INACTIVE_LINKED_CHANGE,
+            ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT,
+        }
+        or unsafe_invariant_findings
+    ):
         status = "BLOCKED"
     elif snapshot.resume_disposition in {
         ExistingObjectiveResumeDisposition.STARTUP_RECOVERY_REQUIRED,
@@ -255,8 +256,7 @@ def inspect_existing_objective(
                     finding.to_payload() for finding in invariant_report.findings
                 ],
                 "recoverable_findings": [
-                    finding.to_payload()
-                    for finding in recoverable_invariant_findings
+                    finding.to_payload() for finding in recoverable_invariant_findings
                 ],
                 "unsafe_findings": [
                     finding.to_payload() for finding in unsafe_invariant_findings
