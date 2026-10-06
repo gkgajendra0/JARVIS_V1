@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -36,6 +37,8 @@ from jarvis.work.models import (
     WorkStep,
     WorkType,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 EXTERNAL_ACCEPTANCE_BINDING_KIND = "capability_external_acceptance_binding"
 EXTERNAL_ACCEPTANCE_RESULT_KIND = "capability_external_acceptance"
@@ -642,20 +645,29 @@ class ExternalAcceptanceCoordinator:
             }
             if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
                 continue
-            work = self.start(
-                change.change_id,
-                activation_artifact_id=activation.artifact_id,
-                authority_session_id=_bounded_text(
-                    activation.payload.get("authority_session_id"),
-                    field="activation.authority_session_id",
-                    limit=180,
-                ),
-                source_turn_id=_bounded_text(
-                    activation.payload.get("source_turn_id"),
-                    field="activation.source_turn_id",
-                    limit=180,
-                ),
-            )
+            try:
+                work = self.start(
+                    change.change_id,
+                    activation_artifact_id=activation.artifact_id,
+                    authority_session_id=_bounded_text(
+                        activation.payload.get("authority_session_id"),
+                        field="activation.authority_session_id",
+                        limit=180,
+                    ),
+                    source_turn_id=_bounded_text(
+                        activation.payload.get("source_turn_id"),
+                        field="activation.source_turn_id",
+                        limit=180,
+                    ),
+                )
+            except Exception:  # noqa: BLE001 - isolate one corrupt capability lineage
+                LOGGER.exception(
+                    "Failed to reconcile current external acceptance mission | "
+                    "change_id=%s activation_artifact_id=%s",
+                    change.change_id,
+                    activation.artifact_id,
+                )
+                continue
             work_ids.append(work.work_id)
         return tuple(work_ids)
 
