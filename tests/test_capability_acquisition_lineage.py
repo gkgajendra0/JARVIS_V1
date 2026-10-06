@@ -2,6 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+    EXTERNAL_ACCEPTANCE_RESULT_KIND,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
@@ -9,11 +13,26 @@ from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
     verify_capability_acquisition_completion,
 )
+from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
+from jarvis.work.models import WorkState, WorkType
+
+
+class FakeWorkStore:
+    def __init__(self) -> None:
+        self.items = {}
+        self.steps = {}
+
+    def get(self, work_id: str):
+        return self.items.get(work_id)
+
+    def list_steps(self, work_id: str):
+        return tuple(self.steps.get(work_id, ()))
 
 
 class FakeStore:
     def __init__(self) -> None:
         self.artifacts = {}
+        self.work = FakeWorkStore()
 
     def latest_artifact(self, change_id: str, kind: str):
         assert change_id == "change-tv"
@@ -35,6 +54,14 @@ def _artifact(
     )
 
 
+def _completed_step(kind: str, observation: dict[str, object]):
+    return SimpleNamespace(
+        kind=kind,
+        state=SimpleNamespace(value="completed"),
+        observation=observation,
+    )
+
+
 def _current_store(*, external_required: bool = False) -> FakeStore:
     store = FakeStore()
     candidate = _artifact(
@@ -44,6 +71,7 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
             "package_id": "tv.control.package",
             "package_version": "1.0.0",
             "package_digest": "p" * 64,
+            "development_work_id": "work-development",
         },
     )
     admission = _artifact(
@@ -69,6 +97,8 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
             "package_version": "1.0.0",
             "package_digest": "p" * 64,
             "effective_enabled": True,
+            "authority_session_id": "owner-session",
+            "source_turn_id": "activation-turn",
         },
     )
     architecture = _artifact(
@@ -79,6 +109,16 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
                 [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT] if external_required else []
             )
         },
+    )
+    goal_artifact = _artifact(
+        "goal-artifact",
+        "g",
+        {"schema": "owner_capability_goal.v1"},
+    )
+    manifest = _artifact(
+        "manifest",
+        "m",
+        {"schema": "substrate_manifest.v1"},
     )
     store.artifacts = {
         "gicc_capability_gap_link": _artifact(
@@ -98,8 +138,73 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
         "capability_package_admission": admission,
         "capability_lifecycle_activation": activation,
         "architecture": architecture,
+        "capability_goal": goal_artifact,
+        MANIFEST_KIND: manifest,
     }
     return store
+
+
+def _install_external_pass(store: FakeStore) -> None:
+    candidate = store.artifacts["capability_candidate"]
+    activation = store.artifacts["capability_lifecycle_activation"]
+    architecture = store.artifacts["architecture"]
+    goal_artifact = store.artifacts["capability_goal"]
+    manifest = store.artifacts[MANIFEST_KIND]
+    work_id = "work-external"
+
+    binding = _artifact(
+        "binding",
+        "i",
+        {
+            "schema": "capability_external_acceptance_binding.v1",
+            "work_id": work_id,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "architecture_artifact_id": architecture.artifact_id,
+            "architecture_artifact_digest": architecture.digest,
+            "manifest_artifact_id": manifest.artifact_id,
+            "manifest_artifact_digest": manifest.digest,
+            "goal_artifact_id": goal_artifact.artifact_id,
+            "goal_artifact_digest": goal_artifact.digest,
+            "acceptance_contract_id": PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+            "authority_session_id": activation.payload["authority_session_id"],
+            "source_turn_id": activation.payload["source_turn_id"],
+        },
+    )
+    store.artifacts[EXTERNAL_ACCEPTANCE_BINDING_KIND] = binding
+    store.work.items[work_id] = SimpleNamespace(
+        work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        source_session_id="phase9-external:change-tv",
+        source_turn_id=activation.artifact_id,
+        dependencies=(candidate.payload["development_work_id"],),
+        state=WorkState.COMPLETED,
+    )
+    store.work.steps[work_id] = (
+        _completed_step("external_acceptance_inspect", {"inspected": True}),
+        _completed_step("external_acceptance_prepare", {"prepared": True}),
+        _completed_step("external_acceptance_invoke", {"invoked": True}),
+        _completed_step(
+            "external_acceptance_record",
+            {"acceptance_recorded": True},
+        ),
+    )
+    store.artifacts[EXTERNAL_ACCEPTANCE_RESULT_KIND] = _artifact(
+        "external",
+        "e",
+        {
+            "schema": "capability_external_acceptance.v1",
+            "work_id": work_id,
+            "binding_artifact_id": binding.artifact_id,
+            "binding_artifact_digest": binding.digest,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "verdict": "pass",
+        },
+    )
 
 
 def test_lineage_verifier_returns_exact_current_chain() -> None:
@@ -171,19 +276,7 @@ def test_lineage_verifier_requires_external_pass_when_declared() -> None:
         is None
     )
 
-    candidate = store.artifacts["capability_candidate"]
-    activation = store.artifacts["capability_lifecycle_activation"]
-    store.artifacts["capability_external_acceptance"] = _artifact(
-        "external",
-        "e",
-        {
-            "candidate_artifact_id": candidate.artifact_id,
-            "candidate_artifact_digest": candidate.digest,
-            "activation_artifact_id": activation.artifact_id,
-            "activation_artifact_digest": activation.digest,
-            "verdict": "pass",
-        },
-    )
+    _install_external_pass(store)
 
     result = verify_capability_acquisition_completion(
         store,
@@ -193,6 +286,8 @@ def test_lineage_verifier_requires_external_pass_when_declared() -> None:
     )
     assert result is not None
     assert result.external_acceptance_required is True
+    assert result.external_acceptance_binding_artifact_id == "binding"
+    assert result.external_acceptance_work_id == "work-external"
     assert result.external_acceptance_artifact_id == "external"
 
 
