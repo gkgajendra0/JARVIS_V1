@@ -53,7 +53,7 @@ from jarvis.goal_intelligence.phase9 import (
     Phase9GoalContinuationVerifier,
 )
 from jarvis.goal_intelligence.store import GoalStore
-from jarvis.work.models import WorkPriority
+from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -289,21 +289,125 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
     assert architecture.artifact_id
     assert phase9.completion_verified(gap=gap, goal=goal) is False
 
+    # A PASS-shaped result alone is not completion. The canonical verifier must
+    # require the exact post-activation WorkItem/binding created by the runtime.
     changes.add_artifact(
         change_id,
         kind="capability_external_acceptance",
         payload={
             "schema": "capability_external_acceptance.v1",
+            "work_id": "work-external-forged",
+            "binding_artifact_id": "artifact-binding-forged",
+            "binding_artifact_digest": "1" * 64,
             "verdict": HardwareAcceptanceVerdict.PASS.value,
             "candidate_artifact_id": candidate.artifact_id,
             "candidate_artifact_digest": candidate.digest,
             "activation_artifact_id": activation.artifact_id,
-            "activation_artifact_digest": "0" * 64,
+            "activation_artifact_digest": activation.digest,
+        },
+    )
+    assert (
+        verify_capability_acquisition_completion(
+            changes,
+            change_id=change_id,
+            motivating_goal_id=goal.goal_id,
+            gap_id=gap.gap_id,
+            request_id=request.request_id,
+            request_digest=request.digest,
+        )
+        is None
+    )
+    assert phase9.completion_verified(gap=gap, goal=goal) is False
+    assert goals.get_continuation(continuation.continuation_id).state is (
+        ContinuationState.BLOCKED
+    )
+
+    manifest = changes.add_artifact(
+        change_id,
+        kind="engineering_manifest",
+        payload={
+            "schema": "engineering_manifest.v1",
+            "manifest_id": "manifest-hardening",
+            "manifest_digest": "d" * 64,
+        },
+    )
+    goal_artifact = changes.latest_artifact(change_id, "capability_goal")
+    assert goal_artifact is not None
+
+    acceptance_work = work.create(
+        WorkItem(
+            request="Validate the exact activated acquired capability.",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id=f"phase9-external:{change_id}",
+            source_turn_id=activation.artifact_id,
+            state=WorkState.COMPLETED,
+            dependencies=("work-development-hardening",),
+        )
+    )
+    for kind, observation in (
+        ("external_acceptance_inspect", {"inspected": True}),
+        ("external_acceptance_prepare", {"prepared": True}),
+        ("external_acceptance_invoke", {"invoked": True}),
+        (
+            "external_acceptance_record",
+            {"acceptance_recorded": True, "verdict": "pass"},
+        ),
+    ):
+        step = WorkStep(
+            work_id=acceptance_work.work_id,
+            kind=kind,
+            summary=kind,
+        )
+        work.add_step(step)
+        work.save_step(step.start().complete(observation))
+
+    binding = changes.add_artifact(
+        change_id,
+        kind="capability_external_acceptance_binding",
+        payload={
+            "schema": "capability_external_acceptance_binding.v1",
+            "work_id": acceptance_work.work_id,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "architecture_artifact_id": architecture.artifact_id,
+            "architecture_artifact_digest": architecture.digest,
+            "manifest_artifact_id": manifest.artifact_id,
+            "manifest_artifact_digest": manifest.digest,
+            "goal_artifact_id": goal_artifact.artifact_id,
+            "goal_artifact_digest": goal_artifact.digest,
+            "capability_id": "media_player_control",
+            "package_id": "media.player.control",
+            "package_version": "1.0.0",
+            "requested_operations": ["play_media"],
+            "acceptance_contract_id": PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+            "device_identity": "Living Room TV",
+            "target_hints": ["entity_type:media_player"],
+            "authority_session_id": "completion-session",
+            "source_turn_id": "activation-turn",
+        },
+    )
+
+    # Even with a real WorkItem/binding, stale result-to-binding evidence is rejected.
+    changes.add_artifact(
+        change_id,
+        kind="capability_external_acceptance",
+        payload={
+            "schema": "capability_external_acceptance.v1",
+            "work_id": acceptance_work.work_id,
+            "binding_artifact_id": binding.artifact_id,
+            "binding_artifact_digest": "0" * 64,
+            "verdict": HardwareAcceptanceVerdict.PASS.value,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
         },
     )
     with pytest.raises(
         CapabilityAcquisitionLineageError,
-        match="external acceptance is not bound",
+        match="current acceptance mission",
     ):
         verify_capability_acquisition_completion(
             changes,
@@ -313,16 +417,15 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
             request_id=request.request_id,
             request_digest=request.digest,
         )
-    assert phase9.completion_verified(gap=gap, goal=goal) is False
-    assert goals.get_continuation(continuation.continuation_id).state is (
-        ContinuationState.BLOCKED
-    )
 
     external = changes.add_artifact(
         change_id,
         kind="capability_external_acceptance",
         payload={
             "schema": "capability_external_acceptance.v1",
+            "work_id": acceptance_work.work_id,
+            "binding_artifact_id": binding.artifact_id,
+            "binding_artifact_digest": binding.digest,
             "verdict": HardwareAcceptanceVerdict.PASS.value,
             "candidate_artifact_id": candidate.artifact_id,
             "candidate_artifact_digest": candidate.digest,
@@ -339,6 +442,8 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
         request_digest=request.digest,
     )
     assert lineage is not None
+    assert lineage.external_acceptance_binding_artifact_id == binding.artifact_id
+    assert lineage.external_acceptance_work_id == acceptance_work.work_id
     assert lineage.external_acceptance_artifact_id == external.artifact_id
     assert phase9.completion_verified(gap=gap, goal=goal) is True
 
