@@ -282,6 +282,50 @@ def test_same_immutable_source_identity_with_conflicting_semantics_fails_closed(
         _resolver(ContradictoryAdapter()).resolve(_goal("power"), context)
 
 
+def test_provisional_same_package_candidates_can_differ_before_verification() -> None:
+    context = _core_context()
+    first = AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.SDK_LIBRARY,
+        source_identity="stv",
+        source_version="1.3.3",
+        source_digest=None,
+        trust_class=AcquisitionTrustClass.UNVERIFIED_CANDIDATE,
+        supported_operations=("issue_supported_control",),
+        strategy=AcquisitionStrategy.ADAPT_SDK,
+        evidence_refs=("research:a",),
+        verification_requirements=("sdk-adapter-contract-test",),
+        license_id="MIT",
+    )
+    second = AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.SDK_LIBRARY,
+        source_identity="stv",
+        source_version="1.3.3",
+        source_digest=None,
+        trust_class=AcquisitionTrustClass.UNVERIFIED_CANDIDATE,
+        supported_operations=("issue_supported_control",),
+        strategy=AcquisitionStrategy.ADAPT_SDK,
+        evidence_refs=("research:a", "pypi-lock-sha256:old-lock"),
+        verification_requirements=("sdk-adapter-contract-test",),
+    )
+
+    result = _resolver().resolve_candidates(
+        _goal("issue_supported_control"),
+        (first, second),
+        context,
+    )
+
+    assert len(result.candidates) == 2
+    assert {item.candidate_id for item in result.candidates} == {
+        first.candidate_id,
+        second.candidate_id,
+    }
+    assert all(
+        result.evaluation(item.candidate_id).disposition
+        is AcquisitionDisposition.BLOCKED
+        for item in result.candidates
+    )
+
+
 def test_unverified_candidate_cannot_win_even_when_operation_matches() -> None:
     context = _core_context()
     unverified = AcquisitionCandidateV1.create(
