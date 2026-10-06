@@ -603,9 +603,11 @@ class ChangeStore:
 
         This is compatibility recovery for prior JARVIS bugs, not a generic retry of
         failed engineering. Recovery requires the still-current strongly approved
-        architecture and one of two exact historical shapes:
-        - old completed-child + unclassified DevelopmentEngine failure; or
-        - failed development caused solely by response_contract_invalid.
+        architecture and one of three exact historical shapes:
+        - old completed-child + unclassified DevelopmentEngine failure;
+        - failed development caused solely by response_contract_invalid; or
+        - a completed child carrying response_contract_invalid after a recorded
+          system_retry that an older Phase-9 control plane failed to replay.
 
         The generation key makes each compatibility recovery one-shot across restarts.
         """
@@ -673,11 +675,53 @@ class ChangeStore:
                         reason = " ".join(
                             str(engine_result.get("reason") or "").split()
                         ).casefold()
+                        blocker = " ".join(
+                            str(engine_result.get("blocker_code") or "").split()
+                        ).casefold()
                         if (
                             disposition == "failed"
                             and "non-retryable failure (unknown)" in reason
                         ):
                             recovery_kind = "legacy_unclassified_completed_child"
+                        elif (
+                            disposition == "failed"
+                            and "response_contract_invalid" in f"{reason} {blocker}"
+                        ):
+                            step_rows = db.execute(
+                                """SELECT * FROM work_steps
+                                WHERE work_id=? AND state=?
+                                ORDER BY created_at, step_id""",
+                                (work.work_id, "completed"),
+                            ).fetchall()
+                            steps = tuple(
+                                self.work._step_from_row(step_row)
+                                for step_row in step_rows
+                            )
+                            latest_engine_index = max(
+                                (
+                                    index
+                                    for index, step in enumerate(steps)
+                                    if step.kind == "dev_engine_execute"
+                                    and isinstance(
+                                        step.observation.get("development_result"),
+                                        dict,
+                                    )
+                                ),
+                                default=-1,
+                            )
+                            system_retry_after_failure = any(
+                                index > latest_engine_index
+                                and step.kind == "system_retry"
+                                for index, step in enumerate(steps)
+                            )
+                            if (
+                                latest_engine_index >= 0
+                                and system_retry_after_failure
+                            ):
+                                recovery_kind = (
+                                    "system_retry_completed_child_"
+                                    "response_contract_invalid"
+                                )
 
                 elif work.state is WorkState.FAILED:
                     step_rows = db.execute(
