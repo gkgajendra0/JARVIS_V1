@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from jarvis.conversation import ConversationSession
 from jarvis.voice.agent import INSTRUCTIONS, build_instructions
 from jarvis.voice.work_tools import (
     WorkAgentTools,
+    WorkToolGroundingError,
     _explicit_capability_lifecycle_intent,
 )
 from jarvis.work.development import DevelopmentWorkspaceManager
@@ -234,6 +236,103 @@ def test_phase9_lifecycle_intent_is_explicit_and_deterministic(
     expected: bool,
 ) -> None:
     assert _explicit_capability_lifecycle_intent(text, activate=activate) is expected
+
+
+class _LifecycleTargetStore:
+    def __init__(self, change_ids: tuple[str, ...]) -> None:
+        self.changes = tuple(SimpleNamespace(change_id=item) for item in change_ids)
+        self.artifacts: dict[tuple[str, str], object] = {}
+        for index, change_id in enumerate(change_ids):
+            candidate = SimpleNamespace(
+                artifact_id=f"candidate-{index}",
+                digest=f"{index + 1}" * 64,
+                payload={},
+                created_at=index,
+            )
+            admission = SimpleNamespace(
+                artifact_id=f"admission-{index}",
+                digest=f"{index + 2}" * 64,
+                payload={
+                    "candidate_artifact_id": candidate.artifact_id,
+                    "candidate_artifact_digest": candidate.digest,
+                },
+                created_at=index,
+            )
+            proposal = SimpleNamespace(
+                artifact_id=f"proposal-{index}",
+                digest=f"{index + 3}" * 64,
+                payload={
+                    "authority_required": True,
+                    "admission_artifact_id": admission.artifact_id,
+                    "admission_artifact_digest": admission.digest,
+                },
+                created_at=index,
+            )
+            self.artifacts[(change_id, "capability_candidate")] = candidate
+            self.artifacts[(change_id, "capability_package_admission")] = admission
+            self.artifacts[(change_id, "capability_lifecycle_proposal")] = proposal
+
+    def list_by_states(self, *args, **kwargs):
+        del args, kwargs
+        return self.changes
+
+    def latest_artifact(self, change_id: str, kind: str):
+        return self.artifacts.get((change_id, kind))
+
+
+def _lifecycle_target_tools(change_ids: tuple[str, ...]) -> WorkAgentTools:
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = SimpleNamespace(store=_LifecycleTargetStore(change_ids))
+    conversation = ConversationSession(session_id="lifecycle-target-test")
+    conversation.start()
+    return WorkAgentTools(runtime, conversation)
+
+
+def test_lifecycle_target_uses_unique_canonical_pending_change() -> None:
+    change_id = "change_aaaaaaaaaaaaaaaa"
+    tools = _lifecycle_target_tools((change_id,))
+
+    assert (
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text="Activate it.",
+            activate=True,
+        )
+        == change_id
+    )
+
+
+def test_lifecycle_target_rejects_model_id_conflicting_with_canonical_state() -> None:
+    tools = _lifecycle_target_tools(("change_aaaaaaaaaaaaaaaa",))
+
+    with pytest.raises(WorkToolGroundingError, match="conflicts with canonical"):
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="change_bbbbbbbbbbbbbbbb",
+            owner_text="Activate it.",
+            activate=True,
+        )
+
+
+def test_lifecycle_target_requires_disambiguation_when_multiple_are_pending() -> None:
+    first = "change_aaaaaaaaaaaaaaaa"
+    second = "change_bbbbbbbbbbbbbbbb"
+    tools = _lifecycle_target_tools((first, second))
+
+    with pytest.raises(WorkToolGroundingError, match="ambiguous"):
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text="Activate it.",
+            activate=True,
+        )
+
+    assert (
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text=f"Activate acquired capability {second}.",
+            activate=True,
+        )
+        == second
+    )
 
 
 def test_work_runtime_rejects_phase9_lifecycle_without_capability_runtime() -> None:
