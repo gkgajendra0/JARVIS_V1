@@ -502,7 +502,10 @@ def test_superseded_source_dependency_recovery_rejects_failed_unrelated_dependen
     )
     assert diagnosis["eligible"] is False
     assert diagnosis["failed_condition"] == "unrelated_dependency_not_completed"
-    assert changes.reopen_recoverable_superseded_dependency_failures(
-        recovery_generation=generation,
-        dry_run=True,
-    ) == ()
+    assert (
+        changes.reopen_recoverable_superseded_dependency_failures(
+            recovery_generation=generation,
+            dry_run=True,
+        )
+        == ()
+    )
