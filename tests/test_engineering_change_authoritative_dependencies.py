@@ -179,11 +179,19 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
         expected_version=change.version,
     )
 
-    stale_source = changes.link_work(
+    historical_source = changes.link_work(
         change.change_id,
         "acquisition",
         1,
         _research(change.change_id, 1),
+    )
+    _complete(work, work.require(historical_source.work_id))
+
+    stale_source = changes.link_work(
+        change.change_id,
+        "acquisition",
+        2,
+        _research(change.change_id, 2),
     )
     stale_item = work.require(stale_source.work_id)
     stale_running = work.save(
@@ -201,8 +209,8 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
     current_source = changes.link_work(
         change.change_id,
         "acquisition",
-        2,
-        _research(change.change_id, 2),
+        3,
+        _research(change.change_id, 3),
     )
     _complete(work, work.require(current_source.work_id))
 
@@ -248,7 +256,11 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
         work_type=WorkType.DEVELOPMENT,
         source_session_id=f"change:{change.change_id}",
         source_turn_id="development:1",
-        dependencies=(stale_source.work_id,),
+        dependencies=(
+            historical_source.work_id,
+            stale_source.work_id,
+            current_source.work_id,
+        ),
     )
     poisoned_stage = changes.link_work(
         change.change_id,
@@ -318,4 +330,179 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
     ]
     assert len(events) == 1
     assert events[0]["detail"]["stale_dependency_work_id"] == stale_source.work_id
+    assert events[0]["detail"]["historical_dependency_work_ids"] == [
+        historical_source.work_id,
+        stale_source.work_id,
+    ]
     assert events[0]["detail"]["authoritative_source_work_id"] == current_source.work_id
+
+
+def test_superseded_source_dependency_recovery_rejects_failed_unrelated_dependency(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    acquisition_process = ProcessContract(
+        key="test.owner_capability_acquisition",
+        version=1,
+        stages=(
+            ProcessStageContract(
+                stage_key="acquisition",
+                work_type=WorkType.RESEARCH,
+                role=ProcessStageRole.ARCHITECTURE_SOURCE,
+            ),
+            ProcessStageContract(
+                stage_key="development",
+                work_type=WorkType.DEVELOPMENT,
+                role=ProcessStageRole.DEVELOPMENT,
+            ),
+        ),
+    )
+    changes = ChangeStore(work, processes=(acquisition_process,))
+
+    change = changes.create(
+        request="Build governed media control.",
+        process_key=acquisition_process.key,
+        process_version=acquisition_process.version,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+
+    stale_source = changes.link_work(
+        change.change_id,
+        "acquisition",
+        1,
+        _research(change.change_id, 1),
+    )
+    stale_item = work.require(stale_source.work_id)
+    stale_running = work.save(
+        stale_item.transition(WorkState.RUNNING),
+        expected_version=stale_item.version,
+    )
+    work.save(
+        stale_running.transition(
+            WorkState.FAILED,
+            status_detail="historical source failure",
+        ),
+        expected_version=stale_running.version,
+    )
+
+    current_source = changes.link_work(
+        change.change_id,
+        "acquisition",
+        2,
+        _research(change.change_id, 2),
+    )
+    _complete(work, work.require(current_source.work_id))
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"target_family": "media_player.control"},
+    )
+    changes.record_stage_outcome(
+        change.change_id,
+        current_source.stage_key,
+        current_source.attempt,
+        produced_artifact_id=architecture.artifact_id,
+        accepted=True,
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.ARCHITECTURE_READY,
+        expected_version=change.version,
+    )
+
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="owner-session",
+        source_turn_id="approval-turn",
+        request_key="owner-session:approval-turn",
+    )
+
+    unrelated = WorkItem(
+        request="Independent prerequisite.",
+        work_type=WorkType.DIAGNOSTICS,
+        source_session_id="other-session",
+        source_turn_id="other-turn",
+    )
+    unrelated = work.create(unrelated)
+    unrelated_running = work.save(
+        unrelated.transition(WorkState.RUNNING),
+        expected_version=unrelated.version,
+    )
+    unrelated_failed = work.save(
+        unrelated_running.transition(
+            WorkState.FAILED,
+            status_detail="real unrelated blocker",
+        ),
+        expected_version=unrelated_running.version,
+    )
+
+    poisoned = WorkItem(
+        request="Develop approved capability.",
+        work_type=WorkType.DEVELOPMENT,
+        source_session_id=f"change:{change.change_id}",
+        source_turn_id="development:1",
+        dependencies=(
+            stale_source.work_id,
+            current_source.work_id,
+            unrelated_failed.work_id,
+        ),
+    )
+    poisoned_stage = changes.link_work(
+        change.change_id,
+        "development",
+        1,
+        poisoned,
+    )
+    change = changes.require(change.change_id)
+    change = changes.transition(
+        change.change_id,
+        ChangeState.DEVELOPING,
+        expected_version=change.version,
+    )
+    poisoned_item = work.require(poisoned_stage.work_id)
+    poisoned_running = work.save(
+        poisoned_item.transition(WorkState.RUNNING),
+        expected_version=poisoned_item.version,
+    )
+    work.save(
+        poisoned_running.transition(
+            WorkState.FAILED,
+            status_detail=(
+                "dependency did not complete successfully: " + stale_source.work_id
+            ),
+        ),
+        expected_version=poisoned_running.version,
+    )
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=change.version,
+    )
+
+    generation = "authoritative-source-dependency-test-v1"
+    diagnosis = changes.diagnose_superseded_dependency_recovery(
+        change.change_id,
+        recovery_generation=generation,
+    )
+    assert diagnosis["eligible"] is False
+    assert diagnosis["failed_condition"] == "unrelated_dependency_not_completed"
+    assert changes.reopen_recoverable_superseded_dependency_failures(
+        recovery_generation=generation,
+        dry_run=True,
+    ) == ()
