@@ -830,14 +830,18 @@ def acquisition_completion_guard(
         if not successful_research:
             return (
                 False,
-                "custom capability development requires successful current web "
-                "research before completion",
+                (
+                    "custom capability development requires successful current web "
+                    "research before completion"
+                ),
             )
         if successful_research[-1] >= resolve_index:
             return (
                 False,
-                "custom capability development must re-resolve after latest "
-                "successful web research",
+                (
+                    "custom capability development must re-resolve after latest "
+                    "successful web research"
+                ),
             )
 
     source_evidence = {
