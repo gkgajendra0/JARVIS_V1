@@ -42,7 +42,9 @@ class _NoMutationBackend:
         raise RuntimeError("read-only preflight may not submit durable work")
 
 
-def _database_source_fingerprint(source_path: pathlib.Path) -> tuple[tuple[str, str], ...]:
+def _database_source_fingerprint(
+    source_path: pathlib.Path,
+) -> tuple[tuple[str, str], ...]:
     """Hash canonical SQLite data files without opening the database."""
 
     members = (source_path, pathlib.Path(str(source_path) + "-wal"))
