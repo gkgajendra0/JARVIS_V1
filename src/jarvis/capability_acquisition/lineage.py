@@ -226,11 +226,10 @@ def verify_capability_acquisition_completion(
             raise CapabilityAcquisitionLineageError(
                 "external acceptance binding contract does not match architecture"
             )
-        if (
-            binding.payload.get("authority_session_id")
-            != activation.payload.get("authority_session_id")
-            or binding.payload.get("source_turn_id")
-            != activation.payload.get("source_turn_id")
+        if binding.payload.get("authority_session_id") != activation.payload.get(
+            "authority_session_id"
+        ) or binding.payload.get("source_turn_id") != activation.payload.get(
+            "source_turn_id"
         ):
             raise CapabilityAcquisitionLineageError(
                 "external acceptance authority differs from activation authority"
