@@ -296,6 +296,11 @@ jobs:
           python -m pytest -q
           tests/test_phase9_evaluation.py
 
+      - name: Run Windows Phase 9 adversarial system hardening
+        run: >-
+          python -m pytest -q
+          tests/test_capability_acquisition_system_hardening.py
+
 
   promotion-policy:
     if: always()
