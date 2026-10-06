@@ -4,6 +4,7 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from hypothesis import settings
 from hypothesis.stateful import RuleBasedStateMachine, invariant, precondition, rule
@@ -14,8 +15,12 @@ from jarvis.autonomy import (
     SupervisorCutoverController,
     SupervisorCutoverDisposition,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
+    _check_external_acceptance_binding,
     assert_capability_system_invariants,
     inspect_capability_system_invariants,
     inspect_capability_workspace_invariants,
@@ -598,6 +603,74 @@ TestCapabilityAcquisitionLifecycleStateMachine.settings = settings(
     deadline=None,
     derandomize=True,
 )
+
+
+def test_external_acceptance_invariant_is_architecture_conditional() -> None:
+    """Activation alone must not invent a real-world acceptance requirement."""
+
+    architecture = SimpleNamespace(
+        kind="architecture",
+        artifact_id="artifact_architecture_internal",
+        payload={"owner_acceptance_contract_ids": []},
+    )
+    activation = SimpleNamespace(
+        kind="capability_lifecycle_activation",
+        artifact_id="artifact_activation_internal",
+        digest="a" * 64,
+        revision=1,
+        payload={},
+    )
+    change = SimpleNamespace(
+        change_id="change_internal_capability",
+        current_architecture_artifact_id=architecture.artifact_id,
+        artifacts=(architecture, activation),
+    )
+    findings = []
+
+    _check_external_acceptance_binding(
+        change=change,
+        work_by_id={},
+        findings=findings,
+    )
+
+    assert findings == []
+
+
+def test_external_acceptance_invariant_requires_binding_when_approved() -> None:
+    """Approved real-world acceptance cannot disappear after activation."""
+
+    architecture = SimpleNamespace(
+        kind="architecture",
+        artifact_id="artifact_architecture_external",
+        payload={
+            "owner_acceptance_contract_ids": [
+                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+            ]
+        },
+    )
+    activation = SimpleNamespace(
+        kind="capability_lifecycle_activation",
+        artifact_id="artifact_activation_external",
+        digest="b" * 64,
+        revision=1,
+        payload={},
+    )
+    change = SimpleNamespace(
+        change_id="change_external_capability",
+        current_architecture_artifact_id=architecture.artifact_id,
+        artifacts=(architecture, activation),
+    )
+    findings = []
+
+    _check_external_acceptance_binding(
+        change=change,
+        work_by_id={},
+        findings=findings,
+    )
+
+    assert [finding.code for finding in findings] == [
+        CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_WITHOUT_BINDING
+    ]
 
 
 def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> None:
