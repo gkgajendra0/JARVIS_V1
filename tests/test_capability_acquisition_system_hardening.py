@@ -788,6 +788,23 @@ def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> No
             missing_reason_codes=("capability_missing",),
         )
     )
+    node = PlanNodeV1.create(
+        plan_identity=goal.goal_id,
+        ordinal=0,
+        node_type=PlanNodeType.ACQUIRE_CAPABILITY,
+        summary="Acquire television control and resume the owner goal.",
+        gap_id=gap.gap_id,
+    )
+    plan = goals.put_plan(
+        PlanGraphV1.create(
+            goal_id=goal.goal_id,
+            goal_revision=goal.goal_revision,
+            nodes=(node,),
+            edges=(),
+            root_node_ids=(node.node_id,),
+            completion_node_ids=(node.node_id,),
+        )
+    )
     request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
     change = changes.create(
         request="Acquire television control.",
@@ -821,6 +838,17 @@ def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> No
         state=WorkState.COMPLETED,
     )
     changes.link_work(change.change_id, "acquisition", 1, source)
+    goals.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id=plan.plan_id,
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id=gap.gap_id,
+            resume_node_id=node.node_id,
+            work_ids=(source.work_id,),
+            goal_revision=goal.goal_revision,
+        )
+    )
     architecture = changes.add_artifact(
         change.change_id,
         kind="architecture",
