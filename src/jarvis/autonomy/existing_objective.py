@@ -265,6 +265,16 @@ class ExistingObjectiveResumeController:
             )
         ):
             startup_recovery_kinds.append("codex-contract-repair-v1")
+        if (
+            lineage.change_id
+            in self._changes.reopen_recoverable_superseded_dependency_failures(
+                recovery_generation="phase9-authoritative-source-dependency-v1",
+                dry_run=True,
+            )
+        ):
+            startup_recovery_kinds.append(
+                "phase9-authoritative-source-dependency-v1"
+            )
 
         capability_completion_ready = False
         capability_completion_error: str | None = None
