@@ -1,15 +1,15 @@
 import pytest
 
+from jarvis.conversation import ConversationSession
 from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
-from jarvis.engineering_change.service import ChangeService
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.engineering_change.models import (
     ProcessContract,
     ProcessStageContract,
     ProcessStageRole,
 )
-from jarvis.conversation import ConversationSession
+from jarvis.engineering_change.service import ChangeService
 from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
