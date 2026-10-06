@@ -614,33 +614,25 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
             "engineering_change_id": change.change_id,
         },
     )
-    broken = work.create(
-        WorkItem(
-            request="Broken development result.",
-            work_type=OWNER_CAPABILITY_ACQUISITION_PROCESS.development_type,
-            source_session_id=f"change:{change.change_id}",
-            source_turn_id="development:1",
-            state=WorkState.COMPLETED,
-            result={
-                "development_engine": {
-                    "disposition": "failed",
-                    "reason": "response_contract_invalid",
-                    "blocker_code": "response_contract_invalid",
-                }
-            },
-        )
-    )
-    architecture = changes.add_artifact(
-        change.change_id,
-        kind="architecture",
-        payload={"schema": "invariant_test.v1"},
+    broken = WorkItem(
+        request="Broken retryable source result.",
+        work_type=OWNER_CAPABILITY_ACQUISITION_PROCESS.research_type,
+        source_session_id=f"change:{change.change_id}",
+        source_turn_id="acquisition:1",
+        state=WorkState.COMPLETED,
+        result={
+            "development_engine": {
+                "disposition": "failed",
+                "reason": "response_contract_invalid",
+                "blocker_code": "response_contract_invalid",
+            }
+        },
     )
     changes.link_work(
         change.change_id,
-        "development",
+        "acquisition",
         1,
         broken,
-        plan_artifact_id=architecture.artifact_id,
     )
 
     report = inspect_capability_system_invariants(
