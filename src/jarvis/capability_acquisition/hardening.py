@@ -373,18 +373,18 @@ def _check_lifecycle_order(
         )
 
 
-def inspect_capability_system_invariants(
+def inspect_capability_workspace_invariants(
     *,
-    goal_store: GoalStore,
+    workspace: ObjectiveWorkspaceV1,
     change_store: ChangeStore,
-    goal_id: str,
 ) -> CapabilitySystemInvariantReportV1:
-    """Inspect cross-lifecycle invariants without mutating canonical state."""
+    """Inspect one already-projected workspace without mutating canonical state."""
 
-    workspace = ObjectiveWorkspaceProjector(
-        goal_store=goal_store,
-        change_store=change_store,
-    ).project(goal_id)
+    if not isinstance(workspace, ObjectiveWorkspaceV1):
+        raise TypeError("workspace must be ObjectiveWorkspaceV1")
+    if not isinstance(change_store, ChangeStore):
+        raise TypeError("change_store must be ChangeStore")
+
     progress = build_progress_ledger(workspace)
     work_by_id = _work_by_id(workspace)
     findings: list[CapabilitySystemInvariantFindingV1] = []
@@ -496,6 +496,24 @@ def inspect_capability_system_invariants(
     return replace(
         report,
         digest=canonical_digest(report.canonical_payload()),
+    )
+
+
+def inspect_capability_system_invariants(
+    *,
+    goal_store: GoalStore,
+    change_store: ChangeStore,
+    goal_id: str,
+) -> CapabilitySystemInvariantReportV1:
+    """Project canonical state, then inspect cross-lifecycle invariants read-only."""
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=goal_store,
+        change_store=change_store,
+    ).project(goal_id)
+    return inspect_capability_workspace_invariants(
+        workspace=workspace,
+        change_store=change_store,
     )
 
 
