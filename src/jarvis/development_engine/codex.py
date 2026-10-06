@@ -677,9 +677,8 @@ def _provider_result(
             retry_after_seconds=retry_after_seconds,
         )
 
-    if (
-        failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID
-        and bool(getattr(error, "retryable_after_repairs", False))
+    if failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID and bool(
+        getattr(error, "retryable_after_repairs", False)
     ):
         return DevelopmentResultV1.create(
             ticket=ticket,
