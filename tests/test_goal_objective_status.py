@@ -258,10 +258,9 @@ def test_owner_status_ignores_external_result_from_old_activation(
     assert projected.external_acceptance_work_id == current_work.work_id
     assert projected.external_acceptance_verdict is None
     assert projected.external_acceptance_work_id != old_work.work_id
-    assert (
-        architecture.artifact_id
-        == changes.require(change.change_id).current_architecture_artifact_id
-    )
+    current_architecture = changes.latest_artifact(change.change_id, "architecture")
+    assert current_architecture is not None
+    assert architecture.artifact_id == current_architecture.artifact_id
 
 
 def test_terminal_goal_is_only_overall_completion_authority(tmp_path) -> None:
