@@ -729,9 +729,7 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
 
     assert cutover.disposition is SupervisorCutoverDisposition.REJECTED
     assert cutover.accepted is False
-    assert cutover.reason_codes == (
-        "system_invariant:retryable_work_not_failed",
-    )
+    assert cutover.reason_codes == ("system_invariant:retryable_work_not_failed",)
     assert cutover.mutation_performed is False
     assert backend.submissions == []
 
