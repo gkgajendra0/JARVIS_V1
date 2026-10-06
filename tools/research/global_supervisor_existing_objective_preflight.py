@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
+import sqlite3
 import sys
+import tempfile
 
 from jarvis.autonomy.existing_objective import (
     ExistingObjectiveLineageError,
@@ -25,7 +28,10 @@ from jarvis.engineering_change.store import ChangeStore
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.goal_intelligence.workspace import ObjectiveWorkspaceProjector
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
-from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.privacy import (
+    build_default_work_payload_codec,
+    default_work_payload_key_path,
+)
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 
@@ -33,6 +39,32 @@ class _NoMutationBackend:
     def submit(self, work_id, *, priority):
         del work_id, priority
         raise RuntimeError("read-only preflight may not submit durable work")
+
+
+def _snapshot_work_store(
+    source_path: pathlib.Path,
+) -> tuple[tempfile.TemporaryDirectory[str], SQLiteWorkStore]:
+    """Open canonical state read-only and inspect only a consistent disposable copy."""
+
+    if os.name == "nt":
+        key_path = default_work_payload_key_path(source_path)
+        if not key_path.is_file():
+            raise ExistingObjectiveLineageError(
+                "protected Work payload key is missing; read-only preflight will not "
+                f"create it: {key_path}"
+            )
+    payload_codec = build_default_work_payload_codec(source_path)
+    guard = tempfile.TemporaryDirectory(prefix="jarvis-preflight-")
+    snapshot_path = pathlib.Path(guard.name) / source_path.name
+    source_uri = source_path.as_uri() + "?mode=ro"
+    try:
+        with sqlite3.connect(source_uri, uri=True, timeout=30.0) as source:
+            with sqlite3.connect(snapshot_path, timeout=30.0) as destination:
+                source.backup(destination)
+    except Exception:
+        guard.cleanup()
+        raise
+    return guard, SQLiteWorkStore(snapshot_path, payload_codec=payload_codec)
 
 
 def inspect_existing_objective(
@@ -47,10 +79,7 @@ def inspect_existing_objective(
         raise ExistingObjectiveLineageError(
             f"canonical Work database does not exist: {path}"
         )
-    work = SQLiteWorkStore(
-        path,
-        payload_codec=build_default_work_payload_codec(path),
-    )
+    snapshot_guard, work = _snapshot_work_store(path)
     goals = GoalStore(work)
     changes = ChangeStore(
         work,
@@ -226,9 +255,10 @@ def inspect_existing_objective(
     }:
         status = "RECOVERY_REQUIRED"
 
-    return {
+    report = {
         "status": status,
         "mutation_performed": False,
+        "inspection_mode": "sqlite_read_only_snapshot",
         "store_path": str(path),
         "snapshot": snapshot.canonical_payload() | {"digest": snapshot.digest},
         "diagnostics": {
@@ -265,6 +295,8 @@ def inspect_existing_objective(
             "workspace_observed_blockers": list(workspace.observed_blockers),
         },
     }
+    snapshot_guard.cleanup()
+    return report
 
 
 def _parser() -> argparse.ArgumentParser:
