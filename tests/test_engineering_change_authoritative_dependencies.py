@@ -1,4 +1,9 @@
 from jarvis.engineering_change import ChangeState, ChangeStore
+from jarvis.engineering_change.models import (
+    ProcessContract,
+    ProcessStageContract,
+    ProcessStageRole,
+)
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkType
@@ -141,14 +146,30 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
     tmp_path,
 ) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
-    changes = ChangeStore(work)
+    acquisition_process = ProcessContract(
+        key="test.owner_capability_acquisition",
+        version=1,
+        stages=(
+            ProcessStageContract(
+                stage_key="acquisition",
+                work_type=WorkType.RESEARCH,
+                role=ProcessStageRole.ARCHITECTURE_SOURCE,
+            ),
+            ProcessStageContract(
+                stage_key="development",
+                work_type=WorkType.DEVELOPMENT,
+                role=ProcessStageRole.DEVELOPMENT,
+            ),
+        ),
+    )
+    changes = ChangeStore(work, processes=(acquisition_process,))
     backend = RecordingBackend()
     coordinator = ChangeCoordinator(changes, backend)
 
     change = changes.create(
         request="Build TV control.",
-        process_key="engineering.change",
-        process_version=1,
+        process_key=acquisition_process.key,
+        process_version=acquisition_process.version,
         source_session_id="owner-session",
         source_turn_id="owner-turn",
     )
@@ -160,7 +181,7 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
 
     stale_source = changes.link_work(
         change.change_id,
-        "research",
+        "acquisition",
         1,
         _research(change.change_id, 1),
     )
@@ -179,7 +200,7 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
 
     current_source = changes.link_work(
         change.change_id,
-        "research",
+        "acquisition",
         2,
         _research(change.change_id, 2),
     )
