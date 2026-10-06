@@ -46,12 +46,8 @@ def reconcile_owner_change_gates(
         }:
             continue
 
-        architecture = (
-            None
-            if change.current_architecture_artifact_id is None
-            else store.get_artifact(change.current_architecture_artifact_id)
-        )
-        if architecture is None or architecture.kind != "architecture":
+        architecture = store.latest_artifact(change_id, "architecture")
+        if architecture is None:
             continue
 
         process = store.process_contract(change.process_key, change.process_version)
