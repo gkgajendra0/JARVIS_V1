@@ -821,7 +821,7 @@ def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> No
             gate_id, approved, actor_id, source_session_id, source_turn_id,
             request_key, decided_at
             ) VALUES (?, 1, 'owner', 'terminal-session', 'approval-turn', ?, ?)""",
-            (f"terminal:{architecture.artifact_id}", decided_at),
+            (gate_id, f"terminal:{architecture.artifact_id}", decided_at),
         )
         db.execute(
             """UPDATE engineering_changes
