@@ -250,8 +250,7 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
         poisoned_running.transition(
             WorkState.FAILED,
             status_detail=(
-                "dependency did not complete successfully: "
-                + stale_source.work_id
+                "dependency did not complete successfully: " + stale_source.work_id
             ),
         ),
         expected_version=poisoned_running.version,
@@ -298,7 +297,4 @@ def test_superseded_source_dependency_recovers_with_fresh_development_attempt(
     ]
     assert len(events) == 1
     assert events[0]["detail"]["stale_dependency_work_id"] == stale_source.work_id
-    assert (
-        events[0]["detail"]["authoritative_source_work_id"]
-        == current_source.work_id
-    )
+    assert events[0]["detail"]["authoritative_source_work_id"] == current_source.work_id
