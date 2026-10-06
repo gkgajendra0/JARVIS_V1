@@ -39,6 +39,9 @@ def test_preflight_snapshot_does_not_mutate_source_database(tmp_path: Path) -> N
 
     before_bytes = source_path.read_bytes()
     before_mtime = source_path.stat().st_mtime_ns
+    before_directory = {
+        item.name: item.read_bytes() for item in tmp_path.iterdir() if item.is_file()
+    }
 
     module = _preflight_module()
     guard, snapshot = module._snapshot_work_store(source_path)
@@ -52,3 +55,6 @@ def test_preflight_snapshot_does_not_mutate_source_database(tmp_path: Path) -> N
 
     assert source_path.read_bytes() == before_bytes
     assert source_path.stat().st_mtime_ns == before_mtime
+    assert {
+        item.name: item.read_bytes() for item in tmp_path.iterdir() if item.is_file()
+    } == before_directory
