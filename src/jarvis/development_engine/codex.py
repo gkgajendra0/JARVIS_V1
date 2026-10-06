@@ -498,6 +498,7 @@ def _contract_repair_payload(
     ticket: DevelopmentTicketV1,
     *,
     reason: str,
+    allowed_evidence_refs: tuple[str, ...] = (),
 ) -> str:
     """Ask the same Codex thread to repair structure without granting new authority."""
 
@@ -507,12 +508,16 @@ def _contract_repair_payload(
         "ticket_id": ticket.ticket_id,
         "status": "previous_response_rejected",
         "reason": normalized_reason or "structured response contract was invalid",
+        "allowed_evidence_refs": list(allowed_evidence_refs),
         "instructions": (
             "Return a fresh response that satisfies the exact output schema. "
             "Do not claim any tool execution or evidence that JARVIS has not supplied. "
-            "If implementation work is needed, return kind=tool_batch with at least "
-            "one authorized tool call. If a terminal disposition is justified, return "
-            "kind=result with no tool calls."
+            "For kind=result, evidence_refs must be copied exactly from "
+            "allowed_evidence_refs; never invent, shorten, rewrite, or derive a new "
+            "reference. If no listed reference is needed, return an empty evidence_refs "
+            "array. If implementation work is needed, return kind=tool_batch with at "
+            "least one authorized tool call. If a terminal disposition is justified, "
+            "return kind=result with no tool calls."
         ),
     }
     return json.dumps(
@@ -878,8 +883,12 @@ class CodexPlanDevelopmentEngine:
         )
         unknown = [item for item in normalized if item not in allowed]
         if unknown:
+            preview = ", ".join(repr(item) for item in unknown[:8])
+            if len(unknown) > 8:
+                preview += f", ... (+{len(unknown) - 8} more)"
             raise ValueError(
-                "Codex returned evidence references outside canonical JARVIS evidence"
+                "Codex returned evidence references outside canonical JARVIS evidence: "
+                + preview
             )
         return normalized
 
@@ -1096,6 +1105,25 @@ class CodexPlanDevelopmentEngine:
                             contract_error = None
 
                     if contract_error is None:
+                        if directive["kind"] == "result":
+                            try:
+                                return self._terminal_result(
+                                    ticket=ticket,
+                                    directive=directive,
+                                    thread_id=thread.id,
+                                    usage=last_usage,
+                                    observed_evidence=observed_evidence,
+                                    changed_files=changed_files,
+                                    passing_tests=passing_tests,
+                                    candidate_revision=candidate_revision,
+                                )
+                            except (TypeError, ValueError) as exc:
+                                response = None
+                                last_contract_error = _DevelopmentResponseContractError(
+                                    str(exc),
+                                    retryable_after_repairs=True,
+                                )
+                                continue
                         break
                     if contract_repairs >= _MAX_CONTRACT_REPAIRS:
                         raise _DevelopmentResponseContractError(
@@ -1127,6 +1155,15 @@ class CodexPlanDevelopmentEngine:
                             _contract_repair_payload(
                                 ticket,
                                 reason=str(contract_error),
+                                allowed_evidence_refs=tuple(
+                                    sorted(
+                                        {
+                                            *ticket.research_evidence_refs,
+                                            *ticket.repository_context_refs,
+                                            *observed_evidence,
+                                        }
+                                    )
+                                ),
                             ),
                             output_schema=_directive_schema(),
                         )
@@ -1137,21 +1174,6 @@ class CodexPlanDevelopmentEngine:
                         last_contract_error = None
                         if circuit is not None:
                             circuit.record_success()
-
-                if directive["kind"] == "result":
-                    try:
-                        return self._terminal_result(
-                            ticket=ticket,
-                            directive=directive,
-                            thread_id=thread.id,
-                            usage=last_usage,
-                            observed_evidence=observed_evidence,
-                            changed_files=changed_files,
-                            passing_tests=passing_tests,
-                            candidate_revision=candidate_revision,
-                        )
-                    except (TypeError, ValueError) as exc:
-                        raise _DevelopmentResponseContractError(str(exc)) from exc
 
                 calls = directive.get("tool_calls")
                 if not isinstance(calls, list) or not calls:
