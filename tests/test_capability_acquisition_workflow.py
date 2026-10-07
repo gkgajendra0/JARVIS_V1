@@ -827,7 +827,9 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
         PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
         in migrated.payload["owner_acceptance_contract_ids"]
     )
-    assert migrated.payload["semantic_capability_contract"] == expected_semantic_contract
+    assert (
+        migrated.payload["semantic_capability_contract"] == expected_semantic_contract
+    )
     assert store.require(change_id).state is ChangeState.ARCHITECTURE_READY
 
     gate_ids = reconcile_owner_change_gates(
