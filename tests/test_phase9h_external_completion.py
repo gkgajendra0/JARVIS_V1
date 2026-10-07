@@ -527,3 +527,15 @@ def test_external_acceptance_guard_requires_durable_real_world_evidence() -> Non
         ),
     )
     assert external_acceptance_completion_guard(after_record) == (True, None)
+
+    failed_record = before_record + (
+        _completed_step(
+            work_id,
+            "external_acceptance_record",
+            {"acceptance_recorded": True, "verdict": "fail"},
+        ),
+    )
+    assert external_acceptance_completion_guard(failed_record) == (
+        False,
+        "external acceptance real-world verdict did not pass",
+    )
