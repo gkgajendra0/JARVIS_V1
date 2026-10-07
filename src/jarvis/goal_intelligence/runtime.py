@@ -70,7 +70,7 @@ from .monitoring import (
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
 )
-from .phase9 import Phase9GoalBridge
+from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
 from .service import GoalOrchestrator, SpecialistActionDispatch
@@ -819,6 +819,15 @@ def build_gicc_apply_runtime(
             ),
         ),
     )
+    migrated_phase9_links = migrate_legacy_phase9_gap_links(
+        goal_store=store,
+        change_store=work_runtime.changes.store,
+    )
+    if migrated_phase9_links:
+        LOGGER.warning(
+            "Migrated durable GICC Phase-9 v1 lineage to append-only v2 evidence: %s",
+            ", ".join(migrated_phase9_links),
+        )
     phase9_bridge = Phase9GoalBridge(
         coordinator=work_runtime.capability_acquisition,
         change_store=work_runtime.changes.store,
