@@ -177,7 +177,12 @@ def verify_capability_acquisition_completion(
         for item in architecture.payload.get("owner_acceptance_contract_ids", ())
         if str(item).strip()
     }
-    external_required = PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in contracts
+    if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
+        raise CapabilityAcquisitionLineageError(
+            "GICC capability completion requires the mandatory real-target "
+            "external acceptance contract"
+        )
+    external_required = True
     external_binding_id = None
     external_work_id = None
     external_id = None
