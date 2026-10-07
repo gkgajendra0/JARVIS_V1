@@ -17,6 +17,7 @@ from jarvis.capability_acquisition.admission import (
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionSourceCompletionHandler,
     ensure_capability_acquisition_architecture_current,
+    migrate_legacy_gicc_external_acceptance_contracts,
 )
 from jarvis.capability_acquisition.artifacts import (
     candidate_from_payload,
@@ -31,6 +32,9 @@ from jarvis.capability_acquisition.models import (
     AcquisitionSourceKind,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
+)
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
@@ -54,6 +58,7 @@ from jarvis.capability_registry.projection import (
 )
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.work.models import WorkPriority, WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
@@ -722,3 +727,110 @@ def test_phase9_revision_with_unchanged_architecture_fails_closed(
         no_progress.payload["unchanged_architecture_artifact_id"]
         == architecture1.artifact_id
     )
+
+
+def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
+    tmp_path,
+) -> None:
+    work, store, _, changes = _changes(tmp_path, handler=True)
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire reusable media-player control.",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=(
+            "entity_type:television",
+            "entity_id:living-room",
+        ),
+        source_session_id="gicc:legacy-goal",
+        source_turn_id="gap:legacy-gap",
+        now_epoch=100.0,
+    )
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(goal, source_revision=REVISION)
+    assert admission.change is not None
+    assert admission.acquisition_work_id is not None
+    change_id = admission.change.change_id
+    store.add_artifact(
+        change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "schema": "gicc_phase9_gap_link.v2",
+            "request_id": "legacy-request",
+            "request_digest": "r" * 64,
+            "motivating_goal_id": "legacy-goal",
+            "gap_id": "legacy-gap",
+            "engineering_change_id": change_id,
+            "reusable_capability_family": "media_player.control",
+            "minimum_required_operations": ["power"],
+            "target_entity_type": "television",
+            "target_entity_id": "living-room",
+            "monitor_event_contract_required": False,
+            "monitor_event_contract": None,
+        },
+    )
+    plan, plan_artifact = _persist_plan(
+        store,
+        change_id=change_id,
+        goal=goal,
+        package_version="1.0.0",
+        changed_path="src/jarvis/tv_control.py",
+    )
+    _complete_acquisition_work(
+        work,
+        work_id=admission.acquisition_work_id,
+        plan=plan,
+        plan_artifact=plan_artifact,
+    )
+    changes.reconcile_for_work(admission.acquisition_work_id)
+    current = ensure_capability_acquisition_architecture_current(store, change_id)
+    assert (
+        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+        in current.payload["owner_acceptance_contract_ids"]
+    )
+
+    legacy_payload = dict(current.payload)
+    legacy_payload["owner_acceptance_contract_ids"] = []
+    legacy_payload.pop("external_runtime_contract", None)
+    legacy = store.add_artifact(
+        change_id,
+        kind="architecture",
+        payload=legacy_payload,
+    )
+    with work._lock, work._connect() as db:
+        db.execute(
+            """UPDATE engineering_changes
+            SET state=?, version=version+1
+            WHERE change_id=?""",
+            (ChangeState.APPROVED_FOR_BUILD.value, change_id),
+        )
+
+    before_revision = legacy.revision
+    assert migrate_legacy_gicc_external_acceptance_contracts(
+        store,
+        dry_run=True,
+    ) == (change_id,)
+    assert store.latest_artifact(change_id, "architecture").revision == before_revision
+    assert store.require(change_id).state is ChangeState.APPROVED_FOR_BUILD
+
+    assert migrate_legacy_gicc_external_acceptance_contracts(store) == (change_id,)
+    migrated = store.latest_artifact(change_id, "architecture")
+    assert migrated is not None
+    assert migrated.revision == before_revision + 1
+    assert (
+        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+        in migrated.payload["owner_acceptance_contract_ids"]
+    )
+    assert store.require(change_id).state is ChangeState.ARCHITECTURE_READY
+
+    gate_ids = reconcile_owner_change_gates(
+        changes,
+        change_ids=(change_id,),
+    )
+    assert len(gate_ids) == 1
+    assert store.require(change_id).state is ChangeState.WAITING_OWNER_APPROVAL
+    gate = GateService(store, verify_owner=lambda *_: False).get(gate_ids[0])
+    challenge = getattr(gate, "challenge", gate)
+    assert challenge.artifact_id == migrated.artifact_id
+    assert challenge.artifact_digest == migrated.digest
