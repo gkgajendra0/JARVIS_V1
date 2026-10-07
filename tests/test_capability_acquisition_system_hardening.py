@@ -15,6 +15,9 @@ from jarvis.autonomy import (
     SupervisorCutoverController,
     SupervisorCutoverDisposition,
 )
+from jarvis.capability_acquisition.architecture import (
+    SemanticCapabilityBuildContractV1,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
@@ -441,6 +444,14 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
         source = self.changes.current_stage_attempt(self.change_id, "acquisition")
         assert source is not None
         item = self.work.require(source.work_id)
+        gap = self.goals.get_gap(self.gap_id)
+        assert gap is not None
+        semantic_contract = SemanticCapabilityBuildContractV1(
+            semantic_capability_family=gap.reusable_capability_family,
+            target_entity_type=gap.target_entity_type,
+            target_entity_id=gap.target_entity_id,
+            required_operations=gap.minimum_required_operations,
+        ).to_payload()
         architecture = self.changes.add_artifact(
             self.change_id,
             kind="architecture",
@@ -451,6 +462,7 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
                 "owner_acceptance_contract_ids": [
                     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
                 ],
+                "semantic_capability_contract": semantic_contract,
             },
         )
         completed = self.work.save(
