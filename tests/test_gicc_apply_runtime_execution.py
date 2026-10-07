@@ -847,6 +847,76 @@ async def test_background_capability_continuation_uses_same_dispatcher(
     assert "Open Calculator." in goal_deliveries[0].message
 
 
+class TerminalSupervisorCutover:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def coordinate(self, goal_id: str):
+        self.calls.append(goal_id)
+        return SimpleNamespace(
+            action=SupervisorAction.TERMINAL,
+            disposition=SupervisorCutoverDisposition.TERMINAL_OBSERVED,
+            accepted=True,
+            mutation_performed=False,
+            decision_digest="terminal-decision-digest",
+            change_id="change-terminal",
+        )
+
+
+@pytest.mark.asyncio
+async def test_terminal_capability_outcome_fails_goal_instead_of_looping(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    anchor = store.work.create(
+        WorkItem(
+            request="Terminal capability acquisition.",
+            work_type=WorkType.RESEARCH,
+            source_session_id="phase9-terminal-session",
+            source_turn_id="phase9-terminal-turn",
+            state=WorkState.FAILED,
+            status_detail="terminal capability failure",
+        )
+    )
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-terminal-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-terminal",
+            resume_node_id="resume-terminal",
+            work_ids=(anchor.work_id,),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:12:30+00:00",
+        )
+    )
+    coordinator = CapabilityContinuationCoordinator(store)
+    cutover = TerminalSupervisorCutover()
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        supervisor_cutover=cutover,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 1
+    assert cutover.calls == [goal.goal_id]
+    assert coordinator.calls == 0
+    assert latest is not None
+    assert latest.state is GoalState.FAILED
+    deliveries = store.work.list_pending_deliveries(limit=20)
+    terminal = [
+        item
+        for item in deliveries
+        if item.event_key == f"gicc-goal:{goal.goal_id}:failed"
+    ]
+    assert len(terminal) == 1
+
+
 class RecordingSupervisorCutover:
     def __init__(self) -> None:
         self.calls: list[str] = []
