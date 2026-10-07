@@ -417,9 +417,7 @@ def _check_gicc_semantic_contract(
     findings: list[CapabilitySystemInvariantFindingV1],
 ) -> None:
     links = [
-        item
-        for item in change.artifacts
-        if item.kind == "gicc_capability_gap_link"
+        item for item in change.artifacts if item.kind == "gicc_capability_gap_link"
     ]
     if not links:
         return
