@@ -11,6 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from jarvis.capability_acquisition.architecture import (
+    SemanticCapabilityBuildContractV1,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
@@ -44,6 +47,9 @@ class CapabilitySystemInvariantCode(StrEnum):
     GAP_LINK_IDENTITY_DRIFT = "gap_link_identity_drift"
     GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE = (
         "gicc_architecture_missing_external_acceptance"
+    )
+    GICC_ARCHITECTURE_SEMANTIC_CONTRACT_DRIFT = (
+        "gicc_architecture_semantic_contract_drift"
     )
     ACTIVATION_WITHOUT_ADMISSION = "activation_without_admission"
     EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION = "external_acceptance_without_activation"
@@ -404,6 +410,70 @@ def _check_gicc_external_acceptance_contract(
     )
 
 
+def _check_gicc_semantic_contract(
+    *,
+    change: WorkspaceChangeV1,
+    findings: list[CapabilitySystemInvariantFindingV1],
+) -> None:
+    links = [
+        item
+        for item in change.artifacts
+        if item.kind == "gicc_capability_gap_link"
+    ]
+    if not links:
+        return
+    link = max(links, key=lambda item: (item.revision, item.artifact_id))
+    architecture = next(
+        (
+            item
+            for item in change.artifacts
+            if item.kind == "architecture"
+            and item.artifact_id == change.current_architecture_artifact_id
+        ),
+        None,
+    )
+    if architecture is None:
+        return
+    try:
+        expected = SemanticCapabilityBuildContractV1(
+            semantic_capability_family=str(
+                link.payload.get("reusable_capability_family") or ""
+            ),
+            target_entity_type=str(link.payload.get("target_entity_type") or ""),
+            target_entity_id=(
+                None
+                if link.payload.get("target_entity_id") is None
+                else str(link.payload.get("target_entity_id"))
+            ),
+            required_operations=tuple(
+                link.payload.get("minimum_required_operations") or ()
+            ),
+            monitor_event_contract=(
+                str(link.payload.get("monitor_event_contract") or "")
+                if link.payload.get("monitor_event_contract_required") is True
+                else None
+            ),
+        ).to_payload()
+    except Exception as exc:
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.GICC_ARCHITECTURE_SEMANTIC_CONTRACT_DRIFT,
+            f"GICC semantic link is invalid: {type(exc).__name__}",
+            change_id=change.change_id,
+        )
+        return
+    if architecture.payload.get("semantic_capability_contract") != expected:
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.GICC_ARCHITECTURE_SEMANTIC_CONTRACT_DRIFT,
+            (
+                "GICC-linked capability architecture does not match the current "
+                "semantic capability contract"
+            ),
+            change_id=change.change_id,
+        )
+
+
 def _check_external_acceptance_binding(
     *,
     change: WorkspaceChangeV1,
@@ -600,6 +670,10 @@ def inspect_capability_workspace_invariants(
         )
         _check_lifecycle_order(change=change, findings=findings)
         _check_gicc_external_acceptance_contract(
+            change=change,
+            findings=findings,
+        )
+        _check_gicc_semantic_contract(
             change=change,
             findings=findings,
         )
