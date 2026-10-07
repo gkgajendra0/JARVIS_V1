@@ -405,10 +405,7 @@ class WorkAgentTools:
                 and disabled.payload.get("effective_enabled") is False
             )
             eligible = (
-                (
-                    not activation_matches_latest_candidate
-                    or disabled_after_activation
-                )
+                (not activation_matches_latest_candidate or disabled_after_activation)
                 if activate
                 else (activation_effective and not disabled_after_activation)
             )
