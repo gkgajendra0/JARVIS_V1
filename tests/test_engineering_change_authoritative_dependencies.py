@@ -806,6 +806,140 @@ def test_completed_response_contract_failure_after_system_retry_recovers_fresh_a
     assert changes.require(change.change_id).state is ChangeState.DEVELOPING
 
 
+def test_missing_architecture_revision_evidence_failure_recovers_fresh_attempt(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = changes.create(
+        request="Build governed media control.",
+        process_key="engineering.change",
+        process_version=1,
+        source_session_id="owner-session",
+        source_turn_id="owner-turn",
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
+
+    source = changes.link_work(
+        change.change_id,
+        "research",
+        1,
+        _research(change.change_id, 1),
+    )
+    _complete(work, work.require(source.work_id))
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"target_family": "media_player.control"},
+    )
+    changes.record_stage_outcome(
+        change.change_id,
+        source.stage_key,
+        source.attempt,
+        produced_artifact_id=architecture.artifact_id,
+        accepted=True,
+    )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.ARCHITECTURE_READY,
+        expected_version=change.version,
+    )
+
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="owner-session",
+        source_turn_id="approval-turn",
+        request_key="owner-session:approval-turn",
+    )
+
+    coordinator.reconcile(change.change_id)
+
+    development = changes.current_stage_attempt(change.change_id, "development")
+    assert development is not None
+    item = work.require(development.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+
+    reason = (
+        "Codex requested architecture revision without exact canonical "
+        "evidence references."
+    )
+    engine_result = {
+        "disposition": "failed",
+        "summary": "Architecture revision request failed evidence validation.",
+        "reason": reason,
+        "blocker_code": None,
+    }
+    engine_step = WorkStep(
+        work_id=running.work_id,
+        kind="dev_engine_execute",
+        summary="Run governed engineering specialist",
+    )
+    work.add_step(engine_step)
+    work.save_step(engine_step.start().complete({"development_result": engine_result}))
+    work.save(
+        running.transition(
+            WorkState.FAILED,
+            status_detail=reason,
+        ),
+        expected_version=running.version,
+    )
+
+    current = changes.require(change.change_id)
+    assert current.state is ChangeState.DEVELOPING
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=current.version,
+    )
+
+    generation = "architecture-revision-evidence-contract-test-v1"
+    assert changes.reopen_recoverable_development_engine_failures(
+        recovery_generation=generation,
+        dry_run=True,
+    ) == (change.change_id,)
+
+    recovered = changes.reopen_recoverable_development_engine_failures(
+        recovery_generation=generation,
+    )
+    assert recovered == (change.change_id,)
+    assert changes.require(change.change_id).state is ChangeState.APPROVED_FOR_BUILD
+
+    coordinator.reconcile(change.change_id)
+
+    attempts = [
+        stage
+        for stage in changes.list_stage_attempts(change.change_id)
+        if stage.stage_key == "development"
+    ]
+    assert len(attempts) == 2
+    assert attempts[0].authoritative is False
+    assert attempts[0].superseded_by_attempt == 2
+    assert attempts[1].authoritative is True
+    assert attempts[1].work_id != attempts[0].work_id
+    assert work.require(attempts[0].work_id).state is WorkState.FAILED
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+
 def test_provisional_candidate_collision_recovery_creates_fresh_source_attempt(
     tmp_path,
 ) -> None:
