@@ -189,7 +189,7 @@ def _install_external_pass(store: FakeStore) -> None:
         _completed_step("external_acceptance_invoke", {"invoked": True}),
         _completed_step(
             "external_acceptance_record",
-            {"acceptance_recorded": True},
+            {"acceptance_recorded": True, "verdict": "pass"},
         ),
     )
     store.artifacts[EXTERNAL_ACCEPTANCE_RESULT_KIND] = _artifact(
