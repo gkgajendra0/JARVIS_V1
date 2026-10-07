@@ -365,7 +365,7 @@ def test_task_and_progress_ledgers_derive_from_same_workspace(tmp_path: Path) ->
     assert progress.blocker_kind == "temporary_resource"
     assert progress.owner_action_required is False
     assert progress.current_plan_valid is True
-    assert progress.next_legal_actions == ("WAIT_RESOURCE", "RETRY")
+    assert progress.next_legal_actions == ("WAIT_RESOURCE",)
     assert progress.source_workspace_digest == workspace.digest
     assert len(progress.digest) == 64
 
@@ -410,10 +410,7 @@ def test_global_supervisor_accepts_only_current_legal_action(tmp_path: Path) -> 
     assert context.workspace_digest == workspace.digest
     assert context.task_ledger.source_workspace_digest == workspace.digest
     assert context.progress_ledger.source_workspace_digest == workspace.digest
-    assert context.allowed_actions == (
-        SupervisorAction.WAIT_RESOURCE,
-        SupervisorAction.RETRY,
-    )
+    assert context.allowed_actions == (SupervisorAction.WAIT_RESOURCE,)
     assert decision.accepted is True
     assert decision.rejection_codes == ()
     assert decision.proposal.action is SupervisorAction.WAIT_RESOURCE
@@ -441,6 +438,18 @@ def test_global_supervisor_rejects_illegal_and_stale_proposals(tmp_path: Path) -
     assert illegal_decision.accepted is False
     assert "action_not_legal" in illegal_decision.rejection_codes
     assert "terminal_not_proven" in illegal_decision.rejection_codes
+
+    invalid_retry = SupervisorProposalV1.create(
+        context,
+        action=SupervisorAction.RETRY,
+        rationale="Retry work that is waiting for a temporary resource.",
+        target_change_id=state["change"].change_id,
+        target_work_id=state["research"].work_id,
+    )
+    invalid_retry_decision = GlobalSupervisor.validate(context, invalid_retry)
+
+    assert invalid_retry_decision.accepted is False
+    assert "action_not_legal" in invalid_retry_decision.rejection_codes
 
     valid_wait = SupervisorProposalV1.create(
         context,
@@ -653,10 +662,7 @@ def test_supervisor_shadow_matches_provider_outage_action_without_writes(
     assert observation.agreement is ShadowAgreement.PRIMARY_MATCH
     assert observation.primary_expected_action is SupervisorAction.WAIT_RESOURCE
     assert observation.proposed_action is SupervisorAction.WAIT_RESOURCE
-    assert observation.expected_actions == (
-        SupervisorAction.WAIT_RESOURCE,
-        SupervisorAction.RETRY,
-    )
+    assert observation.expected_actions == (SupervisorAction.WAIT_RESOURCE,)
     assert state["changes"].require(state["change"].change_id).version == (
         before_change_version
     )
@@ -1092,7 +1098,7 @@ def test_existing_objective_resume_inspects_exact_canonical_lineage(
     )
     assert snapshot.current_architecture_digest == state["architecture"].digest
     assert snapshot.current_phase == "research"
-    assert snapshot.next_legal_actions == ("WAIT_RESOURCE", "RETRY")
+    assert snapshot.next_legal_actions == ("WAIT_RESOURCE",)
     assert snapshot.active_work_id == state["research"].work_id
     assert snapshot.target_names == ("Hisense U7N",)
     assert snapshot.capability_families == ("media_player.control",)
