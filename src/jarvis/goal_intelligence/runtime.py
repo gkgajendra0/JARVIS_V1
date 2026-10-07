@@ -869,11 +869,9 @@ def build_gicc_apply_runtime(
                 ),
             )
         ),
-        invariant_guard=lambda workspace: (
-            blocking_capability_workspace_invariant_codes(
-                workspace=workspace,
-                change_store=work_runtime.changes.store,
-            )
+        invariant_guard=lambda workspace: blocking_capability_workspace_invariant_codes(
+            workspace=workspace,
+            change_store=work_runtime.changes.store,
         ),
     )
     existing_objective_resume = ExistingObjectiveResumeController(
