@@ -303,6 +303,45 @@ def test_lifecycle_target_uses_unique_canonical_pending_change() -> None:
     )
 
 
+def test_lifecycle_target_can_disable_effective_superseded_candidate() -> None:
+    change_id = "change_aaaaaaaaaaaaaaaa"
+    store = _LifecycleTargetStore((change_id,))
+    active_candidate = store.artifacts[(change_id, "capability_candidate")]
+    activation = SimpleNamespace(
+        artifact_id="activation-old-generation",
+        digest="a" * 64,
+        payload={
+            "candidate_artifact_id": active_candidate.artifact_id,
+            "candidate_artifact_digest": active_candidate.digest,
+            "effective_enabled": True,
+        },
+        created_at=10,
+    )
+    store.artifacts[(change_id, "capability_lifecycle_activation")] = activation
+    replacement = SimpleNamespace(
+        artifact_id="candidate-new-generation",
+        digest="f" * 64,
+        payload={},
+        created_at=20,
+    )
+    store.artifacts[(change_id, "capability_candidate")] = replacement
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = SimpleNamespace(store=store)
+    conversation = ConversationSession(session_id="lifecycle-disable-target-test")
+    conversation.start()
+    tools = WorkAgentTools(runtime, conversation)
+
+    assert (
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text="Disable the acquired capability.",
+            activate=False,
+        )
+        == change_id
+    )
+
+
 def test_voice_activation_binds_exact_owner_turn_and_starts_external_acceptance() -> (
     None
 ):
