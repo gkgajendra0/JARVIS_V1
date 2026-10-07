@@ -104,11 +104,7 @@ def _current_store(*, install_external_pass: bool = True) -> FakeStore:
     architecture = _artifact(
         "architecture",
         "h",
-        {
-            "owner_acceptance_contract_ids": [
-                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-            ]
-        },
+        {"owner_acceptance_contract_ids": [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT]},
     )
     goal_artifact = _artifact(
         "goal-artifact",
