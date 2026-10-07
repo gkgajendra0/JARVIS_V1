@@ -14,7 +14,10 @@ from jarvis.autonomy.owner_communication import (
     OwnerCommunicationKind,
     SupervisorOwnerCommunication,
 )
-from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
+from jarvis.autonomy.supervisor_cutover import (
+    SupervisorCutoverController,
+    SupervisorCutoverDisposition,
+)
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.hardening import (
@@ -658,6 +661,20 @@ class GiccApplyRuntime:
                     decision_digest=cutover.decision_digest,
                 )
                 if not cutover.accepted:
+                    continue
+                if (
+                    cutover.disposition
+                    is SupervisorCutoverDisposition.TERMINAL_OBSERVED
+                ):
+                    failed_goal = self._set_goal_state(goal.goal_id, GoalState.FAILED)
+                    advanced += 1
+                    self._enqueue_background_terminal_delivery(failed_goal)
+                    LOGGER.warning(
+                        "Global Supervisor proved terminal capability failure | "
+                        "goal_id=%s change_id=%s",
+                        goal.goal_id,
+                        cutover.change_id,
+                    )
                     continue
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
