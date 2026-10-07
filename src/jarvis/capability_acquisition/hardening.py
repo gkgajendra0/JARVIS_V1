@@ -42,6 +42,9 @@ class CapabilitySystemInvariantCode(StrEnum):
     DEVELOPMENT_DEPENDS_ON_STALE_SOURCE = "development_depends_on_stale_source"
     GOVERNING_CHANGE_DRIFT = "governing_change_drift"
     GAP_LINK_IDENTITY_DRIFT = "gap_link_identity_drift"
+    GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE = (
+        "gicc_architecture_missing_external_acceptance"
+    )
     ACTIVATION_WITHOUT_ADMISSION = "activation_without_admission"
     EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION = "external_acceptance_without_activation"
     EXTERNAL_ACCEPTANCE_WITHOUT_BINDING = "external_acceptance_without_binding"
@@ -363,6 +366,44 @@ def _check_development_binding(
         )
 
 
+def _check_gicc_external_acceptance_contract(
+    *,
+    change: WorkspaceChangeV1,
+    findings: list[CapabilitySystemInvariantFindingV1],
+) -> None:
+    """Require the real-target acceptance boundary on every GICC semantic build."""
+
+    if not _linked_gap_ids(change):
+        return
+    architecture = next(
+        (
+            item
+            for item in change.artifacts
+            if item.kind == "architecture"
+            and item.artifact_id == change.current_architecture_artifact_id
+        ),
+        None,
+    )
+    if architecture is None:
+        return
+    contracts = {
+        str(item).strip().casefold()
+        for item in architecture.payload.get("owner_acceptance_contract_ids", ())
+        if str(item).strip()
+    }
+    if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT.casefold() in contracts:
+        return
+    _add(
+        findings,
+        CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE,
+        (
+            "GICC-linked capability architecture is missing the mandatory "
+            "real-target external acceptance contract"
+        ),
+        change_id=change.change_id,
+    )
+
+
 def _check_external_acceptance_binding(
     *,
     change: WorkspaceChangeV1,
@@ -551,6 +592,10 @@ def inspect_capability_workspace_invariants(
             findings=findings,
         )
         _check_lifecycle_order(change=change, findings=findings)
+        _check_gicc_external_acceptance_contract(
+            change=change,
+            findings=findings,
+        )
         _check_external_acceptance_binding(
             change=change,
             work_by_id=work_by_id,
