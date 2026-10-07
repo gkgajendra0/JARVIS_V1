@@ -29,6 +29,7 @@ from jarvis.capability_registry.projection import (
     CapabilityManagementMode,
 )
 from jarvis.engineering_change import ChangeStore
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
@@ -516,6 +517,20 @@ def test_legacy_phase9_v1_link_migrates_append_only_to_exact_v2(
         )
     )
     request = Phase9AcquisitionRequestV2.create(gap=gap, goal=owner_goal)
+    legacy_request_payload = {
+        "motivating_goal_id": owner_goal.goal_id,
+        "gap_id": gap.gap_id,
+        "reusable_capability_family": gap.reusable_capability_family,
+        "minimum_required_operations": list(gap.minimum_required_operations),
+        "target_entity_type": gap.target_entity_type,
+        "target_entity_id": gap.target_entity_id,
+        "owner_source_session_id": owner_goal.source_session_id,
+        "owner_source_turn_id": owner_goal.source_turn_id,
+        "bridge_source_session_id": f"gicc:{owner_goal.goal_id}",
+        "bridge_source_turn_id": f"gap:{gap.gap_id}",
+    }
+    legacy_request_digest = canonical_digest(legacy_request_payload)
+    legacy_request_id = f"phase9_gicc_{legacy_request_digest[:20]}"
     admission = CapabilityAcquisitionCoordinator(
         changes=coordinator,
         context_provider=StaticAcquisitionContextProvider(_context(ready=False)),
@@ -531,8 +546,8 @@ def test_legacy_phase9_v1_link_migrates_append_only_to_exact_v2(
         kind="gicc_capability_gap_link",
         payload={
             "schema": "gicc_phase9_gap_link.v1",
-            "request_id": request.request_id,
-            "request_digest": request.digest,
+            "request_id": legacy_request_id,
+            "request_digest": legacy_request_digest,
             "motivating_goal_id": request.motivating_goal_id,
             "gap_id": request.gap_id,
             "reusable_capability_family": request.reusable_capability_family,
@@ -560,6 +575,9 @@ def test_legacy_phase9_v1_link_migrates_append_only_to_exact_v2(
     assert current.payload["schema"] == "gicc_phase9_gap_link.v2"
     assert current.payload["request_id"] == request.request_id
     assert current.payload["request_digest"] == request.digest
+    assert current.payload["migrated_from_schema"] == "gicc_phase9_gap_link.v1"
+    assert current.payload["legacy_request_id"] == legacy_request_id
+    assert current.payload["legacy_request_digest"] == legacy_request_digest
     assert current.payload["engineering_change_id"] == admission.change.change_id
     assert current.payload["acquisition_work_id"] == admission.acquisition_work_id
     assert current.payload["admission_disposition"] == "engineering_change"
