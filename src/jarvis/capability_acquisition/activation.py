@@ -75,6 +75,16 @@ class CapabilityAcquisitionLifecycleCoordinator:
             raise CapabilityAcquisitionLifecycleError(
                 "Phase-9 lifecycle requires candidate and package admission evidence"
             )
+        architecture = self._changes.latest_artifact(change_id, "architecture")
+        if (
+            architecture is None
+            or candidate.payload.get("architecture_artifact_id")
+            != architecture.artifact_id
+            or candidate.payload.get("architecture_digest") != architecture.digest
+        ):
+            raise CapabilityAcquisitionLifecycleError(
+                "Phase-9 candidate is not bound to the current acquisition architecture"
+            )
         attempt_id = str(admission.payload.get("attempt_id") or "").strip()
         ensure_capability_release_bridge_current(
             self._changes,
