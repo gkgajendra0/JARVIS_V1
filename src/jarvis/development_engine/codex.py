@@ -973,18 +973,9 @@ class CodexPlanDevelopmentEngine:
             disposition is DevelopmentDisposition.NEEDS_ARCHITECTURE_REVISION
             and not evidence
         ):
-            return DevelopmentResultV1.create(
-                ticket=ticket,
-                disposition=DevelopmentDisposition.FAILED,
-                engine_id=self.engine_id,
-                engine_version=self.engine_version,
-                summary="Architecture revision request failed evidence validation.",
-                reason=(
-                    "Codex requested architecture revision without exact canonical "
-                    "evidence references."
-                ),
-                thread_id=thread_id,
-                usage=usage,
+            raise ValueError(
+                "Codex requested architecture revision without exact canonical "
+                "evidence references."
             )
 
         return DevelopmentResultV1.create(
