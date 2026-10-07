@@ -11,6 +11,7 @@ from jarvis.capability_acquisition.admission import (
     CapabilityAcquisitionAdmission,
     CapabilityAcquisitionAdmissionDisposition,
 )
+from jarvis.capability_acquisition.artifacts import goal_from_payload
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
     verify_capability_acquisition_completion,
@@ -248,9 +249,23 @@ def migrate_legacy_phase9_gap_links(
                 "legacy Phase-9 link no longer resolves to its exact goal/gap"
             )
         request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+        legacy_request_payload = {
+            "motivating_goal_id": goal.goal_id,
+            "gap_id": gap.gap_id,
+            "reusable_capability_family": gap.reusable_capability_family,
+            "minimum_required_operations": list(gap.minimum_required_operations),
+            "target_entity_type": gap.target_entity_type,
+            "target_entity_id": gap.target_entity_id,
+            "owner_source_session_id": goal.source_session_id,
+            "owner_source_turn_id": goal.source_turn_id,
+            "bridge_source_session_id": f"gicc:{goal.goal_id}",
+            "bridge_source_turn_id": f"gap:{gap.gap_id}",
+        }
+        legacy_request_digest = canonical_digest(legacy_request_payload)
+        legacy_request_id = f"phase9_gicc_{legacy_request_digest[:20]}"
         expected_legacy = {
-            "request_id": request.request_id,
-            "request_digest": request.digest,
+            "request_id": legacy_request_id,
+            "request_digest": legacy_request_digest,
             "motivating_goal_id": request.motivating_goal_id,
             "gap_id": request.gap_id,
             "reusable_capability_family": request.reusable_capability_family,
@@ -301,11 +316,25 @@ def migrate_legacy_phase9_gap_links(
             raise GoalStoreConflict(
                 "legacy Phase-9 link is missing canonical admission provenance"
             )
-        phase9_goal = request.to_v1(owner_goal_created_at=goal.created_at)
+        phase9_goal = goal_from_payload(goal_artifact.payload)
+        if (
+            phase9_goal.source_session_id != request.bridge_source_session_id
+            or phase9_goal.source_turn_id != request.bridge_source_turn_id
+            or phase9_goal.requested_capability
+            != request.reusable_capability_family
+            or phase9_goal.required_operations
+            != request.minimum_required_operations
+        ):
+            raise GoalStoreConflict(
+                "legacy Phase-9 capability goal drifted from canonical GICC semantics"
+            )
         payload = {
             "schema": "gicc_phase9_gap_link.v2",
             "request_id": request.request_id,
             "request_digest": request.digest,
+            "migrated_from_schema": "gicc_phase9_gap_link.v1",
+            "legacy_request_id": legacy_request_id,
+            "legacy_request_digest": legacy_request_digest,
             "motivating_goal_id": request.motivating_goal_id,
             "gap_id": request.gap_id,
             "phase9_goal_id": phase9_goal.goal_id,
@@ -427,7 +456,10 @@ class Phase9GoalBridge:
                     kind="gicc_capability_gap_link",
                     payload=payload,
                 )
-            elif latest.payload != payload:
+            elif any(
+                latest.payload.get(key) != value
+                for key, value in payload.items()
+            ):
                 raise GoalStoreConflict(
                     "Phase-9 change is already linked to a different GICC gap"
                 )
