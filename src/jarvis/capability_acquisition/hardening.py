@@ -53,6 +53,9 @@ class CapabilitySystemInvariantCode(StrEnum):
         "gicc_architecture_semantic_contract_drift"
     )
     ACTIVATION_WITHOUT_ADMISSION = "activation_without_admission"
+    ACTIVATED_CANDIDATE_ARCHITECTURE_MISMATCH = (
+        "activated_candidate_architecture_mismatch"
+    )
     EXTERNAL_ACCEPTANCE_WITHOUT_ACTIVATION = "external_acceptance_without_activation"
     EXTERNAL_ACCEPTANCE_WITHOUT_BINDING = "external_acceptance_without_binding"
     EXTERNAL_ACCEPTANCE_BINDING_MISMATCH = "external_acceptance_binding_mismatch"
@@ -521,6 +524,55 @@ def _check_external_acceptance_binding(
         activations,
         key=lambda item: (item.revision, item.artifact_id),
     )
+    if activation.payload.get("effective_enabled") is not True:
+        return
+    disabled = next(
+        (
+            item
+            for item in reversed(change.artifacts)
+            if item.kind == "capability_lifecycle_disable"
+            and item.payload.get("candidate_artifact_id")
+            == activation.payload.get("candidate_artifact_id")
+            and item.payload.get("candidate_artifact_digest")
+            == activation.payload.get("candidate_artifact_digest")
+            and item.payload.get("effective_enabled") is False
+            and item.created_at >= activation.created_at
+        ),
+        None,
+    )
+    if disabled is not None:
+        return
+
+    candidate = next(
+        (
+            item
+            for item in reversed(change.artifacts)
+            if item.kind == "capability_candidate"
+        ),
+        None,
+    )
+    if (
+        candidate is not None
+        and architecture is not None
+        and (
+            candidate.payload.get("architecture_artifact_id")
+            != architecture.artifact_id
+            or candidate.payload.get("architecture_digest") != architecture.digest
+        )
+        and activation.payload.get("candidate_artifact_id") == candidate.artifact_id
+        and activation.payload.get("candidate_artifact_digest") == candidate.digest
+    ):
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.ACTIVATED_CANDIDATE_ARCHITECTURE_MISMATCH,
+            (
+                "effective capability activation belongs to a candidate built under "
+                "a superseded acquisition architecture"
+            ),
+            change_id=change.change_id,
+        )
+        return
+
     current_bindings = [
         item
         for item in bindings
@@ -542,14 +594,6 @@ def _check_external_acceptance_binding(
     )
     work_id = str(binding.payload.get("work_id") or "").strip()
     work = work_by_id.get(work_id)
-    candidate = next(
-        (
-            item
-            for item in reversed(change.artifacts)
-            if item.kind == "capability_candidate"
-        ),
-        None,
-    )
     if (
         work is None
         or work.work_type != "external_acceptance"
