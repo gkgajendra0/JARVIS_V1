@@ -302,6 +302,9 @@ jobs:
           tests/test_capability_acquisition_system_hardening.py
           tests/test_capability_acquisition_owner_flow_hardening.py
           tests/test_capability_acquisition_completion_hardening.py
+          tests/test_capability_acquisition_architecture_gicc_contract.py
+          tests/test_capability_acquisition_promotion.py
+          tests/test_phase9_voice_entrypoint.py
           tests/test_global_supervisor_existing_objective_preflight.py
           tests/test_engineering_substrate_discovery_onvif.py
           tests/test_goal_world_discovery.py
