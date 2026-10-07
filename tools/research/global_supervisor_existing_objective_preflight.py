@@ -160,8 +160,11 @@ def inspect_existing_objective(
         "phase9-gicc-external-acceptance-contract-v1"
         in snapshot.startup_recovery_kinds
     ):
-        recoverable_invariant_codes.add(
-            CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE
+        recoverable_invariant_codes.update(
+            {
+                CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE,
+                CapabilitySystemInvariantCode.GICC_ARCHITECTURE_SEMANTIC_CONTRACT_DRIFT,
+            }
         )
     recoverable_invariant_findings = tuple(
         finding
