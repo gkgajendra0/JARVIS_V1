@@ -580,7 +580,7 @@ def _legal_actions(
     if owner_action_required:
         return ("ASK_OWNER",)
     by_blocker = {
-        "temporary_resource": ("WAIT_RESOURCE", "RETRY"),
+        "temporary_resource": ("WAIT_RESOURCE",),
         "retryable": ("RETRY",),
         "evidence_insufficient": ("REQUEST_RESEARCH",),
         "needs_research": ("REQUEST_RESEARCH",),
