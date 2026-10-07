@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from jarvis.capability_acquisition.admission import CapabilityAcquisitionAdmission
+from jarvis.capability_acquisition.admission import (
+    CapabilityAcquisitionAdmission,
+    CapabilityAcquisitionAdmissionDisposition,
+)
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
     verify_capability_acquisition_completion,
@@ -15,7 +18,12 @@ from jarvis.capability_acquisition.lineage import (
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
-from jarvis.engineering_change import ChangeArtifact, EngineeringChange
+from jarvis.engineering_change import (
+    ChangeArtifact,
+    ChangeState,
+    ChangeStore,
+    EngineeringChange,
+)
 from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
