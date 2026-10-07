@@ -750,13 +750,9 @@ class ChangeStore:
                             and "response_contract_invalid" in reason
                         ):
                             recovery_kind = "response_contract_invalid"
-                        elif (
-                            disposition == "failed"
-                            and reason
-                            == (
-                                "codex requested architecture revision without exact "
-                                "canonical evidence references."
-                            )
+                        elif disposition == "failed" and reason == (
+                            "codex requested architecture revision without exact "
+                            "canonical evidence references."
                         ):
                             recovery_kind = (
                                 "architecture_revision_missing_evidence_contract"
