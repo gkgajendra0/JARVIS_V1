@@ -26,6 +26,7 @@ from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.engineering_change.gates import GateService
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.ledgers import (
+    _legal_actions,
     build_progress_ledger,
     build_task_ledger,
 )
@@ -56,6 +57,16 @@ from jarvis.goal_intelligence.store import GoalStore, GoalStoreError
 from jarvis.goal_intelligence.workspace import ObjectiveWorkspaceProjector
 from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.store import SQLiteWorkStore
+
+
+
+
+def test_dependency_blocker_requests_architecture_revision() -> None:
+    assert _legal_actions(
+        phase="development",
+        blocker_kind="needs_dependency",
+        owner_action_required=False,
+    ) == ("REQUEST_ARCHITECTURE",)
 
 
 def _stores(path: Path) -> tuple[SQLiteWorkStore, GoalStore, ChangeStore]:
