@@ -471,11 +471,93 @@ def ensure_gicc_external_acceptance_contract_current(
     return current
 
 
+_GICC_EXTERNAL_ACCEPTANCE_MIGRATION_STATES = (
+    ChangeState.ARCHITECTURE_READY,
+    ChangeState.WAITING_OWNER_APPROVAL,
+    ChangeState.APPROVED_FOR_BUILD,
+    ChangeState.DEVELOPING,
+    ChangeState.VERIFYING,
+    ChangeState.WAITING_OWNER_ACCEPTANCE,
+    ChangeState.READY_FOR_PROMOTION,
+    ChangeState.WAITING_PROMOTION_APPROVAL,
+)
+
+
+def migrate_legacy_gicc_external_acceptance_contracts(
+    store: ChangeStore,
+    *,
+    dry_run: bool = False,
+    limit: int = 10_000,
+) -> tuple[str, ...]:
+    """Re-open safe legacy GICC architectures under today's acceptance contract.
+
+    This migration never invents owner approval. It appends a deterministic
+    architecture revision, which resets downstream lifecycle state to
+    ARCHITECTURE_READY; the exact revised artifact must then pass the normal owner
+    architecture gate before development can continue.
+    """
+
+    if not isinstance(store, ChangeStore):
+        raise TypeError("store must be ChangeStore")
+    if not isinstance(dry_run, bool):
+        raise TypeError("dry_run must be bool")
+    if type(limit) is not int or limit <= 0:
+        raise ValueError("limit must be a positive integer")
+
+    migrated: list[str] = []
+    changes = store.list_by_states(
+        _GICC_EXTERNAL_ACCEPTANCE_MIGRATION_STATES,
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        limit=limit,
+    )
+    for change in changes:
+        link = store.latest_artifact(change.change_id, "gicc_capability_gap_link")
+        architecture = store.latest_artifact(change.change_id, "architecture")
+        if link is None or architecture is None:
+            continue
+        contracts = {
+            str(item).strip()
+            for item in architecture.payload.get("owner_acceptance_contract_ids", ())
+            if str(item).strip()
+        }
+        if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in contracts:
+            continue
+
+        # Prove the legacy artifact is otherwise the exact current architecture
+        # before creating any compatibility revision.
+        ensure_capability_acquisition_architecture_current(
+            store,
+            change.change_id,
+            artifact_id=architecture.artifact_id,
+            require_gicc_external_acceptance=False,
+        )
+        migrated.append(change.change_id)
+        if dry_run:
+            continue
+
+        revised_payload = dict(architecture.payload)
+        revised_payload["owner_acceptance_contract_ids"] = sorted(
+            contracts | {PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT}
+        )
+        revised_payload["external_runtime_contract"] = (
+            external_interaction_contract_descriptor()
+        )
+        store.add_artifact(
+            change.change_id,
+            kind="architecture",
+            payload=revised_payload,
+        )
+
+    return tuple(migrated)
+
+
 def ensure_capability_acquisition_architecture_current(
     store: ChangeStore,
     change_id: str,
     *,
     artifact_id: str | None = None,
+    require_gicc_external_acceptance: bool = True,
 ) -> ChangeArtifact:
     change = store.require(change_id)
     if (
@@ -527,11 +609,12 @@ def ensure_capability_acquisition_architecture_current(
         raise CapabilityAcquisitionArchitectureError(
             "capability acquisition architecture provenance drifted"
         )
-    ensure_gicc_external_acceptance_contract_current(
-        store,
-        change_id,
-        architecture=architecture,
-    )
+    if require_gicc_external_acceptance:
+        ensure_gicc_external_acceptance_contract_current(
+            store,
+            change_id,
+            architecture=architecture,
+        )
     source_stage_key = (
         OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
     )
