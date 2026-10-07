@@ -18,7 +18,7 @@ from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.hardening import (
-    inspect_capability_workspace_invariants,
+    blocking_capability_workspace_invariant_codes,
 )
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
@@ -869,12 +869,11 @@ def build_gicc_apply_runtime(
                 ),
             )
         ),
-        invariant_guard=lambda workspace: tuple(
-            finding.code.value
-            for finding in inspect_capability_workspace_invariants(
+        invariant_guard=lambda workspace: (
+            blocking_capability_workspace_invariant_codes(
                 workspace=workspace,
                 change_store=work_runtime.changes.store,
-            ).findings
+            )
         ),
     )
     existing_objective_resume = ExistingObjectiveResumeController(
