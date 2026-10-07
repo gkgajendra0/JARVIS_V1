@@ -657,7 +657,7 @@ def _legal_actions(
         "evidence_insufficient": ("REQUEST_RESEARCH",),
         "needs_research": ("REQUEST_RESEARCH",),
         "needs_architecture_revision": ("REQUEST_ARCHITECTURE",),
-        "needs_dependency": ("RESUME_DEVELOPMENT",),
+        "needs_dependency": ("REQUEST_ARCHITECTURE",),
         "terminal": ("TERMINAL",),
     }
     if blocker_kind in by_blocker:
