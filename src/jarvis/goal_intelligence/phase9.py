@@ -320,10 +320,8 @@ def migrate_legacy_phase9_gap_links(
         if (
             phase9_goal.source_session_id != request.bridge_source_session_id
             or phase9_goal.source_turn_id != request.bridge_source_turn_id
-            or phase9_goal.requested_capability
-            != request.reusable_capability_family
-            or phase9_goal.required_operations
-            != request.minimum_required_operations
+            or phase9_goal.requested_capability != request.reusable_capability_family
+            or phase9_goal.required_operations != request.minimum_required_operations
         ):
             raise GoalStoreConflict(
                 "legacy Phase-9 capability goal drifted from canonical GICC semantics"
