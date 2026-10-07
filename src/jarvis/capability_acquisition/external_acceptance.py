@@ -27,7 +27,7 @@ from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
 from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.engineering_substrate.hardware_acceptance import HardwareAcceptanceService
 from jarvis.work.brain import BrainAction
-from jarvis.work.engine import WorkOwnerInputRequired
+from jarvis.work.engine import WorkOwnerInputRequired, WorkTerminalFailure
 from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import (
     DeliveryPolicy,
@@ -1255,6 +1255,22 @@ class ExternalAcceptanceRecordExecutor:
                 payload=payload,
             )
         )
+        if verdict is HardwareAcceptanceVerdict.FAIL:
+            raise WorkTerminalFailure(
+                "Real-target external acceptance failed: the expected physical "
+                "effect was not observed.",
+                failure_code="external_acceptance_failed",
+                observation={
+                    "acceptance_recorded": True,
+                    "verdict": verdict.value,
+                    "operation": request.operation,
+                    "request_id": request.request_id,
+                    "evidence_id": evidence.evidence_id,
+                    "acceptance_artifact_id": artifact.artifact_id,
+                    "acceptance_artifact_digest": artifact.digest,
+                    "observation_method": observation_method,
+                },
+            )
         return {
             "acceptance_recorded": True,
             "verdict": verdict.value,
@@ -1298,6 +1314,8 @@ def external_acceptance_completion_guard(
     )
     if recorded is None:
         return False, "external acceptance requires durable real-world evidence"
+    if recorded.observation.get("verdict") != HardwareAcceptanceVerdict.PASS.value:
+        return False, "external acceptance real-world verdict did not pass"
     return True, None
 
 
