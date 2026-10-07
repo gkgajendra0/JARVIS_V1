@@ -94,6 +94,31 @@ def test_system_outcome_maps_typed_specialist_contracts() -> None:
     assert outcome.evidence_refs == (f"work_step:{step.step_id}",)
 
 
+def test_completed_failed_external_acceptance_is_terminal() -> None:
+    work = WorkItem(
+        request="Validate acquired capability on the real target.",
+        work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        source_session_id="phase9-external:change-demo",
+        source_turn_id="activation-demo",
+        state=WorkState.COMPLETED,
+    )
+    record = (
+        WorkStep(
+            work_id=work.work_id,
+            kind="external_acceptance_record",
+            summary="Record physical acceptance.",
+        )
+        .start()
+        .complete({"acceptance_recorded": True, "verdict": "fail"})
+    )
+
+    outcome = classify_work_system_outcome(work, steps=(record,))
+
+    assert outcome.kind is SystemOutcomeKind.TERMINAL
+    assert outcome.terminal is True
+    assert outcome.evidence_refs == (f"work_step:{record.step_id}",)
+
+
 def test_system_outcome_owner_and_superseded_are_nonterminal() -> None:
     owner_wait = _work(
         state=WorkState.WAITING_FOR_OWNER,
