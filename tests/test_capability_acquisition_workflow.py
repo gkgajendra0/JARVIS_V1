@@ -27,14 +27,14 @@ from jarvis.capability_acquisition.artifacts import (
     plan_payload,
     resolution_payload,
 )
+from jarvis.capability_acquisition.external_contract import (
+    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+)
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
     AcquisitionSourceKind,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
-)
-from jarvis.capability_acquisition.external_contract import (
-    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
