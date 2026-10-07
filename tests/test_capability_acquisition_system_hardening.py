@@ -21,6 +21,7 @@ from jarvis.capability_acquisition.external_contract import (
 from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
     _check_external_acceptance_binding,
+    _check_gicc_external_acceptance_contract,
     assert_capability_system_invariants,
     inspect_capability_system_invariants,
     inspect_capability_workspace_invariants,
@@ -634,6 +635,40 @@ def test_external_acceptance_invariant_is_architecture_conditional() -> None:
     )
 
     assert findings == []
+
+
+def test_gicc_architecture_requires_real_external_acceptance_contract() -> None:
+    """Persisted GICC architectures cannot bypass the real-target proof boundary."""
+
+    architecture = SimpleNamespace(
+        kind="architecture",
+        artifact_id="artifact_architecture_legacy_gicc",
+        payload={"owner_acceptance_contract_ids": []},
+    )
+    link = SimpleNamespace(
+        kind="gicc_capability_gap_link",
+        artifact_id="artifact_gicc_link",
+        payload={
+            "motivating_goal_id": "goal-demo",
+            "gap_id": "gap-demo",
+            "engineering_change_id": "change-legacy-gicc",
+        },
+    )
+    change = SimpleNamespace(
+        change_id="change-legacy-gicc",
+        current_architecture_artifact_id=architecture.artifact_id,
+        artifacts=(link, architecture),
+    )
+    findings = []
+
+    _check_gicc_external_acceptance_contract(
+        change=change,
+        findings=findings,
+    )
+
+    assert [finding.code for finding in findings] == [
+        CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE
+    ]
 
 
 def test_external_acceptance_invariant_requires_binding_when_approved() -> None:
