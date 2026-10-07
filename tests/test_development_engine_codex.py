@@ -371,6 +371,63 @@ async def test_codex_engine_repairs_one_malformed_directive_in_same_thread(
 
 
 @pytest.mark.asyncio
+async def test_codex_engine_repairs_architecture_revision_without_evidence_in_same_thread(
+    tmp_path,
+) -> None:
+    ticket = _ticket()
+    sessions = _sessions(tmp_path, ticket)
+    thread = FakeThread(
+        "thr_architecture_evidence_repair",
+        [
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "The approved architecture must be revised.",
+                    "tool_calls": [],
+                    "disposition": "needs_architecture_revision",
+                    "reason": "The approved protocol cannot satisfy the required operation.",
+                    "requested_dependencies": [],
+                    "evidence_refs": [],
+                    "blocker_code": None,
+                },
+                10,
+            ),
+            _response(
+                {
+                    "kind": "result",
+                    "summary": "The approved architecture must be revised.",
+                    "tool_calls": [],
+                    "disposition": "needs_architecture_revision",
+                    "reason": "The approved protocol cannot satisfy the required operation.",
+                    "requested_dependencies": [],
+                    "evidence_refs": ["research:approved"],
+                    "blocker_code": None,
+                },
+                20,
+            ),
+        ],
+    )
+    engine = CodexPlanDevelopmentEngine(
+        chatgpt_plan=FakePlan(),
+        model="gpt-test",
+        sessions=sessions,
+        runtime_factory=FakeRuntimeFactory(FakeRuntime(thread)),
+        state_dir=tmp_path / "codex",
+    )
+
+    result = await engine.execute(ticket, tools=FakeTools(ticket.allowed_tools))
+
+    assert result.disposition is DevelopmentDisposition.NEEDS_ARCHITECTURE_REVISION
+    assert result.evidence_refs == ("research:approved",)
+    assert len(thread.user_messages) == 1
+    assert len(thread.external_messages) == 1
+    repair = json.loads(thread.external_messages[0])
+    assert repair["contract"] == "jarvis.development_response_repair.v1"
+    assert "without exact canonical evidence references" in repair["reason"]
+    assert "research:approved" in repair["allowed_evidence_refs"]
+
+
+@pytest.mark.asyncio
 async def test_codex_engine_repairs_noncanonical_terminal_evidence_in_same_thread(
     tmp_path,
 ) -> None:
