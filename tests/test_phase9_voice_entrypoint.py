@@ -303,7 +303,9 @@ def test_lifecycle_target_uses_unique_canonical_pending_change() -> None:
     )
 
 
-def test_voice_activation_binds_exact_owner_turn_and_starts_external_acceptance() -> None:
+def test_voice_activation_binds_exact_owner_turn_and_starts_external_acceptance() -> (
+    None
+):
     change_id = "change_aaaaaaaaaaaaaaaa"
     store = _LifecycleTargetStore((change_id,))
     runtime = object.__new__(WorkRuntime)
