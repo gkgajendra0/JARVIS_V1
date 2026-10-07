@@ -25,6 +25,7 @@ from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
     _check_external_acceptance_binding,
     _check_gicc_external_acceptance_contract,
+    _finding_blocks_current_lifecycle,
     assert_capability_system_invariants,
     blocking_capability_workspace_invariant_codes,
     inspect_capability_system_invariants,
@@ -755,6 +756,35 @@ def test_external_acceptance_invariant_blocks_activated_candidate_architecture_d
     assert [finding.code for finding in findings] == [
         CapabilitySystemInvariantCode.ACTIVATED_CANDIDATE_ARCHITECTURE_MISMATCH
     ]
+
+
+def test_post_activation_drift_is_auditable_during_architecture_repair() -> None:
+    finding = SimpleNamespace(
+        code=CapabilitySystemInvariantCode.ACTIVATED_CANDIDATE_ARCHITECTURE_MISMATCH,
+        change_id="change_repair",
+    )
+
+    assert (
+        _finding_blocks_current_lifecycle(
+            finding,
+            change_state_by_id={"change_repair": "architecture_ready"},
+        )
+        is False
+    )
+    assert (
+        _finding_blocks_current_lifecycle(
+            finding,
+            change_state_by_id={"change_repair": "developing"},
+        )
+        is False
+    )
+    assert (
+        _finding_blocks_current_lifecycle(
+            finding,
+            change_state_by_id={"change_repair": "observing"},
+        )
+        is True
+    )
 
 
 def test_external_acceptance_invariant_requires_binding_when_approved() -> None:
