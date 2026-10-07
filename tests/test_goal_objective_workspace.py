@@ -988,6 +988,83 @@ def test_supervisor_cutover_starts_development_only_after_existing_owner_gate(
     assert source.work_id in backend.submissions
 
 
+def test_supervisor_verify_assumption_surfaces_exact_acceptance_gate(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "cutover-verification.sqlite3")
+    backend, coordinator, change, architecture, _source = (
+        _direct_goal_change_ready_for_architecture(state)
+    )
+    architecture_gate = reconcile_owner_change_gates(
+        coordinator,
+        change_ids=(change.change_id,),
+    )[0]
+    GateService(state["changes"], verify_owner=lambda *_: True).decide(
+        architecture_gate,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="owner-verification-session",
+        source_turn_id="owner-verification-turn",
+        request_key="owner-verification-request",
+    )
+    developing = coordinator.reconcile(change.change_id)
+    assert developing.state is ChangeState.DEVELOPING
+    development = state["changes"].current_stage_attempt(
+        change.change_id,
+        "development",
+    )
+    assert development is not None
+    queued = state["work"].require(development.work_id)
+    running = state["work"].save(
+        queued.transition(WorkState.RUNNING),
+        expected_version=queued.version,
+    )
+    state["work"].save(
+        running.transition(
+            WorkState.COMPLETED,
+            status_detail="Verified candidate is ready for owner acceptance.",
+            result={
+                "verification": {
+                    "passed": True,
+                    "sandbox": "supervisor-verification-test",
+                },
+                "commit": "c" * 40,
+                "branch": "feat/supervisor-verification-test",
+            },
+        ),
+        expected_version=running.version,
+    )
+    verifying = coordinator.reconcile(change.change_id)
+    assert verifying.state is ChangeState.VERIFYING
+
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    result = SupervisorCutoverController(
+        projector=projector,
+        change_coordinator=coordinator,
+        mode=AutonomyMode.ASSISTED,
+    ).coordinate(state["goal"].goal_id)
+
+    assert result.action is SupervisorAction.VERIFY_ASSUMPTION
+    assert result.disposition is SupervisorCutoverDisposition.RECONCILED_CHANGE
+    assert len(result.surfaced_gate_ids) == 1
+    persisted = state["changes"].require(change.change_id)
+    assert persisted.state is ChangeState.WAITING_OWNER_ACCEPTANCE
+    acceptance = state["changes"].latest_artifact(change.change_id, "acceptance")
+    assert acceptance is not None
+    gate = GateService(
+        state["changes"],
+        verify_owner=lambda *_: False,
+    ).get(result.surfaced_gate_ids[0])
+    challenge = getattr(gate, "challenge", gate)
+    assert challenge.artifact_id == acceptance.artifact_id
+    assert challenge.artifact_digest == acceptance.digest
+    assert backend.submissions[-1] == development.work_id
+
+
 def test_supervisor_cutover_revalidates_and_rejects_stale_decision(
     tmp_path: Path,
 ) -> None:
