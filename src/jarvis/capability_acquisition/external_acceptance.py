@@ -1258,7 +1258,8 @@ class ExternalAcceptanceRecordExecutor:
         if verdict is HardwareAcceptanceVerdict.FAIL:
             raise WorkTerminalFailure(
                 "Real-target external acceptance failed: the expected physical "
-                "effect was not observed.",
+                "effect was not observed. The acquired capability remains enabled "
+                "until the owner explicitly authorizes disable.",
                 failure_code="external_acceptance_failed",
                 observation={
                     "acceptance_recorded": True,
