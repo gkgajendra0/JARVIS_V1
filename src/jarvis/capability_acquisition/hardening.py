@@ -572,6 +572,13 @@ def inspect_capability_workspace_invariants(
     progress = build_progress_ledger(workspace)
     work_by_id = _work_by_id(workspace)
     findings: list[CapabilitySystemInvariantFindingV1] = []
+    current_plan_id = None if workspace.plan is None else workspace.plan.record_id
+    current_continuations = tuple(
+        item
+        for item in workspace.continuations
+        if current_plan_id is None
+        or str(item.payload.get("plan_id") or "").strip() == current_plan_id
+    )
 
     acquisition_changes = [
         item
@@ -646,7 +653,7 @@ def inspect_capability_workspace_invariants(
         if gap_ids:
             blocked = [
                 item
-                for item in workspace.continuations
+                for item in current_continuations
                 if str(item.payload.get("blocked_by_id") or "").strip() in gap_ids
                 and str(item.payload.get("state") or "").strip() == "blocked"
             ]
@@ -665,7 +672,7 @@ def inspect_capability_workspace_invariants(
         item.record_id: str(item.payload.get("state") or "").strip()
         for item in workspace.capability_gaps
     }
-    for continuation in workspace.continuations:
+    for continuation in current_continuations:
         if str(continuation.payload.get("state") or "").strip() != "resumed":
             continue
         blocker_id = str(continuation.payload.get("blocked_by_id") or "").strip()
@@ -689,6 +696,59 @@ def inspect_capability_workspace_invariants(
     return replace(
         report,
         digest=canonical_digest(report.canonical_payload()),
+    )
+
+
+def blocking_capability_workspace_invariant_codes(
+    *,
+    workspace: ObjectiveWorkspaceV1,
+    change_store: ChangeStore,
+) -> tuple[str, ...]:
+    """Return only invariant codes that may fence the current objective lifecycle.
+
+    The full invariant report intentionally preserves historical findings for audit.
+    Supervisor cutover must not let an old satisfied/superseded capability lifecycle
+    poison a different capability that currently governs the owner objective.
+    """
+
+    report = inspect_capability_workspace_invariants(
+        workspace=workspace,
+        change_store=change_store,
+    )
+    progress = build_progress_ledger(workspace)
+    current_plan_id = None if workspace.plan is None else workspace.plan.record_id
+    blocked_gap_ids = {
+        str(item.payload.get("blocked_by_id") or "").strip()
+        for item in workspace.continuations
+        if str(item.payload.get("state") or "").strip() == "blocked"
+        and str(item.payload.get("blocked_by_type") or "").strip()
+        == "capability_acquisition"
+        and (
+            current_plan_id is None
+            or str(item.payload.get("plan_id") or "").strip() == current_plan_id
+        )
+        and str(item.payload.get("blocked_by_id") or "").strip()
+    }
+    relevant_change_ids = {
+        change.change_id
+        for change in workspace.changes
+        if change.process_key == "owner_capability_acquisition"
+        and any(
+            artifact.kind == "gicc_capability_gap_link"
+            and str(artifact.payload.get("gap_id") or "").strip() in blocked_gap_ids
+            for artifact in change.artifacts
+        )
+    }
+    if progress.active_change_id is not None:
+        relevant_change_ids.add(progress.active_change_id)
+
+    return tuple(
+        dict.fromkeys(
+            finding.code.value
+            for finding in report.findings
+            if finding.change_id is None
+            or finding.change_id in relevant_change_ids
+        )
     )
 
 
