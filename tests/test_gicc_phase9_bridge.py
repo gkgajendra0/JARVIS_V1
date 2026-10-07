@@ -281,7 +281,7 @@ def _install_current_external_pass(artifacts: LineageArtifacts) -> None:
         _completed_external_step("external_acceptance_invoke", {"invoked": True}),
         _completed_external_step(
             "external_acceptance_record",
-            {"acceptance_recorded": True},
+            {"acceptance_recorded": True, "verdict": "pass"},
         ),
     )
     artifacts.artifacts["capability_external_acceptance"] = SimpleNamespace(
