@@ -746,8 +746,7 @@ def blocking_capability_workspace_invariant_codes(
         dict.fromkeys(
             finding.code.value
             for finding in report.findings
-            if finding.change_id is None
-            or finding.change_id in relevant_change_ids
+            if finding.change_id is None or finding.change_id in relevant_change_ids
         )
     )
 
