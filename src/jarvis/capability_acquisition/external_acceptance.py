@@ -485,6 +485,14 @@ class ExternalAcceptanceCoordinator:
             raise ExternalAcceptanceError(
                 "activation is not bound to the current capability candidate"
             )
+        if (
+            candidate.payload.get("architecture_artifact_id")
+            != architecture.artifact_id
+            or candidate.payload.get("architecture_digest") != architecture.digest
+        ):
+            raise ExternalAcceptanceError(
+                "candidate is not bound to the current acquisition architecture"
+            )
         disabled = self._changes.latest_artifact(
             change.change_id,
             "capability_lifecycle_disable",
