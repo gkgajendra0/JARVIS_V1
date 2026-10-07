@@ -1230,9 +1230,10 @@ def test_historical_capability_invariant_is_auditable_but_not_live_blocker(
         for finding in report.findings
         if finding.change_id == historical_change.change_id
     ]
-    assert CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE in {
-        finding.code for finding in historical_findings
-    }
+    assert (
+        CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE
+        in {finding.code for finding in historical_findings}
+    )
 
     blocking_codes = blocking_capability_workspace_invariant_codes(
         workspace=workspace,
