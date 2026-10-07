@@ -156,10 +156,7 @@ def inspect_existing_objective(
                 CapabilitySystemInvariantCode.DEVELOPMENT_DEPENDS_ON_STALE_SOURCE,
             }
         )
-    if (
-        "phase9-gicc-external-acceptance-contract-v1"
-        in snapshot.startup_recovery_kinds
-    ):
+    if "phase9-gicc-external-acceptance-contract-v1" in snapshot.startup_recovery_kinds:
         recoverable_invariant_codes.update(
             {
                 CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE,
