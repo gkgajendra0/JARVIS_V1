@@ -59,8 +59,6 @@ from jarvis.work.models import WorkItem, WorkState, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
-
-
 def test_dependency_blocker_requests_architecture_revision() -> None:
     assert _legal_actions(
         phase="development",
