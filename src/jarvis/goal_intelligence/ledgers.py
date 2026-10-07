@@ -586,7 +586,7 @@ def _legal_actions(
         "needs_research": ("REQUEST_RESEARCH",),
         "needs_architecture_revision": ("REQUEST_ARCHITECTURE",),
         "needs_dependency": ("RESUME_DEVELOPMENT",),
-        "terminal": ("REPLAN", "TERMINAL"),
+        "terminal": ("TERMINAL",),
     }
     if blocker_kind in by_blocker:
         return by_blocker[blocker_kind]
