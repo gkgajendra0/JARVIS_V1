@@ -537,6 +537,78 @@ def _specialist(
     }.get(phase)
 
 
+def _lifecycle_activation_pending(
+    change: WorkspaceChangeV1 | None,
+) -> tuple[bool, str | None]:
+    if change is None:
+        return False, None
+
+    proposals = [
+        artifact
+        for artifact in change.artifacts
+        if artifact.kind == "capability_lifecycle_proposal"
+        and artifact.payload.get("authority_required") is True
+    ]
+    if not proposals:
+        return False, None
+    proposal = max(
+        proposals,
+        key=lambda artifact: (artifact.revision, artifact.artifact_id),
+    )
+    admission_id = str(proposal.payload.get("admission_artifact_id") or "").strip()
+    admission_digest = str(
+        proposal.payload.get("admission_artifact_digest") or ""
+    ).strip()
+    if not admission_id or not admission_digest:
+        return False, None
+
+    activations = [
+        artifact
+        for artifact in change.artifacts
+        if artifact.kind == "capability_lifecycle_activation"
+        and artifact.payload.get("admission_artifact_id") == admission_id
+        and artifact.payload.get("admission_artifact_digest") == admission_digest
+        and artifact.payload.get("effective_enabled") is True
+    ]
+    latest_activation = (
+        None
+        if not activations
+        else max(
+            activations,
+            key=lambda artifact: (artifact.revision, artifact.artifact_id),
+        )
+    )
+    if latest_activation is None:
+        return (
+            True,
+            "Promoted capability package is admitted but requires explicit owner "
+            "activation before real-target acceptance can run.",
+        )
+
+    candidate_id = str(
+        latest_activation.payload.get("candidate_artifact_id") or ""
+    ).strip()
+    candidate_digest = str(
+        latest_activation.payload.get("candidate_artifact_digest") or ""
+    ).strip()
+    disabled = [
+        artifact
+        for artifact in change.artifacts
+        if artifact.kind == "capability_lifecycle_disable"
+        and artifact.payload.get("candidate_artifact_id") == candidate_id
+        and artifact.payload.get("candidate_artifact_digest") == candidate_digest
+        and artifact.payload.get("effective_enabled") is False
+        and artifact.created_at >= latest_activation.created_at
+    ]
+    if disabled:
+        return (
+            True,
+            "The admitted capability was disabled after activation and requires "
+            "explicit owner activation before the objective can continue.",
+        )
+    return False, None
+
+
 def _latest_progress(work: WorkspaceWorkV1 | None) -> str | None:
     if work is None:
         return None
@@ -608,7 +680,7 @@ def _legal_actions(
         "observation": ("CONTINUE",),
         "external_blocker": ("WAIT_RESOURCE",),
         "superseded": ("CONTINUE",),
-        "terminal": ("REPLAN", "TERMINAL"),
+        "terminal": ("TERMINAL",),
         "completed": ("CONTINUE",),
     }
     return by_phase.get(phase, ("CONTINUE",))
@@ -629,6 +701,12 @@ def build_progress_ledger(workspace: ObjectiveWorkspaceV1) -> ProgressLedgerV1:
     )
     work = _authoritative_work(workspace, change)
     blocker_kind, blocker_reason, outcome_owner_action = _blocker(workspace, work)
+    activation_pending, activation_reason = _lifecycle_activation_pending(change)
+    if activation_pending:
+        phase = "activation"
+        blocker_kind = "needs_owner"
+        blocker_reason = activation_reason
+        outcome_owner_action = True
     owner_gate = bool(
         change is not None
         and change.state
