@@ -513,9 +513,7 @@ def _check_external_acceptance_binding(
         if item.kind == "capability_external_acceptance"
     ]
     admissions = [
-        item
-        for item in change.artifacts
-        if item.kind == "capability_package_admission"
+        item for item in change.artifacts if item.kind == "capability_package_admission"
     ]
     proposals = [
         item
@@ -541,9 +539,7 @@ def _check_external_acceptance_binding(
             # been proposed for this exact generation. Historical activations remain
             # auditable but must not fence the new owner activation path.
             return
-        candidate_id = str(
-            admission.payload.get("candidate_artifact_id") or ""
-        ).strip()
+        candidate_id = str(admission.payload.get("candidate_artifact_id") or "").strip()
         candidate_digest = str(
             admission.payload.get("candidate_artifact_digest") or ""
         ).strip()
@@ -613,12 +609,9 @@ def _check_external_acceptance_binding(
     if disabled is not None:
         return
 
-    if (
-        candidate is not None
-        and (
-            activation.payload.get("candidate_artifact_id") != candidate.artifact_id
-            or activation.payload.get("candidate_artifact_digest") != candidate.digest
-        )
+    if candidate is not None and (
+        activation.payload.get("candidate_artifact_id") != candidate.artifact_id
+        or activation.payload.get("candidate_artifact_digest") != candidate.digest
     ):
         _add(
             findings,
