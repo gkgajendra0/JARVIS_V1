@@ -46,6 +46,7 @@ from jarvis.goal_intelligence.models import (
     PlanNodeV1,
     WorldEntityRefV1,
 )
+from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.phase9 import Phase9AcquisitionRequestV2
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.goal_intelligence.workspace import ObjectiveWorkspaceProjector
@@ -203,6 +204,20 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
                 "gap_id": gap.gap_id,
                 "engineering_change_id": change.change_id,
                 "acquisition_work_id": source.work_id,
+                "reusable_capability_family": request.reusable_capability_family,
+                "minimum_required_operations": list(
+                    request.minimum_required_operations
+                ),
+                "target_entity_type": request.target_entity_type,
+                "target_entity_id": request.target_entity_id,
+                "monitor_event_contract_required": (
+                    request.monitor_event_contract_required
+                ),
+                "monitor_event_contract": (
+                    GICC_MONITOR_EVENT_CONTRACT
+                    if request.monitor_event_contract_required
+                    else None
+                ),
             },
         )
         self.goals.put_continuation(
