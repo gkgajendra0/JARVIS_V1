@@ -802,7 +802,7 @@ def test_external_acceptance_invariant_requires_binding_when_approved() -> None:
         artifact_id="artifact_activation_external",
         digest="b" * 64,
         revision=1,
-        payload={},
+        payload={"effective_enabled": True},
     )
     change = SimpleNamespace(
         change_id="change_external_capability",
