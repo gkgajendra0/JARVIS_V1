@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.voice.agent import INSTRUCTIONS, build_instructions
 from jarvis.voice.work_tools import (
     WorkAgentTools,
@@ -300,6 +301,97 @@ def test_lifecycle_target_uses_unique_canonical_pending_change() -> None:
         )
         == change_id
     )
+
+
+def test_voice_activation_binds_exact_owner_turn_and_starts_external_acceptance() -> None:
+    change_id = "change_aaaaaaaaaaaaaaaa"
+    store = _LifecycleTargetStore((change_id,))
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = SimpleNamespace(store=store)
+    runtime._capability_catalog_refresher = lambda: None
+
+    lifecycle_calls: list[dict[str, str]] = []
+    acceptance_calls: list[dict[str, str]] = []
+
+    class _Lifecycle:
+        def activate(
+            self,
+            requested_change_id: str,
+            *,
+            authority_session_id: str,
+            source_turn_id: str,
+        ):
+            lifecycle_calls.append(
+                {
+                    "change_id": requested_change_id,
+                    "authority_session_id": authority_session_id,
+                    "source_turn_id": source_turn_id,
+                }
+            )
+            return SimpleNamespace(
+                artifact=SimpleNamespace(
+                    artifact_id="artifact_activation_voice",
+                    digest="e" * 64,
+                ),
+                capability_id="media_player_control",
+                package_id="media.player.control",
+                package_version="1.0.0",
+                package_digest="f" * 64,
+            )
+
+    class _Acceptance:
+        def start(
+            self,
+            requested_change_id: str,
+            *,
+            activation_artifact_id: str,
+            authority_session_id: str,
+            source_turn_id: str,
+        ):
+            acceptance_calls.append(
+                {
+                    "change_id": requested_change_id,
+                    "activation_artifact_id": activation_artifact_id,
+                    "authority_session_id": authority_session_id,
+                    "source_turn_id": source_turn_id,
+                }
+            )
+            return SimpleNamespace(
+                work_id="work_external_voice",
+                state=SimpleNamespace(value="queued"),
+            )
+
+    runtime.capability_lifecycle = _Lifecycle()
+    runtime.capability_external_acceptance = _Acceptance()
+
+    conversation = ConversationSession(session_id="voice-activation-session")
+    conversation.start()
+    turn = conversation.accept_turn(
+        ConversationRole.USER,
+        "Activate the acquired capability.",
+    )
+    tools = WorkAgentTools(runtime, conversation)
+
+    result = asyncio.run(tools.activate_acquired_capability(None))
+
+    assert result["ok"] is True
+    assert result["change_id"] == change_id
+    assert result["external_acceptance_work_id"] == "work_external_voice"
+    assert lifecycle_calls == [
+        {
+            "change_id": change_id,
+            "authority_session_id": conversation.session_id,
+            "source_turn_id": turn.turn_id,
+        }
+    ]
+    assert acceptance_calls == [
+        {
+            "change_id": change_id,
+            "activation_artifact_id": "artifact_activation_voice",
+            "authority_session_id": conversation.session_id,
+            "source_turn_id": turn.turn_id,
+        }
+    ]
 
 
 def test_lifecycle_target_rejects_model_id_conflicting_with_canonical_state() -> None:
