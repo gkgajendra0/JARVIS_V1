@@ -9,6 +9,10 @@ from jarvis.autonomy.owner_communication import (
     OwnerCommunicationKind,
     SupervisorOwnerCommunication,
 )
+from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionArchitectureError,
+    ensure_gicc_external_acceptance_contract_current,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.verification import (
     ensure_capability_candidate_acceptance_current,
@@ -183,6 +187,16 @@ class CapabilityAcquisitionReleaseBridge:
                 "change_not_observing",
                 "Phase-9 package bridge requires deployed EngineeringChange",
             )
+        try:
+            ensure_gicc_external_acceptance_contract_current(
+                self._changes,
+                change_id,
+            )
+        except CapabilityAcquisitionArchitectureError as exc:
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "gicc_external_acceptance_contract_missing",
+                str(exc),
+            ) from exc
         ensure_capability_candidate_acceptance_current(self._changes, change_id)
         candidate = self._changes.latest_artifact(change_id, "capability_candidate")
         if candidate is None:
@@ -494,6 +508,16 @@ def ensure_capability_release_bridge_current(
             "wrong_process",
             "change is not Phase-9 capability acquisition",
         )
+    try:
+        ensure_gicc_external_acceptance_contract_current(
+            changes,
+            change_id,
+        )
+    except CapabilityAcquisitionArchitectureError as exc:
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "gicc_external_acceptance_contract_missing",
+            str(exc),
+        ) from exc
     candidate = changes.latest_artifact(change_id, "capability_candidate")
     admission = changes.latest_artifact(change_id, "capability_package_admission")
     lifecycle = changes.latest_artifact(change_id, "capability_lifecycle_proposal")
