@@ -116,6 +116,7 @@ GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1: tuple[SystemReplayCaseV1, ...] = (
         (
             "tests/test_capability_acquisition_resolver.py::test_target_specific_goal_does_not_reuse_unscoped_operation_match",
             "tests/test_capability_acquisition_resolver.py::test_target_specific_goal_reuses_only_explicitly_scoped_capability",
+            "tests/test_capability_acquisition_resolver.py::test_target_incompatible_samsung_candidate_cannot_win_hisense_vidaa_goal",
         ),
         status=SystemReplayStatus.COVERED,
         owning_phase="S6",
