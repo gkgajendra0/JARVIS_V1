@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from jarvis.engineering_substrate.canonical import canonical_digest
-from jarvis.work.models import WorkItem, WorkState, WorkStep
+from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
 
 
 class SystemOutcomeKind(StrEnum):
@@ -273,6 +273,26 @@ def classify_work_system_outcome(
                 kind=SystemOutcomeKind.TERMINAL,
                 reason=reason or blocker or work.status_detail,
                 evidence_refs=development_evidence,
+            )
+
+    if work.work_type is WorkType.EXTERNAL_ACCEPTANCE:
+        failed_acceptance = next(
+            (
+                step
+                for step in reversed(steps)
+                if step.kind == "external_acceptance_record"
+                and step.state.value == "completed"
+                and step.observation.get("acceptance_recorded") is True
+                and step.observation.get("verdict") == "fail"
+            ),
+            None,
+        )
+        if failed_acceptance is not None:
+            return _create(
+                work,
+                kind=SystemOutcomeKind.TERMINAL,
+                reason="Real-target external acceptance failed.",
+                evidence_refs=(f"work_step:{failed_acceptance.step_id}",),
             )
 
     if work.state is WorkState.COMPLETED:
