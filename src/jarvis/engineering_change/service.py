@@ -393,4 +393,3 @@ class ChangeService:
         if not isinstance(challenge, GateChallenge):
             raise ChangeConflict("acceptance gate could not be recovered")
         return challenge
-
