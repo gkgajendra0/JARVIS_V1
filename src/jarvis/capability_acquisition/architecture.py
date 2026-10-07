@@ -436,6 +436,41 @@ def derive_capability_acquisition_architecture(
     return store.add_artifact(change.change_id, kind="architecture", payload=payload)
 
 
+def ensure_gicc_external_acceptance_contract_current(
+    store: ChangeStore,
+    change_id: str,
+    *,
+    architecture: ChangeArtifact | None = None,
+) -> ChangeArtifact | None:
+    """Require real-target acceptance for any GICC-linked capability architecture.
+
+    Non-GICC EngineeringChanges keep their declared acceptance semantics. A GICC
+    capability-gap link, however, means the acquired capability exists to unblock an
+    owner objective against a real target, so that boundary may not disappear from a
+    persisted legacy architecture or an alternate lifecycle entry point.
+    """
+
+    link = store.latest_artifact(change_id, "gicc_capability_gap_link")
+    if link is None:
+        return architecture
+    current = architecture or store.latest_artifact(change_id, "architecture")
+    if current is None:
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC-linked capability acquisition architecture is missing"
+        )
+    contracts = {
+        str(item).strip().casefold()
+        for item in current.payload.get("owner_acceptance_contract_ids", ())
+        if str(item).strip()
+    }
+    if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT.casefold() not in contracts:
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC-linked capability architecture is missing the mandatory "
+            "real-target external acceptance contract"
+        )
+    return current
+
+
 def ensure_capability_acquisition_architecture_current(
     store: ChangeStore,
     change_id: str,
@@ -492,6 +527,11 @@ def ensure_capability_acquisition_architecture_current(
         raise CapabilityAcquisitionArchitectureError(
             "capability acquisition architecture provenance drifted"
         )
+    ensure_gicc_external_acceptance_contract_current(
+        store,
+        change_id,
+        architecture=architecture,
+    )
     source_stage_key = (
         OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
     )
