@@ -20,6 +20,9 @@ from jarvis.autonomy.supervisor_cutover import (
 )
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
+from jarvis.capability_acquisition.architecture import (
+    migrate_legacy_gicc_external_acceptance_contracts,
+)
 from jarvis.capability_acquisition.hardening import (
     blocking_capability_workspace_invariant_codes,
 )
@@ -30,6 +33,7 @@ from jarvis.capability_acquisition.lineage import (
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.config import JarvisConfig
 from jarvis.engineering_change import ChangeStore
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.hands.provider_adapters import (
     build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
@@ -827,6 +831,20 @@ def build_gicc_apply_runtime(
         LOGGER.warning(
             "Migrated durable GICC Phase-9 v1 lineage to append-only v2 evidence: %s",
             ", ".join(migrated_phase9_links),
+        )
+    migrated_gicc_architectures = migrate_legacy_gicc_external_acceptance_contracts(
+        work_runtime.changes.store,
+    )
+    if migrated_gicc_architectures:
+        surfaced = reconcile_owner_change_gates(
+            work_runtime.changes,
+            change_ids=migrated_gicc_architectures,
+        )
+        LOGGER.warning(
+            "Migrated GICC architecture contracts after lineage upgrade; "
+            "fresh owner architecture approval is required: changes=%s gates=%s",
+            ", ".join(migrated_gicc_architectures),
+            ", ".join(surfaced),
         )
     phase9_bridge = Phase9GoalBridge(
         coordinator=work_runtime.capability_acquisition,
