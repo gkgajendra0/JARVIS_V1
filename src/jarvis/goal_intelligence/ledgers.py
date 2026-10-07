@@ -674,7 +674,7 @@ def _legal_actions(
         "development": ("RESUME_DEVELOPMENT",),
         "verification": ("VERIFY_ASSUMPTION",),
         "owner_acceptance": ("ASK_OWNER",),
-        "promotion": ("CONTINUE",),
+        "promotion": ("ASK_OWNER",),
         "promotion_approval": ("ASK_OWNER",),
         "activation": ("CONTINUE",),
         "observation": ("CONTINUE",),
@@ -716,7 +716,18 @@ def build_progress_ledger(workspace: ObjectiveWorkspaceV1) -> ProgressLedgerV1:
             "waiting_promotion_approval",
         }
     )
-    owner_action_required = outcome_owner_action or owner_gate
+    promotion_preparation_required = bool(
+        change is not None and change.state == "ready_for_promotion"
+    )
+    if promotion_preparation_required:
+        blocker_kind = "needs_owner"
+        blocker_reason = (
+            "Promotion preparation requires owner presence and strong local "
+            "verification before GitHub credential use."
+        )
+    owner_action_required = (
+        outcome_owner_action or owner_gate or promotion_preparation_required
+    )
     terminal_work = bool(work is not None and work.system_outcome.terminal)
     terminal_change = bool(
         change is not None and change.state in {"failed", "rejected", "rolled_back"}
