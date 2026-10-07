@@ -51,6 +51,7 @@ from jarvis.goal_intelligence.phase9 import (
     Phase9AcquisitionRequestV2,
     Phase9GoalBridge,
     Phase9GoalContinuationVerifier,
+    migrate_legacy_phase9_gap_links,
 )
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.models import WorkItem, WorkPriority, WorkState, WorkStep, WorkType
@@ -468,3 +469,97 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
     assert recheck.continuation is not None
     assert recheck.continuation.state is ContinuationState.RESUMED
     assert goals.get_gap(gap.gap_id).state.value == "satisfied"
+
+
+def test_legacy_phase9_v1_link_migrates_append_only_to_exact_v2(
+    tmp_path: Path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "legacy-link.sqlite3")
+    goals = GoalStore(work)
+    changes = ChangeStore(
+        work,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    coordinator = ChangeCoordinator(changes, _Backend())
+    owner_goal = goals.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="legacy-owner-session",
+            source_turn_id="legacy-owner-turn",
+            exact_owner_request="Play media on the television.",
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Requested media is playing.",
+            completion_predicates=("playback_started",),
+        )
+    )
+    requirement = CapabilityRequirementV1.create(
+        goal_id=owner_goal.goal_id,
+        semantic_capability="media_player.control",
+        operation="play_media",
+        target_entity_type="media_player",
+        reason="Reusable playback control is missing.",
+    )
+    graph = goals.put_requirement_graph(
+        CapabilityRequirementGraphV1.create(
+            goal_id=owner_goal.goal_id,
+            requirements=(requirement,),
+        )
+    )
+    gap = goals.put_gap(
+        CapabilityGapV1.create(
+            goal_id=owner_goal.goal_id,
+            requirement_ids=graph.requirement_ids,
+            reusable_capability_family="media_player.control",
+            target_entity_type="media_player",
+            minimum_required_operations=("play_media",),
+            missing_reason_codes=("capability_missing",),
+            motivating_goal_id=owner_goal.goal_id,
+        )
+    )
+    request = Phase9AcquisitionRequestV2.create(gap=gap, goal=owner_goal)
+    admission = CapabilityAcquisitionCoordinator(
+        changes=coordinator,
+        context_provider=StaticAcquisitionContextProvider(_context(ready=False)),
+    ).admit(
+        request.to_v1(owner_goal_created_at=owner_goal.created_at),
+        source_revision="a" * 40,
+    )
+    assert admission.change is not None
+    assert admission.acquisition_work_id is not None
+
+    legacy = changes.add_artifact(
+        admission.change.change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "schema": "gicc_phase9_gap_link.v1",
+            "request_id": request.request_id,
+            "request_digest": request.digest,
+            "motivating_goal_id": request.motivating_goal_id,
+            "gap_id": request.gap_id,
+            "reusable_capability_family": request.reusable_capability_family,
+            "minimum_required_operations": list(request.minimum_required_operations),
+            "target_entity_type": request.target_entity_type,
+            "target_entity_id": request.target_entity_id,
+            "owner_source_session_id": request.owner_source_session_id,
+            "owner_source_turn_id": request.owner_source_turn_id,
+        },
+    )
+
+    migrated = migrate_legacy_phase9_gap_links(
+        goal_store=goals,
+        change_store=changes,
+    )
+
+    assert migrated == (admission.change.change_id,)
+    assert changes.get_artifact(legacy.artifact_id) == legacy
+    current = changes.latest_artifact(
+        admission.change.change_id,
+        "gicc_capability_gap_link",
+    )
+    assert current is not None
+    assert current.artifact_id != legacy.artifact_id
+    assert current.payload["schema"] == "gicc_phase9_gap_link.v2"
+    assert current.payload["request_id"] == request.request_id
+    assert current.payload["request_digest"] == request.digest
+    assert current.payload["engineering_change_id"] == admission.change.change_id
+    assert current.payload["acquisition_work_id"] == admission.acquisition_work_id
+    assert current.payload["admission_disposition"] == "engineering_change"
