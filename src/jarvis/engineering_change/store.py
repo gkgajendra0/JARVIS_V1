@@ -603,9 +603,11 @@ class ChangeStore:
 
         This is compatibility recovery for prior JARVIS bugs, not a generic retry of
         failed engineering. Recovery requires the still-current strongly approved
-        architecture and one of three exact historical shapes:
+        architecture and one of four exact historical shapes:
         - old completed-child + unclassified DevelopmentEngine failure;
-        - failed development caused solely by response_contract_invalid; or
+        - failed development caused solely by response_contract_invalid;
+        - failed development caused by the historical missing-evidence architecture
+          revision contract bug; or
         - a completed child carrying response_contract_invalid after a recorded
           system_retry that an older Phase-9 control plane failed to replay.
 
@@ -748,6 +750,17 @@ class ChangeStore:
                             and "response_contract_invalid" in reason
                         ):
                             recovery_kind = "response_contract_invalid"
+                        elif (
+                            disposition == "failed"
+                            and reason
+                            == (
+                                "codex requested architecture revision without exact "
+                                "canonical evidence references."
+                            )
+                        ):
+                            recovery_kind = (
+                                "architecture_revision_missing_evidence_contract"
+                            )
 
                 if recovery_kind is None:
                     continue
