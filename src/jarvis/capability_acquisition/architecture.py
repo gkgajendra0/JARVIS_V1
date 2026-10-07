@@ -535,9 +535,7 @@ def migrate_legacy_gicc_external_acceptance_contracts(
         expected_semantic = (
             None if semantic_contract is None else semantic_contract.to_payload()
         )
-        acceptance_missing = (
-            PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts
-        )
+        acceptance_missing = PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts
         semantic_mismatch = (
             architecture.payload.get("semantic_capability_contract")
             != expected_semantic
