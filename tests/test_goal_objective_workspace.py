@@ -1414,6 +1414,81 @@ def test_supervisor_does_not_repeat_retry_after_work_enters_retrying(
     assert "RETRY" not in progress.next_legal_actions
 
 
+def test_progress_ledger_projects_pending_lifecycle_activation_as_owner_blocker(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "pending-lifecycle-activation.sqlite3")
+    admission = state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_package_admission",
+        payload={
+            "schema": "capability_acquisition_release_admission.v1",
+            "candidate_artifact_id": "candidate-current",
+            "candidate_artifact_digest": "c" * 64,
+        },
+    )
+    state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_lifecycle_proposal",
+        payload={
+            "schema": "capability_lifecycle_proposal.v1",
+            "authority_required": True,
+            "admission_artifact_id": admission.artifact_id,
+            "admission_artifact_digest": admission.digest,
+        },
+    )
+
+    projector = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    )
+    pending = build_progress_ledger(projector.project(state["goal"].goal_id))
+
+    assert pending.phase == "activation"
+    assert pending.blocker_kind == "needs_owner"
+    assert pending.owner_action_required is True
+    assert pending.next_legal_actions == ("ASK_OWNER",)
+
+    activation = state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_lifecycle_activation",
+        payload={
+            "schema": "capability_acquisition_activation.v1",
+            "candidate_artifact_id": "candidate-current",
+            "candidate_artifact_digest": "c" * 64,
+            "admission_artifact_id": admission.artifact_id,
+            "admission_artifact_digest": admission.digest,
+            "effective_enabled": True,
+        },
+    )
+    active = build_progress_ledger(projector.project(state["goal"].goal_id))
+
+    assert active.phase == "research"
+    assert active.blocker_kind == "temporary_resource"
+    assert active.owner_action_required is False
+    assert active.next_legal_actions == ("WAIT_RESOURCE",)
+
+    state["changes"].add_artifact(
+        state["change"].change_id,
+        kind="capability_lifecycle_disable",
+        payload={
+            "schema": "capability_acquisition_disable.v1",
+            "candidate_artifact_id": "candidate-current",
+            "candidate_artifact_digest": "c" * 64,
+            "admission_artifact_id": admission.artifact_id,
+            "admission_artifact_digest": admission.digest,
+            "effective_enabled": False,
+            "activation_artifact_id": activation.artifact_id,
+        },
+    )
+    disabled = build_progress_ledger(projector.project(state["goal"].goal_id))
+
+    assert disabled.phase == "activation"
+    assert disabled.blocker_kind == "needs_owner"
+    assert disabled.owner_action_required is True
+    assert disabled.next_legal_actions == ("ASK_OWNER",)
+
+
 def test_objective_workspace_projects_phase9_external_acceptance_work(
     tmp_path: Path,
 ) -> None:
