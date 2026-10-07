@@ -790,8 +790,13 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
         in current.payload["owner_acceptance_contract_ids"]
     )
 
+    expected_semantic_contract = current.payload["semantic_capability_contract"]
     legacy_payload = dict(current.payload)
     legacy_payload["owner_acceptance_contract_ids"] = []
+    legacy_payload["semantic_capability_contract"] = {
+        **expected_semantic_contract,
+        "target_entity_type": "stale-television-type",
+    }
     legacy_payload.pop("external_runtime_contract", None)
     legacy = store.add_artifact(
         change_id,
@@ -822,6 +827,7 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
         PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
         in migrated.payload["owner_acceptance_contract_ids"]
     )
+    assert migrated.payload["semantic_capability_contract"] == expected_semantic_contract
     assert store.require(change_id).state is ChangeState.ARCHITECTURE_READY
 
     gate_ids = reconcile_owner_change_gates(
