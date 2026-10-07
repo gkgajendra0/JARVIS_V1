@@ -657,6 +657,8 @@ class GiccApplyRuntime:
                     mutation_performed=cutover.mutation_performed,
                     decision_digest=cutover.decision_digest,
                 )
+                if not cutover.accepted:
+                    continue
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
