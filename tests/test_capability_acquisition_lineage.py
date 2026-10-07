@@ -62,7 +62,7 @@ def _completed_step(kind: str, observation: dict[str, object]):
     )
 
 
-def _current_store(*, external_required: bool = False) -> FakeStore:
+def _current_store(*, install_external_pass: bool = True) -> FakeStore:
     store = FakeStore()
     candidate = _artifact(
         "candidate",
@@ -105,9 +105,9 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
         "architecture",
         "h",
         {
-            "owner_acceptance_contract_ids": (
-                [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT] if external_required else []
-            )
+            "owner_acceptance_contract_ids": [
+                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+            ]
         },
     )
     goal_artifact = _artifact(
@@ -141,6 +141,8 @@ def _current_store(*, external_required: bool = False) -> FakeStore:
         "capability_goal": goal_artifact,
         MANIFEST_KIND: manifest,
     }
+    if install_external_pass:
+        _install_external_pass(store)
     return store
 
 
@@ -225,7 +227,7 @@ def test_lineage_verifier_returns_exact_current_chain() -> None:
     assert result.package_id == "tv.control.package"
     assert result.package_version == "1.0.0"
     assert result.package_digest == "p" * 64
-    assert result.external_acceptance_required is False
+    assert result.external_acceptance_required is True
 
 
 def test_lineage_verifier_returns_none_until_activation_is_effective() -> None:
@@ -264,7 +266,7 @@ def test_lineage_verifier_rejects_stale_candidate_binding() -> None:
 
 
 def test_lineage_verifier_requires_external_pass_when_declared() -> None:
-    store = _current_store(external_required=True)
+    store = _current_store(install_external_pass=False)
 
     assert (
         verify_capability_acquisition_completion(
