@@ -581,8 +581,10 @@ def _lifecycle_activation_pending(
     if latest_activation is None:
         return (
             True,
-            "Promoted capability package is admitted but requires explicit owner "
-            "activation before real-target acceptance can run.",
+            (
+                "Promoted capability package is admitted but requires explicit owner "
+                "activation before real-target acceptance can run."
+            ),
         )
 
     candidate_id = str(
@@ -603,8 +605,10 @@ def _lifecycle_activation_pending(
     if disabled:
         return (
             True,
-            "The admitted capability was disabled after activation and requires "
-            "explicit owner activation before the objective can continue.",
+            (
+                "The admitted capability was disabled after activation and requires "
+                "explicit owner activation before the objective can continue."
+            ),
         )
     return False, None
 
