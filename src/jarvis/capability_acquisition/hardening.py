@@ -502,11 +502,6 @@ def _check_external_acceptance_binding(
     if not external_required:
         return
 
-    activations = [
-        item
-        for item in change.artifacts
-        if item.kind == "capability_lifecycle_activation"
-    ]
     bindings = [
         item
         for item in change.artifacts
@@ -517,6 +512,81 @@ def _check_external_acceptance_binding(
         for item in change.artifacts
         if item.kind == "capability_external_acceptance"
     ]
+    admissions = [
+        item
+        for item in change.artifacts
+        if item.kind == "capability_package_admission"
+    ]
+    proposals = [
+        item
+        for item in change.artifacts
+        if item.kind == "capability_lifecycle_proposal"
+        and item.payload.get("authority_required") is True
+    ]
+
+    candidate = None
+    if admissions:
+        admission = max(
+            admissions,
+            key=lambda item: (item.revision, item.artifact_id),
+        )
+        current_proposals = [
+            item
+            for item in proposals
+            if item.payload.get("admission_artifact_id") == admission.artifact_id
+            and item.payload.get("admission_artifact_digest") == admission.digest
+        ]
+        if not current_proposals:
+            # Promotion/admission has advanced but lifecycle activation has not yet
+            # been proposed for this exact generation. Historical activations remain
+            # auditable but must not fence the new owner activation path.
+            return
+        candidate_id = str(
+            admission.payload.get("candidate_artifact_id") or ""
+        ).strip()
+        candidate_digest = str(
+            admission.payload.get("candidate_artifact_digest") or ""
+        ).strip()
+        candidate = next(
+            (
+                item
+                for item in change.artifacts
+                if item.kind == "capability_candidate"
+                and item.artifact_id == candidate_id
+                and item.digest == candidate_digest
+            ),
+            None,
+        )
+        if candidate is None:
+            _add(
+                findings,
+                CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_BINDING_MISMATCH,
+                "current package admission has no exact capability candidate",
+                change_id=change.change_id,
+            )
+            return
+        activations = [
+            item
+            for item in change.artifacts
+            if item.kind == "capability_lifecycle_activation"
+            and item.payload.get("admission_artifact_id") == admission.artifact_id
+            and item.payload.get("admission_artifact_digest") == admission.digest
+        ]
+    else:
+        activations = [
+            item
+            for item in change.artifacts
+            if item.kind == "capability_lifecycle_activation"
+        ]
+        candidate = next(
+            (
+                item
+                for item in reversed(change.artifacts)
+                if item.kind == "capability_candidate"
+            ),
+            None,
+        )
+
     if not activations:
         return
 
@@ -543,14 +613,20 @@ def _check_external_acceptance_binding(
     if disabled is not None:
         return
 
-    candidate = next(
-        (
-            item
-            for item in reversed(change.artifacts)
-            if item.kind == "capability_candidate"
-        ),
-        None,
-    )
+    if (
+        candidate is not None
+        and (
+            activation.payload.get("candidate_artifact_id") != candidate.artifact_id
+            or activation.payload.get("candidate_artifact_digest") != candidate.digest
+        )
+    ):
+        _add(
+            findings,
+            CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_BINDING_MISMATCH,
+            "effective activation is not bound to the current admitted candidate",
+            change_id=change.change_id,
+        )
+        return
     if (
         candidate is not None
         and architecture is not None
@@ -816,6 +892,39 @@ def inspect_capability_workspace_invariants(
     )
 
 
+_POST_ACTIVATION_INVARIANT_CODES = frozenset(
+    {
+        CapabilitySystemInvariantCode.ACTIVATED_CANDIDATE_ARCHITECTURE_MISMATCH,
+        CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_WITHOUT_BINDING,
+        CapabilitySystemInvariantCode.EXTERNAL_ACCEPTANCE_BINDING_MISMATCH,
+    }
+)
+
+_POST_ACTIVATION_ENFORCEMENT_STATES = frozenset(
+    {
+        "observing",
+        "closed",
+        "blocked_external",
+        "failed",
+    }
+)
+
+
+def _finding_blocks_current_lifecycle(
+    finding: CapabilitySystemInvariantFindingV1,
+    *,
+    change_state_by_id: dict[str, str],
+) -> bool:
+    if (
+        finding.code in _POST_ACTIVATION_INVARIANT_CODES
+        and finding.change_id is not None
+        and change_state_by_id.get(finding.change_id)
+        not in _POST_ACTIVATION_ENFORCEMENT_STATES
+    ):
+        return False
+    return True
+
+
 def blocking_capability_workspace_invariant_codes(
     *,
     workspace: ObjectiveWorkspaceV1,
@@ -859,11 +968,18 @@ def blocking_capability_workspace_invariant_codes(
     if progress.active_change_id is not None:
         relevant_change_ids.add(progress.active_change_id)
 
+    change_state_by_id = {
+        change.change_id: change.state for change in workspace.changes
+    }
     return tuple(
         dict.fromkeys(
             finding.code.value
             for finding in report.findings
-            if finding.change_id is None or finding.change_id in relevant_change_ids
+            if (finding.change_id is None or finding.change_id in relevant_change_ids)
+            and _finding_blocks_current_lifecycle(
+                finding,
+                change_state_by_id=change_state_by_id,
+            )
         )
     )
 
