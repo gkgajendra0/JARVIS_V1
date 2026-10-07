@@ -347,6 +347,35 @@ class WorkAgentTools:
             process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
             limit=10_000,
         ):
+            activation = store.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_activation",
+            )
+            activation_effective = bool(
+                activation is not None
+                and activation.payload.get("effective_enabled") is True
+            )
+            disabled = store.latest_artifact(
+                change.change_id,
+                "capability_lifecycle_disable",
+            )
+            disabled_after_activation = bool(
+                activation_effective
+                and disabled is not None
+                and activation is not None
+                and disabled.payload.get("candidate_artifact_id")
+                == activation.payload.get("candidate_artifact_id")
+                and disabled.payload.get("candidate_artifact_digest")
+                == activation.payload.get("candidate_artifact_digest")
+                and disabled.created_at >= activation.created_at
+                and disabled.payload.get("effective_enabled") is False
+            )
+
+            if not activate:
+                if activation_effective and not disabled_after_activation:
+                    candidates.append(change.change_id)
+                continue
+
             candidate = store.latest_artifact(
                 change.change_id,
                 "capability_candidate",
@@ -373,14 +402,6 @@ class WorkAgentTools:
             ):
                 continue
 
-            activation = store.latest_artifact(
-                change.change_id,
-                "capability_lifecycle_activation",
-            )
-            activation_effective = bool(
-                activation is not None
-                and activation.payload.get("effective_enabled") is True
-            )
             activation_matches_latest_candidate = bool(
                 activation_effective
                 and activation is not None
@@ -389,27 +410,7 @@ class WorkAgentTools:
                 and activation.payload.get("candidate_artifact_digest")
                 == candidate.digest
             )
-            disabled = store.latest_artifact(
-                change.change_id,
-                "capability_lifecycle_disable",
-            )
-            disabled_after_activation = bool(
-                activation_effective
-                and disabled is not None
-                and activation is not None
-                and disabled.payload.get("candidate_artifact_id")
-                == activation.payload.get("candidate_artifact_id")
-                and disabled.payload.get("candidate_artifact_digest")
-                == activation.payload.get("candidate_artifact_digest")
-                and disabled.created_at >= activation.created_at
-                and disabled.payload.get("effective_enabled") is False
-            )
-            eligible = (
-                (not activation_matches_latest_candidate or disabled_after_activation)
-                if activate
-                else (activation_effective and not disabled_after_activation)
-            )
-            if eligible:
+            if not activation_matches_latest_candidate or disabled_after_activation:
                 candidates.append(change.change_id)
         return tuple(sorted(candidates))
 
