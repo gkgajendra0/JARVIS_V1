@@ -1038,7 +1038,7 @@ def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> No
     assert progress.phase == "terminal"
     assert progress.blocker_kind == "terminal"
     assert progress.current_plan_valid is False
-    assert progress.next_legal_actions == ("REPLAN", "TERMINAL")
+    assert progress.next_legal_actions == ("TERMINAL",)
     assert "RESUME_DEVELOPMENT" not in progress.next_legal_actions
 
     report = inspect_capability_system_invariants(
