@@ -703,6 +703,60 @@ def test_gicc_architecture_requires_real_external_acceptance_contract() -> None:
     ]
 
 
+def test_external_acceptance_invariant_blocks_activated_candidate_architecture_drift() -> None:
+    candidate = SimpleNamespace(
+        kind="capability_candidate",
+        artifact_id="artifact_candidate_stale_architecture",
+        digest="c" * 64,
+        revision=2,
+        created_at=2,
+        payload={
+            "architecture_artifact_id": "artifact_architecture_old",
+            "architecture_digest": "o" * 64,
+        },
+    )
+    architecture = SimpleNamespace(
+        kind="architecture",
+        artifact_id="artifact_architecture_current",
+        digest="n" * 64,
+        revision=3,
+        created_at=3,
+        payload={
+            "owner_acceptance_contract_ids": [
+                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+            ]
+        },
+    )
+    activation = SimpleNamespace(
+        kind="capability_lifecycle_activation",
+        artifact_id="artifact_activation_stale_architecture",
+        digest="a" * 64,
+        revision=4,
+        created_at=4,
+        payload={
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "effective_enabled": True,
+        },
+    )
+    change = SimpleNamespace(
+        change_id="change_stale_activation_architecture",
+        current_architecture_artifact_id=architecture.artifact_id,
+        artifacts=(candidate, architecture, activation),
+    )
+    findings = []
+
+    _check_external_acceptance_binding(
+        change=change,
+        work_by_id={},
+        findings=findings,
+    )
+
+    assert [finding.code for finding in findings] == [
+        CapabilitySystemInvariantCode.ACTIVATED_CANDIDATE_ARCHITECTURE_MISMATCH
+    ]
+
+
 def test_external_acceptance_invariant_requires_binding_when_approved() -> None:
     """Approved real-world acceptance cannot disappear after activation."""
 
