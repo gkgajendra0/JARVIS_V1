@@ -84,6 +84,47 @@ class CapabilityAcquisitionLifecycleCoordinator:
         )
         return candidate, admission
 
+    def _active_binding(
+        self,
+        change_id: str,
+    ) -> tuple[ChangeArtifact, ChangeArtifact]:
+        activation = self._changes.latest_artifact(
+            change_id,
+            "capability_lifecycle_activation",
+        )
+        if activation is None or activation.payload.get("effective_enabled") is not True:
+            raise CapabilityAcquisitionLifecycleError(
+                "Phase-9 lifecycle disable requires an effective activation"
+            )
+        candidate_id = str(
+            activation.payload.get("candidate_artifact_id") or ""
+        ).strip()
+        candidate_digest = str(
+            activation.payload.get("candidate_artifact_digest") or ""
+        ).strip()
+        admission_id = str(
+            activation.payload.get("admission_artifact_id") or ""
+        ).strip()
+        admission_digest = str(
+            activation.payload.get("admission_artifact_digest") or ""
+        ).strip()
+        candidate = self._changes.get_artifact(candidate_id) if candidate_id else None
+        admission = self._changes.get_artifact(admission_id) if admission_id else None
+        if (
+            candidate is None
+            or admission is None
+            or candidate.kind != "capability_candidate"
+            or admission.kind != "capability_package_admission"
+            or candidate.digest != candidate_digest
+            or admission.digest != admission_digest
+            or admission.payload.get("candidate_artifact_id") != candidate.artifact_id
+            or admission.payload.get("candidate_artifact_digest") != candidate.digest
+        ):
+            raise CapabilityAcquisitionLifecycleError(
+                "effective activation binding is missing, stale or cross-generation"
+            )
+        return candidate, admission
+
     @staticmethod
     def _identity(candidate: ChangeArtifact) -> tuple[str, str, str, str]:
         capability_id = (
@@ -204,7 +245,7 @@ class CapabilityAcquisitionLifecycleCoordinator:
         authority_session_id: str,
         source_turn_id: str,
     ) -> CapabilityAcquisitionLifecycleResult:
-        candidate, admission = self._binding(change_id)
+        candidate, admission = self._active_binding(change_id)
         capability_id, package_id, package_version, package_digest = self._identity(
             candidate
         )
