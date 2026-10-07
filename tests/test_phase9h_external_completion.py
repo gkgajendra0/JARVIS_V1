@@ -141,7 +141,7 @@ def _acceptance_recovery_state(tmp_path: Path, *, external_required: bool = True
             "package_version": "1.0.0",
             "package_digest": "b" * 64,
             "architecture_artifact_id": architecture.artifact_id,
-            "architecture_artifact_digest": architecture.digest,
+            "architecture_digest": architecture.digest,
         },
     )
     activation = changes.add_artifact(
@@ -182,6 +182,45 @@ def test_external_acceptance_is_skipped_when_architecture_does_not_require_it(
         )
         is None
     )
+    assert (
+        store.find_by_source_turn(
+            source_session_id=f"phase9-external:{change.change_id}",
+            source_turn_id=activation.artifact_id,
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        )
+        is None
+    )
+
+
+def test_external_acceptance_rejects_candidate_from_superseded_architecture(
+    tmp_path: Path,
+) -> None:
+    store, changes, change, _candidate, activation, _development = (
+        _acceptance_recovery_state(tmp_path)
+    )
+    current = changes.latest_artifact(change.change_id, "architecture")
+    assert current is not None
+    changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            **current.payload,
+            "strategy": "revised-after-candidate",
+        },
+    )
+    coordinator = ExternalAcceptanceCoordinator(changes, FakeBackend())
+
+    with pytest.raises(
+        ExternalAcceptanceError,
+        match="not bound to the current acquisition architecture",
+    ):
+        coordinator.start(
+            change.change_id,
+            activation_artifact_id=activation.artifact_id,
+            authority_session_id="owner-session",
+            source_turn_id="activation-turn",
+        )
+
     assert (
         store.find_by_source_turn(
             source_session_id=f"phase9-external:{change.change_id}",
