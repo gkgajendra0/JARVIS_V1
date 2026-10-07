@@ -703,7 +703,9 @@ def test_gicc_architecture_requires_real_external_acceptance_contract() -> None:
     ]
 
 
-def test_external_acceptance_invariant_blocks_activated_candidate_architecture_drift() -> None:
+def test_external_acceptance_invariant_blocks_activated_candidate_architecture_drift() -> (
+    None
+):
     candidate = SimpleNamespace(
         kind="capability_candidate",
         artifact_id="artifact_candidate_stale_architecture",
@@ -722,9 +724,7 @@ def test_external_acceptance_invariant_blocks_activated_candidate_architecture_d
         revision=3,
         created_at=3,
         payload={
-            "owner_acceptance_contract_ids": [
-                PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
-            ]
+            "owner_acceptance_contract_ids": [PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT]
         },
     )
     activation = SimpleNamespace(
