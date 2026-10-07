@@ -521,7 +521,28 @@ def migrate_legacy_gicc_external_acceptance_contracts(
             for item in architecture.payload.get("owner_acceptance_contract_ids", ())
             if str(item).strip()
         }
-        if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in contracts:
+        goal_artifact = store.latest_artifact(change.change_id, "capability_goal")
+        if goal_artifact is None:
+            raise CapabilityAcquisitionArchitectureError(
+                "legacy GICC architecture migration requires capability goal evidence"
+            )
+        goal = goal_from_payload(goal_artifact.payload)
+        semantic_contract = _gicc_semantic_contract(
+            store,
+            change_id=change.change_id,
+            goal=goal,
+        )
+        expected_semantic = (
+            None if semantic_contract is None else semantic_contract.to_payload()
+        )
+        acceptance_missing = (
+            PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts
+        )
+        semantic_mismatch = (
+            architecture.payload.get("semantic_capability_contract")
+            != expected_semantic
+        )
+        if not acceptance_missing and not semantic_mismatch:
             continue
 
         # Prove the legacy artifact is otherwise the exact current architecture
@@ -531,6 +552,7 @@ def migrate_legacy_gicc_external_acceptance_contracts(
             change.change_id,
             artifact_id=architecture.artifact_id,
             require_gicc_external_acceptance=False,
+            require_gicc_semantic_contract=False,
         )
         migrated.append(change.change_id)
         if dry_run:
@@ -540,6 +562,10 @@ def migrate_legacy_gicc_external_acceptance_contracts(
         revised_payload["owner_acceptance_contract_ids"] = sorted(
             contracts | {PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT}
         )
+        if expected_semantic is None:
+            revised_payload.pop("semantic_capability_contract", None)
+        else:
+            revised_payload["semantic_capability_contract"] = expected_semantic
         revised_payload["external_runtime_contract"] = (
             external_interaction_contract_descriptor()
         )
@@ -558,6 +584,7 @@ def ensure_capability_acquisition_architecture_current(
     *,
     artifact_id: str | None = None,
     require_gicc_external_acceptance: bool = True,
+    require_gicc_semantic_contract: bool = True,
 ) -> ChangeArtifact:
     change = store.require(change_id)
     if (
@@ -609,6 +636,20 @@ def ensure_capability_acquisition_architecture_current(
         raise CapabilityAcquisitionArchitectureError(
             "capability acquisition architecture provenance drifted"
         )
+    if require_gicc_semantic_contract:
+        goal = goal_from_payload(goal_artifact.payload)
+        semantic_contract = _gicc_semantic_contract(
+            store,
+            change_id=change_id,
+            goal=goal,
+        )
+        expected_semantic = (
+            None if semantic_contract is None else semantic_contract.to_payload()
+        )
+        if payload.get("semantic_capability_contract") != expected_semantic:
+            raise CapabilityAcquisitionArchitectureError(
+                "GICC-linked capability architecture semantic contract drifted"
+            )
     if require_gicc_external_acceptance:
         ensure_gicc_external_acceptance_contract_current(
             store,
