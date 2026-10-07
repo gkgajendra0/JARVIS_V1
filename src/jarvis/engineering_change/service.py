@@ -19,6 +19,7 @@ from jarvis.conversation import ConversationRole, ConversationSession, Conversat
 from jarvis.work.models import WorkDeliveryKind, WorkState
 
 from .coordinator import ChangeCoordinator
+from .delivery import reconcile_owner_acceptance_gates
 from .gates import GateChallenge, GateDecision, GateKind, GateService
 from .models import ChangeConflict, ChangeState, EngineeringChange
 
@@ -377,47 +378,19 @@ class ChangeService:
 
     def prepare_acceptance(self, change_id: str) -> GateChallenge:
         """Present canonical development evidence; never trust a model pass claim."""
-        store = self.coordinator.store
-        change = store.require(change_id)
-        if change.state is not ChangeState.VERIFYING:
+
+        gate_ids = reconcile_owner_acceptance_gates(
+            self.coordinator,
+            change_ids=(change_id,),
+        )
+        if len(gate_ids) != 1:
             raise ChangeConflict("change has not reached verification")
-        process = store.process_contract(
-            change.process_key,
-            change.process_version,
-        )
-        stage = store.current_stage_attempt(
-            change_id,
-            process.development_stage.stage_key,
-        )
-        if stage is None:
-            raise ChangeConflict("development stage is missing")
-        work = store.work.require(stage.work_id)
-        result = work.result
-        if (
-            work.state is not WorkState.COMPLETED
-            or not isinstance(result.get("verification"), dict)
-            or result["verification"].get("passed") is not True
-            or not result.get("commit")
-            or not result.get("branch")
-        ):
-            raise ChangeConflict("canonical development has no verified commit")
-        payload = {"work_id": stage.work_id, "result": result}
-        artifact = store.add_artifact(change_id, kind="acceptance", payload=payload)
-        gate = GateService(store, verify_owner=lambda *_: False).present(
-            change_id, GateKind.ACCEPTANCE, artifact.artifact_id
-        )
-        self._enqueue_gate_delivery(
-            store=store,
-            work=work,
-            change_id=change_id,
-            gate=gate,
-            artifact=artifact,
-            summary="Acceptance approval is required for the verified candidate.",
-            proposal_summary={
-                "review_kind": "acceptance",
-                "branch": result["branch"],
-                "commit": result["commit"],
-                "sandbox": result["verification"].get("sandbox"),
-            },
-        )
-        return gate
+        gate = GateService(
+            self.coordinator.store,
+            verify_owner=lambda *_: False,
+        ).get(gate_ids[0])
+        challenge = None if gate is None else getattr(gate, "challenge", gate)
+        if not isinstance(challenge, GateChallenge):
+            raise ChangeConflict("acceptance gate could not be recovered")
+        return challenge
+
