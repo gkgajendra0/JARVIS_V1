@@ -225,6 +225,8 @@ GLOBAL_SUPERVISOR_S1_REPLAY_CORPUS_V1: tuple[SystemReplayCaseV1, ...] = (
             "tests/test_phase9h_external_completion.py::test_external_acceptance_decline_waits_for_same_owner_authorization",
             "tests/test_phase9h_external_completion.py::test_external_acceptance_authority_must_match_activation_artifact",
             "tests/test_capability_acquisition_owner_flow_hardening.py::test_owner_turn_discovers_target_and_enters_exact_phase9_lineage",
+            "tests/test_capability_acquisition_architecture_gicc_contract.py::test_current_gicc_architecture_rejects_legacy_missing_external_acceptance",
+            "tests/test_capability_acquisition_promotion.py::test_release_bridge_rejects_legacy_gicc_architecture_without_live_acceptance",
             "tests/test_phase9_voice_entrypoint.py::test_voice_activation_binds_exact_owner_turn_and_starts_external_acceptance",
             "tests/test_capability_acquisition_completion_hardening.py::test_exact_completion_lineage_fences_and_resumes_original_goal",
         ),
