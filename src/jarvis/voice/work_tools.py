@@ -377,9 +377,13 @@ class WorkAgentTools:
                 change.change_id,
                 "capability_lifecycle_activation",
             )
-            current_activation = bool(
+            activation_effective = bool(
                 activation is not None
                 and activation.payload.get("effective_enabled") is True
+            )
+            activation_matches_latest_candidate = bool(
+                activation_effective
+                and activation is not None
                 and activation.payload.get("candidate_artifact_id")
                 == candidate.artifact_id
                 and activation.payload.get("candidate_artifact_digest")
@@ -390,18 +394,23 @@ class WorkAgentTools:
                 "capability_lifecycle_disable",
             )
             disabled_after_activation = bool(
-                current_activation
+                activation_effective
                 and disabled is not None
                 and activation is not None
                 and disabled.payload.get("candidate_artifact_id")
-                == candidate.artifact_id
+                == activation.payload.get("candidate_artifact_id")
+                and disabled.payload.get("candidate_artifact_digest")
+                == activation.payload.get("candidate_artifact_digest")
                 and disabled.created_at >= activation.created_at
                 and disabled.payload.get("effective_enabled") is False
             )
             eligible = (
-                (not current_activation or disabled_after_activation)
+                (
+                    not activation_matches_latest_candidate
+                    or disabled_after_activation
+                )
                 if activate
-                else (current_activation and not disabled_after_activation)
+                else (activation_effective and not disabled_after_activation)
             )
             if eligible:
                 candidates.append(change.change_id)
