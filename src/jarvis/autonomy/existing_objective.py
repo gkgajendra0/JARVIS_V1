@@ -11,6 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from jarvis.capability_acquisition.architecture import (
+    migrate_legacy_gicc_external_acceptance_contracts,
+)
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
     verify_capability_acquisition_completion,
@@ -282,6 +285,16 @@ class ExistingObjectiveResumeController:
         ):
             startup_recovery_kinds.append("phase9-authoritative-source-dependency-v1")
 
+        legacy_acceptance_contract_recovery = (
+            lineage.change_id
+            in migrate_legacy_gicc_external_acceptance_contracts(
+                self._changes,
+                dry_run=True,
+            )
+        )
+        if legacy_acceptance_contract_recovery:
+            startup_recovery_kinds.append("phase9-gicc-external-acceptance-contract-v1")
+
         capability_completion_ready = False
         capability_completion_error: str | None = None
         try:
@@ -295,7 +308,13 @@ class ExistingObjectiveResumeController:
                 is not None
             )
         except CapabilityAcquisitionLineageError as exc:
-            capability_completion_error = str(exc)
+            completion_error = str(exc)
+            if not (
+                legacy_acceptance_contract_recovery
+                and "mandatory real-target external acceptance contract"
+                in completion_error
+            ):
+                capability_completion_error = completion_error
 
         requested_is_active = progress.active_change_id == lineage.change_id
         if capability_completion_error is not None:
