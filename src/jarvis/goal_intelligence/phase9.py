@@ -455,8 +455,7 @@ class Phase9GoalBridge:
                     payload=payload,
                 )
             elif any(
-                latest.payload.get(key) != value
-                for key, value in payload.items()
+                latest.payload.get(key) != value for key, value in payload.items()
             ):
                 raise GoalStoreConflict(
                     "Phase-9 change is already linked to a different GICC gap"
