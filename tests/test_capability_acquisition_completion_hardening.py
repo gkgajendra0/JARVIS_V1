@@ -29,8 +29,8 @@ from jarvis.capability_registry.projection import (
     CapabilityManagementMode,
 )
 from jarvis.engineering_change import ChangeStore
-from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_change.coordinator import ChangeCoordinator
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
 from jarvis.goal_intelligence.models import (
