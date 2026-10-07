@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -12,6 +14,7 @@ from dataclasses import dataclass
 
 from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
 from jarvis.config import JarvisConfig
+from jarvis.development_engine.codex import REVIEWED_CODEX_SDK_VERSION
 from jarvis.engineering_substrate.secrets.store import (
     SecretNotFoundError,
     SecretStore,
@@ -84,6 +87,16 @@ def run_preflight(
     _require(config.chatgpt_plan_enabled, "ChatGPT-plan reasoning is not enabled")
     _require(bool(config.chatgpt_plan_model), "ChatGPT-plan model is not configured")
     _require(
+        config.development_engine_enabled,
+        "governed DevelopmentEngine capability development is disabled",
+    )
+    development_model = str(
+        config.development_engine_model or config.chatgpt_plan_model or ""
+    ).strip()
+    _require(
+        bool(development_model), "DevelopmentEngine coding model is not configured"
+    )
+    _require(
         config.work_orchestration_enabled, "durable Work orchestration is disabled"
     )
     _require(config.github_promotion_enabled, "governed GitHub promotion is disabled")
@@ -95,6 +108,43 @@ def run_preflight(
     _require(
         str(config.chatgpt_plan_model) in visible_models,
         "configured ChatGPT-plan model is not visible to the connected account",
+    )
+    _require(
+        development_model in visible_models,
+        "configured DevelopmentEngine model is not visible to the connected account",
+    )
+
+    try:
+        codex_module = importlib.import_module("openai_codex")
+    except ImportError as exc:
+        raise Phase9MissionPreflightError(
+            "openai-codex is not installed; install the JARVIS development-codex "
+            "optional dependency before the real capability mission"
+        ) from exc
+    codex_version = str(getattr(codex_module, "__version__", "")).strip()
+    _require(
+        codex_version == REVIEWED_CODEX_SDK_VERSION,
+        "owner machine does not have the reviewed openai-codex=="
+        f"{REVIEWED_CODEX_SDK_VERSION} runtime",
+    )
+
+    docker = shutil.which("docker")
+    _require(bool(docker), "Docker is unavailable for governed development testing")
+    test_image = str(config.development_test_docker_image or "").strip()
+    _require(bool(test_image), "development test Docker image is not configured")
+    image_probe = subprocess.run(
+        [str(docker), "image", "inspect", test_image],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30.0,
+        check=False,
+        shell=False,
+    )
+    _require(
+        image_probe.returncode == 0,
+        "configured development test Docker image is unavailable locally",
     )
 
     adapters = build_default_model_adapter_registry(
@@ -115,6 +165,10 @@ def run_preflight(
     _require(
         all(target.locality.value != "local" for target in all_targets),
         "production Work pool still contains a local LLM",
+    )
+    _require(
+        len(all_targets) == 1 and all_targets[0].provider_id == "chatgpt_plan",
+        "production Work pool must not contain an automatic paid-provider fallback",
     )
 
     _require(
@@ -149,6 +203,12 @@ def run_preflight(
         "local_llm_in_work_pool": False,
         "global_brain_router_mode": config.global_brain_router_mode,
         "work_orchestration_enabled": config.work_orchestration_enabled,
+        "development_engine_enabled": config.development_engine_enabled,
+        "development_engine_model": development_model,
+        "openai_codex_version": codex_version,
+        "development_test_image": test_image,
+        "work_context_mode": config.work_context_mode,
+        "automatic_paid_fallback": False,
         "github_promotion_enabled": config.github_promotion_enabled,
         "github_repository": config.github_repository_full_name,
         "github_secret_descriptor_verified": True,
@@ -160,7 +220,7 @@ def run_preflight(
             else config.realtime_model
         ),
         "next": (
-            "start JARVIS voice and submit one natural external outcome; "
+            "start the JARVIS runtime and submit one natural external outcome; "
             "do not provide protocol/IP/SDK implementation hints"
         ),
     }

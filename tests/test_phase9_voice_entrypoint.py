@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.voice.agent import INSTRUCTIONS, build_instructions
-from jarvis.voice.work_tools import WorkAgentTools
+from jarvis.voice.work_tools import (
+    WorkAgentTools,
+    WorkToolGroundingError,
+    _explicit_capability_lifecycle_intent,
+)
 from jarvis.work.development import DevelopmentWorkspaceManager
 from jarvis.work.runtime import WorkRuntime
 
@@ -200,3 +206,278 @@ def test_work_tools_can_hide_direct_capability_acquisition_in_apply() -> None:
     assert "start_capability_acquisition" not in [tool.id for tool in apply_tools]
     assert "activate_acquired_capability" in [tool.id for tool in apply_tools]
     assert "disable_acquired_capability" in [tool.id for tool in apply_tools]
+
+
+@pytest.mark.parametrize(
+    ("text", "activate", "expected"),
+    (
+        ("Activate it.", True, True),
+        ("Please enable the acquired capability.", True, True),
+        ("Turn the capability on.", True, True),
+        ("Turn on the capability.", True, True),
+        ("Start using it now.", True, True),
+        ("Do not activate it.", True, False),
+        ("Don't enable the capability.", True, False),
+        ("Never turn it on.", True, False),
+        ("Yes, proceed.", True, False),
+        ("What is its status?", True, False),
+        ("Disable it.", False, True),
+        ("Deactivate the capability.", False, True),
+        ("Turn it off.", False, True),
+        ("Turn off the capability.", False, True),
+        ("Stop using it.", False, True),
+        ("Do not disable it.", False, False),
+        ("Don't turn it off.", False, False),
+        ("Yes, proceed.", False, False),
+    ),
+)
+def test_phase9_lifecycle_intent_is_explicit_and_deterministic(
+    text: str,
+    activate: bool,
+    expected: bool,
+) -> None:
+    assert _explicit_capability_lifecycle_intent(text, activate=activate) is expected
+
+
+class _LifecycleTargetStore:
+    def __init__(self, change_ids: tuple[str, ...]) -> None:
+        self.changes = tuple(SimpleNamespace(change_id=item) for item in change_ids)
+        self.artifacts: dict[tuple[str, str], object] = {}
+        for index, change_id in enumerate(change_ids):
+            candidate = SimpleNamespace(
+                artifact_id=f"candidate-{index}",
+                digest=f"{index + 1}" * 64,
+                payload={},
+                created_at=index,
+            )
+            admission = SimpleNamespace(
+                artifact_id=f"admission-{index}",
+                digest=f"{index + 2}" * 64,
+                payload={
+                    "candidate_artifact_id": candidate.artifact_id,
+                    "candidate_artifact_digest": candidate.digest,
+                },
+                created_at=index,
+            )
+            proposal = SimpleNamespace(
+                artifact_id=f"proposal-{index}",
+                digest=f"{index + 3}" * 64,
+                payload={
+                    "authority_required": True,
+                    "admission_artifact_id": admission.artifact_id,
+                    "admission_artifact_digest": admission.digest,
+                },
+                created_at=index,
+            )
+            self.artifacts[(change_id, "capability_candidate")] = candidate
+            self.artifacts[(change_id, "capability_package_admission")] = admission
+            self.artifacts[(change_id, "capability_lifecycle_proposal")] = proposal
+
+    def list_by_states(self, *args, **kwargs):
+        del args, kwargs
+        return self.changes
+
+    def latest_artifact(self, change_id: str, kind: str):
+        return self.artifacts.get((change_id, kind))
+
+
+def _lifecycle_target_tools(change_ids: tuple[str, ...]) -> WorkAgentTools:
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = SimpleNamespace(store=_LifecycleTargetStore(change_ids))
+    conversation = ConversationSession(session_id="lifecycle-target-test")
+    conversation.start()
+    return WorkAgentTools(runtime, conversation)
+
+
+def test_lifecycle_target_uses_unique_canonical_pending_change() -> None:
+    change_id = "change_aaaaaaaaaaaaaaaa"
+    tools = _lifecycle_target_tools((change_id,))
+
+    assert (
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text="Activate it.",
+            activate=True,
+        )
+        == change_id
+    )
+
+
+def test_lifecycle_target_can_disable_effective_superseded_candidate() -> None:
+    change_id = "change_aaaaaaaaaaaaaaaa"
+    store = _LifecycleTargetStore((change_id,))
+    active_candidate = store.artifacts[(change_id, "capability_candidate")]
+    activation = SimpleNamespace(
+        artifact_id="activation-old-generation",
+        digest="a" * 64,
+        payload={
+            "candidate_artifact_id": active_candidate.artifact_id,
+            "candidate_artifact_digest": active_candidate.digest,
+            "effective_enabled": True,
+        },
+        created_at=10,
+    )
+    store.artifacts[(change_id, "capability_lifecycle_activation")] = activation
+    replacement = SimpleNamespace(
+        artifact_id="candidate-new-generation",
+        digest="f" * 64,
+        payload={},
+        created_at=20,
+    )
+    store.artifacts[(change_id, "capability_candidate")] = replacement
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = SimpleNamespace(store=store)
+    conversation = ConversationSession(session_id="lifecycle-disable-target-test")
+    conversation.start()
+    tools = WorkAgentTools(runtime, conversation)
+
+    assert (
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text="Disable the acquired capability.",
+            activate=False,
+        )
+        == change_id
+    )
+
+
+def test_voice_activation_binds_exact_owner_turn_and_starts_external_acceptance() -> (
+    None
+):
+    change_id = "change_aaaaaaaaaaaaaaaa"
+    store = _LifecycleTargetStore((change_id,))
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = SimpleNamespace(store=store)
+    runtime._capability_catalog_refresher = lambda: None
+
+    lifecycle_calls: list[dict[str, str]] = []
+    acceptance_calls: list[dict[str, str]] = []
+
+    class _Lifecycle:
+        def activate(
+            self,
+            requested_change_id: str,
+            *,
+            authority_session_id: str,
+            source_turn_id: str,
+        ):
+            lifecycle_calls.append(
+                {
+                    "change_id": requested_change_id,
+                    "authority_session_id": authority_session_id,
+                    "source_turn_id": source_turn_id,
+                }
+            )
+            return SimpleNamespace(
+                artifact=SimpleNamespace(
+                    artifact_id="artifact_activation_voice",
+                    digest="e" * 64,
+                ),
+                capability_id="media_player_control",
+                package_id="media.player.control",
+                package_version="1.0.0",
+                package_digest="f" * 64,
+            )
+
+    class _Acceptance:
+        def start(
+            self,
+            requested_change_id: str,
+            *,
+            activation_artifact_id: str,
+            authority_session_id: str,
+            source_turn_id: str,
+        ):
+            acceptance_calls.append(
+                {
+                    "change_id": requested_change_id,
+                    "activation_artifact_id": activation_artifact_id,
+                    "authority_session_id": authority_session_id,
+                    "source_turn_id": source_turn_id,
+                }
+            )
+            return SimpleNamespace(
+                work_id="work_external_voice",
+                state=SimpleNamespace(value="queued"),
+            )
+
+    runtime.capability_lifecycle = _Lifecycle()
+    runtime.capability_external_acceptance = _Acceptance()
+
+    conversation = ConversationSession(session_id="voice-activation-session")
+    conversation.start()
+    turn = conversation.accept_turn(
+        ConversationRole.USER,
+        "Activate the acquired capability.",
+    )
+    tools = WorkAgentTools(runtime, conversation)
+
+    result = asyncio.run(tools.activate_acquired_capability(None))
+
+    assert result["ok"] is True
+    assert result["change_id"] == change_id
+    assert result["external_acceptance_work_id"] == "work_external_voice"
+    assert lifecycle_calls == [
+        {
+            "change_id": change_id,
+            "authority_session_id": conversation.session_id,
+            "source_turn_id": turn.turn_id,
+        }
+    ]
+    assert acceptance_calls == [
+        {
+            "change_id": change_id,
+            "activation_artifact_id": "artifact_activation_voice",
+            "authority_session_id": conversation.session_id,
+            "source_turn_id": turn.turn_id,
+        }
+    ]
+
+
+def test_lifecycle_target_rejects_model_id_conflicting_with_canonical_state() -> None:
+    tools = _lifecycle_target_tools(("change_aaaaaaaaaaaaaaaa",))
+
+    with pytest.raises(WorkToolGroundingError, match="conflicts with canonical"):
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="change_bbbbbbbbbbbbbbbb",
+            owner_text="Activate it.",
+            activate=True,
+        )
+
+
+def test_lifecycle_target_requires_disambiguation_when_multiple_are_pending() -> None:
+    first = "change_aaaaaaaaaaaaaaaa"
+    second = "change_bbbbbbbbbbbbbbbb"
+    tools = _lifecycle_target_tools((first, second))
+
+    with pytest.raises(WorkToolGroundingError, match="ambiguous"):
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text="Activate it.",
+            activate=True,
+        )
+
+    assert (
+        tools._resolve_lifecycle_change_id(
+            requested_change_id="",
+            owner_text=f"Activate acquired capability {second}.",
+            activate=True,
+        )
+        == second
+    )
+
+
+def test_work_runtime_rejects_phase9_lifecycle_without_capability_runtime() -> None:
+    with pytest.raises(
+        ValueError,
+        match="requires governed capability runtime",
+    ):
+        from jarvis.work.runtime import build_work_runtime
+
+        build_work_runtime(
+            provider="test",
+            research_service=object(),  # type: ignore[arg-type]
+            capability_runtime=None,
+            capability_lifecycle_service=object(),  # type: ignore[arg-type]
+        )

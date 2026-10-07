@@ -23,6 +23,7 @@ from jarvis.conversation import (
     ConversationStatus,
 )
 from jarvis.engineering_change.gates import GateService
+from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -61,6 +62,9 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        objective_status: OwnerObjectiveStatusResolver | None = None,
+        gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
         gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
     ) -> None:
@@ -71,7 +75,17 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
-        self._gicc_tool_factory = gicc_tool_factory
+        self._objective_status = objective_status
+        if gicc_action_tool_factory is not None and gicc_tool_factory is not None:
+            raise ValueError(
+                "use either gicc_action_tool_factory or legacy gicc_tool_factory, not both"
+            )
+        self._gicc_action_tool_factory = (
+            gicc_action_tool_factory
+            if gicc_action_tool_factory is not None
+            else gicc_tool_factory
+        )
+        self._gicc_read_tool_factory = gicc_read_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
 
     @property
@@ -80,6 +94,14 @@ class _SessionToolBundle:
         conversation = self._conversation_getter()
         if conversation is None:
             return tools
+        pending_change_gate = False
+        if self._work_runtime is not None and self._work_runtime.changes is not None:
+            pending_change_gate = bool(
+                GateService(
+                    self._work_runtime.changes.store,
+                    verify_owner=lambda *_: False,
+                ).pending_gate_ids()
+            )
         if self._memory_runtime is not None:
             tools.extend(
                 MemoryAgentTools(
@@ -94,15 +116,22 @@ class _SessionToolBundle:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
-        if self._gicc_tool_factory is not None:
-            tools.extend(self._gicc_tool_factory(conversation))
+        # A pending EngineeringChange decision is a protected continuation boundary.
+        # Keep read-only objective awareness available, but suppress goal-changing
+        # GICC actions so deictic speech such as "proceed" cannot become a new goal.
+        if self._gicc_read_tool_factory is not None:
+            tools.extend(self._gicc_read_tool_factory(conversation))
+        if self._gicc_action_tool_factory is not None and not pending_change_gate:
+            tools.extend(self._gicc_action_tool_factory(conversation))
         if self._work_runtime is not None:
             tools.extend(
                 WorkAgentTools(
                     self._work_runtime,
                     conversation,
+                    objective_status=self._objective_status,
                     allow_capability_acquisition=(
                         self._allow_direct_capability_acquisition
+                        and not pending_change_gate
                     ),
                 ).tools
             )
@@ -122,7 +151,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         gicc_runtime: _ManagedBackgroundRuntime | None = None,
-        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
         allow_direct_capability_acquisition: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -233,7 +263,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             or research_service is not None
             or capability_runtime is not None
             or work_runtime is not None
-            or gicc_tool_factory is not None
+            or gicc_action_tool_factory is not None
+            or gicc_read_tool_factory is not None
         ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
@@ -243,7 +274,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 research_service=research_service,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
-                gicc_tool_factory=gicc_tool_factory,
+                objective_status=(
+                    None
+                    if gicc_runtime is None
+                    else getattr(gicc_runtime, "objective_status", None)
+                ),
+                gicc_action_tool_factory=gicc_action_tool_factory,
+                gicc_read_tool_factory=gicc_read_tool_factory,
                 allow_direct_capability_acquisition=(
                     allow_direct_capability_acquisition
                 ),
@@ -387,8 +424,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             raise ValueError("change-gate question must not be empty")
 
         def session_tools(conversation: ConversationSession) -> list:
-            work_tools = WorkAgentTools(runtime, conversation)
-            return [work_tools.decide_change_gate]
+            work_tools = WorkAgentTools(
+                runtime,
+                conversation,
+                bound_change_gate_id=gate_id,
+                allow_capability_acquisition=False,
+            )
+            return [work_tools.decide_bound_change_gate]
 
         def gate_resolved() -> bool:
             pending = GateService(
@@ -397,21 +439,27 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             ).pending_gate_ids()
             return gate_id not in pending
 
+        spoken_prompt = (
+            "Sir, I have finished planning the requested engineering change. "
+            "I need your approval before development can start. "
+            "Should I proceed? Please say yes or no."
+        )
         instructions = (
-            "JARVIS has proactively opened this voice interaction because one exact "
-            "EngineeringChange gate requires the owner's explicit approval or rejection. "
-            "Explain the proposal concisely without adding facts, then ask the owner to "
-            f"say exactly 'approve {gate_id}' or 'reject {gate_id}'. Do not treat a "
-            "generic yes/no as approval. Keep listening until the exact gate decision is "
-            "spoken, or the interaction ends. When the owner gives the exact phrase, call "
-            "decide_change_gate with this exact gate ID. Pending review: "
-            + normalized_question
+            "Say exactly the following approval question and nothing else: "
+            + spoken_prompt
+            + " After the owner answers, use only the bound change-gate decision tool. "
+            "Natural affirmative or rejection wording is valid because the trusted "
+            "runtime already bound this session to one exact gate. Call the decision "
+            "tool at most once for each canonical USER turn. If the tool says the "
+            "answer was not understood, ask one concise yes-or-no clarification and "
+            "wait for a new USER turn; never retry the same turn."
         )
 
         try:
             await self._run_one_session_owned(
                 initial_instructions=instructions,
                 initial_prompt_label="engineering change approval prompt",
+                fallback_prompt_text=spoken_prompt,
                 session_tool_factory=session_tools,
                 completion_predicate=gate_resolved,
                 completion_label=f"engineering change gate {gate_id}",

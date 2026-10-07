@@ -18,7 +18,7 @@ from jarvis.goal_intelligence.monitoring import (
     MonitorObservationDisposition,
 )
 from jarvis.goal_intelligence.store import GoalStore
-from jarvis.work.models import WorkItem, WorkState, WorkType
+from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState, WorkType
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -214,6 +214,9 @@ def test_duplicate_events_and_notifications_are_idempotent(tmp_path: Path) -> No
         work_store.deliveries[0]["event_key"]
         == f"gicc-monitor:{predicate.predicate_id}:complete"
     )
+    assert work_store.deliveries[0]["message"] == (
+        "Completed: Delivery agent verified at the main gate."
+    )
 
 
 def test_monitor_dispatcher_links_validated_monitor_node_to_work(
@@ -264,3 +267,36 @@ def test_monitor_dispatcher_links_validated_monitor_node_to_work(
     payload = state["payload"]
     assert isinstance(payload, dict)
     assert payload["strategy"] == MonitoringStrategy.NATIVE_EVENT.value
+
+
+def test_monitor_timeout_uses_supervisor_owner_voice(tmp_path: Path) -> None:
+    store, goal = _store(tmp_path)
+    predicate = _predicate(goal)
+    work_starter = FakeWorkStarter()
+    started = MonitoringWorkCoordinator(
+        goal_store=store,
+        work_starter=work_starter,
+    ).start(
+        predicate,
+        strategy=MonitoringStrategy.LOCAL_DETECTOR,
+        now_epoch=100.0,
+    )
+    work_store = FakeMonitorWorkStore()
+    work_store.add(started.work_id)
+    processor = MonitorEventProcessor(goal_store=store, work_store=work_store)
+
+    result = processor.process(
+        predicate=predicate,
+        observation_digest="frame-timeout",
+        condition_met=False,
+        observed_at_epoch=3701.0,
+        notification_message="unused",
+    )
+
+    assert result.disposition is MonitorObservationDisposition.TIMED_OUT
+    assert len(work_store.deliveries) == 1
+    assert work_store.deliveries[0]["kind"] is WorkDeliveryKind.FAILURE
+    assert work_store.deliveries[0]["message"] == (
+        "I can't continue with this objective: Monitoring stopped because the "
+        "condition was not verified in time."
+    )

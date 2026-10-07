@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDeliveryKind,
@@ -62,6 +68,32 @@ class WorkOrchestrator:
         self._store = store
         self._backend = backend
 
+    @staticmethod
+    def _governed_child(work: WorkItem) -> bool:
+        return work.source_session_id.startswith(("change:", "gicc:"))
+
+    def _enqueue_failure_delivery(self, work: WorkItem, summary: str) -> None:
+        if self._governed_child(work):
+            return
+        intent = OwnerCommunicationIntentV1.create(
+            kind=OwnerCommunicationKind.FAILURE,
+            event_key=f"failure:{work.version}",
+            summary=summary,
+            terminal=True,
+            work_id=work.work_id,
+            system_outcome_kind="terminal",
+            technical_detail=work.status_detail,
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        if owner_message is None:
+            return
+        self._store.enqueue_delivery(
+            work=work,
+            kind=WorkDeliveryKind.FAILURE,
+            message=owner_message.message,
+            event_key=owner_message.event_key,
+        )
+
     def start(
         self,
         *,
@@ -79,7 +111,20 @@ class WorkOrchestrator:
             work_type=work_type,
         )
         if existing is not None:
-            return WorkSubmission(work=existing, execution_id=existing.work_id)
+            if (
+                existing.work_type in self._EVENT_DRIVEN_WORK_TYPES
+                or existing.state.terminal
+            ):
+                execution_id = (
+                    self._store.get_execution_id(existing.work_id) or existing.work_id
+                )
+            else:
+                execution_id = ensure_durable_execution(
+                    store=self._store,
+                    backend=self._backend,
+                    item=existing,
+                )
+            return WorkSubmission(work=existing, execution_id=execution_id)
 
         event_driven = work_type in self._EVENT_DRIVEN_WORK_TYPES
         item = WorkItem(
@@ -97,7 +142,11 @@ class WorkOrchestrator:
         if event_driven:
             return WorkSubmission(work=item, execution_id=item.work_id)
         try:
-            execution_id = self._backend.submit(item.work_id, priority=priority)
+            execution_id = ensure_durable_execution(
+                store=self._store,
+                backend=self._backend,
+                item=item,
+            )
         except Exception as exc:
             detail = " ".join(str(exc).split())[:400]
             reason = f"durable execution could not be submitted: {type(exc).__name__}"
@@ -108,28 +157,8 @@ class WorkOrchestrator:
                 status_detail=reason,
             )
             failed = self._store.save(failed, expected_version=item.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=reason,
-                event_key=f"failure:{failed.version}",
-            )
+            self._enqueue_failure_delivery(failed, reason)
             raise
-        if execution_id != item.work_id:
-            reason = "durable backend returned a mismatched execution id"
-            failed = item.transition(
-                WorkState.FAILED,
-                status_detail=reason,
-            )
-            failed = self._store.save(failed, expected_version=item.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=reason,
-                event_key=f"failure:{failed.version}",
-            )
-            raise RuntimeError("durable backend must use work_id as execution_id")
-        self._store.set_execution_id(item.work_id, execution_id)
         return WorkSubmission(work=item, execution_id=execution_id)
 
     def get(self, work_id: str) -> WorkItem:
@@ -143,29 +172,11 @@ class WorkOrchestrator:
             if item.work_type in self._EVENT_DRIVEN_WORK_TYPES:
                 reconciled.append(item.work_id)
                 continue
-            bound_execution = self._store.get_execution_id(item.work_id)
-            if bound_execution is not None and bound_execution != item.work_id:
-                # Retry executions intentionally use a non-canonical DBOS ID. After
-                # graceful shutdown they may be durably parked as CANCELLED, so let
-                # production backends resume that exact execution instead of creating
-                # a second canonical executor for the same WorkItem.
-                reconcile_execution = getattr(
-                    self._backend,
-                    "reconcile_execution",
-                    None,
-                )
-                if callable(reconcile_execution):
-                    resumed_id = reconcile_execution(bound_execution)
-                    if resumed_id != bound_execution:
-                        raise RuntimeError(
-                            "durable backend changed retry execution identity"
-                        )
-                reconciled.append(item.work_id)
-                continue
-            execution_id = self._backend.submit(item.work_id, priority=item.priority)
-            if execution_id != item.work_id:
-                raise RuntimeError("durable backend must use work_id as execution_id")
-            self._store.set_execution_id(item.work_id, execution_id)
+            ensure_durable_execution(
+                store=self._store,
+                backend=self._backend,
+                item=item,
+            )
             reconciled.append(item.work_id)
         return tuple(reconciled)
 
@@ -286,15 +297,17 @@ class WorkOrchestrator:
             raise
         return saved
 
-    def retry_failed(
+    def _retry_failed(
         self,
         work_id: str,
         *,
-        owner_request: str,
-        source_session_id: str,
-        source_turn_id: str,
+        step_kind: str,
+        step_summary: str,
+        step_input: dict[str, object],
+        step_observation: dict[str, object],
+        status_detail: str,
     ) -> WorkItem:
-        """Retry failed canonical work without losing its identity or evidence."""
+        """Restart failed canonical work while preserving identity and evidence."""
 
         item = self._store.require(work_id)
         if item.state is not WorkState.FAILED:
@@ -303,25 +316,19 @@ class WorkOrchestrator:
             raise ValueError(
                 "event-driven monitoring retry requires the owning goal to be re-armed"
             )
-        normalized = owner_request.strip()
-        if not normalized:
-            raise ValueError("retry request must not be empty")
 
         retry_step = WorkStep(
             work_id=item.work_id,
-            kind="owner_retry",
-            summary="Owner requested retry of failed work",
-            input_data={
-                "source_session_id": source_session_id,
-                "source_turn_id": source_turn_id,
-            },
+            kind=step_kind,
+            summary=step_summary,
+            input_data=step_input,
         )
         self._store.add_step(retry_step)
-        self._store.save_step(retry_step.start().complete({"response": normalized}))
+        self._store.save_step(retry_step.start().complete(step_observation))
 
         retrying = item.transition(
             WorkState.RETRYING,
-            status_detail="retry requested by owner",
+            status_detail=status_detail,
             current_step_id=None,
         )
         saved = self._store.save(retrying, expected_version=item.version)
@@ -340,14 +347,61 @@ class WorkOrchestrator:
                 current_step_id=latest.current_step_id,
             )
             failed = self._store.save(failed, expected_version=latest.version)
-            self._store.enqueue_delivery(
-                work=failed,
-                kind=WorkDeliveryKind.FAILURE,
-                message=failed.status_detail or "Background work retry failed.",
-                event_key=f"failure:{failed.version}",
+            self._enqueue_failure_delivery(
+                failed,
+                failed.status_detail or "Background work retry failed.",
             )
             raise
         return saved
+
+    def retry_failed(
+        self,
+        work_id: str,
+        *,
+        owner_request: str,
+        source_session_id: str,
+        source_turn_id: str,
+    ) -> WorkItem:
+        """Retry failed canonical work from an explicit owner request."""
+
+        normalized = owner_request.strip()
+        if not normalized:
+            raise ValueError("retry request must not be empty")
+        return self._retry_failed(
+            work_id,
+            step_kind="owner_retry",
+            step_summary="Owner requested retry of failed work",
+            step_input={
+                "source_session_id": source_session_id,
+                "source_turn_id": source_turn_id,
+            },
+            step_observation={"response": normalized},
+            status_detail="retry requested by owner",
+        )
+
+    def retry_failed_system(
+        self,
+        work_id: str,
+        *,
+        reason: str,
+        source: str = "global_supervisor",
+    ) -> WorkItem:
+        """Retry deterministic-retryable failed work without forging owner intent."""
+
+        normalized_reason = " ".join(str(reason).split()).strip()
+        normalized_source = str(source).strip().casefold()
+        if not normalized_reason:
+            raise ValueError("system retry reason must not be empty")
+        if not normalized_source:
+            raise ValueError("system retry source must not be empty")
+        return self._retry_failed(
+            work_id,
+            step_kind="system_retry",
+            step_summary="JARVIS requested retry of retryable failed work",
+            step_input={"source": normalized_source},
+            step_observation={"reason": normalized_reason},
+            status_detail=f"retry requested by {normalized_source}",
+        )
 
     def reprioritize(self, work_id: str, priority: WorkPriority) -> WorkItem:
         item = self._store.require(work_id)

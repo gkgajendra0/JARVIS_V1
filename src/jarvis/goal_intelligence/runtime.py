@@ -7,8 +7,25 @@ import json
 import logging
 from dataclasses import dataclass, field, replace
 
+from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
+from jarvis.autonomy.mode import AutonomyMode
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
+from jarvis.autonomy.supervisor_cutover import (
+    SupervisorCutoverController,
+    SupervisorCutoverDisposition,
+)
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
+from jarvis.capability_acquisition.architecture import (
+    migrate_legacy_gicc_external_acceptance_contracts,
+)
+from jarvis.capability_acquisition.hardening import (
+    blocking_capability_workspace_invariant_codes,
+)
 from jarvis.capability_acquisition.lineage import (
     CapabilityAcquisitionLineageError,
     verify_capability_acquisition_completion,
@@ -16,6 +33,7 @@ from jarvis.capability_acquisition.lineage import (
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.config import JarvisConfig
 from jarvis.engineering_change import ChangeStore
+from jarvis.engineering_change.delivery import reconcile_owner_change_gates
 from jarvis.hands.provider_adapters import (
     build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
@@ -33,7 +51,7 @@ from .composition import (
 )
 from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
-from .information import InformationResolver
+from .information import InformationResolutionStrategy, InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .models import (
     ContinuationBlockerType,
@@ -56,13 +74,19 @@ from .monitoring import (
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
 )
-from .phase9 import Phase9GoalBridge
+from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
 from .service import GoalOrchestrator, SpecialistActionDispatch
+from .status import OwnerObjectiveStatusResolver
 from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
+from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry
+from .world_discovery import (
+    EntityInformationProbe,
+    ReviewedLocalServiceEntityDiscovery,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -163,10 +187,13 @@ class GiccApplyRuntime:
     dispatcher: GoalPlanDispatcher
     telemetry: GiccTelemetrySink
     capability_runtime: CapabilityRuntime
+    objective_status: OwnerObjectiveStatusResolver | None = None
     replan_controller: ReplanController | None = None
     change_store: ChangeStore | None = None
     monitor_processor: MonitorEventProcessor | None = None
     monitor_bus: MonitorObservationBus | None = None
+    supervisor_cutover: SupervisorCutoverController | None = None
+    existing_objective_resume: ExistingObjectiveResumeController | None = None
     reconcile_interval_seconds: float = 1.0
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _monitor_subscription_id: str | None = field(default=None, init=False, repr=False)
@@ -525,20 +552,30 @@ class GiccApplyRuntime:
         if not work_ids:
             return False
 
-        kind = (
-            WorkDeliveryKind.COMPLETION
-            if goal.state is GoalState.COMPLETED
-            else WorkDeliveryKind.FAILURE
-        )
-        message = (
-            f"Goal completed: {goal.exact_owner_request}"
-            if goal.state is GoalState.COMPLETED
-            else (
-                "JARVIS could not verify completion of the goal: "
-                f"{goal.exact_owner_request}"
-            )
-        )
+        completed = goal.state is GoalState.COMPLETED
+        kind = WorkDeliveryKind.COMPLETION if completed else WorkDeliveryKind.FAILURE
         event_key = f"gicc-goal:{goal.goal_id}:{goal.state.value}"
+        intent = OwnerCommunicationIntentV1.create(
+            kind=(
+                OwnerCommunicationKind.COMPLETION
+                if completed
+                else OwnerCommunicationKind.FAILURE
+            ),
+            event_key=event_key,
+            summary=(
+                goal.exact_owner_request
+                if completed
+                else (
+                    "I could not verify the required outcome for "
+                    f"{goal.exact_owner_request}"
+                )
+            ),
+            goal_id=goal.goal_id,
+            terminal=not completed,
+            system_outcome_kind=("completed" if completed else "terminal"),
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        assert owner_message is not None
         for work_id in work_ids:
             work = self.store.work.get(work_id)
             if work is None:
@@ -546,8 +583,8 @@ class GiccApplyRuntime:
             delivery = self.store.work.enqueue_delivery(
                 work=work,
                 kind=kind,
-                message=message,
-                event_key=event_key,
+                message=owner_message.message,
+                event_key=owner_message.event_key,
             )
             if delivery is not None:
                 self.telemetry.emit(
@@ -613,6 +650,36 @@ class GiccApplyRuntime:
         for goal in active:
             before_goal = self.store.get_goal(goal.goal_id)
             before_plan = self.store.latest_plan_for_goal(goal.goal_id)
+            if (
+                goal.state is GoalState.WAITING_CAPABILITY
+                and self.supervisor_cutover is not None
+            ):
+                cutover = self.supervisor_cutover.coordinate(goal.goal_id)
+                self.telemetry.emit(
+                    "global_supervisor_cutover_observed",
+                    goal_id=goal.goal_id,
+                    action=None if cutover.action is None else cutover.action.value,
+                    disposition=cutover.disposition.value,
+                    accepted=cutover.accepted,
+                    mutation_performed=cutover.mutation_performed,
+                    decision_digest=cutover.decision_digest,
+                )
+                if not cutover.accepted:
+                    continue
+                if (
+                    cutover.disposition
+                    is SupervisorCutoverDisposition.TERMINAL_OBSERVED
+                ):
+                    failed_goal = self._set_goal_state(goal.goal_id, GoalState.FAILED)
+                    advanced += 1
+                    self._enqueue_background_terminal_delivery(failed_goal)
+                    LOGGER.warning(
+                        "Global Supervisor proved terminal capability failure | "
+                        "goal_id=%s change_id=%s",
+                        goal.goal_id,
+                        cutover.change_id,
+                    )
+                    continue
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
@@ -739,7 +806,46 @@ def build_gicc_apply_runtime(
 
     reasoning_client = _reasoning_client(config)
     planner = GoalPlanner(client=reasoning_client)
-    information_resolver = InformationResolver(store=store)
+    entity_resolver = EntityResolver(
+        world,
+        discoveries=(ReviewedLocalServiceEntityDiscovery(),),
+    )
+    information_resolver = InformationResolver(
+        store=store,
+        probes=(
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
+            ),
+        ),
+    )
+    migrated_phase9_links = migrate_legacy_phase9_gap_links(
+        goal_store=store,
+        change_store=work_runtime.changes.store,
+    )
+    if migrated_phase9_links:
+        LOGGER.warning(
+            "Migrated durable GICC Phase-9 v1 lineage to append-only v2 evidence: %s",
+            ", ".join(migrated_phase9_links),
+        )
+    migrated_gicc_architectures = migrate_legacy_gicc_external_acceptance_contracts(
+        work_runtime.changes.store,
+    )
+    if migrated_gicc_architectures:
+        surfaced = reconcile_owner_change_gates(
+            work_runtime.changes,
+            change_ids=migrated_gicc_architectures,
+        )
+        LOGGER.warning(
+            "Migrated GICC architecture contracts after lineage upgrade; "
+            "fresh owner architecture approval is required: changes=%s gates=%s",
+            ", ".join(migrated_gicc_architectures),
+            ", ".join(surfaced),
+        )
     phase9_bridge = Phase9GoalBridge(
         coordinator=work_runtime.capability_acquisition,
         change_store=work_runtime.changes.store,
@@ -749,7 +855,7 @@ def build_gicc_apply_runtime(
     coordinator = GoalIntelligenceCoordinator(
         store=store,
         interpreter=interpreter,
-        entity_resolver=EntityResolver(world),
+        entity_resolver=entity_resolver,
         requirement_deriver=RequirementDeriver(client=reasoning_client),
         capability_context=capability_context,
         capability_graph_resolver=CapabilityGraphResolver(store=store),
@@ -784,12 +890,49 @@ def build_gicc_apply_runtime(
         store=store,
         orchestrator=orchestrator,
     )
+    supervisor_projector = ObjectiveWorkspaceProjector(
+        goal_store=store,
+        change_store=work_runtime.changes.store,
+        work_store=work_runtime.store,
+    )
+    supervisor_mode = (
+        AutonomyMode.ASSISTED
+        if config.autonomy_mode is AutonomyMode.ASSISTED
+        else AutonomyMode.SHADOW
+    )
+    supervisor_cutover = SupervisorCutoverController(
+        projector=supervisor_projector,
+        change_coordinator=work_runtime.changes,
+        mode=supervisor_mode,
+        retry_failed_work=lambda work_id: (
+            work_runtime.retry_failed_work_from_supervisor(
+                work_id,
+                reason=(
+                    "Global Supervisor selected RETRY from the deterministic "
+                    "Progress Ledger."
+                ),
+            )
+        ),
+        invariant_guard=lambda workspace: blocking_capability_workspace_invariant_codes(
+            workspace=workspace,
+            change_store=work_runtime.changes.store,
+        ),
+    )
+    existing_objective_resume = ExistingObjectiveResumeController(
+        projector=supervisor_projector,
+        change_store=work_runtime.changes.store,
+        cutover=supervisor_cutover,
+    )
     return GiccApplyRuntime(
         store=store,
         world=world,
         coordinator=coordinator,
         dispatcher=dispatcher,
         telemetry=telemetry,
+        objective_status=OwnerObjectiveStatusResolver(
+            goals=store,
+            changes=work_runtime.changes.store,
+        ),
         replan_controller=ReplanController(
             store=store,
             planner=planner,
@@ -798,4 +941,6 @@ def build_gicc_apply_runtime(
         monitor_processor=monitor_processor,
         monitor_bus=DEFAULT_MONITOR_OBSERVATION_BUS,
         capability_runtime=capability_runtime,
+        supervisor_cutover=supervisor_cutover,
+        existing_objective_resume=existing_objective_resume,
     )

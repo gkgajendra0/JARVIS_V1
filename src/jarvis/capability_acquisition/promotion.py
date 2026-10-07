@@ -4,6 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
+from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionArchitectureError,
+    ensure_gicc_external_acceptance_contract_current,
+)
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.verification import (
     ensure_capability_candidate_acceptance_current,
@@ -178,6 +187,16 @@ class CapabilityAcquisitionReleaseBridge:
                 "change_not_observing",
                 "Phase-9 package bridge requires deployed EngineeringChange",
             )
+        try:
+            ensure_gicc_external_acceptance_contract_current(
+                self._changes,
+                change_id,
+            )
+        except CapabilityAcquisitionArchitectureError as exc:
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "gicc_external_acceptance_contract_missing",
+                str(exc),
+            ) from exc
         ensure_capability_candidate_acceptance_current(self._changes, change_id)
         candidate = self._changes.latest_artifact(change_id, "capability_candidate")
         if candidate is None:
@@ -434,18 +453,34 @@ class CapabilityAcquisitionReleaseBridge:
                 "Phase-9 candidate has no canonical development WorkItem",
             )
         development_work = self._changes.work.require(development_work_id)
+        event_key = f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"
+        owner_message = SupervisorOwnerCommunication.compile(
+            OwnerCommunicationIntentV1.create(
+                kind=OwnerCommunicationKind.OWNER_INPUT,
+                event_key=event_key,
+                summary=(
+                    "The acquired capability is ready and passed package admission. "
+                    "It remains disabled by design until you explicitly activate it. "
+                    "Say 'activate the acquired capability' to continue, or leave it "
+                    "disabled."
+                ),
+                owner_action_required=True,
+                change_id=change_id,
+                work_id=development_work.work_id,
+                system_outcome_kind="needs_owner",
+                technical_detail="explicit lifecycle activation authority required",
+            )
+        )
+        if owner_message is None:
+            raise CapabilityAcquisitionReleaseBridgeError(
+                "owner_activation_message_suppressed",
+                "Supervisor communication suppressed required lifecycle authority",
+            )
         self._changes.work.enqueue_delivery(
             work=development_work,
             kind=WorkDeliveryKind.OWNER_INPUT,
-            message=(
-                f"Capability acquisition {change_id} is deployed and package "
-                f"{package_id}@{package_version} passed Phase-8 admission. It remains "
-                f"disabled by design. Lifecycle proposal SHA-256: "
-                f"{lifecycle_artifact.digest}. Explicit owner activation is required. "
-                f"Say 'activate acquired capability {change_id}' to continue, or leave "
-                f"it disabled."
-            ),
-            event_key=(f"phase9-lifecycle:{change_id}:{lifecycle_artifact.digest}"),
+            message=owner_message.message,
+            event_key=owner_message.event_key,
         )
         return CapabilityAcquisitionReleaseBridgeResult(
             admission=result,
@@ -473,6 +508,16 @@ def ensure_capability_release_bridge_current(
             "wrong_process",
             "change is not Phase-9 capability acquisition",
         )
+    try:
+        ensure_gicc_external_acceptance_contract_current(
+            changes,
+            change_id,
+        )
+    except CapabilityAcquisitionArchitectureError as exc:
+        raise CapabilityAcquisitionReleaseBridgeError(
+            "gicc_external_acceptance_contract_missing",
+            str(exc),
+        ) from exc
     candidate = changes.latest_artifact(change_id, "capability_candidate")
     admission = changes.latest_artifact(change_id, "capability_package_admission")
     lifecycle = changes.latest_artifact(change_id, "capability_lifecycle_proposal")

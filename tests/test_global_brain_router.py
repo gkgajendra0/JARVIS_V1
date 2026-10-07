@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import jarvis.brain_routing.work as brain_routing_work
 from jarvis.brain_routing.deterministic import (
     DeterministicResolution,
     DeterministicResolutionStatus,
@@ -19,6 +20,7 @@ from jarvis.brain_routing.models import (
 )
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.brain_routing.work import GlobalBrainRouterReasoner
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.model_routing.eligibility import EligibilityPolicy
 from jarvis.model_routing.models import (
     BenchmarkStatus,
@@ -39,8 +41,10 @@ from jarvis.model_routing.registry import (
 from jarvis.model_routing.router import ModelRouter, build_work_routing_request
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.work.brain import BrainAction, BrainCoordinator, BrainDecision, BrainRequest
+from jarvis.work.context import WorkContextAssembler, WorkContextMode
 from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkItem, WorkStep, WorkType
+from jarvis.work.reasoner import work_reasoning_contract_digest
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -77,6 +81,8 @@ def _request(
     work: WorkItem,
     *actions: str,
     recent_steps: tuple[WorkStep, ...] = (),
+    context_mode: WorkContextMode = WorkContextMode.OFF,
+    context_pack=None,
 ) -> BrainRequest:
     return BrainRequest(
         work=work,
@@ -90,6 +96,8 @@ def _request(
             )
             for action in actions
         ),
+        context_mode=context_mode,
+        context_pack=context_pack,
     )
 
 
@@ -195,13 +203,21 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
         action="dev_prepare_workspace",
         summary="Model agrees",
     )
-    _, work, route_store, _, model, router = _router(
+    store, work, route_store, _, model, router = _router(
         tmp_path,
         mode="shadow",
         model_decision=model_decision,
     )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
 
-    decision = await router.decide(_request(work, "dev_prepare_workspace"))
+    decision = await router.decide(
+        _request(
+            work,
+            "dev_prepare_workspace",
+            context_mode=WorkContextMode.SHADOW,
+            context_pack=context_pack,
+        )
+    )
 
     assert decision == model_decision
     assert model.calls == 1
@@ -210,6 +226,227 @@ async def test_shadow_mode_preserves_model_behavior_and_records_match(
     assert record.shadow_proposed_action == "dev_prepare_workspace"
     assert record.shadow_match is True
     assert record.reason_codes == ("shadow_deterministic_match",)
+    assert record.goal_complete is False
+    assert record.needs_owner is False
+    assert record.owner_question is None
+    assert record.parameters_digest == canonical_digest({})
+    assert record.reasoner_contract_digest == work_reasoning_contract_digest()
+
+    snapshot = route_store.get_context_snapshot(record.route_request_id)
+    assert snapshot is not None
+    assert snapshot["schema"] == "c6_work_reasoning_snapshot.v1"
+    assert snapshot["reasoner_contract_digest"] == work_reasoning_contract_digest()
+    assert snapshot["work_version"] == work.version
+    assert snapshot["work_state"] == work.state.value
+    assert snapshot["work_current_step_id"] is None
+    assert snapshot["history_step_count"] == 0
+    assert snapshot["recent_step_ids"] == []
+    assert snapshot["context_version"] == context_pack.version
+    assert snapshot["context_selected_step_ids"] == []
+    assert snapshot["context_evidence_count"] == 0
+    assert snapshot["context_evidence_digest"] == canonical_digest([])
+    assert snapshot["context_pack_digest"] == canonical_digest(
+        {
+            "recent_steps": context_pack.recent_steps_payload(),
+            "evidence": list(context_pack.evidence),
+            "history_manifest": context_pack.history_manifest_payload(),
+        }
+    )
+    assert snapshot["history_step_ids_digest"] == canonical_digest([])
+    assert snapshot["allowed_actions"][0]["name"] == "dev_prepare_workspace"
+    assert store.list_steps(work.work_id) == ()
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_backfills_missing_context_snapshot(tmp_path: Path) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    store, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
+    request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=context_pack,
+    )
+
+    first = await router.decide(request)
+    record = route_store.list_for_work(work.work_id)[0]
+    with store.extension_transaction() as connection:
+        connection.execute(
+            "DELETE FROM brain_route_context_snapshots WHERE route_request_id = ?",
+            (record.route_request_id,),
+        )
+    assert route_store.get_context_snapshot(record.route_request_id) is None
+
+    second = await router.decide(request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    restored = route_store.get_context_snapshot(record.route_request_id)
+    assert restored is not None
+    assert restored["work_version"] == work.version
+    assert restored["history_step_ids_digest"] == canonical_digest([])
+    assert restored["context_evidence_digest"] == canonical_digest([])
+    assert restored["context_pack_digest"] == canonical_digest(
+        {
+            "recent_steps": context_pack.recent_steps_payload(),
+            "evidence": list(context_pack.evidence),
+            "history_manifest": context_pack.history_manifest_payload(),
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_does_not_backfill_legacy_route_under_new_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    store, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
+    request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=context_pack,
+    )
+
+    first = await router.decide(request)
+    record = route_store.list_for_work(work.work_id)[0]
+    with store.extension_transaction() as connection:
+        row = connection.execute(
+            "SELECT route_json FROM brain_route_decisions WHERE route_request_id = ?",
+            (record.route_request_id,),
+        ).fetchone()
+        assert row is not None
+        payload = store.decode_extension_json(str(row["route_json"]))
+        payload.pop("reasoner_contract_digest", None)
+        connection.execute(
+            "UPDATE brain_route_decisions SET route_json = ? WHERE route_request_id = ?",
+            (
+                store.encode_extension_json(payload),
+                record.route_request_id,
+            ),
+        )
+        connection.execute(
+            "DELETE FROM brain_route_context_snapshots WHERE route_request_id = ?",
+            (record.route_request_id,),
+        )
+
+    monkeypatch.setattr(
+        brain_routing_work,
+        "work_reasoning_contract_digest",
+        lambda: "f" * 64,
+    )
+
+    second = await router.decide(request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    legacy = route_store.get(record.route_request_id)
+    assert legacy is not None
+    assert legacy.reasoner_contract_digest is None
+    assert route_store.get_context_snapshot(record.route_request_id) is None
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_preserves_snapshot_from_older_reasoning_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    _, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    context_pack = WorkContextAssembler().build(work=work, steps=())
+    request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=context_pack,
+    )
+
+    first = await router.decide(request)
+    record = route_store.list_for_work(work.work_id)[0]
+    original = route_store.get_context_snapshot(record.route_request_id)
+    assert original is not None
+    assert original["reasoner_contract_digest"] == work_reasoning_contract_digest()
+
+    monkeypatch.setattr(
+        brain_routing_work,
+        "work_reasoning_contract_digest",
+        lambda: "f" * 64,
+    )
+
+    second = await router.decide(request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    assert route_store.get_context_snapshot(record.route_request_id) == original
+
+
+@pytest.mark.asyncio
+async def test_shadow_retry_preserves_snapshot_when_context_projection_changes(
+    tmp_path: Path,
+) -> None:
+    model_decision = BrainDecision(
+        action="dev_prepare_workspace",
+        summary="Model agrees",
+    )
+    _, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+    first_pack = WorkContextAssembler().build(work=work, steps=())
+    first_request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=first_pack,
+    )
+
+    first = await router.decide(first_request)
+    record = route_store.list_for_work(work.work_id)[0]
+    original = route_store.get_context_snapshot(record.route_request_id)
+    assert original is not None
+
+    changed_pack = WorkContextAssembler().build(
+        work=work,
+        steps=(),
+        evidence=({"ref": "new-context-evidence"},),
+    )
+    changed_request = _request(
+        work,
+        "dev_prepare_workspace",
+        context_mode=WorkContextMode.SHADOW,
+        context_pack=changed_pack,
+    )
+    second = await router.decide(changed_request)
+
+    assert first == second == model_decision
+    assert model.calls == 2
+    assert changed_pack.evidence != first_pack.evidence
+    assert route_store.get_context_snapshot(record.route_request_id) == original
 
 
 @pytest.mark.asyncio
@@ -235,6 +472,35 @@ async def test_shadow_mode_records_mismatch_without_overriding_model(
     record = route_store.list_for_work(work.work_id)[0]
     assert record.shadow_match is False
     assert record.reason_codes == ("shadow_deterministic_mismatch",)
+
+
+@pytest.mark.asyncio
+async def test_model_route_persists_owner_wait_decision_fingerprint(
+    tmp_path: Path,
+) -> None:
+    model_decision = BrainDecision(
+        action=None,
+        summary="Protected pairing input is required.",
+        needs_owner=True,
+        owner_question="Enter the pairing PIN.",
+    )
+    _, work, route_store, _, model, router = _router(
+        tmp_path,
+        mode="shadow",
+        model_decision=model_decision,
+    )
+
+    decision = await router.decide(_request(work, "dev_prepare_workspace"))
+
+    assert decision == model_decision
+    assert model.calls == 1
+    record = route_store.list_for_work(work.work_id)[0]
+    assert record.route_kind is BrainRouteKind.MODEL
+    assert record.selected_action is None
+    assert record.goal_complete is False
+    assert record.needs_owner is True
+    assert record.owner_question == "Enter the pairing PIN."
+    assert record.parameters_digest == canonical_digest({})
 
 
 @pytest.mark.asyncio

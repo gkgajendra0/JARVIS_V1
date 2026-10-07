@@ -24,6 +24,7 @@ from jarvis.capability_acquisition.models import (
     AcquisitionTrustClass,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
+    normalize_python_distribution_identity,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import (
@@ -112,6 +113,58 @@ class AcquisitionWorkContextResolver:
             if step.state.value == "completed"
         )
 
+    def canonical_target_hints(
+        self,
+        context: AcquisitionWorkContext,
+    ) -> tuple[str, ...]:
+        """Project structured target facts without changing the immutable Phase-9 goal."""
+
+        hints = {
+            " ".join(str(item).split()).strip().casefold()
+            for item in context.goal.target_hints
+            if str(item).strip()
+        }
+
+        link = self._store.latest_artifact(
+            context.change_id,
+            "gicc_capability_gap_link",
+        )
+        if link is not None:
+            target_type = str(link.payload.get("target_entity_type") or "").strip()
+            if target_type:
+                hints.add(f"entity_type:{target_type}".casefold())
+
+        target_context = self._store.latest_artifact(
+            context.change_id,
+            "gicc_target_context",
+        )
+        if target_context is not None:
+            for item in target_context.payload.get("target_hints", ()):
+                normalized = " ".join(str(item).split()).strip().casefold()
+                if normalized:
+                    hints.add(normalized)
+
+        architecture = self._store.latest_artifact(
+            context.change_id,
+            "architecture",
+        )
+        if architecture is not None:
+            fields = {
+                "target_entity_type": "entity_type",
+                "target_vendor": "vendor",
+                "target_platform": "platform",
+                "target_protocol": "protocol",
+                "target_model": "model",
+            }
+            for key, dimension in fields.items():
+                value = " ".join(
+                    str(architecture.payload.get(key) or "").split()
+                ).strip()
+                if value:
+                    hints.add(f"{dimension}:{value}".casefold())
+
+        return tuple(sorted(hints))
+
 
 def recorded_unverified_candidates(
     steps: tuple[WorkStep, ...],
@@ -193,17 +246,25 @@ class AcquisitionInspectGoalExecutor:
         }
 
 
+_UNVERIFIED_VERIFICATION_CONTRACT_BY_SOURCE_KIND = {
+    AcquisitionSourceKind.MCP: "mcp-tools-list-contract",
+    AcquisitionSourceKind.OPENAPI: "openapi-contract-test",
+    AcquisitionSourceKind.ASYNCAPI: "asyncapi-contract-test",
+    AcquisitionSourceKind.SDK_LIBRARY: "sdk-adapter-contract-test",
+}
+
+
 class AcquisitionRecordCandidateExecutor:
-    """Record research-discovered source metadata without assigning trust."""
+    """Record unverified source identity/evidence; JARVIS owns governance contracts."""
 
     descriptor = BrainAction(
         name="acq_record_candidate",
         description=(
-            "Record one research-discovered capability source candidate and its "
-            "proposed dependency/network/device/acceptance requirements. This action "
-            "always stores the source as UNVERIFIED; model text cannot grant trust. "
-            "For a Python sdk_library intended for PyPI verification, source_identity "
-            "must be the distribution name and source_version should be exact."
+            "Record one research-discovered reusable source as UNVERIFIED. Provide only "
+            "source identity/version, supported semantic operations, evidence refs, and "
+            "optional source digest/license metadata. JARVIS deterministically assigns "
+            "the source-type verification contract; model text cannot invent trust, "
+            "network/device/discovery scope, or owner-acceptance policy."
         ),
         parameter_schema={
             "type": "object",
@@ -237,37 +298,6 @@ class AcquisitionRecordCandidateExecutor:
                     "minItems": 1,
                     "maxItems": 50,
                 },
-                "verification_requirements": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "minItems": 1,
-                    "maxItems": 30,
-                },
-                "secret_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 240},
-                    "maxItems": 30,
-                },
-                "network_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "device_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "discovery_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "external_acceptance_requirements": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
                 "license_id": {
                     "type": ["string", "null"],
                     "maxLength": 240,
@@ -278,7 +308,6 @@ class AcquisitionRecordCandidateExecutor:
                 "source_identity",
                 "supported_operations",
                 "evidence_refs",
-                "verification_requirements",
             ],
             "additionalProperties": False,
         },
@@ -315,25 +344,26 @@ class AcquisitionRecordCandidateExecutor:
             AcquisitionSourceKind.ASYNCAPI: AcquisitionStrategy.GENERATE_CONTRACT_CLIENT,
             AcquisitionSourceKind.SDK_LIBRARY: AcquisitionStrategy.ADAPT_SDK,
         }[source_kind]
+        source_identity = str(parameters.get("source_identity") or "")
+        if source_kind is AcquisitionSourceKind.SDK_LIBRARY:
+            try:
+                source_identity = normalize_python_distribution_identity(
+                    source_identity
+                )
+            except ValueError as exc:
+                raise AcquisitionProtocolError(str(exc)) from exc
         candidate = AcquisitionCandidateV1.create(
             source_kind=source_kind,
-            source_identity=str(parameters.get("source_identity") or ""),
+            source_identity=source_identity,
             source_version=parameters.get("source_version"),
             source_digest=parameters.get("source_digest"),
             trust_class=AcquisitionTrustClass.UNVERIFIED_CANDIDATE,
             supported_operations=tuple(parameters.get("supported_operations") or ()),
             strategy=strategy,
             evidence_refs=tuple(parameters.get("evidence_refs") or ()),
-            secret_scopes=tuple(parameters.get("secret_scopes") or ()),
-            network_scopes=tuple(parameters.get("network_scopes") or ()),
-            device_scopes=tuple(parameters.get("device_scopes") or ()),
-            discovery_scopes=tuple(parameters.get("discovery_scopes") or ()),
             license_id=parameters.get("license_id"),
-            verification_requirements=tuple(
-                parameters.get("verification_requirements") or ()
-            ),
-            external_acceptance_requirements=tuple(
-                parameters.get("external_acceptance_requirements") or ()
+            verification_requirements=(
+                _UNVERIFIED_VERIFICATION_CONTRACT_BY_SOURCE_KIND[source_kind],
             ),
             reason_codes=("research_discovered_unverified",),
         )
@@ -405,9 +435,11 @@ class AcquisitionResolveExecutor:
         del parameters
         context = self._resolver.context_for(work.work_id)
         acquisition_context = self._context_provider.current()
+        target_hints = self._resolver.canonical_target_hints(context)
         registered = self._acquisition.resolve(
             context.goal,
             acquisition_context,
+            canonical_target_hints=target_hints,
         )
         steps = self._resolver.completed_steps(work.work_id)
         research_candidates = (
@@ -418,6 +450,7 @@ class AcquisitionResolveExecutor:
             context.goal,
             (*registered.candidates, *research_candidates),
             acquisition_context,
+            canonical_target_hints=target_hints,
         )
         payload = resolution_payload(
             candidates=resolution.candidates,
@@ -429,11 +462,18 @@ class AcquisitionResolveExecutor:
             change_id=context.change_id,
             payload=payload,
         )
+        selected = resolution.selected_candidate
         return {
             "resolved": True,
             "resolution_artifact_id": artifact.artifact_id,
             "resolution_artifact_digest": artifact.digest,
             "selected_candidate_id": resolution.selected_candidate_id,
+            "selected_candidate_strategy": (
+                None if selected is None else selected.strategy.value
+            ),
+            "selected_candidate_source_kind": (
+                None if selected is None else selected.source_kind.value
+            ),
             "candidate_count": len(resolution.candidates),
             "blocked_candidate_count": sum(
                 item.disposition.value == "blocked" for item in resolution.evaluations
@@ -602,6 +642,37 @@ class AcquisitionFinalizeExecutor:
             raise AcquisitionProtocolError(
                 "an existing reusable capability became available; engineering build is unnecessary"
             )
+
+        completed_steps = self._resolver.completed_steps(work.work_id)
+        if candidate.strategy is AcquisitionStrategy.BUILD_CUSTOM:
+            successful_research_indexes = [
+                index
+                for index, step in enumerate(completed_steps)
+                if step.kind == "research_web"
+                and step.state.value == "completed"
+                and step.observation.get("ok") is True
+            ]
+            if not successful_research_indexes:
+                raise AcquisitionProtocolError(
+                    "custom capability development requires successful current web "
+                    "research before finalization"
+                )
+            latest_resolve_index = max(
+                (
+                    index
+                    for index, step in enumerate(completed_steps)
+                    if step.kind == "acq_resolve"
+                    and step.state.value == "completed"
+                    and step.observation.get("resolved") is True
+                ),
+                default=-1,
+            )
+            if latest_resolve_index <= successful_research_indexes[-1]:
+                raise AcquisitionProtocolError(
+                    "custom capability development must re-resolve candidates after "
+                    "the latest successful web research"
+                )
+
         changed_components = tuple(parameters.get("changed_components") or ())
         changed_paths = tuple(parameters.get("changed_paths") or ())
         if not changed_components and not changed_paths:
@@ -744,7 +815,35 @@ def acquisition_completion_guard(
     if not finalized:
         return False, "capability acquisition requires a canonical acq_finalize plan"
 
-    resolve_index, _ = resolved[-1]
+    resolve_index, resolve_step = resolved[-1]
+    selected_strategy = str(
+        resolve_step.observation.get("selected_candidate_strategy") or ""
+    ).strip()
+    if selected_strategy == AcquisitionStrategy.BUILD_CUSTOM.value:
+        successful_research = [
+            index
+            for index, step in enumerate(steps)
+            if step.kind == "research_web"
+            and step.state.value == "completed"
+            and step.observation.get("ok") is True
+        ]
+        if not successful_research:
+            return (
+                False,
+                (
+                    "custom capability development requires successful current web "
+                    "research before completion"
+                ),
+            )
+        if successful_research[-1] >= resolve_index:
+            return (
+                False,
+                (
+                    "custom capability development must re-resolve after latest "
+                    "successful web research"
+                ),
+            )
+
     source_evidence = {
         "research_web",
         "acq_discover_local",

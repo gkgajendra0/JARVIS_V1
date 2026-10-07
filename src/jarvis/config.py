@@ -13,7 +13,11 @@ from jarvis.ai_provider import (
     normalize_tts_provider,
 )
 from jarvis.autonomy.mode import AutonomyMode
-from jarvis.machine_config import configured_text, load_machine_settings
+from jarvis.machine_config import (
+    configured_alias_text,
+    configured_text,
+    load_machine_settings,
+)
 from jarvis.runtime_lane import (
     GiccMode,
     RuntimeLane,
@@ -130,6 +134,12 @@ class JarvisConfig:
     autonomy_mode: AutonomyMode = AutonomyMode.SHADOW
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
+    work_paid_fallback_enabled: bool = False
+    development_engine_enabled: bool = False
+    development_engine_model: str | None = None
+    work_context_mode: str = "shadow"
+    work_prompt_compression_mode: str = "off"
+    work_prompt_compression_rate: float = 0.8
     global_brain_router_mode: str = "shadow"
     jev_bounded_decisions_enabled: bool = False
     jev_benchmark_admitted: bool = False
@@ -154,7 +164,7 @@ class JarvisConfig:
     show_transcript: bool = True
     startup_greeting_enabled: bool = True
     wake_model_path: str | None = None
-    wake_threshold: float = 0.68
+    wake_threshold: float = 0.82
     wake_debounce_seconds: float = 2.0
     audio_input_device: str | None = None
     audio_output_device: str | None = None
@@ -202,12 +212,68 @@ class JarvisConfig:
 
         if not isinstance(self.chatgpt_plan_enabled, bool):
             raise TypeError("chatgpt_plan_enabled must be a bool")
+        if not isinstance(self.development_engine_enabled, bool):
+            raise TypeError("development_engine_enabled must be a bool")
+        if self.development_engine_enabled:
+            if not self.chatgpt_plan_enabled:
+                raise ValueError(
+                    "DevelopmentEngine requires JARVIS_CHATGPT_PLAN_ENABLED=true"
+                )
+            development_model = str(
+                self.development_engine_model or self.chatgpt_plan_model or ""
+            ).strip()
+            if not development_model:
+                raise ValueError(
+                    "DevelopmentEngine requires JARVIS_DEVELOPMENT_ENGINE_MODEL "
+                    "or JARVIS_CHATGPT_PLAN_MODEL"
+                )
+            if not str(self.development_test_docker_image or "").strip():
+                raise ValueError(
+                    "DevelopmentEngine requires "
+                    "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE "
+                    "(or legacy JARVIS_DEV_TEST_DOCKER_IMAGE) so model-edited code "
+                    "is never executed directly on the owner host"
+                )
+
+        if not isinstance(self.work_paid_fallback_enabled, bool):
+            raise TypeError("work_paid_fallback_enabled must be a bool")
 
         if not isinstance(self.tts_project_billing_isolation_verified, bool):
             raise TypeError("tts_project_billing_isolation_verified must be a bool")
 
         if not isinstance(self.autonomy_mode, AutonomyMode):
             raise TypeError("autonomy_mode must be an AutonomyMode")
+
+        work_context_mode = str(self.work_context_mode).strip().casefold()
+        if work_context_mode not in {"off", "shadow", "apply"}:
+            raise ValueError("work_context_mode must be one of: off, shadow, apply")
+        object.__setattr__(self, "work_context_mode", work_context_mode)
+
+        work_prompt_compression_mode = (
+            str(self.work_prompt_compression_mode).strip().casefold()
+        )
+        if work_prompt_compression_mode not in {"off", "shadow", "apply"}:
+            raise ValueError(
+                "work_prompt_compression_mode must be one of: off, shadow, apply"
+            )
+        object.__setattr__(
+            self,
+            "work_prompt_compression_mode",
+            work_prompt_compression_mode,
+        )
+        compression_rate = float(self.work_prompt_compression_rate)
+        if not 0.0 < compression_rate <= 1.0:
+            raise ValueError("work_prompt_compression_rate must be within (0, 1]")
+        object.__setattr__(
+            self,
+            "work_prompt_compression_rate",
+            compression_rate,
+        )
+        if work_context_mode == "apply" and work_prompt_compression_mode == "apply":
+            raise ValueError(
+                "work context and prompt compression cannot both be APPLY "
+                "until combined-context acceptance exists"
+            )
 
         brain_router_mode = str(self.global_brain_router_mode).strip().casefold()
         if brain_router_mode not in {"off", "shadow", "apply"}:
@@ -500,6 +566,33 @@ class JarvisConfig:
             work_orchestration_model=_configured_optional_text(
                 "JARVIS_WORK_ORCHESTRATION_MODEL", machine
             ),
+            work_paid_fallback_enabled=_configured_bool(
+                "JARVIS_WORK_PAID_FALLBACK_ENABLED", False, machine
+            ),
+            development_engine_enabled=_configured_bool(
+                "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+                False,
+                machine,
+            ),
+            development_engine_model=_configured_optional_text(
+                "JARVIS_DEVELOPMENT_ENGINE_MODEL",
+                machine,
+            ),
+            work_context_mode=_configured_required_text(
+                "JARVIS_WORK_CONTEXT_MODE",
+                "shadow",
+                machine,
+            ),
+            work_prompt_compression_mode=_configured_required_text(
+                "JARVIS_WORK_PROMPT_COMPRESSION_MODE",
+                "off",
+                machine,
+            ),
+            work_prompt_compression_rate=_configured_float(
+                "JARVIS_WORK_PROMPT_COMPRESSION_RATE",
+                0.8,
+                machine,
+            ),
             global_brain_router_mode=_configured_required_text(
                 "JARVIS_GLOBAL_BRAIN_ROUTER_MODE",
                 "shadow",
@@ -542,8 +635,12 @@ class JarvisConfig:
             work_global_concurrency=_configured_int(
                 "JARVIS_WORK_GLOBAL_CONCURRENCY", 4, machine
             ),
-            development_test_docker_image=_configured_optional_text(
-                "JARVIS_DEV_TEST_DOCKER_IMAGE", machine
+            development_test_docker_image=configured_alias_text(
+                (
+                    "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+                    "JARVIS_DEV_TEST_DOCKER_IMAGE",
+                ),
+                machine,
             ),
             github_promotion_enabled=_configured_bool(
                 "JARVIS_GITHUB_PROMOTION_ENABLED", False, machine
@@ -588,7 +685,7 @@ class JarvisConfig:
             wake_model_path=_configured_optional_text(
                 "JARVIS_WAKE_MODEL_PATH", machine
             ),
-            wake_threshold=_configured_float("JARVIS_WAKE_THRESHOLD", 0.68, machine),
+            wake_threshold=_configured_float("JARVIS_WAKE_THRESHOLD", 0.82, machine),
             wake_debounce_seconds=_configured_float(
                 "JARVIS_WAKE_DEBOUNCE_SECONDS", 2.0, machine
             ),

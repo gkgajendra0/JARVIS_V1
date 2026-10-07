@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jarvis.autonomy import SupervisorAction, SupervisorCutoverDisposition
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityDescriptor,
@@ -13,9 +14,13 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
+from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
 from jarvis.goal_intelligence.composition import (
     GoalIntakeDisposition,
     GoalIntakeResult,
@@ -182,6 +187,7 @@ def _runtime(
     *,
     replan_controller=None,
     change_store=None,
+    supervisor_cutover=None,
 ) -> GiccApplyRuntime:
     dispatcher = GoalPlanDispatcher(
         store=store,
@@ -199,6 +205,7 @@ def _runtime(
         replan_controller=replan_controller,
         change_store=change_store,
         capability_runtime=capability_runtime,  # type: ignore[arg-type]
+        supervisor_cutover=supervisor_cutover,
     )
 
 
@@ -495,9 +502,31 @@ async def test_failed_verification_replans_once_and_completes(
     assert len(capability_runtime.requests) == 2
 
 
+class FakePhase9WorkStore:
+    def __init__(self) -> None:
+        self.items = {}
+        self.steps = {}
+
+    def get(self, work_id: str):
+        return self.items.get(work_id)
+
+    def list_steps(self, work_id: str):
+        return tuple(self.steps.get(work_id, ()))
+
+
+def _completed_external_step(kind: str, observation: dict[str, object]):
+    return SimpleNamespace(
+        kind=kind,
+        state=SimpleNamespace(value="completed"),
+        observation=observation,
+    )
+
+
 class FakePhase9ChangeStore:
     def __init__(self) -> None:
         self.acceptance = None
+        self.binding = None
+        self.work = FakePhase9WorkStore()
         self.candidate = SimpleNamespace(
             artifact_id="candidate-tv",
             digest="c" * 64,
@@ -505,6 +534,7 @@ class FakePhase9ChangeStore:
                 "package_id": "tv.control.package",
                 "package_version": "1.0.0",
                 "package_digest": "p" * 64,
+                "development_work_id": "work-development",
             },
         )
         self.admission = SimpleNamespace(
@@ -530,14 +560,28 @@ class FakePhase9ChangeStore:
                 "package_version": "1.0.0",
                 "package_digest": "p" * 64,
                 "effective_enabled": True,
+                "authority_session_id": "owner-session",
+                "source_turn_id": "activation-turn",
             },
         )
         self.architecture = SimpleNamespace(
+            artifact_id="architecture-tv",
+            digest="h" * 64,
             payload={
                 "owner_acceptance_contract_ids": [
                     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
                 ]
-            }
+            },
+        )
+        self.goal_artifact = SimpleNamespace(
+            artifact_id="goal-tv-artifact",
+            digest="g" * 64,
+            payload={"schema": "owner_capability_goal.v1"},
+        )
+        self.manifest = SimpleNamespace(
+            artifact_id="manifest-tv",
+            digest="m" * 64,
+            payload={"schema": "substrate_manifest.v1"},
         )
         self.link = SimpleNamespace(
             payload={
@@ -567,15 +611,61 @@ class FakePhase9ChangeStore:
             "capability_candidate": self.candidate,
             "capability_package_admission": self.admission,
             "capability_lifecycle_activation": self.activation,
+            EXTERNAL_ACCEPTANCE_BINDING_KIND: self.binding,
             "capability_external_acceptance": self.acceptance,
+            "capability_goal": self.goal_artifact,
+            MANIFEST_KIND: self.manifest,
         }.get(kind)
 
     def pass_current_acceptance(self) -> None:
+        work_id = "work-external-tv"
+        self.binding = SimpleNamespace(
+            artifact_id="external-binding-tv",
+            digest="i" * 64,
+            payload={
+                "schema": "capability_external_acceptance_binding.v1",
+                "work_id": work_id,
+                "candidate_artifact_id": self.candidate.artifact_id,
+                "candidate_artifact_digest": self.candidate.digest,
+                "activation_artifact_id": self.activation.artifact_id,
+                "activation_artifact_digest": self.activation.digest,
+                "architecture_artifact_id": self.architecture.artifact_id,
+                "architecture_artifact_digest": self.architecture.digest,
+                "manifest_artifact_id": self.manifest.artifact_id,
+                "manifest_artifact_digest": self.manifest.digest,
+                "goal_artifact_id": self.goal_artifact.artifact_id,
+                "goal_artifact_digest": self.goal_artifact.digest,
+                "acceptance_contract_id": PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+                "authority_session_id": self.activation.payload["authority_session_id"],
+                "source_turn_id": self.activation.payload["source_turn_id"],
+            },
+        )
+        self.work.items[work_id] = SimpleNamespace(
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id="phase9-external:change-tv",
+            source_turn_id=self.activation.artifact_id,
+            dependencies=(self.candidate.payload["development_work_id"],),
+            state=WorkState.COMPLETED,
+        )
+        self.work.steps[work_id] = (
+            _completed_external_step(
+                "external_acceptance_inspect", {"inspected": True}
+            ),
+            _completed_external_step("external_acceptance_prepare", {"prepared": True}),
+            _completed_external_step("external_acceptance_invoke", {"invoked": True}),
+            _completed_external_step(
+                "external_acceptance_record",
+                {"acceptance_recorded": True, "verdict": "pass"},
+            ),
+        )
         self.acceptance = SimpleNamespace(
             artifact_id="external-acceptance-tv",
             digest="e" * 64,
             payload={
                 "schema": "capability_external_acceptance.v1",
+                "work_id": work_id,
+                "binding_artifact_id": self.binding.artifact_id,
+                "binding_artifact_digest": self.binding.digest,
                 "verdict": "pass",
                 "candidate_artifact_id": self.candidate.artifact_id,
                 "candidate_artifact_digest": self.candidate.digest,
@@ -628,6 +718,44 @@ async def test_external_acceptance_fences_capability_continuation(
     assert coordinator.calls == 1
     assert latest is not None
     assert latest.state is GoalState.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_legacy_gicc_activation_cannot_resume_without_external_acceptance_contract(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-legacy-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:13:30+00:00",
+        )
+    )
+    changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
+    changes.architecture.payload["owner_acceptance_contract_ids"] = ()
+    coordinator = CapabilityContinuationCoordinator(store)
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        change_store=changes,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 0
+    assert coordinator.calls == 0
+    assert latest is not None
+    assert latest.state is GoalState.WAITING_CAPABILITY
 
 
 @pytest.mark.asyncio
@@ -717,3 +845,184 @@ async def test_background_capability_continuation_uses_same_dispatcher(
     ]
     assert len(goal_deliveries) == 1
     assert "Open Calculator." in goal_deliveries[0].message
+
+
+class TerminalSupervisorCutover:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def coordinate(self, goal_id: str):
+        self.calls.append(goal_id)
+        return SimpleNamespace(
+            action=SupervisorAction.TERMINAL,
+            disposition=SupervisorCutoverDisposition.TERMINAL_OBSERVED,
+            accepted=True,
+            mutation_performed=False,
+            decision_digest="terminal-decision-digest",
+            change_id="change-terminal",
+        )
+
+
+@pytest.mark.asyncio
+async def test_terminal_capability_outcome_fails_goal_instead_of_looping(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    anchor = store.work.create(
+        WorkItem(
+            request="Terminal capability acquisition.",
+            work_type=WorkType.RESEARCH,
+            source_session_id="phase9-terminal-session",
+            source_turn_id="phase9-terminal-turn",
+            state=WorkState.FAILED,
+            status_detail="terminal capability failure",
+        )
+    )
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-terminal-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-terminal",
+            resume_node_id="resume-terminal",
+            work_ids=(anchor.work_id,),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:12:30+00:00",
+        )
+    )
+    coordinator = CapabilityContinuationCoordinator(store)
+    cutover = TerminalSupervisorCutover()
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        supervisor_cutover=cutover,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 1
+    assert cutover.calls == [goal.goal_id]
+    assert coordinator.calls == 0
+    assert latest is not None
+    assert latest.state is GoalState.FAILED
+    deliveries = store.work.list_pending_deliveries(limit=20)
+    terminal = [
+        item
+        for item in deliveries
+        if item.event_key == f"gicc-goal:{goal.goal_id}:failed"
+    ]
+    assert len(terminal) == 1
+
+
+class RecordingSupervisorCutover:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def coordinate(self, goal_id: str):
+        self.calls.append(goal_id)
+        return SimpleNamespace(
+            action=SupervisorAction.WAIT_RESOURCE,
+            disposition=SupervisorCutoverDisposition.AWAIT_RUNTIME,
+            accepted=True,
+            mutation_performed=False,
+            decision_digest="shadow-decision-digest",
+        )
+
+
+class RejectingSupervisorCutover:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def coordinate(self, goal_id: str):
+        self.calls.append(goal_id)
+        return SimpleNamespace(
+            action=None,
+            disposition=SupervisorCutoverDisposition.REJECTED,
+            accepted=False,
+            mutation_performed=False,
+            decision_digest=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_waiting_capability_runs_supervisor_before_legacy_continuation(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-supervisor-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:13:00+00:00",
+        )
+    )
+    changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
+    coordinator = CapabilityContinuationCoordinator(store)
+    cutover = RecordingSupervisorCutover()
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        change_store=changes,
+        supervisor_cutover=cutover,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    assert advanced == 0
+    assert cutover.calls == [goal.goal_id]
+    assert coordinator.calls == 0
+    latest = store.get_goal(goal.goal_id)
+    assert latest is not None
+    assert latest.state is GoalState.WAITING_CAPABILITY
+
+
+@pytest.mark.asyncio
+async def test_rejected_supervisor_cutover_fences_ready_capability_continuation(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-supervisor-rejected-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:14:00+00:00",
+        )
+    )
+    changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
+    changes.pass_current_acceptance()
+    coordinator = CapabilityContinuationCoordinator(store)
+    cutover = RejectingSupervisorCutover()
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        change_store=changes,
+        supervisor_cutover=cutover,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 0
+    assert cutover.calls == [goal.goal_id]
+    assert coordinator.calls == 0
+    assert latest is not None
+    assert latest.state is GoalState.WAITING_CAPABILITY

@@ -9,6 +9,11 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from jarvis.ai_provider import provider_api_key
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.brain_routing.deterministic import default_work_deterministic_resolvers
 from jarvis.brain_routing.store import BrainRouteStore
 from jarvis.brain_routing.work import GlobalBrainRouterReasoner
@@ -21,6 +26,7 @@ from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordin
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
+    migrate_legacy_gicc_external_acceptance_contracts,
 )
 from jarvis.capability_acquisition.discovery_workflow import (
     build_acquisition_discovery_executors,
@@ -69,6 +75,22 @@ from jarvis.capability_registry.reconciliation import CapabilityLifecycleReconci
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_PROVIDER_ID,
     ChatGPTPlanSessionManager,
+)
+from jarvis.development_engine.codex import CodexPlanDevelopmentEngine
+from jarvis.development_engine.coordinator import DevelopmentEngineCoordinator
+from jarvis.development_engine.phase9 import (
+    Phase9DevelopmentControlPlaneDecider,
+    Phase9DevelopmentEngineExecutor,
+    Phase9DevelopmentTicketBuilder,
+    Phase9ResearchControlPlaneDecider,
+    Phase9ResearchEvidenceExecutor,
+    handle_phase9_model_owner_request,
+    phase9_development_completion_guard,
+)
+from jarvis.development_engine.session_store import DevelopmentSessionStore
+from jarvis.engineering_change import (
+    SystemOutcomeKind,
+    classify_work_system_outcome,
 )
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import reconcile_owner_change_gates
@@ -129,6 +151,10 @@ from jarvis.promotion.runtime_composition import (
     PromotionRuntimeConfig,
 )
 from jarvis.promotion.store import PromotionStore
+from jarvis.provider_circuit import (
+    BackgroundProviderCircuitRegistry,
+    provider_circuit_key,
+)
 from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.brain import BrainCoordinator, InteractiveBrainGate
 from jarvis.work.dbos_backend import (
@@ -147,6 +173,7 @@ from jarvis.work.estimates import estimate_work
 from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState, WorkType
 from jarvis.work.orchestrator import WorkOrchestrator
 from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.prompt_compression import LLMLingua2WorkPayloadCompressor
 from jarvis.work.reasoner import RoutedWorkReasoner
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
 from jarvis.work.store import SQLiteWorkStore, WorkStoreError, default_work_store_path
@@ -404,6 +431,51 @@ class WorkRuntime:
                     )
             raise
 
+    def retry_failed_work_from_supervisor(
+        self,
+        work_id: str,
+        *,
+        reason: str,
+    ) -> WorkItem:
+        """Retry only canonical failures already classified retryable by JARVIS."""
+
+        work = self.store.require(str(work_id).strip())
+        if work.state is not WorkState.FAILED:
+            raise ValueError("Supervisor retry requires a failed WorkItem")
+        outcome = classify_work_system_outcome(
+            work,
+            steps=self.store.list_steps(work.work_id),
+        )
+        if outcome.kind is not SystemOutcomeKind.RETRYABLE:
+            raise ValueError(
+                "Supervisor retry is allowed only for deterministic retryable outcomes"
+            )
+        if self.changes is None:
+            raise RuntimeError("Supervisor retry requires EngineeringChange runtime")
+
+        reopened_change = self.changes.prepare_failed_work_retry(work.work_id)
+        try:
+            return self.orchestrator.retry_failed_system(
+                work.work_id,
+                reason=reason,
+                source="global_supervisor",
+            )
+        except Exception:
+            try:
+                self.changes.reconcile_for_work(work.work_id)
+            except Exception:
+                LOGGER.exception(
+                    "Failed to reconcile EngineeringChange after Supervisor retry "
+                    "submission failure | work_id=%s | change_id=%s",
+                    work.work_id,
+                    (
+                        reopened_change.change_id
+                        if reopened_change is not None
+                        else "unknown"
+                    ),
+                )
+            raise
+
     def resolve_status_target(self, work_id: str | None = None) -> WorkItem:
         normalized = str(work_id or "").strip()
         if normalized:
@@ -464,12 +536,23 @@ class WorkRuntime:
                             + ", ".join(estimate.remaining_work[:3])
                             + "."
                         )
-                    self.store.enqueue_delivery(
-                        work=work,
-                        kind=WorkDeliveryKind.PROGRESS,
-                        message=" ".join(parts),
-                        event_key=f"progress:{int(due_at.timestamp())}",
+                    event_key = f"progress:{int(due_at.timestamp())}"
+                    intent = OwnerCommunicationIntentV1.create(
+                        kind=OwnerCommunicationKind.PROGRESS,
+                        event_key=event_key,
+                        summary=" ".join(parts),
+                        work_id=work.work_id,
+                        system_outcome_kind=work.state.value,
+                        technical_detail=work.status_detail,
                     )
+                    owner_message = SupervisorOwnerCommunication.compile(intent)
+                    if owner_message is not None:
+                        self.store.enqueue_delivery(
+                            work=work,
+                            kind=WorkDeliveryKind.PROGRESS,
+                            message=owner_message.message,
+                            event_key=owner_message.event_key,
+                        )
                     self.store.advance_status_update_interval(
                         work_id,
                         interval_seconds=interval_seconds,
@@ -609,6 +692,13 @@ def build_work_runtime(
     model: str | None = None,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    development_engine_enabled: bool = False,
+    development_engine_model: str | None = None,
+    paid_fallback_enabled: bool = False,
+    provider_circuit_registry: BackgroundProviderCircuitRegistry | None = None,
+    work_context_mode: str = "shadow",
+    work_prompt_compression_mode: str = "off",
+    work_prompt_compression_rate: float = 0.8,
     global_brain_router_mode: str = "shadow",
     global_concurrency: int = 4,
     max_reasoning_cycles: int = 64,
@@ -630,6 +720,12 @@ def build_work_runtime(
     acquisition_candidate_advisor: AcquisitionCandidateAdvisor | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
+
+    if capability_lifecycle_service is not None and capability_runtime is None:
+        raise ValueError(
+            "capability lifecycle service requires governed capability runtime "
+            "for Phase-9 external acceptance"
+        )
 
     loop = event_loop or asyncio.get_running_loop()
     resolved_store_path = Path(store_path or default_work_store_path())
@@ -669,17 +765,50 @@ def build_work_runtime(
     adapter_registry = build_default_model_adapter_registry(
         chatgpt_plan_session_manager=chatgpt_plan_session,
     )
+    chatgpt_plan_available_models: tuple[str, ...] = ()
+    if chatgpt_plan_session is not None and chatgpt_plan_session.is_connected():
+        try:
+            chatgpt_plan_available_models = tuple(
+                item.slug for item in chatgpt_plan_session.list_models()
+            )
+        except Exception as exc:  # noqa: BLE001 - catalog failure keeps legacy route
+            LOGGER.warning(
+                "ChatGPT-plan model catalog unavailable; using configured single "
+                "model routing: %s",
+                type(exc).__name__,
+            )
     work_targets = build_default_work_targets(
         configured_provider=provider,
         configured_model=model,
         adapter_registry=adapter_registry,
         chatgpt_plan_enabled=chatgpt_plan_enabled,
         chatgpt_plan_model=chatgpt_plan_model,
+        chatgpt_plan_available_models=chatgpt_plan_available_models,
+        paid_fallback_enabled=paid_fallback_enabled,
     )
+    provider_circuits = provider_circuit_registry or BackgroundProviderCircuitRegistry()
     routing_store = ModelRoutingStore(store)
     brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
     strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
+
+    resource_capacities = {
+        "work": max(1, global_concurrency),
+        "cpu": max(1, min(2, global_concurrency)),
+        "git": 1,
+        "network": max(1, global_concurrency),
+        "gpu": 1,
+        "browser": 1,
+        "desktop": 1,
+        "provider_api": 1,
+        "prompt_compression": 1,
+        "development_intelligence": 1,
+        **engineering_resource_capacities(),
+    }
+    resources = ResourceLeaseManager(
+        resource_capacities,
+        min_available_memory_mb=min_available_memory_mb,
+    )
 
     def _credential_available(target) -> bool:
         if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
@@ -699,10 +828,25 @@ def build_work_runtime(
         eligibility_policy=EligibilityPolicy(),
         credential_available=_credential_available,
     )
+    compression_mode = str(work_prompt_compression_mode).strip().casefold()
+    prompt_compressor = (
+        None
+        if compression_mode == "off"
+        else LLMLingua2WorkPayloadCompressor(
+            rate=float(work_prompt_compression_rate),
+        )
+    )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
         invoker=ModelInvoker(adapter_registry),
         primary_target_id=work_targets.primary_target_id,
+        provider_circuit_registry=provider_circuits,
+        resources=resources,
+        resource_keys=("provider_api",),
+        prompt_compressor=prompt_compressor,
+        prompt_compression_mode=compression_mode,
+        prompt_compression_work_types=frozenset({WorkType.RESEARCH}),
+        prompt_compression_resource_keys=("cpu", "prompt_compression"),
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,
@@ -736,6 +880,7 @@ def build_work_runtime(
         diagnostic_image,
         protected_main_root=diagnostic_workspace_manager.repository_root,
     )
+    phase9_ticket_builder = Phase9DevelopmentTicketBuilder(change_store)
     executors = (
         ResearchWorkExecutor(
             research_service,
@@ -774,6 +919,7 @@ def build_work_runtime(
                 protected_main_root=workspace_manager.repository_root,
             ),
         ),
+        Phase9ResearchEvidenceExecutor(change_store, phase9_ticket_builder),
         *(
             ()
             if capability_runtime is None
@@ -787,26 +933,86 @@ def build_work_runtime(
             test_runner=build_development_test_runner(development_test_image),
         ),
     )
-    actions = WorkActionRegistry(tuple(executors))
-    resource_capacities = {
-        "work": max(1, global_concurrency),
-        "cpu": max(1, min(2, global_concurrency)),
-        "git": 1,
-        "network": max(1, global_concurrency),
-        "gpu": 1,
-        "browser": 1,
-        "desktop": 1,
-        "provider_api": 1,
-        **engineering_resource_capacities(),
-    }
-    resources = ResourceLeaseManager(
-        resource_capacities,
-        min_available_memory_mb=min_available_memory_mb,
-    )
+    base_actions = WorkActionRegistry(tuple(executors))
+
+    control_plane_decider = None
+    if development_engine_enabled:
+        if not chatgpt_plan_enabled or chatgpt_plan_session is None:
+            raise ValueError(
+                "DevelopmentEngine requires Sign in with ChatGPT to be enabled"
+            )
+        development_model = str(development_engine_model or "").strip()
+        if not development_model:
+            capable_plan_targets = tuple(
+                target
+                for target in work_targets.registry.for_role("capable")
+                if target.provider_id == CHATGPT_PLAN_PROVIDER_ID
+            )
+            if capable_plan_targets:
+                development_model = capable_plan_targets[0].model_id
+            else:
+                primary_target = work_targets.registry.require(
+                    work_targets.primary_target_id
+                )
+                if primary_target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
+                    development_model = primary_target.model_id
+                else:
+                    development_model = str(chatgpt_plan_model or "").strip()
+        if not development_model:
+            raise ValueError(
+                "DevelopmentEngine requires an available ChatGPT-plan coding model"
+            )
+        development_sessions = DevelopmentSessionStore(store)
+        development_specialist = CodexPlanDevelopmentEngine(
+            chatgpt_plan=chatgpt_plan_session,
+            model=development_model,
+            sessions=development_sessions,
+            provider_circuit=provider_circuits.circuit(
+                provider_circuit_key(
+                    provider=CHATGPT_PLAN_PROVIDER_ID,
+                    model=development_model,
+                )
+            ),
+        )
+        development_coordinator = DevelopmentEngineCoordinator(
+            engine=development_specialist,
+            sessions=development_sessions,
+            resources=resources,
+            resource_keys=("development_intelligence", "provider_api"),
+        )
+        phase9_engine_executor = Phase9DevelopmentEngineExecutor(
+            builder=phase9_ticket_builder,
+            coordinator=development_coordinator,
+            actions=base_actions,
+            resources=resources,
+            change_store=change_store,
+        )
+        actions = WorkActionRegistry((*executors, phase9_engine_executor))
+        phase9_research_decider = Phase9ResearchControlPlaneDecider(
+            phase9_ticket_builder
+        )
+        phase9_development_decider = Phase9DevelopmentControlPlaneDecider(
+            phase9_ticket_builder
+        )
+
+        def control_plane_decider(work, available_actions, steps):
+            research = phase9_research_decider(work, available_actions, steps)
+            if research is not None:
+                return research
+            return phase9_development_decider(work, available_actions, steps)
+    else:
+        actions = base_actions
 
     def _completion_guard(work: WorkItem, steps):
         if work.work_type is WorkType.EXTERNAL_ACCEPTANCE:
             return external_acceptance_completion_guard(steps)
+        development_engine_guard = phase9_development_completion_guard(
+            change_store,
+            work,
+            steps,
+        )
+        if development_engine_guard is not None:
+            return development_engine_guard
         stage = change_store.stage_for_work(work.work_id)
         if stage is None:
             return None
@@ -859,8 +1065,23 @@ def build_work_runtime(
         base_resource_keys=("work",),
         action_admission=change_store.work_admitted,
         completion_guard=_completion_guard,
+        model_owner_request_handler=lambda work, question: (
+            handle_phase9_model_owner_request(
+                change_store,
+                work,
+                question,
+            )
+        ),
+        control_plane_decider=control_plane_decider,
+        context_mode=work_context_mode,
     )
     engine.reconcile_interrupted_steps()
+    reconciled_model_owner = engine.reconcile_waiting_model_owner_requests()
+    if reconciled_model_owner:
+        LOGGER.info(
+            "Migrated stale Phase-9 model owner waits into governed research: %s",
+            ", ".join(reconciled_model_owner),
+        )
     reconciled_owner_deliveries = engine.reconcile_waiting_owner_deliveries()
     if reconciled_owner_deliveries:
         LOGGER.info(
@@ -876,7 +1097,6 @@ def build_work_runtime(
         max_reasoning_cycles=max_reasoning_cycles,
     )
     orchestrator = WorkOrchestrator(store, backend)
-    orchestrator.reconcile_active()
     changes = ChangeCoordinator(
         change_store,
         backend,
@@ -895,6 +1115,88 @@ def build_work_runtime(
             ),
         ),
     )
+
+    def _reconcile_terminal_change(work_id: str) -> None:
+        changes.reconcile_for_work(work_id)
+        reconcile_owner_change_gates(changes)
+
+    # DBOS may recover an existing workflow as soon as it launches. Install the
+    # EngineeringChange terminal bridge immediately after its coordinator exists,
+    # then repair any parent/child drift that occurred in the startup window before
+    # running compatibility migrations.
+    configure_terminal_reconciliation(_reconcile_terminal_change)
+    changes.reconcile_active()
+
+    recovered_revision_research = (
+        change_store.reopen_recoverable_architecture_revision_failures(
+            recovery_generation="phase9-research-provider-sdk-v1",
+        )
+    )
+    for change_id in recovered_revision_research:
+        changes.reconcile(change_id)
+    if recovered_revision_research:
+        LOGGER.warning(
+            "Recovered compatible architecture-revision research failure(s) with "
+            "fresh source attempts: %s",
+            ", ".join(recovered_revision_research),
+        )
+
+    recovered_provisional_resolution = (
+        change_store.reopen_recoverable_provisional_candidate_resolution_failures(
+            recovery_generation="phase9-provisional-candidate-resolution-v1",
+        )
+    )
+    for change_id in recovered_provisional_resolution:
+        changes.reconcile(change_id)
+    if recovered_provisional_resolution:
+        LOGGER.warning(
+            "Recovered provisional acquisition candidate collision(s) with fresh "
+            "source attempts: %s",
+            ", ".join(recovered_provisional_resolution),
+        )
+
+    recovered_development = change_store.reopen_recoverable_development_engine_failures(
+        recovery_generation="codex-contract-repair-v1",
+    )
+    for change_id in recovered_development:
+        changes.reconcile(change_id)
+    if recovered_development:
+        LOGGER.warning(
+            "Recovered compatible DevelopmentEngine failure(s) under their existing "
+            "approved architecture: %s",
+            ", ".join(recovered_development),
+        )
+
+    recovered_dependencies = (
+        change_store.reopen_recoverable_superseded_dependency_failures(
+            recovery_generation="phase9-authoritative-source-dependency-v1",
+        )
+    )
+    for change_id in recovered_dependencies:
+        changes.reconcile(change_id)
+    if recovered_dependencies:
+        LOGGER.warning(
+            "Recovered development attempt(s) poisoned by superseded architecture-"
+            "source dependencies: %s",
+            ", ".join(recovered_dependencies),
+        )
+
+    migrated_acceptance_contracts = migrate_legacy_gicc_external_acceptance_contracts(
+        change_store,
+    )
+    if migrated_acceptance_contracts:
+        surfaced = reconcile_owner_change_gates(
+            changes,
+            change_ids=migrated_acceptance_contracts,
+        )
+        LOGGER.warning(
+            "Migrated legacy GICC capability architecture(s) to the mandatory "
+            "real-target acceptance contract; fresh owner architecture approval is "
+            "required: changes=%s gates=%s",
+            ", ".join(migrated_acceptance_contracts),
+            ", ".join(surfaced),
+        )
+
     capability_acquisition = CapabilityAcquisitionCoordinator(
         changes=changes,
         context_provider=acquisition_context,
@@ -904,6 +1206,15 @@ def build_work_runtime(
         if capability_runtime is None
         else ExternalAcceptanceCoordinator(change_store, backend)
     )
+    if capability_external_acceptance is not None:
+        recovered_acceptance_work = (
+            capability_external_acceptance.reconcile_current_activations()
+        )
+        if recovered_acceptance_work:
+            LOGGER.warning(
+                "Reconciled current post-activation external acceptance mission(s): %s",
+                ", ".join(recovered_acceptance_work),
+            )
     if (
         capability_lifecycle_service is not None
         and capability_deployment_metadata is None
@@ -996,11 +1307,9 @@ def build_work_runtime(
 
         release_bridge_task = loop.create_task(reconcile_release_bridge())
 
-    def _reconcile_terminal_change(work_id: str) -> None:
-        changes.reconcile_for_work(work_id)
-        reconcile_owner_change_gates(changes)
-
-    configure_terminal_reconciliation(_reconcile_terminal_change)
+    # Resume/repair ordinary active Work only after terminal parent reconciliation
+    # and compatibility recovery are in place.
+    orchestrator.reconcile_active()
     changes.reconcile_active()
     surfaced_change_gates = reconcile_owner_change_gates(changes)
     if surfaced_change_gates:

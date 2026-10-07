@@ -191,6 +191,47 @@ jobs:
           import dulwich; import uroman; import jellyfish;
           print('Unified Windows Hands Python dependencies ready')"
 
+      - name: Parse C6 LLMLingua owner PowerShell
+        shell: powershell
+        run: |
+          $scripts = @(
+            "tools/research/c6_llmlingua_owner_acceptance.ps1",
+            "tools/research/c6_llmlingua_current_token_probe.ps1"
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "C6 owner PowerShell has parse errors: $script"
+            }
+          }
+
+      - name: Probe C6 current-token direct script execution
+        shell: powershell
+        run: |
+          & python tools/research/c6_llmlingua_current_token_probe.py --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "C6 current-token probe failed direct script import/argument parsing."
+          }
+
+      - name: Execute C6 owner dependency version probe
+        shell: powershell
+        run: |
+          $lines = & python tools/research/c6_dependency_probe.py
+          if ($LASTEXITCODE -ne 0) {
+            throw "C6 owner dependency probe failed to execute."
+          }
+          $probe = (($lines -join [Environment]::NewLine) | ConvertFrom-Json)
+          if ([string]$probe.jsonschema_version -ne "4.26.0") {
+            throw "Expected jsonschema==4.26.0, found '$($probe.jsonschema_version)'."
+          }
+
       - name: Run Windows multilingual Hands regressions
         run: >-
           python -m pytest -q
@@ -254,6 +295,19 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_phase9_evaluation.py
+
+      - name: Run Windows Phase 9 adversarial system hardening
+        run: >-
+          python -m pytest -q
+          tests/test_capability_acquisition_system_hardening.py
+          tests/test_capability_acquisition_owner_flow_hardening.py
+          tests/test_capability_acquisition_completion_hardening.py
+          tests/test_capability_acquisition_architecture_gicc_contract.py
+          tests/test_capability_acquisition_promotion.py
+          tests/test_phase9_voice_entrypoint.py
+          tests/test_global_supervisor_existing_objective_preflight.py
+          tests/test_engineering_substrate_discovery_onvif.py
+          tests/test_goal_world_discovery.py
 
 
   promotion-policy:

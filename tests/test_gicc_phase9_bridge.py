@@ -8,6 +8,9 @@ from jarvis.capabilities.models import (
     DiscoverySnapshot,
     DiscoveryState,
 )
+from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
+)
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
@@ -16,6 +19,7 @@ from jarvis.capability_registry.projection import (
     CapabilityInventoryEntry,
     CapabilityManagementMode,
 )
+from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
 from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
 from jarvis.goal_intelligence.models import (
@@ -38,6 +42,7 @@ from jarvis.goal_intelligence.phase9 import (
     Phase9GoalContinuationVerifier,
 )
 from jarvis.goal_intelligence.store import GoalStore
+from jarvis.work.models import WorkState, WorkType
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -101,10 +106,23 @@ class LinkedFakeAdmitter(FakeAdmitter):
         )
 
 
+class LineageWorkStore:
+    def __init__(self) -> None:
+        self.items = {}
+        self.steps = {}
+
+    def get(self, work_id: str):
+        return self.items.get(work_id)
+
+    def list_steps(self, work_id: str):
+        return tuple(self.steps.get(work_id, ()))
+
+
 class LineageArtifacts:
     def __init__(self) -> None:
         self.change = SimpleNamespace(change_id="change-phase9")
         self.artifacts = {}
+        self.work = LineageWorkStore()
 
     def latest_artifact(self, change_id: str, kind: str):
         assert change_id == self.change.change_id
@@ -141,6 +159,7 @@ def _install_current_lineage(
             "package_id": "tv.control.package",
             "package_version": "1.0.0",
             "package_digest": "p" * 64,
+            "development_work_id": "work-development",
         },
     )
     admission = SimpleNamespace(
@@ -166,6 +185,8 @@ def _install_current_lineage(
             "package_version": "1.0.0",
             "package_digest": "p" * 64,
             "effective_enabled": True,
+            "authority_session_id": "owner-session",
+            "source_turn_id": "activation-turn",
         },
     )
     artifacts.artifacts.update(
@@ -189,9 +210,94 @@ def _install_current_lineage(
             "architecture": SimpleNamespace(
                 artifact_id="artifact-architecture",
                 digest="r" * 64,
-                payload={"owner_acceptance_contract_ids": []},
+                payload={
+                    "owner_acceptance_contract_ids": [
+                        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+                    ]
+                },
+            ),
+            "capability_goal": SimpleNamespace(
+                artifact_id="artifact-goal",
+                digest="g" * 64,
+                payload={"schema": "owner_capability_goal.v1"},
+            ),
+            MANIFEST_KIND: SimpleNamespace(
+                artifact_id="artifact-manifest",
+                digest="m" * 64,
+                payload={"schema": "substrate_manifest.v1"},
             ),
         }
+    )
+
+
+def _completed_external_step(kind: str, observation: dict[str, object]):
+    return SimpleNamespace(
+        kind=kind,
+        state=SimpleNamespace(value="completed"),
+        observation=observation,
+    )
+
+
+def _install_current_external_pass(artifacts: LineageArtifacts) -> None:
+    candidate = artifacts.artifacts["capability_candidate"]
+    activation = artifacts.artifacts["capability_lifecycle_activation"]
+    architecture = artifacts.artifacts["architecture"]
+    goal_artifact = artifacts.artifacts["capability_goal"]
+    manifest = artifacts.artifacts[MANIFEST_KIND]
+    work_id = "work-external"
+
+    binding = SimpleNamespace(
+        artifact_id="artifact-external-binding",
+        digest="i" * 64,
+        payload={
+            "schema": "capability_external_acceptance_binding.v1",
+            "work_id": work_id,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "architecture_artifact_id": architecture.artifact_id,
+            "architecture_artifact_digest": architecture.digest,
+            "manifest_artifact_id": manifest.artifact_id,
+            "manifest_artifact_digest": manifest.digest,
+            "goal_artifact_id": goal_artifact.artifact_id,
+            "goal_artifact_digest": goal_artifact.digest,
+            "acceptance_contract_id": PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
+            "authority_session_id": activation.payload["authority_session_id"],
+            "source_turn_id": activation.payload["source_turn_id"],
+        },
+    )
+    artifacts.artifacts[EXTERNAL_ACCEPTANCE_BINDING_KIND] = binding
+    artifacts.work.items[work_id] = SimpleNamespace(
+        work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        source_session_id="phase9-external:change-phase9",
+        source_turn_id=activation.artifact_id,
+        dependencies=(candidate.payload["development_work_id"],),
+        state=WorkState.COMPLETED,
+    )
+    artifacts.work.steps[work_id] = (
+        _completed_external_step("external_acceptance_inspect", {"inspected": True}),
+        _completed_external_step("external_acceptance_prepare", {"prepared": True}),
+        _completed_external_step("external_acceptance_invoke", {"invoked": True}),
+        _completed_external_step(
+            "external_acceptance_record",
+            {"acceptance_recorded": True, "verdict": "pass"},
+        ),
+    )
+    artifacts.artifacts["capability_external_acceptance"] = SimpleNamespace(
+        artifact_id="artifact-external-acceptance",
+        digest="x" * 64,
+        payload={
+            "schema": "capability_external_acceptance.v1",
+            "work_id": work_id,
+            "binding_artifact_id": binding.artifact_id,
+            "binding_artifact_digest": binding.digest,
+            "candidate_artifact_id": candidate.artifact_id,
+            "candidate_artifact_digest": candidate.digest,
+            "activation_artifact_id": activation.artifact_id,
+            "activation_artifact_digest": activation.digest,
+            "verdict": HardwareAcceptanceVerdict.PASS.value,
+        },
     )
 
 
@@ -425,10 +531,13 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
 
     admitted = bridge.admit_gap(gap, goal)
 
-    assert len(artifacts.records) == 1
-    change_id, kind, payload = artifacts.records[0]
+    assert len(artifacts.records) == 2
+    by_kind = {
+        kind: (change_id, payload) for change_id, kind, payload in artifacts.records
+    }
+
+    change_id, payload = by_kind["gicc_capability_gap_link"]
     assert change_id == "change-phase9"
-    assert kind == "gicc_capability_gap_link"
     assert payload["schema"] == "gicc_phase9_gap_link.v2"
     assert payload["motivating_goal_id"] == goal.goal_id
     assert payload["gap_id"] == gap.gap_id
@@ -443,6 +552,14 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     assert payload["bridge_source_session_id"] == f"gicc:{goal.goal_id}"
     assert payload["bridge_source_turn_id"] == f"gap:{gap.gap_id}"
 
+    target_change_id, target = by_kind["gicc_target_context"]
+    assert target_change_id == "change-phase9"
+    assert target["schema"] == "gicc_target_context.v1"
+    assert target["motivating_goal_id"] == goal.goal_id
+    assert target["gap_id"] == gap.gap_id
+    assert target["target_entity_type"] == gap.target_entity_type
+    assert target["target_hints"] == [f"entity_type:{gap.target_entity_type}"]
+
 
 def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:
     store = _store(tmp_path)
@@ -452,6 +569,7 @@ def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> Non
     request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
     artifacts = LineageArtifacts()
     _install_current_lineage(artifacts, request=request, goal=goal, gap=gap)
+    _install_current_external_pass(artifacts)
     bridge = Phase9GoalBridge(
         coordinator=FakeAdmitter(),
         change_store=artifacts,
@@ -489,19 +607,7 @@ def test_phase9_completion_requires_real_external_acceptance_when_declared(
 
     assert bridge.completion_verified(gap=gap, goal=goal) is False
 
-    candidate = artifacts.artifacts["capability_candidate"]
-    activation = artifacts.artifacts["capability_lifecycle_activation"]
-    artifacts.artifacts["capability_external_acceptance"] = SimpleNamespace(
-        artifact_id="artifact-external-acceptance",
-        digest="x" * 64,
-        payload={
-            "candidate_artifact_id": candidate.artifact_id,
-            "candidate_artifact_digest": candidate.digest,
-            "activation_artifact_id": activation.artifact_id,
-            "activation_artifact_digest": activation.digest,
-            "verdict": HardwareAcceptanceVerdict.PASS.value,
-        },
-    )
+    _install_current_external_pass(artifacts)
     assert bridge.completion_verified(gap=gap, goal=goal) is True
 
     artifacts.artifacts["capability_external_acceptance"].payload["verdict"] = (

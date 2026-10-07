@@ -16,6 +16,7 @@ from .models import (
     GoalInterpretationCandidateV1,
     OwnerGoalV2,
 )
+from .world import canonical_world_entity_type
 
 _FAMILY_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 _OPERATION_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -155,6 +156,8 @@ Return reusable capability families and generic operations only.
 Permanent rules:
 - owner task parameters are not capability identity;
 - providers, devices/resources and Authority are separate from capability identity;
+- canonical world target types are camera, computer, display, entrance, media_player,
+  room and generic_external_resource; normalize TV/television to media_player;
 - use reusable dotted families such as media_player.control, camera.observe,
   vision.perceive, notification.owner, computer.application;
 - do not put movie titles, filenames, people, search terms, brands or resource names
@@ -235,7 +238,11 @@ class RequirementValidator:
                     semantic_capability=proposal.semantic_capability,
                     operation=proposal.operation,
                     target_entity_id=proposal.target_entity_id,
-                    target_entity_type=proposal.target_entity_type,
+                    target_entity_type=(
+                        None
+                        if proposal.target_entity_type is None
+                        else canonical_world_entity_type(proposal.target_entity_type)
+                    ),
                     required_parameters_schema=proposal.required_parameters_schema,
                     preconditions=tuple(proposal.preconditions),
                     expected_postconditions=tuple(proposal.expected_postconditions),

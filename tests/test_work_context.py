@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+from jarvis.brain_routing.models import (
+    BrainRouteKind,
+    BrainRouteRecord,
+    BrainRoutingMode,
+)
 from jarvis.brain_routing.work import build_work_global_route_facts
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.work.brain import BrainAction, BrainDecision, BrainRequest
 from jarvis.work.context import (
     WorkContextAssembler,
     WorkContextMode,
     build_context_shadow_report,
 )
-from jarvis.work.context_evaluation import compare_context_decisions
-from jarvis.work.models import WorkItem, WorkStep, WorkType
-from jarvis.work.reasoner import _work_input_payload
+from jarvis.work.context_evaluation import (
+    compare_context_decisions,
+    compare_recorded_context_decision,
+    reconstruct_recorded_context_request,
+)
+from jarvis.work.models import WorkItem, WorkState, WorkStep, WorkType
+from jarvis.work.reasoner import _work_input_payload, work_reasoning_contract_digest
 
 
 def _work(work_type: WorkType = WorkType.DEVELOPMENT) -> WorkItem:
@@ -231,3 +241,221 @@ def test_global_route_facts_use_context_pack_only_in_apply() -> None:
 
     assert apply_facts.route_request_id == shadow_facts.route_request_id
     assert apply_facts.estimated_context_tokens < shadow_facts.estimated_context_tokens
+
+
+def _recorded_decision(
+    decision: BrainDecision,
+    *,
+    include_c6_provenance: bool = True,
+) -> BrainRouteRecord:
+    return BrainRouteRecord(
+        route_request_id="route-c6-recorded",
+        work_id="work-c6-recorded",
+        subsystem_key="work",
+        task_kind="development",
+        route_kind=BrainRouteKind.MODEL,
+        mode=BrainRoutingMode.SHADOW,
+        policy_version=1,
+        policy_digest="a" * 64,
+        reason_codes=("deterministic_abstained",),
+        created_at_epoch=1.0,
+        selected_action=decision.action,
+        goal_complete=(decision.goal_complete if include_c6_provenance else None),
+        needs_owner=(decision.needs_owner if include_c6_provenance else None),
+        owner_question=(decision.owner_question if include_c6_provenance else None),
+        parameters_digest=(
+            canonical_digest(decision.parameters) if include_c6_provenance else None
+        ),
+    )
+
+
+def test_recorded_context_equivalence_uses_full_safety_fingerprint() -> None:
+    legacy = BrainDecision(
+        action="dev_status",
+        summary="Inspect status",
+        parameters={"scope": "candidate"},
+    )
+    same = BrainDecision(
+        action="dev_status",
+        summary="Different wording is allowed",
+        parameters={"scope": "candidate"},
+    )
+    changed = BrainDecision(
+        action="dev_status",
+        summary="Different parameters are material",
+        parameters={"scope": "workspace"},
+    )
+
+    equivalent = compare_recorded_context_decision(
+        _recorded_decision(legacy),
+        same,
+    )
+    assert equivalent is not None and equivalent.equivalent is True
+
+    mismatch = compare_recorded_context_decision(
+        _recorded_decision(legacy),
+        changed,
+    )
+    assert mismatch is not None
+    assert mismatch.equivalent is False
+    assert mismatch.parameters_equal is False
+
+
+def test_recorded_context_equivalence_rejects_legacy_incomplete_provenance() -> None:
+    decision = BrainDecision(
+        action="dev_status",
+        summary="Inspect status",
+    )
+
+    assert (
+        compare_recorded_context_decision(
+            _recorded_decision(decision, include_c6_provenance=False),
+            decision,
+        )
+        is None
+    )
+
+
+def test_reconstruct_recorded_context_request_uses_historical_prefix() -> None:
+    work = _work()
+    first = _completed_step(
+        work,
+        "dev_read_file",
+        observation={"path": "src/first.py", "text": "first"},
+    )
+    second = _completed_step(
+        work,
+        "dev_status",
+        observation={"clean": True},
+    )
+    later = _completed_step(
+        work,
+        "dev_write_file",
+        observation={"path": "src/later.py"},
+    )
+    historical_evidence = ({"ref": "evidence:historical"},)
+    expected_pack = WorkContextAssembler().build(
+        work=work,
+        steps=(first, second),
+        evidence=historical_evidence,
+    )
+    snapshot = {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "reasoner_contract_digest": work_reasoning_contract_digest(),
+        "work_version": work.version,
+        "work_state": work.state.value,
+        "work_status_detail": "historical status",
+        "work_current_step_id": second.step_id,
+        "purpose": "choose the next bounded step",
+        "allowed_actions": [
+            {
+                "name": "dev_status",
+                "description": "Read bounded development status",
+                "parameter_schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                },
+            }
+        ],
+        "recent_step_ids": [first.step_id, second.step_id],
+        "history_step_count": 2,
+        "history_step_ids_digest": canonical_digest([first.step_id, second.step_id]),
+        "evidence": list(historical_evidence),
+        "context_version": expected_pack.version,
+        "context_selected_step_ids": [
+            step.step_id for step in expected_pack.selected_steps
+        ],
+        "context_evidence_count": len(expected_pack.evidence),
+        "context_evidence_digest": canonical_digest(list(expected_pack.evidence)),
+        "context_pack_digest": canonical_digest(
+            {
+                "recent_steps": expected_pack.recent_steps_payload(),
+                "evidence": list(expected_pack.evidence),
+                "history_manifest": expected_pack.history_manifest_payload(),
+            }
+        ),
+    }
+    advanced = work.transition(
+        WorkState.RUNNING,
+        status_detail="later live status",
+    )
+
+    replay = reconstruct_recorded_context_request(
+        snapshot=snapshot,
+        work=advanced,
+        steps=(first, second, later),
+    )
+
+    assert replay.context_mode is WorkContextMode.APPLY
+    assert replay.work.version == work.version
+    assert replay.work.state is work.state
+    assert replay.work.status_detail == "historical status"
+    assert replay.work.current_step_id == second.step_id
+    assert [step.step_id for step in replay.recent_steps] == [
+        first.step_id,
+        second.step_id,
+    ]
+    assert replay.context_pack is not None
+    assert replay.context_pack.full_history_step_count == 2
+    assert (
+        replay.context_pack.recent_steps_payload()
+        == expected_pack.recent_steps_payload()
+    )
+    assert replay.context_pack.evidence == expected_pack.evidence
+    assert replay.evidence == historical_evidence
+
+
+def test_reconstruct_recorded_context_request_rejects_history_drift() -> None:
+    work = _work()
+    step = _completed_step(work, "dev_status", observation={"clean": True})
+    snapshot = {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "reasoner_contract_digest": work_reasoning_contract_digest(),
+        "work_version": work.version,
+        "work_state": work.state.value,
+        "work_status_detail": None,
+        "work_current_step_id": step.step_id,
+        "purpose": "choose the next bounded step",
+        "allowed_actions": [
+            {
+                "name": "dev_status",
+                "description": "Read bounded development status",
+                "parameter_schema": {"type": "object"},
+            }
+        ],
+        "recent_step_ids": [step.step_id],
+        "history_step_count": 1,
+        "history_step_ids_digest": "f" * 64,
+        "evidence": [],
+        "context_version": "c6.v1",
+    }
+
+    try:
+        reconstruct_recorded_context_request(
+            snapshot=snapshot,
+            work=work,
+            steps=(step,),
+        )
+    except ValueError as exc:
+        assert "history prefix" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected replay history drift to fail closed")
+
+
+def test_reconstruct_recorded_context_request_rejects_contract_drift() -> None:
+    work = _work()
+    snapshot = {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "reasoner_contract_digest": "f" * 64,
+    }
+
+    try:
+        reconstruct_recorded_context_request(
+            snapshot=snapshot,
+            work=work,
+            steps=(),
+        )
+    except ValueError as exc:
+        assert "reasoning contract" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected replay reasoning-contract drift to fail closed")

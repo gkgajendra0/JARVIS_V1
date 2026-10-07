@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from tests.test_gicc_composition import (
@@ -375,3 +376,39 @@ async def test_gicc_voice_internal_failure_does_not_invent_device_problem(
     assert any(
         event["event"] == "gicc_goal_processing_error" for event in telemetry.events
     )
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_status_reads_canonical_objective_projection(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    conversation, _ = _conversation("What is happening with my TV task?")
+    payload = {
+        "goal_id": "goal_tv",
+        "overall_state": "waiting_owner",
+        "phase": "waiting_owner_approval",
+        "verified_completion": False,
+    }
+    objective = SimpleNamespace(public_payload=lambda: payload)
+    resolver = SimpleNamespace(
+        list_active=lambda *, limit: (objective,),
+        resolve=lambda goal_id: objective,
+    )
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        objective_status=resolver,  # type: ignore[arg-type]
+    )
+
+    listed = await tools.list_owner_objectives(None)  # type: ignore[arg-type]
+    found = await tools.get_owner_objective_status(
+        None,  # type: ignore[arg-type]
+        goal_id="goal_tv",
+    )
+
+    assert listed["objectives"] == [payload]
+    assert found["goal_id"] == "goal_tv"
+    assert found["verified_completion"] is False
+    assert "Never infer overall completion" in str(listed["truth_note"])

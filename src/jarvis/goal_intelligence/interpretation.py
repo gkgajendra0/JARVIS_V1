@@ -248,6 +248,9 @@ Rules:
 - Preserve the owner's natural intent even when phrased in English, Hinglish or shorthand.
 - Never invent a concrete resource, application, account, provider, movie edition,
   service, location, or success condition that is not supported by supplied evidence.
+- For physical/resource entities use JARVIS world types camera, computer, display,
+  entrance, media_player, room or generic_external_resource; classify TV/television as
+  media_player. Resource names/vendors remain evidence, never entity types.
 - Prefer an unresolved entity or information need over a guessed target.
 - Information needs are only facts that can materially change target, result, Authority,
   cost, success criteria or ability to continue. Do not ask questions yourself.

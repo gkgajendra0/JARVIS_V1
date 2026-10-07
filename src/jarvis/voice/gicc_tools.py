@@ -15,6 +15,7 @@ from jarvis.goal_intelligence.composition import (
 )
 from jarvis.goal_intelligence.information import BoundInformationInteraction
 from jarvis.goal_intelligence.models import GoalState, PlanState
+from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
 from jarvis.goal_intelligence.telemetry import (
     DEFAULT_GICC_TELEMETRY,
@@ -49,6 +50,7 @@ class GiccAgentTools:
         store: GoalStore,
         *,
         execution_runtime: GiccExecutionRuntime | None = None,
+        objective_status: OwnerObjectiveStatusResolver | None = None,
         telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     ) -> None:
         if not isinstance(coordinator, GoalIntelligenceCoordinator):
@@ -68,16 +70,80 @@ class GiccAgentTools:
             )
         self._coordinator = coordinator
         self._execution_runtime = execution_runtime
+        self._objective_status = objective_status
         self._conversation = conversation
         self._store = store
         self._telemetry = telemetry
 
     @property
-    def tools(self) -> list:
+    def action_tools(self) -> list:
+        """Goal-changing tools that may be suppressed at protected decision boundaries."""
+
         return [
             self.pursue_owner_goal,
             self.resolve_goal_information,
         ]
+
+    @property
+    def read_tools(self) -> list:
+        """Read-only owner-objective awareness tools; safe during approval gates."""
+
+        if self._objective_status is None:
+            return []
+        return [
+            self.list_owner_objectives,
+            self.get_owner_objective_status,
+        ]
+
+    @property
+    def tools(self) -> list:
+        return [*self.action_tools, *self.read_tools]
+
+    @function_tool()
+    async def list_owner_objectives(
+        self,
+        context: RunContext,
+    ) -> dict[str, object]:
+        """List canonical active owner objectives across their full lifecycle.
+
+        Use for questions about an overall task, goal, capability request, or whether
+        something is still in progress. Child WorkItem completion is not overall
+        completion; verified_completion is the only completion authority.
+        """
+
+        del context
+        resolver = self._objective_status
+        if resolver is None:
+            return {"ok": False, "status": "objective_status_unavailable"}
+        objectives = resolver.list_active(limit=50)
+        return {
+            "ok": True,
+            "status": "listed",
+            "objectives": [item.public_payload() for item in objectives],
+            "truth_note": (
+                "These are owner-level objectives joined across GICC, Work, "
+                "EngineeringChange, activation, and external acceptance. Never infer "
+                "overall completion from a child WorkItem alone."
+            ),
+        }
+
+    @function_tool()
+    async def get_owner_objective_status(
+        self,
+        context: RunContext,
+        goal_id: str,
+    ) -> dict[str, object]:
+        """Read one canonical owner objective across its complete persisted lineage."""
+
+        del context
+        resolver = self._objective_status
+        if resolver is None:
+            return {"ok": False, "status": "objective_status_unavailable"}
+        try:
+            objective = resolver.resolve(goal_id)
+        except ValueError:
+            return {"ok": False, "status": "unknown_goal_id", "goal_id": goal_id}
+        return {"ok": True, "status": "found", **objective.public_payload()}
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(

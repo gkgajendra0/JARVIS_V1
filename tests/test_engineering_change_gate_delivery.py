@@ -3,6 +3,7 @@ from __future__ import annotations
 from jarvis.engineering_change import ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import reconcile_owner_change_gates
+from jarvis.engineering_change.gates import GateKind, GateService
 from jarvis.work.models import WorkDeliveryKind, WorkState
 from jarvis.work.store import SQLiteWorkStore
 
@@ -61,6 +62,9 @@ def test_architecture_ready_is_surfaced_as_exact_owner_gate(tmp_path) -> None:
     assert architecture.digest in delivery.event_key
     assert f"approve {gate_id}" in delivery.message
     assert f"reject {gate_id}" in delivery.message
+    assert architecture.digest in delivery.message
+    assert "The architecture is ready for your approval" in delivery.message
+    assert change.change_id not in delivery.message
 
 
 def test_gate_reconciliation_is_idempotent_across_restart_style_rechecks(
@@ -87,3 +91,72 @@ def test_gate_reconciliation_is_idempotent_across_restart_style_rechecks(
     deliveries = work.list_pending_deliveries(limit=10)
     assert len(deliveries) == 1
     assert deliveries[0].kind is WorkDeliveryKind.CHANGE_GATE
+
+
+def test_revised_architecture_gate_delivery_uses_latest_source_attempt(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    store = ChangeStore(work)
+    coordinator = ChangeCoordinator(store, RecordingBackend())
+
+    change = coordinator.start("Build capability", "session", "turn")
+    source1 = store.list_stages(change.change_id)[0]
+    _complete(work, source1.work_id)
+    architecture1 = store.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"strategy": "build_custom", "allowed_paths": ["capability_v1.py"]},
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(store, verify_owner=lambda *_: True)
+    gate1 = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture1.artifact_id,
+    )
+    gates.decide(
+        gate1.gate_id,
+        approved=True,
+        artifact_digest=architecture1.digest,
+        actor_id="owner",
+        source_session_id="session-approval-1",
+        source_turn_id="turn-approval-1",
+        request_key="request-approval-1",
+    )
+    coordinator.reconcile(change.change_id)
+    development = next(
+        stage
+        for stage in store.list_stages(change.change_id)
+        if stage.stage_key == "development"
+    )
+
+    store.request_architecture_revision_for_work(
+        development.work_id,
+        reason="The first architecture needs a different transport.",
+    )
+    coordinator.reconcile(change.change_id)
+    source2 = [
+        stage
+        for stage in store.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ][-1]
+    assert source2.attempt == 2
+    _complete(work, source2.work_id)
+    architecture2 = store.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"strategy": "build_custom", "allowed_paths": ["capability_v2.py"]},
+    )
+
+    reconciled = coordinator.reconcile(change.change_id)
+    assert reconciled.state is ChangeState.ARCHITECTURE_READY
+    surfaced = reconcile_owner_change_gates(coordinator)
+
+    assert len(surfaced) == 1
+    deliveries = work.list_pending_deliveries(limit=10)
+    assert len(deliveries) == 1
+    assert deliveries[0].kind is WorkDeliveryKind.CHANGE_GATE
+    assert deliveries[0].work_id == source2.work_id
+    assert deliveries[0].work_id != source1.work_id
+    assert architecture2.digest in deliveries[0].event_key

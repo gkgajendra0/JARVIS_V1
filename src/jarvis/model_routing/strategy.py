@@ -62,10 +62,11 @@ _STRATEGY_RULES = {
     "version": 1,
     "provider_pressure_affects_difficulty": False,
     "capable_failure_threshold": 2,
+    "frontier_failure_threshold": 3,
     "stalled_cycle_threshold": 2,
     "failed_hypothesis_threshold": 2,
     "evidence_capable": ["large", "heterogeneous"],
-    "roles": ["efficient", "capable"],
+    "roles": ["efficient", "capable", "frontier"],
 }
 _STRATEGY_DIGEST = hashlib.sha256(
     json.dumps(
@@ -239,6 +240,7 @@ class EngineeringStageStrategy:
 
         reasons: list[str] = []
         capable_required = False
+        frontier_required = False
 
         if quality_failures >= 2:
             capable_required = True
@@ -265,6 +267,19 @@ class EngineeringStageStrategy:
             capable_required = True
             reasons.append("evidence_complexity")
 
+        # Astra/frontier-class reasoning is escalation-only. Provider pressure
+        # never makes the task "harder"; only repeated semantic/quality failure
+        # may promote a later cycle beyond the normal capable tier.
+        if (
+            quality_failures >= 3
+            or structured_failures >= 3
+            or failed_hypotheses >= 3
+            or stalled_cycles >= 3
+        ):
+            frontier_required = True
+            capable_required = True
+            reasons.append("repeated_capable_tier_failure")
+
         diagnostic_unknown = (
             request.task_kind in {"diagnostics", "unknown_diagnostic", "incident"}
             and not healthy_progress
@@ -274,7 +289,11 @@ class EngineeringStageStrategy:
             capable_required = True
             reasons.append("unknown_diagnostic")
 
-        preferred_role = "capable" if capable_required else "efficient"
+        preferred_role = (
+            "frontier"
+            if frontier_required
+            else ("capable" if capable_required else "efficient")
+        )
         if not capable_required:
             if healthy_progress:
                 reasons.append("healthy_progress")
@@ -291,22 +310,42 @@ class EngineeringStageStrategy:
             (target for target in eligible_targets if "capable" in target.roles),
             key=lambda target: target.target_id,
         )
+        frontier = sorted(
+            (target for target in eligible_targets if "frontier" in target.roles),
+            key=lambda target: target.target_id,
+        )
 
-        if capable_required:
-            candidates = capable
+        if frontier_required:
+            candidates = frontier
             if not candidates:
                 raise StrategyNoCandidateError(
-                    "capable route required but no capable target is eligible"
+                    "frontier route required but no frontier target is eligible"
                 )
+        elif capable_required:
+            candidates = list(capable)
+            seen = {target.target_id for target in candidates}
+            candidates.extend(
+                target for target in frontier if target.target_id not in seen
+            )
+            if not candidates:
+                raise StrategyNoCandidateError(
+                    "capable route required but no capable target or frontier fallback is eligible"
+                )
+            if not capable and frontier:
+                reasons.append("capable_unavailable_frontier_fallback")
         else:
             candidates = list(efficient)
             seen = {target.target_id for target in candidates}
             candidates.extend(
                 target for target in capable if target.target_id not in seen
             )
+            seen.update(target.target_id for target in candidates)
+            candidates.extend(
+                target for target in frontier if target.target_id not in seen
+            )
             if not candidates:
                 raise StrategyNoCandidateError(
-                    "no efficient or capable target is eligible"
+                    "no efficient, capable or frontier target is eligible"
                 )
             if not efficient:
                 reasons.append("efficient_unavailable_capable_fallback")

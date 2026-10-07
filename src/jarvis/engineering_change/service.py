@@ -10,10 +10,16 @@ from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.strong_approval import StrongApprovalService
 from jarvis.authority.types import ActionAttributes, ActionOrigin
 from jarvis.authority.verifier import WindowsHelloVerifier
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.work.models import WorkDeliveryKind, WorkState
 
 from .coordinator import ChangeCoordinator
+from .delivery import reconcile_owner_acceptance_gates
 from .gates import GateChallenge, GateDecision, GateKind, GateService
 from .models import ChangeConflict, ChangeState, EngineeringChange
 
@@ -24,10 +30,50 @@ _SINGLE_REVIEW = re.compile(
     r"\s*(approve|reject)\s+(architecture|acceptance|promotion)(?:\s+(?:proposal|gate))?[.!]?\s*",
     re.IGNORECASE,
 )
+_BOUND_REVIEW = re.compile(
+    r"\s*(?:jarvis[\s,:-]+)?"
+    r"(yes|approve|approved|proceed|go\s+ahead|continue|no|reject|rejected|"
+    r"decline|declined|stop|cancel)"
+    r"(?:[\s,;:-]+(?:jarvis|please|it|this|the|architecture|proposal|change|"
+    r"yes|approve|approved|proceed|go\s+ahead|continue))*[.!]?\s*",
+    re.IGNORECASE,
+)
 
 
 class ChangeService:
     """Only accepted USER turns from this session can produce gate decisions."""
+
+    @staticmethod
+    def _enqueue_gate_delivery(
+        *,
+        store,
+        work,
+        change_id: str,
+        gate: GateChallenge,
+        artifact,
+        summary: str,
+        proposal_summary: dict[str, object],
+    ) -> None:
+        intent = OwnerCommunicationIntentV1.create(
+            kind=OwnerCommunicationKind.CHANGE_GATE,
+            event_key=(f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}"),
+            summary=summary,
+            change_id=change_id,
+            work_id=work.work_id,
+            gate_id=gate.gate_id,
+            artifact_digest=artifact.digest,
+            artifact_revision=artifact.revision,
+            proposal_summary=proposal_summary,
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        if owner_message is None:
+            raise ChangeConflict("Supervisor suppressed required change gate")
+        store.work.enqueue_delivery(
+            work=work,
+            kind=WorkDeliveryKind.CHANGE_GATE,
+            message=owner_message.message,
+            event_key=owner_message.event_key,
+        )
 
     def __init__(
         self,
@@ -65,10 +111,9 @@ class ChangeService:
             change.process_version,
         )
         source_stage = process.architecture_source_stage
-        stages = store.list_stages(change_id)
-        research = next(
-            (s for s in stages if s.stage_key == source_stage.stage_key),
-            None,
+        research = store.current_stage_attempt(
+            change_id,
+            source_stage.stage_key,
         )
         if (
             research is None
@@ -94,17 +139,17 @@ class ChangeService:
         gate = GateService(store, verify_owner=lambda *_: False).present(
             change_id, GateKind.ARCHITECTURE, artifact.artifact_id
         )
-        store.work.enqueue_delivery(
+        self._enqueue_gate_delivery(
+            store=store,
             work=store.work.require(research.work_id),
-            kind=WorkDeliveryKind.CHANGE_GATE,
-            message=(
-                f"Review EngineeringChange {change_id} architecture revision "
-                f"{artifact.revision}: {rendered}. Digest: {artifact.digest}. "
-                f"To decide, say 'approve architecture' if this is the only pending "
-                f"review, or 'approve {gate.gate_id}' to identify it exactly. "
-                f"Say 'reject architecture' or 'reject {gate.gate_id}' to decline."
-            ),
-            event_key=f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}",
+            change_id=change_id,
+            gate=gate,
+            artifact=artifact,
+            summary="Architecture approval is required before development can start.",
+            proposal_summary={
+                "review_kind": "architecture",
+                "proposal": payload,
+            },
         )
         return gate
 
@@ -153,7 +198,12 @@ class ChangeService:
         store.add_artifact(change_id, kind="architecture", payload=payload)
         return self.propose_architecture(change_id, payload)
 
-    def decide_latest(self, gate_id: str) -> GateDecision:
+    def decide_latest(
+        self,
+        gate_id: str,
+        *,
+        allow_bound_decision: bool = False,
+    ) -> GateDecision:
         turn = next(
             (
                 candidate
@@ -166,7 +216,8 @@ class ChangeService:
             raise ChangeConflict("no accepted owner turn")
         match = _DECISION.fullmatch(turn.text)
         typed = _SINGLE_REVIEW.fullmatch(turn.text)
-        if match is None and typed is None:
+        bound = _BOUND_REVIEW.fullmatch(turn.text) if allow_bound_decision else None
+        if match is None and typed is None and bound is None:
             raise ChangeConflict("owner must explicitly identify the current gate")
         store = self.coordinator.store
         verification = lambda actor, source_session, source_turn, gate, digest: (
@@ -195,12 +246,21 @@ class ChangeService:
             raise ChangeConflict(
                 "promotion decisions must execute through governed Phase-7 promotion service"
             )
+        token = (match or typed or bound).group(1).casefold()
+        approved = token in {
+            "approve",
+            "approved",
+            "yes",
+            "proceed",
+            "go ahead",
+            "continue",
+        }
         if (
             isinstance(gate, GateDecision)
             and gate.verification_id is not None
             and gate.source_session_id == self.session.session_id
             and gate.source_turn_id == turn.turn_id
-            and gate.approved == ((match or typed).group(1).casefold() == "approve")
+            and gate.approved == approved
             and (match is None or match.group(2) == gate_id)
             and (typed is None or typed.group(2).casefold() == challenge.kind.value)
         ):
@@ -213,7 +273,8 @@ class ChangeService:
             or gates.pending_gate_ids() != (gate_id,)
         ):
             raise ChangeConflict("spoken review is ambiguous; identify the gate ID")
-        approved = (match or typed).group(1).casefold() == "approve"
+        if bound is not None and not allow_bound_decision:
+            raise ChangeConflict("bound owner decision is unavailable in this context")
         proposal = ActionProposal.create(
             session_id=self.session.session_id,
             capability="engineering_change",
@@ -295,65 +356,40 @@ class ChangeService:
             GateKind.PROMOTION,
             promotion.artifact_id,
         )
-        store.work.enqueue_delivery(
+        self._enqueue_gate_delivery(
+            store=store,
             work=store.work.require(work_id),
-            kind=WorkDeliveryKind.CHANGE_GATE,
-            message=(
-                f"Review EngineeringChange {change_id} exact Phase-7 promotion "
-                f"evidence for PR #{evidence.pr_number}, candidate "
-                f"{evidence.candidate_head_sha}, tested merge "
-                f"{evidence.tested_merge_sha}. Evidence SHA-256: "
-                f"{evidence.digest}. Approval must execute through "
-                f"the governed PromotionAuthorityBridge; this gate alone is not an "
-                f"execution permit. Say 'approve promotion' for a single pending "
-                f"promotion, or 'approve {gate.gate_id}'."
+            change_id=change_id,
+            gate=gate,
+            artifact=promotion,
+            summary=(
+                "Promotion approval is required for the exact verified release "
+                "evidence; the gate itself is not an execution permit."
             ),
-            event_key=f"change-gate:{change_id}:{gate.gate_id}:{promotion.digest}",
+            proposal_summary={
+                "review_kind": "promotion",
+                "pr_number": evidence.pr_number,
+                "candidate_head_sha": evidence.candidate_head_sha,
+                "tested_merge_sha": evidence.tested_merge_sha,
+                "evidence_digest": evidence.digest,
+            },
         )
         return gate
 
     def prepare_acceptance(self, change_id: str) -> GateChallenge:
         """Present canonical development evidence; never trust a model pass claim."""
-        store = self.coordinator.store
-        change = store.require(change_id)
-        if change.state is not ChangeState.VERIFYING:
+
+        gate_ids = reconcile_owner_acceptance_gates(
+            self.coordinator,
+            change_ids=(change_id,),
+        )
+        if len(gate_ids) != 1:
             raise ChangeConflict("change has not reached verification")
-        stage = next(
-            (
-                s
-                for s in reversed(store.list_stages(change_id))
-                if s.stage_key == "development"
-            ),
-            None,
-        )
-        if stage is None:
-            raise ChangeConflict("development stage is missing")
-        work = store.work.require(stage.work_id)
-        result = work.result
-        if (
-            work.state is not WorkState.COMPLETED
-            or not isinstance(result.get("verification"), dict)
-            or result["verification"].get("passed") is not True
-            or not result.get("commit")
-            or not result.get("branch")
-        ):
-            raise ChangeConflict("canonical development has no verified commit")
-        payload = {"work_id": stage.work_id, "result": result}
-        artifact = store.add_artifact(change_id, kind="acceptance", payload=payload)
-        gate = GateService(store, verify_owner=lambda *_: False).present(
-            change_id, GateKind.ACCEPTANCE, artifact.artifact_id
-        )
-        store.work.enqueue_delivery(
-            work=work,
-            kind=WorkDeliveryKind.CHANGE_GATE,
-            message=(
-                f"Review EngineeringChange {change_id} acceptance: branch "
-                f"{result['branch']}, commit {result['commit']}, tests passed in "
-                f"{result['verification'].get('sandbox')}. Digest: {artifact.digest}. "
-                f"Say 'approve acceptance' for a single pending review, or "
-                f"'approve {gate.gate_id}' to identify it exactly. "
-                f"Use 'reject acceptance' or 'reject {gate.gate_id}' to decline."
-            ),
-            event_key=f"change-gate:{change_id}:{gate.gate_id}:{artifact.digest}",
-        )
-        return gate
+        gate = GateService(
+            self.coordinator.store,
+            verify_owner=lambda *_: False,
+        ).get(gate_ids[0])
+        challenge = None if gate is None else getattr(gate, "challenge", gate)
+        if not isinstance(challenge, GateChallenge):
+            raise ChangeConflict("acceptance gate could not be recovered")
+        return challenge

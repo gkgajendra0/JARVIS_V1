@@ -5,7 +5,7 @@ import pytest
 from jarvis.engineering_change import ChangeConflict, ChangeState, ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
-from jarvis.work.models import WorkState
+from jarvis.work.models import WorkState, WorkStep
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -48,7 +48,48 @@ def test_restart_reconciles_submission_without_duplicate_stage(tmp_path) -> None
     coordinator.reconcile(change.change_id)
     coordinator.reconcile(change.change_id)
     assert changes.list_stages(change.change_id) == stages
-    assert backend.submissions == [stages[0].work_id, stages[0].work_id]
+    assert backend.submissions == [stages[0].work_id]
+    assert work.get_execution_id(stages[0].work_id) == stages[0].work_id
+
+
+def test_change_stage_uses_shared_terminal_recovery_and_persists_binding(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+
+    class RecoveringBackend(RecordingBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.recoveries: list[tuple[str, str, str]] = []
+
+        def recover_execution(
+            self,
+            execution_id: str,
+            *,
+            work_id: str,
+            priority,
+            recovery_token: str,
+        ) -> str:
+            del priority
+            self.recoveries.append((execution_id, work_id, recovery_token))
+            return f"{work_id}__retry_{recovery_token}"
+
+    backend = RecoveringBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = coordinator.start("Recover camera stage", "session", "turn")
+    stage = changes.list_stages(change.change_id)[0]
+
+    assert backend.submissions == []
+    assert len(backend.recoveries) == 1
+    source_execution, work_id, recovery_token = backend.recoveries[0]
+    assert source_execution == stage.work_id
+    assert work_id == stage.work_id
+    assert recovery_token.startswith("startup_recovery_")
+    assert work.get_execution_id(stage.work_id) == (
+        f"{stage.work_id}__retry_{recovery_token}"
+    )
 
 
 def test_independent_changes_can_have_ready_research_workitems_in_parallel(
@@ -212,6 +253,262 @@ def test_changed_architecture_cannot_verify_completed_old_development(tmp_path) 
     assert changes.work_admitted(new_development.work_id)
 
 
+def test_development_can_reopen_governed_architecture_research(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Build media adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"v": 1, "transport": "initial"},
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+    )
+    coordinator.reconcile(change.change_id)
+    development = next(
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "development"
+    )
+
+    reopened = changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="Dependency graph changed after verification.",
+    )
+
+    assert reopened.state is ChangeState.RESEARCHING
+
+    replayed = changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="Replay after a process interruption.",
+    )
+    assert replayed == reopened
+    revision_requests = changes.list_artifacts(
+        change.change_id,
+        kind="architecture_revision_request",
+    )
+    assert len(revision_requests) == 1
+
+    coordinator.reconcile(change.change_id)
+    research_stages = [
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ]
+    assert [stage.attempt for stage in research_stages] == [1, 2]
+    replacement = work.require(research_stages[-1].work_id)
+    assert "Dependency graph changed after verification." in replacement.request
+    assert replacement.work_id != research.work_id
+    revision = changes.latest_artifact(
+        change.change_id,
+        "architecture_revision_request",
+    )
+    assert revision is not None
+    assert (
+        revision.payload["previous_architecture_artifact_id"]
+        == architecture.artifact_id
+    )
+    assert revision.payload["source_attempt"] == 2
+
+
+def test_revision_research_compatibility_recovery_starts_fresh_attempt(
+    tmp_path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    coordinator = ChangeCoordinator(changes, RecordingBackend())
+
+    change = coordinator.start("Build media adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "transport": "vidaa_mqtt_tls",
+            "target_vendor": "hisense",
+            "target_platform": "vidaa",
+        },
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+    )
+    coordinator.reconcile(change.change_id)
+
+    development = next(
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "development"
+    )
+    changes.request_architecture_revision_for_work(
+        development.work_id,
+        reason="The approved dependency evidence needs governed re-research.",
+    )
+    coordinator.reconcile(change.change_id)
+    source2 = [
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ][-1]
+    assert source2.attempt == 2
+
+    item = work.require(source2.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    first = WorkStep(
+        work_id=running.work_id,
+        kind="brain_reasoning",
+        summary="JARVIS brain reasoning failed",
+    )
+    work.add_step(first)
+    work.save_step(
+        first.start().fail(
+            "ChatGPTPlanHTTPError: Our servers are currently overloaded. "
+            "Please try again later."
+        )
+    )
+    second = WorkStep(
+        work_id=running.work_id,
+        kind="acq_verify_pypi_sdk",
+        summary="Verify candidate",
+    )
+    work.add_step(second)
+    work.save_step(
+        second.start().fail(
+            "DependencyPolicyError: package name must be a Python distribution "
+            "name, not a URL/path"
+        )
+    )
+    third = WorkStep(
+        work_id=running.work_id,
+        kind="brain_reasoning",
+        summary="JARVIS brain reasoning failed",
+    )
+    work.add_step(third)
+    work.save_step(
+        third.start().fail(
+            "ChatGPTPlanHTTPError: Our servers are currently overloaded. "
+            "Please try again later."
+        )
+    )
+    work.save(
+        running.transition(
+            WorkState.FAILED,
+            status_detail=(
+                "brain reasoning failed: ChatGPTPlanHTTPError: "
+                "Our servers are currently overloaded. Please try again later."
+            ),
+            current_step_id=third.step_id,
+        ),
+        expected_version=running.version,
+    )
+    coordinator.reconcile_for_work(source2.work_id)
+    active = changes.require(change.change_id)
+    assert active.state is ChangeState.RESEARCHING
+
+    # Compatibility recovery remains a migration for already-persisted legacy bad
+    # states. Recreate that old parent state explicitly; normal S5 behavior above no
+    # longer promotes this recoverable child failure to FAILED.
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=active.version,
+    )
+
+    before_revision = changes.latest_artifact(
+        change.change_id,
+        "architecture_revision_request",
+    )
+    assert before_revision is not None
+    assert changes.reopen_recoverable_architecture_revision_failures(
+        recovery_generation="phase9-research-provider-sdk-v1",
+        dry_run=True,
+    ) == (change.change_id,)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+    assert (
+        changes.latest_artifact(
+            change.change_id,
+            "architecture_revision_request",
+        ).artifact_id
+        == before_revision.artifact_id
+    )
+
+    recovered = changes.reopen_recoverable_architecture_revision_failures(
+        recovery_generation="phase9-research-provider-sdk-v1",
+    )
+    assert recovered == (change.change_id,)
+    assert changes.require(change.change_id).state is ChangeState.RESEARCHING
+
+    revision = changes.latest_artifact(
+        change.change_id,
+        "architecture_revision_request",
+    )
+    assert revision is not None
+    assert revision.payload["source_attempt"] == 3
+    recovery = revision.payload["compatibility_recovery"]
+    assert recovery["failed_work_id"] == source2.work_id
+    assert recovery["failure_kinds"] == [
+        "legacy_pypi_url_identity",
+        "provider_overload",
+    ]
+
+    coordinator.reconcile(change.change_id)
+    research_stages = [
+        stage
+        for stage in changes.list_stages(change.change_id)
+        if stage.stage_key == "research"
+    ]
+    assert [stage.attempt for stage in research_stages] == [1, 2, 3]
+    source3 = research_stages[-1]
+    assert source3.work_id != source2.work_id
+    assert work.require(source2.work_id).state is WorkState.FAILED
+    replacement = work.require(source3.work_id)
+    assert replacement.state is WorkState.QUEUED
+    assert '"target_vendor":"hisense"' in replacement.request
+    assert '"target_platform":"vidaa"' in replacement.request
+    assert "Preserve the owner target semantics" in replacement.request
+
+    assert (
+        changes.reopen_recoverable_architecture_revision_failures(
+            recovery_generation="phase9-research-provider-sdk-v1",
+        )
+        == ()
+    )
+
+
 def test_failed_research_is_recorded_without_starting_development(tmp_path) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     changes = ChangeStore(work)
@@ -223,3 +520,135 @@ def test_failed_research_is_recorded_without_starting_development(tmp_path) -> N
     coordinator.reconcile_for_work(research.work_id)
     assert changes.require(change.change_id).state is ChangeState.FAILED
     assert len(changes.list_stages(change.change_id)) == 1
+
+
+def test_contract_failure_recovery_reuses_approved_architecture_once(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    changes = ChangeStore(work)
+    backend = RecordingBackend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    change = coordinator.start("Build media adapter", "session", "turn")
+    research = changes.list_stages(change.change_id)[0]
+    _complete(work, work.require(research.work_id))
+    coordinator.reconcile_for_work(research.work_id)
+
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"transport": "approved"},
+    )
+    coordinator.reconcile(change.change_id)
+    gates = GateService(changes, verify_owner=lambda *_: True)
+    gate = gates.present(
+        change.change_id,
+        GateKind.ARCHITECTURE,
+        architecture.artifact_id,
+    )
+    gates.decide(
+        gate.gate_id,
+        approved=True,
+        artifact_digest=architecture.digest,
+        actor_id="owner",
+        source_session_id="session",
+        source_turn_id="approval",
+        request_key="session:approval",
+        verification_id="verification_demo",
+        verifier_id="test_verifier",
+    )
+    coordinator.reconcile(change.change_id)
+
+    development = changes.list_stages(change.change_id)[1]
+    item = work.require(development.work_id)
+    running = work.save(
+        item.transition(WorkState.RUNNING),
+        expected_version=item.version,
+    )
+    step = WorkStep(
+        work_id=running.work_id,
+        kind="phase9_development_engine",
+        summary="Run DevelopmentEngine",
+    )
+    work.add_step(step)
+    completed_step = step.start().complete(
+        {
+            "development_result": {
+                "disposition": "failed",
+                "reason": (
+                    "The approved ChatGPT-plan/Codex engineering target returned a "
+                    "non-retryable failure (response_contract_invalid)."
+                ),
+            }
+        }
+    )
+    work.save_step(completed_step)
+
+    # A later completed bookkeeping step must not hide the DevelopmentEngine result
+    # that actually explains why this WorkItem failed.
+    bookkeeping = WorkStep(
+        work_id=running.work_id,
+        kind="status_snapshot",
+        summary="Record terminal status bookkeeping",
+    )
+    work.add_step(bookkeeping)
+    work.save_step(
+        bookkeeping.start().complete({"status": "owner_notification_enqueued"})
+    )
+
+    failed = work.save(
+        running.transition(
+            WorkState.FAILED,
+            status_detail="response contract invalid",
+            current_step_id=step.step_id,
+        ),
+        expected_version=running.version,
+    )
+
+    # Reproduce the startup race: DBOS can finish the child before the terminal
+    # EngineeringChange callback is installed, leaving the parent temporarily stale.
+    assert failed.state is WorkState.FAILED
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+    # Runtime startup classifies response-contract failure as retryable and keeps the
+    # governing EngineeringChange active for the future Supervisor.
+    coordinator.reconcile_active()
+    active = changes.require(change.change_id)
+    assert active.state is ChangeState.DEVELOPING
+
+    # Compatibility recovery still proves already-persisted legacy FAILED state can be
+    # migrated safely after an upgrade.
+    changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=active.version,
+    )
+
+    stages_before_dry_run = changes.list_stages(change.change_id)
+    assert changes.reopen_recoverable_development_engine_failures(
+        recovery_generation="codex-contract-repair-v1",
+        dry_run=True,
+    ) == (change.change_id,)
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+    assert changes.list_stages(change.change_id) == stages_before_dry_run
+
+    recovered = changes.reopen_recoverable_development_engine_failures(
+        recovery_generation="codex-contract-repair-v1",
+    )
+    assert recovered == (change.change_id,)
+
+    coordinator.reconcile(change.change_id)
+    stages = changes.list_stages(change.change_id)
+    assert len(stages) == 3
+    assert stages[-1].stage_key == development.stage_key
+    assert stages[-1].attempt == development.attempt + 1
+    assert stages[-1].work_id != development.work_id
+    assert changes.require(change.change_id).state is ChangeState.DEVELOPING
+
+    # The same runtime generation cannot silently reopen the same historical failure
+    # again on another restart.
+    assert (
+        changes.reopen_recoverable_development_engine_failures(
+            recovery_generation="codex-contract-repair-v1",
+        )
+        == ()
+    )

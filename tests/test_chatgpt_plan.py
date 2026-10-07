@@ -7,11 +7,13 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 import jarvis.chatgpt_plan as chatgpt_plan_module
+import jarvis.chatgpt_plan_cli as chatgpt_plan_cli_module
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_REQUIRED_SCOPE,
     CHATGPT_PLAN_TARGET_ID,
     ChatGPTPlanCredentials,
     ChatGPTPlanHTTPError,
+    ChatGPTPlanModel,
     ChatGPTPlanResponse,
     ChatGPTPlanSessionManager,
     ChatGPTPlanUsageUnavailable,
@@ -268,10 +270,10 @@ def test_raw_chatgpt_plan_subscription_limit_is_provider_pressure() -> None:
         provider="chatgpt_plan",
     )
 
-    assert failure.kind is ProviderFailureKind.RATE_LIMITED
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
 
 
-def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None:
+def test_chatgpt_plan_usage_error_maps_to_quota_exhausted() -> None:
     failure = classify_provider_failure(
         ChatGPTPlanUsageUnavailable(
             "limit",
@@ -282,11 +284,11 @@ def test_chatgpt_plan_usage_error_maps_to_rate_limit_for_work_fallback() -> None
         provider="chatgpt_plan",
     )
 
-    assert failure.kind is ProviderFailureKind.RATE_LIMITED
+    assert failure.kind is ProviderFailureKind.QUOTA_EXHAUSTED
     assert failure.retryable is True
 
 
-def test_plan_enabled_work_pool_is_plan_primary_plus_configured_paid_fallback() -> None:
+def test_plan_enabled_work_pool_is_plan_only_without_explicit_paid_fallback() -> None:
     adapters = ModelAdapterRegistry(
         (
             _DummyAdapter("chatgpt_plan"),
@@ -307,13 +309,109 @@ def test_plan_enabled_work_pool_is_plan_primary_plus_configured_paid_fallback() 
     assert targets.primary_target_id == CHATGPT_PLAN_TARGET_ID
     assert tuple(target.target_id for target in all_targets) == (
         CHATGPT_PLAN_TARGET_ID,
-        "work.gemini.default",
     )
     plan = targets.registry.require(CHATGPT_PLAN_TARGET_ID)
     assert plan.locality is ModelLocality.CLOUD
     assert plan.cost_profile is not None
     assert plan.cost_profile.input_usd_per_million_tokens == 0.0
     assert plan.cost_profile.output_usd_per_million_tokens == 0.0
+
+
+def test_plan_model_catalog_builds_efficient_capable_and_frontier_tiers() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            _DummyAdapter("chatgpt_plan"),
+            _DummyAdapter("gemini"),
+            _DummyAdapter("openai"),
+        )
+    )
+
+    targets = build_default_work_targets(
+        configured_provider="gemini",
+        configured_model=None,
+        adapter_registry=adapters,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-6-astra",
+        chatgpt_plan_available_models=(
+            "gpt-5.6-luna",
+            "gpt-5.6-sol",
+            "gpt-6-astra",
+        ),
+    )
+
+    assert targets.primary_target_id == CHATGPT_PLAN_TARGET_ID
+    efficient = targets.registry.for_role("efficient")
+    capable = targets.registry.for_role("capable")
+    frontier = targets.registry.for_role("frontier")
+    assert tuple(target.model_id for target in efficient) == ("gpt-5.6-luna",)
+    assert tuple(target.model_id for target in capable) == ("gpt-5.6-sol",)
+    assert tuple(target.model_id for target in frontier) == ("gpt-6-astra",)
+
+
+def test_plan_model_catalog_without_luna_uses_capable_primary() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            _DummyAdapter("chatgpt_plan"),
+            _DummyAdapter("gemini"),
+            _DummyAdapter("openai"),
+        )
+    )
+
+    targets = build_default_work_targets(
+        configured_provider="gemini",
+        configured_model=None,
+        adapter_registry=adapters,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="gpt-6-astra",
+        chatgpt_plan_available_models=("gpt-6-sol", "gpt-6-astra"),
+    )
+
+    primary = targets.registry.require(targets.primary_target_id)
+    assert primary.model_id == "gpt-6-sol"
+    assert "capable" in primary.roles
+    assert tuple(
+        target.model_id for target in targets.registry.for_role("frontier")
+    ) == ("gpt-6-astra",)
+
+
+def test_catalog_unavailable_refuses_astra_as_routine_fallback() -> None:
+    adapters = ModelAdapterRegistry(
+        (
+            _DummyAdapter("chatgpt_plan"),
+            _DummyAdapter("gemini"),
+            _DummyAdapter("openai"),
+        )
+    )
+
+    with pytest.raises(ValueError, match="refusing routine Astra fallback"):
+        build_default_work_targets(
+            configured_provider="gemini",
+            configured_model=None,
+            adapter_registry=adapters,
+            chatgpt_plan_enabled=True,
+            chatgpt_plan_model="gpt-6-astra",
+            chatgpt_plan_available_models=(),
+        )
+
+
+def test_signin_default_prefers_sol_over_astra(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Manager:
+        def list_models(self) -> tuple[ChatGPTPlanModel, ...]:
+            return (
+                ChatGPTPlanModel("gpt-6-astra", "GPT-6-Astra"),
+                ChatGPTPlanModel("gpt-5.6-sol", "GPT-5.6-Sol"),
+                ChatGPTPlanModel("gpt-5.6-luna", "GPT-5.6-Luna"),
+            )
+
+    monkeypatch.setattr(
+        chatgpt_plan_cli_module,
+        "_configured_model",
+        lambda: "gpt-6-astra",
+    )
+
+    selected = chatgpt_plan_cli_module._select_model(_Manager(), None)
+
+    assert selected == "gpt-5.6-sol"
 
 
 def test_legacy_work_pool_is_unchanged_when_plan_is_disabled() -> None:

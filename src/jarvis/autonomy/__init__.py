@@ -39,6 +39,16 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "jarvis.autonomy.existing_objective",
+        (
+            "ExistingObjectiveLineageError",
+            "ExistingObjectiveLineageV1",
+            "ExistingObjectiveResumeController",
+            "ExistingObjectiveResumeDisposition",
+            "ExistingObjectiveResumeSnapshotV1",
+        ),
+    ),
+    (
         "jarvis.autonomy.mode",
         ("AutonomyMode",),
     ),
@@ -158,6 +168,48 @@ _EXPORT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "build_default_desired_state_rule_registry",
             "dispatch_cooldown_until",
             "within_numeric_tolerance",
+        ),
+    ),
+    (
+        "jarvis.autonomy.owner_communication",
+        (
+            "OwnerCommunicationIntentV1",
+            "OwnerCommunicationKind",
+            "SupervisorOwnerCommunication",
+            "SupervisorOwnerMessageV1",
+        ),
+    ),
+    (
+        "jarvis.autonomy.shadow",
+        (
+            "GLOBAL_SUPERVISOR_S11_FAULT_MATRIX_V1",
+            "ShadowAgreement",
+            "ShadowFaultCaseV1",
+            "ShadowFaultKind",
+            "SupervisorShadowObservationV1",
+            "SupervisorShadowRunner",
+            "validate_global_supervisor_s11_fault_matrix",
+        ),
+    ),
+    (
+        "jarvis.autonomy.supervisor_cutover",
+        (
+            "SupervisorCutoverController",
+            "SupervisorCutoverDisposition",
+            "SupervisorCutoverResultV1",
+        ),
+    ),
+    (
+        "jarvis.autonomy.supervisor",
+        (
+            "DeterministicSupervisorAdvisor",
+            "GlobalSupervisor",
+            "SupervisorAction",
+            "SupervisorAdvisor",
+            "SupervisorContextV1",
+            "SupervisorDecisionV1",
+            "SupervisorProposalV1",
+            "supervisor_context_from_workspace",
         ),
     ),
     (

@@ -10,13 +10,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jarvis.capability_acquisition.external_acceptance import (
+    EXTERNAL_ACCEPTANCE_BINDING_KIND,
     EXTERNAL_ACCEPTANCE_RESULT_KIND,
+    external_acceptance_completion_guard,
 )
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
 from jarvis.engineering_change import ChangeStore
+from jarvis.engineering_substrate.change_integration import MANIFEST_KIND
 from jarvis.engineering_substrate.contracts import HardwareAcceptanceVerdict
+from jarvis.work.models import WorkState, WorkType
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +38,8 @@ class CapabilityAcquisitionLineage:
     package_version: str
     package_digest: str
     external_acceptance_required: bool
+    external_acceptance_binding_artifact_id: str | None
+    external_acceptance_work_id: str | None
     external_acceptance_artifact_id: str | None
 
 
@@ -132,6 +138,18 @@ def verify_capability_acquisition_completion(
     if activation.payload.get("effective_enabled") is not True:
         return None
 
+    disabled = store.latest_artifact(change_key, "capability_lifecycle_disable")
+    if (
+        disabled is not None
+        and disabled.payload.get("candidate_artifact_id") == candidate.artifact_id
+        and disabled.payload.get("candidate_artifact_digest") == candidate.digest
+        and disabled.payload.get("effective_enabled") is False
+        and disabled.created_at >= activation.created_at
+    ):
+        # A later explicit disable invalidates capability readiness even when an
+        # older activation and external-acceptance artifact still exist.
+        return None
+
     package_identity = (
         _text(candidate.payload.get("package_id"), field="package_id"),
         _text(candidate.payload.get("package_version"), field="package_version"),
@@ -159,26 +177,117 @@ def verify_capability_acquisition_completion(
         for item in architecture.payload.get("owner_acceptance_contract_ids", ())
         if str(item).strip()
     }
-    external_required = PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT in contracts
+    if PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT not in contracts:
+        raise CapabilityAcquisitionLineageError(
+            "GICC capability completion requires the mandatory real-target "
+            "external acceptance contract"
+        )
+    external_required = True
+    external_binding_id = None
+    external_work_id = None
     external_id = None
     if external_required:
+        binding = store.latest_artifact(
+            change_key,
+            EXTERNAL_ACCEPTANCE_BINDING_KIND,
+        )
         external = store.latest_artifact(
             change_key,
             EXTERNAL_ACCEPTANCE_RESULT_KIND,
         )
-        if external is None:
+        if binding is None or external is None:
+            return None
+        if binding.payload.get("schema") != "capability_external_acceptance_binding.v1":
+            raise CapabilityAcquisitionLineageError(
+                "external acceptance binding schema is stale"
+            )
+
+        goal_artifact = store.latest_artifact(change_key, "capability_goal")
+        manifest = store.latest_artifact(change_key, MANIFEST_KIND)
+        if goal_artifact is None or manifest is None:
+            return None
+
+        if (
+            binding.payload.get("candidate_artifact_id") != candidate.artifact_id
+            or binding.payload.get("candidate_artifact_digest") != candidate.digest
+            or binding.payload.get("activation_artifact_id") != activation.artifact_id
+            or binding.payload.get("activation_artifact_digest") != activation.digest
+            or binding.payload.get("architecture_artifact_id")
+            != architecture.artifact_id
+            or binding.payload.get("architecture_artifact_digest")
+            != architecture.digest
+            or binding.payload.get("manifest_artifact_id") != manifest.artifact_id
+            or binding.payload.get("manifest_artifact_digest") != manifest.digest
+            or binding.payload.get("goal_artifact_id") != goal_artifact.artifact_id
+            or binding.payload.get("goal_artifact_digest") != goal_artifact.digest
+        ):
+            raise CapabilityAcquisitionLineageError(
+                "external acceptance binding is stale or cross-generation"
+            )
+        if (
+            binding.payload.get("acceptance_contract_id")
+            != PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+        ):
+            raise CapabilityAcquisitionLineageError(
+                "external acceptance binding contract does not match architecture"
+            )
+        if binding.payload.get("authority_session_id") != activation.payload.get(
+            "authority_session_id"
+        ) or binding.payload.get("source_turn_id") != activation.payload.get(
+            "source_turn_id"
+        ):
+            raise CapabilityAcquisitionLineageError(
+                "external acceptance authority differs from activation authority"
+            )
+
+        work_id = _text(
+            binding.payload.get("work_id"),
+            field="external_acceptance_work_id",
+        )
+        acceptance_work = store.work.get(work_id)
+        if acceptance_work is None:
             return None
         if (
-            external.payload.get("candidate_artifact_id") != candidate.artifact_id
+            acceptance_work.work_type is not WorkType.EXTERNAL_ACCEPTANCE
+            or acceptance_work.source_session_id != f"phase9-external:{change_key}"
+            or acceptance_work.source_turn_id != activation.artifact_id
+        ):
+            raise CapabilityAcquisitionLineageError(
+                "external acceptance WorkItem identity does not match its binding"
+            )
+        development_work_id = _text(
+            candidate.payload.get("development_work_id"),
+            field="development_work_id",
+        )
+        if development_work_id not in set(acceptance_work.dependencies):
+            raise CapabilityAcquisitionLineageError(
+                "external acceptance WorkItem is not dependent on current development"
+            )
+        if acceptance_work.state is not WorkState.COMPLETED:
+            return None
+        allowed, _ = external_acceptance_completion_guard(
+            store.work.list_steps(work_id)
+        )
+        if not allowed:
+            return None
+
+        if (
+            external.payload.get("schema") != "capability_external_acceptance.v1"
+            or external.payload.get("work_id") != work_id
+            or external.payload.get("binding_artifact_id") != binding.artifact_id
+            or external.payload.get("binding_artifact_digest") != binding.digest
+            or external.payload.get("candidate_artifact_id") != candidate.artifact_id
             or external.payload.get("candidate_artifact_digest") != candidate.digest
             or external.payload.get("activation_artifact_id") != activation.artifact_id
             or external.payload.get("activation_artifact_digest") != activation.digest
         ):
             raise CapabilityAcquisitionLineageError(
-                "external acceptance is not bound to the current activation"
+                "external acceptance is not bound to the current acceptance mission"
             )
         if external.payload.get("verdict") != HardwareAcceptanceVerdict.PASS.value:
             return None
+        external_binding_id = binding.artifact_id
+        external_work_id = work_id
         external_id = external.artifact_id
 
     return CapabilityAcquisitionLineage(
@@ -195,5 +304,7 @@ def verify_capability_acquisition_completion(
         package_version=package_identity[1],
         package_digest=package_identity[2],
         external_acceptance_required=external_required,
+        external_acceptance_binding_artifact_id=external_binding_id,
+        external_acceptance_work_id=external_work_id,
         external_acceptance_artifact_id=external_id,
     )
