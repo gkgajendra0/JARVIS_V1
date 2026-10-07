@@ -26,6 +26,7 @@ from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordin
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
+    migrate_legacy_gicc_external_acceptance_contracts,
 )
 from jarvis.capability_acquisition.discovery_workflow import (
     build_acquisition_discovery_executors,
@@ -1178,6 +1179,22 @@ def build_work_runtime(
             "Recovered development attempt(s) poisoned by superseded architecture-"
             "source dependencies: %s",
             ", ".join(recovered_dependencies),
+        )
+
+    migrated_acceptance_contracts = migrate_legacy_gicc_external_acceptance_contracts(
+        change_store,
+    )
+    if migrated_acceptance_contracts:
+        surfaced = reconcile_owner_change_gates(
+            changes,
+            change_ids=migrated_acceptance_contracts,
+        )
+        LOGGER.warning(
+            "Migrated legacy GICC capability architecture(s) to the mandatory "
+            "real-target acceptance contract; fresh owner architecture approval is "
+            "required: changes=%s gates=%s",
+            ", ".join(migrated_acceptance_contracts),
+            ", ".join(surfaced),
         )
 
     capability_acquisition = CapabilityAcquisitionCoordinator(
