@@ -21,11 +21,13 @@ from jarvis.autonomy.mode import AutonomyMode
 from jarvis.autonomy.supervisor_cutover import SupervisorCutoverController
 from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
+    blocking_capability_workspace_invariant_codes,
     inspect_capability_workspace_invariants,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.goal_intelligence.phase9 import migrate_legacy_phase9_gap_links
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.goal_intelligence.workspace import ObjectiveWorkspaceProjector
 from jarvis.incident_repair.process import UNKNOWN_INCIDENT_REPAIR_PROCESS
@@ -115,6 +117,10 @@ def inspect_existing_objective(
             OWNER_CAPABILITY_ACQUISITION_PROCESS,
         ),
     )
+    snapshot_lineage_migrations = migrate_legacy_phase9_gap_links(
+        goal_store=goals,
+        change_store=changes,
+    )
     projector = ObjectiveWorkspaceProjector(
         goal_store=goals,
         change_store=changes,
@@ -136,6 +142,12 @@ def inspect_existing_objective(
         workspace=workspace,
         change_store=changes,
     )
+    blocking_invariant_codes = set(
+        blocking_capability_workspace_invariant_codes(
+            workspace=workspace,
+            change_store=changes,
+        )
+    )
     recoverable_invariant_codes: set[CapabilitySystemInvariantCode] = set()
     if "phase9-authoritative-source-dependency-v1" in snapshot.startup_recovery_kinds:
         recoverable_invariant_codes.update(
@@ -144,15 +156,24 @@ def inspect_existing_objective(
                 CapabilitySystemInvariantCode.DEVELOPMENT_DEPENDS_ON_STALE_SOURCE,
             }
         )
+    if (
+        "phase9-gicc-external-acceptance-contract-v1"
+        in snapshot.startup_recovery_kinds
+    ):
+        recoverable_invariant_codes.add(
+            CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE
+        )
     recoverable_invariant_findings = tuple(
         finding
         for finding in invariant_report.findings
         if finding.code in recoverable_invariant_codes
+        and finding.code.value in blocking_invariant_codes
     )
     unsafe_invariant_findings = tuple(
         finding
         for finding in invariant_report.findings
-        if finding.code not in recoverable_invariant_codes
+        if finding.code.value in blocking_invariant_codes
+        and finding.code not in recoverable_invariant_codes
     )
 
     target = " ".join(str(expected_target or "").split()).strip()
@@ -289,6 +310,9 @@ def inspect_existing_objective(
         "store_path": str(path),
         "snapshot": snapshot.canonical_payload() | {"digest": snapshot.digest},
         "diagnostics": {
+            "snapshot_migrations": {
+                "gicc_phase9_v1_to_v2": list(snapshot_lineage_migrations),
+            },
             "goal": {
                 "goal_id": workspace.goal.record_id,
                 "state": workspace.goal.payload.get("state"),
@@ -307,8 +331,10 @@ def inspect_existing_objective(
             "requested_change_milestones": milestones,
             "superseded_dependency_recovery": dependency_recovery,
             "capability_system_invariants": {
-                "passed": invariant_report.passed,
+                "passed": not unsafe_invariant_findings,
+                "audit_passed": invariant_report.passed,
                 "digest": invariant_report.digest,
+                "blocking_codes": sorted(blocking_invariant_codes),
                 "findings": [
                     finding.to_payload() for finding in invariant_report.findings
                 ],
