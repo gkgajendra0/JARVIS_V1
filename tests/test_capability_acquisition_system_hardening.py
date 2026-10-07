@@ -20,6 +20,7 @@ from jarvis.capability_acquisition.external_contract import (
 )
 from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
+    blocking_capability_workspace_invariant_codes,
     _check_external_acceptance_binding,
     _check_gicc_external_acceptance_contract,
     assert_capability_system_invariants,
@@ -32,6 +33,7 @@ from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.outcomes import classify_work_system_outcome
 from jarvis.goal_intelligence.ledgers import build_progress_ledger
 from jarvis.goal_intelligence.models import (
+    CapabilityGapState,
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     CapabilityRequirementV1,
@@ -1047,3 +1049,198 @@ def test_failed_change_cannot_advertise_resume_development(tmp_path: Path) -> No
     assert CapabilitySystemInvariantCode.FAILED_CHANGE_EXPOSES_FORWARD_PROGRESS not in {
         finding.code for finding in report.findings
     }
+
+
+def test_historical_capability_invariant_is_auditable_but_not_live_blocker(
+    tmp_path: Path,
+) -> None:
+    work = SQLiteWorkStore(tmp_path / "historical-isolation.sqlite3")
+    goals = GoalStore(work)
+    changes = ChangeStore(
+        work,
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    backend = _Backend()
+    coordinator = ChangeCoordinator(changes, backend)
+
+    entity = goals.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="television",
+            canonical_name="Historical Isolation Television",
+        )
+    )
+    goal = goals.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="historical-isolation-session",
+            source_turn_id="historical-isolation-turn",
+            exact_owner_request="Acquire the capabilities needed for the current mission.",
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="The current capability gap is resolved.",
+            completion_predicates=("current_capability_ready",),
+            referenced_entity_ids=(entity.entity_id,),
+        )
+    )
+    historical_requirement = CapabilityRequirementV1.create(
+        goal_id=goal.goal_id,
+        semantic_capability="legacy.device.control",
+        operation="legacy_operation",
+        target_entity_id=entity.entity_id,
+        target_entity_type="television",
+        reason="Historical capability requirement.",
+    )
+    current_requirement = CapabilityRequirementV1.create(
+        goal_id=goal.goal_id,
+        semantic_capability="media_player.control",
+        operation="play_media",
+        target_entity_id=entity.entity_id,
+        target_entity_type="television",
+        reason="Current capability requirement.",
+    )
+    graph = goals.put_requirement_graph(
+        CapabilityRequirementGraphV1.create(
+            goal_id=goal.goal_id,
+            requirements=(historical_requirement, current_requirement),
+        )
+    )
+    historical_gap = goals.put_gap(
+        CapabilityGapV1.create(
+            goal_id=goal.goal_id,
+            requirement_ids=(historical_requirement.requirement_id,),
+            reusable_capability_family="legacy.device.control",
+            target_entity_type="television",
+            target_entity_id=entity.entity_id,
+            minimum_required_operations=("legacy_operation",),
+            missing_reason_codes=("historical_missing",),
+        )
+    )
+    historical_gap = goals.update_gap_state(
+        historical_gap.gap_id,
+        CapabilityGapState.SATISFIED,
+        expected_revision=historical_gap.revision,
+    )
+    current_gap = goals.put_gap(
+        CapabilityGapV1.create(
+            goal_id=goal.goal_id,
+            requirement_ids=(current_requirement.requirement_id,),
+            reusable_capability_family="media_player.control",
+            target_entity_type="television",
+            target_entity_id=entity.entity_id,
+            minimum_required_operations=("play_media",),
+            missing_reason_codes=("current_missing",),
+        )
+    )
+    node = PlanNodeV1.create(
+        plan_identity=f"{goal.goal_id}:current-capability",
+        ordinal=0,
+        node_type=PlanNodeType.ACQUIRE_CAPABILITY,
+        summary="Acquire the current media-control capability.",
+        gap_id=current_gap.gap_id,
+    )
+    plan = goals.put_plan(
+        PlanGraphV1.create(
+            goal_id=goal.goal_id,
+            goal_revision=goal.goal_revision,
+            nodes=(node,),
+            edges=(),
+            root_node_ids=(node.node_id,),
+            completion_node_ids=(node.node_id,),
+        )
+    )
+
+    historical_request = Phase9AcquisitionRequestV2.create(
+        gap=historical_gap,
+        goal=goal,
+    )
+    historical_change = changes.create(
+        request="Historical completed capability lifecycle.",
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        source_session_id=historical_request.bridge_source_session_id,
+        source_turn_id=historical_request.bridge_source_turn_id,
+    )
+    changes.add_artifact(
+        historical_change.change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "schema": "gicc_phase9_gap_link.v2",
+            "request_id": historical_request.request_id,
+            "request_digest": historical_request.digest,
+            "motivating_goal_id": goal.goal_id,
+            "gap_id": historical_gap.gap_id,
+            "engineering_change_id": historical_change.change_id,
+        },
+    )
+    changes.add_artifact(
+        historical_change.change_id,
+        kind="architecture",
+        payload={
+            "schema": "capability_acquisition_architecture.v1",
+            "owner_acceptance_contract_ids": [],
+        },
+    )
+
+    current_request = Phase9AcquisitionRequestV2.create(gap=current_gap, goal=goal)
+    current_change = coordinator.start(
+        "Acquire the currently governing capability.",
+        current_request.bridge_source_session_id,
+        current_request.bridge_source_turn_id,
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+    )
+    current_source = changes.current_stage_attempt(
+        current_change.change_id,
+        "acquisition",
+    )
+    assert current_source is not None
+    changes.add_artifact(
+        current_change.change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "schema": "gicc_phase9_gap_link.v2",
+            "request_id": current_request.request_id,
+            "request_digest": current_request.digest,
+            "motivating_goal_id": goal.goal_id,
+            "gap_id": current_gap.gap_id,
+            "engineering_change_id": current_change.change_id,
+            "acquisition_work_id": current_source.work_id,
+        },
+    )
+    goals.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id=plan.plan_id,
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id=current_gap.gap_id,
+            resume_node_id=node.node_id,
+            work_ids=(current_source.work_id,),
+            goal_revision=goal.goal_revision,
+        )
+    )
+
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=goals,
+        change_store=changes,
+    ).project(goal.goal_id)
+    report = inspect_capability_workspace_invariants(
+        workspace=workspace,
+        change_store=changes,
+    )
+    historical_findings = [
+        finding
+        for finding in report.findings
+        if finding.change_id == historical_change.change_id
+    ]
+    assert CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE in {
+        finding.code for finding in historical_findings
+    }
+
+    blocking_codes = blocking_capability_workspace_invariant_codes(
+        workspace=workspace,
+        change_store=changes,
+    )
+
+    assert (
+        CapabilitySystemInvariantCode.GICC_ARCHITECTURE_MISSING_EXTERNAL_ACCEPTANCE.value
+        not in blocking_codes
+    )
+    assert build_progress_ledger(workspace).active_change_id == current_change.change_id
