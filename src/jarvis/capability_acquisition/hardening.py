@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionArchitectureError,
     SemanticCapabilityBuildContractV1,
 )
 from jarvis.capability_acquisition.external_contract import (
@@ -454,7 +455,7 @@ def _check_gicc_semantic_contract(
                 else None
             ),
         ).to_payload()
-    except Exception as exc:
+    except CapabilityAcquisitionArchitectureError as exc:
         _add(
             findings,
             CapabilitySystemInvariantCode.GICC_ARCHITECTURE_SEMANTIC_CONTRACT_DRIFT,
