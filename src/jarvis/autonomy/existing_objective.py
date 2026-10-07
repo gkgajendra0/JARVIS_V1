@@ -319,12 +319,15 @@ class ExistingObjectiveResumeController:
         requested_is_active = progress.active_change_id == lineage.change_id
         if capability_completion_error is not None:
             resume_disposition = ExistingObjectiveResumeDisposition.LINEAGE_CONFLICT
-        elif capability_completion_ready:
-            resume_disposition = ExistingObjectiveResumeDisposition.CAPABILITY_COMPLETE
         elif startup_recovery_kinds:
+            # Startup recovery mutates the governing lifecycle before it is safe to
+            # trust historical completion evidence. Recovery therefore outranks an
+            # otherwise complete legacy lineage.
             resume_disposition = (
                 ExistingObjectiveResumeDisposition.STARTUP_RECOVERY_REQUIRED
             )
+        elif capability_completion_ready:
+            resume_disposition = ExistingObjectiveResumeDisposition.CAPABILITY_COMPLETE
         elif requested_is_active and change.state == "failed":
             resume_disposition = (
                 ExistingObjectiveResumeDisposition.FAILED_GOVERNING_CHANGE
