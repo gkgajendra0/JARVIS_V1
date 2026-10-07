@@ -721,6 +721,44 @@ async def test_external_acceptance_fences_capability_continuation(
 
 
 @pytest.mark.asyncio
+async def test_legacy_gicc_activation_cannot_resume_without_external_acceptance_contract(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-legacy-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:13:30+00:00",
+        )
+    )
+    changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
+    changes.architecture.payload["owner_acceptance_contract_ids"] = ()
+    coordinator = CapabilityContinuationCoordinator(store)
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        change_store=changes,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 0
+    assert coordinator.calls == 0
+    assert latest is not None
+    assert latest.state is GoalState.WAITING_CAPABILITY
+
+
+@pytest.mark.asyncio
 async def test_background_existing_capability_reuse_needs_no_engineering_work(
     tmp_path: Path,
 ) -> None:
@@ -824,6 +862,21 @@ class RecordingSupervisorCutover:
         )
 
 
+class RejectingSupervisorCutover:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def coordinate(self, goal_id: str):
+        self.calls.append(goal_id)
+        return SimpleNamespace(
+            action=None,
+            disposition=SupervisorCutoverDisposition.REJECTED,
+            accepted=False,
+            mutation_performed=False,
+            decision_digest=None,
+        )
+
+
 @pytest.mark.asyncio
 async def test_waiting_capability_runs_supervisor_before_legacy_continuation(
     tmp_path: Path,
@@ -860,5 +913,46 @@ async def test_waiting_capability_runs_supervisor_before_legacy_continuation(
     assert cutover.calls == [goal.goal_id]
     assert coordinator.calls == 0
     latest = store.get_goal(goal.goal_id)
+    assert latest is not None
+    assert latest.state is GoalState.WAITING_CAPABILITY
+
+
+@pytest.mark.asyncio
+async def test_rejected_supervisor_cutover_fences_ready_capability_continuation(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_CAPABILITY)
+    store.put_continuation(
+        GoalContinuationV1.create(
+            goal_id=goal.goal_id,
+            plan_id="phase9-supervisor-rejected-plan",
+            blocked_by_type=ContinuationBlockerType.CAPABILITY_ACQUISITION,
+            blocked_by_id="gap-tv-control",
+            resume_node_id="resume-tv-control",
+            work_ids=("phase9-work",),
+            goal_revision=goal.goal_revision,
+            created_at="2026-10-01T18:14:00+00:00",
+        )
+    )
+    changes = FakePhase9ChangeStore()
+    changes.bind_goal(goal.goal_id)
+    changes.pass_current_acceptance()
+    coordinator = CapabilityContinuationCoordinator(store)
+    cutover = RejectingSupervisorCutover()
+    runtime = _runtime(
+        store,
+        coordinator,
+        FakeCapabilityRuntime(),
+        change_store=changes,
+        supervisor_cutover=cutover,
+    )
+
+    advanced = await runtime.reconcile_once()
+
+    latest = store.get_goal(goal.goal_id)
+    assert advanced == 0
+    assert cutover.calls == [goal.goal_id]
+    assert coordinator.calls == 0
     assert latest is not None
     assert latest.state is GoalState.WAITING_CAPABILITY
