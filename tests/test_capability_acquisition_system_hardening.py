@@ -431,6 +431,9 @@ class CapabilityAcquisitionLifecycleMachine(RuleBasedStateMachine):
                 "schema": "stateful_architecture.v1",
                 "source_attempt": source.attempt,
                 "strategy": f"strategy-{source.attempt}",
+                "owner_acceptance_contract_ids": [
+                    PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+                ],
             },
         )
         completed = self.work.save(
