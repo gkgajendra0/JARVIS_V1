@@ -282,6 +282,13 @@ def test_phase9_lifecycle_coordinator_uses_phase8_service(
     )
     package = registry.get_package(PACKAGE_ID, PACKAGE_VERSION)
     assert package is not None
+    architecture = changes.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "schema": "runtime_composition_architecture.v1",
+        },
+    )
     candidate = changes.add_artifact(
         change.change_id,
         kind="capability_candidate",
@@ -292,6 +299,8 @@ def test_phase9_lifecycle_coordinator_uses_phase8_service(
             "package_id": PACKAGE_ID,
             "package_version": PACKAGE_VERSION,
             "package_digest": package.package_digest,
+            "architecture_artifact_id": architecture.artifact_id,
+            "architecture_digest": architecture.digest,
         },
     )
     changes.add_artifact(
