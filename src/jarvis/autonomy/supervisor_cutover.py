@@ -15,6 +15,8 @@ from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.delivery import (
     reconcile_owner_acceptance_gates,
     reconcile_owner_change_gates,
+    reconcile_owner_lifecycle_activation_requests,
+    reconcile_owner_promotion_attention,
 )
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.workspace import (
@@ -298,14 +300,30 @@ class SupervisorCutoverController:
             )
 
         if action is SupervisorAction.ASK_OWNER:
-            surfaced = (
-                ()
-                if change_id is None
-                else reconcile_owner_change_gates(
+            surfaced: tuple[str, ...] = ()
+            if change_id is not None:
+                surfaced = tuple(
+                    dict.fromkeys(
+                        (
+                            *reconcile_owner_change_gates(
+                                self._changes,
+                                change_ids=(change_id,),
+                            ),
+                            *reconcile_owner_acceptance_gates(
+                                self._changes,
+                                change_ids=(change_id,),
+                            ),
+                            *reconcile_owner_promotion_attention(
+                                self._changes,
+                                change_ids=(change_id,),
+                            ),
+                        )
+                    )
+                )
+                reconcile_owner_lifecycle_activation_requests(
                     self._changes,
                     change_ids=(change_id,),
                 )
-            )
             after = self._projector.project(goal_id)
             return self._result(
                 before=before,
