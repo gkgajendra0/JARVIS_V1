@@ -20,10 +20,10 @@ from jarvis.capability_acquisition.external_contract import (
 )
 from jarvis.capability_acquisition.hardening import (
     CapabilitySystemInvariantCode,
-    blocking_capability_workspace_invariant_codes,
     _check_external_acceptance_binding,
     _check_gicc_external_acceptance_contract,
     assert_capability_system_invariants,
+    blocking_capability_workspace_invariant_codes,
     inspect_capability_system_invariants,
     inspect_capability_workspace_invariants,
 )
@@ -761,7 +761,7 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
         target_entity_type="television",
         reason="Capability is absent.",
     )
-    graph = goals.put_requirement_graph(
+    goals.put_requirement_graph(
         CapabilityRequirementGraphV1.create(
             goal_id=goal.goal_id,
             requirements=(requirement,),
