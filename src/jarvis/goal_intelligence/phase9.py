@@ -198,6 +198,143 @@ class Phase9GapRecheck:
     continuation: GoalContinuationV1 | None
 
 
+def migrate_legacy_phase9_gap_links(
+    *,
+    goal_store: GoalStore,
+    change_store: ChangeStore,
+    dry_run: bool = False,
+    limit: int = 10_000,
+) -> tuple[str, ...]:
+    """Append exact v2 lineage for durable v1 GICC links without rewriting history."""
+
+    if not isinstance(goal_store, GoalStore):
+        raise TypeError("goal_store must be GoalStore")
+    if not isinstance(change_store, ChangeStore):
+        raise TypeError("change_store must be ChangeStore")
+    if not isinstance(dry_run, bool):
+        raise TypeError("dry_run must be bool")
+    if type(limit) is not int or limit <= 0:
+        raise ValueError("limit must be a positive integer")
+
+    migrated: list[str] = []
+    changes = change_store.list_by_states(
+        tuple(ChangeState),
+        process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+        process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+        limit=limit,
+    )
+    for change in changes:
+        link = change_store.latest_artifact(
+            change.change_id,
+            "gicc_capability_gap_link",
+        )
+        if link is None or link.payload.get("schema") != "gicc_phase9_gap_link.v1":
+            continue
+
+        goal_id = str(link.payload.get("motivating_goal_id") or "").strip()
+        gap_id = str(link.payload.get("gap_id") or "").strip()
+        goal = goal_store.get_goal(goal_id)
+        gap = goal_store.get_gap(gap_id)
+        if goal is None or gap is None:
+            raise GoalStoreConflict(
+                "legacy Phase-9 link no longer resolves to its exact goal/gap"
+            )
+        request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
+        expected_legacy = {
+            "request_id": request.request_id,
+            "request_digest": request.digest,
+            "motivating_goal_id": request.motivating_goal_id,
+            "gap_id": request.gap_id,
+            "reusable_capability_family": request.reusable_capability_family,
+            "minimum_required_operations": list(request.minimum_required_operations),
+            "target_entity_type": request.target_entity_type,
+            "target_entity_id": request.target_entity_id,
+            "owner_source_session_id": request.owner_source_session_id,
+            "owner_source_turn_id": request.owner_source_turn_id,
+        }
+        for key, expected in expected_legacy.items():
+            if link.payload.get(key) != expected:
+                raise GoalStoreConflict(
+                    f"legacy Phase-9 link field {key} drifted from canonical goal/gap"
+                )
+        if (
+            change.source_session_id != request.bridge_source_session_id
+            or change.source_turn_id != request.bridge_source_turn_id
+        ):
+            raise GoalStoreConflict(
+                "legacy Phase-9 EngineeringChange source identity drifted"
+            )
+
+        source_stage_key = (
+            OWNER_CAPABILITY_ACQUISITION_PROCESS.architecture_source_stage.stage_key
+        )
+        source_stages = sorted(
+            (
+                item
+                for item in change_store.list_stages(change.change_id)
+                if item.stage_key == source_stage_key
+            ),
+            key=lambda item: item.attempt,
+        )
+        if not source_stages or source_stages[0].attempt != 1:
+            raise GoalStoreConflict(
+                "legacy Phase-9 link has no original acquisition stage"
+            )
+        acquisition_work_id = source_stages[0].work_id
+        goal_artifact = change_store.latest_artifact(
+            change.change_id,
+            "capability_goal",
+        )
+        admission_artifact = change_store.latest_artifact(
+            change.change_id,
+            "capability_acquisition_admission",
+        )
+        if goal_artifact is None or admission_artifact is None:
+            raise GoalStoreConflict(
+                "legacy Phase-9 link is missing canonical admission provenance"
+            )
+        phase9_goal = request.to_v1(owner_goal_created_at=goal.created_at)
+        payload = {
+            "schema": "gicc_phase9_gap_link.v2",
+            "request_id": request.request_id,
+            "request_digest": request.digest,
+            "motivating_goal_id": request.motivating_goal_id,
+            "gap_id": request.gap_id,
+            "phase9_goal_id": phase9_goal.goal_id,
+            "phase9_goal_digest": phase9_goal.digest,
+            "engineering_change_id": change.change_id,
+            "acquisition_work_id": acquisition_work_id,
+            "goal_artifact_id": goal_artifact.artifact_id,
+            "admission_artifact_id": admission_artifact.artifact_id,
+            "admission_disposition": (
+                CapabilityAcquisitionAdmissionDisposition.ENGINEERING_CHANGE.value
+            ),
+            "reusable_capability_family": request.reusable_capability_family,
+            "minimum_required_operations": list(request.minimum_required_operations),
+            "target_entity_type": request.target_entity_type,
+            "target_entity_id": request.target_entity_id,
+            "owner_source_session_id": request.owner_source_session_id,
+            "owner_source_turn_id": request.owner_source_turn_id,
+            "bridge_source_session_id": request.bridge_source_session_id,
+            "bridge_source_turn_id": request.bridge_source_turn_id,
+            "monitor_event_contract_required": request.monitor_event_contract_required,
+            "monitor_event_contract": (
+                GICC_MONITOR_EVENT_CONTRACT
+                if request.monitor_event_contract_required
+                else None
+            ),
+        }
+        migrated.append(change.change_id)
+        if not dry_run:
+            change_store.add_artifact(
+                change.change_id,
+                kind="gicc_capability_gap_link",
+                payload=payload,
+            )
+
+    return tuple(migrated)
+
+
 class Phase9GoalBridge:
     """Translate reusable GICC gaps into the existing governed Phase-9 machinery."""
 
