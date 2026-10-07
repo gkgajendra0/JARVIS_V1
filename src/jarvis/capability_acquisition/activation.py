@@ -92,7 +92,10 @@ class CapabilityAcquisitionLifecycleCoordinator:
             change_id,
             "capability_lifecycle_activation",
         )
-        if activation is None or activation.payload.get("effective_enabled") is not True:
+        if (
+            activation is None
+            or activation.payload.get("effective_enabled") is not True
+        ):
             raise CapabilityAcquisitionLifecycleError(
                 "Phase-9 lifecycle disable requires an effective activation"
             )
