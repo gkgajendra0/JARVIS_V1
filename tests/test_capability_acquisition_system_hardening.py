@@ -761,7 +761,7 @@ def test_invariant_checker_detects_completed_retryable_work(tmp_path: Path) -> N
         target_entity_type="television",
         reason="Capability is absent.",
     )
-    goals.put_requirement_graph(
+    graph = goals.put_requirement_graph(
         CapabilityRequirementGraphV1.create(
             goal_id=goal.goal_id,
             requirements=(requirement,),
@@ -1111,7 +1111,7 @@ def test_historical_capability_invariant_is_auditable_but_not_live_blocker(
         target_entity_type="television",
         reason="Current capability requirement.",
     )
-    graph = goals.put_requirement_graph(
+    goals.put_requirement_graph(
         CapabilityRequirementGraphV1.create(
             goal_id=goal.goal_id,
             requirements=(historical_requirement, current_requirement),
