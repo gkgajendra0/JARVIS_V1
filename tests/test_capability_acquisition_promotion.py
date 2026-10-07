@@ -313,7 +313,9 @@ def _phase8_stack(tmp_path, release: ReleaseRecord, manifest: CapabilityManifest
     return registry, admission, reconciler
 
 
-def test_release_bridge_rejects_legacy_gicc_architecture_without_live_acceptance() -> None:
+def test_release_bridge_rejects_legacy_gicc_architecture_without_live_acceptance() -> (
+    None
+):
     class _Changes:
         def require(self, change_id: str):
             assert change_id == "change_legacy_gicc"
@@ -327,9 +329,7 @@ def test_release_bridge_rejects_legacy_gicc_architecture_without_live_acceptance
             if kind == "gicc_capability_gap_link":
                 return SimpleNamespace(payload={})
             if kind == "architecture":
-                return SimpleNamespace(
-                    payload={"owner_acceptance_contract_ids": []}
-                )
+                return SimpleNamespace(payload={"owner_acceptance_contract_ids": []})
             raise AssertionError(
                 "release bridge should fail before reading downstream lifecycle evidence"
             )
