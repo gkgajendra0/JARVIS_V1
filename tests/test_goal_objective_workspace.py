@@ -1414,6 +1414,34 @@ def test_supervisor_does_not_repeat_retry_after_work_enters_retrying(
     assert "RETRY" not in progress.next_legal_actions
 
 
+def test_progress_ledger_projects_promotion_preparation_as_owner_blocker(
+    tmp_path: Path,
+) -> None:
+    state = _scenario(tmp_path / "promotion-owner-boundary.sqlite3")
+    workspace = ObjectiveWorkspaceProjector(
+        goal_store=state["goals"],
+        change_store=state["changes"],
+    ).project(state["goal"].goal_id)
+    promoted_changes = tuple(
+        replace(change, state=ChangeState.READY_FOR_PROMOTION.value)
+        if change.change_id == state["change"].change_id
+        else change
+        for change in workspace.changes
+    )
+    promoted_workspace = replace(
+        workspace,
+        changes=promoted_changes,
+        digest="pending",
+    )
+
+    progress = build_progress_ledger(promoted_workspace)
+
+    assert progress.phase == "promotion"
+    assert progress.blocker_kind == "needs_owner"
+    assert progress.owner_action_required is True
+    assert progress.next_legal_actions == ("ASK_OWNER",)
+
+
 def test_progress_ledger_projects_pending_lifecycle_activation_as_owner_blocker(
     tmp_path: Path,
 ) -> None:
