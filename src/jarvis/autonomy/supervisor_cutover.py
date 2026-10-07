@@ -12,7 +12,10 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from jarvis.engineering_change.coordinator import ChangeCoordinator
-from jarvis.engineering_change.delivery import reconcile_owner_change_gates
+from jarvis.engineering_change.delivery import (
+    reconcile_owner_acceptance_gates,
+    reconcile_owner_change_gates,
+)
 from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.goal_intelligence.workspace import (
     ObjectiveWorkspaceProjector,
@@ -309,6 +312,25 @@ class SupervisorCutoverController:
                 after=after,
                 action=action,
                 disposition=SupervisorCutoverDisposition.AWAIT_OWNER,
+                accepted=True,
+                reason_codes=(),
+                decision_digest=revalidated.digest,
+                change_id=change_id,
+                change_state_before=before_state,
+                surfaced_gate_ids=surfaced,
+            )
+
+        if action is SupervisorAction.VERIFY_ASSUMPTION:
+            surfaced = reconcile_owner_acceptance_gates(
+                self._changes,
+                change_ids=(change_id,),
+            )
+            after = self._projector.project(goal_id)
+            return self._result(
+                before=before,
+                after=after,
+                action=action,
+                disposition=SupervisorCutoverDisposition.RECONCILED_CHANGE,
                 accepted=True,
                 reason_codes=(),
                 decision_digest=revalidated.digest,
