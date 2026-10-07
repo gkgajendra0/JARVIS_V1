@@ -210,7 +210,11 @@ def _install_current_lineage(
             "architecture": SimpleNamespace(
                 artifact_id="artifact-architecture",
                 digest="r" * 64,
-                payload={"owner_acceptance_contract_ids": []},
+                payload={
+                    "owner_acceptance_contract_ids": [
+                        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+                    ]
+                },
             ),
             "capability_goal": SimpleNamespace(
                 artifact_id="artifact-goal",
@@ -565,6 +569,7 @@ def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> Non
     request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
     artifacts = LineageArtifacts()
     _install_current_lineage(artifacts, request=request, goal=goal, gap=gap)
+    _install_current_external_pass(artifacts)
     bridge = Phase9GoalBridge(
         coordinator=FakeAdmitter(),
         change_store=artifacts,
