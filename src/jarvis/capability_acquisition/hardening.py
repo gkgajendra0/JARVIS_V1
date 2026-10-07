@@ -908,14 +908,12 @@ def _finding_blocks_current_lifecycle(
     *,
     change_state_by_id: dict[str, str],
 ) -> bool:
-    if (
+    return not (
         finding.code in _POST_ACTIVATION_INVARIANT_CODES
         and finding.change_id is not None
         and change_state_by_id.get(finding.change_id)
         not in _POST_ACTIVATION_ENFORCEMENT_STATES
-    ):
-        return False
-    return True
+    )
 
 
 def blocking_capability_workspace_invariant_codes(
