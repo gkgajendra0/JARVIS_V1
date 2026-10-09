@@ -245,8 +245,8 @@ class WindowsNeighborInformationProbe:
             resolution_ref=None,
             evidence_refs=tuple(evidence),
             reason=(
-                "Windows network candidates only: name and model advertisements "
-                "are unverified; no device type, control protocol, pairing or "
-                "execution authority established"
+                "Windows network candidates: no manufacturer, device type, "
+                "control protocol, pairing or execution authority independently "
+                "verified; any name/model advertisements remain untrusted"
             ),
         )
