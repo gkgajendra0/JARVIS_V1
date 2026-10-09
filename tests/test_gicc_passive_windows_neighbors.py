@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from jarvis.goal_intelligence.information import (
     InformationResolutionState,
     InformationResolver,
+    can_rediscover_information,
 )
 from jarvis.goal_intelligence.local_network import (
     WindowsNeighborInformationProbe,
@@ -230,3 +231,27 @@ def test_unverified_neighbor_evidence_survives_information_need_restart(
     assert len(snapshots) == 8
     assert snapshots[-1].startswith("windows_neighbor_cache_observed:000000001034")
     assert goal_store.get_information_need(need.information_need_id) == current
+
+
+def test_recheck_eligibility_excludes_owner_only_information_and_secrets() -> None:
+    assert can_rediscover_information(_need("goal_rediscovery"))
+
+    owner_only = InformationNeedV1.create(
+        goal_id="goal_rediscovery",
+        category=InformationNeedCategory.MISSING_VALUE,
+        subject="owner preference",
+        required_fact="preferred format",
+        why_required="a personal choice",
+        allowed_resolution_sources=("owner_input",),
+    )
+    assert not can_rediscover_information(owner_only)
+
+    secret = InformationNeedV1.create(
+        goal_id="goal_rediscovery",
+        category=InformationNeedCategory.OWNER_SECRET,
+        subject="private credential",
+        required_fact="authorization secret",
+        why_required="private authentication",
+        allowed_resolution_sources=("world_registry", "secret_flow"),
+    )
+    assert not can_rediscover_information(secret)

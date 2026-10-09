@@ -645,19 +645,18 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
             evidence_turn_ids=[turn.turn_id],
         )
     )
-    requirements = QueueStructuredClient(
-        CapabilityRequirementProposalSet(
-            requirements=[
-                CapabilityRequirementProposal(
-                    semantic_capability="media_player.control",
-                    operation="issue_supported_control",
-                    target_entity_type="television",
-                    expected_postconditions=["tv_controlled"],
-                    reason="A reusable TV control operation is missing.",
-                )
-            ]
-        )
+    proposal = CapabilityRequirementProposalSet(
+        requirements=[
+            CapabilityRequirementProposal(
+                semantic_capability="media_player.control",
+                operation="issue_supported_control",
+                target_entity_type="television",
+                expected_postconditions=["tv_controlled"],
+                reason="A reusable TV control operation is missing.",
+            )
+        ]
     )
+    requirements = QueueStructuredClient(proposal, proposal)
     # Simulate the owner's Windows LAN observation. A neighbor with a
     # syntactically valid address/MAC is still not a proven TV identity.
     windows_backend = WindowsPassiveNeighborBackend(
@@ -678,15 +677,22 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
             ),
         ),
     )
+    entity_resolver = EntityResolver(registry)
     information_resolver = InformationResolver(
         store=store,
-        probes=(WindowsNeighborInformationProbe(windows_backend),),
+        probes=(
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+            WindowsNeighborInformationProbe(windows_backend),
+        ),
     )
     phase9 = FakePhase9Bridge()
     coordinator = GoalIntelligenceCoordinator(
         store=store,
         interpreter=GoalInterpreter(client=interpreter),
-        entity_resolver=EntityResolver(registry),
+        entity_resolver=entity_resolver,
         information_resolver=information_resolver,
         requirement_deriver=RequirementDeriver(client=requirements),
         capability_context=StaticContext(),
@@ -709,3 +715,24 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
         for item in result.information_needs[0].evidence_refs
     )
     assert registry.entities() == ()
+
+    # The device becomes independently available after the original attempt.
+    # Explicit bounded rediscovery must resume the SAME durable GICC goal.
+    assert result.goal is not None
+    tv = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Registered Living Room TV",
+            aliases=("my tv",),
+            provenance_refs=("owner_inventory:registered_tv",),
+        )
+    )
+    waiting = await coordinator.continue_goal(result.goal.goal_id)
+    assert waiting.disposition is GoalIntakeDisposition.WAITING_INFORMATION
+
+    resumed = await coordinator.continue_goal(
+        result.goal.goal_id, retry_information=True
+    )
+    assert resumed.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+    assert len(phase9.gaps) == 1
+    assert phase9.gaps[0][0].target_entity_id == tv.entity_id
