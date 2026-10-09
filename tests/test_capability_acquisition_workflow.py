@@ -804,7 +804,7 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
             "target_entity_type": "television",
             "target_entity_id": "living-room",
             "canonical_name": "Living room TV fixture",
-            "provenance_refs": ["fixture:owner_device_inventory"],
+            "provenance_refs": ["owner_inventory:verified_fixture_television"],
             "target_hints": [
                 "entity_type:television",
                 "entity_name:Living room TV fixture",

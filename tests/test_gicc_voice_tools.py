@@ -54,6 +54,7 @@ async def test_gicc_voice_clarification_resumes_exact_goal(
             entity_type="media_player",
             canonical_name="Living Room TV",
             aliases=("my tv",),
+            provenance_refs=("owner_inventory:living_room_tv",),
         )
     )
     registry.register_entity(
@@ -61,6 +62,7 @@ async def test_gicc_voice_clarification_resumes_exact_goal(
             entity_type="media_player",
             canonical_name="Bedroom TV",
             aliases=("my tv",),
+            provenance_refs=("owner_inventory:bedroom_tv",),
         )
     )
     conversation, turn = _conversation("Play Transporter on my TV.")

@@ -188,7 +188,7 @@ def _build_change(
                 "target_entity_type": gicc_link["target_entity_type"],
                 "target_entity_id": gicc_link["target_entity_id"],
                 "canonical_name": "Verified fixture television",
-                "provenance_refs": ["fixture:owner_device_inventory"],
+                "provenance_refs": ["owner_inventory:verified_fixture_television"],
                 "target_hints": [
                     "entity_type:media_player",
                     "entity_name:Verified fixture television",
