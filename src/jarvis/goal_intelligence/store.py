@@ -1049,6 +1049,25 @@ class GoalStore:
                     )
                 )
             )
+            # The passive network watcher can run repeatedly while a device
+            # remains unidentified. Retain its newest bounded snapshots, not
+            # unlimited timestamped duplicates in a protected owner record.
+            snapshots = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_neighbor_cache_observed:")
+            )
+            if len(snapshots) > 8:
+                outdated = set(snapshots[:-8])
+                evidence = tuple(item for item in evidence if item not in outdated)
+            neighbor_refs = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_neighbor_unverified:")
+            )
+            if len(neighbor_refs) > 64:
+                outdated = set(neighbor_refs[:-64])
+                evidence = tuple(item for item in evidence if item not in outdated)
             if (
                 current.state is state
                 and attempts == current.self_resolution_attempts
