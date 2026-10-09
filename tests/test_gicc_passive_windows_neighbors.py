@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +16,8 @@ from jarvis.goal_intelligence.information import (
 from jarvis.goal_intelligence.local_network import (
     WindowsNeighborInformationProbe,
     WindowsPassiveNeighborBackend,
+    _WINDOWS_NEIGHBORS_SCRIPT,
+    _parse_rows,
 )
 from jarvis.goal_intelligence.models import (
     GoalKind,
@@ -255,3 +258,29 @@ def test_recheck_eligibility_excludes_owner_only_information_and_secrets() -> No
         allowed_resolution_sources=("world_registry", "secret_flow"),
     )
     assert not can_rediscover_information(secret)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows owner OS interface required")
+def test_windows_powershell_cache_enumeration_is_read_only_and_executable() -> None:
+    """Catch a malformed Windows command before asking owner for acceptance."""
+
+    script = _WINDOWS_NEIGHBORS_SCRIPT
+    assert "Get-NetNeighbor" in script
+    assert "Get-NetRoute" in script
+    assert "Test-NetConnection" not in script
+    assert "Invoke-WebRequest" not in script
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert isinstance(_parse_rows(result.stdout), tuple)
