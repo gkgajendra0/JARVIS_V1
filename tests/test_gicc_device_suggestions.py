@@ -13,6 +13,8 @@ from jarvis.goal_intelligence.device_suggestions import (
 from jarvis.goal_intelligence.models import InformationNeedState
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.windows_aep import AepIdentityCandidateV1
+
+
 def _evidence(
     address: str = "192.168.1.22",
     *,
