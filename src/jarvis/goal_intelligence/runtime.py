@@ -8,6 +8,7 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 
+from jarvis.authority.proposal import ActionProposal
 from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.autonomy.owner_communication import (
@@ -60,6 +61,7 @@ from .information import (
 )
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .local_network import WindowsNeighborInformationProbe
+from .network_consent import prepare_pending_device_discovery_consent
 from .models import (
     ContinuationBlockerType,
     ContinuationState,
@@ -88,6 +90,7 @@ from .status import OwnerObjectiveStatusResolver
 from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
+from .windows_lan_scope import WindowsLanScopePlanner
 from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry
 from .world_discovery import (
@@ -218,6 +221,27 @@ class GiccApplyRuntime:
         init=False,
         repr=False,
     )
+
+    def prepare_network_discovery_consent(
+        self,
+        *,
+        goal_id: str,
+        session_id: str,
+        planner: WindowsLanScopePlanner | None = None,
+    ) -> ActionProposal | None:
+        """Suggest one reviewed owner approval, never initiate a scan.
+
+        The caller must use existing AuthorityService for owner consent,
+        audit and exactly-once action-permit execution. This cannot turn a
+        network observation into a trusted device or a control permission.
+        """
+
+        return prepare_pending_device_discovery_consent(
+            store=self.store,
+            goal_id=goal_id,
+            session_id=session_id,
+            planner=planner,
+        )
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
