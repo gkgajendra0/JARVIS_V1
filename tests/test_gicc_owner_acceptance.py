@@ -341,7 +341,27 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
 
     result = await coordinator.pursue(conversation=conversation, turn=turn)
 
-    assert result.disposition is GoalIntakeDisposition.PLAN_READY
+    assert result.disposition is GoalIntakeDisposition.PLAN_READY, (
+        result.disposition,
+        tuple(
+            (
+                need.category.value,
+                need.subject,
+                need.required_fact,
+                need.state.value,
+                need.candidate_values,
+            )
+            for need in result.information_needs
+        ),
+        result.goal.referenced_entity_ids if result.goal else (),
+        tuple(
+            req.target_entity_type
+            for req in (
+                result.requirement_result.graph.requirements
+                if result.requirement_result else ()
+            )
+        ),
+    )
     assert result.information_interactions == ()
     assert result.capability_analysis is not None
     assert result.capability_analysis.gaps == ()
