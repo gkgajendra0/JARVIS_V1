@@ -5,8 +5,19 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from tests.test_authority_foundation import LocalPolicy
 from tests.test_gicc_windows_aep import FakeWatcher, _device
 
+from jarvis.authority import (
+    AttentionState,
+    AuthorityEffect,
+    AuthorityService,
+    InMemoryAuditEventStore,
+    InteractionContext,
+    PermitRegistry,
+    RiskClassifier,
+    TrustTier,
+)
 from jarvis.authority.approval import ApprovalService
 from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.types import (
@@ -16,6 +27,7 @@ from jarvis.authority.types import (
     ApprovalRequirement,
 )
 from jarvis.goal_intelligence.aep_authority import (
+    AepAuthorityExecutionGuard,
     AepExistingApprovalValidator,
     aep_approval_material,
 )
@@ -68,32 +80,21 @@ def _setup():
     return scope, approvals, proposal, validator, clock
 
 
-def test_real_authority_grant_required_before_winrt_watcher_can_start() -> None:
-    scope, approvals, proposal, validator, clock = _setup()
-    watcher = FakeWatcher(rows=(_device(),))
-    backend = WindowsAepIdentityBackend(
-        platform="win32",
-        is_authorized=validator,
-        watcher_factory=lambda _: watcher,
-        clock=lambda: 100.0,
-    )
+def test_owner_approval_readiness_alone_is_not_an_execution_permit() -> None:
+    scope, approvals, proposal, readiness, clock = _setup()
 
-    assert backend.observe(scope) == ()
-    assert watcher.started == 0
-
+    assert not readiness(scope)
     approvals.grant(
         scope.consent_record_id,
         proposal=proposal,
         session_id="owner-session",
         method=ApprovalMethod.SPOKEN,
     )
-    assert len(backend.observe(scope)) == 1
-    assert watcher.started == watcher.stopped == 1
-
-    # Expiring an existing session grant must disable discovery immediately.
+    # This reports approval status only. Production scanning requires the
+    # audited execution permit consumed by AepAuthorityExecutionGuard.
+    assert readiness(scope)
     clock[0] = 131.0
-    assert backend.observe(scope) == ()
-    assert watcher.started == 1
+    assert not readiness(scope)
 
 
 def test_real_authority_grant_is_exact_to_protocol_network_and_timeout() -> None:
@@ -123,3 +124,114 @@ def test_unapproved_action_and_wrong_session_cannot_be_reused_for_aep() -> None:
     assert not validator(scope)
     approvals.invalidate_session("owner-session")
     assert not validator(scope)
+
+
+def _policy_authority(approvals: ApprovalService, clock):
+    return AuthorityService(
+        risk_classifier=RiskClassifier(),
+        policy_engine=LocalPolicy(),
+        approvals=approvals,
+        audit_store=InMemoryAuditEventStore(),
+        permits=PermitRegistry(clock=lambda: clock[0]),
+        clock=lambda: clock[0],
+    )
+
+
+def _policy_context():
+    return InteractionContext(
+        session_id="owner-session",
+        trust_tier=TrustTier.CORROBORATED_OWNER,
+        attention_state=AttentionState.ATTENTIVE,
+        actor_unambiguous=True,
+    )
+
+
+def test_aep_requires_policy_audit_and_one_time_execution_permit() -> None:
+    scope, approvals, proposal, _readiness, clock = _setup()
+    authority = _policy_authority(approvals, clock)
+    context = _policy_context()
+
+    denied = authority.evaluate(
+        proposal=proposal,
+        context=context,
+        approval_id=scope.consent_record_id,
+    )
+    assert denied.effect is AuthorityEffect.DENY
+
+    approvals.grant(
+        scope.consent_record_id,
+        proposal=proposal,
+        session_id="owner-session",
+        method=ApprovalMethod.SPOKEN,
+    )
+    decision = authority.evaluate(
+        proposal=proposal,
+        context=context,
+        approval_id=scope.consent_record_id,
+    )
+    assert decision.effect is AuthorityEffect.ALLOW
+    assert decision.execution_permit is not None
+
+    guard = AepAuthorityExecutionGuard(
+        authority=authority,
+        proposal=proposal,
+        context=context,
+        permit_id=decision.execution_permit.permit_id,
+        approval_id=scope.consent_record_id,
+    )
+    watcher = FakeWatcher(rows=(_device(),))
+    backend = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=guard,
+        watcher_factory=lambda _: watcher,
+        clock=lambda: 100.0,
+    )
+    assert len(backend.observe(scope)) == 1
+    assert watcher.started == watcher.stopped == 1
+
+    # Neither the approval nor its execution permit is reusable.
+    assert backend.observe(scope) == ()
+    assert watcher.started == 1
+
+
+def test_aep_full_authority_guard_denies_scope_change_without_consuming_permit() -> None:
+    scope, approvals, proposal, _readiness, clock = _setup()
+    approvals.grant(
+        scope.consent_record_id,
+        proposal=proposal,
+        session_id="owner-session",
+        method=ApprovalMethod.SPOKEN,
+    )
+    authority = _policy_authority(approvals, clock)
+    context = _policy_context()
+    decision = authority.evaluate(
+        proposal=proposal,
+        context=context,
+        approval_id=scope.consent_record_id,
+    )
+    assert decision.effect is AuthorityEffect.ALLOW
+    assert decision.execution_permit is not None
+    guard = AepAuthorityExecutionGuard(
+        authority=authority,
+        proposal=proposal,
+        context=context,
+        permit_id=decision.execution_permit.permit_id,
+        approval_id=scope.consent_record_id,
+    )
+    assert not guard(replace(scope, protocol="dns_sd"))
+    assert not guard(replace(scope, max_results=5))
+    assert not guard(replace(scope, consent_record_id="unrelated"))
+    assert guard(scope)
+    assert not guard(scope)
+
+
+def test_active_aep_guard_rejects_non_authority_service() -> None:
+    scope, _approvals, proposal, _readiness, _clock = _setup()
+    with pytest.raises(TypeError, match="canonical AuthorityService"):
+        AepAuthorityExecutionGuard(
+            authority=object(),
+            proposal=proposal,
+            context=_policy_context(),
+            permit_id="some-permit",
+            approval_id=scope.consent_record_id,
+        )
