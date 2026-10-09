@@ -161,6 +161,12 @@ class AepAuthorityExecutionGuard:
         self._permit_id = permit_id.strip()
         self._approval_id = approval_id.strip()
 
+    @property
+    def session_id(self) -> str:
+        """Expose the exact session bound by the canonical action permit."""
+
+        return self._context.session_id
+
     def __call__(self, scope: ReviewedAepScopeV1) -> bool:
         if not isinstance(scope, ReviewedAepScopeV1):
             return False

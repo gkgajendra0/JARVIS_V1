@@ -55,6 +55,7 @@ from .composition import (
 from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import (
+    InformationResolutionResult,
     InformationResolutionStrategy,
     InformationResolver,
     can_rediscover_information,
@@ -92,7 +93,7 @@ from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 from .windows_lan_scope import WindowsLanScopePlanner
 from .workspace import ObjectiveWorkspaceProjector
-from .world import EntityResolver, WorldRegistry
+from .world import EntityResolver, WorldRegistry, canonical_world_entity_type
 from .world_discovery import (
     EntityInformationProbe,
     ReviewedLocalServiceEntityDiscovery,
@@ -242,6 +243,80 @@ class GiccApplyRuntime:
             session_id=session_id,
             planner=planner,
         )
+
+    def apply_approved_network_discovery(
+        self,
+        *,
+        goal_id: str,
+        need_id: str,
+        session_id: str,
+        scope: ReviewedAepScopeV1,
+        authority_guard: AepAuthorityExecutionGuard,
+        planner: WindowsLanScopePlanner | None = None,
+    ) -> InformationResolutionResult | None:
+        """Execute one owner-authorized network observation for an existing goal.
+
+        No new goal, approval, entity, architecture or control ability is
+        created. The one-time permit is consumed by the AEP backend before
+        any WinRT watcher starts. An unverified result remains evidence on
+        the same canonical InformationNeed, enabling ordinary GICC recovery.
+        """
+
+        if not isinstance(scope, ReviewedAepScopeV1):
+            raise TypeError("network discovery needs a reviewed AEP scope")
+        if not isinstance(authority_guard, AepAuthorityExecutionGuard):
+            raise TypeError("network discovery needs an Authority execution guard")
+        if not isinstance(session_id, str) or not session_id.strip():
+            return None
+        session = session_id.strip()
+        goal = self.store.get_goal(goal_id)
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or goal.source_session_id != session
+            or authority_guard.session_id != session
+        ):
+            return None
+        need = self.store.get_information_need(need_id)
+        if (
+            need is None
+            or need.goal_id != goal.goal_id
+            or not can_rediscover_information(need)
+            or need.answer_schema.get("type") != "entity_id"
+            or not {
+                "bounded_local_discovery",
+                "current_state_observation",
+            }.issubset(need.allowed_resolution_sources)
+        ):
+            return None
+
+        kind = canonical_world_entity_type(need.answer_schema.get("entity_type"))
+        if kind not in {"media_player", "camera"}:
+            return None
+        local_planner = planner or WindowsLanScopePlanner()
+        # Windows can broadcast on every interface. The consent proposal
+        # must still be valid against the CURRENT passive OS LAN scope.
+        if not any(
+            reviewed.protocol == scope.protocol
+            and reviewed.approved_address_ranges == scope.approved_address_ranges
+            and reviewed.all_local_interfaces_authorized
+            == scope.all_local_interfaces_authorized
+            and reviewed.timeout_seconds == scope.timeout_seconds
+            and reviewed.max_results == scope.max_results
+            for reviewed in local_planner.consent_scopes_for(kind)
+        ):
+            return None
+
+        probe = WindowsNeighborInformationProbe(
+            aep_backend=WindowsAepIdentityBackend(
+                is_authorized=authority_guard,
+            ),
+            aep_scopes=(scope,),
+        )
+        # Reuse the existing protected WorkStore CAS/evidence path. The
+        # candidate evidence cannot resolve a physical identity by itself.
+        resolver = InformationResolver(store=self.store, probes=(probe,))
+        return resolver.resolve(need)
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
