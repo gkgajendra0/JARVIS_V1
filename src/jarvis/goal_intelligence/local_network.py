@@ -191,11 +191,10 @@ class WindowsNeighborInformationProbe:
                 reason="no passive Windows network neighbors verified",
             )
         evidence = [
-            "windows_neighbor_cache_observed:"
+            f"windows_neighbor_cache_observed:{at_epoch:012d}:"
             + canonical_digest(
-                {"at_epoch": at_epoch, "rows": [r.evidence_ref for r in observations]}
-            )
-            + f":at_epoch:{at_epoch}",
+                {"rows": [r.evidence_ref for r in observations]}
+            ),
             *(row.evidence_ref for row in observations),
         ]
         return InformationProbeResult(
