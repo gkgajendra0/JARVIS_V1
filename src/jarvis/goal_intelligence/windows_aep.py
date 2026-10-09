@@ -12,6 +12,7 @@ manufacturer attestations, credentials, pairing or device control authority.
 from __future__ import annotations
 
 import ipaddress
+import re
 import sys
 import threading
 import time
@@ -91,6 +92,7 @@ class AepIdentityCandidateV1:
     name: str
     manufacturer: str
     model: str
+    category: str
     observed_at_epoch: int
 
     @property
@@ -103,10 +105,21 @@ class AepIdentityCandidateV1:
                 "name": self.name,
                 "manufacturer": self.manufacturer,
                 "model": self.model,
+                "category": self.category,
                 "observed_at_epoch": self.observed_at_epoch,
             }
         )
-        return "windows_aep_unverified:" + digest
+        # Untrusted advertising strings are reduced to inert bounded labels.
+        # These are research hints, never proof of a vendor or model.
+        def label(value: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")[:40] or "unknown"
+
+        return (
+            f"windows_aep_unverified:{self.protocol}:{self.address}:"
+            f"vendor={label(self.manufacturer)}:model={label(self.model)}:"
+            f"category={label(self.category)}:"
+            f"at={self.observed_at_epoch:012d}:{digest[:24]}"
+        )
 
 
 def _valid_address(raw: object, scope: ReviewedAepScopeV1) -> str | None:
@@ -154,6 +167,9 @@ def _candidate_from_device(
                 properties.get("System.Devices.Aep.Manufacturer") or ""
             ).strip()[:128],
             model=str(properties.get("System.Devices.Aep.ModelName") or "").strip()[
+                :128
+            ],
+            category=str(properties.get("System.Devices.Aep.Category") or "").strip()[
                 :128
             ],
             observed_at_epoch=at_epoch,
