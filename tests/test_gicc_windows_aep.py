@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jarvis.goal_intelligence.runtime import build_gicc_apply_runtime
 from jarvis.goal_intelligence.windows_aep import (
     ReviewedAepScopeV1,
     WindowsAepIdentityBackend,
@@ -247,3 +248,37 @@ def test_windows_winrt_aep_projection_contract_without_starting_discovery() -> N
         DeviceInformation.create_watcher_with_kind_aqs_filter_and_additional_properties
     )
     assert DeviceInformationKind.ASSOCIATION_ENDPOINT is not None
+
+
+def test_runtime_rejects_unapproved_active_aep_scans_before_store_access() -> None:
+    """Optional network enumeration cannot be enabled by config alone."""
+
+    runtime = SimpleNamespace(
+        capability_acquisition=object(),
+        changes=object(),
+    )
+    capability_context = SimpleNamespace(current=lambda: None)
+    with pytest.raises(ValueError, match="independent owner-consent"):
+        build_gicc_apply_runtime(
+            config=object(),
+            capability_runtime=object(),
+            work_runtime=runtime,
+            capability_context=capability_context,
+            approved_aep_scopes=(_scope(),),
+        )
+
+
+def test_runtime_rejects_duplicate_protocol_scopes_before_store_access() -> None:
+    runtime = SimpleNamespace(
+        capability_acquisition=object(),
+        changes=object(),
+    )
+    with pytest.raises(ValueError, match="distinct reviewed protocol scopes"):
+        build_gicc_apply_runtime(
+            config=object(),
+            capability_runtime=object(),
+            work_runtime=runtime,
+            capability_context=SimpleNamespace(current=lambda: None),
+            approved_aep_scopes=(_scope(), _scope()),
+            trusted_aep_consent_validator=lambda _: True,
+        )
