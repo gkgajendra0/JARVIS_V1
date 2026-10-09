@@ -245,24 +245,27 @@ def test_invalid_executable_target_cannot_reach_approval_architecture(target):
 
 
 class _TargetEvidenceStore:
-    def __init__(self, target_id, *, context_id=None, provenance=None):
+    def __init__(
+        self, target_id, *, context_id=None, provenance=None, entity_type="television"
+    ):
         self.target_id = target_id
         self.context_id = context_id
         self.provenance = provenance
+        self.entity_type = entity_type
 
     def latest_artifact(self, change_id, kind):
         assert change_id == "change-tv"
         if kind == "gicc_capability_gap_link":
             return SimpleNamespace(
                 payload={
-                    "target_entity_type": "television",
+                    "target_entity_type": self.entity_type,
                     "target_entity_id": self.target_id,
                 }
             )
         if kind == "gicc_target_context" and self.context_id is not None:
             return SimpleNamespace(
                 payload={
-                    "target_entity_type": "television",
+                    "target_entity_type": self.entity_type,
                     "target_entity_id": self.context_id,
                     "canonical_name": "Verified owner TV",
                     "provenance_refs": self.provenance,
@@ -304,3 +307,23 @@ def test_gicc_physical_architecture_accepts_grounded_identity_only() -> None:
         ),
         "change-tv",
     )
+
+
+@pytest.mark.parametrize(
+    "entity_type",
+    ("smart_tv", "webcam", "monitor", "desktop"),
+)
+def test_physical_alias_cannot_bypass_missing_canonical_identity(
+    entity_type: str,
+) -> None:
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError,
+        match="identity is unresolved",
+    ):
+        require_gicc_physical_target_identity(
+            _TargetEvidenceStore(
+                "entity-existing",
+                entity_type=entity_type,
+            ),
+            "change-tv",
+        )
