@@ -149,24 +149,11 @@ class AcquisitionWorkContextResolver:
                 if normalized:
                     hints.add(normalized)
 
-        architecture = self._store.latest_artifact(
-            context.change_id,
-            "architecture",
-        )
-        if architecture is not None:
-            fields = {
-                "target_entity_type": "entity_type",
-                "target_vendor": "vendor",
-                "target_platform": "platform",
-                "target_protocol": "protocol",
-                "target_model": "model",
-            }
-            for key, dimension in fields.items():
-                value = " ".join(
-                    str(architecture.payload.get(key) or "").split()
-                ).strip()
-                if value:
-                    hints.add(f"{dimension}:{value}".casefold())
+        # An acquisition architecture is an implementation *proposal*.
+        # Its vendor, model, platform and protocol fields cannot establish
+        # canonical environmental facts; otherwise an incorrect guessed
+        # adapter could prove its own target compatibility. Owner approval
+        # of the proposal likewise does not transform it into observation.
 
         return tuple(sorted(hints))
 
