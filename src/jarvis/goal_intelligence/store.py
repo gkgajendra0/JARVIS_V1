@@ -987,6 +987,7 @@ class GoalStore:
         expected_revision: int,
         self_resolution_attempts: tuple[str, ...] | list[str] | None = None,
         owner_question: str | None = None,
+        evidence_refs: tuple[str, ...] | list[str] | None = None,
     ) -> InformationNeedV1:
         if not isinstance(state, InformationNeedState):
             raise TypeError("state must be InformationNeedState")
@@ -1032,10 +1033,27 @@ class GoalStore:
                 if owner_question is None
                 else str(owner_question).strip() or None
             )
+            evidence = (
+                current.evidence_refs
+                if evidence_refs is None
+                else tuple(
+                    sorted(
+                        {
+                            *current.evidence_refs,
+                            *(
+                                str(item).strip()
+                                for item in evidence_refs
+                                if str(item).strip()
+                            ),
+                        }
+                    )
+                )
+            )
             if (
                 current.state is state
                 and attempts == current.self_resolution_attempts
                 and question == current.owner_question
+                and evidence == current.evidence_refs
             ):
                 return current
             candidate = replace(
@@ -1044,6 +1062,7 @@ class GoalStore:
                 state=state,
                 self_resolution_attempts=attempts,
                 owner_question=question,
+                evidence_refs=evidence,
                 digest="pending",
             )
             updated = replace(
