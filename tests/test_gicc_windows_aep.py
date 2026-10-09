@@ -329,3 +329,32 @@ def test_runtime_rejects_plain_true_callback_as_network_authority() -> None:
             approved_aep_scopes=(_scope(),),
             trusted_aep_consent_validator=lambda _: True,
         )
+
+
+def test_watcher_that_raises_after_start_is_always_stopped_and_detached() -> None:
+    class RaisesAfterActivation(FakeWatcher):
+        def start(self):
+            super().start()
+            raise RuntimeError("Windows start failed after registering watcher")
+
+    watcher = RaisesAfterActivation(rows=(_device(),))
+    assert _backend(watcher).observe(_scope()) == ()
+    assert watcher.started == 1
+    assert watcher.stopped == 1
+    assert set(watcher.unsubscribed) == {
+        "added",
+        "removed",
+        "enumeration_completed",
+    }
+
+
+def test_watcher_handler_registration_failure_detaches_previous_handlers() -> None:
+    class BadRegistration(FakeWatcher):
+        def add_enumeration_completed(self, fn):
+            raise RuntimeError("event-handler registration unavailable")
+
+    watcher = BadRegistration(rows=(_device(),))
+    assert _backend(watcher).observe(_scope()) == ()
+    assert watcher.started == 0
+    assert watcher.stopped == 0
+    assert set(watcher.unsubscribed) == {"added", "removed"}
