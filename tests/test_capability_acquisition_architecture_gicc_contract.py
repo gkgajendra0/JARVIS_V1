@@ -327,3 +327,29 @@ def test_physical_alias_cannot_bypass_missing_canonical_identity(
             ),
             "change-tv",
         )
+
+
+
+@pytest.mark.parametrize(
+    "unverified",
+    (
+        ("discovery:obs_fake", "discovery_evidence:sha_fake"),
+        ("machine_config:default_media_target",),
+        ("windows_aep_unverified:fixture",),
+        ("windows_neighbor_unverified:fixture",),
+    ),
+)
+def test_architecture_rejects_observation_only_physical_provenance(
+    unverified: tuple[str, ...],
+) -> None:
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError, match="identity is unresolved"
+    ):
+        require_gicc_physical_target_identity(
+            _TargetEvidenceStore(
+                "entity-tv",
+                context_id="entity-tv",
+                provenance=unverified,
+            ),
+            "change-tv",
+        )

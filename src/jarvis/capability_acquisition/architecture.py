@@ -335,7 +335,10 @@ def require_gicc_physical_target_identity(
         return
     # Apply the existing GICC resource ontology. A "smart_tv" or "webcam"
     # alias must not bypass the same physical-target identity safeguard.
-    from jarvis.goal_intelligence.world import canonical_world_entity_type
+    from jarvis.goal_intelligence.world import (
+        canonical_world_entity_type,
+        has_independent_target_provenance,
+    )
 
     kind = canonical_world_entity_type(link.payload.get("target_entity_type"))
     if kind not in {
@@ -356,7 +359,9 @@ def require_gicc_physical_target_identity(
         or target.payload.get("target_entity_type")
         != link.payload.get("target_entity_type")
         or not str(target.payload.get("canonical_name") or "").strip()
-        or not target.payload.get("provenance_refs")
+        or not has_independent_target_provenance(
+            target.payload.get("provenance_refs") or ()
+        )
     ):
         raise CapabilityAcquisitionArchitectureError(
             "GICC physical target identity is unresolved; a device-specific "

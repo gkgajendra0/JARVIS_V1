@@ -14,7 +14,10 @@ from .models import (
     EntityLifecycleState,
     WorldEntityRefV1,
 )
-from .world import canonical_world_entity_type
+from .world import (
+    canonical_world_entity_type,
+    has_independent_target_provenance,
+)
 
 # Do not accidentally require device identification for generic capabilities,
 # cloud services, notifications or an unscoped software skill.
@@ -56,6 +59,7 @@ def bind_physical_target_requirements(
         for entity_id in referenced_entity_ids
         if (item := get_entity(entity_id)) is not None
         and item.lifecycle_state is EntityLifecycleState.ACTIVE
+        and has_independent_target_provenance(item.provenance_refs)
     }
     replacements: dict[str, str] = {}
     requirements: list[CapabilityRequirementV1] = []

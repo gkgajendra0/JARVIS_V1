@@ -224,13 +224,45 @@ def test_information_resolver_uses_world_then_discovery_before_owner(
 
     result = information.resolve(need)
 
-    assert result.state is InformationResolutionState.RESOLVED
-    assert result.interaction is None
-    assert result.need.resolution_ref is not None
+    # Service ads are useful observations, but do not identify a trusted TV.
+    assert result.state is InformationResolutionState.WAITING_FOR_OWNER
+    assert result.need.resolution_ref is None
+    assert any(
+        ref.startswith("discovery:")
+        for ref in result.need.evidence_refs
+    )
+    assert world.entities() == ()
     assert result.attempted_strategies == (
         InformationResolutionStrategy.WORLD_REGISTRY,
         InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
     )
-    resolved = goals.get_entity(result.need.resolution_ref)
-    assert resolved is not None
-    assert resolved.entity_type == "media_player"
+    assert not any(
+        item.entity_type == "media_player" for item in goals.list_entities()
+    )
+
+
+
+def test_saved_service_advertisement_cannot_resolve_as_verified_tv(
+    tmp_path: Path,
+) -> None:
+    goals = _store(tmp_path / "untrusted-advertisement.sqlite3")
+    world = WorldRegistry(goals)
+    observed = world.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Discovered media player 192.168.1.40",
+            aliases=("my tv",),
+            provenance_refs=(
+                "discovery:obs_fixture",
+                "discovery_evidence:unverified",
+            ),
+        )
+    )
+    resolution = EntityResolver(world).resolve(
+        "my tv",
+        expected_entity_types=("media_player",),
+        allow_discovery=False,
+    )
+    assert resolution.state is EntityResolutionState.MISSING
+    assert resolution.entity_id is None
+    assert observed.entity_id not in resolution.candidate_entity_ids

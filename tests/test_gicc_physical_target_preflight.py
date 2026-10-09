@@ -118,3 +118,39 @@ def test_missing_entity_type_cannot_hide_media_player_requirement() -> None:
         graph, referenced_entity_ids=(), get_entity=lambda _: None
     )
     assert missing == ("media_player",)
+
+
+
+def test_service_advertisement_cannot_bind_physical_requirement() -> None:
+    observed_tv = WorldEntityRefV1.create(
+        entity_type="media_player",
+        canonical_name="Discovered media player 192.168.1.40",
+        provenance_refs=("discovery:obs_fake", "discovery_evidence:sha_fake"),
+    )
+    _, missing = bind_physical_target_requirements(
+        _graph(),
+        referenced_entity_ids=(observed_tv.entity_id,),
+        get_entity=lambda _: observed_tv,
+    )
+    assert missing == ("media_player",)
+
+    with pytest.raises(PhysicalTargetPreflightError):
+        bind_physical_target_requirements(
+            _graph(target_id=observed_tv.entity_id),
+            referenced_entity_ids=(observed_tv.entity_id,),
+            get_entity=lambda _: observed_tv,
+        )
+
+
+def test_config_preference_cannot_bind_physical_requirement() -> None:
+    configured = WorldEntityRefV1.create(
+        entity_type="media_player",
+        canonical_name="Configured TV Name",
+        provenance_refs=("machine_config:default_media_target",),
+    )
+    _, missing = bind_physical_target_requirements(
+        _graph(),
+        referenced_entity_ids=(configured.entity_id,),
+        get_entity=lambda _: configured,
+    )
+    assert missing == ("media_player",)

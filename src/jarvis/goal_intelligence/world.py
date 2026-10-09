@@ -113,6 +113,34 @@ def _generic_reference_types(mention: str) -> tuple[str, ...]:
     return tuple(sorted(set(inferred)))
 
 
+_UNVERIFIED_PHYSICAL_PROVENANCE = (
+    "discovery:",
+    "discovery_evidence:",
+    "machine_config:",
+    "windows_neighbor_",
+    "windows_aep_",
+    "world_discovery_unverified:",
+)
+_PHYSICAL_TARGET_TYPES = frozenset(
+    {"media_player", "camera", "computer", "display", "speaker", "printer"}
+)
+
+
+def has_independent_target_provenance(refs: tuple[str, ...] | list[str]) -> bool:
+    """Reject *only* observation/configuration metadata as physical identity.
+
+    A remaining independently reviewed source is an identity prerequisite,
+    NOT evidence of pairing, control authority, device model or physical effect.
+    """
+
+    return any(
+        isinstance(ref, str)
+        and bool(ref.strip())
+        and not ref.strip().casefold().startswith(_UNVERIFIED_PHYSICAL_PROVENANCE)
+        for ref in refs
+    )
+
+
 class WorldRegistry:
     """Thin canonical registry facade; no duplicate device truth is introduced."""
 
@@ -207,6 +235,12 @@ class EntityResolver:
         result = []
         for entity in self._registry.entities():
             if entity.lifecycle_state is not EntityLifecycleState.ACTIVE:
+                continue
+            if (
+                canonical_world_entity_type(entity.entity_type)
+                in _PHYSICAL_TARGET_TYPES
+                and not has_independent_target_provenance(entity.provenance_refs)
+            ):
                 continue
             if (
                 expected
@@ -384,6 +418,7 @@ class EntityResolver:
 
         if allow_discovery:
             discovered: list[WorldEntityRefV1] = []
+            observation_refs: set[str] = set()
             for source in self._discoveries:
                 for entity in source.discover(
                     mention=query,
@@ -397,14 +432,34 @@ class EntityResolver:
                         not in expected
                     ):
                         continue
+                    if (
+                        canonical_world_entity_type(entity.entity_type)
+                        in _PHYSICAL_TARGET_TYPES
+                        and not has_independent_target_provenance(
+                            entity.provenance_refs
+                        )
+                    ):
+                        # Network service ads are useful research observations,
+                        # but do not create an ACTIVE canonical TV/camera.
+                        observation_refs.update(entity.provenance_refs)
+                        continue
                     self._registry.register_entity(entity)
                     discovered.append(entity)
             unique = {entity.entity_id: entity for entity in discovered}
             if unique:
                 return self._result(
                     tuple(unique[key] for key in sorted(unique)),
-                    reason="bounded read-only discovery",
+                    reason="independently grounded bounded discovery",
                     evidence_prefix="world_discovery",
+                )
+            if observation_refs:
+                return EntityResolution(
+                    state=EntityResolutionState.MISSING,
+                    evidence_refs=(
+                        "world_discovery_unverified",
+                        *tuple(sorted(observation_refs))[:64],
+                    ),
+                    reason="service advertisements observed, physical identity unverified",
                 )
 
         return EntityResolution(
