@@ -51,6 +51,7 @@ from jarvis.capability_acquisition.standard_sources import (
 )
 from jarvis.capability_acquisition.workflow import (
     AcquisitionRecordCandidateExecutor,
+    AcquisitionWorkContextResolver,
     acquisition_completion_guard,
 )
 from jarvis.capability_registry.projection import (
@@ -882,3 +883,60 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
     challenge = getattr(gate, "challenge", gate)
     assert challenge.artifact_id == migrated.artifact_id
     assert challenge.artifact_digest == migrated.digest
+
+
+def test_architecture_cannot_create_canonical_device_facts(tmp_path) -> None:
+    """An approved or proposed Roku adapter cannot self-prove TV identity."""
+
+    _, store, _, changes = _changes(tmp_path)
+    goal = _goal("power")
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(goal, source_revision=REVISION)
+    assert admission.change is not None
+    change_id = admission.change.change_id
+
+    store.add_artifact(
+        change_id,
+        kind="gicc_capability_gap_link",
+        payload={"target_entity_type": "television"},
+    )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "target_hints": [
+                "entity_type:television",
+                "entity_name:living room TV",
+            ],
+        },
+    )
+    store.add_artifact(
+        change_id,
+        kind="architecture",
+        payload={
+            "target_entity_type": "television",
+            "target_vendor": "unverified-vendor",
+            "target_platform": "unverified-platform",
+            "target_protocol": "unverified-protocol",
+            "target_model": "unverified-model",
+        },
+    )
+
+    from types import SimpleNamespace
+
+    context = SimpleNamespace(change_id=change_id, goal=goal)
+    hints = AcquisitionWorkContextResolver(store).canonical_target_hints(context)
+
+    assert "entity_type:television" in hints
+    assert "entity_name:living room tv" in hints
+    assert not any(
+        value in hints
+        for value in (
+            "vendor:unverified-vendor",
+            "platform:unverified-platform",
+            "protocol:unverified-protocol",
+            "model:unverified-model",
+        )
+    )
