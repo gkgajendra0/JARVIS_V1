@@ -410,7 +410,12 @@ class Phase9GoalBridge:
         # Recheck the physical target even if an alternate GICC caller bypasses
         # normal intake; research of an unbound device must not start a build.
         physical_types = {
-            "media_player", "camera", "computer", "display", "speaker", "printer"
+            "media_player",
+            "camera",
+            "computer",
+            "display",
+            "speaker",
+            "printer",
         }
         kind = canonical_world_entity_type(gap.target_entity_type)
         if kind in physical_types:
