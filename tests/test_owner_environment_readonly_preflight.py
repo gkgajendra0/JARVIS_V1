@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
 
 from jarvis.engineering_substrate.contracts import DiscoveryScope
+from jarvis.goal_intelligence.models import WorldEntityRefV1
+from jarvis.goal_intelligence.store import GoalStore
+from jarvis.work.privacy import build_default_work_payload_codec
+from jarvis.work.store import SQLiteWorkStore
 
+
+from tools.research import owner_environment_readonly_preflight as probe
 from tools.research.owner_environment_readonly_preflight import (
     discover_read_only,
     reviewed_device_scopes,
@@ -68,3 +77,28 @@ def test_cameras_are_opt_in_and_use_reviewed_onvif_policy() -> None:
     assert len(scopes) == 3
     assert scopes[-1].adapter_id == "onvif_ws_discovery.v1"
     assert scopes[-1].allowed_device_types == ("network_video_transmitter",)
+
+
+def test_owner_inventory_reads_existing_protected_world_without_modifying_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "owner.sqlite3"
+    work = SQLiteWorkStore(
+        db, payload_codec=build_default_work_payload_codec(db)
+    )
+    world = GoalStore(work)
+    tv = world.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Known television",
+            provenance_refs=("owner_inventory:screen",),
+        )
+    )
+    monkeypatch.setattr(probe, "default_work_store_path", lambda: db)
+    snapshot = probe.known_world_entities()
+    assert snapshot["status"] == "read_only"
+    assert len(snapshot["entities"]) == 1
+    assert snapshot["entities"][0]["entity_id"] == tv.entity_id
+    assert snapshot["entities"][0]["canonical_name"] == "Known television"
+    assert "authorized_operations" not in snapshot["entities"][0]
+    assert world.get_entity(tv.entity_id).digest == tv.digest
