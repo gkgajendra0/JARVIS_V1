@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
@@ -89,6 +90,7 @@ from .store import GoalStore, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry
+from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 from .world_discovery import (
     EntityInformationProbe,
     ReviewedLocalServiceEntityDiscovery,
@@ -804,6 +806,10 @@ def build_gicc_apply_runtime(
     work_runtime: WorkRuntime,
     capability_context: AcquisitionContextProvider,
     telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
+    approved_aep_scopes: tuple[ReviewedAepScopeV1, ...] = (),
+    trusted_aep_consent_validator: (
+        Callable[[ReviewedAepScopeV1], bool] | None
+    ) = None,
 ) -> GiccApplyRuntime:
     """Compose GICC APPLY without creating new Authority or execution substrates."""
 
@@ -815,6 +821,17 @@ def build_gicc_apply_runtime(
         raise TypeError("capability_context must provide current()")
     if not callable(getattr(telemetry, "emit", None)):
         raise TypeError("telemetry must provide emit()")
+    # Windows AEP may transmit discovery queries across *all* local adapters.
+    # The caller must supply an Authority-backed consent validator for every
+    # explicit scope; a config flag/voice command cannot activate this source.
+    if approved_aep_scopes and not callable(trusted_aep_consent_validator):
+        raise ValueError("AEP requires an independent owner-consent validator")
+    if len(approved_aep_scopes) > 3:
+        raise ValueError("AEP protocol scope count exceeds reviewed bound")
+    if len({scope.protocol for scope in approved_aep_scopes}) != len(
+        approved_aep_scopes
+    ):
+        raise ValueError("AEP requires distinct reviewed protocol scopes")
 
     store = build_default_goal_store()
     world = WorldRegistry(store)
@@ -859,7 +876,16 @@ def build_gicc_apply_runtime(
                 entity_resolver,
                 strategy=InformationResolutionStrategy.WORLD_REGISTRY,
             ),
-            WindowsNeighborInformationProbe(),
+            WindowsNeighborInformationProbe(
+                aep_backend=(
+                    WindowsAepIdentityBackend(
+                        is_authorized=trusted_aep_consent_validator
+                    )
+                    if approved_aep_scopes
+                    else None
+                ),
+                aep_scopes=approved_aep_scopes,
+            ),
             EntityInformationProbe(
                 entity_resolver,
                 strategy=InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
