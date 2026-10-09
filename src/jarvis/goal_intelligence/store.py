@@ -1068,6 +1068,16 @@ class GoalStore:
             if len(neighbor_refs) > 64:
                 outdated = set(neighbor_refs[:-64])
                 evidence = tuple(item for item in evidence if item not in outdated)
+            # Active WinRT advertisements are not canonical identity and may
+            # change repeatedly; keep only a bounded protected audit trail.
+            aep_refs = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_aep_neighbor_correlated_unverified:")
+            )
+            if len(aep_refs) > 32:
+                outdated = set(aep_refs[:-32])
+                evidence = tuple(item for item in evidence if item not in outdated)
             if (
                 current.state is state
                 and attempts == current.self_resolution_attempts

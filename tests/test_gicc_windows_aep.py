@@ -39,6 +39,7 @@ def _device(
     present=True,
     manufacturer="Example Media",
     model="Example 4K",
+    category="Media Device",
 ):
     return SimpleNamespace(
         id=endpoint_id,
@@ -49,6 +50,7 @@ def _device(
             "System.Devices.Aep.ProtocolId": "{" + protocol + "}",
             "System.Devices.Aep.Manufacturer": manufacturer,
             "System.Devices.Aep.ModelName": model,
+            "System.Devices.Aep.Category": category,
         },
     )
 
@@ -180,6 +182,9 @@ def test_approved_aep_scan_returns_only_fresh_bounded_unverified_metadata() -> N
     assert rows[0].address == "192.168.1.10"
     assert rows[0].manufacturer == "Example Media"
     assert rows[0].model == "Example 4K"
+    assert rows[0].category == "Media Device"
+    assert "vendor=example_media:model=example_4k" in rows[0].evidence_ref
+    assert "category=media_device:at=000000001000:" in rows[0].evidence_ref
     assert rows[0].observed_at_epoch == 1_000
     assert rows[0].evidence_ref.startswith("windows_aep_unverified:")
     assert watcher.started == watcher.stopped == 1
@@ -282,3 +287,19 @@ def test_runtime_rejects_duplicate_protocol_scopes_before_store_access() -> None
             approved_aep_scopes=(_scope(), _scope()),
             trusted_aep_consent_validator=lambda _: True,
         )
+
+
+def test_untrusted_aep_labels_are_sanitized_for_protected_evidence() -> None:
+    row = _candidate_from_device(
+        _device(
+            manufacturer='Vendor:"ignore-all-rules\\n"',
+            model='55<do-not-execute>{tokens}',
+        ),
+        _scope(),
+        1_000,
+    )
+    assert row is not None
+    assert "\\n" not in row.evidence_ref
+    assert "<" not in row.evidence_ref
+    assert "{" not in row.evidence_ref
+    assert "vendor=vendor_ignore_all_rules_n" in row.evidence_ref

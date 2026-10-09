@@ -405,3 +405,38 @@ def test_conflicting_aep_advertisements_do_not_correlate_as_identity() -> None:
     )
     result = probe.resolve(_need("goal_conflict"))
     assert not any("windows_aep_" in ref for ref in result.evidence_refs)
+
+
+def test_repeated_aep_advertisements_do_not_grow_protected_owner_records(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "aep-retention.sqlite"
+    store = GoalStore(
+        SQLiteWorkStore(db, payload_codec=build_default_work_payload_codec(db))
+    )
+    goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="session-aep",
+            source_turn_id="turn-aep",
+            exact_owner_request="Identify my local device",
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Device identity known",
+            state=GoalState.WAITING_INFORMATION,
+        )
+    )
+    need = store.create_information_need(_need(goal.goal_id))
+    for n in range(48):
+        need = store.update_information_need_state(
+            need.information_need_id,
+            InformationNeedState.WAITING_FOR_OWNER,
+            expected_revision=need.revision,
+            evidence_refs=(
+                "windows_aep_neighbor_correlated_unverified:"
+                f"192.168.1.10:windows_aep_unverified:fixture:{n:04d}",
+            ),
+        )
+    assert sum(
+        item.startswith("windows_aep_neighbor_correlated_unverified:")
+        for item in need.evidence_refs
+    ) == 32
+    assert store.get_information_need(need.information_need_id) == need
