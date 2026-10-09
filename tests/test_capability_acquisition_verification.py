@@ -205,9 +205,7 @@ def _build_change(
         # A strictly synthetic, explicitly target-scoped fixture keeps this
         # legacy digest/semantic-contract test independent of the real-world
         # unverified custom-build fallback (which must now be blocked).
-        original = CustomBuildCapabilitySourceAdapter().discover(
-            goal, _context()
-        )[0]
+        original = CustomBuildCapabilitySourceAdapter().discover(goal, _context())[0]
         fixture = AcquisitionCandidateV1.create(
             source_kind=original.source_kind,
             source_identity=original.source_identity,
@@ -224,9 +222,7 @@ def _build_change(
             device_scopes=(f"entity_type:{gicc_link['target_entity_type']}",),
             reason_codes=original.reason_codes,
         )
-        resolution = resolver.resolve_candidates(
-            goal, (fixture,), _context()
-        )
+        resolution = resolver.resolve_candidates(goal, (fixture,), _context())
     candidate = resolution.selected_candidate
     assert candidate is not None
     evaluation = resolution.evaluation(candidate.candidate_id)
