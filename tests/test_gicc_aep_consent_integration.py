@@ -16,7 +16,6 @@ from tests.test_gicc_passive_windows_neighbors import _backend, _entry, _need
 from tests.test_gicc_windows_aep import FakeWatcher, _device
 
 from jarvis.authority import (
-    ActionAttributes,
     ApprovalMethod,
     ApprovalRequirement,
     ApprovalService,
@@ -86,6 +85,7 @@ def test_owner_goal_to_authorized_network_observation_stops_before_control() -> 
         proposal,
         session_id="owner-session",
         requirement=ApprovalRequirement.EXPLICIT,
+        ttl_seconds=60.0,
     )
     scope = replace(scope, consent_record_id=requested.approval_id)
 
