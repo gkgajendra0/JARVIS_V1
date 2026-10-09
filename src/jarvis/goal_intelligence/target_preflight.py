@@ -32,9 +32,20 @@ class PhysicalTargetPreflightError(ValueError):
 
 def _target_type(requirement: CapabilityRequirementV1) -> str | None:
     declared = canonical_world_entity_type(requirement.target_entity_type)
-    family = canonical_world_entity_type(
-        requirement.semantic_capability.split(".", 1)[0]
-    )
+    # Semantic capability namespaces are NOT physical-world noun aliases.
+    # For example monitor.evaluate refers to event monitoring, whereas the
+    # world ontology treats the noun "monitor" as a physical display.
+    # Only explicit, reviewed device-domain aliases may imply a target type.
+    namespace = requirement.semantic_capability.split(".", 1)[0].strip().casefold()
+    family = {
+        "tv": "media_player",
+        "television": "media_player",
+        "smart_tv": "media_player",
+        "webcam": "camera",
+        "security_camera": "camera",
+        "laptop": "computer",
+        "desktop": "computer",
+    }.get(namespace, namespace)
     if family in _PHYSICAL_ENTITY_TYPES:
         if declared and declared not in {family, "generic_external_resource"}:
             raise PhysicalTargetPreflightError(

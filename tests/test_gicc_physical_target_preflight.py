@@ -211,3 +211,27 @@ def test_unknown_or_empty_identity_labels_cannot_bind_target(
         get_entity=lambda _: entity,
     )
     assert missing == ("media_player",)
+
+
+@pytest.mark.parametrize(
+    "family",
+    ("monitor.evaluate", "monitor.watch", "screening.evaluate"),
+)
+def test_monitoring_semantic_family_is_not_a_physical_display(
+    family: str,
+) -> None:
+    graph = _graph(target_type=None, family=family)
+    bound, missing = bind_physical_target_requirements(
+        graph, referenced_entity_ids=(), get_entity=lambda _: None
+    )
+    assert bound is graph
+    assert missing == ()
+
+
+def test_explicit_display_target_still_requires_real_display() -> None:
+    _, missing = bind_physical_target_requirements(
+        _graph(target_type="monitor", family="monitor.evaluate"),
+        referenced_entity_ids=(),
+        get_entity=lambda _: None,
+    )
+    assert missing == ("display",)
