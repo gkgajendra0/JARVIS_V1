@@ -28,7 +28,7 @@ from .world import canonical_world_entity_type
 
 _MAX_ROWS = 16
 _MAX_OUTPUT_BYTES = 65536
-_MAC_RE = re.compile(r"^[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}$", re.I)
+_MAC_RE = re.compile(r"^[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}$", re.IGNORECASE)
 
 # All strings are constants, not interpolated owner/model/network parameters.
 _WINDOWS_NEIGHBORS_SCRIPT = r"""
