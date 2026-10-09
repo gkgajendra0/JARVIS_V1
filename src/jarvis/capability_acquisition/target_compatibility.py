@@ -118,6 +118,17 @@ def evaluate_candidate_target_compatibility(
     )
     required = _hint_map(required_values)
 
+    # A generic software utility is an abstract build target, not an
+    # identified physical/remote endpoint. Do not require a manufacturer or
+    # device-protocol attestation merely because GICC labels it "software".
+    # Additional dimensions (vendor, model, protocol, etc.) still require proof.
+    if (
+        set(required) == {"entity_type"}
+        and required["entity_type"] <= {"software", "generic_external_resource"}
+    ):
+        required = {}
+        required_values = ()
+
     # Owner-goal provenance establishes *why* a custom build was proposed, not
     # whether its claimed device/platform/protocol is compatible. In particular,
     # never let a custom-build fallback bypass missing target evidence. Existing
