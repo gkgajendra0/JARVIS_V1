@@ -74,6 +74,7 @@ from .monitoring import (
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
 )
+from .local_network import WindowsNeighborInformationProbe
 from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
@@ -817,6 +818,7 @@ def build_gicc_apply_runtime(
                 entity_resolver,
                 strategy=InformationResolutionStrategy.WORLD_REGISTRY,
             ),
+            WindowsNeighborInformationProbe(),
             EntityInformationProbe(
                 entity_resolver,
                 strategy=InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
