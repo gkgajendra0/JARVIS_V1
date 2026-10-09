@@ -283,6 +283,7 @@ class GoalIntelligenceCoordinator:
                         allowed_resolution_sources=(
                             "conversation_context",
                             "world_registry",
+                            "current_state_observation",
                             "bounded_local_discovery",
                             "owner_input",
                         ),
@@ -510,6 +511,7 @@ class GoalIntelligenceCoordinator:
                         ),
                         allowed_resolution_sources=(
                             "world_registry",
+                            "current_state_observation",
                             "bounded_local_discovery",
                             "owner_input",
                         ),
