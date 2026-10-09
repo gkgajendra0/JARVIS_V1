@@ -8,7 +8,6 @@ from enum import StrEnum
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateV1,
     AcquisitionSourceKind,
-    AcquisitionStrategy,
     OwnerCapabilityGoalV1,
 )
 from jarvis.engineering_substrate.canonical import canonical_digest
