@@ -376,6 +376,11 @@ class EntityResolver:
             for entity in all_entities
             if entity.lifecycle_state is EntityLifecycleState.ACTIVE
             and (
+                canonical_world_entity_type(entity.entity_type)
+                not in _PHYSICAL_TARGET_TYPES
+                or has_independent_target_provenance(entity.provenance_refs)
+            )
+            and (
                 self._identity_matches(entity, query)
                 or self._alias_matches(entity, query)
             )
