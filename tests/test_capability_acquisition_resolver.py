@@ -526,7 +526,12 @@ def test_target_incompatible_samsung_candidate_cannot_win_hisense_vidaa_goal() -
     assert "target_incompatible" in samsung_evaluation.reason_codes
     assert "target_conflict_vendor" in samsung_evaluation.reason_codes
     assert "target_conflict_platform" in samsung_evaluation.reason_codes
-    assert result.selected_candidate_id == custom.candidate_id
+    # Owner-goal lineage is not proof that this custom adapter would work
+    # with the verified physical television.
+    custom_evaluation = result.evaluation(custom.candidate_id)
+    assert custom_evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in custom_evaluation.reason_codes
+    assert result.selected_candidate_id is None
 
 
 def test_target_specific_external_candidate_requires_structured_target_proof() -> None:
@@ -546,7 +551,12 @@ def test_target_specific_external_candidate_requires_structured_target_proof() -
     assert "target_compatibility_unproven" in evaluation.reason_codes
     assert "target_unproven_vendor" in evaluation.reason_codes
     assert "target_unproven_platform" in evaluation.reason_codes
-    assert result.selected_candidate_id == custom.candidate_id
+    # Owner-goal lineage is not proof that this custom adapter would work
+    # with the verified physical television.
+    custom_evaluation = result.evaluation(custom.candidate_id)
+    assert custom_evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in custom_evaluation.reason_codes
+    assert result.selected_candidate_id is None
 
 
 def test_matching_target_proof_keeps_verified_sdk_selectable() -> None:
