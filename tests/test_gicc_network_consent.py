@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from jarvis.goal_intelligence.models import (
     GoalKind,
     GoalState,
@@ -23,7 +25,17 @@ from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
 
-def _data(tmp_path: Path, *, state=GoalState.WAITING_INFORMATION):
+def _data(
+    tmp_path: Path,
+    *,
+    state=GoalState.WAITING_INFORMATION,
+    sources=(
+        "world_registry",
+        "current_state_observation",
+        "bounded_local_discovery",
+        "owner_input",
+    ),
+):
     db = tmp_path / "consent-proposal.sqlite"
     store = GoalStore(
         SQLiteWorkStore(db, payload_codec=build_default_work_payload_codec(db))
@@ -45,12 +57,7 @@ def _data(tmp_path: Path, *, state=GoalState.WAITING_INFORMATION):
             subject="my TV",
             required_fact="canonical media_player target",
             why_required="target identity unresolved",
-            allowed_resolution_sources=(
-                "world_registry",
-                "current_state_observation",
-                "bounded_local_discovery",
-                "owner_input",
-            ),
+            allowed_resolution_sources=sources,
             answer_schema={"type": "entity_id", "entity_type": "television"},
         )
     )
@@ -203,6 +210,28 @@ def test_owner_only_information_cannot_create_scan_consent(tmp_path: Path) -> No
             store=store,
             goal_id=goal.goal_id,
             session_id="owner-session",
+            planner=_planner(),
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "sources",
+    (
+        ("world_registry", "current_state_observation", "owner_input"),
+        ("world_registry", "bounded_local_discovery", "owner_input"),
+    ),
+)
+def test_no_owner_scan_request_when_need_disallows_required_discovery_strategies(
+    tmp_path: Path, sources: tuple[str, ...]
+) -> None:
+    store, goal, _need = _data(tmp_path, sources=sources)
+    assert (
+        prepare_pending_device_discovery_consent(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
             planner=_planner(),
         )
         is None
