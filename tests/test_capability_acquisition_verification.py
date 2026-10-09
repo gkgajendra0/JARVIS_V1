@@ -21,6 +21,7 @@ from jarvis.capability_acquisition.artifacts import (
     resolution_payload,
 )
 from jarvis.capability_acquisition.models import (
+    AcquisitionCandidateV1,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
 )
@@ -198,7 +199,34 @@ def _build_change(
     resolver = CapabilityAcquisitionResolver(
         CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),))
     )
-    resolution = resolver.resolve(goal, _context())
+    if gicc_link is None:
+        resolution = resolver.resolve(goal, _context())
+    else:
+        # A strictly synthetic, explicitly target-scoped fixture keeps this
+        # legacy digest/semantic-contract test independent of the real-world
+        # unverified custom-build fallback (which must now be blocked).
+        original = CustomBuildCapabilitySourceAdapter().discover(
+            goal, _context()
+        )[0]
+        fixture = AcquisitionCandidateV1.create(
+            source_kind=original.source_kind,
+            source_identity=original.source_identity,
+            source_version=original.source_version,
+            source_digest=original.source_digest,
+            trust_class=original.trust_class,
+            supported_operations=original.supported_operations,
+            strategy=original.strategy,
+            evidence_refs=(
+                *original.evidence_refs,
+                "test-fixture:explicit-device-compatibility-contract",
+            ),
+            verification_requirements=original.verification_requirements,
+            device_scopes=(f"entity_type:{gicc_link['target_entity_type']}",),
+            reason_codes=original.reason_codes,
+        )
+        resolution = resolver.resolve_candidates(
+            goal, (fixture,), _context()
+        )
     candidate = resolution.selected_candidate
     assert candidate is not None
     evaluation = resolution.evaluation(candidate.candidate_id)
