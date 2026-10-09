@@ -48,7 +48,7 @@ $neighbors = @(
         $indexes -contains $_.InterfaceIndex -and
         $_.State -in @('Reachable','Stale','Delay','Probe')
     } |
-    Select-Object -First 32 -Property InterfaceIndex,IPAddress,LinkLayerAddress,State
+    Select-Object -First 32 -Property InterfaceAlias,InterfaceIndex,IPAddress,LinkLayerAddress,State
 )
 ConvertTo-Json -InputObject $neighbors -Compress -Depth 3
 """
@@ -90,11 +90,14 @@ def _parse_rows(raw: str) -> tuple[PassiveNeighborV1, ...]:
             mac = str(row.get("LinkLayerAddress") or "").strip().lower()
             state = str(row.get("State") or "").strip().lower()
             idx = int(row.get("InterfaceIndex"))
-        except (ValueError, TypeError, ipaddress.AddressValueError):
+            alias = str(row.get("InterfaceAlias") or "").strip()
+        except (ValueError, TypeError):
             continue
         # Never treat cache entries on loopback, multicast, public or
         # non-physical interfaces as candidates for local device identity.
         if not ip.is_private or ip.is_loopback or ip.is_link_local:
+            continue
+        if alias.casefold().startswith(("vethernet", "loopback")):
             continue
         if not _MAC_RE.fullmatch(mac) or idx < 1:
             continue
