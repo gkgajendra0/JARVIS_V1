@@ -140,5 +140,5 @@ class WindowsLocalSubnetObserver:
             if len(raw.encode("utf-8")) > _MAX_OUTPUT_BYTES:
                 return ()
             return _parse_subnets(raw)
-        except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+        except (AttributeError, OSError, ValueError, TypeError, subprocess.TimeoutExpired):
             return ()
