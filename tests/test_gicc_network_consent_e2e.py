@@ -258,7 +258,7 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
         goal_id=goal.goal_id, need_id="unrelated-information-need"
     )
     assert (
-        assert runtime.apply_approved_network_discovery(
+        runtime.apply_approved_network_discovery(
             goal_id=goal.goal_id,
             need_id="unrelated-information-need",
             session_id=goal.source_session_id,
@@ -269,7 +269,7 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
         is None
     )
     assert (
-        assert runtime.apply_approved_network_discovery(
+        runtime.apply_approved_network_discovery(
             goal_id=goal.goal_id,
             need_id=need.information_need_id,
             session_id="another-session",
@@ -280,7 +280,7 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
         is None
     )
     assert (
-        assert runtime.apply_approved_network_discovery(
+        runtime.apply_approved_network_discovery(
             goal_id=goal.goal_id,
             need_id=need.information_need_id,
             session_id=goal.source_session_id,
