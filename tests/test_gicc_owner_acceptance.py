@@ -358,7 +358,8 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
             req.target_entity_type
             for req in (
                 result.requirement_result.graph.requirements
-                if result.requirement_result else ()
+                if result.requirement_result
+                else ()
             )
         ),
     )
