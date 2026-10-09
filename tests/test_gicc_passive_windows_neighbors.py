@@ -27,12 +27,19 @@ from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
 
-def _entry(ip: str, mac: str, state: str = "Stale", idx: int = 4):
+def _entry(
+    ip: str,
+    mac: str,
+    state: str = "Stale",
+    idx: int = 4,
+    alias: str = "Ethernet",
+):
     return {
         "IPAddress": ip,
         "LinkLayerAddress": mac,
         "State": state,
         "InterfaceIndex": idx,
+        "InterfaceAlias": alias,
     }
 
 
@@ -74,7 +81,11 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
         [
             _entry("192.168.1.10", "50-BA-02-AE-0D-18", "Reachable"),
             _entry("192.168.1.1", "94-98-69-73-3D-60"),
-            _entry("172.23.63.154", "00-15-5D-E4-F3-C9"),
+            _entry(
+                "172.23.63.154",
+                "00-15-5D-E4-F3-C9",
+                alias="vEthernet (WSL)",
+            ),
             _entry("8.8.8.8", "00-11-22-33-44-55"),
             _entry("192.168.1.11", "invalid_mac"),
             _entry("192.168.1.99", "AA-BB-CC-DD-EE-FF", "Permanent"),
@@ -85,7 +96,7 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
     observations, timestamp = backend.observe()
 
     assert timestamp == 1000
-    assert len(observations) == 3
+    assert len(observations) == 2
     assert observations[-1].ip_address == "192.168.1.10"
     assert observations[-1].state == "reachable"
     assert all(item.evidence_ref.startswith("windows_neighbor_unverified:") for item in observations)
