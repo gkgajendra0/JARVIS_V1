@@ -54,9 +54,7 @@ def prepare_pending_device_discovery_consent(
                 InformationNeedCategory.PHYSICAL_OBSERVATION,
             }
             or need.answer_schema.get("type") != "entity_id"
-            or not _APPROVED_DISCOVERY_SOURCES.issubset(
-                need.allowed_resolution_sources
-            )
+            or not _APPROVED_DISCOVERY_SOURCES.issubset(need.allowed_resolution_sources)
         ):
             continue
         kind = canonical_world_entity_type(need.answer_schema.get("entity_type"))

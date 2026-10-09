@@ -91,9 +91,7 @@ def build_aep_consent_proposal(
     the owner grants a one-shot, policy-audited execution permit.
     """
 
-    target, parameters = aep_approval_material(
-        scope, goal_id=goal_id, need_id=need_id
-    )
+    target, parameters = aep_approval_material(scope, goal_id=goal_id, need_id=need_id)
     ranges = ", ".join(scope.approved_address_ranges)
     return ActionProposal.create(
         session_id=session_id,
