@@ -168,3 +168,16 @@ def test_owner_cannot_get_suggestions_for_resolved_need(tmp_path: Path) -> None:
         session_id=goal.source_session_id,
         now_epoch=1001,
     ) == ()
+
+
+def test_owner_only_information_does_not_reveal_unverified_network_choices(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path, sources=("owner_input",))
+    _add(store, need, _evidence())
+    assert pending_owner_device_suggestions(
+        store=store,
+        goal_id=goal.goal_id,
+        session_id=goal.source_session_id,
+        now_epoch=1001,
+    ) == ()
