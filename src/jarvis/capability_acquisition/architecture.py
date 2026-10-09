@@ -24,6 +24,7 @@ from jarvis.engineering_change.models import (
     EngineeringChange,
 )
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.engineering_substrate.pytest_targets import normalize_pytest_targets
 from jarvis.engineering_substrate.sandbox import (
     UnknownSandboxProfileError,
     default_sandbox_registry,
@@ -33,6 +34,17 @@ from jarvis.work.models import WorkItem, WorkState
 
 class CapabilityAcquisitionArchitectureError(ChangeConflict):
     """Acquisition plan/architecture provenance is missing, stale or non-buildable."""
+
+
+def validate_acquisition_verification_targets(targets: tuple[str, ...]) -> None:
+    try:
+        if not targets:
+            raise ValueError("at least one target is required")
+        normalize_pytest_targets(targets)
+    except ValueError as exc:
+        raise CapabilityAcquisitionArchitectureError(
+            f"acquisition requires executable verification targets: {exc}"
+        ) from exc
 
 
 def validate_acquisition_sandbox_profiles(profile_ids: tuple[str, ...]) -> None:
@@ -251,6 +263,7 @@ class CapabilityAcquisitionArchitecturePlan:
                 "capability acquisition architecture requires sandbox profile"
             )
         validate_acquisition_sandbox_profiles(self.sandbox_profile_ids)
+        validate_acquisition_verification_targets(self.verification_targets)
         if self.schema_version != 1:
             raise CapabilityAcquisitionArchitectureError(
                 "unsupported capability acquisition architecture version"

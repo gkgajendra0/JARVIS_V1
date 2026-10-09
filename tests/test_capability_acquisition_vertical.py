@@ -462,6 +462,34 @@ async def test_production_acquisition_vertical_develop_verify_promote_activate_r
     assert changes.latest_artifact(change_id, "acquisition_plan") is None
     assert changes.latest_artifact(change_id, "architecture") is None
     assert changes.require(change_id) == before
+    for target in (
+        "run all tests",
+        "../tests/test_utility.py",
+        "--pyargs",
+        "tests/test_utility.py::",
+    ):
+        with pytest.raises(
+            CapabilityAcquisitionArchitectureError, match="executable verification"
+        ):
+            await AcquisitionFinalizeExecutor(resolver).execute(
+                work=research,
+                parameters={
+                    "proposed_capability_id": CAPABILITY,
+                    "proposed_package_id": PACKAGE,
+                    "proposed_package_version": "1.0.0",
+                    "rollback_summary": "Disable package",
+                    "changed_paths": paths,
+                    "sandbox_profile_ids": ["test.offline.v1"],
+                    "verification_contract_ids": ["utility.verify.v1"],
+                    "development_test_targets": [target],
+                    "owner_acceptance_contract_ids": [
+                        PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT
+                    ],
+                },
+            )
+        assert changes.latest_artifact(change_id, "acquisition_plan") is None
+        assert changes.latest_artifact(change_id, "architecture") is None
+        assert changes.require(change_id) == before
     await _action(
         work,
         AcquisitionFinalizeExecutor(resolver),

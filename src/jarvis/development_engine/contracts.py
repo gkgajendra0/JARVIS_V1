@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.engineering_substrate.pytest_targets import normalize_pytest_targets
 
 DEVELOPMENT_ENGINE_CONTRACT_VERSION = 1
 
@@ -97,17 +98,7 @@ def _tokens(
 
 
 def _verification_targets(values: tuple[str, ...]) -> tuple[str, ...]:
-    targets: list[str] = []
-    for value in values:
-        text = _text(value, field="verification_target")
-        path, separator, selector = text.partition("::")
-        if any(character.isspace() for character in path) or "\x00" in text:
-            raise ValueError("verification_target must be a repository-relative path")
-        canonical_path = _paths((path,), field="verification_target")[0]
-        if separator and (not selector or "\n" in selector or "\r" in selector):
-            raise ValueError("verification_target has an invalid pytest selector")
-        targets.append(canonical_path + (separator + selector if separator else ""))
-    return _tokens(tuple(targets), field="verification_target")
+    return normalize_pytest_targets(values)
 
 
 class DevelopmentDisposition(StrEnum):

@@ -225,3 +225,19 @@ def test_non_gicc_current_architecture_does_not_invent_external_acceptance() -> 
     )
 
     assert architecture is store._architecture
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["run all tests", "../tests/test_demo.py", "--pyargs", "tests/test_demo.py::"],
+)
+def test_invalid_executable_target_cannot_reach_approval_architecture(target):
+    from dataclasses import replace
+
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError, match="executable verification"
+    ):
+        replace(
+            _architecture_with_profiles(("test.offline.v1",)),
+            verification_targets=(target,),
+        )

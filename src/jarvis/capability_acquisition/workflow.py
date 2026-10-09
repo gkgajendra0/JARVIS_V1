@@ -7,6 +7,7 @@ from typing import Any
 
 from jarvis.capability_acquisition.architecture import (
     validate_acquisition_sandbox_profiles,
+    validate_acquisition_verification_targets,
 )
 from jarvis.capability_acquisition.artifacts import (
     candidate_from_payload,
@@ -569,6 +570,7 @@ class AcquisitionFinalizeExecutor:
                     "maxItems": 30,
                 },
                 "development_test_targets": {
+                    "description": "Executable repository-relative pytest paths or node selectors; no prose, options, absolute paths or traversal.",
                     "type": "array",
                     "items": {"type": "string", "minLength": 1, "maxLength": 500},
                     "minItems": 1,
@@ -691,6 +693,9 @@ class AcquisitionFinalizeExecutor:
             )
         validate_acquisition_sandbox_profiles(
             tuple(parameters.get("sandbox_profile_ids") or ())
+        )
+        validate_acquisition_verification_targets(
+            tuple(parameters.get("development_test_targets") or ())
         )
         plan = CapabilityAcquisitionPlanV1.create(
             context.goal,
