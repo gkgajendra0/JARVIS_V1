@@ -8,8 +8,14 @@ does not request/grant approvals and does not create a second authority store.
 from __future__ import annotations
 
 from jarvis.authority.approval import ApprovalService
+from jarvis.authority.permit import PermitStatus
 from jarvis.authority.proposal import ActionProposal, canonical_json
-from jarvis.authority.types import ApprovalRequirement, ApprovalStatus
+from jarvis.authority.service import AuthorityService
+from jarvis.authority.types import (
+    ApprovalRequirement,
+    ApprovalStatus,
+    InteractionContext,
+)
 
 from .windows_aep import ReviewedAepScopeV1
 
@@ -36,7 +42,11 @@ def aep_approval_material(
 
 
 class AepExistingApprovalValidator:
-    """Only an existing, granted and proposal-bound approval enables AEP."""
+    """Check approval readiness only; NOT a full execution authorization.
+
+    A production AEP watcher must instead use AepAuthorityExecutionGuard,
+    which revalidates policy, audit and the one-time execution permit.
+    """
 
     def __init__(
         self,
@@ -78,3 +88,66 @@ class AepExistingApprovalValidator:
             return record.status is ApprovalStatus.GRANTED
         except Exception:  # noqa: BLE001 - never permit on Authority failure
             return False
+
+
+class AepAuthorityExecutionGuard:
+    """One-shot full Authority enforcement immediately before active enumeration.
+
+    It must not issue a new approval, permit or grant. Those are provided by
+    the canonical owner approval/action flow, then revalidated and consumed
+    with policy/audit immediately before the first network discovery.
+    """
+
+    def __init__(
+        self,
+        *,
+        authority: AuthorityService,
+        proposal: ActionProposal,
+        context: InteractionContext,
+        permit_id: str,
+        approval_id: str,
+    ) -> None:
+        if not isinstance(authority, AuthorityService):
+            raise TypeError("AEP execution requires the canonical AuthorityService")
+        if not isinstance(proposal, ActionProposal):
+            raise TypeError("AEP execution requires the canonical ActionProposal")
+        if not isinstance(context, InteractionContext):
+            raise TypeError("AEP execution requires an InteractionContext")
+        if proposal.session_id != context.session_id:
+            raise ValueError("AEP execution session does not match proposal")
+        if not permit_id.strip() or not approval_id.strip():
+            raise ValueError("AEP execution needs existing permit and approval ids")
+        self._authority = authority
+        self._proposal = proposal
+        self._context = context
+        self._permit_id = permit_id.strip()
+        self._approval_id = approval_id.strip()
+
+    def __call__(self, scope: ReviewedAepScopeV1) -> bool:
+        if not isinstance(scope, ReviewedAepScopeV1):
+            return False
+        if scope.consent_record_id != self._approval_id:
+            return False
+        if (
+            self._proposal.capability != "network_discovery"
+            or self._proposal.operation != "enumerate_aep"
+        ):
+            return False
+        target, parameters = aep_approval_material(scope)
+        if (
+            self._proposal.target_json != canonical_json(target)
+            or self._proposal.parameters_json != canonical_json(parameters)
+        ):
+            return False
+        try:
+            permit = self._authority.revalidate_and_consume(
+                permit_id=self._permit_id,
+                proposal=self._proposal,
+                context=self._context,
+            )
+        except Exception:  # noqa: BLE001 - policy, audit and permit failures deny
+            return False
+        return (
+            permit.status is PermitStatus.CONSUMED
+            and permit.approval_id == self._approval_id
+        )
