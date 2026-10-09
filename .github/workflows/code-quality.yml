@@ -278,6 +278,7 @@ jobs:
           tests/test_gicc_passive_windows_neighbors.py
           tests/test_gicc_windows_aep.py
           tests/test_gicc_aep_authority.py
+          tests/test_gicc_windows_lan_scope.py
 
       - name: Run Phase 5E disposable secret acceptance
         run: python -m jarvis.engineering_substrate.secrets.acceptance
