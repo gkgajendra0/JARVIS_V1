@@ -233,7 +233,14 @@ class WindowsAepIdentityBackend:
 
         try:
             watcher = self._watcher_factory(scope)
-        except (ImportError, AttributeError, TypeError, ValueError, OSError, RuntimeError):
+        except (
+            ImportError,
+            AttributeError,
+            TypeError,
+            ValueError,
+            OSError,
+            RuntimeError,
+        ):
             return ()
 
         at_epoch = int(self._clock())

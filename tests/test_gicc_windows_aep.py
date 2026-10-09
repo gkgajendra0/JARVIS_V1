@@ -360,7 +360,9 @@ def test_watcher_handler_registration_failure_detaches_previous_handlers() -> No
     assert set(watcher.unsubscribed) == {"added", "removed"}
 
 
-def test_winrt_factory_signature_failure_is_handled_without_owner_intervention() -> None:
+def test_winrt_factory_signature_failure_is_handled_without_owner_intervention() -> (
+    None
+):
     def invalid_projection(_scope):
         raise TypeError("WinRT projection lacks this factory overload")
 
