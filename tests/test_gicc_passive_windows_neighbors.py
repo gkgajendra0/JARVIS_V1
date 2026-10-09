@@ -19,6 +19,7 @@ from jarvis.goal_intelligence.models import (
     GoalKind,
     GoalState,
     InformationNeedCategory,
+    InformationNeedState,
     InformationNeedV1,
     OwnerGoalV2,
 )
@@ -205,3 +206,22 @@ def test_unverified_neighbor_evidence_survives_information_need_restart(
     assert persisted.digest == result.need.digest
     assert persisted.evidence_refs == result.need.evidence_refs
     assert goal_store.list_entities() == ()
+
+    # Discovery keeps retrying without finding a verifiable target. Its
+    # protected owner record must not grow without bound across restarts.
+    current = persisted
+    for epoch in range(1001, 1035):
+        current = goal_store.update_information_need_state(
+            current.information_need_id,
+            InformationNeedState.WAITING_FOR_OWNER,
+            expected_revision=current.revision,
+            evidence_refs=(f"windows_neighbor_cache_observed:{epoch:012d}:" + "a" * 64,),
+        )
+    snapshots = [
+        item
+        for item in current.evidence_refs
+        if item.startswith("windows_neighbor_cache_observed:")
+    ]
+    assert len(snapshots) == 8
+    assert snapshots[-1].startswith("windows_neighbor_cache_observed:000000001034")
+    assert goal_store.get_information_need(need.information_need_id) == current
