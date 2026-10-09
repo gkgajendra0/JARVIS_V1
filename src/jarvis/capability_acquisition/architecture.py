@@ -351,9 +351,8 @@ def require_gicc_physical_target_identity(
         not target_id
         or target is None
         or target.payload.get("target_entity_id") != target_id
-        or target.payload.get("target_entity_type") != link.payload.get(
-            "target_entity_type"
-        )
+        or target.payload.get("target_entity_type")
+        != link.payload.get("target_entity_type")
         or not str(target.payload.get("canonical_name") or "").strip()
         or not target.payload.get("provenance_refs")
     ):
