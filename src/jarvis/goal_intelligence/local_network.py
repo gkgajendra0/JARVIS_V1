@@ -202,51 +202,66 @@ class WindowsNeighborInformationProbe:
         }:
             return InformationProbeResult(resolution_ref=None)
         observations, at_epoch = self._backend.observe()
-        if not observations:
-            return InformationProbeResult(
-                resolution_ref=None,
-                reason="no passive Windows network neighbors verified",
+        evidence: list[str] = []
+        if observations:
+            evidence.extend(
+                (
+                    f"windows_neighbor_cache_observed:{at_epoch:012d}:"
+                    + canonical_digest(
+                        {"rows": [row.evidence_ref for row in observations]}
+                    ),
+                    *(row.evidence_ref for row in observations),
+                )
             )
-        evidence = [
-            f"windows_neighbor_cache_observed:{at_epoch:012d}:"
-            + canonical_digest({"rows": [r.evidence_ref for r in observations]}),
-            *(row.evidence_ref for row in observations),
-        ]
-        # Optional WinRT AEP discovery is only possible with independently
-        # reviewed scopes and a trusted authorization checker. Match its
-        # metadata to an OS-observed IP, but NEVER bind a world entity or
-        # candidate capability from these observations by themselves.
+
+        # An approved AEP enumeration must not depend on a previous neighbor
+        # cache hit: devices missing from the OS cache may still advertise via
+        # Windows. Both stand-alone and correlated AEP records are RESEARCH
+        # EVIDENCE, not verified identity, pairing or execution permission.
         if self._aep_backend is not None and self._aep_scopes:
             neighbors = {row.ip_address for row in observations}
-            matched: dict[str, list] = {}
+            candidates_by_address: dict[str, list] = {}
             for scope in self._aep_scopes:
                 for candidate in self._aep_backend.observe(scope):
-                    if candidate.address in neighbors:
-                        matched.setdefault(candidate.address, []).append(candidate)
-            for address, group in sorted(matched.items()):
+                    candidates_by_address.setdefault(candidate.address, []).append(
+                        candidate
+                    )
+
+            for address, group in sorted(candidates_by_address.items()):
                 vendors = {
-                    value.manufacturer.casefold()
-                    for value in group
-                    if value.manufacturer.strip()
+                    item.manufacturer.casefold()
+                    for item in group
+                    if item.manufacturer.strip()
                 }
                 models = {
-                    value.model.casefold() for value in group if value.model.strip()
+                    item.model.casefold() for item in group if item.model.strip()
                 }
                 if len(vendors) > 1 or len(models) > 1:
-                    continue  # disagreeing identity advertisements
+                    continue  # ambiguous/inconsistent identity advertisements
+
+                label = (
+                    "windows_aep_neighbor_correlated_unverified:"
+                    if address in neighbors
+                    else "windows_aep_discovered_unverified:"
+                )
                 evidence.extend(
-                    f"windows_aep_neighbor_correlated_unverified:{address}:"
-                    + item.evidence_ref
+                    f"{label}{address}:" + item.evidence_ref
                     for item in sorted(
                         group, key=lambda value: (value.protocol, value.endpoint_id)
                     )
                 )
+
+        if not evidence:
+            return InformationProbeResult(
+                resolution_ref=None,
+                reason="no approved Windows device observation was available",
+            )
         return InformationProbeResult(
             resolution_ref=None,
             evidence_refs=tuple(evidence),
             reason=(
-                "Windows network candidates: no manufacturer, device type, "
-                "control protocol, pairing or execution authority independently "
-                "verified; any name/model advertisements remain untrusted"
+                "Windows device observations are unverified research hints; "
+                "no physical identity, supported control protocol, pairing "
+                "or operation authority established"
             ),
         )
