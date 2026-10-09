@@ -64,6 +64,7 @@ from .models import (
     PlanState,
     WorldEntityRefV1,
 )
+from .local_network import WindowsNeighborInformationProbe
 from .monitoring import (
     DEFAULT_MONITOR_OBSERVATION_BUS,
     GICC_MONITOR_EVENT_CONTRACT,
@@ -74,7 +75,6 @@ from .monitoring import (
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
 )
-from .local_network import WindowsNeighborInformationProbe
 from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
