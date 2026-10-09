@@ -194,7 +194,9 @@ def test_aep_requires_policy_audit_and_one_time_execution_permit() -> None:
     assert watcher.started == 1
 
 
-def test_aep_full_authority_guard_denies_scope_change_without_consuming_permit() -> None:
+def test_aep_full_authority_guard_denies_scope_change_without_consuming_permit() -> (
+    None
+):
     scope, approvals, proposal, _readiness, clock = _setup()
     approvals.grant(
         scope.consent_record_id,
