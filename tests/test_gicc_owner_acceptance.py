@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from tests.test_gicc_composition import (
@@ -24,6 +26,10 @@ from jarvis.goal_intelligence.information import (
     InformationResolutionStrategy,
     InformationResolver,
     restore_bound_information_interaction,
+)
+from jarvis.goal_intelligence.local_network import (
+    WindowsNeighborInformationProbe,
+    WindowsPassiveNeighborBackend,
 )
 from jarvis.goal_intelligence.interpretation import (
     GoalInterpreter,
@@ -652,11 +658,36 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
             ]
         )
     )
+    # Simulate the owner's Windows LAN observation. A neighbor with a
+    # syntactically valid address/MAC is still not a proven TV identity.
+    windows_backend = WindowsPassiveNeighborBackend(
+        platform="win32",
+        clock=lambda: 1000.0,
+        runner=lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "InterfaceAlias": "Ethernet",
+                        "InterfaceIndex": 2,
+                        "IPAddress": "192.168.1.10",
+                        "LinkLayerAddress": "50-BA-02-AE-0D-18",
+                        "State": "Stale",
+                    }
+                ]
+            ),
+        ),
+    )
+    information_resolver = InformationResolver(
+        store=store,
+        probes=(WindowsNeighborInformationProbe(windows_backend),),
+    )
     phase9 = FakePhase9Bridge()
     coordinator = GoalIntelligenceCoordinator(
         store=store,
         interpreter=GoalInterpreter(client=interpreter),
         entity_resolver=EntityResolver(registry),
+        information_resolver=information_resolver,
         requirement_deriver=RequirementDeriver(client=requirements),
         capability_context=StaticContext(),
         capability_graph_resolver=CapabilityGraphResolver(store=store),
@@ -673,3 +704,8 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
         "entity_type": "media_player",
     }
     assert result.information_needs[0].state is InformationNeedState.WAITING_FOR_OWNER
+    assert any(
+        item.startswith("windows_neighbor_unverified:192.168.1.10:")
+        for item in result.information_needs[0].evidence_refs
+    )
+    assert registry.entities() == ()
