@@ -597,7 +597,12 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     assert target["motivating_goal_id"] == goal.goal_id
     assert target["gap_id"] == gap.gap_id
     assert target["target_entity_type"] == gap.target_entity_type
-    assert target["target_hints"] == [f"entity_type:{gap.target_entity_type}"]
+    assert target["target_entity_id"] == gap.target_entity_id
+    assert target["canonical_name"] == "Verified owner television"
+    assert target["target_hints"] == [
+        f"entity_type:{gap.target_entity_type}",
+        "entity_name:Verified owner television",
+    ]
 
 
 def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:
