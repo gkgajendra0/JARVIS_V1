@@ -12,7 +12,7 @@ from jarvis.conversation import ConversationRole, ConversationSession, Conversat
 
 from .capability_graph import CapabilityGapAnalysis, CapabilityGraphResolver
 from .continuation import ContinuationCoordinator
-from .information import InformationResolver
+from .information import InformationResolver, can_rediscover_information
 from .interpretation import GoalInterpretationResult, GoalInterpreter
 from .models import (
     CapabilityGapState,
@@ -334,8 +334,10 @@ class GoalIntelligenceCoordinator:
             interpretation_result=interpretation,
         )
 
-    async def continue_goal(self, goal_id: str) -> GoalIntakeResult:
-        """Resume one exact durable goal after its current blocker is resolved."""
+    async def continue_goal(
+        self, goal_id: str, *, retry_information: bool = False
+    ) -> GoalIntakeResult:
+        """Resume the same durable goal, optionally retrying approved discovery."""
 
         goal = self._store.get_goal(str(goal_id).strip())
         if goal is None:
@@ -349,6 +351,16 @@ class GoalIntelligenceCoordinator:
         if goal.state is GoalState.WAITING_INFORMATION:
             needs = self._store.list_information_needs(goal_id=goal.goal_id)
             unresolved = tuple(need for need in needs if need.state.value != "resolved")
+            if retry_information:
+                # On reappearance, reuse the exact need and owner approval
+                # lineage. Never poll secrets or owner-only information.
+                for need in unresolved:
+                    if can_rediscover_information(need):
+                        self._information.resolve(need)
+                needs = self._store.list_information_needs(goal_id=goal.goal_id)
+                unresolved = tuple(
+                    need for need in needs if need.state.value != "resolved"
+                )
             if unresolved:
                 return GoalIntakeResult(
                     disposition=GoalIntakeDisposition.WAITING_INFORMATION,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field, replace
 
 from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
@@ -51,7 +52,11 @@ from .composition import (
 )
 from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
-from .information import InformationResolutionStrategy, InformationResolver
+from .information import (
+    InformationResolutionStrategy,
+    InformationResolver,
+    can_rediscover_information,
+)
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .local_network import WindowsNeighborInformationProbe
 from .models import (
@@ -196,6 +201,10 @@ class GiccApplyRuntime:
     supervisor_cutover: SupervisorCutoverController | None = None
     existing_objective_resume: ExistingObjectiveResumeController | None = None
     reconcile_interval_seconds: float = 1.0
+    information_recheck_interval_seconds: float = 120.0
+    _information_last_recheck: dict[str, float] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _monitor_subscription_id: str | None = field(default=None, init=False, repr=False)
     _event_loop: asyncio.AbstractEventLoop | None = field(
@@ -530,10 +539,16 @@ class GiccApplyRuntime:
             conversation=conversation,
             turn=turn,
         )
+        if result.goal is not None and result.goal.state is GoalState.WAITING_INFORMATION:
+            self._information_last_recheck[result.goal.goal_id] = time.monotonic()
         return await self._advance_intake_result(result)
 
-    async def continue_goal(self, goal_id: str) -> GoalIntakeResult:
-        result = await self.coordinator.continue_goal(goal_id)
+    async def continue_goal(
+        self, goal_id: str, *, retry_information: bool = False
+    ) -> GoalIntakeResult:
+        result = await self.coordinator.continue_goal(
+            goal_id, retry_information=retry_information
+        )
         return await self._advance_intake_result(result)
 
     def _enqueue_background_terminal_delivery(self, goal: OwnerGoalV2) -> bool:
@@ -647,6 +662,13 @@ class GiccApplyRuntime:
         if any(goal.state is GoalState.WAITING_CAPABILITY for goal in active):
             self.capability_runtime.refresh_catalog()
 
+        # Only retry deadlines are volatile. Goal, identity and approval
+        # evidence remains in the canonical protected store across restart.
+        active_ids = {goal.goal_id for goal in active}
+        for stale_id in tuple(self._information_last_recheck):
+            if stale_id not in active_ids:
+                self._information_last_recheck.pop(stale_id, None)
+
         advanced = 0
         for goal in active:
             before_goal = self.store.get_goal(goal.goal_id)
@@ -685,6 +707,19 @@ class GiccApplyRuntime:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
                 await self.continue_goal(goal.goal_id)
+            elif goal.state is GoalState.WAITING_INFORMATION:
+                if not any(
+                    can_rediscover_information(need)
+                    for need in self.store.list_information_needs(goal_id=goal.goal_id)
+                ):
+                    continue
+                now = time.monotonic()
+                last = self._information_last_recheck.get(goal.goal_id)
+                interval = max(60.0, self.information_recheck_interval_seconds)
+                if last is not None and now - last < interval:
+                    continue
+                self._information_last_recheck[goal.goal_id] = now
+                await self.continue_goal(goal.goal_id, retry_information=True)
             elif goal.state in {
                 GoalState.PLANNED,
                 GoalState.EXECUTING,

@@ -78,6 +78,29 @@ _DEFAULT_ORDER = (
 )
 
 
+_AUTOMATIC_REDISCOVERY_SOURCES = frozenset(
+    {
+        InformationResolutionStrategy.WORLD_REGISTRY.value,
+        InformationResolutionStrategy.CURRENT_STATE_OBSERVATION.value,
+        InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY.value,
+    }
+)
+
+
+def can_rediscover_information(need: InformationNeedV1) -> bool:
+    """Check only observation-based needs, never secrets or owner-only inputs."""
+
+    return (
+        need.state is not InformationNeedState.RESOLVED
+        and need.category is not InformationNeedCategory.OWNER_SECRET
+        and bool(
+            _AUTOMATIC_REDISCOVERY_SOURCES.intersection(
+                need.allowed_resolution_sources
+            )
+        )
+    )
+
+
 class InformationResolver:
     """Try self-resolution in bounded order; owner input is always last."""
 
