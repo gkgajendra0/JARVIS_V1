@@ -177,6 +177,23 @@ def _build_change(
             kind="gicc_capability_gap_link",
             payload=gicc_link,
         )
+        # This fixture has an explicit canonical TV reference. Supply its
+        # matching provenance instead of letting a model invent device identity.
+        change_store.add_artifact(
+            admission.change.change_id,
+            kind="gicc_target_context",
+            payload={
+                "schema": "gicc_target_context.v1",
+                "target_entity_type": gicc_link["target_entity_type"],
+                "target_entity_id": gicc_link["target_entity_id"],
+                "canonical_name": "Verified fixture television",
+                "provenance_refs": ["fixture:owner_device_inventory"],
+                "target_hints": [
+                    "entity_type:media_player",
+                    "entity_name:Verified fixture television",
+                ],
+            },
+        )
 
     resolver = CapabilityAcquisitionResolver(
         CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),))
