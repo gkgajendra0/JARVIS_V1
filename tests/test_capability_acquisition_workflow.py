@@ -32,6 +32,7 @@ from jarvis.capability_acquisition.external_contract import (
 )
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
+    AcquisitionCandidateV1,
     AcquisitionSourceKind,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
@@ -232,7 +233,33 @@ def _persist_plan(
     resolver = CapabilityAcquisitionResolver(
         CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),))
     )
-    resolution = resolver.resolve(goal, _empty_context())
+    if "entity_type:television" not in goal.target_hints:
+        resolution = resolver.resolve(goal, _empty_context())
+    else:
+        # The legacy-migration fixture supplies an explicit synthetic target
+        # declaration; the normal blind custom-build source remains blocked.
+        original = CustomBuildCapabilitySourceAdapter().discover(
+            goal, _empty_context()
+        )[0]
+        fixture = AcquisitionCandidateV1.create(
+            source_kind=original.source_kind,
+            source_identity=original.source_identity,
+            source_version=original.source_version,
+            source_digest=original.source_digest,
+            trust_class=original.trust_class,
+            supported_operations=original.supported_operations,
+            strategy=original.strategy,
+            evidence_refs=(
+                *original.evidence_refs,
+                "test-fixture:explicit-device-compatibility-contract",
+            ),
+            verification_requirements=original.verification_requirements,
+            device_scopes=("entity_type:television",),
+            reason_codes=original.reason_codes,
+        )
+        resolution = resolver.resolve_candidates(
+            goal, (fixture,), _empty_context()
+        )
     candidate = resolution.selected_candidate
     assert candidate is not None
     evaluation = resolution.evaluation(candidate.candidate_id)
