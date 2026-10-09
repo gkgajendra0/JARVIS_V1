@@ -99,7 +99,10 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
     assert len(observations) == 2
     assert observations[-1].ip_address == "192.168.1.10"
     assert observations[-1].state == "reachable"
-    assert all(item.evidence_ref.startswith("windows_neighbor_unverified:") for item in observations)
+    assert all(
+        item.evidence_ref.startswith("windows_neighbor_unverified:")
+        for item in observations
+    )
     assert calls and calls[0][0][0].casefold() == "powershell.exe"
     assert "-NoProfile" in calls[0][0]
     assert calls[0][1]["timeout"] == 5
