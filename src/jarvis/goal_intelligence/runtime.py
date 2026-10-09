@@ -53,6 +53,7 @@ from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import InformationResolutionStrategy, InformationResolver
 from .interpretation import GoalInterpreter, build_goal_interpreter
+from .local_network import WindowsNeighborInformationProbe
 from .models import (
     ContinuationBlockerType,
     ContinuationState,
@@ -64,7 +65,6 @@ from .models import (
     PlanState,
     WorldEntityRefV1,
 )
-from .local_network import WindowsNeighborInformationProbe
 from .monitoring import (
     DEFAULT_MONITOR_OBSERVATION_BUS,
     GICC_MONITOR_EVENT_CONTRACT,
