@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Protocol
 
@@ -33,6 +33,7 @@ from .phase9 import Phase9GapAdmission, Phase9GoalBridge
 from .planning import GoalPlanner, PlanValidationContext
 from .requirements import RequirementDerivationResult, RequirementDeriver
 from .store import GoalStore
+from .target_preflight import bind_physical_target_requirements
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .world import (
     EntityResolutionState,
@@ -471,7 +472,92 @@ class GoalIntelligenceCoordinator:
             known_entity_ids=goal.referenced_entity_ids,
             task_specific_terms=_task_terms(_task_specific_values(candidate)),
         )
-        graph = self._store.put_requirement_graph(requirement_result.graph)
+        graph, missing_types = bind_physical_target_requirements(
+            requirement_result.graph,
+            referenced_entity_ids=goal.referenced_entity_ids,
+            get_entity=self._store.get_entity,
+        )
+        if missing_types:
+            # This fallback is intentionally deterministic: a reasoning worker
+            # cannot omit the physical resource from candidate_entities and then
+            # route an unbound device-specific build directly into Phase 9.
+            goal = self._store.update_goal_state(
+                goal.goal_id,
+                GoalState.WAITING_INFORMATION,
+                expected_revision=goal.goal_revision,
+            )
+            needs: list[InformationNeedV1] = []
+            interactions: list[dict[str, object]] = []
+            discovered_entity_ids: list[str] = []
+            for kind in missing_types:
+                mention = {
+                    "media_player": "my TV",
+                    "camera": "my camera",
+                    "computer": "my computer",
+                    "display": "my display",
+                    "speaker": "my speaker",
+                    "printer": "my printer",
+                }.get(kind, f"my {kind}")
+                need = self._store.create_information_need(
+                    InformationNeedV1.create(
+                        goal_id=goal.goal_id,
+                        category=InformationNeedCategory.MISSING_VALUE,
+                        subject=mention,
+                        required_fact=f"canonical {kind} identity for {mention}",
+                        why_required=(
+                            "A physical-device capability requires the actual "
+                            "device identity before planning an integration."
+                        ),
+                        allowed_resolution_sources=(
+                            "world_registry",
+                            "bounded_local_discovery",
+                            "owner_input",
+                        ),
+                        owner_question=f"Which {mention} should I use?",
+                        answer_schema={"type": "entity_id", "entity_type": kind},
+                    )
+                )
+                resolution = self._information.resolve(need)
+                needs.append(resolution.need)
+                if resolution.interaction is not None:
+                    interactions.append(resolution.interaction)
+                if resolution.need.resolution_ref is not None:
+                    discovered_entity_ids.append(resolution.need.resolution_ref)
+
+            if len(discovered_entity_ids) != len(missing_types):
+                return GoalIntakeResult(
+                    disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+                    goal=goal,
+                    interpretation=interpretation_result,
+                    requirement_result=requirement_result,
+                    information_needs=tuple(needs),
+                    information_interactions=tuple(interactions),
+                )
+
+            # The existing registry/discovery resolved every target without
+            # owner input. Resume the same goal and retain the same requirement
+            # semantics; no second LLM derivation is needed.
+            goal = self._store.update_goal_referenced_entities(
+                goal.goal_id,
+                tuple(discovered_entity_ids),
+                expected_revision=goal.goal_revision,
+                state=GoalState.RESOLVING,
+            )
+            graph, missing_types = bind_physical_target_requirements(
+                requirement_result.graph,
+                referenced_entity_ids=goal.referenced_entity_ids,
+                get_entity=self._store.get_entity,
+            )
+            if missing_types:
+                raise ValueError("resolved physical target could not be rebound")
+
+        if graph is not requirement_result.graph:
+            requirement_result = replace(
+                requirement_result,
+                graph=graph,
+                requirements=graph.requirements,
+            )
+        graph = self._store.put_requirement_graph(graph)
         self._telemetry.emit(
             "gicc_requirement_graph_created",
             goal_id=goal.goal_id,
