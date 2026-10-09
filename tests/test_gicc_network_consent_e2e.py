@@ -10,6 +10,11 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+from tests.test_authority_foundation import LocalPolicy
+from tests.test_gicc_network_consent import _data, _planner
+from tests.test_gicc_passive_windows_neighbors import _backend
+from tests.test_gicc_windows_aep import FakeWatcher, _device
+
 from jarvis.authority import (
     ApprovalMethod,
     ApprovalRequirement,
@@ -39,10 +44,6 @@ from jarvis.goal_intelligence.network_consent import (
 from jarvis.goal_intelligence.windows_aep import WindowsAepIdentityBackend
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
 from jarvis.goal_intelligence.world_discovery import EntityInformationProbe
-from tests.test_authority_foundation import LocalPolicy
-from tests.test_gicc_network_consent import _data, _planner
-from tests.test_gicc_passive_windows_neighbors import _backend
-from tests.test_gicc_windows_aep import FakeWatcher, _device
 
 
 def test_owner_goal_research_and_identity_recovery_use_one_governed_flow(
