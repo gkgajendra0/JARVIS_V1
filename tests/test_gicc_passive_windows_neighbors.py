@@ -262,6 +262,27 @@ def test_recheck_eligibility_excludes_owner_only_information_and_secrets() -> No
     assert not can_rediscover_information(secret)
 
 
+@pytest.mark.parametrize(
+    "category",
+    [
+        InformationNeedCategory.OWNER_PREFERENCE,
+        InformationNeedCategory.AUTHORIZATION,
+        InformationNeedCategory.SUCCESS_CRITERIA,
+        InformationNeedCategory.PHYSICAL_OBSERVATION,
+    ],
+)
+def test_owner_only_boundaries_never_auto_recheck(category) -> None:
+    need = InformationNeedV1.create(
+        goal_id="goal_safety",
+        category=category,
+        subject="owner-only decision",
+        required_fact="explicit owner response",
+        why_required="this fact cannot be inferred from local network cache",
+        allowed_resolution_sources=("world_registry", "owner_input"),
+    )
+    assert not can_rediscover_information(need)
+
+
 @pytest.mark.skipif(
     sys.platform != "win32", reason="Windows owner OS interface required"
 )
