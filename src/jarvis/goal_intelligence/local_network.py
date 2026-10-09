@@ -192,9 +192,7 @@ class WindowsNeighborInformationProbe:
             )
         evidence = [
             f"windows_neighbor_cache_observed:{at_epoch:012d}:"
-            + canonical_digest(
-                {"rows": [r.evidence_ref for r in observations]}
-            ),
+            + canonical_digest({"rows": [r.evidence_ref for r in observations]}),
             *(row.evidence_ref for row in observations),
         ]
         return InformationProbeResult(
