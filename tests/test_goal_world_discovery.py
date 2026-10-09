@@ -227,19 +227,13 @@ def test_information_resolver_uses_world_then_discovery_before_owner(
     # Service ads are useful observations, but do not identify a trusted TV.
     assert result.state is InformationResolutionState.NEEDS_OWNER
     assert result.need.resolution_ref is None
-    assert any(
-        ref.startswith("discovery:")
-        for ref in result.need.evidence_refs
-    )
+    assert any(ref.startswith("discovery:") for ref in result.need.evidence_refs)
     assert world.entities() == ()
     assert result.attempted_strategies == (
         InformationResolutionStrategy.WORLD_REGISTRY,
         InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
     )
-    assert not any(
-        item.entity_type == "media_player" for item in goals.list_entities()
-    )
-
+    assert not any(item.entity_type == "media_player" for item in goals.list_entities())
 
 
 def test_saved_service_advertisement_cannot_resolve_as_verified_tv(

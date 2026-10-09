@@ -239,10 +239,10 @@ class EntityResolver:
         for entity in self._registry.entities():
             if entity.lifecycle_state is not EntityLifecycleState.ACTIVE:
                 continue
-            if (
-                canonical_world_entity_type(entity.entity_type)
-                in _PHYSICAL_TARGET_TYPES
-                and not has_independent_target_provenance(entity.provenance_refs)
+            if canonical_world_entity_type(
+                entity.entity_type
+            ) in _PHYSICAL_TARGET_TYPES and not has_independent_target_provenance(
+                entity.provenance_refs
             ):
                 continue
             if (

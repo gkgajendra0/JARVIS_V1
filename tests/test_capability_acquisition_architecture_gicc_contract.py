@@ -329,7 +329,6 @@ def test_physical_alias_cannot_bypass_missing_canonical_identity(
         )
 
 
-
 @pytest.mark.parametrize(
     "unverified",
     (

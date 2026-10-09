@@ -120,7 +120,6 @@ def test_missing_entity_type_cannot_hide_media_player_requirement() -> None:
     assert missing == ("media_player",)
 
 
-
 def test_service_advertisement_cannot_bind_physical_requirement() -> None:
     observed_tv = WorldEntityRefV1.create(
         entity_type="media_player",
