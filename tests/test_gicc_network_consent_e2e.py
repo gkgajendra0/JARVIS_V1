@@ -320,6 +320,17 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
     assert store.get_information_need(need.information_need_id) == result.need
     assert runtime.world.entities() == ()
 
+    # JARVIS can now present a concise device hint instead of requesting
+    # raw owner-run PowerShell/IP diagnostics. Nothing is auto-confirmed.
+    suggestions = runtime.pending_network_device_suggestions(
+        goal_id=goal.goal_id,
+        session_id=goal.source_session_id,
+        now_epoch=1001,
+    )
+    assert len(suggestions) == 1
+    assert suggestions[0].display_hint == "example media example 4k"
+    assert suggestions[0].evidence_ref in result.need.evidence_refs
+
     # Reconciliation cannot reuse the consumed permit for another LAN query.
     again = runtime.apply_approved_network_discovery(
         goal_id=goal.goal_id,
