@@ -28,6 +28,11 @@ from .world import canonical_world_entity_type
 
 _MAX_ROWS = 16
 _MAX_OUTPUT_BYTES = 65536
+_LOCAL_IPV4_NETWORKS = (
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+)
 _MAC_RE = re.compile(r"^[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}$", re.IGNORECASE)
 
 # All strings are constants, not interpolated owner/model/network parameters.
@@ -95,7 +100,7 @@ def _parse_rows(raw: str) -> tuple[PassiveNeighborV1, ...]:
             continue
         # Never treat cache entries on loopback, multicast, public or
         # non-physical interfaces as candidates for local device identity.
-        if not ip.is_private or ip.is_loopback or ip.is_link_local:
+        if not any(ip in subnet for subnet in _LOCAL_IPV4_NETWORKS):
             continue
         if alias.casefold().startswith(("vethernet", "loopback")):
             continue
