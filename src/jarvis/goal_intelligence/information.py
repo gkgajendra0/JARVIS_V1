@@ -91,8 +91,20 @@ def can_rediscover_information(need: InformationNeedV1) -> bool:
     """Check only observation-based needs, never secrets or owner-only inputs."""
 
     return (
-        need.state is not InformationNeedState.RESOLVED
-        and need.category is not InformationNeedCategory.OWNER_SECRET
+        need.state
+        in {
+            InformationNeedState.OPEN,
+            InformationNeedState.SELF_RESOLVING,
+            InformationNeedState.WAITING_FOR_OWNER,
+        }
+        and need.category
+        not in {
+            InformationNeedCategory.OWNER_SECRET,
+            InformationNeedCategory.OWNER_PREFERENCE,
+            InformationNeedCategory.AUTHORIZATION,
+            InformationNeedCategory.SUCCESS_CRITERIA,
+            InformationNeedCategory.PHYSICAL_OBSERVATION,
+        }
         and bool(
             _AUTOMATIC_REDISCOVERY_SOURCES.intersection(need.allowed_resolution_sources)
         )
