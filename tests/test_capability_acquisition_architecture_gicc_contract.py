@@ -8,6 +8,7 @@ from jarvis.capability_acquisition.architecture import (
     _effective_owner_acceptance_contract_ids,
     _gicc_semantic_contract,
     ensure_gicc_external_acceptance_contract_current,
+    require_gicc_physical_target_identity,
 )
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
@@ -241,3 +242,61 @@ def test_invalid_executable_target_cannot_reach_approval_architecture(target):
             _architecture_with_profiles(("test.offline.v1",)),
             verification_targets=(target,),
         )
+
+
+class _TargetEvidenceStore:
+    def __init__(self, target_id, *, context_id=None, provenance=None):
+        self.target_id = target_id
+        self.context_id = context_id
+        self.provenance = provenance
+
+    def latest_artifact(self, change_id, kind):
+        assert change_id == "change-tv"
+        if kind == "gicc_capability_gap_link":
+            return SimpleNamespace(payload={
+                "target_entity_type": "television",
+                "target_entity_id": self.target_id,
+            })
+        if kind == "gicc_target_context" and self.context_id is not None:
+            return SimpleNamespace(payload={
+                "target_entity_type": "television",
+                "target_entity_id": self.context_id,
+                "canonical_name": "Verified owner TV",
+                "provenance_refs": self.provenance,
+            })
+        return None
+
+
+@pytest.mark.parametrize(
+    ("target_id", "context_id", "provenance"),
+    [
+        (None, None, None),
+        ("entity-tv", None, None),
+        ("entity-tv", "entity-other", ("owner:device",)),
+        ("entity-tv", "entity-tv", ()),
+    ],
+)
+def test_gicc_physical_architecture_rejects_missing_or_invalid_identity(
+    target_id, context_id, provenance
+) -> None:
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError,
+        match="identity is unresolved",
+    ):
+        require_gicc_physical_target_identity(
+            _TargetEvidenceStore(
+                target_id, context_id=context_id, provenance=provenance
+            ),
+            "change-tv",
+        )
+
+
+def test_gicc_physical_architecture_accepts_grounded_identity_only() -> None:
+    require_gicc_physical_target_identity(
+        _TargetEvidenceStore(
+            "entity-tv",
+            context_id="entity-tv",
+            provenance=("owner_inventory:television",),
+        ),
+        "change-tv",
+    )
