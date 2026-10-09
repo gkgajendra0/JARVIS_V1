@@ -25,6 +25,7 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 from .information import InformationProbeResult, InformationResolutionStrategy
 from .models import InformationNeedV1
 from .world import canonical_world_entity_type
+from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 
 _MAX_ROWS = 16
 _MAX_OUTPUT_BYTES = 65536
@@ -173,8 +174,19 @@ class WindowsNeighborInformationProbe:
 
     strategy = InformationResolutionStrategy.CURRENT_STATE_OBSERVATION
 
-    def __init__(self, backend: WindowsPassiveNeighborBackend | None = None) -> None:
+    def __init__(
+        self,
+        backend: WindowsPassiveNeighborBackend | None = None,
+        *,
+        aep_backend: WindowsAepIdentityBackend | None = None,
+        aep_scopes: tuple[ReviewedAepScopeV1, ...] = (),
+    ) -> None:
         self._backend = backend or WindowsPassiveNeighborBackend()
+        # Network enumeration is active; never create an implicit AEP grant.
+        if aep_scopes and aep_backend is None:
+            raise ValueError("AEP scopes require a separately authorized backend")
+        self._aep_backend = aep_backend
+        self._aep_scopes = tuple(aep_scopes)
 
     def resolve(self, need: InformationNeedV1) -> InformationProbeResult:
         if need.answer_schema.get("type") != "entity_id":
@@ -200,11 +212,41 @@ class WindowsNeighborInformationProbe:
             + canonical_digest({"rows": [r.evidence_ref for r in observations]}),
             *(row.evidence_ref for row in observations),
         ]
+        # Optional WinRT AEP discovery is only possible with independently
+        # reviewed scopes and a trusted authorization checker. Match its
+        # metadata to an OS-observed IP, but NEVER bind a world entity or
+        # candidate capability from these observations by themselves.
+        if self._aep_backend is not None and self._aep_scopes:
+            neighbors = {row.ip_address for row in observations}
+            matched: dict[str, list] = {}
+            for scope in self._aep_scopes:
+                for candidate in self._aep_backend.observe(scope):
+                    if candidate.address in neighbors:
+                        matched.setdefault(candidate.address, []).append(candidate)
+            for address, group in sorted(matched.items()):
+                vendors = {
+                    value.manufacturer.casefold()
+                    for value in group
+                    if value.manufacturer.strip()
+                }
+                models = {
+                    value.model.casefold() for value in group if value.model.strip()
+                }
+                if len(vendors) > 1 or len(models) > 1:
+                    continue  # disagreeing identity advertisements
+                evidence.extend(
+                    f"windows_aep_neighbor_correlated_unverified:{address}:"
+                    + item.evidence_ref
+                    for item in sorted(
+                        group, key=lambda value: (value.protocol, value.endpoint_id)
+                    )
+                )
         return InformationProbeResult(
             resolution_ref=None,
             evidence_refs=tuple(evidence),
             reason=(
-                "passive network candidates only: no manufacturer, device type, "
-                "connectivity, protocol or authorization established"
+                "Windows network candidates only: name and model advertisements "
+                "are unverified; no device type, control protocol, pairing or "
+                "execution authority established"
             ),
         )
