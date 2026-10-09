@@ -170,6 +170,14 @@ def evaluate_candidate_target_compatibility(
             else:
                 matched.append(dimension)
 
+        # A candidate's own transport/model/vendor claims describe what the
+        # adapter supports; they cannot establish what the actual owner device
+        # provides. Require independent goal/observed target corroboration
+        # before treating a device-specific candidate as compatible.
+        for dimension in ("vendor", "platform", "protocol", "model"):
+            if dimension in declared and dimension not in required:
+                missing.append(dimension)
+
         if conflicting:
             verdict = TargetCompatibilityVerdict.INCOMPATIBLE
             reasons = (
