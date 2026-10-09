@@ -106,9 +106,7 @@ def test_real_authority_grant_is_exact_to_protocol_network_and_timeout() -> None
     )
     assert validator(scope)
     assert not validator(replace(scope, protocol="dns_sd"))
-    assert not validator(
-        replace(scope, approved_address_ranges=("192.168.2.0/24",))
-    )
+    assert not validator(replace(scope, approved_address_ranges=("192.168.2.0/24",)))
     assert not validator(replace(scope, timeout_seconds=0.75))
     assert not validator(replace(scope, max_results=6))
     assert not validator(replace(scope, consent_record_id="unrelated-approval"))

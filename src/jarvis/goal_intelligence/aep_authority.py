@@ -64,10 +64,9 @@ class AepExistingApprovalValidator:
         ):
             return False
         target, parameters = aep_approval_material(scope)
-        if (
-            self._proposal.target_json != canonical_json(target)
-            or self._proposal.parameters_json != canonical_json(parameters)
-        ):
+        if self._proposal.target_json != canonical_json(
+            target
+        ) or self._proposal.parameters_json != canonical_json(parameters):
             return False
         try:
             record = self._approvals.validate(
