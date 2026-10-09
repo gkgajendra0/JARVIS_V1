@@ -253,17 +253,21 @@ class _TargetEvidenceStore:
     def latest_artifact(self, change_id, kind):
         assert change_id == "change-tv"
         if kind == "gicc_capability_gap_link":
-            return SimpleNamespace(payload={
-                "target_entity_type": "television",
-                "target_entity_id": self.target_id,
-            })
+            return SimpleNamespace(
+                payload={
+                    "target_entity_type": "television",
+                    "target_entity_id": self.target_id,
+                }
+            )
         if kind == "gicc_target_context" and self.context_id is not None:
-            return SimpleNamespace(payload={
-                "target_entity_type": "television",
-                "target_entity_id": self.context_id,
-                "canonical_name": "Verified owner TV",
-                "provenance_refs": self.provenance,
-            })
+            return SimpleNamespace(
+                payload={
+                    "target_entity_type": "television",
+                    "target_entity_id": self.context_id,
+                    "canonical_name": "Verified owner TV",
+                    "provenance_refs": self.provenance,
+                }
+            )
         return None
 
 
