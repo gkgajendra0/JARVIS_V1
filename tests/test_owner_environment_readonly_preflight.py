@@ -6,19 +6,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from tools.research import owner_environment_readonly_preflight as probe
+from tools.research.owner_environment_readonly_preflight import (
+    discover_read_only,
+    reviewed_device_scopes,
+)
 
 from jarvis.engineering_substrate.contracts import DiscoveryScope
 from jarvis.goal_intelligence.models import WorldEntityRefV1
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
-
-
-from tools.research import owner_environment_readonly_preflight as probe
-from tools.research.owner_environment_readonly_preflight import (
-    discover_read_only,
-    reviewed_device_scopes,
-)
 
 
 @dataclass
