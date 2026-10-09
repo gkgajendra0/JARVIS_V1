@@ -69,7 +69,6 @@ from .models import (
     PlanNodeType,
     PlanNodeV1,
     PlanState,
-    WorldEntityRefV1,
 )
 from .monitoring import (
     DEFAULT_MONITOR_OBSERVATION_BUS,
@@ -835,20 +834,11 @@ def build_gicc_apply_runtime(
     world = WorldRegistry(store)
     world.project_current_computer(capability_runtime.catalog)
 
-    default_media_target = str(config.default_media_target or "").strip()
-    if default_media_target:
-        world.register_entity(
-            WorldEntityRefV1.create(
-                entity_type="media_player",
-                canonical_name=default_media_target,
-                aliases=(
-                    "my tv",
-                    "my television",
-                    "default media target",
-                ),
-                provenance_refs=("machine_config:default_media_target",),
-            )
-        )
+    # A configured media target is a routing preference, not an observed
+    # physical device. Never manufacture an ACTIVE GICC media_player entity
+    # from its label: doing so would bypass device-identity preflight.
+    # Existing trusted registry entities and independently reviewed discovery
+    # remain the only sources for physical target binding.
 
     interpreter = build_goal_interpreter(
         provider=config.ai_provider,
