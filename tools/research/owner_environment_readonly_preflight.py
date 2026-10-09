@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -119,7 +120,7 @@ def known_world_entities() -> dict[str, object]:
     db = Path(default_work_store_path())
     if not db.is_file():
         return {"status": "not_configured", "entities": []}
-    if not default_work_payload_key_path(db).is_file():
+    if os.name == "nt" and not default_work_payload_key_path(db).is_file():
         return {"status": "protected_key_unavailable", "entities": []}
     codec = build_default_work_payload_codec(db)
     try:
