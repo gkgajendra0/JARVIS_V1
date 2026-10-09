@@ -90,7 +90,7 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
     calls = []
     backend = _backend(
         [
-            _entry("192.168.1.10", "50-BA-02-AE-0D-18", "Reachable"),
+            _entry("192.168.1.10", "02-11-22-33-44-55", "Reachable"),
             _entry("192.168.1.1", "94-98-69-73-3D-60"),
             _entry(
                 "172.23.63.154",
@@ -103,7 +103,7 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
             _entry("192.168.1.11", "invalid_mac"),
             _entry("192.168.1.12", "AA-BB-CC-DD-EE-02", alias=""),
             _entry("192.168.1.99", "AA-BB-CC-DD-EE-FF", "Permanent"),
-            _entry("192.168.1.10", "50-BA-02-AE-0D-18", "Reachable"),
+            _entry("192.168.1.10", "02-11-22-33-44-55", "Reachable"),
         ],
         calls=calls,
     )
@@ -126,7 +126,7 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
 
 def test_neighbor_candidate_is_never_reported_as_verified_identity() -> None:
     probe = WindowsNeighborInformationProbe(
-        _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")])
+        _backend([_entry("192.168.1.10", "02-11-22-33-44-55")])
     )
     result = probe.resolve(_need("goal_tv"))
 
@@ -168,7 +168,7 @@ def test_non_windows_cannot_start_passive_windows_collection() -> None:
 
 
 def test_timeout_or_failed_command_fail_closed_without_unverified_identity() -> None:
-    backend = _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")], returncode=1)
+    backend = _backend([_entry("192.168.1.10", "02-11-22-33-44-55")], returncode=1)
     assert backend.observe() == ((), 1000)
 
     def timeout(*args, **kwargs):
@@ -202,7 +202,7 @@ def test_unverified_neighbor_evidence_survives_information_need_restart(
         store=goal_store,
         probes=(
             WindowsNeighborInformationProbe(
-                _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")])
+                _backend([_entry("192.168.1.10", "02-11-22-33-44-55")])
             ),
         ),
     )
@@ -336,7 +336,7 @@ def test_correlate_authorized_aep_only_with_existing_neighbor_evidence() -> None
         ),
         clock=lambda: 1000.0,
     )
-    neighbor = _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")])
+    neighbor = _backend([_entry("192.168.1.10", "02-11-22-33-44-55")])
     probe = WindowsNeighborInformationProbe(
         neighbor, aep_backend=approved, aep_scopes=(scope,)
     )
@@ -360,7 +360,7 @@ def test_no_aep_backend_or_scope_means_no_active_network_enumeration() -> None:
         def observe(self, scope):
             raise AssertionError("unauthorized active enumeration")
 
-    neighbor = _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")])
+    neighbor = _backend([_entry("192.168.1.10", "02-11-22-33-44-55")])
     result = WindowsNeighborInformationProbe(
         neighbor, aep_backend=ExplodingBackend()
     ).resolve(_need("goal_inactive"))
@@ -399,7 +399,7 @@ def test_conflicting_aep_advertisements_do_not_correlate_as_identity() -> None:
         ),
     )
     probe = WindowsNeighborInformationProbe(
-        _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")]),
+        _backend([_entry("192.168.1.10", "02-11-22-33-44-55")]),
         aep_backend=aep,
         aep_scopes=(scope,),
     )

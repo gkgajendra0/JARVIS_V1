@@ -675,7 +675,7 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
                         "InterfaceAlias": "Ethernet",
                         "InterfaceIndex": 2,
                         "IPAddress": "192.168.1.10",
-                        "LinkLayerAddress": "50-BA-02-AE-0D-18",
+                        "LinkLayerAddress": "02-11-22-33-44-55",
                         "State": "Stale",
                     }
                 ]
