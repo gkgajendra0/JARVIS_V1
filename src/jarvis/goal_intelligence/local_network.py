@@ -24,8 +24,8 @@ from jarvis.engineering_substrate.canonical import canonical_digest
 
 from .information import InformationProbeResult, InformationResolutionStrategy
 from .models import InformationNeedV1
-from .world import canonical_world_entity_type
 from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
+from .world import canonical_world_entity_type
 
 _MAX_ROWS = 16
 _MAX_OUTPUT_BYTES = 65536

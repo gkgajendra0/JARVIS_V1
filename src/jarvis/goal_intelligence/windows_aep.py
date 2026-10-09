@@ -207,7 +207,7 @@ class WindowsAepIdentityBackend:
         try:
             if self._authorized(scope) is not True:
                 return ()
-        except Exception:
+        except Exception:  # noqa: BLE001 - fail closed for any authority failure
             # A failing authorization service must not authorize a scan.
             return ()
 
