@@ -55,9 +55,9 @@ Files: development_engine/contracts.py, phase9.py, tools.py, related tests.
 
 ## Task 5: Completion gate
 
-- [ ] Run full pytest: blocked by automatic approval review; Ruff passes.
+- [x] Run full pytest in an isolated hosted network namespace: 3,016 passed, six Windows-only skips, zero failures on the final source revision. Ruff passes.
 - [x] Obtain independent review and fix substantive findings.
-- [ ] Mark pre-machine PASS: full suite, real Docker, live external boundaries and Windows acceptance still outstanding.
+- [x] Mark pre-machine PASS: all six jobs passed on the final exact source revision. Only live owner-machine acceptance remains.
 
 ## Execution ledger
 
@@ -77,3 +77,13 @@ Files: development_engine/contracts.py, phase9.py, tools.py, related tests.
 - Required Docker CI job prepared and connected to promotion-policy; not run here (Docker unavailable), not triggered remotely.
 - Full suite was interrupted near 97% by automatic approval review detecting outbound Microsoft telemetry; no final JUnit result, no full-suite PASS claimed. Endpoint/test not established. Do not rerun or trigger equivalent CI without resolving the disclosure block.
 - Runtime fixtures use disposable stores only. Original D8 owner-machine database and approval lineage were not modified.
+
+## Hosted validation follow-up
+
+- Resolved disclosure risk with Internet-isolated Linux test namespaces and production Docker network-none execution, with telemetry optouts preserved. No unrestricted retry was used.
+- Initial hosted source and subsequent Windows-connected workflow runs both passed all six CI jobs.
+- Latest source a8b543f8ae54a936953bc713d6511ee1de32321c, tree faf982ea6e5c3e21bb1e83c8b34a647e639d58df, rejects invalid executable targets before architecture/plan persistence using the existing ticket normalization contract. Four architecture cases and the connected finalizer reproduced the defect before repair.
+- Latest local reruns: 48 focused target/acquisition tests and 31 workflow/verifier/coordinator/cold-import regressions passed; lint and formatting clean.
+- Final CI run 37898831210: full Linux suite 3,016 passed/six Windows-only skips/zero failures, required real-Docker three tests passed. Windows adversarial/connected acquisition 89 passed; all six jobs, including promotion-policy, completed successfully.
+- See docs/testing/capability-acquisition-2026-10-09/REPORT.md and MACHINE_ACCEPTANCE.md for exact evidence and owner handoff.
+- Final live acceptance is deliberately outstanding: real cloud engineering/owner approvals, remote promotion, runtime restart, external readback, original-goal completion and durable reuse on the existing owner machine.

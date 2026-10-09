@@ -1,33 +1,46 @@
 # Capability acquisition validation — 2026-10-09
 
-Status: **partial validation; complete pre-machine acceptance is not established.**
+## Current checkpoint
 
-Validated on Python 3.11.17 against base fc2c4f14c088df69a321bb5635347a057bb11d5b, branch fix/capability-acquisition-system-acceptance.
+Source branch: `fix/capability-acquisition-system-acceptance`, draft [PR #253](https://github.com/gkgajendra0/JARVIS_V1/pull/253), stacked on #252.
+
+**Pre-machine PASS.** Final tested source: `a8b543f8ae54a936953bc713d6511ee1de32321c` (tree `faf982ea6e5c3e21bb1e83c8b34a647e639d58df`). All six required jobs passed in [run 37898831210](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/37898831210): Ruff, full Linux pytest, required Docker acquisition, Windows Hello, Windows DPAPI/acquisition, and promotion-policy. Only live owner-machine acceptance remains.
 
 ## Repairs
 
-1. Development tickets carry digest-bound typed executable verification targets. Legacy tickets without the field retain their exact canonical payload and digest. Explicit empty targets do not fall back to prose.
-2. Research exposes registered sandbox profiles; unknown IDs are rejected before a plan or architecture can be persisted. No local-device permission alias was introduced.
-3. Substrate verification requests the registered `artifact` resource lease instead of nonexistent `artifact_store`.
+1. Development tickets carry digest-bound typed executable verification targets. Legacy tickets without the field retain their canonical payload/digest. Explicit empty targets do not fall back to prose, and expanded pytest scope is rejected.
+2. Unknown sandbox profile IDs are rejected before plan/architecture persistence. Research advertises exact registered IDs. No local-device permission alias was introduced.
+3. Substrate verification uses the registered `artifact` resource lease instead of nonexistent `artifact_store`.
+4. Architecture and research finalization reject prose, traversal, pytest options and empty selectors before plan persistence. The shared target normalizer preserves existing valid ticket canonicalization and legacy digests. Four new architecture regressions and connected persistence checks reproduced the issue before the fix.
 
-## Evidence
+## Verified evidence
 
-- Related acquisition, development, substrate, registry and GICC suite: 610 passed, two Windows-only DPAPI skips, zero failures/errors (612 total).
-- Additional promotion/deployment/continuation suite: 48 passed, zero failures/errors.
-- Connected normal and failing-candidate-test recovery scenarios pass, plus registered-resource regression.
-- Real candidate pytest, Git commits/worktrees, SQLite stores, digest-bound approvals, independent candidate verification, promotion policy, package admission/lifecycle activation, runtime operation and readback, production goal continuation/replanning and verified goal completion, then reuse are exercised.
-- Unknown sandbox finalization is rejected without persisted acquisition plan, architecture or change mutation. Expanded pytest scope and commit after failing tests are rejected.
-- Final focused rerun after the continuation changes: 44 passed, zero failures/errors.
-- Ruff checks and formatting pass.
-- Fresh independent review completed; the original fixture-plan evidence gap was corrected to invoke production coordinator/planner/runtime. Model output remains controlled.
+- Full hosted Linux suite: **3,016 passed, six Windows-only skips, zero failures** (3,022 outcomes in the latest completed job logs). The skipped cases cover Windows DPAPI and real Windows Job Objects; these receive separate Windows CI validation.
+- Required real-Docker connected acquisition: **three tests passed** — normal acquisition, actual failing candidate-test recovery, and the registered resource-capacity regression. `JARVIS_E2E_REQUIRE_DOCKER=1` was set; absence of Docker cannot silently skip or select the fixture runner.
+- Windows Hello helper, Windows DPAPI/Hands, Phase 6–9 regressions/adversarial acquisition, Ruff, and promotion-policy: **passed** on the final source revision. The Windows adversarial/connected acquisition batch passed all 89 tests, including normal acquisition and candidate-test-failure recovery.
+- Earlier related suites: 658 passed, two Windows DPAPI skips. Latest focused reruns: 48 target/acquisition tests and 31 workflow/verifier/coordinator/cold-import regressions passed. Ruff formatting and lint passed.
+- Connected tests execute actual candidate pytest, real Git commits/worktrees and SQLite stores, digest-bound approval handling, independent candidate verification, promotion policy, release staging, package admission/activation, runtime readback, production original-goal continuation/replanning/completion, and reuse. Unknown-profile finalization has no persisted plan, architecture or change mutation.
+- Fresh independent reviews completed. The initial manually persisted fixture plan was replaced by production coordinator/planner/runtime continuation. Controlled planner/model output remains declared.
 
-The accompanying JSON files record disposable test lineage, artifact digests and controlled boundaries. They are test evidence, not owner-machine production approvals.
+## Telemetry containment and local harness results
 
-## Remaining gates
+Automatic approval review interrupted the initial broad local run after flagging possible metadata disclosure to a Microsoft telemetry endpoint. That unrestricted run was not retried or indirectly triggered. Linux hosted tests now run in an isolated network namespace with loopback enabled and no Internet route; .NET/PowerShell telemetry optouts are also preserved. The production Docker test profile uses `--network none`. Dependency installation and image construction occur before isolation.
 
-- **Full repository pytest: BLOCKED.** Automatic approval review stopped the run near 97% after detecting an outbound request to an untrusted Microsoft telemetry endpoint, citing possible disclosure of sensitive test/environment/failure metadata. No final report exists. The responsible endpoint/test has not been established. It was not retried or indirectly triggered through CI.
-- **Real Docker: NOT RUN.** No Docker executable/daemon is available here. A required `acquisition-docker` job is prepared and included in promotion-policy dependencies. It requires the production Docker runner and preserves evidence; missing Docker does not silently skip. Host and image install carry the existing LiveKit wheel workaround. No remote CI was triggered.
-- **Live external boundaries: NOT PROVEN.** Research/model decisions, owner authentication, GitHub CI/merge, process switching and external effect use declared controlled fixtures. Live cloud engineering and remote promotion require independent acceptance.
-- **Windows/physical owner acceptance: NOT RUN.** Two DPAPI tests are skipped on Linux. The original D8 database and approval lineage are untouched. Existing unknown-profile architecture requires legitimate revision and exact owner reapproval; no approval was forged or reset.
+A stricter temporary local syscall-denial harness completed all 3,018 cases with five environment/harness failures: one intentional loopback connection denial, two multiprocessing imports affected by the temporary launcher, and two SDK constructors requiring the environment's SOCKS proxy dependency. The launcher and local dependency were corrected; the two cold-import cases and SDK extractor suite passed (11 tests), and the loopback suite passed separately (33 tests). The affected tests were `test_dev_control_client_answers_authenticated_liveness_probe`, `test_engineering_knowledge_acceptance_cold_import_has_no_cycle`, `test_engineering_knowledge_package_cold_import_has_no_cycle`, `test_pinned_openai_client_exposes_production_parse_surface`, and `test_pinned_gemini_client_exposes_production_and_bakeoff_surfaces`. None of these required a production code change. The clean hosted full-suite result is the authoritative broad validation.
 
-The connected test can require Docker using `JARVIS_E2E_REQUIRE_DOCKER=1` and `JARVIS_DEVELOPMENT_TEST_IMAGE=<built image>` when the remaining approval/environment blockers are resolved. Do not treat the current controlled-boundary pass as complete live-system acceptance.
+Hosted evidence artifacts:
+
+- [Full-suite JUnit](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/37898831210/artifacts/11601234780), SHA-256 `c993a47011f9f7d59e23eb18e83273c0101ff8382d6ce7b00cbf202282a8fb10`.
+- [Real-Docker JUnit and stage JSON](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/37898831210/artifacts/11601448595), SHA-256 `4da6f835acee4e1b96ecabf16b0b728b1516466e743a7b342227416124bf80db`.
+
+- [Windows acquisition JUnit and stage JSON](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/37898831210/artifacts/11602770357), SHA-256 `dd2a3abedda4e58726f0824dd658b655771a02be9ebde3abc1a102c9f9d3c6ef`.
+
+The adjacent `vertical-evidence.json` files describe earlier disposable local fixture runs, not the hosted Docker run or production owner approvals. The connector exposed artifact download references, but direct local retrieval returned HTTP 403; the hosted artifacts remain available through GitHub.
+
+## Final owner-machine acceptance
+
+The remaining live checks require the owner environment: existing ChatGPT-plan/Codex connection, actual owner authentication/approval, real GitHub promotion, runtime process restart, external device/resource readback, durable original-goal completion and reuse after restart. These boundaries are controlled fixtures in hosted tests and are not claimed as live acceptance.
+
+The original D8 owner database and approval lineage are untouched. Updating code does not rewrite its approved architecture, pinned source revision or permission scopes. An invalid old profile requires supported architecture revision and fresh exact owner approval. See `MACHINE_ACCEPTANCE.md`; do not reset stores, invent approvals, or start a replacement goal to hide a stalled lineage.
+
+No test suite guarantees all future model-generated implementations or physical devices will work.
