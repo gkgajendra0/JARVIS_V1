@@ -119,13 +119,13 @@ def evaluate_candidate_target_compatibility(
     )
     required = _hint_map(required_values)
 
-    # A custom build is generated from this exact immutable owner goal. Existing
-    # capabilities have already passed descriptor target filtering before evaluation.
+    # Owner-goal provenance establishes *why* a custom build was proposed, not
+    # whether its claimed device/platform/protocol is compatible. In particular,
+    # never let a custom-build fallback bypass missing target evidence. Existing
+    # capabilities retain their separate descriptor/binding compatibility guard.
     intrinsically_bound = (
-        candidate.strategy is AcquisitionStrategy.BUILD_CUSTOM
-        and candidate.source_kind is AcquisitionSourceKind.CUSTOM_BUILD
-        and candidate.source_identity == f"owner-goal:{goal.goal_id}"
-    ) or candidate.source_kind is AcquisitionSourceKind.EXISTING_CAPABILITY
+        candidate.source_kind is AcquisitionSourceKind.EXISTING_CAPABILITY
+    )
 
     declared_values = tuple(
         sorted(
