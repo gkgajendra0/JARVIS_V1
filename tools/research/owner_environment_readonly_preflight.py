@@ -26,7 +26,9 @@ from jarvis.work.privacy import (
 from jarvis.work.store import default_work_store_path
 
 
-def reviewed_device_scopes(*, include_cameras: bool = False) -> tuple[DiscoveryScope, ...]:
+def reviewed_device_scopes(
+    *, include_cameras: bool = False
+) -> tuple[DiscoveryScope, ...]:
     scopes = [
         DiscoveryScope(
             scope_id="owner.environment.media.mdns.v1",
@@ -82,29 +84,33 @@ def discover_read_only(
         try:
             observations = broker.discover(scope)
         except DiscoveryBrokerError as exc:
-            checks.append({
-                "adapter_id": scope.adapter_id,
-                "status": "unavailable",
-                "reason_code": type(exc).__name__,
-                "observation_count": 0,
-            })
-            continue
-        checks.append({
-            "adapter_id": scope.adapter_id,
-            "scope_id": scope.scope_id,
-            "status": "observed" if observations else "no_observations",
-            "observation_count": len(observations),
-            "observations": [
+            checks.append(
                 {
-                    "observation_id": obs.observation_id,
-                    "stable_identity": obs.stable_identity,
-                    "endpoints": list(obs.endpoints),
-                    "expires_at_epoch": obs.expires_at_epoch,
-                    "evidence_digest": obs.evidence_digest,
+                    "adapter_id": scope.adapter_id,
+                    "status": "unavailable",
+                    "reason_code": type(exc).__name__,
+                    "observation_count": 0,
                 }
-                for obs in observations
-            ],
-        })
+            )
+            continue
+        checks.append(
+            {
+                "adapter_id": scope.adapter_id,
+                "scope_id": scope.scope_id,
+                "status": "observed" if observations else "no_observations",
+                "observation_count": len(observations),
+                "observations": [
+                    {
+                        "observation_id": obs.observation_id,
+                        "stable_identity": obs.stable_identity,
+                        "endpoints": list(obs.endpoints),
+                        "expires_at_epoch": obs.expires_at_epoch,
+                        "evidence_digest": obs.evidence_digest,
+                    }
+                    for obs in observations
+                ],
+            }
+        )
     return checks
 
 
@@ -128,27 +134,35 @@ def known_world_entities() -> dict[str, object]:
     for (raw,) in rows:
         value = json.loads(codec.decode(raw))
         if value.get("entity_type") not in {
-            "media_player", "television", "camera", "display", "computer"
+            "media_player",
+            "television",
+            "camera",
+            "display",
+            "computer",
         }:
             continue
-        entities.append({
-            "entity_id": value.get("entity_id"),
-            "entity_type": value.get("entity_type"),
-            "canonical_name": value.get("canonical_name"),
-            "lifecycle_state": value.get("lifecycle_state"),
-            "provenance_refs": value.get("provenance_refs", []),
-        })
+        entities.append(
+            {
+                "entity_id": value.get("entity_id"),
+                "entity_type": value.get("entity_type"),
+                "canonical_name": value.get("canonical_name"),
+                "lifecycle_state": value.get("lifecycle_state"),
+                "provenance_refs": value.get("provenance_refs", []),
+            }
+        )
     return {"status": "read_only", "entities": entities}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--include-cameras", action="store_true",
+        "--include-cameras",
+        action="store_true",
         help="Also perform the registered, read-only ONVIF camera discovery",
     )
     parser.add_argument(
-        "--registry-only", action="store_true",
+        "--registry-only",
+        action="store_true",
         help="Do not perform any network discovery",
     )
     args = parser.parse_args()
