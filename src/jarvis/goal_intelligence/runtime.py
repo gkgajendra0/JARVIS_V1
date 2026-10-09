@@ -539,7 +539,10 @@ class GiccApplyRuntime:
             conversation=conversation,
             turn=turn,
         )
-        if result.goal is not None and result.goal.state is GoalState.WAITING_INFORMATION:
+        if (
+            result.goal is not None
+            and result.goal.state is GoalState.WAITING_INFORMATION
+        ):
             self._information_last_recheck[result.goal.goal_id] = time.monotonic()
         return await self._advance_intake_result(result)
 
