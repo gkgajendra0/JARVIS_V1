@@ -1413,6 +1413,47 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need compare-and-swap resolution lost"
                 )
+
+            # Discovery can resolve a device while an owner question is still
+            # visible. Retire that exact bound interaction in the SAME
+            # transaction rather than leaving a misleading active prompt.
+            interactions = db.execute(
+                """
+                SELECT interaction_id, payload, digest
+                FROM information_need_interactions_v1
+                WHERE information_need_id=? AND state='active'
+                """,
+                (need_id,),
+            ).fetchall()
+            for interaction_row in interactions:
+                interaction = self._decode(interaction_row["payload"])
+                if canonical_digest(interaction) != interaction_row["digest"]:
+                    raise GoalStoreError("information interaction digest mismatch")
+                resolved_interaction = {
+                    **interaction,
+                    "state": "resolved",
+                    "resolved_at": updated.resolved_at,
+                    "resolved_turn_id": None,
+                    "resolution_ref": resolution_ref,
+                }
+                resolved_digest = canonical_digest(resolved_interaction)
+                interaction_update = db.execute(
+                    """
+                    UPDATE information_need_interactions_v1
+                    SET state='resolved', payload=?, digest=?, resolved_at=?
+                    WHERE interaction_id=? AND state='active'
+                    """,
+                    (
+                        self._encode(resolved_interaction),
+                        resolved_digest,
+                        updated.resolved_at,
+                        interaction_row["interaction_id"],
+                    ),
+                )
+                if interaction_update.rowcount != 1:
+                    raise GoalStoreConflict(
+                        "information interaction auto-resolution CAS lost"
+                    )
         return updated
 
     def put_requirement_graph(
