@@ -770,6 +770,21 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
             "monitor_event_contract": None,
         },
     )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "schema": "gicc_target_context.v1",
+            "target_entity_type": "television",
+            "target_entity_id": "living-room",
+            "canonical_name": "Living room TV fixture",
+            "provenance_refs": ["fixture:owner_device_inventory"],
+            "target_hints": [
+                "entity_type:television",
+                "entity_name:Living room TV fixture",
+            ],
+        },
+    )
     plan, plan_artifact = _persist_plan(
         store,
         change_id=change_id,
