@@ -195,6 +195,13 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
             provenance_refs=("owner-config:main-gate",),
         )
     )
+    # Resolve the physical camera through its reviewed entrance relationship.
+    # Regression diagnostics must separate identity from monitoring planning.
+    gate_resolution = EntityResolver(registry).resolve(
+        "main gate", expected_entity_types=("camera",)
+    )
+    assert gate_resolution.state.value == "resolved"
+    assert gate_resolution.entity_id == camera.entity_id
     conversation, turn = _conversation(
         "Jarvis, monitor my main gate and let me know once a delivery agent "
         "is standing at the door."
