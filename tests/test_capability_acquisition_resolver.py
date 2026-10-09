@@ -502,6 +502,23 @@ def _targeted_custom_build(goal: OwnerCapabilityGoalV1) -> AcquisitionCandidateV
     )
 
 
+def test_unidentified_television_must_not_select_custom_build_from_goal_alone() -> None:
+    goal = _targeted_goal()
+    fallback = _targeted_custom_build(goal)
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (fallback,),
+        _core_context(),
+    )
+
+    evaluation = result.evaluation(fallback.candidate_id)
+    assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in evaluation.reason_codes
+    assert "target_unproven_entity_type" in evaluation.reason_codes
+    assert result.selected_candidate_id is None
+
+
 def test_target_incompatible_samsung_candidate_cannot_win_hisense_vidaa_goal() -> None:
     goal = _targeted_goal()
     samsung = _targeted_sdk(
