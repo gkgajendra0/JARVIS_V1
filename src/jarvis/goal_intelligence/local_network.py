@@ -1,0 +1,206 @@
+"""Passive Windows network-neighbor observations for GICC information gathering.
+
+A cached ARP/neighbor entry only says that Windows has seen an IP/MAC pair.
+It does NOT identify a product, authorize a probe, prove online reachability,
+or constitute evidence that a control protocol/operation works.
+
+The fixed PowerShell command only reads locally cached OS information. It does
+not emit packets, attempt DNS, scan ports, authenticate or modify device state.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import json
+import re
+import subprocess
+import sys
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+from jarvis.engineering_substrate.canonical import canonical_digest
+
+from .information import InformationProbeResult, InformationResolutionStrategy
+from .models import InformationNeedV1
+from .world import canonical_world_entity_type
+
+_MAX_ROWS = 16
+_MAX_OUTPUT_BYTES = 65536
+_MAC_RE = re.compile(r"^[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}$", re.I)
+
+# All strings are constants, not interpolated owner/model/network parameters.
+_WINDOWS_NEIGHBORS_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+$indexes = @(
+    Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.NextHop -ne '0.0.0.0' -and
+        $_.InterfaceAlias -notmatch '^(vEthernet|Loopback)' -and
+        $_.InterfaceIndex -gt 0
+    } |
+    Select-Object -ExpandProperty InterfaceIndex -Unique
+)
+$neighbors = @(
+    Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object {
+        $indexes -contains $_.InterfaceIndex -and
+        $_.State -in @('Reachable','Stale','Delay','Probe')
+    } |
+    Select-Object -First 32 -Property InterfaceIndex,IPAddress,LinkLayerAddress,State
+)
+ConvertTo-Json -InputObject $neighbors -Compress -Depth 3
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class PassiveNeighborV1:
+    """OS-cached, unverified observation; intentionally not a WorldEntityRef."""
+
+    ip_address: str
+    mac_address: str
+    state: str
+    interface_index: int
+
+    @property
+    def evidence_ref(self) -> str:
+        return (
+            "windows_neighbor_unverified:"
+            f"{self.ip_address}:{self.mac_address}:{self.state}"
+        )
+
+
+def _parse_rows(raw: str) -> tuple[PassiveNeighborV1, ...]:
+    if not raw.strip():
+        return ()
+    data: Any = json.loads(raw)
+    if data is None:
+        return ()
+    if isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return ()
+    results: dict[tuple[str, str], PassiveNeighborV1] = {}
+    for row in data[:32]:
+        if not isinstance(row, dict):
+            continue
+        try:
+            ip = ipaddress.IPv4Address(str(row.get("IPAddress") or ""))
+            mac = str(row.get("LinkLayerAddress") or "").strip().lower()
+            state = str(row.get("State") or "").strip().lower()
+            idx = int(row.get("InterfaceIndex"))
+        except (ValueError, TypeError, ipaddress.AddressValueError):
+            continue
+        # Never treat cache entries on loopback, multicast, public or
+        # non-physical interfaces as candidates for local device identity.
+        if not ip.is_private or ip.is_loopback or ip.is_link_local:
+            continue
+        if not _MAC_RE.fullmatch(mac) or idx < 1:
+            continue
+        if state not in {"reachable", "stale", "delay", "probe"}:
+            continue
+        item = PassiveNeighborV1(
+            ip_address=str(ip),
+            mac_address=mac.replace(":", "-"),
+            state=state,
+            interface_index=idx,
+        )
+        results[(item.ip_address, item.mac_address)] = item
+    ordered = sorted(
+        results.values(),
+        key=lambda item: (int(ipaddress.IPv4Address(item.ip_address)), item.mac_address),
+    )
+    return tuple(ordered[:_MAX_ROWS])
+
+
+class WindowsPassiveNeighborBackend:
+    """Bounded, read-only OS-cache query; no network-probing privileges."""
+
+    def __init__(
+        self,
+        *,
+        runner: Callable[..., Any] = subprocess.run,
+        platform: str | None = None,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        self._runner = runner
+        self._platform = sys.platform if platform is None else platform
+        self._clock = clock
+
+    def observe(self) -> tuple[tuple[PassiveNeighborV1, ...], int]:
+        collected_at = int(self._clock())
+        if self._platform != "win32":
+            return (), collected_at
+        try:
+            process = self._runner(
+                [
+                    "powershell.exe",
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    _WINDOWS_NEIGHBORS_SCRIPT,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            if process.returncode != 0:
+                return (), collected_at
+            data = str(process.stdout or "")
+            if len(data.encode("utf-8")) > _MAX_OUTPUT_BYTES:
+                return (), collected_at
+            return _parse_rows(data), collected_at
+        except (OSError, ValueError, subprocess.TimeoutExpired, json.JSONDecodeError):
+            return (), collected_at
+
+
+class WindowsNeighborInformationProbe:
+    """Expose passive candidates to GICC; NEVER claim entity identity."""
+
+    strategy = InformationResolutionStrategy.CURRENT_STATE_OBSERVATION
+
+    def __init__(
+        self, backend: WindowsPassiveNeighborBackend | None = None
+    ) -> None:
+        self._backend = backend or WindowsPassiveNeighborBackend()
+
+    def resolve(self, need: InformationNeedV1) -> InformationProbeResult:
+        if need.answer_schema.get("type") != "entity_id":
+            return InformationProbeResult(resolution_ref=None)
+        target_type = canonical_world_entity_type(
+            need.answer_schema.get("entity_type")
+        )
+        if target_type not in {
+            "media_player",
+            "camera",
+            "computer",
+            "display",
+            "speaker",
+            "printer",
+        }:
+            return InformationProbeResult(resolution_ref=None)
+        observations, at_epoch = self._backend.observe()
+        if not observations:
+            return InformationProbeResult(
+                resolution_ref=None,
+                reason="no passive Windows network neighbors verified",
+            )
+        evidence = [
+            "windows_neighbor_cache_observed:"
+            + canonical_digest(
+                {"at_epoch": at_epoch, "rows": [r.evidence_ref for r in observations]}
+            )
+            + f":at_epoch:{at_epoch}",
+            *(row.evidence_ref for row in observations),
+        ]
+        return InformationProbeResult(
+            resolution_ref=None,
+            evidence_refs=tuple(evidence),
+            reason=(
+                "passive network candidates only: no manufacturer, device type, "
+                "connectivity, protocol or authorization established"
+            ),
+        )
