@@ -133,9 +133,12 @@ def has_independent_target_provenance(refs: tuple[str, ...] | list[str]) -> bool
     NOT evidence of pairing, control authority, device model or physical effect.
     """
 
+    if not isinstance(refs, tuple | list):
+        return False
+    if any(not isinstance(ref, str) for ref in refs):
+        return False
     return any(
-        isinstance(ref, str)
-        and bool(ref.strip())
+        ref.strip()
         and not ref.strip().casefold().startswith(_UNVERIFIED_PHYSICAL_PROVENANCE)
         for ref in refs
     )
