@@ -622,3 +622,64 @@ def test_matching_target_proof_keeps_verified_sdk_selectable() -> None:
     assert evaluation.disposition is AcquisitionDisposition.SELECTABLE
     assert "target_compatible" in evaluation.reason_codes
     assert result.selected_candidate_id == matching.candidate_id
+
+
+def test_candidate_cannot_self_attest_unverified_device_protocol() -> None:
+    goal = _targeted_goal()
+    guessed_transport = _targeted_sdk(
+        identity="blind-device-adapter",
+        device_scopes=(
+            "entity_type:television",
+            "protocol:unverified-control-transport",
+        ),
+    )
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (guessed_transport,),
+        _core_context(),
+    )
+
+    evaluation = result.evaluation(guessed_transport.candidate_id)
+    assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_unproven_protocol" in evaluation.reason_codes
+    assert result.selected_candidate_id is None
+
+
+def test_independent_protocol_observation_allows_matching_adapter() -> None:
+    goal = _targeted_goal()
+    candidate = _targeted_sdk(
+        identity="verified-protocol-adapter",
+        device_scopes=(
+            "entity_type:television",
+            "protocol:reviewed-transport-v1",
+        ),
+    )
+    result = _resolver().resolve_candidates(
+        goal,
+        (candidate,),
+        _core_context(),
+        canonical_target_hints=("protocol:reviewed-transport-v1",),
+    )
+
+    assert result.selected_candidate_id == candidate.candidate_id
+    assert result.evaluation(candidate.candidate_id).disposition is (
+        AcquisitionDisposition.SELECTABLE
+    )
+
+
+def test_candidate_unverified_platform_is_not_inferred_from_device_type() -> None:
+    goal = _targeted_goal()
+    candidate = _targeted_sdk(
+        identity="platform-specific-adapter",
+        device_scopes=(
+            "entity_type:television",
+            "platform:unverified-operating-system",
+        ),
+    )
+    result = _resolver().resolve_candidates(goal, (candidate,), _core_context())
+
+    assert result.selected_candidate_id is None
+    assert "target_unproven_platform" in result.evaluation(
+        candidate.candidate_id
+    ).reason_codes
