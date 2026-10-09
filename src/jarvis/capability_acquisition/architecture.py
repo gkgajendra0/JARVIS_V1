@@ -333,10 +333,12 @@ def require_gicc_physical_target_identity(
     link = store.latest_artifact(change_id, "gicc_capability_gap_link")
     if link is None:
         return
-    kind = str(link.payload.get("target_entity_type") or "").strip().casefold()
+    # Apply the existing GICC resource ontology. A "smart_tv" or "webcam"
+    # alias must not bypass the same physical-target identity safeguard.
+    from jarvis.goal_intelligence.world import canonical_world_entity_type
+
+    kind = canonical_world_entity_type(link.payload.get("target_entity_type"))
     if kind not in {
-        "tv",
-        "television",
         "media_player",
         "camera",
         "computer",
