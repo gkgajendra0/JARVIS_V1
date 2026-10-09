@@ -215,7 +215,9 @@ def test_unverified_neighbor_evidence_survives_information_need_restart(
             current.information_need_id,
             InformationNeedState.WAITING_FOR_OWNER,
             expected_revision=current.revision,
-            evidence_refs=(f"windows_neighbor_cache_observed:{epoch:012d}:" + "a" * 64,),
+            evidence_refs=(
+                f"windows_neighbor_cache_observed:{epoch:012d}:" + "a" * 64,
+            ),
         )
     snapshots = [
         item
