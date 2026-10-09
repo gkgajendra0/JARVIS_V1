@@ -131,3 +131,26 @@ def test_real_windows_os_scope_inspection_sends_no_lan_probe() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert isinstance(_parse_networks(result.stdout), tuple)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ("timeout", "malformed-json", "oversized", "missing-result", "missing-stdout"),
+)
+def test_passive_scope_planner_handles_broken_windows_provider(
+    failure: str,
+) -> None:
+    def runner(*args, **kwargs):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(cmd="powershell.exe", timeout=5)
+        if failure == "malformed-json":
+            return SimpleNamespace(returncode=0, stdout="{not-json")
+        if failure == "oversized":
+            return SimpleNamespace(returncode=0, stdout=" " * 33000)
+        if failure == "missing-result":
+            return None
+        return SimpleNamespace(returncode=0)
+
+    planner = WindowsLanScopePlanner(runner=runner, platform="win32")
+    assert planner.inspect() == ()
+    assert planner.consent_scopes_for("television") == ()
