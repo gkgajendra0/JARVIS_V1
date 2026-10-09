@@ -435,8 +435,11 @@ def test_repeated_aep_advertisements_do_not_grow_protected_owner_records(
                 f"192.168.1.10:windows_aep_unverified:fixture:{n:04d}",
             ),
         )
-    assert sum(
-        item.startswith("windows_aep_neighbor_correlated_unverified:")
-        for item in need.evidence_refs
-    ) == 32
+    assert (
+        sum(
+            item.startswith("windows_aep_neighbor_correlated_unverified:")
+            for item in need.evidence_refs
+        )
+        == 32
+    )
     assert store.get_information_need(need.information_need_id) == need

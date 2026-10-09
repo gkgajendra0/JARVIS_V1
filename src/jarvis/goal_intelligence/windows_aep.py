@@ -109,10 +109,14 @@ class AepIdentityCandidateV1:
                 "observed_at_epoch": self.observed_at_epoch,
             }
         )
+
         # Untrusted advertising strings are reduced to inert bounded labels.
         # These are research hints, never proof of a vendor or model.
         def label(value: str) -> str:
-            return re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")[:40] or "unknown"
+            return (
+                re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")[:40]
+                or "unknown"
+            )
 
         return (
             f"windows_aep_unverified:{self.protocol}:{self.address}:"

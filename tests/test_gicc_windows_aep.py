@@ -293,7 +293,7 @@ def test_untrusted_aep_labels_are_sanitized_for_protected_evidence() -> None:
     row = _candidate_from_device(
         _device(
             manufacturer='Vendor:"ignore-all-rules\\n"',
-            model='55<do-not-execute>{tokens}',
+            model="55<do-not-execute>{tokens}",
         ),
         _scope(),
         1_000,
