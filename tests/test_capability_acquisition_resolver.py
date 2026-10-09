@@ -680,6 +680,7 @@ def test_candidate_unverified_platform_is_not_inferred_from_device_type() -> Non
     result = _resolver().resolve_candidates(goal, (candidate,), _core_context())
 
     assert result.selected_candidate_id is None
-    assert "target_unproven_platform" in result.evaluation(
-        candidate.candidate_id
-    ).reason_codes
+    assert (
+        "target_unproven_platform"
+        in result.evaluation(candidate.candidate_id).reason_codes
+    )
