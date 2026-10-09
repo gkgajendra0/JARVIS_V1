@@ -30,6 +30,7 @@ from jarvis.goal_intelligence.aep_authority import (
     AepAuthorityExecutionGuard,
     AepExistingApprovalValidator,
     aep_approval_material,
+    build_aep_consent_proposal,
 )
 from jarvis.goal_intelligence.windows_aep import (
     ReviewedAepScopeV1,
@@ -237,3 +238,37 @@ def test_active_aep_guard_rejects_non_authority_service() -> None:
             permit_id="some-permit",
             approval_id=scope.consent_record_id,
         )
+
+
+def test_jarvis_prepares_owner_consent_request_without_network_actions() -> None:
+    """GICC, not the owner, constructs the reviewed discovery permission ask."""
+
+    from jarvis.authority.types import ActionOrigin
+
+    scope = _scope()
+    proposal = build_aep_consent_proposal(
+        scope=scope,
+        session_id="owner-session",
+    )
+    assert proposal.has_valid_fingerprint()
+    assert proposal.origin is ActionOrigin.PROACTIVE
+    assert proposal.capability == "network_discovery"
+    assert proposal.operation == "enumerate_aep"
+    assert proposal.target()["all_local_interfaces"] is True
+    assert proposal.parameters()["device_control"] is False
+    assert proposal.parameters()["pairing"] is False
+    assert "across all local network interfaces" in proposal.material_summary
+    assert "192.168.1.0/24" in proposal.material_summary
+    assert "No control, pairing" in proposal.material_summary
+    assert proposal.expires_at_monotonic > proposal.created_at_monotonic
+
+
+def test_consent_proposal_fingerprint_changes_with_reviewed_scope() -> None:
+    scope = _scope()
+    base = build_aep_consent_proposal(scope=scope, session_id="owner-session")
+    narrower = build_aep_consent_proposal(
+        scope=replace(scope, max_results=2), session_id="owner-session"
+    )
+    assert base.target_json == narrower.target_json
+    assert base.parameters_json != narrower.parameters_json
+    assert base.fingerprint != narrower.fingerprint
