@@ -12,6 +12,8 @@ from jarvis.authority.permit import PermitStatus
 from jarvis.authority.proposal import ActionProposal, canonical_json
 from jarvis.authority.service import AuthorityService
 from jarvis.authority.types import (
+    ActionAttributes,
+    ActionOrigin,
     ApprovalRequirement,
     ApprovalStatus,
     InteractionContext,
@@ -38,6 +40,42 @@ def aep_approval_material(
             "device_control": False,
             "pairing": False,
         },
+    )
+
+
+def build_aep_consent_proposal(
+    *,
+    scope: ReviewedAepScopeV1,
+    session_id: str,
+    ttl_seconds: float = 120.0,
+) -> ActionProposal:
+    """Prepare an exact owner-facing request; never grant or execute it.
+
+    AEP discovery can emit active multicast/broadcast queries over ALL local
+    network interfaces. The listed address ranges filter *returned records*,
+    not the reach of those packets. That distinction must be visible before
+    the owner grants a one-shot, policy-audited execution permit.
+    """
+
+    target, parameters = aep_approval_material(scope)
+    ranges = ", ".join(scope.approved_address_ranges)
+    return ActionProposal.create(
+        session_id=session_id,
+        capability="network_discovery",
+        operation="enumerate_aep",
+        target=target,
+        parameters=parameters,
+        material_summary=(
+            f"Allow one {scope.protocol} Windows network-discovery query "
+            "across all local network interfaces? "
+            f"Keep only device results from {ranges}, "
+            f"wait at most {scope.timeout_seconds:g} seconds and retain no "
+            f"more than {scope.max_results} results. No control, pairing, "
+            "login or configuration changes will be attempted."
+        ),
+        attributes=ActionAttributes(external_side_effect=True),
+        origin=ActionOrigin.PROACTIVE,
+        ttl_seconds=ttl_seconds,
     )
 
 
