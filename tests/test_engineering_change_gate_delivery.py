@@ -67,6 +67,37 @@ def test_architecture_ready_is_surfaced_as_exact_owner_gate(tmp_path) -> None:
     assert change.change_id not in delivery.message
 
 
+def test_architecture_gate_message_discloses_physical_target_scopes(tmp_path) -> None:
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    store = ChangeStore(work)
+    coordinator = ChangeCoordinator(store, RecordingBackend())
+    change = coordinator.start("Acquire TV control", "session", "turn")
+    stage = store.list_stages(change.change_id)[0]
+    _complete(work, stage.work_id)
+    store.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={
+            "strategy": "build_custom",
+            "allowed_paths": ["src/jarvis/tv.py"],
+            "device_scopes": ["Verified living-room television"],
+            "network_scopes": ["Approved local TV endpoint only"],
+            "discovery_scopes": ["reviewed-discovery-scope"],
+            "owner_acceptance_contract_ids": ["real-target-readback"],
+        },
+    )
+    coordinator.reconcile(change.change_id)
+
+    assert reconcile_owner_change_gates(coordinator)
+    deliveries = work.list_pending_deliveries(limit=10)
+    assert len(deliveries) == 1
+    message = deliveries[0].message
+    assert "Verified living-room television" in message
+    assert "Approved local TV endpoint only" in message
+    assert "reviewed-discovery-scope" in message
+    assert "real-target-readback" in message
+
+
 def test_gate_reconciliation_is_idempotent_across_restart_style_rechecks(
     tmp_path,
 ) -> None:
