@@ -225,7 +225,7 @@ def test_information_resolver_uses_world_then_discovery_before_owner(
     result = information.resolve(need)
 
     # Service ads are useful observations, but do not identify a trusted TV.
-    assert result.state is InformationResolutionState.WAITING_FOR_OWNER
+    assert result.state is InformationResolutionState.NEEDS_OWNER
     assert result.need.resolution_ref is None
     assert any(
         ref.startswith("discovery:")
