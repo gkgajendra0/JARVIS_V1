@@ -3,7 +3,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from tests.test_gicc_windows_aep import FakeWatcher, _device
 from tests.test_gicc_composition import (
     FakePhase9Bridge,
     QueueStructuredClient,
@@ -12,6 +11,7 @@ from tests.test_gicc_composition import (
     _conversation,
     _store,
 )
+from tests.test_gicc_windows_aep import FakeWatcher, _device
 
 from jarvis.capabilities.models import (
     CapabilityDescriptor,
