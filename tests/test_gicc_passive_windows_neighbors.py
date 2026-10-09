@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -260,7 +262,9 @@ def test_recheck_eligibility_excludes_owner_only_information_and_secrets() -> No
     assert not can_rediscover_information(secret)
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows owner OS interface required")
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows owner OS interface required"
+)
 def test_windows_powershell_cache_enumeration_is_read_only_and_executable() -> None:
     """Catch a malformed Windows command before asking owner for acceptance."""
 
