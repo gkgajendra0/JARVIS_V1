@@ -135,9 +135,7 @@ def test_absent_authority_never_constructs_watcher() -> None:
     def forbidden(_):
         raise AssertionError("unauthorized WinRT watcher must not exist")
 
-    no_checker = WindowsAepIdentityBackend(
-        platform="win32", watcher_factory=forbidden
-    )
+    no_checker = WindowsAepIdentityBackend(platform="win32", watcher_factory=forbidden)
     assert no_checker.observe(_scope()) == ()
     refused = WindowsAepIdentityBackend(
         platform="win32",
@@ -166,7 +164,10 @@ def test_approved_aep_scan_returns_only_fresh_bounded_unverified_metadata() -> N
             _device(endpoint_id="missing-tv", present=False),
             _device(endpoint_id="outside-subnet", address="192.168.2.20"),
             _device(endpoint_id="public-ip", address="8.8.8.8"),
-            _device(endpoint_id="other-protocol", protocol="782232aa-a2f9-4993-971b-aedc551346b0"),
+            _device(
+                endpoint_id="other-protocol",
+                protocol="782232aa-a2f9-4993-971b-aedc551346b0",
+            ),
             _device(),  # identical repeated Added notification is harmless
         )
     )
@@ -194,9 +195,7 @@ def test_removed_device_excluded_before_snapshot() -> None:
 
 
 def test_duplicate_conflicting_identity_fails_closed_and_stops() -> None:
-    watcher = FakeWatcher(
-        rows=(_device(), _device(manufacturer="a conflicting label"))
-    )
+    watcher = FakeWatcher(rows=(_device(), _device(manufacturer="a conflicting label")))
     assert _backend(watcher).observe(_scope()) == ()
     assert watcher.stopped == 1
 
@@ -216,12 +215,10 @@ def test_never_accept_partial_scan_on_timeout() -> None:
 
 
 def test_missing_presence_and_invalid_address_never_confirms_device() -> None:
-    assert _candidate_from_device(
-        _device(present="true"), _scope(), 1_000
-    ) is None
-    assert _candidate_from_device(
-        _device(address="169.254.0.5"), _scope(), 1_000
-    ) is None
+    assert _candidate_from_device(_device(present="true"), _scope(), 1_000) is None
+    assert (
+        _candidate_from_device(_device(address="169.254.0.5"), _scope(), 1_000) is None
+    )
     assert _normalize_protocol("not-a-uuid") is None
 
 

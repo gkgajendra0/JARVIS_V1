@@ -115,8 +115,7 @@ def _valid_address(raw: object, scope: ReviewedAepScopeV1) -> str | None:
     except (ValueError, TypeError):
         return None
     if not any(
-        address in ipaddress.IPv4Network(cidr)
-        for cidr in scope.approved_address_ranges
+        address in ipaddress.IPv4Network(cidr) for cidr in scope.approved_address_ranges
     ):
         return None
     return str(address)
@@ -154,7 +153,9 @@ def _candidate_from_device(
             manufacturer=str(
                 properties.get("System.Devices.Aep.Manufacturer") or ""
             ).strip()[:128],
-            model=str(properties.get("System.Devices.Aep.ModelName") or "").strip()[:128],
+            model=str(properties.get("System.Devices.Aep.ModelName") or "").strip()[
+                :128
+            ],
             observed_at_epoch=at_epoch,
         )
     except (AttributeError, TypeError, ValueError):
@@ -164,14 +165,19 @@ def _candidate_from_device(
 def _winrt_watcher_factory(scope: ReviewedAepScopeV1) -> object:
     """Uses a protocol-specific selector, never an unfiltered CreateWatcher."""
 
-    from winrt.windows.devices.enumeration import DeviceInformation, DeviceInformationKind
+    from winrt.windows.devices.enumeration import (
+        DeviceInformation,
+        DeviceInformationKind,
+    )
 
     protocol = _PROTOCOLS[scope.protocol]
     aqs = f'System.Devices.Aep.ProtocolId:="{{{protocol}}}"'
-    return DeviceInformation.create_watcher_with_kind_aqs_filter_and_additional_properties(
-        aqs,
-        _PROPERTIES,
-        DeviceInformationKind.ASSOCIATION_ENDPOINT,
+    return (
+        DeviceInformation.create_watcher_with_kind_aqs_filter_and_additional_properties(
+            aqs,
+            _PROPERTIES,
+            DeviceInformationKind.ASSOCIATION_ENDPOINT,
+        )
     )
 
 
@@ -182,7 +188,9 @@ class WindowsAepIdentityBackend:
         self,
         *,
         is_authorized: Callable[[ReviewedAepScopeV1], bool] | None = None,
-        watcher_factory: Callable[[ReviewedAepScopeV1], object] = _winrt_watcher_factory,
+        watcher_factory: Callable[
+            [ReviewedAepScopeV1], object
+        ] = _winrt_watcher_factory,
         platform: str | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
@@ -191,9 +199,7 @@ class WindowsAepIdentityBackend:
         self._platform = sys.platform if platform is None else platform
         self._clock = clock
 
-    def observe(
-        self, scope: ReviewedAepScopeV1
-    ) -> tuple[AepIdentityCandidateV1, ...]:
+    def observe(self, scope: ReviewedAepScopeV1) -> tuple[AepIdentityCandidateV1, ...]:
         if not isinstance(scope, ReviewedAepScopeV1):
             raise TypeError("AEP requires a reviewed scope")
         if self._platform != "win32" or self._authorized is None:
