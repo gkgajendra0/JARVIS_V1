@@ -502,6 +502,30 @@ def _targeted_custom_build(goal: OwnerCapabilityGoalV1) -> AcquisitionCandidateV
     )
 
 
+def test_abstract_software_utility_remains_buildable_without_device() -> None:
+    goal = OwnerCapabilityGoalV1.create(
+        request="Build a reusable numeric transformation",
+        requested_capability="example.utility",
+        required_operations=("transform",),
+        target_hints=("entity_type:software",),
+        source_session_id="generic-utility",
+        source_turn_id="generic-utility-turn",
+        now_epoch=100.0,
+    )
+    fallback = _targeted_custom_build(goal)
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (fallback,),
+        _core_context(),
+    )
+
+    assert result.selected_candidate_id == fallback.candidate_id
+    assert result.evaluation(fallback.candidate_id).disposition is (
+        AcquisitionDisposition.SELECTABLE
+    )
+
+
 def test_unidentified_television_must_not_select_custom_build_from_goal_alone() -> None:
     goal = _targeted_goal()
     fallback = _targeted_custom_build(goal)
