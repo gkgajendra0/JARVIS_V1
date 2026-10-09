@@ -30,6 +30,10 @@ from jarvis.goal_intelligence.models import (
     OwnerGoalV2,
 )
 from jarvis.goal_intelligence.store import GoalStore
+from jarvis.goal_intelligence.windows_aep import (
+    ReviewedAepScopeV1,
+    WindowsAepIdentityBackend,
+)
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -309,3 +313,92 @@ def test_windows_powershell_cache_enumeration_is_read_only_and_executable() -> N
     )
     assert result.returncode == 0, result.stderr
     assert isinstance(_parse_rows(result.stdout), tuple)
+
+
+def test_correlate_authorized_aep_only_with_existing_neighbor_evidence() -> None:
+    from tests.test_gicc_windows_aep import FakeWatcher, _device
+
+    scope = ReviewedAepScopeV1(
+        protocol="upnp",
+        approved_address_ranges=("192.168.1.0/24",),
+        consent_record_id="reviewed-fixture",
+        all_local_interfaces_authorized=True,
+        timeout_seconds=0.25,
+    )
+    approved = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda value: value == scope,
+        watcher_factory=lambda value: FakeWatcher(
+            rows=(
+                _device(endpoint_id="matched", address="192.168.1.10"),
+                _device(endpoint_id="not-in-neighbors", address="192.168.1.22"),
+            )
+        ),
+        clock=lambda: 1000.0,
+    )
+    neighbor = _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")])
+    probe = WindowsNeighborInformationProbe(
+        neighbor, aep_backend=approved, aep_scopes=(scope,)
+    )
+    result = probe.resolve(_need("goal_aep"))
+    assert not result.resolved
+    assert sum(
+        item.startswith("windows_aep_neighbor_correlated_unverified:")
+        for item in result.evidence_refs
+    ) == 1
+    assert any(
+        item.startswith("windows_aep_neighbor_correlated_unverified:192.168.1.10:")
+        for item in result.evidence_refs
+    )
+
+
+def test_no_aep_backend_or_scope_means_no_active_network_enumeration() -> None:
+    class ExplodingBackend:
+        def observe(self, scope):
+            raise AssertionError("unauthorized active enumeration")
+
+    neighbor = _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")])
+    result = WindowsNeighborInformationProbe(
+        neighbor, aep_backend=ExplodingBackend()
+    ).resolve(_need("goal_inactive"))
+    assert not any("windows_aep_" in value for value in result.evidence_refs)
+    with pytest.raises(ValueError, match="authorized backend"):
+        WindowsNeighborInformationProbe(
+            neighbor,
+            aep_scopes=(
+                ReviewedAepScopeV1(
+                    protocol="upnp",
+                    approved_address_ranges=("192.168.1.0/24",),
+                    consent_record_id="missing-checker",
+                    all_local_interfaces_authorized=True,
+                ),
+            ),
+        )
+
+
+def test_conflicting_aep_advertisements_do_not_correlate_as_identity() -> None:
+    from tests.test_gicc_windows_aep import FakeWatcher, _device
+
+    scope = ReviewedAepScopeV1(
+        protocol="upnp",
+        approved_address_ranges=("192.168.1.0/24",),
+        consent_record_id="fixture",
+        all_local_interfaces_authorized=True,
+    )
+    aep = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda _: True,
+        watcher_factory=lambda _: FakeWatcher(
+            rows=(
+                _device(endpoint_id="first", manufacturer="Vendor A"),
+                _device(endpoint_id="second", manufacturer="Vendor B"),
+            )
+        ),
+    )
+    probe = WindowsNeighborInformationProbe(
+        _backend([_entry("192.168.1.10", "50-BA-02-AE-0D-18")]),
+        aep_backend=aep,
+        aep_scopes=(scope,),
+    )
+    result = probe.resolve(_need("goal_conflict"))
+    assert not any("windows_aep_" in ref for ref in result.evidence_refs)
