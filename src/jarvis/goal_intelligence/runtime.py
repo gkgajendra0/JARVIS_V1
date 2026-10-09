@@ -807,9 +807,7 @@ def build_gicc_apply_runtime(
     capability_context: AcquisitionContextProvider,
     telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     approved_aep_scopes: tuple[ReviewedAepScopeV1, ...] = (),
-    trusted_aep_consent_validator: (
-        Callable[[ReviewedAepScopeV1], bool] | None
-    ) = None,
+    trusted_aep_consent_validator: (Callable[[ReviewedAepScopeV1], bool] | None) = None,
 ) -> GiccApplyRuntime:
     """Compose GICC APPLY without creating new Authority or execution substrates."""
 
