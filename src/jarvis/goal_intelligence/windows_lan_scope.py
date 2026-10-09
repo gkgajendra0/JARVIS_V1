@@ -123,7 +123,14 @@ class WindowsLanScopePlanner:
             if len(output.encode("utf-8")) > _MAX_BYTES:
                 return ()
             return _parse_networks(output)
-        except (OSError, ValueError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        except (
+            AttributeError,
+            TypeError,
+            OSError,
+            ValueError,
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+        ):
             return ()
 
     def consent_scopes_for(
