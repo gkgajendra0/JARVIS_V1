@@ -122,10 +122,10 @@ def evaluate_candidate_target_compatibility(
     # identified physical/remote endpoint. Do not require a manufacturer or
     # device-protocol attestation merely because GICC labels it "software".
     # Additional dimensions (vendor, model, protocol, etc.) still require proof.
-    if (
-        set(required) == {"entity_type"}
-        and required["entity_type"] <= {"software", "generic_external_resource"}
-    ):
+    if set(required) == {"entity_type"} and required["entity_type"] <= {
+        "software",
+        "generic_external_resource",
+    }:
         required = {}
         required_values = ()
 
