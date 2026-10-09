@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from tests.test_gicc_windows_aep import FakeWatcher, _device
 from tests.test_gicc_composition import (
     FakePhase9Bridge,
     QueueStructuredClient,
@@ -54,6 +55,10 @@ from jarvis.goal_intelligence.requirements import (
     RequirementDeriver,
 )
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
+from jarvis.goal_intelligence.windows_aep import (
+    ReviewedAepScopeV1,
+    WindowsAepIdentityBackend,
+)
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
 from jarvis.goal_intelligence.world_discovery import EntityInformationProbe
 from jarvis.hands.provider_adapters import StructuredOutputTelemetry
@@ -678,6 +683,18 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
         ),
     )
     entity_resolver = EntityResolver(registry)
+    aep_scope = ReviewedAepScopeV1(
+        protocol="upnp",
+        approved_address_ranges=("192.168.1.0/24",),
+        consent_record_id="synthetic-authorized-aep",
+        all_local_interfaces_authorized=True,
+    )
+    aep_backend = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda _: True,
+        watcher_factory=lambda _: FakeWatcher(rows=(_device(),)),
+        clock=lambda: 1000.0,
+    )
     information_resolver = InformationResolver(
         store=store,
         probes=(
@@ -685,7 +702,11 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
                 entity_resolver,
                 strategy=InformationResolutionStrategy.WORLD_REGISTRY,
             ),
-            WindowsNeighborInformationProbe(windows_backend),
+            WindowsNeighborInformationProbe(
+                windows_backend,
+                aep_backend=aep_backend,
+                aep_scopes=(aep_scope,),
+            ),
         ),
     )
     phase9 = FakePhase9Bridge()
@@ -715,6 +736,10 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
         for item in result.information_needs[0].evidence_refs
     )
     assert registry.entities() == ()
+    assert any(
+        ref.startswith("windows_aep_neighbor_correlated_unverified:")
+        for ref in result.information_needs[0].evidence_refs
+    )
 
     # The device becomes independently available after the original attempt.
     # Explicit bounded rediscovery must resume the SAME durable GICC goal.
