@@ -320,6 +320,13 @@ class GoalIntelligenceCoordinator:
                 needs.append(resolution.need)
                 if resolution.interaction is not None:
                     interactions.append(resolution.interaction)
+            # Some approved information sources may have already resolved the
+            # exact identity during this intake. Never leave a goal waiting
+            # for owner input after every missing fact was resolved by JARVIS.
+            if needs and all(
+                need.resolution_ref is not None for need in needs
+            ):
+                return await self.continue_goal(goal.goal_id)
             return GoalIntakeResult(
                 disposition=GoalIntakeDisposition.WAITING_INFORMATION,
                 goal=goal,
@@ -367,11 +374,22 @@ class GoalIntelligenceCoordinator:
                     goal=goal,
                     information_needs=unresolved,
                 )
+            # A goal may have both an already-trusted target and a second
+            # target resolved later. Preserve all initial references when
+            # advancing the same durable goal after a discovery retry.
             entity_ids = tuple(
-                need.resolution_ref
-                for need in needs
-                if need.resolution_ref is not None
-                and self._store.get_entity(need.resolution_ref) is not None
+                sorted(
+                    {
+                        *goal.referenced_entity_ids,
+                        *(
+                            need.resolution_ref
+                            for need in needs
+                            if need.resolution_ref is not None
+                            and self._store.get_entity(need.resolution_ref)
+                            is not None
+                        ),
+                    }
+                )
             )
             goal = self._store.update_goal_referenced_entities(
                 goal.goal_id,
