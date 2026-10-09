@@ -112,7 +112,10 @@ def _parse_rows(raw: str) -> tuple[PassiveNeighborV1, ...]:
         results[(item.ip_address, item.mac_address)] = item
     ordered = sorted(
         results.values(),
-        key=lambda item: (int(ipaddress.IPv4Address(item.ip_address)), item.mac_address),
+        key=lambda item: (
+            int(ipaddress.IPv4Address(item.ip_address)),
+            item.mac_address,
+        ),
     )
     return tuple(ordered[:_MAX_ROWS])
 
