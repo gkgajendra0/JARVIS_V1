@@ -41,9 +41,7 @@ def _planner(rows, *, platform: str = "win32", calls=None):
 
 def test_os_derived_media_scopes_do_not_require_owner_ip_entry() -> None:
     calls = []
-    planner = _planner(
-        [_row("192.168.1.6"), _row("192.168.1.8")], calls=calls
-    )
+    planner = _planner([_row("192.168.1.6"), _row("192.168.1.8")], calls=calls)
     scopes = planner.consent_scopes_for("smart_tv")
     assert [scope.protocol for scope in scopes] == ["upnp", "dns_sd"]
     assert all(scope.approved_address_ranges == ("192.168.1.0/24",) for scope in scopes)
@@ -54,9 +52,7 @@ def test_os_derived_media_scopes_do_not_require_owner_ip_entry() -> None:
     assert "Get-NetIPAddress" in calls[0][0][-1]
     assert "Get-NetRoute" in calls[0][0][-1]
     assert "Test-NetConnection" not in calls[0][0][-1]
-    proposal = build_aep_consent_proposal(
-        scope=scopes[0], session_id="owner-session"
-    )
+    proposal = build_aep_consent_proposal(scope=scopes[0], session_id="owner-session")
     assert "192.168.1.0/24" in proposal.material_summary
     assert "all local network interfaces" in proposal.material_summary
 
