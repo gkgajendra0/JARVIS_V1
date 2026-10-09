@@ -713,8 +713,12 @@ class InformationNeedV1:
         resolved_at: str | None = None,
     ) -> InformationNeedV1:
         reference = _text(resolution_ref, field="resolution_ref")
+        # Repeated observations may be saved before a later retry resolves
+        # the same need. Joining both snapshots without deduplication would
+        # reject valid resolution and strand the owner's original goal.
         combined = _tokens(
-            tuple(self.evidence_refs) + tuple(evidence_refs), field="evidence_ref"
+            tuple(dict.fromkeys((*self.evidence_refs, *evidence_refs))),
+            field="evidence_ref",
         )
         candidate = replace(
             self,

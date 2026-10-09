@@ -218,3 +218,36 @@ def test_another_need_cannot_receive_bound_reply(tmp_path: Path) -> None:
             goal_id=goal.goal_id,
             information_need_id=second.need.information_need_id,
         )
+
+
+def test_resolution_merges_repeated_observation_evidence_without_duplicates(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    unresolved = store.create_information_need(
+        InformationNeedV1.create(
+            goal_id=goal.goal_id,
+            category=InformationNeedCategory.AMBIGUOUS_REFERENCE,
+            subject="my TV",
+            required_fact="independently reviewed TV target",
+            why_required="prevent an incorrect device action",
+            allowed_resolution_sources=("world_registry", "owner_input"),
+            evidence_refs=("owner_inventory:verified_owner_selection",),
+        )
+    )
+    resolved = store.resolve_information_need(
+        unresolved.information_need_id,
+        resolution_ref="entity:tv-a",
+        evidence_refs=(
+            "owner_inventory:verified_owner_selection",
+            "world_exact:entity:tv-a",
+        ),
+        expected_revision=unresolved.revision,
+        resolved_at="2026-10-01T12:05:00+00:00",
+    )
+    assert resolved.evidence_refs == (
+        "owner_inventory:verified_owner_selection",
+        "world_exact:entity:tv-a",
+    )
+    assert resolved.state is InformationNeedState.RESOLVED
+    assert store.get_information_need(unresolved.information_need_id) == resolved
