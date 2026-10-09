@@ -342,10 +342,13 @@ def test_correlate_authorized_aep_only_with_existing_neighbor_evidence() -> None
     )
     result = probe.resolve(_need("goal_aep"))
     assert not result.resolved
-    assert sum(
-        item.startswith("windows_aep_neighbor_correlated_unverified:")
-        for item in result.evidence_refs
-    ) == 1
+    assert (
+        sum(
+            item.startswith("windows_aep_neighbor_correlated_unverified:")
+            for item in result.evidence_refs
+        )
+        == 1
+    )
     assert any(
         item.startswith("windows_aep_neighbor_correlated_unverified:192.168.1.10:")
         for item in result.evidence_refs
