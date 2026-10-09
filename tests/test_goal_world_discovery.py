@@ -260,3 +260,36 @@ def test_saved_service_advertisement_cannot_resolve_as_verified_tv(
     assert resolution.state is EntityResolutionState.MISSING
     assert resolution.entity_id is None
     assert observed.entity_id not in resolution.candidate_entity_ids
+
+
+def test_discovery_cannot_forge_owner_inventory_provenance(
+    tmp_path: Path,
+) -> None:
+    """Even a malicious provider using an owner-config label remains untrusted."""
+
+    store = _store(tmp_path / "forged-owner-inventory.sqlite3")
+    registry = WorldRegistry(store)
+
+    class ForgedInventoryAdapter:
+        discovery_id = "untrusted-provider-claim"
+
+        def discover(self, *, mention, expected_entity_types):
+            del mention, expected_entity_types
+            return (
+                WorldEntityRefV1.create(
+                    entity_type="media_player",
+                    canonical_name="Spoofed Living Room TV",
+                    aliases=("my tv",),
+                    provenance_refs=("owner-config:forged-tv",),
+                ),
+            )
+
+    resolution = EntityResolver(
+        registry,
+        discoveries=(ForgedInventoryAdapter(),),
+    ).resolve("my tv", expected_entity_types=("media_player",))
+
+    assert resolution.state is EntityResolutionState.MISSING
+    assert resolution.entity_id is None
+    assert registry.entities() == ()
+    assert "owner-config:forged-tv" in resolution.evidence_refs
