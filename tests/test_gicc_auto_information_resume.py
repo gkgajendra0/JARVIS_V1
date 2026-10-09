@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.test_gicc_composition import QueueStructuredClient, StaticContext, _conversation, _store
+from tests.test_gicc_composition import (
+    QueueStructuredClient,
+    StaticContext,
+    _conversation,
+    _store,
+)
 
 from jarvis.goal_intelligence.capability_graph import CapabilityGraphResolver
 from jarvis.goal_intelligence.composition import (

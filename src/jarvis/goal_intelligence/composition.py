@@ -323,9 +323,7 @@ class GoalIntelligenceCoordinator:
             # Some approved information sources may have already resolved the
             # exact identity during this intake. Never leave a goal waiting
             # for owner input after every missing fact was resolved by JARVIS.
-            if needs and all(
-                need.resolution_ref is not None for need in needs
-            ):
+            if needs and all(need.resolution_ref is not None for need in needs):
                 return await self.continue_goal(goal.goal_id)
             return GoalIntakeResult(
                 disposition=GoalIntakeDisposition.WAITING_INFORMATION,
@@ -385,8 +383,7 @@ class GoalIntelligenceCoordinator:
                             need.resolution_ref
                             for need in needs
                             if need.resolution_ref is not None
-                            and self._store.get_entity(need.resolution_ref)
-                            is not None
+                            and self._store.get_entity(need.resolution_ref) is not None
                         ),
                     }
                 )
