@@ -119,6 +119,7 @@ class InformationResolver:
             if item in {strategy.value for strategy in InformationResolutionStrategy}
         }
         attempted: list[InformationResolutionStrategy] = []
+        observed_evidence: set[str] = set()
 
         for strategy in _DEFAULT_ORDER:
             if strategy not in allowed:
@@ -128,11 +129,12 @@ class InformationResolver:
             if probe is None:
                 continue
             result = probe.resolve(current)
+            observed_evidence.update(result.evidence_refs)
             if result.resolved:
                 resolved = self._store.resolve_information_need(
                     current.information_need_id,
                     resolution_ref=str(result.resolution_ref),
-                    evidence_refs=result.evidence_refs,
+                    evidence_refs=tuple(sorted(observed_evidence)),
                     expected_revision=current.revision,
                     resolved_at=datetime.now(UTC).isoformat(),
                 )
@@ -160,6 +162,7 @@ class InformationResolver:
                     InformationResolutionStrategy.SECRET_FLOW.value,
                 ),
                 owner_question=owner_question,
+                evidence_refs=tuple(sorted(observed_evidence)),
             )
             interaction = self._store.begin_information_interaction(
                 need_id=updated.information_need_id,
@@ -182,6 +185,7 @@ class InformationResolver:
                 expected_revision=current.revision,
                 self_resolution_attempts=attempt_values,
                 owner_question=owner_question,
+                evidence_refs=tuple(sorted(observed_evidence)),
             )
             interaction = self._store.begin_information_interaction(
                 need_id=updated.information_need_id,
@@ -199,6 +203,7 @@ class InformationResolver:
             InformationNeedState.SELF_RESOLVING,
             expected_revision=current.revision,
             self_resolution_attempts=attempt_values,
+            evidence_refs=tuple(sorted(observed_evidence)),
         )
         return InformationResolutionResult(
             state=InformationResolutionState.UNRESOLVED,
