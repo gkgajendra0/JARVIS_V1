@@ -283,8 +283,11 @@ class WindowsAepIdentityBackend:
             ):
                 token = getattr(watcher, f"add_{kind}")(handler)
                 tokens.append((kind, token))
-            watcher.start()
+            # start() can activate a watcher and still raise (e.g. while
+            # dispatching a callback). Attempt stop in all such cases; do not
+            # leave an active discovery watcher running after an exception.
             started = True
+            watcher.start()
             # On timeout discard incomplete snapshots, not just late records.
             if not finished.wait(scope.timeout_seconds):
                 return ()
