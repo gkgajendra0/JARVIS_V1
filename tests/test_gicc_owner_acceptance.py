@@ -27,14 +27,14 @@ from jarvis.goal_intelligence.information import (
     InformationResolver,
     restore_bound_information_interaction,
 )
-from jarvis.goal_intelligence.local_network import (
-    WindowsNeighborInformationProbe,
-    WindowsPassiveNeighborBackend,
-)
 from jarvis.goal_intelligence.interpretation import (
     GoalInterpreter,
     ShadowEntityCandidate,
     ShadowGoalInterpretationOutput,
+)
+from jarvis.goal_intelligence.local_network import (
+    WindowsNeighborInformationProbe,
+    WindowsPassiveNeighborBackend,
 )
 from jarvis.goal_intelligence.models import (
     GoalKind,
