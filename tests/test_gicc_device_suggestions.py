@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.test_gicc_network_consent import _data
 
 from jarvis.goal_intelligence.device_suggestions import (
     pending_owner_device_suggestions,
@@ -12,9 +13,6 @@ from jarvis.goal_intelligence.device_suggestions import (
 from jarvis.goal_intelligence.models import InformationNeedState
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.windows_aep import AepIdentityCandidateV1
-from tests.test_gicc_network_consent import _data
-
-
 def _evidence(
     address: str = "192.168.1.22",
     *,
