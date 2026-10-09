@@ -11,9 +11,9 @@ import pytest
 
 from jarvis.goal_intelligence.aep_authority import build_aep_consent_proposal
 from jarvis.goal_intelligence.windows_lan_scope import (
+    _PASSIVE_SCOPE_SCRIPT,
     WindowsLanScopePlanner,
     _parse_networks,
-    _PASSIVE_SCOPE_SCRIPT,
 )
 
 
