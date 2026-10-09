@@ -12,7 +12,8 @@ import re
 import time
 from dataclasses import dataclass
 
-from .models import GoalState, InformationNeedState
+from .information import can_rediscover_information
+from .models import GoalState
 from .store import GoalStore
 from .world import canonical_world_entity_type
 
@@ -115,7 +116,7 @@ def pending_owner_device_suggestions(
     grouped: dict[str, list[UnverifiedDeviceSuggestionV1]] = {}
     for need in store.list_information_needs(goal_id=goal.goal_id):
         if (
-            need.state is InformationNeedState.RESOLVED
+            not can_rediscover_information(need)
             or need.answer_schema.get("type") != "entity_id"
             or canonical_world_entity_type(need.answer_schema.get("entity_type"))
             not in {"media_player", "camera"}
