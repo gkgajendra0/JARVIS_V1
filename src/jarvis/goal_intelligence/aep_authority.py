@@ -24,16 +24,32 @@ from .windows_aep import ReviewedAepScopeV1
 
 def aep_approval_material(
     scope: ReviewedAepScopeV1,
+    *,
+    goal_id: str | None = None,
+    need_id: str | None = None,
 ) -> tuple[dict[str, object], dict[str, object]]:
-    """Exact target and parameters for the canonical Authority proposal."""
+    """Bind one network discovery to a specific GICC goal when provided."""
 
+    if (goal_id is None) != (need_id is None):
+        raise ValueError("goal and information need must be bound together")
+    target: dict[str, object] = {
+        "resource": "windows_association_endpoint_discovery",
+        "protocol": scope.protocol,
+        "address_result_filters": list(scope.approved_address_ranges),
+        "all_local_interfaces": scope.all_local_interfaces_authorized,
+    }
+    if goal_id is not None and need_id is not None:
+        if (
+            not isinstance(goal_id, str)
+            or not goal_id.strip()
+            or not isinstance(need_id, str)
+            or not need_id.strip()
+        ):
+            raise ValueError("discovery needs concrete goal and information need IDs")
+        target["gicc_goal_id"] = goal_id.strip()
+        target["gicc_need_id"] = need_id.strip()
     return (
-        {
-            "resource": "windows_association_endpoint_discovery",
-            "protocol": scope.protocol,
-            "address_result_filters": list(scope.approved_address_ranges),
-            "all_local_interfaces": scope.all_local_interfaces_authorized,
-        },
+        target,
         {
             "timeout_seconds": scope.timeout_seconds,
             "max_results": scope.max_results,
@@ -43,10 +59,28 @@ def aep_approval_material(
     )
 
 
+def _material_for_proposal(
+    scope: ReviewedAepScopeV1, proposal: ActionProposal
+) -> tuple[dict[str, object], dict[str, object]] | None:
+    """Rebuild exact proposal material while preserving goal lineage."""
+
+    values = proposal.target()
+    goal_id = values.get("gicc_goal_id")
+    need_id = values.get("gicc_need_id")
+    if (goal_id is None) != (need_id is None):
+        return None
+    try:
+        return aep_approval_material(scope, goal_id=goal_id, need_id=need_id)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_aep_consent_proposal(
     *,
     scope: ReviewedAepScopeV1,
     session_id: str,
+    goal_id: str | None = None,
+    need_id: str | None = None,
     ttl_seconds: float = 120.0,
 ) -> ActionProposal:
     """Prepare an exact owner-facing request; never grant or execute it.
@@ -57,7 +91,9 @@ def build_aep_consent_proposal(
     the owner grants a one-shot, policy-audited execution permit.
     """
 
-    target, parameters = aep_approval_material(scope)
+    target, parameters = aep_approval_material(
+        scope, goal_id=goal_id, need_id=need_id
+    )
     ranges = ", ".join(scope.approved_address_ranges)
     return ActionProposal.create(
         session_id=session_id,
@@ -111,7 +147,10 @@ class AepExistingApprovalValidator:
             or self._proposal.operation != "enumerate_aep"
         ):
             return False
-        target, parameters = aep_approval_material(scope)
+        material = _material_for_proposal(scope, self._proposal)
+        if material is None:
+            return False
+        target, parameters = material
         if self._proposal.target_json != canonical_json(
             target
         ) or self._proposal.parameters_json != canonical_json(parameters):
@@ -167,6 +206,15 @@ class AepAuthorityExecutionGuard:
 
         return self._context.session_id
 
+    def binds_information_need(self, *, goal_id: str, need_id: str) -> bool:
+        """Deny redirecting a one-time scan to an unrelated owner goal."""
+
+        target = self._proposal.target()
+        return (
+            target.get("gicc_goal_id") == goal_id
+            and target.get("gicc_need_id") == need_id
+        )
+
     def __call__(self, scope: ReviewedAepScopeV1) -> bool:
         if not isinstance(scope, ReviewedAepScopeV1):
             return False
@@ -177,7 +225,10 @@ class AepAuthorityExecutionGuard:
             or self._proposal.operation != "enumerate_aep"
         ):
             return False
-        target, parameters = aep_approval_material(scope)
+        material = _material_for_proposal(scope, self._proposal)
+        if material is None:
+            return False
+        target, parameters = material
         if self._proposal.target_json != canonical_json(
             target
         ) or self._proposal.parameters_json != canonical_json(parameters):
