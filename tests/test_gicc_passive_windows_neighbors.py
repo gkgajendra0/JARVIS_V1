@@ -431,8 +431,8 @@ def test_repeated_aep_advertisements_do_not_grow_protected_owner_records(
             InformationNeedState.WAITING_FOR_OWNER,
             expected_revision=need.revision,
             evidence_refs=(
-                "windows_aep_neighbor_correlated_unverified:"
-                f"192.168.1.10:windows_aep_unverified:fixture:{n:04d}",
+                "windows_aep_neighbor_correlated_unverified:192.168.1.10:"
+                + f"windows_aep_unverified:fixture:{n:04d}",
             ),
         )
     assert (
