@@ -453,12 +453,12 @@ class EntityResolver:
                     if (
                         canonical_world_entity_type(entity.entity_type)
                         in _PHYSICAL_TARGET_TYPES
-                        and not has_independent_target_provenance(
-                            entity.provenance_refs
-                        )
                     ):
-                        # Network service ads are useful research observations,
-                        # but do not create an ACTIVE canonical TV/camera.
+                        # A discovery adapter can return arbitrary provenance
+                        # strings, including forged "owner-config:" labels.
+                        # Its own claim cannot elevate a physical target into
+                        # the owner-reviewed canonical inventory. A distinct,
+                        # explicitly verified admission path is required.
                         observation_refs.update(entity.provenance_refs)
                         continue
                     self._registry.register_entity(entity)
