@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from tests.test_gicc_windows_aep import FakeWatcher, _device
 
 from jarvis.authority.approval import ApprovalService
 from jarvis.authority.proposal import ActionProposal
@@ -22,8 +23,6 @@ from jarvis.goal_intelligence.windows_aep import (
     ReviewedAepScopeV1,
     WindowsAepIdentityBackend,
 )
-from tests.test_gicc_windows_aep import FakeWatcher, _device
-
 
 def _scope(*, record: str = "pending") -> ReviewedAepScopeV1:
     return ReviewedAepScopeV1(
