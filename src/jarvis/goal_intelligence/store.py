@@ -1078,6 +1078,14 @@ class GoalStore:
             if len(aep_refs) > 32:
                 outdated = set(aep_refs[:-32])
                 evidence = tuple(item for item in evidence if item not in outdated)
+            standalone = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_aep_discovered_unverified:")
+            )
+            if len(standalone) > 32:
+                outdated = set(standalone[:-32])
+                evidence = tuple(item for item in evidence if item not in outdated)
             if (
                 current.state is state
                 and attempts == current.self_resolution_attempts
