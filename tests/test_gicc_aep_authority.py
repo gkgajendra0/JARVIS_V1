@@ -24,6 +24,7 @@ from jarvis.goal_intelligence.windows_aep import (
     WindowsAepIdentityBackend,
 )
 
+
 def _scope(*, record: str = "pending") -> ReviewedAepScopeV1:
     return ReviewedAepScopeV1(
         protocol="upnp",
