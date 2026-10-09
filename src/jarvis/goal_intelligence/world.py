@@ -113,13 +113,18 @@ def _generic_reference_types(mention: str) -> tuple[str, ...]:
     return tuple(sorted(set(inferred)))
 
 
-_UNVERIFIED_PHYSICAL_PROVENANCE = (
-    "discovery:",
-    "discovery_evidence:",
-    "machine_config:",
-    "windows_neighbor_",
-    "windows_aep_",
-    "world_discovery_unverified:",
+# A physical device identity is an explicit owner inventory entry or verified
+# local-computer binding, not arbitrary model/provider-generated evidence text.
+# Device advertisements and configuration routing hints never become identity.
+# Future device attestors must extend this reviewed contract and its tests
+# rather than relying on unknown provenance strings.
+_TRUSTED_OWNER_INVENTORY_PREFIXES = (
+    "owner_inventory:",
+    "owner-config:",
+    "owner:device",
+)
+_TRUSTED_LOCAL_COMPUTER_PROVENANCE = frozenset(
+    {"capability_runtime:local_machine", "machine:current"}
 )
 _PHYSICAL_TARGET_TYPES = frozenset(
     {"media_player", "camera", "computer", "display", "speaker", "printer"}
@@ -127,21 +132,26 @@ _PHYSICAL_TARGET_TYPES = frozenset(
 
 
 def has_independent_target_provenance(refs: tuple[str, ...] | list[str]) -> bool:
-    """Reject *only* observation/configuration metadata as physical identity.
+    """Require reviewed owner inventory or actual local computer identity.
 
-    A remaining independently reviewed source is an identity prerequisite,
-    NOT evidence of pairing, control authority, device model or physical effect.
+    This is a prerequisite for planning, NOT evidence of model, pairing,
+    remote endpoint authorization or a physical command succeeding.
     """
 
     if not isinstance(refs, tuple | list):
         return False
-    if any(not isinstance(ref, str) for ref in refs):
-        return False
-    return any(
-        ref.strip()
-        and not ref.strip().casefold().startswith(_UNVERIFIED_PHYSICAL_PROVENANCE)
-        for ref in refs
-    )
+    for ref in refs:
+        if not isinstance(ref, str):
+            return False
+        normalized = ref.strip().casefold()
+        if normalized in _TRUSTED_LOCAL_COMPUTER_PROVENANCE:
+            return True
+        if normalized == "reviewed-owner-inventory":
+            return True
+        for prefix in _TRUSTED_OWNER_INVENTORY_PREFIXES:
+            if normalized.startswith(prefix) and len(normalized) > len(prefix):
+                return True
+    return False
 
 
 class WorldRegistry:

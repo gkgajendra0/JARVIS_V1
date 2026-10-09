@@ -336,6 +336,8 @@ def test_physical_alias_cannot_bypass_missing_canonical_identity(
         ("machine_config:default_media_target",),
         ("windows_aep_unverified:fixture",),
         ("windows_neighbor_unverified:fixture",),
+        ("unreviewed:claim",),
+        ("discovery:sample", "unreviewed:claim"),
     ),
 )
 def test_architecture_rejects_observation_only_physical_provenance(

@@ -184,3 +184,30 @@ def test_config_preference_cannot_bind_physical_requirement() -> None:
         get_entity=lambda _: configured,
     )
     assert missing == ("media_player",)
+
+
+@pytest.mark.parametrize(
+    "untrusted",
+    (
+        ("unreviewed:claim",),
+        ("provider:asserted",),
+        ("discovery:sample", "unreviewed:claim"),
+        ("owner_inventory:",),
+        ("owner-config:",),
+        ("owner:device",),
+    ),
+)
+def test_unknown_or_empty_identity_labels_cannot_bind_target(
+    untrusted: tuple[str, ...],
+) -> None:
+    entity = WorldEntityRefV1.create(
+        entity_type="media_player",
+        canonical_name="Unverified television",
+        provenance_refs=untrusted,
+    )
+    _, missing = bind_physical_target_requirements(
+        _graph(),
+        referenced_entity_ids=(entity.entity_id,),
+        get_entity=lambda _: entity,
+    )
+    assert missing == ("media_player",)
