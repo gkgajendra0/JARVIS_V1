@@ -95,6 +95,8 @@ def test_waiting_device_need_generates_exact_permission_proposal(
     assert proposal.capability == "network_discovery"
     assert proposal.operation == "enumerate_aep"
     assert proposal.target()["protocol"] == "upnp"
+    assert proposal.target()["gicc_goal_id"] == goal.goal_id
+    assert proposal.target()["gicc_need_id"] == _need.information_need_id
     assert proposal.target()["address_result_filters"] == ["192.168.1.0/24"]
     assert "all local network interfaces" in proposal.material_summary
     assert store.list_information_needs(goal_id=goal.goal_id) == before

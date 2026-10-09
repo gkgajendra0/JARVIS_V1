@@ -251,6 +251,20 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
 
     # Reject unrelated goals, sessions, and changed LAN scope before any
     # network watcher can start or any one-time permit can be consumed.
+    assert guard.binds_information_need(
+        goal_id=goal.goal_id, need_id=need.information_need_id
+    )
+    assert not guard.binds_information_need(
+        goal_id=goal.goal_id, need_id="unrelated-information-need"
+    )
+    assert runtime.apply_approved_network_discovery(
+        goal_id=goal.goal_id,
+        need_id="unrelated-information-need",
+        session_id=goal.source_session_id,
+        scope=scope,
+        authority_guard=guard,
+        planner=planner,
+    ) is None
     assert runtime.apply_approved_network_discovery(
         goal_id=goal.goal_id,
         need_id=need.information_need_id,

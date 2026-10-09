@@ -275,6 +275,9 @@ class GiccApplyRuntime:
             or goal.state is not GoalState.WAITING_INFORMATION
             or goal.source_session_id != session
             or authority_guard.session_id != session
+            or not authority_guard.binds_information_need(
+                goal_id=goal.goal_id, need_id=need_id
+            )
         ):
             return None
         need = self.store.get_information_need(need_id)
