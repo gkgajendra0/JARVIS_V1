@@ -61,7 +61,6 @@ from .information import (
 )
 from .interpretation import GoalInterpreter, build_goal_interpreter
 from .local_network import WindowsNeighborInformationProbe
-from .network_consent import prepare_pending_device_discovery_consent
 from .models import (
     ContinuationBlockerType,
     ContinuationState,
@@ -82,6 +81,7 @@ from .monitoring import (
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
 )
+from .network_consent import prepare_pending_device_discovery_consent
 from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
