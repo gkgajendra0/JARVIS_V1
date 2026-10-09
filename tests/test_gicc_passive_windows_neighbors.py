@@ -443,3 +443,94 @@ def test_repeated_aep_advertisements_do_not_grow_protected_owner_records(
         == 32
     )
     assert store.get_information_need(need.information_need_id) == need
+
+
+def test_approved_aep_can_observe_device_missing_from_neighbor_cache() -> None:
+    """A previously invisible LAN device must not need an owner ARP command."""
+
+    from tests.test_gicc_windows_aep import FakeWatcher, _device
+
+    scope = ReviewedAepScopeV1(
+        protocol="upnp",
+        approved_address_ranges=("192.168.1.0/24",),
+        consent_record_id="reviewed-discovery-test",
+        all_local_interfaces_authorized=True,
+    )
+    watcher = FakeWatcher(rows=(_device(endpoint_id="aep-only"),))
+    backend = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda candidate: candidate == scope,
+        watcher_factory=lambda _: watcher,
+        clock=lambda: 1000,
+    )
+    probe = WindowsNeighborInformationProbe(
+        _backend([]), aep_backend=backend, aep_scopes=(scope,)
+    )
+    result = probe.resolve(_need("goal_newly_discoverable"))
+    assert result.resolution_ref is None
+    assert any(
+        ref.startswith("windows_aep_discovered_unverified:192.168.1.10:")
+        for ref in result.evidence_refs
+    )
+    assert not any(
+        ref.startswith("windows_aep_neighbor_correlated_unverified:")
+        for ref in result.evidence_refs
+    )
+    assert watcher.started == watcher.stopped == 1
+
+
+def test_aep_permission_denial_with_no_neighbors_returns_no_identity() -> None:
+    from tests.test_gicc_windows_aep import FakeWatcher, _device
+
+    scope = ReviewedAepScopeV1(
+        protocol="upnp",
+        approved_address_ranges=("192.168.1.0/24",),
+        consent_record_id="not-approved",
+        all_local_interfaces_authorized=True,
+    )
+    watcher = FakeWatcher(rows=(_device(),))
+    backend = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda _: False,
+        watcher_factory=lambda _: watcher,
+    )
+    result = WindowsNeighborInformationProbe(
+        _backend([]), aep_backend=backend, aep_scopes=(scope,)
+    ).resolve(_need("goal_denied"))
+    assert result.resolution_ref is None
+    assert result.evidence_refs == ()
+    assert watcher.started == 0
+
+
+def test_unmatched_aep_advertisement_research_evidence_is_bounded(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "aep-only-retention.sqlite"
+    store = GoalStore(
+        SQLiteWorkStore(db, payload_codec=build_default_work_payload_codec(db))
+    )
+    goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id="session-unmatched",
+            source_turn_id="turn-unmatched",
+            exact_owner_request="Identify any TV on my network",
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Identify device",
+            state=GoalState.WAITING_INFORMATION,
+        )
+    )
+    need = store.create_information_need(_need(goal.goal_id))
+    for i in range(40):
+        need = store.update_information_need_state(
+            need.information_need_id,
+            InformationNeedState.WAITING_FOR_OWNER,
+            expected_revision=need.revision,
+            evidence_refs=(
+                f"windows_aep_discovered_unverified:192.168.1.10:fixture_{i:04d}",
+            ),
+        )
+    assert sum(
+        item.startswith("windows_aep_discovered_unverified:")
+        for item in need.evidence_refs
+    ) == 32
+    assert store.get_information_need(need.information_need_id) == need
