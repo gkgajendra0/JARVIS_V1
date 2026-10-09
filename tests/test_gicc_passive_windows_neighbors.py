@@ -132,7 +132,7 @@ def test_neighbor_candidate_is_never_reported_as_verified_identity() -> None:
 
     assert result.resolution_ref is None
     assert result.resolved is False
-    assert "no manufacturer" in result.reason
+    assert "no physical identity" in result.reason
     assert any(
         item.startswith("windows_neighbor_unverified:192.168.1.10:")
         for item in result.evidence_refs
