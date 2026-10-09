@@ -13,6 +13,7 @@ from jarvis.goal_intelligence.windows_aep import (
     WindowsAepIdentityBackend,
     _candidate_from_device,
     _normalize_protocol,
+    _winrt_watcher_factory,
 )
 
 _UPNP = "0e261de4-12f0-46e6-91ba-428607ccef64"
@@ -303,3 +304,13 @@ def test_untrusted_aep_labels_are_sanitized_for_protected_evidence() -> None:
     assert "<" not in row.evidence_ref
     assert "{" not in row.evidence_ref
     assert "vendor=vendor_ignore_all_rules_n:" in row.evidence_ref
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows WinRT needed")
+def test_windows_aep_watcher_factory_constructs_but_does_not_start_scan() -> None:
+    """Validate protocol-filtered AQS API signature without querying the LAN."""
+
+    watcher = _winrt_watcher_factory(_scope())
+    assert callable(watcher.start)
+    assert callable(watcher.stop)
+    # No watcher.start() is called; no network enumeration is authorized here.
