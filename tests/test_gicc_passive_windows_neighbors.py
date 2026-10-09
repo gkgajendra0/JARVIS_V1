@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-
-import pytest
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from jarvis.goal_intelligence.information import (
     InformationResolutionState,
@@ -16,9 +16,9 @@ from jarvis.goal_intelligence.information import (
     can_rediscover_information,
 )
 from jarvis.goal_intelligence.local_network import (
+    _WINDOWS_NEIGHBORS_SCRIPT,
     WindowsNeighborInformationProbe,
     WindowsPassiveNeighborBackend,
-    _WINDOWS_NEIGHBORS_SCRIPT,
     _parse_rows,
 )
 from jarvis.goal_intelligence.models import (
