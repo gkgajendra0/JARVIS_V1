@@ -233,9 +233,7 @@ class WindowsNeighborInformationProbe:
                     for item in group
                     if item.manufacturer.strip()
                 }
-                models = {
-                    item.model.casefold() for item in group if item.model.strip()
-                }
+                models = {item.model.casefold() for item in group if item.model.strip()}
                 if len(vendors) > 1 or len(models) > 1:
                     continue  # ambiguous/inconsistent identity advertisements
 

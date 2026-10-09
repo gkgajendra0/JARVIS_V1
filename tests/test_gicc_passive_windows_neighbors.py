@@ -529,8 +529,11 @@ def test_unmatched_aep_advertisement_research_evidence_is_bounded(
                 f"windows_aep_discovered_unverified:192.168.1.10:fixture_{i:04d}",
             ),
         )
-    assert sum(
-        item.startswith("windows_aep_discovered_unverified:")
-        for item in need.evidence_refs
-    ) == 32
+    assert (
+        sum(
+            item.startswith("windows_aep_discovered_unverified:")
+            for item in need.evidence_refs
+        )
+        == 32
+    )
     assert store.get_information_need(need.information_need_id) == need
