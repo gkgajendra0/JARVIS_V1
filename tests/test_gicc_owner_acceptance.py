@@ -736,3 +736,13 @@ async def test_missing_tv_cannot_start_device_specific_acquisition(
     assert resumed.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
     assert len(phase9.gaps) == 1
     assert phase9.gaps[0][0].target_entity_id == tv.entity_id
+
+    # Auto-discovery retires its earlier owner question instead of leaving
+    # an active prompt tied to a now-resolved device.
+    assert result.information_interactions
+    for interaction in result.information_interactions:
+        record = store.get_information_interaction(interaction["interaction_id"])
+        assert record is not None
+        assert record["state"] == "resolved"
+        assert record["resolved_turn_id"] is None
+        assert record["resolution_ref"] == tv.entity_id
