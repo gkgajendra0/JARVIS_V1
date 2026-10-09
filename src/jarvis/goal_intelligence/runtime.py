@@ -47,6 +47,10 @@ from jarvis.work.runtime import WorkRuntime
 
 from .aep_authority import AepAuthorityExecutionGuard
 from .capability_graph import CapabilityGraphResolver
+from .device_suggestions import (
+    UnverifiedDeviceSuggestionV1,
+    pending_owner_device_suggestions,
+)
 from .composition import (
     GoalIntakeDisposition,
     GoalIntakeResult,
@@ -242,6 +246,22 @@ class GiccApplyRuntime:
             goal_id=goal_id,
             session_id=session_id,
             planner=planner,
+        )
+
+    def pending_network_device_suggestions(
+        self,
+        *,
+        goal_id: str,
+        session_id: str,
+        now_epoch: int | None = None,
+    ) -> tuple[UnverifiedDeviceSuggestionV1, ...]:
+        """Read short-lived identity hints; never confirm or control a device."""
+
+        return pending_owner_device_suggestions(
+            store=self.store,
+            goal_id=goal_id,
+            session_id=session_id,
+            now_epoch=now_epoch,
         )
 
     def apply_approved_network_discovery(
