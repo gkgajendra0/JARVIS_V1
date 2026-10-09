@@ -20,7 +20,11 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeDisposition,
     GoalIntelligenceCoordinator,
 )
-from jarvis.goal_intelligence.information import restore_bound_information_interaction
+from jarvis.goal_intelligence.information import (
+    InformationResolutionStrategy,
+    InformationResolver,
+    restore_bound_information_interaction,
+)
 from jarvis.goal_intelligence.interpretation import (
     GoalInterpreter,
     ShadowEntityCandidate,
@@ -45,6 +49,7 @@ from jarvis.goal_intelligence.requirements import (
 )
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
+from jarvis.goal_intelligence.world_discovery import EntityInformationProbe
 from jarvis.hands.provider_adapters import StructuredOutputTelemetry
 
 
@@ -546,3 +551,125 @@ async def test_owner_acceptance_scenario_5_restart_restores_exact_clarification(
     assert restored_need.goal_id == goal_id
     assert restored_interaction.goal_id == goal_id
     assert restored_interaction.information_need_id == need_id
+
+
+@pytest.mark.asyncio
+async def test_tv_identity_is_resolved_before_acquisition_if_model_omits_entity(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    registry = WorldRegistry(store)
+    tv = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Known living-room TV",
+            aliases=("my tv",),
+            provenance_refs=("owner_inventory:living_room",),
+        )
+    )
+    conversation, turn = _conversation("Acquire control of my TV.")
+    interpreter = QueueStructuredClient(
+        ShadowGoalInterpretationOutput(
+            actionable=True,
+            desired_outcome="Control my existing TV.",
+            goal_kind=GoalKind.ONE_SHOT,
+            candidate_entities=[],
+            candidate_completion_predicates=["tv_controlled"],
+            evidence_turn_ids=[turn.turn_id],
+        )
+    )
+    requirements = QueueStructuredClient(
+        CapabilityRequirementProposalSet(
+            requirements=[
+                CapabilityRequirementProposal(
+                    semantic_capability="media_player.control",
+                    operation="issue_supported_control",
+                    target_entity_type="television",
+                    expected_postconditions=["tv_controlled"],
+                    reason="A reusable TV control operation is missing.",
+                )
+            ]
+        )
+    )
+    entity_resolver = EntityResolver(registry)
+    information = InformationResolver(
+        store=store,
+        probes=(
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+        ),
+    )
+    phase9 = FakePhase9Bridge()
+    coordinator = GoalIntelligenceCoordinator(
+        store=store,
+        interpreter=GoalInterpreter(client=interpreter),
+        entity_resolver=entity_resolver,
+        information_resolver=information,
+        requirement_deriver=RequirementDeriver(client=requirements),
+        capability_context=StaticContext(),
+        capability_graph_resolver=CapabilityGraphResolver(store=store),
+        phase9_bridge=phase9,
+    )
+
+    result = await coordinator.pursue(conversation=conversation, turn=turn)
+
+    assert result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+    assert len(phase9.gaps) == 1
+    assert phase9.gaps[0][0].target_entity_id == tv.entity_id
+    assert result.goal is not None
+    assert tv.entity_id in result.goal.referenced_entity_ids
+
+
+@pytest.mark.asyncio
+async def test_missing_tv_cannot_start_device_specific_acquisition(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    registry = WorldRegistry(store)
+    conversation, turn = _conversation("Acquire control of my TV.")
+    interpreter = QueueStructuredClient(
+        ShadowGoalInterpretationOutput(
+            actionable=True,
+            desired_outcome="Control my television.",
+            goal_kind=GoalKind.ONE_SHOT,
+            candidate_entities=[],
+            candidate_completion_predicates=["tv_controlled"],
+            evidence_turn_ids=[turn.turn_id],
+        )
+    )
+    requirements = QueueStructuredClient(
+        CapabilityRequirementProposalSet(
+            requirements=[
+                CapabilityRequirementProposal(
+                    semantic_capability="media_player.control",
+                    operation="issue_supported_control",
+                    target_entity_type="television",
+                    expected_postconditions=["tv_controlled"],
+                    reason="A reusable TV control operation is missing.",
+                )
+            ]
+        )
+    )
+    phase9 = FakePhase9Bridge()
+    coordinator = GoalIntelligenceCoordinator(
+        store=store,
+        interpreter=GoalInterpreter(client=interpreter),
+        entity_resolver=EntityResolver(registry),
+        requirement_deriver=RequirementDeriver(client=requirements),
+        capability_context=StaticContext(),
+        capability_graph_resolver=CapabilityGraphResolver(store=store),
+        phase9_bridge=phase9,
+    )
+
+    result = await coordinator.pursue(conversation=conversation, turn=turn)
+
+    assert result.disposition is GoalIntakeDisposition.WAITING_INFORMATION
+    assert not phase9.gaps
+    assert len(result.information_needs) == 1
+    assert result.information_needs[0].answer_schema == {
+        "type": "entity_id",
+        "entity_type": "media_player",
+    }
+    assert result.information_needs[0].state is InformationNeedState.WAITING_FOR_OWNER
