@@ -102,7 +102,7 @@ def _parse_rows(raw: str) -> tuple[PassiveNeighborV1, ...]:
         # non-physical interfaces as candidates for local device identity.
         if not any(ip in subnet for subnet in _LOCAL_IPV4_NETWORKS):
             continue
-        if alias.casefold().startswith(("vethernet", "loopback")):
+        if not alias or alias.casefold().startswith(("vethernet", "loopback")):
             continue
         if not _MAC_RE.fullmatch(mac) or idx < 1:
             continue
