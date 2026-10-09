@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
@@ -45,6 +44,7 @@ from jarvis.voice.hands_fast_path import FAST_PATH_OPERATIONS, execute_fast_hint
 from jarvis.work.models import WorkDeliveryKind
 from jarvis.work.runtime import WorkRuntime
 
+from .aep_authority import AepAuthorityExecutionGuard
 from .capability_graph import CapabilityGraphResolver
 from .composition import (
     GoalIntakeDisposition,
@@ -806,7 +806,7 @@ def build_gicc_apply_runtime(
     capability_context: AcquisitionContextProvider,
     telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
     approved_aep_scopes: tuple[ReviewedAepScopeV1, ...] = (),
-    trusted_aep_consent_validator: (Callable[[ReviewedAepScopeV1], bool] | None) = None,
+    trusted_aep_consent_validator: AepAuthorityExecutionGuard | None = None,
 ) -> GiccApplyRuntime:
     """Compose GICC APPLY without creating new Authority or execution substrates."""
 
@@ -821,14 +821,18 @@ def build_gicc_apply_runtime(
     # Windows AEP may transmit discovery queries across *all* local adapters.
     # The caller must supply an Authority-backed consent validator for every
     # explicit scope; a config flag/voice command cannot activate this source.
-    if approved_aep_scopes and not callable(trusted_aep_consent_validator):
-        raise ValueError("AEP requires an independent owner-consent validator")
     if len(approved_aep_scopes) > 3:
         raise ValueError("AEP protocol scope count exceeds reviewed bound")
     if len({scope.protocol for scope in approved_aep_scopes}) != len(
         approved_aep_scopes
     ):
         raise ValueError("AEP requires distinct reviewed protocol scopes")
+    if approved_aep_scopes and not isinstance(
+        trusted_aep_consent_validator, AepAuthorityExecutionGuard
+    ):
+        raise ValueError(
+            "AEP requires a policy-audited one-time Authority execution permit"
+        )
 
     store = build_default_goal_store()
     world = WorldRegistry(store)
