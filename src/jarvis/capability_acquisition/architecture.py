@@ -24,11 +24,26 @@ from jarvis.engineering_change.models import (
     EngineeringChange,
 )
 from jarvis.engineering_change.store import ChangeStore
+from jarvis.engineering_substrate.sandbox import (
+    UnknownSandboxProfileError,
+    default_sandbox_registry,
+)
 from jarvis.work.models import WorkItem, WorkState
 
 
 class CapabilityAcquisitionArchitectureError(ChangeConflict):
     """Acquisition plan/architecture provenance is missing, stale or non-buildable."""
+
+
+def validate_acquisition_sandbox_profiles(profile_ids: tuple[str, ...]) -> None:
+    registry = default_sandbox_registry()
+    for profile_id in profile_ids:
+        try:
+            registry.require(profile_id, 1)
+        except UnknownSandboxProfileError as exc:
+            raise CapabilityAcquisitionArchitectureError(
+                f"acquisition requires a registered sandbox profile: {profile_id}"
+            ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,6 +250,7 @@ class CapabilityAcquisitionArchitecturePlan:
             raise CapabilityAcquisitionArchitectureError(
                 "capability acquisition architecture requires sandbox profile"
             )
+        validate_acquisition_sandbox_profiles(self.sandbox_profile_ids)
         if self.schema_version != 1:
             raise CapabilityAcquisitionArchitectureError(
                 "unsupported capability acquisition architecture version"

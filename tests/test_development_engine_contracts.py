@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from jarvis.development_engine import (
@@ -63,6 +65,48 @@ def test_ticket_is_canonical_and_order_independent() -> None:
     assert left == right
     assert left.ticket_id == f"dev_ticket_{left.digest[:16]}"
     assert left.canonical_payload()["contract_version"] == 1
+
+
+def test_explicit_verification_targets_are_digest_bound_and_durable() -> None:
+    payload = _ticket().canonical_payload()
+    payload["verification_targets"] = ["tests/test_demo.py::test_demo"]
+    ticket = DevelopmentTicketV1.from_payload(payload)
+    assert ticket.verification_targets == ("tests/test_demo.py::test_demo",)
+    assert ticket.digest != _ticket().digest
+    assert (
+        DevelopmentTicketV1.from_payload(
+            ticket.canonical_payload(), expected_digest=ticket.digest
+        )
+        == ticket
+    )
+    with pytest.raises(ValueError, match="digest"):
+        replace(ticket, verification_targets=("tests/test_other.py",))
+
+
+def test_legacy_ticket_roundtrip_preserves_exact_payload_and_digest() -> None:
+    ticket = _ticket()
+    payload = ticket.canonical_payload()
+    assert "verification_targets" not in payload
+    restored = DevelopmentTicketV1.from_payload(payload, expected_digest=ticket.digest)
+    assert restored.verification_targets is None
+    assert restored.canonical_payload() == payload
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "../escape.py",
+        "--collect-only",
+        "/tmp/test.py",
+        "C:\\test.py",
+        "tests/../escape.py",
+    ],
+)
+def test_explicit_verification_targets_reject_unsafe_paths(target: str) -> None:
+    payload = _ticket().canonical_payload()
+    payload["verification_targets"] = [target]
+    with pytest.raises(ValueError, match="verification_target"):
+        DevelopmentTicketV1.from_payload(payload)
 
 
 def test_ticket_writable_paths_are_canonical_and_repository_relative() -> None:

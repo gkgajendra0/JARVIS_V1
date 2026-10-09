@@ -96,6 +96,20 @@ def _tokens(
     return tuple(sorted(normalized))
 
 
+def _verification_targets(values: tuple[str, ...]) -> tuple[str, ...]:
+    targets: list[str] = []
+    for value in values:
+        text = _text(value, field="verification_target")
+        path, separator, selector = text.partition("::")
+        if any(character.isspace() for character in path) or "\x00" in text:
+            raise ValueError("verification_target must be a repository-relative path")
+        canonical_path = _paths((path,), field="verification_target")[0]
+        if separator and (not selector or "\n" in selector or "\r" in selector):
+            raise ValueError("verification_target has an invalid pytest selector")
+        targets.append(canonical_path + (separator + selector if separator else ""))
+    return _tokens(tuple(targets), field="verification_target")
+
+
 class DevelopmentDisposition(StrEnum):
     """Typed outcome from an engineering specialist.
 
@@ -184,6 +198,7 @@ class DevelopmentTicketV1:
     attempt: int
     contract_version: int
     digest: str
+    verification_targets: tuple[str, ...] | None = None
 
     @classmethod
     def create(
@@ -208,6 +223,7 @@ class DevelopmentTicketV1:
         repository_context_refs: tuple[str, ...] | list[str] = (),
         writable_paths: tuple[str, ...] | list[str] = (),
         attempt: int = 1,
+        verification_targets: tuple[str, ...] | list[str] | None = None,
     ) -> DevelopmentTicketV1:
         if type(attempt) is not int or attempt < 1:
             raise ValueError("attempt must be a positive integer")
@@ -291,6 +307,10 @@ class DevelopmentTicketV1:
             "attempt": attempt,
             "contract_version": DEVELOPMENT_ENGINE_CONTRACT_VERSION,
         }
+        if verification_targets is not None:
+            payload["verification_targets"] = list(
+                _verification_targets(tuple(verification_targets))
+            )
         digest = canonical_digest(payload)
         return cls(
             ticket_id=f"dev_ticket_{digest[:16]}",
@@ -319,6 +339,11 @@ class DevelopmentTicketV1:
             attempt=attempt,
             contract_version=DEVELOPMENT_ENGINE_CONTRACT_VERSION,
             digest=digest,
+            verification_targets=(
+                None
+                if verification_targets is None
+                else tuple(payload["verification_targets"])
+            ),
         )
 
     @classmethod
@@ -354,6 +379,11 @@ class DevelopmentTicketV1:
             acceptance_criteria=tuple(payload["acceptance_criteria"]),  # type: ignore[arg-type]
             allowed_tools=tuple(payload["allowed_tools"]),  # type: ignore[arg-type]
             attempt=int(payload["attempt"]),
+            verification_targets=(
+                None
+                if "verification_targets" not in payload
+                else tuple(payload["verification_targets"])
+            ),
         )
         version = int(payload["contract_version"])
         if version != DEVELOPMENT_ENGINE_CONTRACT_VERSION:
@@ -365,7 +395,7 @@ class DevelopmentTicketV1:
         return ticket
 
     def canonical_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "request": self.request,
             "work_id": self.work_id,
             "engineering_change_id": self.engineering_change_id,
@@ -387,6 +417,9 @@ class DevelopmentTicketV1:
             "attempt": self.attempt,
             "contract_version": self.contract_version,
         }
+        if self.verification_targets is not None:
+            payload["verification_targets"] = list(self.verification_targets)
+        return payload
 
     def __post_init__(self) -> None:
         if self.contract_version != DEVELOPMENT_ENGINE_CONTRACT_VERSION:

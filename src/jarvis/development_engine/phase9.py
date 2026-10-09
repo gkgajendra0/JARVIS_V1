@@ -182,7 +182,6 @@ class Phase9DevelopmentTicketBuilder:
         acceptance_criteria = tuple(
             sorted(
                 {
-                    *(f"pytest:{item}" for item in verification_targets),
                     *(
                         f"verification_contract:{item}"
                         for item in verification_contracts
@@ -255,6 +254,7 @@ class Phase9DevelopmentTicketBuilder:
             repository_context_refs=repository_context_refs,
             writable_paths=allowed_paths,
             acceptance_criteria=acceptance_criteria,
+            verification_targets=verification_targets,
             allowed_tools=allowed,
             attempt=stage.attempt,
         )

@@ -1,5 +1,9 @@
 name: Code Quality
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
 on:
   push:
     branches:
@@ -61,8 +65,19 @@ jobs:
               print(f"Playwright Chromium launch ready: {executable}")
           PY
 
-      - name: Run unit tests
-        run: python -m pytest -q
+      - name: Run unit tests without internet access
+        run: |
+          sudo --preserve-env=DOTNET_CLI_TELEMETRY_OPTOUT,POWERSHELL_TELEMETRY_OPTOUT unshare --net -- bash -c '
+            ip link set lo up
+            exec runuser -u "$1" -- "${@:2}"
+          ' _ "$(id -un)" "$(command -v python)" -m pytest -q --junitxml=full-suite.xml
+
+      - name: Preserve full-suite results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-suite-evidence
+          path: full-suite.xml
 
   windows-hello-helper:
     runs-on: windows-latest
@@ -310,6 +325,40 @@ jobs:
           tests/test_goal_world_discovery.py
 
 
+  acquisition-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Preinstall LiveKit BlingFire wheel
+        run: >-
+          python -m pip install
+          "https://files.pythonhosted.org/packages/8f/27/408c435cbed31fa3601ff32ef0499ff594cd898b483c9b4017e9df906de6/livekit_blingfire-1.1.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl"
+      - name: Install acquisition test dependencies
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
+      - name: Build governed development sandbox
+        run: docker build -f tools/development-sandbox/Dockerfile -t jarvis-acquisition-test:ci .
+      - name: Run acquisition vertical with required Docker execution
+        env:
+          JARVIS_E2E_REQUIRE_DOCKER: "1"
+          JARVIS_DEVELOPMENT_TEST_IMAGE: jarvis-acquisition-test:ci
+          JARVIS_E2E_REPORT_DIR: acquisition-evidence
+        run: |
+          sudo --preserve-env=JARVIS_E2E_REQUIRE_DOCKER,JARVIS_DEVELOPMENT_TEST_IMAGE,JARVIS_E2E_REPORT_DIR,DOTNET_CLI_TELEMETRY_OPTOUT,POWERSHELL_TELEMETRY_OPTOUT unshare --net -- bash -c '
+            ip link set lo up
+            exec runuser -u "$1" -- "${@:2}"
+          ' _ "$(id -un)" "$(command -v python)" -m pytest tests/test_capability_acquisition_vertical.py -q --junitxml=acquisition-evidence/junit.xml
+      - name: Preserve acquisition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acquisition-docker-evidence
+          path: acquisition-evidence/
+
   promotion-policy:
     if: always()
     needs:
@@ -317,15 +366,18 @@ jobs:
       - pytest
       - windows-hello-helper
       - windows-dpapi
+      - acquisition-docker
     runs-on: ubuntu-latest
     steps:
       - name: Require all promotion validations to succeed
         env:
+          ACQUISITION_DOCKER_RESULT: ${{ needs.acquisition-docker.result }}
           RUFF_RESULT: ${{ needs.ruff.result }}
           PYTEST_RESULT: ${{ needs.pytest.result }}
           WINDOWS_HELLO_RESULT: ${{ needs.windows-hello-helper.result }}
           WINDOWS_DPAPI_RESULT: ${{ needs.windows-dpapi.result }}
         run: |
+          test "$ACQUISITION_DOCKER_RESULT" = "success"
           test "$RUFF_RESULT" = "success"
           test "$PYTEST_RESULT" = "success"
           test "$WINDOWS_HELLO_RESULT" = "success"

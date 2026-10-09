@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from jarvis.capability_acquisition.architecture import (
+    validate_acquisition_sandbox_profiles,
+)
 from jarvis.capability_acquisition.artifacts import (
     candidate_from_payload,
     candidate_payload,
@@ -34,6 +37,7 @@ from jarvis.capability_acquisition.resolver import (
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.capability_acquisition.source import CapabilitySourceRegistry
 from jarvis.engineering_change import ChangeArtifact, ChangeStore
+from jarvis.engineering_substrate.sandbox import default_sandbox_registry
 from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 
@@ -548,7 +552,13 @@ class AcquisitionFinalizeExecutor:
                 },
                 "sandbox_profile_ids": {
                     "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 180},
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            definition.profile.profile_id
+                            for definition in default_sandbox_registry().all()
+                        ],
+                    },
                     "minItems": 1,
                     "maxItems": 20,
                 },
@@ -679,6 +689,9 @@ class AcquisitionFinalizeExecutor:
             raise AcquisitionProtocolError(
                 "build acquisition plan requires bounded changed component/path scope"
             )
+        validate_acquisition_sandbox_profiles(
+            tuple(parameters.get("sandbox_profile_ids") or ())
+        )
         plan = CapabilityAcquisitionPlanV1.create(
             context.goal,
             candidate,

@@ -297,6 +297,8 @@ class WorkExecutorDevelopmentToolPort:
         return work
 
     def _approved_test_targets(self) -> tuple[str, ...]:
+        if self._ticket.verification_targets is not None:
+            return self._ticket.verification_targets
         return tuple(
             item.removeprefix("pytest:").strip()
             for item in self._ticket.acceptance_criteria

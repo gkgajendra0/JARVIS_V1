@@ -4,6 +4,7 @@ import pytest
 
 from jarvis.capability_acquisition.architecture import (
     CapabilityAcquisitionArchitectureError,
+    CapabilityAcquisitionArchitecturePlan,
     _effective_owner_acceptance_contract_ids,
     _gicc_semantic_contract,
     ensure_gicc_external_acceptance_contract_current,
@@ -12,6 +13,8 @@ from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
 )
 from jarvis.capability_acquisition.models import OwnerCapabilityGoalV1
+from jarvis.capability_acquisition.workflow import AcquisitionFinalizeExecutor
+from jarvis.engineering_substrate.sandbox import default_sandbox_registry
 
 
 class FakeStore:
@@ -32,6 +35,67 @@ class FakeStore:
         assert change_id == "change-tv"
         assert kind == "gicc_capability_gap_link"
         return self._artifact
+
+
+def _architecture_with_profiles(profiles: tuple[str, ...]):
+    return CapabilityAcquisitionArchitecturePlan(
+        goal_artifact_id="goal-artifact",
+        goal_artifact_digest="a" * 64,
+        goal_id="goal",
+        goal_digest="b" * 64,
+        plan_artifact_id="plan-artifact",
+        plan_artifact_digest="c" * 64,
+        plan_id="plan",
+        plan_digest="d" * 64,
+        selected_candidate_id="candidate",
+        selected_candidate_digest="e" * 64,
+        selected_evaluation_digest="f" * 64,
+        source_revision="a" * 40,
+        strategy="build_custom",
+        requested_operations=("power",),
+        allowed_paths=("src/jarvis/acquired_capabilities/demo",),
+        allowed_components=(),
+        dependency_refs=(),
+        secret_scopes=(),
+        sandbox_profile_ids=profiles,
+        discovery_scopes=(),
+        network_scopes=(),
+        device_scopes=(),
+        verification_contract_ids=("contract",),
+        verification_targets=("tests/test_demo.py",),
+        owner_acceptance_contract_ids=(),
+        proposed_capability_id="demo",
+        proposed_package_id="demo",
+        proposed_package_version="1.0.0",
+        rollback_strategy="disable",
+    )
+
+
+@pytest.mark.parametrize(
+    "profile", ["local_device_control", "local_device_control.v1", "test.offline.v1.v1"]
+)
+def test_unregistered_sandbox_cannot_reach_approval_architecture(profile: str) -> None:
+    with pytest.raises(CapabilityAcquisitionArchitectureError, match="sandbox profile"):
+        _architecture_with_profiles((profile,))
+
+
+def test_registered_sandbox_identity_is_preserved_without_version_suffix_rewrite() -> (
+    None
+):
+    architecture = _architecture_with_profiles(("test.offline.v1",))
+    profile_id = architecture.to_payload()["sandbox_profile_ids"][0]
+    assert (
+        default_sandbox_registry().require(profile_id, 1).profile.profile_id
+        == profile_id
+    )
+
+
+def test_research_finalization_advertises_only_registered_sandbox_profiles() -> None:
+    schema = AcquisitionFinalizeExecutor.descriptor.parameter_schema
+    offered = schema["properties"]["sandbox_profile_ids"]["items"]["enum"]
+    assert set(offered) == {
+        definition.profile.profile_id for definition in default_sandbox_registry().all()
+    }
 
 
 def _goal() -> OwnerCapabilityGoalV1:
