@@ -88,6 +88,8 @@ def test_passive_cache_returns_unverified_local_candidates_only() -> None:
                 alias="vEthernet (WSL)",
             ),
             _entry("8.8.8.8", "00-11-22-33-44-55"),
+            _entry("192.0.0.1", "00-11-22-33-44-56"),
+            _entry("172.15.0.2", "00-11-22-33-44-57"),
             _entry("192.168.1.11", "invalid_mac"),
             _entry("192.168.1.99", "AA-BB-CC-DD-EE-FF", "Permanent"),
             _entry("192.168.1.10", "50-BA-02-AE-0D-18", "Reachable"),
