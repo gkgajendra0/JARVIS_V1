@@ -546,9 +546,12 @@ class GiccApplyRuntime:
     async def continue_goal(
         self, goal_id: str, *, retry_information: bool = False
     ) -> GoalIntakeResult:
-        result = await self.coordinator.continue_goal(
-            goal_id, retry_information=retry_information
-        )
+        if retry_information:
+            result = await self.coordinator.continue_goal(
+                goal_id, retry_information=True
+            )
+        else:
+            result = await self.coordinator.continue_goal(goal_id)
         return await self._advance_intake_result(result)
 
     def _enqueue_background_terminal_delivery(self, goal: OwnerGoalV2) -> bool:
