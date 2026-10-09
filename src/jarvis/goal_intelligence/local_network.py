@@ -48,7 +48,7 @@ $neighbors = @(
         $indexes -contains $_.InterfaceIndex -and
         $_.State -in @('Reachable','Stale','Delay','Probe')
     } |
-    Select-Object -First 32 -Property InterfaceAlias,InterfaceIndex,IPAddress,LinkLayerAddress,State
+    Select-Object -First 32 -Property InterfaceAlias,InterfaceIndex,IPAddress,LinkLayerAddress,@{Name='State';Expression={$_.State.ToString()}}
 )
 ConvertTo-Json -InputObject $neighbors -Compress -Depth 3
 """
