@@ -94,9 +94,7 @@ def can_rediscover_information(need: InformationNeedV1) -> bool:
         need.state is not InformationNeedState.RESOLVED
         and need.category is not InformationNeedCategory.OWNER_SECRET
         and bool(
-            _AUTOMATIC_REDISCOVERY_SOURCES.intersection(
-                need.allowed_resolution_sources
-            )
+            _AUTOMATIC_REDISCOVERY_SOURCES.intersection(need.allowed_resolution_sources)
         )
     )
 
