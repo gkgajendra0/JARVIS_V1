@@ -302,4 +302,4 @@ def test_untrusted_aep_labels_are_sanitized_for_protected_evidence() -> None:
     assert "\\n" not in row.evidence_ref
     assert "<" not in row.evidence_ref
     assert "{" not in row.evidence_ref
-    assert "vendor=vendor_ignore_all_rules:" in row.evidence_ref
+    assert "vendor=vendor_ignore_all_rules_n:" in row.evidence_ref
