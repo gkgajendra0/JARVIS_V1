@@ -31,6 +31,8 @@ from jarvis.goal_intelligence.models import (
     GoalContinuationV1,
     GoalKind,
     GoalState,
+    InformationNeedCategory,
+    InformationNeedV1,
     MonitorPredicateV1,
     OwnerGoalV2,
     PlanGraphV1,
@@ -1026,3 +1028,46 @@ async def test_rejected_supervisor_cutover_fences_ready_capability_continuation(
     assert coordinator.calls == 0
     assert latest is not None
     assert latest.state is GoalState.WAITING_CAPABILITY
+
+
+@pytest.mark.asyncio
+async def test_waiting_device_rechecks_automatically_but_is_throttled(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_INFORMATION)
+    store.create_information_need(
+        InformationNeedV1.create(
+            goal_id=goal.goal_id,
+            category=InformationNeedCategory.MISSING_VALUE,
+            subject="my television",
+            required_fact="canonical media_player identity",
+            why_required="cannot develop control for an unidentified device",
+            allowed_resolution_sources=(
+                "world_registry",
+                "bounded_local_discovery",
+                "owner_input",
+            ),
+        )
+    )
+
+    class TrackingCoordinator:
+        def __init__(self):
+            self.calls = []
+
+        async def continue_goal(self, goal_id, *, retry_information=False):
+            self.calls.append((goal_id, retry_information))
+            return GoalIntakeResult(
+                disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+                goal=store.get_goal(goal_id),
+                information_needs=store.list_information_needs(goal_id=goal_id),
+            )
+
+    coordinator = TrackingCoordinator()
+    runtime = _runtime(store, coordinator, FakeCapabilityRuntime())
+    assert await runtime.reconcile_once() == 0
+    assert coordinator.calls == [(goal.goal_id, True)]
+
+    # The one-second reconciler must not reissue network discovery on each tick.
+    assert await runtime.reconcile_once() == 0
+    assert coordinator.calls == [(goal.goal_id, True)]
