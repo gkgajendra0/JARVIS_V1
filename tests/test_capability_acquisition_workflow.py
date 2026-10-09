@@ -257,9 +257,7 @@ def _persist_plan(
             device_scopes=("entity_type:television",),
             reason_codes=original.reason_codes,
         )
-        resolution = resolver.resolve_candidates(
-            goal, (fixture,), _empty_context()
-        )
+        resolution = resolver.resolve_candidates(goal, (fixture,), _empty_context())
     candidate = resolution.selected_candidate
     assert candidate is not None
     evaluation = resolution.evaluation(candidate.candidate_id)
