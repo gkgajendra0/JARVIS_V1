@@ -312,9 +312,12 @@ jobs:
           tests/test_phase9_evaluation.py
 
       - name: Run Windows Phase 9 adversarial system hardening
+        env:
+          JARVIS_E2E_REPORT_DIR: windows-acquisition-evidence
         run: >-
           python -m pytest -q
           tests/test_capability_acquisition_system_hardening.py
+          tests/test_capability_acquisition_vertical.py
           tests/test_capability_acquisition_owner_flow_hardening.py
           tests/test_capability_acquisition_completion_hardening.py
           tests/test_capability_acquisition_architecture_gicc_contract.py
@@ -323,6 +326,14 @@ jobs:
           tests/test_global_supervisor_existing_objective_preflight.py
           tests/test_engineering_substrate_discovery_onvif.py
           tests/test_goal_world_discovery.py
+          --junitxml=windows-acquisition-evidence/junit.xml
+
+      - name: Preserve Windows acquisition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-acquisition-evidence
+          path: windows-acquisition-evidence/
 
 
   acquisition-docker:
