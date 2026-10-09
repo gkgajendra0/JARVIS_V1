@@ -71,7 +71,10 @@ def bind_physical_target_requirements(
         target_id = requirement.target_entity_id
         if target_id is not None:
             entity = known.get(target_id)
-            if entity is None or canonical_world_entity_type(entity.entity_type) != kind:
+            if (
+                entity is None
+                or canonical_world_entity_type(entity.entity_type) != kind
+            ):
                 raise PhysicalTargetPreflightError(
                     "physical capability target must be a referenced active "
                     "canonical entity of the requested type"
