@@ -120,6 +120,37 @@ def test_missing_entity_type_cannot_hide_media_player_requirement() -> None:
     assert missing == ("media_player",)
 
 
+@pytest.mark.parametrize(
+    ("target_type", "family"),
+    (
+        ("software", "media_player.control"),
+        ("computer", "media_player.control"),
+        ("camera", "television.control"),
+    ),
+)
+def test_conflicting_physical_semantics_cannot_bypass_target_preflight(
+    target_type: str, family: str
+) -> None:
+    with pytest.raises(
+        PhysicalTargetPreflightError,
+        match="contradicts declared target type",
+    ):
+        bind_physical_target_requirements(
+            _graph(target_type=target_type, family=family),
+            referenced_entity_ids=(),
+            get_entity=lambda _: None,
+        )
+
+
+def test_television_semantic_alias_requires_physical_target() -> None:
+    _, missing = bind_physical_target_requirements(
+        _graph(target_type=None, family="television.control"),
+        referenced_entity_ids=(),
+        get_entity=lambda _: None,
+    )
+    assert missing == ("media_player",)
+
+
 def test_service_advertisement_cannot_bind_physical_requirement() -> None:
     observed_tv = WorldEntityRefV1.create(
         entity_type="media_player",

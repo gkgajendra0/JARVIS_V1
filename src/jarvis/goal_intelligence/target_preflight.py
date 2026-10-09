@@ -32,12 +32,16 @@ class PhysicalTargetPreflightError(ValueError):
 
 def _target_type(requirement: CapabilityRequirementV1) -> str | None:
     declared = canonical_world_entity_type(requirement.target_entity_type)
-    if declared in _PHYSICAL_ENTITY_TYPES:
-        return declared
-    if declared and declared != "generic_external_resource":
-        return None
-    prefix = requirement.semantic_capability.split(".", 1)[0]
-    return prefix if prefix in _PHYSICAL_ENTITY_TYPES else None
+    family = canonical_world_entity_type(
+        requirement.semantic_capability.split(".", 1)[0]
+    )
+    if family in _PHYSICAL_ENTITY_TYPES:
+        if declared and declared not in {family, "generic_external_resource"}:
+            raise PhysicalTargetPreflightError(
+                "physical capability family contradicts declared target type"
+            )
+        return family
+    return declared if declared in _PHYSICAL_ENTITY_TYPES else None
 
 
 def bind_physical_target_requirements(
