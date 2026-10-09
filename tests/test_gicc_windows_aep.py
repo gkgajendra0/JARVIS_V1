@@ -314,3 +314,18 @@ def test_windows_aep_watcher_factory_constructs_but_does_not_start_scan() -> Non
     assert callable(watcher.start)
     assert callable(watcher.stop)
     # No watcher.start() is called; no network enumeration is authorized here.
+
+
+def test_runtime_rejects_plain_true_callback_as_network_authority() -> None:
+    """A lambda returning True is not an audited JARVIS execution permit."""
+
+    runtime = SimpleNamespace(capability_acquisition=object(), changes=object())
+    with pytest.raises(ValueError, match="policy-audited one-time Authority"):
+        build_gicc_apply_runtime(
+            config=object(),
+            capability_runtime=object(),
+            work_runtime=runtime,
+            capability_context=SimpleNamespace(current=lambda: None),
+            approved_aep_scopes=(_scope(),),
+            trusted_aep_consent_validator=lambda _: True,
+        )
