@@ -264,7 +264,7 @@ def test_runtime_rejects_unapproved_active_aep_scans_before_store_access() -> No
         changes=object(),
     )
     capability_context = SimpleNamespace(current=lambda: None)
-    with pytest.raises(ValueError, match="independent owner-consent"):
+    with pytest.raises(ValueError, match="policy-audited one-time Authority"):
         build_gicc_apply_runtime(
             config=object(),
             capability_runtime=object(),
