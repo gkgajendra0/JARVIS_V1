@@ -168,17 +168,13 @@ class WindowsNeighborInformationProbe:
 
     strategy = InformationResolutionStrategy.CURRENT_STATE_OBSERVATION
 
-    def __init__(
-        self, backend: WindowsPassiveNeighborBackend | None = None
-    ) -> None:
+    def __init__(self, backend: WindowsPassiveNeighborBackend | None = None) -> None:
         self._backend = backend or WindowsPassiveNeighborBackend()
 
     def resolve(self, need: InformationNeedV1) -> InformationProbeResult:
         if need.answer_schema.get("type") != "entity_id":
             return InformationProbeResult(resolution_ref=None)
-        target_type = canonical_world_entity_type(
-            need.answer_schema.get("entity_type")
-        )
+        target_type = canonical_world_entity_type(need.answer_schema.get("entity_type"))
         if target_type not in {
             "media_player",
             "camera",
