@@ -81,9 +81,7 @@ def test_owner_inventory_reads_existing_protected_world_without_modifying_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db = tmp_path / "owner.sqlite3"
-    work = SQLiteWorkStore(
-        db, payload_codec=build_default_work_payload_codec(db)
-    )
+    work = SQLiteWorkStore(db, payload_codec=build_default_work_payload_codec(db))
     world = GoalStore(work)
     tv = world.put_entity(
         WorldEntityRefV1.create(
