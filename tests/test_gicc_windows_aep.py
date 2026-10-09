@@ -358,3 +358,28 @@ def test_watcher_handler_registration_failure_detaches_previous_handlers() -> No
     assert watcher.started == 0
     assert watcher.stopped == 0
     assert set(watcher.unsubscribed) == {"added", "removed"}
+
+
+def test_winrt_factory_signature_failure_is_handled_without_owner_intervention() -> None:
+    def invalid_projection(_scope):
+        raise TypeError("WinRT projection lacks this factory overload")
+
+    backend = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda _: True,
+        watcher_factory=invalid_projection,
+    )
+    assert backend.observe(_scope()) == ()
+
+
+def test_malformed_winrt_metadata_cannot_abort_entire_discovery_flow() -> None:
+    class BadMetadata:
+        @property
+        def properties(self):
+            raise OSError("Windows provider cannot read this property")
+
+    watcher = FakeWatcher(rows=(BadMetadata(), _device(endpoint_id="good")))
+    result = _backend(watcher).observe(_scope())
+    assert len(result) == 1
+    assert result[0].endpoint_id == "good"
+    assert watcher.started == watcher.stopped == 1
