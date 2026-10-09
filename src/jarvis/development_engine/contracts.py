@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from jarvis.engineering_substrate.canonical import canonical_digest
+from jarvis.engineering_substrate.pytest_targets import normalize_pytest_targets
 
 DEVELOPMENT_ENGINE_CONTRACT_VERSION = 1
 
@@ -94,6 +95,10 @@ def _tokens(
     if len(set(normalized)) != len(normalized):
         raise ValueError(f"{field} values must be unique")
     return tuple(sorted(normalized))
+
+
+def _verification_targets(values: tuple[str, ...]) -> tuple[str, ...]:
+    return normalize_pytest_targets(values)
 
 
 class DevelopmentDisposition(StrEnum):
@@ -184,6 +189,7 @@ class DevelopmentTicketV1:
     attempt: int
     contract_version: int
     digest: str
+    verification_targets: tuple[str, ...] | None = None
 
     @classmethod
     def create(
@@ -208,6 +214,7 @@ class DevelopmentTicketV1:
         repository_context_refs: tuple[str, ...] | list[str] = (),
         writable_paths: tuple[str, ...] | list[str] = (),
         attempt: int = 1,
+        verification_targets: tuple[str, ...] | list[str] | None = None,
     ) -> DevelopmentTicketV1:
         if type(attempt) is not int or attempt < 1:
             raise ValueError("attempt must be a positive integer")
@@ -291,6 +298,10 @@ class DevelopmentTicketV1:
             "attempt": attempt,
             "contract_version": DEVELOPMENT_ENGINE_CONTRACT_VERSION,
         }
+        if verification_targets is not None:
+            payload["verification_targets"] = list(
+                _verification_targets(tuple(verification_targets))
+            )
         digest = canonical_digest(payload)
         return cls(
             ticket_id=f"dev_ticket_{digest[:16]}",
@@ -319,6 +330,11 @@ class DevelopmentTicketV1:
             attempt=attempt,
             contract_version=DEVELOPMENT_ENGINE_CONTRACT_VERSION,
             digest=digest,
+            verification_targets=(
+                None
+                if verification_targets is None
+                else tuple(payload["verification_targets"])
+            ),
         )
 
     @classmethod
@@ -354,6 +370,11 @@ class DevelopmentTicketV1:
             acceptance_criteria=tuple(payload["acceptance_criteria"]),  # type: ignore[arg-type]
             allowed_tools=tuple(payload["allowed_tools"]),  # type: ignore[arg-type]
             attempt=int(payload["attempt"]),
+            verification_targets=(
+                None
+                if "verification_targets" not in payload
+                else tuple(payload["verification_targets"])
+            ),
         )
         version = int(payload["contract_version"])
         if version != DEVELOPMENT_ENGINE_CONTRACT_VERSION:
@@ -365,7 +386,7 @@ class DevelopmentTicketV1:
         return ticket
 
     def canonical_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "request": self.request,
             "work_id": self.work_id,
             "engineering_change_id": self.engineering_change_id,
@@ -387,6 +408,9 @@ class DevelopmentTicketV1:
             "attempt": self.attempt,
             "contract_version": self.contract_version,
         }
+        if self.verification_targets is not None:
+            payload["verification_targets"] = list(self.verification_targets)
+        return payload
 
     def __post_init__(self) -> None:
         if self.contract_version != DEVELOPMENT_ENGINE_CONTRACT_VERSION:

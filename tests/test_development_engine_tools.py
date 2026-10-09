@@ -315,6 +315,44 @@ async def test_tool_port_defaults_to_and_enforces_approved_test_targets(
 
 
 @pytest.mark.asyncio
+async def test_typed_targets_do_not_authorize_pytest_text_in_acceptance(
+    tmp_path,
+) -> None:
+    legacy = _ticket(tools=("run_tests",))
+    payload = legacy.canonical_payload()
+    payload["verification_targets"] = ["tests/test_typed.py"]
+    ticket = DevelopmentTicketV1.from_payload(payload)
+    store = _running_store(tmp_path)
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=ticket,
+        store=store,
+        actions=WorkActionRegistry((OwnerExecutor(),)),
+    )
+    with pytest.raises(DevelopmentToolOwnerInputRequired):
+        await port.invoke("run_tests", {})
+    assert store.list_steps("work_demo")[-1].input_data["targets"] == [
+        "tests/test_typed.py"
+    ]
+    with pytest.raises(DevelopmentToolDenied):
+        await port.invoke("run_tests", {"targets": ["tests/test_demo.py"]})
+
+
+@pytest.mark.asyncio
+async def test_explicit_empty_targets_never_fall_back_to_acceptance_text(
+    tmp_path,
+) -> None:
+    payload = _ticket(tools=("run_tests",)).canonical_payload()
+    payload["verification_targets"] = []
+    port = WorkExecutorDevelopmentToolPort(
+        ticket=DevelopmentTicketV1.from_payload(payload),
+        store=_running_store(tmp_path),
+        actions=WorkActionRegistry((OwnerExecutor(),)),
+    )
+    with pytest.raises(DevelopmentToolDenied, match="no approved pytest targets"):
+        await port.invoke("run_tests", {})
+
+
+@pytest.mark.asyncio
 async def test_tool_port_requires_running_admitted_work(tmp_path) -> None:
     store = _running_store(tmp_path)
     running = store.require("work_demo")

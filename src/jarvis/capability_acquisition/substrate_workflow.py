@@ -562,7 +562,7 @@ class CapabilitySubstrateVerifyExecutor:
         parameters: dict[str, Any],
     ) -> tuple[str, ...]:
         del work, parameters
-        return ("artifact_store",)
+        return ("artifact",)
 
     async def execute(
         self,
