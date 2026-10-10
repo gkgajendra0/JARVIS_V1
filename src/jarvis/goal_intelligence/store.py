@@ -648,6 +648,8 @@ class GoalStore:
             )
             if current.goal_revision != expected_revision:
                 raise GoalStoreConflict("goal revision changed before entity update")
+            if current.state is GoalState.CANCELLED:
+                raise GoalStoreConflict("cancelled goal cannot receive entity updates")
             entity_ids = tuple(
                 sorted(
                     {
@@ -723,6 +725,8 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "goal revision changed before compare-and-swap update"
                 )
+            if current.state is GoalState.CANCELLED and state is not GoalState.CANCELLED:
+                raise GoalStoreConflict("cancelled goal cannot be reactivated")
             if current.state is state:
                 return current
             updated = current.with_state(state, updated_at=updated_at)
