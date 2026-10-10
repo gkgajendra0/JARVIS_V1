@@ -48,6 +48,7 @@ from jarvis.goal_intelligence.composition import (
 )
 from jarvis.goal_intelligence.information import (
     InformationResolutionState,
+    InformationResolutionStrategy,
     InformationResolver,
 )
 from jarvis.goal_intelligence.interpretation import (
@@ -118,7 +119,12 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         entity_resolver=entities,
         information_resolver=InformationResolver(
             store=store,
-            probes=(EntityInformationProbe(entities),),
+            probes=(
+                EntityInformationProbe(
+                    entities,
+                    strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+                ),
+            ),
         ),
         requirement_deriver=RequirementDeriver(
             client=_QueueStructuredClient(
