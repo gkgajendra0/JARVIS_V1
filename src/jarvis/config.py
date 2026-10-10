@@ -508,6 +508,28 @@ class JarvisConfig:
 
         return self.ai_provider
 
+    def autonomous_acquisition_acceptance_config_blockers(self) -> tuple[str, ...]:
+        """Report configuration-only blockers before a real owner-machine test.
+
+        This checks neither connected providers nor active devices, and cannot
+        authorize discovery, deployment, or a physical operation. Normal
+        production/legacy voice use remains allowed with a nonempty result.
+        """
+        blockers: list[str] = []
+        if self.runtime_lane is not RuntimeLane.DEVELOPMENT:
+            blockers.append("development_lane_required")
+        if self.gicc_mode is not GiccMode.APPLY:
+            blockers.append("gicc_apply_inactive")
+        if not self.work_orchestration_enabled:
+            blockers.append("work_orchestrator_inactive")
+        if not self.development_engine_enabled:
+            blockers.append("development_specialist_inactive")
+        if not self.chatgpt_plan_enabled:
+            blockers.append("engineering_provider_inactive")
+        if not self.development_test_docker_image:
+            blockers.append("development_sandbox_unconfigured")
+        return tuple(blockers)
+
     @classmethod
     def from_environment(cls) -> JarvisConfig:
         """Load persisted machine settings, then apply environment overrides.
