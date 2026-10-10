@@ -1986,6 +1986,12 @@ class GoalStore:
             raise TypeError("gap must be CapabilityGapV1")
         operations_key = "|".join(gap.minimum_required_operations)
         with self.work.extension_transaction() as db:
+            owner_row = db.execute(
+                "SELECT state FROM owner_goals_v2 WHERE goal_id=?",
+                (gap.goal_id,),
+            ).fetchone()
+            if owner_row is not None and owner_row["state"] == GoalState.CANCELLED.value:
+                raise GoalStoreConflict("cannot create or advance a cancelled goal")
             row = db.execute(
                 "SELECT payload, digest FROM capability_gaps_v1 WHERE gap_id=?",
                 (gap.gap_id,),
@@ -2112,6 +2118,12 @@ class GoalStore:
         if not isinstance(plan, PlanGraphV1):
             raise TypeError("plan must be PlanGraphV1")
         with self.work.extension_transaction() as db:
+            owner_row = db.execute(
+                "SELECT state FROM owner_goals_v2 WHERE goal_id=?",
+                (plan.goal_id,),
+            ).fetchone()
+            if owner_row is not None and owner_row["state"] == GoalState.CANCELLED.value:
+                raise GoalStoreConflict("cannot create or advance a cancelled goal")
             row = db.execute(
                 "SELECT payload, digest FROM plan_graphs_v1 WHERE plan_id=?",
                 (plan.plan_id,),
@@ -2187,6 +2199,12 @@ class GoalStore:
         if not expected:
             raise ValueError("expected_digest must not be empty")
         with self.work.extension_transaction() as db:
+            owner_row = db.execute(
+                "SELECT state FROM owner_goals_v2 WHERE goal_id=?",
+                (plan.goal_id,),
+            ).fetchone()
+            if owner_row is not None and owner_row["state"] == GoalState.CANCELLED.value:
+                raise GoalStoreConflict("cannot create or advance a cancelled goal")
             row = db.execute(
                 "SELECT payload, digest FROM plan_graphs_v1 WHERE plan_id=?",
                 (plan.plan_id,),
