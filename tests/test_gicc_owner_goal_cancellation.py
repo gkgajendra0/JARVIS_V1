@@ -160,7 +160,7 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
         source_session_id="separate-project",
         source_turn_id="another-request",
     )
-    work.save(unrelated, expected_version=0)
+    work.create(unrelated)
     runtime, orchestrator = _runtime(work, goals, changes)
 
     result = await runtime.cancel_owner_goal(goal.goal_id)
