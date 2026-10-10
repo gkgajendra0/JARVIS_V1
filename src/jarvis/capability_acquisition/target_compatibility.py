@@ -41,6 +41,24 @@ def _hint(value: object) -> tuple[str, str] | None:
     target_value = raw_value.strip()
     if key not in _TARGET_DIMENSIONS or not target_value:
         return None
+    if key == "entity_type":
+        # Recognize equivalent names for the same canonical world resource.
+        # A TV vs media_player alias must not look like an owner/inventory
+        # contradiction, while platform/protocol claims remain exact.
+        target_value = {
+            "tv": "media_player",
+            "television": "media_player",
+            "smart_tv": "media_player",
+            "smart_television": "media_player",
+            "media": "media_player",
+            "desktop": "computer",
+            "laptop": "computer",
+            "pc": "computer",
+            "webcam": "camera",
+            "security_camera": "camera",
+            "monitor": "display",
+            "screen": "display",
+        }.get(target_value, target_value)
     return key, target_value
 
 
