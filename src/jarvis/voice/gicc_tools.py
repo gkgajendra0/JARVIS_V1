@@ -435,8 +435,7 @@ class GiccAgentTools:
                             eligible = tuple(
                                 hint
                                 for hint in hints
-                                if getattr(hint, "evidence_ref", None)
-                                in eligible_refs
+                                if getattr(hint, "evidence_ref", None) in eligible_refs
                             )
                             if eligible:
                                 payload["unverified_device_hints"] = [
