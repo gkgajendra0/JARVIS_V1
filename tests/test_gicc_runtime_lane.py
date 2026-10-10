@@ -104,3 +104,47 @@ def test_dev_supervisor_config_defaults_to_development() -> None:
     config = DevSupervisorConfig()
 
     assert config.runtime_lane is RuntimeLane.DEVELOPMENT
+
+
+def test_autonomous_acquisition_preflight_rejects_legacy_and_shadow_paths() -> None:
+    direct = JarvisConfig()
+    assert direct.autonomous_acquisition_acceptance_config_blockers() == (
+        "development_lane_required",
+        "gicc_apply_inactive",
+        "work_orchestrator_inactive",
+        "development_specialist_inactive",
+        "engineering_provider_inactive",
+        "development_sandbox_unconfigured",
+    )
+
+    shadow = JarvisConfig(
+        runtime_lane=RuntimeLane.DEVELOPMENT,
+        gicc_mode=GiccMode.SHADOW,
+    )
+    assert "gicc_apply_inactive" in (
+        shadow.autonomous_acquisition_acceptance_config_blockers()
+    )
+
+
+def test_autonomous_acquisition_preflight_requires_entire_specialist_route() -> None:
+    incomplete = JarvisConfig(
+        runtime_lane=RuntimeLane.DEVELOPMENT,
+        gicc_mode=GiccMode.APPLY,
+    )
+    assert "development_specialist_inactive" in (
+        incomplete.autonomous_acquisition_acceptance_config_blockers()
+    )
+
+    configured = JarvisConfig(
+        runtime_lane=RuntimeLane.DEVELOPMENT,
+        gicc_mode=GiccMode.APPLY,
+        work_orchestration_enabled=True,
+        work_dbos_database_url="postgresql://localhost/jarvis_test",
+        development_engine_enabled=True,
+        chatgpt_plan_enabled=True,
+        chatgpt_plan_model="reviewed-coding-model",
+        development_test_docker_image="jarvis-sandbox:reviewed",
+    )
+    assert configured.autonomous_acquisition_acceptance_config_blockers() == ()
+    # Empty config blockers never establishes provider health, real-world
+    # discovery authorization, approved deployment, or physical TV control.
