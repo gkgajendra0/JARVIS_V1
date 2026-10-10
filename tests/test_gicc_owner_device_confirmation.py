@@ -329,3 +329,49 @@ def test_owner_confirmation_requires_consumed_discovery_authority(
     assert world.entities() == ()
     # Nothing was consumed: the owner can safely approve an actual
     # bounded discovery and later confirm the observed device.
+
+
+def test_multiple_discovered_devices_need_exact_owner_choice(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    world = WorldRegistry(store)
+    now = int(time.time())
+    first_ref = _evidence(address="192.168.1.10", now=now)
+    second_ref = _evidence(address="192.168.1.20", now=now)
+    store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=(
+            first_ref,
+            second_ref,
+            "windows_aep_authorized_scope_consumed:upnp",
+        ),
+    )
+    common = {
+        "store": store,
+        "world": world,
+        "goal_id": goal.goal_id,
+        "information_need_id": need.information_need_id,
+        "session_id": goal.source_session_id,
+        "owner_turn_id": "owner-explicit-second-tv",
+    }
+    assert confirm_single_discovered_device(**common) is None
+    assert (
+        confirm_single_discovered_device(
+            **common,
+            selected_evidence_ref="made-up-network-device",
+        )
+        is None
+    )
+    assert world.entities() == ()
+
+    confirmed = confirm_single_discovered_device(
+        **common,
+        selected_evidence_ref=second_ref,
+    )
+    assert confirmed is not None
+    assert f"unverified_aep_evidence:{second_ref}" in confirmed.provenance_refs
+    assert f"unverified_aep_evidence:{first_ref}" not in confirmed.provenance_refs
+    assert world.bindings(entity_id=confirmed.entity_id) == ()

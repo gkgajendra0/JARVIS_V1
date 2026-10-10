@@ -383,6 +383,7 @@ class GiccApplyRuntime:
         information_need_id: str,
         session_id: str,
         owner_turn_id: str,
+        selected_evidence_ref: str | None = None,
     ) -> WorldEntityRefV1 | None:
         """Register owner-confirmed identity only; never pair or control it."""
         return confirm_single_discovered_device(
@@ -392,6 +393,7 @@ class GiccApplyRuntime:
             information_need_id=information_need_id,
             session_id=session_id,
             owner_turn_id=owner_turn_id,
+            selected_evidence_ref=selected_evidence_ref,
         )
 
     def authorize_and_discover_network(

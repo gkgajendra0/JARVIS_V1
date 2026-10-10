@@ -32,6 +32,7 @@ def confirm_single_discovered_device(
     information_need_id: str,
     session_id: str,
     owner_turn_id: str,
+    selected_evidence_ref: str | None = None,
 ) -> WorldEntityRefV1 | None:
     """Bind one *fresh* owner-reaffirmed physical identity to the original goal.
 
@@ -74,15 +75,28 @@ def confirm_single_discovered_device(
     hints = pending_owner_device_suggestions(
         store=store, goal_id=goal.goal_id, session_id=goal.source_session_id
     )
-    # Never silently choose between conflicting or multiple network devices.
-    if len(hints) != 1 or hints[0].evidence_ref not in need.evidence_refs:
-        return None
-    # A bare or injected network advertisement does not prove it originated
-    # in an owner-approved, one-time Windows AEP scan. The same InfoNeed
-    # must carry the consumed authorization for the observed protocol.
-    consumed_scope = "windows_aep_authorized_scope_consumed:" + hints[0].protocol
-    if consumed_scope not in need.evidence_refs:
-        return None
+    # Only this exact canonical InformationNeed may supply the candidates.
+    # Without an explicit selected reference there must be exactly one.
+    candidates = tuple(
+        hint
+        for hint in hints
+        if hint.evidence_ref in need.evidence_refs
+        and f"windows_aep_authorized_scope_consumed:{hint.protocol}"
+        in need.evidence_refs
+    )
+    if selected_evidence_ref is None:
+        if len(candidates) != 1:
+            return None
+        chosen = candidates[0]
+    else:
+        matching = tuple(
+            hint
+            for hint in candidates
+            if hint.evidence_ref == str(selected_evidence_ref).strip()
+        )
+        if len(matching) != 1:
+            return None
+        chosen = matching[0]
     canonical_name, aliases = details
     # Existing canonical owner inventory should use the already bound
     # entity-disambiguation path rather than create a second "my TV".
@@ -104,7 +118,7 @@ def confirm_single_discovered_device(
         if (
             existing.lifecycle_state is EntityLifecycleState.ACTIVE
             and exact_owner_provenance in existing.provenance_refs
-            and f"unverified_aep_evidence:{hints[0].evidence_ref}"
+            and f"unverified_aep_evidence:{chosen.evidence_ref}"
             in existing.provenance_refs
         ):
             return existing  # exactly idempotent; never a new confirmation
