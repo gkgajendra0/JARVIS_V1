@@ -33,7 +33,7 @@ from jarvis.goal_intelligence.models import (
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
-from jarvis.work.models import WorkItem, WorkState, WorkType
+from jarvis.work.models import WorkDeliveryKind, WorkItem, WorkState, WorkType
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -162,8 +162,18 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
     )
     work.create(unrelated)
     runtime, orchestrator = _runtime(work, goals, changes)
+    stale = work.enqueue_delivery(
+        work=work.require(item.work_id),
+        kind=WorkDeliveryKind.PROGRESS,
+        message="Old TV research is ready",
+        event_key="old-tv-progress",
+    )
+    assert stale is not None
+    assert len(work.list_pending_deliveries()) == 1
 
     result = await runtime.cancel_owner_goal(goal.goal_id)
+    assert result["suppressed_pending_notifications"] == 1
+    assert work.list_pending_deliveries() == ()
 
     assert result["status"] == "cancelled"
     assert result["historical_audit_retained"] is True
