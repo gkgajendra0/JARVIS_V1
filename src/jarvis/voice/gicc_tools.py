@@ -483,6 +483,51 @@ class GiccAgentTools:
                                 )
                             if choice_sets:
                                 payload["device_choice_sets"] = choice_sets
+
+            # The original identity question remains durable, but it is a
+            # fallback, not the next owner action when governed discovery is
+            # available. Otherwise LiveKit sees "Which TV?" alongside a valid
+            # scoped discovery proposal and can repeatedly request a model/IP
+            # instead of advancing the existing InformationNeed.
+            options = payload.get("device_choice_sets")
+            scopes = payload.get("network_discovery")
+            bound_need_ids: set[str] = set()
+            if isinstance(options, list) and options:
+                bound_need_ids.update(
+                    str(item["information_need_id"]) for item in options
+                )
+                payload["next_action"] = "confirm_discovered_device_identity"
+                payload["truth_note"] = (
+                    "A governed observation produced unverified devices. Show "
+                    "the exact option set and request explicit owner confirmation "
+                    "of their identity. No control, pairing, or access is yet "
+                    "authorized. Do not ask for a model or network address."
+                )
+            elif isinstance(scopes, dict):
+                bound_need_ids.add(str(scopes["information_need_id"]))
+                payload["next_action"] = "request_scoped_discovery_approval"
+                payload["truth_note"] = (
+                    "A bounded discovery scope is available. Present its exact "
+                    "scope and ask for explicit owner authorization before any "
+                    "active scan; Windows Hello and the AuthorityService are "
+                    "still required. Defer the generic device identity question "
+                    "until governed discovery genuinely cannot resolve it. "
+                    "Never ask the owner to identify an IP, model or protocol "
+                    "as a substitute for discovery."
+                )
+            if bound_need_ids:
+                deferred = [
+                    question
+                    for question in questions
+                    if str(question["information_need_id"]) in bound_need_ids
+                ]
+                payload["questions"] = [
+                    question
+                    for question in questions
+                    if str(question["information_need_id"]) not in bound_need_ids
+                ]
+                if deferred:
+                    payload["deferred_information_questions"] = deferred
             return payload
 
         if result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY:
