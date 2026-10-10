@@ -1080,9 +1080,7 @@ async def test_production_gicc_tool_provider_keeps_discovery_offers_across_turns
 
     unrelated = ConversationSession(session_id="different-owner-session")
     unrelated.start()
-    unrelated.accept_turn(
-        ConversationRole.USER, "I approve the network discovery."
-    )
+    unrelated.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     assert provider(unrelated) is not first
     denied = await provider(unrelated).authorize_bounded_network_discovery(
         None, goal_id=goal.goal_id
