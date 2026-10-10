@@ -12,6 +12,7 @@ from jarvis.goal_intelligence.models import (
     GoalKind,
     GoalState,
     InformationNeedCategory,
+    InformationNeedState,
     InformationNeedV1,
     OwnerGoalV2,
 )
@@ -227,6 +228,27 @@ def test_no_owner_scan_request_when_need_disallows_required_discovery_strategies
     tmp_path: Path, sources: tuple[str, ...]
 ) -> None:
     store, goal, _need = _data(tmp_path, sources=sources)
+    assert (
+        prepare_pending_device_discovery_consent(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            planner=_planner(),
+        )
+        is None
+    )
+
+
+def test_cancelled_need_does_not_request_network_permission(tmp_path: Path) -> None:
+    """An unresolved goal cannot resurrect permission for a retired need."""
+
+    store, goal, need = _data(tmp_path)
+    cancelled = store.update_information_need_state(
+        need.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=need.revision,
+    )
+    assert cancelled.state is InformationNeedState.CANCELLED
     assert (
         prepare_pending_device_discovery_consent(
             store=store,
