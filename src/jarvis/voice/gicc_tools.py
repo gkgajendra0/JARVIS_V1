@@ -679,7 +679,7 @@ class GiccAgentTools:
             continued = await runtime.continue_goal(
                 goal.goal_id, retry_information=True
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - voice boundary must remain truthful
             return self._internal_failure(
                 turn=turn, stage="resume_owner_confirmed_device_goal", error=exc
             )
