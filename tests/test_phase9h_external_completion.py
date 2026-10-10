@@ -602,6 +602,7 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
     )
     request = SimpleNamespace(
         request_id="physical-request-1",
+        operation="play_media",
         expected_observation="Movie visible on the actual television",
     )
     work_store.add_step(

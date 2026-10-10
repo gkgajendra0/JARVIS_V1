@@ -777,7 +777,9 @@ class GiccAgentTools:
                     session_id=goal.source_session_id,
                 )
             except Exception:
-                LOGGER.warning("GICC could not verify owner device options", exc_info=True)
+                LOGGER.warning(
+                    "GICC could not verify owner device options", exc_info=True
+                )
                 return {"ok": False, "status": "owner_device_choice_is_not_current"}
             candidates = tuple(
                 hint
@@ -794,8 +796,7 @@ class GiccAgentTools:
                 option_index >= len(candidates)
                 or len(candidates) < 2
                 or displayed_choice_set_digest != _device_choice_digest(candidates)
-                or selected_evidence_ref
-                != candidates[option_index].evidence_ref
+                or selected_evidence_ref != candidates[option_index].evidence_ref
             ):
                 return {"ok": False, "status": "owner_device_choice_is_not_current"}
             selected["selected_evidence_ref"] = selected_evidence_ref
