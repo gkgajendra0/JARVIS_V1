@@ -433,14 +433,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if not normalized_question:
             raise ValueError("change-gate question must not be empty")
 
+        bound_session: ConversationSession | None = None
+        bound_work_tools: WorkAgentTools | None = None
+
         def session_tools(conversation: ConversationSession) -> list:
-            work_tools = WorkAgentTools(
-                runtime,
-                conversation,
-                bound_change_gate_id=gate_id,
-                allow_capability_acquisition=False,
-            )
-            return [work_tools.decide_bound_change_gate]
+            nonlocal bound_session, bound_work_tools
+            # Re-enumeration must not reset the same-turn approval replay guard.
+            if bound_session is not conversation or bound_work_tools is None:
+                bound_work_tools = WorkAgentTools(
+                    runtime,
+                    conversation,
+                    bound_change_gate_id=gate_id,
+                    allow_capability_acquisition=False,
+                )
+                bound_session = conversation
+            return [bound_work_tools.decide_bound_change_gate]
 
         def gate_resolved() -> bool:
             pending = GateService(
