@@ -141,11 +141,18 @@ class GiccAgentTools:
         if resolver is None:
             return {"ok": False, "status": "objective_status_unavailable"}
         objectives = resolver.list_active(limit=50)
-        self._listed_owner_goal_ids = {item.goal_id for item in objectives}
+        projections = [item.public_payload() for item in objectives]
+        self._listed_owner_goal_ids = {
+            key
+            for payload in projections
+            if isinstance(payload, dict)
+            for key in (payload.get("goal_id"),)
+            if isinstance(key, str) and key.strip()
+        }
         return {
             "ok": True,
             "status": "listed",
-            "objectives": [item.public_payload() for item in objectives],
+            "objectives": projections,
             "truth_note": (
                 "These are owner-level objectives joined across GICC, Work, "
                 "EngineeringChange, activation, and external acceptance. Never infer "
@@ -169,9 +176,14 @@ class GiccAgentTools:
             objective = resolver.resolve(goal_id)
         except ValueError:
             return {"ok": False, "status": "unknown_goal_id", "goal_id": goal_id}
-        if not objective.terminal:
-            self._listed_owner_goal_ids.add(objective.goal_id)
-        return {"ok": True, "status": "found", **objective.public_payload()}
+        payload = objective.public_payload()
+        if (
+            isinstance(payload, dict)
+            and payload.get("goal_id") == goal_id
+            and payload.get("terminal") is not True
+        ):
+            self._listed_owner_goal_ids.add(goal_id)
+        return {"ok": True, "status": "found", **payload}
 
     @function_tool()
     async def cancel_owner_goal(
