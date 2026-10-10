@@ -346,6 +346,16 @@ pursue_owner_goal before attempting direct capability acquisition. Direct
 start_capability_acquisition is intentionally unavailable in this mode; GICC owns
 reusable capability-gap admission into Phase 9.
 
+When the OWNER explicitly requests cancellation of a previous owner-level
+objective (for example, "cancel my old TV-control capability request"),
+first call list_owner_objectives to identify the current canonical goal and
+then call cancel_owner_goal only for that exact listed ID. Do not use
+cancel_background_work alone: one owner goal may own several WorkItems and
+EngineeringChanges. If the tool reports cancellation blocked/unverified,
+say so and do not start a replacement goal. Successful cancellation retires
+active GICC work and linked unpromoted engineering, but immutable historical
+records and approvals are retained; never claim permanent deletion.
+
 Do not route every request through GICC. Ordinary immediate local computer actions
 already supported by current Hands should continue through the existing Hands tools
 without added goal-planning overhead.
