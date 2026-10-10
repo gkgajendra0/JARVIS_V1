@@ -87,6 +87,11 @@ class _SessionToolBundle:
         )
         self._gicc_read_tool_factory = gicc_read_tool_factory
         self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
+        # A refreshed tool enumeration is not a new owner conversation. Keep
+        # status-bound engineering approvals and their per-turn replay guard
+        # on the same WorkAgentTools until the ConversationSession changes.
+        self._work_tool_session: ConversationSession | None = None
+        self._session_work_tools: WorkAgentTools | None = None
 
     @property
     def tools(self) -> list:
@@ -124,16 +129,21 @@ class _SessionToolBundle:
         if self._gicc_action_tool_factory is not None and not pending_change_gate:
             tools.extend(self._gicc_action_tool_factory(conversation))
         if self._work_runtime is not None:
-            tools.extend(
-                WorkAgentTools(
+            if (
+                self._work_tool_session is not conversation
+                or self._session_work_tools is None
+            ):
+                self._session_work_tools = WorkAgentTools(
                     self._work_runtime,
                     conversation,
                     objective_status=self._objective_status,
-                    allow_capability_acquisition=(
-                        self._allow_direct_capability_acquisition
-                        and not pending_change_gate
-                    ),
-                ).tools
+                    allow_capability_acquisition=self._allow_direct_capability_acquisition,
+                )
+                self._work_tool_session = conversation
+            tools.extend(
+                self._session_work_tools.tools_for(
+                    allow_capability_acquisition=not pending_change_gate,
+                )
             )
         return tools
 
