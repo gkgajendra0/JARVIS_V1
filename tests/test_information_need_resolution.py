@@ -305,3 +305,41 @@ def test_canonical_store_rejects_resurrection_of_cancelled_need(
         )
 
     assert store.get_information_need(need.information_need_id) == cancelled
+
+
+def test_cancellation_atomically_retires_active_owner_question(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    pending = InformationResolver(store=store).resolve(
+        _need(goal),
+        created_at="2026-10-01T12:02:00+00:00",
+    )
+    assert pending.interaction is not None
+    interaction_id = str(pending.interaction["interaction_id"])
+    assert store.get_information_interaction(interaction_id)["state"] == "active"
+    cancelled = store.update_information_need_state(
+        pending.need.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=pending.need.revision,
+    )
+
+    assert cancelled.state is InformationNeedState.CANCELLED
+    retired = store.get_information_interaction(interaction_id)
+    assert retired is not None
+    assert retired["state"] == "cancelled"
+    assert retired["resolution_ref"] is None
+    assert store.get_information_need(cancelled.information_need_id) == cancelled
+
+    conversation = ConversationSession(session_id="owner-bound-session")
+    conversation.start()
+    reply = conversation.accept_turn(ConversationRole.USER, "Use the other TV")
+    with pytest.raises(GoalStoreConflict):
+        store.submit_information_interaction_reply(
+            interaction_id=interaction_id,
+            goal_id=goal.goal_id,
+            need_id=cancelled.information_need_id,
+            source_turn_id=reply.turn_id,
+            resolution_ref="entity:tv-b",
+            resolved_at="2026-10-01T12:03:00+00:00",
+        )
