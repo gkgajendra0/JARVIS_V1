@@ -202,6 +202,18 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
     assert work.require(monitor.work_id).state is WorkState.CANCELLED
     assert work.require(unrelated.work_id).state is WorkState.QUEUED
     assert changes.get(change.change_id) is not None
+    with pytest.raises(GoalStoreConflict, match="cancelled goal"):
+        goals.put_gap(gap)
+    with pytest.raises(GoalStoreConflict, match="cancelled goal"):
+        goals.put_plan(plan)
+    with pytest.raises(GoalStoreConflict, match="cancelled goal"):
+        goals.update_plan_execution(plan, expected_digest=plan.digest)
+    with pytest.raises(GoalStoreConflict, match="cancelled goal"):
+        goals.update_goal_state(
+            goal.goal_id,
+            GoalState.RESOLVING,
+            expected_revision=goals.get_goal(goal.goal_id).goal_revision,
+        )
 
     repeat = await runtime.cancel_owner_goal(goal.goal_id)
     assert repeat["idempotent"] is True
