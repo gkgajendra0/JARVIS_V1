@@ -912,3 +912,48 @@ def test_confirmed_target_id_overrides_conflicting_stale_owner_id() -> None:
     )
     assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
     assert "target_conflicting_provenance_entity_id" in result.reason_codes
+
+
+def test_reusable_sdk_does_not_require_owner_inventory_display_name() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = _targeted_goal()
+    sdk = _targeted_sdk(
+        identity="generic-vidaa-library",
+        device_scopes=("entity_type:television", "platform:vidaa"),
+    )
+    result = evaluate_candidate_target_compatibility(
+        goal,
+        sdk,
+        canonical_target_hints=(
+            "entity_type:television",
+            "entity_name:Owner-confirmed TV",
+            "platform:vidaa",
+        ),
+    )
+    assert result.verdict is TargetCompatibilityVerdict.COMPATIBLE
+    assert result.compatible
+
+    # But claiming a different owner's concrete device name is not reusable.
+    wrong_name = _targeted_sdk(
+        identity="wrong-physical-tv-binding",
+        device_scopes=(
+            "entity_type:television",
+            "entity_name:Different owner's TV",
+            "platform:vidaa",
+        ),
+    )
+    rejected = evaluate_candidate_target_compatibility(
+        goal,
+        wrong_name,
+        canonical_target_hints=(
+            "entity_type:television",
+            "entity_name:Owner-confirmed TV",
+            "platform:vidaa",
+        ),
+    )
+    assert rejected.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflict_entity_name" in rejected.reason_codes

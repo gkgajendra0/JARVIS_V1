@@ -122,13 +122,14 @@ class AcquisitionWorkContextResolver:
         self,
         context: AcquisitionWorkContext,
     ) -> tuple[str, ...]:
-        """Project structured target facts without changing the immutable Phase-9 goal."""
+        """Project independently reviewed target facts, not the owner's plan claims.
 
-        hints = {
-            " ".join(str(item).split()).strip().casefold()
-            for item in context.goal.target_hints
-            if str(item).strip()
-        }
+        The acquisition resolver already reads context.goal.target_hints as
+        the original interpreted claim. Returning those same claims as
+        canonical target facts would make stale Roku and observed VIDAA
+        compatible by allowing a self-matching intersection.
+        """
+        hints: set[str] = set()
 
         link = self._store.latest_artifact(
             context.change_id,
