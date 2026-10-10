@@ -1166,14 +1166,12 @@ class ExternalAcceptanceRecordExecutor:
         del parameters
         context = self._resolver.context_for(work.work_id)
         steps = self._resolver.store.work.list_steps(work.work_id)
-        invoked = _latest_step(
-            steps,
-            "external_acceptance_invoke",
-            predicate=lambda step: step.observation.get("invoked") is True,
-        )
-        if invoked is None:
+        # The latest attempt is authoritative. Do not skip a newer
+        # denied/failed invocation in favor of an earlier successful one.
+        invoked = _latest_step(steps, "external_acceptance_invoke")
+        if invoked is None or invoked.observation.get("invoked") is not True:
             raise ExternalAcceptanceError(
-                "external acceptance record requires a successful live invocation"
+                "external acceptance record requires a successful latest live invocation"
             )
         request_id = str(invoked.observation.get("request_id") or "")
         hardware = HardwareAcceptanceService(self._resolver.store)
@@ -1294,6 +1292,7 @@ class ExternalAcceptanceRecordExecutor:
             "activation_artifact_digest": context.activation.digest,
             "request_id": request.request_id,
             "request_digest": canonical_digest(request),
+            "invocation_step_id": invoked.step_id,
             "evidence_id": evidence.evidence_id,
             "evidence_digest": canonical_digest(evidence),
             "operation": request.operation,
@@ -1323,6 +1322,7 @@ class ExternalAcceptanceRecordExecutor:
                 observation={
                     "acceptance_recorded": True,
                     "verdict": verdict.value,
+                    "invocation_step_id": invoked.step_id,
                     "operation": request.operation,
                     "request_id": request.request_id,
                     "evidence_id": evidence.evidence_id,
@@ -1334,6 +1334,7 @@ class ExternalAcceptanceRecordExecutor:
         return {
             "acceptance_recorded": True,
             "verdict": verdict.value,
+            "invocation_step_id": invoked.step_id,
             "operation": request.operation,
             "request_id": request.request_id,
             "evidence_id": evidence.evidence_id,
@@ -1367,13 +1368,17 @@ def external_acceptance_completion_guard(
         return False, "external acceptance remains pending after owner decline"
     if invoked.observation.get("invoked") is not True:
         return False, "external acceptance live invocation has not succeeded"
-    recorded = _latest_step(
-        steps,
-        "external_acceptance_record",
-        predicate=lambda step: step.observation.get("acceptance_recorded") is True,
-    )
-    if recorded is None:
+    recorded = _latest_step(steps, "external_acceptance_record")
+    if recorded is None or recorded.observation.get("acceptance_recorded") is not True:
         return False, "external acceptance requires durable real-world evidence"
+    # A pass for an earlier invocation cannot certify a later successful
+    # attempt. New evidence records bind their exact invocation step ID;
+    # legacy records must at least chronologically follow the latest invoke.
+    if steps.index(recorded) <= steps.index(invoked):
+        return False, "external acceptance requires fresh evidence for latest invocation"
+    bound_invocation = recorded.observation.get("invocation_step_id")
+    if bound_invocation is not None and bound_invocation != invoked.step_id:
+        return False, "external acceptance evidence belongs to another invocation"
     if recorded.observation.get("verdict") != HardwareAcceptanceVerdict.PASS.value:
         return False, "external acceptance real-world verdict did not pass"
     return True, None

@@ -580,6 +580,48 @@ def test_external_acceptance_guard_requires_durable_real_world_evidence() -> Non
         False,
         "external acceptance real-world verdict did not pass",
     )
+    # No stale "pass" may survive a later denied or newly retried operation.
+    newer_failed = after_record + (
+        _completed_step(work_id, "external_acceptance_invoke", {"invoked": False}),
+    )
+    assert external_acceptance_completion_guard(newer_failed) == (
+        False,
+        "external acceptance live invocation has not succeeded",
+    )
+    newer_succeeded = after_record + (
+        _completed_step(work_id, "external_acceptance_invoke", {"invoked": True}),
+    )
+    assert external_acceptance_completion_guard(newer_succeeded) == (
+        False,
+        "external acceptance requires fresh evidence for latest invocation",
+    )
+    wrong_invocation = before_record + (
+        _completed_step(
+            work_id,
+            "external_acceptance_record",
+            {
+                "acceptance_recorded": True,
+                "verdict": "pass",
+                "invocation_step_id": "different-attempt",
+            },
+        ),
+    )
+    assert external_acceptance_completion_guard(wrong_invocation) == (
+        False,
+        "external acceptance evidence belongs to another invocation",
+    )
+    correctly_bound = before_record + (
+        _completed_step(
+            work_id,
+            "external_acceptance_record",
+            {
+                "acceptance_recorded": True,
+                "verdict": "pass",
+                "invocation_step_id": before_record[-1].step_id,
+            },
+        ),
+    )
+    assert external_acceptance_completion_guard(correctly_bound) == (True, None)
 
 
 @pytest.mark.asyncio
