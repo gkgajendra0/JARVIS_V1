@@ -40,7 +40,7 @@ from jarvis.goal_intelligence.requirements import (
 )
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
-from jarvis.voice.gicc_tools import GiccAgentTools
+from jarvis.voice.gicc_tools import GiccAgentTools, build_session_scoped_gicc_tools
 
 
 @pytest.mark.asyncio
@@ -1009,3 +1009,83 @@ async def test_gicc_voice_binds_owner_selected_option_to_displayed_set(
     assert accepted["device_control_verified"] is False
     assert runtime.confirmed_ref == "fresh-aep-option-b"
     assert runtime.resumes == 1
+
+
+@pytest.mark.asyncio
+async def test_production_gicc_tool_provider_keeps_discovery_offers_across_turns(
+    tmp_path: Path,
+) -> None:
+    """Action/read tool-list refreshes must not erase an offered scan scope."""
+    from tests.test_gicc_network_consent import _data, _planner
+
+    from jarvis.conversation import ConversationSession
+    from jarvis.goal_intelligence.network_consent import (
+        prepare_pending_device_discovery_consent,
+    )
+
+    store, goal, need = _data(tmp_path)
+    conversation = ConversationSession(session_id=goal.source_session_id)
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "Find my television.")
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(need,),
+    )
+
+    class Runtime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.scan_calls = 0
+
+        def prepare_network_discovery_consent(self, *, goal_id, session_id):
+            return prepare_pending_device_discovery_consent(
+                store=store,
+                goal_id=goal_id,
+                session_id=session_id,
+                planner=_planner(),
+            )
+
+        def authorize_and_discover_network(
+            self, *, goal_id, session_id, owner_turn_id, expected_scope_material
+        ):
+            assert goal_id == goal.goal_id
+            assert session_id == goal.source_session_id
+            assert owner_turn_id == conversation.turns[-1].turn_id
+            assert expected_scope_material[1] == "upnp"
+            self.scan_calls += 1
+            return SimpleNamespace(need=need)
+
+    runtime = Runtime()
+    provider = build_session_scoped_gicc_tools(
+        FailingGoalCoordinator(),
+        store,
+        execution_runtime=runtime,
+    )
+    first = provider(conversation)
+    assert provider(conversation) is first
+    assert provider(conversation).action_tools
+    assert provider(conversation).read_tools == []
+    offered = await provider(conversation).pursue_owner_goal(None)
+    assert offered["network_discovery"]["protocol"] == "upnp"
+
+    # The voice tool registry is refreshed, as it is on each speech turn.
+    assert provider(conversation) is first
+    conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
+    approved = await provider(conversation).authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert approved["status"] == "authorized_discovery_observation_recorded"
+    assert runtime.scan_calls == 1
+
+    unrelated = ConversationSession(session_id="different-owner-session")
+    unrelated.start()
+    unrelated.accept_turn(
+        ConversationRole.USER, "I approve the network discovery."
+    )
+    assert provider(unrelated) is not first
+    denied = await provider(unrelated).authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert denied["status"] == "discovery_goal_not_current_or_not_waiting"
+    assert runtime.scan_calls == 1

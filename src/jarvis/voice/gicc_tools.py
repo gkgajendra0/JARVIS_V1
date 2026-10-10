@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import logging
 import re
-from typing import Protocol
+from typing import Callable, Protocol
 
 from livekit.agents import RunContext, function_tool
 
@@ -1083,3 +1083,39 @@ class GiccAgentTools:
             }
         )
         return payload
+
+
+def build_session_scoped_gicc_tools(
+    coordinator: GoalIntelligenceCoordinator,
+    store: GoalStore,
+    *,
+    execution_runtime: GiccExecutionRuntime | None = None,
+    objective_status: OwnerObjectiveStatusResolver | None = None,
+    telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
+) -> Callable[[ConversationSession], GiccAgentTools]:
+    """Reuse consent/choice offers across tool-list refreshes of one conversation.
+
+    Production may enumerate action/read tools on every speech turn. Creating
+    a new GiccAgentTools each time would lose the prior scoped consent offer
+    and the exact displayed device-choice set. A different conversation gets
+    a clean instance and cannot inherit the previous owner's offers.
+    """
+    current_session: ConversationSession | None = None
+    current_tools: GiccAgentTools | None = None
+
+    def get(conversation: ConversationSession) -> GiccAgentTools:
+        nonlocal current_session, current_tools
+        if current_session is conversation and current_tools is not None:
+            return current_tools
+        current_tools = GiccAgentTools(
+            coordinator,
+            conversation,
+            store,
+            execution_runtime=execution_runtime,
+            objective_status=objective_status,
+            telemetry=telemetry,
+        )
+        current_session = conversation
+        return current_tools
+
+    return get
