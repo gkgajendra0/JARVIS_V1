@@ -311,6 +311,82 @@ class GiccAgentTools:
                 "submitted through resolve_goal_information with the exact "
                 "interaction ID and selected candidate value."
             )
+            # A passive OS scope check can prepare a consent summary. This is
+            # explicitly NOT a registered approval, permit, or active scan.
+            # An unverified AEP sighting must never be offered as a canonical
+            # candidate value for resolve_goal_information.
+            runtime = self._execution_runtime
+            if (
+                runtime is not None
+                and goal.source_session_id == self._conversation.session_id
+            ):
+                prepare = getattr(runtime, "prepare_network_discovery_consent", None)
+                if callable(prepare):
+                    try:
+                        proposal = prepare(
+                            goal_id=goal.goal_id,
+                            session_id=goal.source_session_id,
+                        )
+                    except Exception:  # noqa: BLE001 - passive observation must not break goal intake
+                        LOGGER.warning(
+                            "GICC could not prepare passive network consent scope",
+                            exc_info=True,
+                        )
+                    else:
+                        if proposal is not None and proposal.has_valid_fingerprint():
+                            target = proposal.target()
+                            payload["network_discovery"] = {
+                                "state": "proposal_only_not_authorized",
+                                "summary": proposal.material_summary,
+                                "protocol": target.get("protocol"),
+                                "result_address_filters": target.get(
+                                    "address_result_filters"
+                                ),
+                                "all_local_interfaces": target.get(
+                                    "all_local_interfaces"
+                                ),
+                                "information_need_id": target.get("gicc_need_id"),
+                                "owner_approval_required": True,
+                                "scan_started": False,
+                            }
+                            payload["truth_note"] = (
+                                "An eligible bounded device discovery scope was "
+                                "prepared without active scanning. The owner must "
+                                "consent using the canonical AuthorityService "
+                                "approval path before any scan runs. This tool has "
+                                "not registered an approval request or executed "
+                                "network discovery; generic spoken agreement is "
+                                "not execution authority. Do not ask the owner to "
+                                "find the TV IP manually, invent devices, or "
+                                "treat unverified network observations as identity."
+                            )
+                suggestions = getattr(
+                    runtime, "pending_network_device_suggestions", None
+                )
+                if callable(suggestions):
+                    try:
+                        hints = suggestions(
+                            goal_id=goal.goal_id,
+                            session_id=goal.source_session_id,
+                        )
+                    except Exception:  # noqa: BLE001 - read failure cannot advance authority
+                        LOGGER.warning(
+                            "GICC could not read unverified device hints",
+                            exc_info=True,
+                        )
+                    else:
+                        if hints:
+                            payload["unverified_device_hints"] = [
+                                {
+                                    "display_hint": hint.display_hint,
+                                    "address": hint.address,
+                                    "protocol_observed": hint.protocol,
+                                    "neighbor_correlated": hint.neighbor_correlated,
+                                    "verified_identity": False,
+                                    "control_access_verified": False,
+                                }
+                                for hint in hints
+                            ]
             return payload
 
         if result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY:
