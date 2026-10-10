@@ -136,7 +136,7 @@ def confirm_single_discovered_device(
         entity_id=entity_id,
         provenance_refs=(
             f"owner_inventory:explicit_device_confirmation:{goal.goal_id}:{turn_id}",
-            f"unverified_aep_evidence:{hints[0].evidence_ref}",
+            f"unverified_aep_evidence:{chosen.evidence_ref}",
         ),
     )
     return world.register_entity(entry)
