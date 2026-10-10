@@ -637,9 +637,7 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
     monkeypatch.setattr(
         module,
         "canonical_digest",
-        lambda value: (
-            "request-digest" if value is request else original_digest(value)
-        ),
+        lambda value: "request-digest" if value is request else original_digest(value),
     )
     monkeypatch.setattr(
         module,
@@ -658,12 +656,12 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
         await ExternalAcceptanceRecordExecutor(Resolver()).execute(
             work=item, parameters={}
         )
-    assert (
-        raised.value.input_key
-        == "external_effect_confirmation:physical-request-1"
-    )
+    assert raised.value.input_key == "external_effect_confirmation:physical-request-1"
     assert "no independent device-state readback" in str(raised.value)
-    assert requires_owner_physical_confirmation(
-        SimpleNamespace(latest_artifact=lambda *_: None),
-        "ordinary-software-change",
-    ) is False
+    assert (
+        requires_owner_physical_confirmation(
+            SimpleNamespace(latest_artifact=lambda *_: None),
+            "ordinary-software-change",
+        )
+        is False
+    )
