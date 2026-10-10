@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 from typing import Protocol
@@ -28,6 +29,12 @@ from jarvis.goal_intelligence.telemetry import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _device_choice_digest(hints: tuple[object, ...]) -> str:
+    """Bind the voice options to one exact live, ordered candidate set."""
+    refs = tuple(str(getattr(hint, "evidence_ref", "")) for hint in hints)
+    return hashlib.sha256("\n".join(refs).encode("utf-8")).hexdigest()
 
 
 class GiccToolGroundingError(ValueError):
@@ -412,6 +419,35 @@ class GiccAgentTools:
                                 }
                                 for hint in hints
                             ]
+                            choice_sets = []
+                            for need in result.information_needs:
+                                candidates = tuple(
+                                    hint
+                                    for hint in hints
+                                    if getattr(hint, "evidence_ref", None)
+                                    in need.evidence_refs
+                                )
+                                if not candidates:
+                                    continue
+                                choice_sets.append(
+                                    {
+                                        "information_need_id": need.information_need_id,
+                                        "digest": _device_choice_digest(candidates),
+                                        "options": [
+                                            {
+                                                "option": index,
+                                                "display_hint": hint.display_hint,
+                                                "evidence_ref": hint.evidence_ref,
+                                                "verified_identity": False,
+                                            }
+                                            for index, hint in enumerate(
+                                                candidates, start=1
+                                            )
+                                        ],
+                                    }
+                                )
+                            if choice_sets:
+                                payload["device_choice_sets"] = choice_sets
             return payload
 
         if result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY:
@@ -599,6 +635,11 @@ class GiccAgentTools:
                 goal_id=goal.goal_id,
                 session_id=goal.source_session_id,
             )
+            eligible = tuple(
+                item
+                for item in candidates
+                if getattr(item, "evidence_ref", None) in result.need.evidence_refs
+            )
             payload["unverified_device_hints"] = [
                 {
                     "display_hint": item.display_hint,
@@ -606,12 +647,22 @@ class GiccAgentTools:
                     "protocol_observed": item.protocol,
                     "verified_identity": False,
                 }
-                for item in candidates
-                # Goal-wide suggestions can include another physical device.
-                # Never present or bind it to this information need; keep
-                # the next consent decision scoped to the actual target.
-                if getattr(item, "evidence_ref", None) in result.need.evidence_refs
+                for item in eligible
             ]
+            if eligible:
+                payload["device_choice_set"] = {
+                    "information_need_id": result.need.information_need_id,
+                    "digest": _device_choice_digest(eligible),
+                    "options": [
+                        {
+                            "option": index,
+                            "display_hint": item.display_hint,
+                            "evidence_ref": item.evidence_ref,
+                            "verified_identity": False,
+                        }
+                        for index, item in enumerate(eligible, start=1)
+                    ],
+                }
         # If this strictly one-time observation produced no fresh device
         # suggestion, provide the NEXT bounded scope to the owner instead of
         # looping the exhausted protocol or asking for a manual IP. This is
@@ -659,6 +710,8 @@ class GiccAgentTools:
         context: RunContext,
         goal_id: str,
         information_need_id: str,
+        selected_evidence_ref: str = "",
+        displayed_choice_set_digest: str = "",
     ) -> dict[str, object]:
         """Confirm one recent discovered TV/camera as owner inventory.
 
@@ -672,6 +725,7 @@ class GiccAgentTools:
         consent = re.fullmatch(
             r"(?:i\s+)?confirm\s+(?:that\s+)?(?:the|this)\s+"
             r"(?:discovered|detected)\s+(?:tv|television|camera|device)\s+"
+            r"(?:option\s+(?P<option>[1-8])\s+)?"
             r"(?:is\s+mine|belongs\s+to\s+me|is\s+my\s+"
             r"(?:tv|television|camera))[.!]?",
             turn.text.casefold().strip(),
@@ -696,12 +750,50 @@ class GiccAgentTools:
         )
         if not callable(confirm):
             return {"ok": False, "status": "owner_device_confirmation_unavailable"}
+        selected: dict[str, object] = {}
+        option = consent.group("option")
+        if option is not None:
+            hints_method = getattr(runtime, "pending_network_device_suggestions", None)
+            need = self._store.get_information_need(str(information_need_id).strip())
+            if (
+                not callable(hints_method)
+                or need is None
+                or need.goal_id != goal.goal_id
+            ):
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            try:
+                hints = hints_method(
+                    goal_id=goal.goal_id,
+                    session_id=goal.source_session_id,
+                )
+            except Exception:
+                LOGGER.warning("GICC could not verify owner device options", exc_info=True)
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            candidates = tuple(
+                hint
+                for hint in hints
+                if getattr(hint, "evidence_ref", None) in need.evidence_refs
+            )
+            option_index = int(option) - 1
+            if (
+                option_index >= len(candidates)
+                or len(candidates) < 2
+                or displayed_choice_set_digest != _device_choice_digest(candidates)
+                or selected_evidence_ref
+                != candidates[option_index].evidence_ref
+            ):
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            selected["selected_evidence_ref"] = selected_evidence_ref
+        elif selected_evidence_ref or displayed_choice_set_digest:
+            # A model may not select a device that the owner did not name.
+            return {"ok": False, "status": "explicit_device_option_not_given"}
         try:
             entity = confirm(
                 goal_id=goal.goal_id,
                 information_need_id=str(information_need_id).strip(),
                 session_id=goal.source_session_id,
                 owner_turn_id=turn.turn_id,
+                **selected,
             )
         except Exception:
             LOGGER.warning(
