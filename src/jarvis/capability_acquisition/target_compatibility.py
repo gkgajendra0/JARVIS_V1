@@ -117,6 +117,19 @@ def evaluate_candidate_target_compatibility(
         )
     )
     required = _hint_map(required_values)
+    # A stale owner plan and an independently reviewed target inventory
+    # cannot be unioned into proof. One matching claimed protocol would
+    # otherwise hide the other, incompatible canonical target protocol.
+    goal_facts = _hint_map(goal.target_hints)
+    canonical_facts = _hint_map(canonical_target_hints)
+    provenance_conflicts = tuple(
+        sorted(
+            dimension
+            for dimension, observed in canonical_facts.items()
+            if dimension in goal_facts
+            and goal_facts[dimension].isdisjoint(observed)
+        )
+    )
 
     # A generic software utility is an abstract build target, not an
     # identified physical/remote endpoint. Do not require a manufacturer or
@@ -152,7 +165,18 @@ def evaluate_candidate_target_compatibility(
     missing: list[str] = []
     conflicting: list[str] = []
 
-    if not required:
+    if provenance_conflicts:
+        verdict = TargetCompatibilityVerdict.INCOMPATIBLE
+        conflicting.extend(provenance_conflicts)
+        reasons = (
+            "target_incompatible",
+            *(f"target_conflict_{dimension}" for dimension in provenance_conflicts),
+            *(
+                f"target_conflicting_provenance_{dimension}"
+                for dimension in provenance_conflicts
+            ),
+        )
+    elif not required:
         verdict = TargetCompatibilityVerdict.NOT_REQUIRED
         reasons = ("target_compatibility_not_required",)
     elif intrinsically_bound:
