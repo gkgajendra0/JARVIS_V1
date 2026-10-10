@@ -96,6 +96,7 @@ class GiccAgentTools:
         # offered* scope for this exact goal in the same live conversation.
         self._offered_network_discovery: dict[str, tuple[tuple[object, ...], str]] = {}
         self._listed_owner_goal_ids: set[str] = set()
+        self._listed_owner_goal_payloads: dict[str, dict[str, object]] = {}
 
     @property
     def action_tools(self) -> list:
@@ -142,13 +143,14 @@ class GiccAgentTools:
             return {"ok": False, "status": "objective_status_unavailable"}
         objectives = resolver.list_active(limit=50)
         projections = [item.public_payload() for item in objectives]
-        self._listed_owner_goal_ids = {
-            key
+        self._listed_owner_goal_payloads = {
+            payload["goal_id"]: payload
             for payload in projections
             if isinstance(payload, dict)
-            for key in (payload.get("goal_id"),)
-            if isinstance(key, str) and key.strip()
+            and isinstance(payload.get("goal_id"), str)
+            and payload["goal_id"].strip()
         }
+        self._listed_owner_goal_ids = set(self._listed_owner_goal_payloads)
         return {
             "ok": True,
             "status": "listed",
@@ -183,6 +185,7 @@ class GiccAgentTools:
             and payload.get("terminal") is not True
         ):
             self._listed_owner_goal_ids.add(goal_id)
+            self._listed_owner_goal_payloads[goal_id] = payload
         return {"ok": True, "status": "found", **payload}
 
     @function_tool()
@@ -210,6 +213,17 @@ class GiccAgentTools:
                 "truth_note": "No owner cancellation was performed.",
             }
         key = str(goal_id).strip()
+        if re.search(
+            r"\b(?:do not|don't|never)\s+(?:\w+\s+){0,3}"
+            r"(?:cancel|stop|withdraw|remove|delete|abandon)\b",
+            turn.text,
+            flags=re.IGNORECASE,
+        ):
+            return {
+                "ok": False,
+                "status": "cancellation_negated",
+                "truth_note": "The owner explicitly said not to cancel.",
+            }
         if key not in self._listed_owner_goal_ids:
             return {
                 "ok": False,
@@ -219,6 +233,61 @@ class GiccAgentTools:
                     "the exact goal ID; no cancellation was performed."
                 ),
             }
+        # A model selecting one ID from a large objective list is not proof
+        # that the owner referred to THAT objective. Prefer explicit goal ID,
+        # then unique grounded device-category match. Otherwise fail closed.
+        selected = self._listed_owner_goal_payloads.get(key)
+        if selected is None:
+            return {
+                "ok": False,
+                "status": "unverified_cancel_target",
+                "truth_note": "The target is not grounded in canonical objective status.",
+            }
+        candidates = self._listed_owner_goal_payloads
+        if len(candidates) > 1 and key.casefold() not in turn.text.casefold():
+            topic_aliases = (
+                ("tv", "television", "hisense", "vidaa"),
+                ("camera", "webcam", "doorbell"),
+                ("gate", "entrance"),
+                ("monitoring", "monitor"),
+                ("music", "speaker", "audio"),
+            )
+            mentioned = [
+                aliases
+                for aliases in topic_aliases
+                if any(
+                    re.search(r"\b" + re.escape(alias) + r"\b", turn.text, re.I)
+                    for alias in aliases
+                )
+            ]
+            matches = set(candidates)
+            if not mentioned:
+                matches = set()
+            for aliases in mentioned:
+                matches &= {
+                    candidate_id
+                    for candidate_id, payload in candidates.items()
+                    if any(
+                        re.search(
+                            r"\b" + re.escape(alias) + r"\b",
+                            str(payload.get("owner_request") or "")
+                            + " "
+                            + str(payload.get("desired_outcome") or ""),
+                            re.I,
+                        )
+                        for alias in aliases
+                    )
+                }
+            if matches != {key}:
+                return {
+                    "ok": False,
+                    "status": "ambiguous_cancel_target",
+                    "truth_note": (
+                        "Multiple objectives are active and this cancellation "
+                        "cannot be uniquely matched to the owner's words. "
+                        "Ask which exact request to cancel; none were stopped."
+                    ),
+                }
         runtime = self._execution_runtime
         action = (
             None if runtime is None else getattr(runtime, "cancel_owner_goal", None)
@@ -255,6 +324,7 @@ class GiccAgentTools:
         if result.get("status") != "cancelled":
             return {"ok": False, "status": "owner_goal_cancel_unverified"}
         self._listed_owner_goal_ids.discard(key)
+        self._listed_owner_goal_payloads.pop(key, None)
         self._offered_network_discovery.pop(key, None)
         for option_key in tuple(self._offered_device_options):
             if option_key[0] == key:
