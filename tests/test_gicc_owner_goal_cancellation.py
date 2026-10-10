@@ -95,6 +95,11 @@ def _fixture(tmp_path):
         source_session_id=f"gicc:{goal.goal_id}",
         source_turn_id=f"gap:{gap.gap_id}",
     )
+    change = changes.transition(
+        change.change_id,
+        ChangeState.RESEARCHING,
+        expected_version=change.version,
+    )
     item = WorkItem(
         request="Research TV control",
         work_type=WorkType.RESEARCH,
@@ -238,7 +243,7 @@ async def test_failed_work_stop_prevents_false_cancelled_goal(tmp_path):
         changes.owner_goal_acquisition_changes(
             goal.goal_id, tuple(g.gap_id for g in goals.list_gaps(goal_id=goal.goal_id))
         )[0][0].state
-        is ChangeState.PROPOSED
+        is ChangeState.RESEARCHING
     )
 
 
