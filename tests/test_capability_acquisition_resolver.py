@@ -714,3 +714,25 @@ def test_conflicting_owner_and_canonical_device_proof_fails_closed() -> None:
         assert "target_conflict_platform" in evaluation.reason_codes
         assert "target_conflicting_provenance_platform" in evaluation.reason_codes
         assert result.selected_candidate_id is None
+
+
+def test_world_entity_type_alias_does_not_fake_a_provenance_conflict() -> None:
+    """TV and media_player name the same type; protocols do not."""
+    goal = _targeted_goal()
+    candidate = _targeted_sdk(
+        identity="reviewed-vidaa-tv-adapter",
+        device_scopes=("entity_type:television", "platform:vidaa"),
+    )
+    result = _resolver().resolve_candidates(
+        goal,
+        (candidate,),
+        _core_context(),
+        canonical_target_hints=(
+            "entity_type:media_player",
+            "platform:vidaa",
+        ),
+    )
+    assert result.selected_candidate_id == candidate.candidate_id
+    assert result.evaluation(candidate.candidate_id).disposition is (
+        AcquisitionDisposition.SELECTABLE
+    )
