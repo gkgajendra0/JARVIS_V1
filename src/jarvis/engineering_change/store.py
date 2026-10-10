@@ -431,9 +431,9 @@ class ChangeStore:
             raise ChangeConflict("not a capability-acquisition change")
         with self.work._lock, self.work._connect() as db:
             rows = db.execute(
-                "SELECT work_id FROM work_items WHERE source_session_id=? "
+                "SELECT work_id FROM work_items WHERE source_session_id IN (?, ?) "
                 "UNION SELECT work_id FROM engineering_change_stages WHERE change_id=?",
-                (f"change:{change_id}", change_id),
+                (f"change:{change_id}", f"phase9-external:{change_id}", change_id),
             ).fetchall()
         return tuple(sorted(str(row["work_id"]) for row in rows))
 
