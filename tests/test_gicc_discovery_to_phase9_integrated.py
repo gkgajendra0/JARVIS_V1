@@ -90,6 +90,11 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         source_revision_provider=lambda: "a" * 40,
     )
 
+    conversation = ConversationSession(session_id="owner-session")
+    conversation.start()
+    turn = conversation.accept_turn(
+        ConversationRole.USER, "JARVIS, acquire control of my TV."
+    )
     world = WorldRegistry(store)
     entities = EntityResolver(world)
     coordinator = GoalIntelligenceCoordinator(
@@ -104,11 +109,11 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
                         ShadowEntityCandidate(
                             mention="my TV",
                             proposed_type="media_player",
-                            evidence_turn_ids=["placeholder"],
+                            evidence_turn_ids=[turn.turn_id],
                         )
                     ],
                     candidate_completion_predicates=["tv_responded"],
-                    evidence_turn_ids=["placeholder"],
+                    evidence_turn_ids=[turn.turn_id],
                 )
             )
         ),
@@ -136,28 +141,6 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         capability_context=context,
         capability_graph_resolver=CapabilityGraphResolver(store=store),
         phase9_bridge=phase9,
-    )
-    conversation = ConversationSession(session_id="owner-session")
-    conversation.start()
-    turn = conversation.accept_turn(
-        ConversationRole.USER, "JARVIS, acquire control of my TV."
-    )
-
-    # Supply the canonical accepted turn, never fabricate an identity by
-    # model output or from a mere network advertisement.
-    interpretation = coordinator._interpreter
-    original = interpretation._client.outputs[0]
-    interpretation._client.outputs[0] = original.model_copy(
-        update={
-            "candidate_entities": [
-                ShadowEntityCandidate(
-                    mention="my TV",
-                    proposed_type="media_player",
-                    evidence_turn_ids=[turn.turn_id],
-                )
-            ],
-            "evidence_turn_ids": [turn.turn_id],
-        }
     )
     initial = asyncio.run(
         coordinator.pursue(conversation=conversation, turn=turn)
