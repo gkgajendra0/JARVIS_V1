@@ -532,9 +532,7 @@ class WorkRuntime:
                 parts.append(f"Blocker: {estimate.blocked_reason}.")
             if estimate.remaining_work:
                 parts.append(
-                    "Remaining work: "
-                    + ", ".join(estimate.remaining_work[:3])
-                    + "."
+                    "Remaining work: " + ", ".join(estimate.remaining_work[:3]) + "."
                 )
             event_key = f"progress:{int(due_at.timestamp())}"
             intent = OwnerCommunicationIntentV1.create(
