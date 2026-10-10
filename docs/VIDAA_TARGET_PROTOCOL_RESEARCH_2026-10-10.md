@@ -47,6 +47,18 @@ may be guessed from model text or project documentation.
 - **Security.** Never print tokens/PINs or save them in general goal logs;
   use the existing secret storage and AuthorityService/permit gates. No
   code in this research note authorizes a network connection.
+- **Community-client TLS warning.** Review of the upstream
+  [Python client implementation](https://github.com/tombabolewski/vidaa-control/blob/main/vidaa/client.py)
+  shows it can set `ssl.CERT_NONE` and `tls_insecure_set(True)` for a TV
+  with a self-signed certificate, and exposes static/dynamic fallback
+  authentication branches. TLS-encrypted transport without peer
+  authentication does not independently prove that the endpoint is the
+  owner's actual television. JARVIS must not silently inherit those
+  permissive transport settings, private keys, service credentials or
+  automatic fallback behavior when researching third-party packages.
+  Require reviewed endpoint identity/pinning or an equivalent explicit
+  security decision, scoped owner pairing and protected credential storage
+  before any real-TV control adapter is activated.
 - **Offline tests.** Add conflicting TLS/plain and PIN/no-PIN observations,
   no-app-found, wrong-device, stale-credential and false-positive playback
   cases to acquisition verification before owner-machine acceptance.
