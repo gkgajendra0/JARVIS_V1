@@ -838,15 +838,21 @@ class GiccApplyRuntime:
                 raise ValueError("unknown owner goal")
             if goal.state is GoalState.CANCELLED:
                 return {
-                    "status": "cancelled", "goal_id": key,
-                    "idempotent": True, "historical_audit_retained": True,
+                    "status": "cancelled",
+                    "goal_id": key,
+                    "idempotent": True,
+                    "historical_audit_retained": True,
                 }
             if goal.state in {GoalState.COMPLETED, GoalState.FAILED}:
-                raise GoalStoreConflict("cannot cancel a completed or failed owner goal")
+                raise GoalStoreConflict(
+                    "cannot cancel a completed or failed owner goal"
+                )
             changes = self.change_store
             work = self.work_runtime
             if changes is None or work is None:
-                raise RuntimeError("linked change and work cancellation runtime unavailable")
+                raise RuntimeError(
+                    "linked change and work cancellation runtime unavailable"
+                )
 
             gaps = self.store.list_gaps(goal_id=key, limit=1000)
             gap_ids = tuple(gap.gap_id for gap in gaps)
@@ -871,9 +877,7 @@ class GiccApplyRuntime:
                         changes.owner_acquisition_work_ids, change.change_id
                     )
                 )
-            for continuation in self.store.list_continuations(
-                goal_id=key, limit=1000
-            ):
+            for continuation in self.store.list_continuations(goal_id=key, limit=1000):
                 for work_id in continuation.work_ids:
                     stage = changes.stage_for_work(work_id)
                     if stage is not None and stage.change_id not in change_ids:
@@ -915,13 +919,15 @@ class GiccApplyRuntime:
                     superseded.append(change.change_id)
 
             updated_goal = await asyncio.to_thread(
-                self.store.cancel_goal_tree, key,
+                self.store.cancel_goal_tree,
+                key,
                 expected_revision=goal.goal_revision,
             )
             if updated_goal.state is not GoalState.CANCELLED:
                 raise RuntimeError("goal tombstone could not be verified")
             self.telemetry.emit(
-                "gicc_owner_goal_cancelled", goal_id=key,
+                "gicc_owner_goal_cancelled",
+                goal_id=key,
                 stopped_work_count=len(stopped),
                 superseded_change_count=len(superseded),
             )
