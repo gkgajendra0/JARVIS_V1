@@ -1375,7 +1375,10 @@ def external_acceptance_completion_guard(
     # attempt. New evidence records bind their exact invocation step ID;
     # legacy records must at least chronologically follow the latest invoke.
     if steps.index(recorded) <= steps.index(invoked):
-        return False, "external acceptance requires fresh evidence for latest invocation"
+        return (
+            False,
+            "external acceptance requires fresh evidence for latest invocation",
+        )
     bound_invocation = recorded.observation.get("invocation_step_id")
     if bound_invocation is not None and bound_invocation != invoked.step_id:
         return False, "external acceptance evidence belongs to another invocation"
