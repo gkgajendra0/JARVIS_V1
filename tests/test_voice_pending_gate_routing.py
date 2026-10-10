@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+
+import pytest
+
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.engineering_change import ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
-from jarvis.voice.canonical_active_speaker_runtime import _SessionToolBundle
+from jarvis.voice.canonical_active_speaker_runtime import (
+    CanonicalActiveSpeakerRuntimeController,
+    _SessionToolBundle,
+)
+from jarvis.voice.runtime import VoiceRuntimeState
 from jarvis.work.models import WorkState
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import SQLiteWorkStore
@@ -198,3 +206,50 @@ def test_live_work_tool_refresh_keeps_exact_approval_and_replay_context(
     assert bundle._session_work_tools is not bound
     assert bundle._session_work_tools is not None
     assert bundle._session_work_tools._contextual_change_gate_id is None
+
+
+@pytest.mark.asyncio
+async def test_proactive_gate_tool_factory_does_not_reset_same_turn_replay_guard(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bound approval remains one-shot even when the voice tools are re-enumerated."""
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    store = ChangeStore(work)
+    coordinator = ChangeCoordinator(store, RecordingBackend())
+    change = coordinator.start("Capability approval", "source", "turn")
+    research = store.list_stages(change.change_id)[0]
+    _complete(work, research.work_id)
+    architecture = store.add_artifact(
+        change.change_id, kind="architecture", payload={"strategy": "build_custom"}
+    )
+    coordinator.reconcile(change.change_id)
+    gate = GateService(store, verify_owner=lambda *_: False).present(
+        change.change_id, GateKind.ARCHITECTURE, architecture.artifact_id
+    )
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = coordinator
+
+    controller = object.__new__(CanonicalActiveSpeakerRuntimeController)
+    controller._work_runtime = runtime
+    controller._shutdown = asyncio.Event()
+    controller._state = VoiceRuntimeState.IDLE
+    controller._active_end = None
+    monkeypatch.setattr(controller, "_cancel_timeout", lambda: None)
+
+    async def fake_session_runner(*, session_tool_factory, **kwargs) -> None:
+        del kwargs
+        conversation = ConversationSession(session_id="approval-session")
+        conversation.start()
+        first = session_tool_factory(conversation)
+        second = session_tool_factory(conversation)
+        assert first == second
+        next_conversation = ConversationSession(session_id="other-session")
+        next_conversation.start()
+        assert session_tool_factory(next_conversation) != first
+
+    monkeypatch.setattr(controller, "_run_one_session_owned", fake_session_runner)
+    assert not await controller._run_change_gate_interaction(
+        gate_id=gate.gate_id,
+        question="Please review this architecture",
+    )
