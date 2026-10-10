@@ -490,7 +490,9 @@ async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     # network identity hint without an exact stored approved-scan record.
     assert "unverified_device_hints" not in payload
     assert "device_choice_sets" not in payload
-    assert payload["questions"][0]["options"] == []
+    assert payload["next_action"] == "request_scoped_discovery_approval"
+    assert payload["questions"] == []
+    assert payload["deferred_information_questions"][0]["options"] == []
     assert store.get_information_need(need.information_need_id) == before_need
     assert runtime.consent_reads == runtime.suggestion_reads == 1
 
@@ -516,6 +518,10 @@ async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     )
     mismatched_payload = await mismatched_tools.pursue_owner_goal(None)
     assert "network_discovery" not in mismatched_payload
+    assert "next_action" not in mismatched_payload
+    assert mismatched_payload["questions"][0]["information_need_id"] == (
+        need.information_need_id
+    )
 
     other_conversation = ConversationSession(session_id="unrelated-owner-session")
     other_conversation.start()
@@ -800,6 +806,9 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
         offered["device_choice_sets"][0]["options"][0]["display_hint"]
         == "Unverified TV"
     )
+    assert offered["next_action"] == "confirm_discovered_device_identity"
+    assert offered["questions"] == []
+    assert offered["deferred_information_questions"]
     conversation.accept_turn(
         ConversationRole.USER, "I confirm the discovered TV is mine."
     )
@@ -1008,6 +1017,8 @@ async def test_gicc_voice_binds_owner_selected_option_to_displayed_set(
     assert choices["information_need_id"] == need.information_need_id
     assert [item["option"] for item in choices["options"]] == [1, 2]
     assert choices["options"][1]["display_hint"] == "TV vendor B"
+    assert offered["next_action"] == "confirm_discovered_device_identity"
+    assert offered["questions"] == []
 
     conversation.accept_turn(
         ConversationRole.USER, "I confirm the discovered TV option 2 is mine."
