@@ -925,6 +925,12 @@ class GiccApplyRuntime:
             )
             if updated_goal.state is not GoalState.CANCELLED:
                 raise RuntimeError("goal tombstone could not be verified")
+            # A monitor callback may have entered just before its WorkItem was
+            # stopped. Sweep any resulting pending notification once more.
+            suppressed_deliveries += await asyncio.to_thread(
+                work.store.suppress_pending_deliveries_for_work_ids,
+                tuple(sorted(work_ids)),
+            )
             self.telemetry.emit(
                 "gicc_owner_goal_cancelled",
                 goal_id=key,
