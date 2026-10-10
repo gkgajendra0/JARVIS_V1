@@ -161,6 +161,14 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
         source_turn_id="another-request",
     )
     work.create(unrelated)
+    monitor = WorkItem(
+        request="Monitoring for exact owner goal",
+        work_type=WorkType.MONITORING,
+        source_session_id=f"gicc-monitor:{goal.goal_id}",
+        source_turn_id="predicate:tv",
+    )
+    work.create(monitor)
+    owned_ids = sorted((item.work_id, monitor.work_id))
     runtime, orchestrator = _runtime(work, goals, changes)
     stale = work.enqueue_delivery(
         work=work.require(item.work_id),
@@ -177,8 +185,8 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
 
     assert result["status"] == "cancelled"
     assert result["historical_audit_retained"] is True
-    assert result["cancelled_work_ids"] == [item.work_id]
-    assert orchestrator.calls == [item.work_id]
+    assert result["cancelled_work_ids"] == owned_ids
+    assert orchestrator.calls == owned_ids
     assert goals.get_goal(goal.goal_id).state is GoalState.CANCELLED
     assert goals.list_active_goals() == ()
     assert goals.get_gap(gap.gap_id).state is CapabilityGapState.CANCELLED
@@ -191,12 +199,13 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
     )
     assert changes.require(change.change_id).state is ChangeState.SUPERSEDED
     assert work.require(item.work_id).state is WorkState.CANCELLED
+    assert work.require(monitor.work_id).state is WorkState.CANCELLED
     assert work.require(unrelated.work_id).state is WorkState.QUEUED
     assert changes.get(change.change_id) is not None
 
     repeat = await runtime.cancel_owner_goal(goal.goal_id)
     assert repeat["idempotent"] is True
-    assert orchestrator.calls == [item.work_id]
+    assert orchestrator.calls == owned_ids
 
 
 @pytest.mark.asyncio
