@@ -144,8 +144,7 @@ def evaluate_candidate_target_compatibility(
         sorted(
             dimension
             for dimension, observed in canonical_facts.items()
-            if dimension in goal_facts
-            and goal_facts[dimension].isdisjoint(observed)
+            if dimension in goal_facts and goal_facts[dimension].isdisjoint(observed)
         )
     )
 
