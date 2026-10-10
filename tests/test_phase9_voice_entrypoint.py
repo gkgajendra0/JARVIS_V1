@@ -187,6 +187,10 @@ def test_gicc_apply_instructions_override_direct_phase9_entry() -> None:
     )
     assert "Ordinary immediate local computer actions" in instructions
     assert "resolve_goal_information" in instructions
+    assert "obey the exact next_action" in instructions
+    assert "deferred_information_questions" in instructions
+    assert "request_scoped_discovery_approval" in instructions
+    assert "confirm_discovered_device_identity" in instructions
     assert "Never treat unrelated ambient speech as the answer" in instructions
 
 
