@@ -795,7 +795,11 @@ async def test_gicc_voice_binds_owner_selected_option_to_displayed_set(
         need.information_need_id,
         need.state,
         expected_revision=need.revision,
-        evidence_refs=("fresh-aep-option-a", "fresh-aep-option-b"),
+        evidence_refs=(
+            "fresh-aep-option-a",
+            "fresh-aep-option-b",
+            "windows_aep_authorized_scope_consumed:upnp",
+        ),
     )
     conversation = ConversationSession(session_id=goal.source_session_id)
     conversation.start()

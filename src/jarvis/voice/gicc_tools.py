@@ -426,6 +426,11 @@ class GiccAgentTools:
                                     for hint in hints
                                     if getattr(hint, "evidence_ref", None)
                                     in need.evidence_refs
+                                    and (
+                                        "windows_aep_authorized_scope_consumed:"
+                                        + str(getattr(hint, "protocol", ""))
+                                    )
+                                    in need.evidence_refs
                                 )
                                 if not candidates:
                                     continue
@@ -639,6 +644,11 @@ class GiccAgentTools:
                 item
                 for item in candidates
                 if getattr(item, "evidence_ref", None) in result.need.evidence_refs
+                and (
+                    "windows_aep_authorized_scope_consumed:"
+                    + str(getattr(item, "protocol", ""))
+                )
+                in result.need.evidence_refs
             )
             payload["unverified_device_hints"] = [
                 {
@@ -773,6 +783,11 @@ class GiccAgentTools:
                 hint
                 for hint in hints
                 if getattr(hint, "evidence_ref", None) in need.evidence_refs
+                and (
+                    "windows_aep_authorized_scope_consumed:"
+                    + str(getattr(hint, "protocol", ""))
+                )
+                in need.evidence_refs
             )
             option_index = int(option) - 1
             if (
