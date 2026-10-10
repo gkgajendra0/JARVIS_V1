@@ -1109,14 +1109,13 @@ class GoalStore:
         need_key = str(need_id).strip()
         if not turn_id or len(turn_id) > 128 or not goal_key or not need_key:
             return False
-        if entity is not None:
-            if (
-                not isinstance(entity, WorldEntityRefV1)
-                or entity.entity_id != f"owner_confirmed_network:{need_key}"
-                or f"owner_inventory:explicit_device_confirmation:{goal_key}:{turn_id}"
-                not in entity.provenance_refs
-            ):
-                raise ValueError("owner-confirmed entity provenance is not bound")
+        if entity is not None and (
+            not isinstance(entity, WorldEntityRefV1)
+            or entity.entity_id != f"owner_confirmed_network:{need_key}"
+            or f"owner_inventory:explicit_device_confirmation:{goal_key}:{turn_id}"
+            not in entity.provenance_refs
+        ):
+            raise ValueError("owner-confirmed entity provenance is not bound")
         with self.work.extension_transaction() as db:
             row = db.execute(
                 "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?",
