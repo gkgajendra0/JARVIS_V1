@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.engineering_change import ChangeStore
 from jarvis.engineering_change.coordinator import ChangeCoordinator
 from jarvis.engineering_change.gates import GateKind, GateService
@@ -129,3 +129,72 @@ def test_bound_change_gate_before_owner_turn_fails_closed_without_exception(
     assert GateService(store, verify_owner=lambda *_: False).pending_gate_ids() == (
         gate.gate_id,
     )
+
+
+def test_live_work_tool_refresh_keeps_exact_approval_and_replay_context(
+    tmp_path,
+) -> None:
+    """Enumerating the live tool bundle cannot erase a pending gate binding."""
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    store = ChangeStore(work)
+    coordinator = ChangeCoordinator(store, RecordingBackend())
+    change = coordinator.start("Build owner capability", "source", "turn")
+    research = store.list_stages(change.change_id)[0]
+    _complete(work, research.work_id)
+    architecture = store.add_artifact(
+        change.change_id,
+        kind="architecture",
+        payload={"strategy": "build_custom"},
+    )
+    coordinator.reconcile(change.change_id)
+    gate = GateService(store, verify_owner=lambda *_: False).present(
+        change.change_id, GateKind.ARCHITECTURE, architecture.artifact_id
+    )
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = coordinator
+    conversation = ConversationSession(session_id="owner-session")
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "What is my task status?")
+    active_session = [conversation]
+    bundle = _SessionToolBundle(
+        None,
+        lambda: active_session[0],
+        memory_runtime=None,
+        memory_query_coordinator=None,
+        research_service=None,
+        capability_runtime=None,
+        work_runtime=runtime,
+        allow_direct_capability_acquisition=True,
+    )
+
+    _ = bundle.tools
+    bound = bundle._session_work_tools
+    assert bound is not None
+    assert bound._bind_contextual_change_gate_from_status()
+    assert bound._contextual_change_gate_id == gate.gate_id
+    bound._last_gate_decision_attempt_turn_id = "seen-turn"
+
+    # LiveKit can request a new exposed tool list between the status and reply.
+    refreshed = bundle.tools
+    assert bundle._session_work_tools is bound
+    assert bound._contextual_change_gate_id == gate.gate_id
+    assert bound._last_gate_decision_attempt_turn_id == "seen-turn"
+    assert bound.start_capability_acquisition not in refreshed
+
+    # Gate visibility must change dynamically without replacing the instance.
+    assert bound.start_capability_acquisition in bound.tools_for(
+        allow_capability_acquisition=True,
+    )
+    assert bound.start_capability_acquisition not in bound.tools_for(
+        allow_capability_acquisition=False,
+    )
+
+    # The next wake session must never inherit the previous session's binding.
+    next_session = ConversationSession(session_id="next-session")
+    next_session.start()
+    active_session[0] = next_session
+    _ = bundle.tools
+    assert bundle._session_work_tools is not bound
+    assert bundle._session_work_tools is not None
+    assert bundle._session_work_tools._contextual_change_gate_id is None
