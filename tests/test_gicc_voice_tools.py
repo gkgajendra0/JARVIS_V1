@@ -486,8 +486,10 @@ async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     )
     assert "all local network interfaces" in payload["network_discovery"]["summary"]
     assert "has not registered an approval request" in payload["truth_note"]
-    assert payload["unverified_device_hints"][0]["verified_identity"] is False
-    assert payload["unverified_device_hints"][0]["control_access_verified"] is False
+    # A mock runtime saying it saw a device cannot create a displayable
+    # network identity hint without an exact stored approved-scan record.
+    assert "unverified_device_hints" not in payload
+    assert "device_choice_sets" not in payload
     assert payload["questions"][0]["options"] == []
     assert store.get_information_need(need.information_need_id) == before_need
     assert runtime.consent_reads == runtime.suggestion_reads == 1

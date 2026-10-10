@@ -409,20 +409,11 @@ class GiccAgentTools:
                         )
                     else:
                         if hints:
-                            payload["unverified_device_hints"] = [
-                                {
-                                    "display_hint": hint.display_hint,
-                                    "address": hint.address,
-                                    "protocol_observed": hint.protocol,
-                                    "neighbor_correlated": hint.neighbor_correlated,
-                                    "verified_identity": False,
-                                    "control_access_verified": False,
-                                }
-                                for hint in hints
-                            ]
-                            choice_sets = []
-                            for need in result.information_needs:
-                                candidates = tuple(
+                            # A runtime suggestion is untrusted until the exact
+                            # canonical current InformationNeed records both
+                            # this evidence ref and its authorized AEP scope.
+                            eligible_by_need = {
+                                need.information_need_id: tuple(
                                     hint
                                     for hint in hints
                                     if getattr(hint, "evidence_ref", None)
@@ -432,6 +423,37 @@ class GiccAgentTools:
                                         + str(getattr(hint, "protocol", ""))
                                     )
                                     in need.evidence_refs
+                                )
+                                for need in result.information_needs
+                                if need.goal_id == goal.goal_id
+                            }
+                            eligible_refs = {
+                                hint.evidence_ref
+                                for entries in eligible_by_need.values()
+                                for hint in entries
+                            }
+                            eligible = tuple(
+                                hint
+                                for hint in hints
+                                if getattr(hint, "evidence_ref", None)
+                                in eligible_refs
+                            )
+                            if eligible:
+                                payload["unverified_device_hints"] = [
+                                    {
+                                        "display_hint": hint.display_hint,
+                                        "address": hint.address,
+                                        "protocol_observed": hint.protocol,
+                                        "neighbor_correlated": hint.neighbor_correlated,
+                                        "verified_identity": False,
+                                        "control_access_verified": False,
+                                    }
+                                    for hint in eligible
+                                ]
+                            choice_sets = []
+                            for need in result.information_needs:
+                                candidates = eligible_by_need.get(
+                                    need.information_need_id, ()
                                 )
                                 if not candidates:
                                     continue
