@@ -95,6 +95,7 @@ class GiccAgentTools:
         # An accepted "approve discovery" utterance requires a *previously
         # offered* scope for this exact goal in the same live conversation.
         self._offered_network_discovery: dict[str, tuple[tuple[object, ...], str]] = {}
+        self._listed_owner_goal_ids: set[str] = set()
 
     @property
     def action_tools(self) -> list:
@@ -105,6 +106,7 @@ class GiccAgentTools:
             self.resolve_goal_information,
             self.authorize_bounded_network_discovery,
             self.confirm_discovered_device_identity,
+            self.cancel_owner_goal,
         ]
 
     @property
@@ -139,6 +141,7 @@ class GiccAgentTools:
         if resolver is None:
             return {"ok": False, "status": "objective_status_unavailable"}
         objectives = resolver.list_active(limit=50)
+        self._listed_owner_goal_ids = {item.goal_id for item in objectives}
         return {
             "ok": True,
             "status": "listed",
@@ -166,7 +169,86 @@ class GiccAgentTools:
             objective = resolver.resolve(goal_id)
         except ValueError:
             return {"ok": False, "status": "unknown_goal_id", "goal_id": goal_id}
+        if not objective.terminal:
+            self._listed_owner_goal_ids.add(objective.goal_id)
         return {"ok": True, "status": "found", **objective.public_payload()}
+
+    @function_tool()
+    async def cancel_owner_goal(
+        self,
+        context: RunContext,
+        goal_id: str,
+    ) -> dict[str, object]:
+        """Cancel one previously listed owner goal when the owner explicitly asks.
+
+        For "cancel my old TV request", first list_owner_objectives to ground
+        the exact active ID. Cancels work, not the owner's unrelated projects.
+        The history/audit stays immutable, and no physical capability is removed.
+        """
+        del context
+        turn = self._latest_user_turn()
+        if not re.search(
+            r"\\b(cancel|stop|withdraw|remove|delete|abandon)\\b",
+            turn.text, flags=re.IGNORECASE,
+        ):
+            return {
+                "ok": False, "status": "explicit_cancel_request_required",
+                "truth_note": "No owner cancellation was performed.",
+            }
+        key = str(goal_id).strip()
+        if key not in self._listed_owner_goal_ids:
+            return {
+                "ok": False, "status": "unverified_cancel_target",
+                "truth_note": (
+                    "List current canonical owner objectives first and select "
+                    "the exact goal ID; no cancellation was performed."
+                ),
+            }
+        runtime = self._execution_runtime
+        action = None if runtime is None else getattr(
+            runtime, "cancel_owner_goal", None
+        )
+        if not callable(action):
+            return {
+                "ok": False, "status": "owner_goal_cancel_unavailable",
+                "truth_note": "No owner cancellation was performed.",
+            }
+        try:
+            result = await action(key)
+        except Exception as exc:  # noqa: BLE001 - preserve truthful voice status
+            LOGGER.exception(
+                "GICC owner goal cancellation was blocked | goal_id=%s", key,
+                exc_info=exc,
+            )
+            self._telemetry.emit(
+                "gicc_owner_goal_cancel_blocked",
+                goal_id=key, error_type=type(exc).__name__,
+            )
+            return {
+                "ok": False, "status": "owner_goal_cancel_blocked",
+                "goal_id": key,
+                "truth_note": (
+                    "Cancellation could not be verified across all linked "
+                    "subsystems. Do not say the goal or work was removed; "
+                    "check its canonical status before requesting a fresh goal."
+                ),
+            }
+        if result.get("status") != "cancelled":
+            return {"ok": False, "status": "owner_goal_cancel_unverified"}
+        self._listed_owner_goal_ids.discard(key)
+        self._offered_network_discovery.pop(key, None)
+        for option_key in tuple(self._offered_device_options):
+            if option_key[0] == key:
+                self._offered_device_options.pop(option_key, None)
+        return {
+            "ok": True,
+            **result,
+            "truth_note": (
+                "This exact goal has been retired from active work and "
+                "its linked running tasks were stopped. Immutable engineering "
+                "and authorization history was retained, not erased."
+            ),
+        }
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
