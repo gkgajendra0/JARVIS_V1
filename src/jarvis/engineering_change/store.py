@@ -408,6 +408,18 @@ class ChangeStore:
                 if prior is not None and prior[1] != gap:
                     raise ChangeConflict("one change references different owner gaps")
                 found[change.change_id] = (change, gap)
+            # Legacy GICC admissions predate the link artifact. Their bridge
+            # source is deterministic from the immutable goal + exact gap ID.
+            # No guessing from request text, names, or recent-change order.
+            for gap in sorted(gaps):
+                old_rows = db.execute(
+                    "SELECT * FROM engineering_changes WHERE process_key=? "
+                    "AND source_session_id=? AND source_turn_id=?",
+                    ("owner_capability_acquisition", f"gicc:{goal_key}", f"gap:{gap}"),
+                ).fetchall()
+                for row in old_rows:
+                    change = self._from_row(row)
+                    found[change.change_id] = (change, gap)
         return tuple(found[key] for key in sorted(found))
 
     def supersede_cancelled_owner_acquisition(
@@ -430,15 +442,20 @@ class ChangeStore:
                 (change_id,),
             ).fetchone()
             if link is None:
-                raise ChangeConflict("no verifiable GICC owner-goal link")
-            payload = self.work._decode_json(link["payload"])
-            if _digest(payload) != link["digest"]:
-                raise ChangeConflict("capability gap link integrity mismatch")
-            if (
-                payload.get("motivating_goal_id") != goal_id
-                or payload.get("gap_id") != gap_id
-            ):
-                raise ChangeConflict("cancel scope mismatches canonical goal and gap")
+                if (
+                    change.source_session_id != f"gicc:{goal_id}"
+                    or change.source_turn_id != f"gap:{gap_id}"
+                ):
+                    raise ChangeConflict("no verifiable GICC owner-goal link")
+            else:
+                payload = self.work._decode_json(link["payload"])
+                if _digest(payload) != link["digest"]:
+                    raise ChangeConflict("capability gap link integrity mismatch")
+                if (
+                    payload.get("motivating_goal_id") != goal_id
+                    or payload.get("gap_id") != gap_id
+                ):
+                    raise ChangeConflict("cancel scope mismatches canonical goal and gap")
             terminal = {
                 ChangeState.CLOSED, ChangeState.REJECTED, ChangeState.FAILED,
                 ChangeState.SUPERSEDED, ChangeState.ROLLED_BACK,
