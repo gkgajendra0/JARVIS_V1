@@ -69,6 +69,7 @@ class WorkDeliveryKind(str, Enum):
 class WorkDeliveryState(str, Enum):
     PENDING = "pending"
     DELIVERED = "delivered"
+    CANCELLED = "cancelled"
 
 
 class WorkType(str, Enum):
