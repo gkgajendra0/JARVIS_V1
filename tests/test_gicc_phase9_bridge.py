@@ -535,6 +535,28 @@ def test_phase9_bridge_blocks_unidentified_physical_device(tmp_path: Path) -> No
     assert not admitter.goals
 
 
+def test_phase9_bridge_never_resurrects_cancelled_owner_goal(tmp_path: Path) -> None:
+    import pytest
+
+    from jarvis.goal_intelligence.store import GoalStoreConflict
+
+    store = _store(tmp_path)
+    goal, gap = _identified_tv_goal_and_gap(store)
+    admitter = FakeAdmitter()
+    bridge = Phase9GoalBridge(
+        coordinator=admitter,
+        change_store=FakeArtifacts(),
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+    store.cancel_goal_tree(goal.goal_id, expected_revision=goal.goal_revision)
+
+    # The caller deliberately supplies its stale pre-cancellation snapshots.
+    with pytest.raises(GoalStoreConflict, match="cancelled owner goal"):
+        bridge.admit_gap(gap, goal)
+    assert not admitter.goals
+
+
 def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
     store = _store(tmp_path)
     goal, gap = _identified_tv_goal_and_gap(store)
