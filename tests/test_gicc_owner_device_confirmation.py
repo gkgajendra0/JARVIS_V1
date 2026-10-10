@@ -259,7 +259,10 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         second_need.information_need_id,
         second_need.state,
         expected_revision=second_need.revision,
-        evidence_refs=(_evidence(address="192.168.1.11", now=now),),
+        evidence_refs=(
+            _evidence(address="192.168.1.11", now=now, category="Video Camera"),
+            "windows_aep_authorized_scope_consumed:upnp",
+        ),
     )
     first = confirm_single_discovered_device(
         store=store,
@@ -283,6 +286,22 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         is None
     )
     assert world.entities() == (first,)
+    # Prove that the second goal was otherwise eligible for confirmation:
+    # a genuinely new owner turn can confirm its own authorized camera.
+    second = confirm_single_discovered_device(
+        store=store,
+        world=world,
+        goal_id=second_goal.goal_id,
+        information_need_id=second_need.information_need_id,
+        session_id=second_goal.source_session_id,
+        owner_turn_id="new-camera-confirmation-turn",
+    )
+    assert second is not None
+    assert second.entity_type == "camera"
+    assert {entity.entity_id for entity in world.entities()} == {
+        first.entity_id,
+        second.entity_id,
+    }
 
 
 def test_owner_confirmation_requires_consumed_discovery_authority(
