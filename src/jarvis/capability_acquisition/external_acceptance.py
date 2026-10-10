@@ -1217,9 +1217,7 @@ class ExternalAcceptanceRecordExecutor:
                 for index, step in enumerate(steps)
                 if step.step_id == invoked.step_id
             )
-            response = _owner_reply(
-                steps[invocation_index + 1 :], input_key=input_key
-            )
+            response = _owner_reply(steps[invocation_index + 1 :], input_key=input_key)
             if response is None:
                 raise WorkOwnerInputRequired(
                     (
