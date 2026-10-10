@@ -1012,6 +1012,13 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need revision changed before state update"
                 )
+            if (
+                current.state is InformationNeedState.CANCELLED
+                and state is not InformationNeedState.CANCELLED
+            ):
+                raise GoalStoreConflict(
+                    "cancelled information need cannot transition to another state"
+                )
             attempts = (
                 current.self_resolution_attempts
                 if self_resolution_attempts is None
@@ -1401,6 +1408,10 @@ class GoalStore:
                     return current
                 raise GoalStoreConflict(
                     "information need is already resolved to another reference"
+                )
+            if current.state is InformationNeedState.CANCELLED:
+                raise GoalStoreConflict(
+                    "cancelled information need cannot be resolved"
                 )
             if expected_revision is not None and current.revision != expected_revision:
                 raise GoalStoreConflict(
