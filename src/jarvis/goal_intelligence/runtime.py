@@ -20,6 +20,10 @@ from jarvis.autonomy.supervisor_cutover import (
     SupervisorCutoverController,
     SupervisorCutoverDisposition,
 )
+from jarvis.capabilities.authority_bridge import (
+    AuthorizedNetworkDiscovery,
+    CapabilityAuthorizationError,
+)
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capability_acquisition.architecture import (
@@ -369,6 +373,78 @@ class GiccApplyRuntime:
             "Authorized AEP scope was consumed but durable attempt marking raced"
         )
         return result
+
+    def authorize_and_discover_network(
+        self,
+        *,
+        goal_id: str,
+        session_id: str,
+        planner: WindowsLanScopePlanner | None = None,
+    ) -> InformationResolutionResult | None:
+        """Run one reviewed AEP scan only after exact Windows Hello approval.
+
+        An existing CapabilityRuntime broker issues the AuthorityService
+        decision and permit. This never creates a separate approval service
+        and never treats observed devices as trusted world entities.
+        """
+        local_planner = planner or WindowsLanScopePlanner()
+        proposal = self.prepare_network_discovery_consent(
+            goal_id=goal_id,
+            session_id=session_id,
+            planner=local_planner,
+        )
+        if proposal is None:
+            return None
+        target = proposal.target()
+        need_id = str(target["gicc_need_id"])
+        need = self.store.get_information_need(need_id)
+        if need is None or not can_rediscover_information(need):
+            return None
+        kind = canonical_world_entity_type(need.answer_schema.get("entity_type"))
+        reviewed = next(
+            (
+                scope
+                for scope in local_planner.consent_scopes_for(kind)
+                if scope.protocol == target.get("protocol")
+                and list(scope.approved_address_ranges)
+                == target.get("address_result_filters")
+                and scope.all_local_interfaces_authorized
+                == target.get("all_local_interfaces")
+            ),
+            None,
+        )
+        if reviewed is None:
+            return None
+        authorized = self.capability_runtime.authorize_network_discovery_proposal(
+            proposal
+        )
+        if (
+            not isinstance(authorized, AuthorizedNetworkDiscovery)
+            or authorized.proposal != proposal
+            or authorized.context.session_id != session_id
+        ):
+            raise CapabilityAuthorizationError(
+                "discovery authorization was not bound to exact GICC proposal"
+            )
+        scope = replace(
+            reviewed,
+            consent_record_id=authorized.approval_id,
+        )
+        guard = AepAuthorityExecutionGuard(
+            authority=authorized.authority,
+            proposal=authorized.proposal,
+            context=authorized.context,
+            permit_id=authorized.permit_id,
+            approval_id=authorized.approval_id,
+        )
+        return self.apply_approved_network_discovery(
+            goal_id=goal_id,
+            need_id=need_id,
+            session_id=session_id,
+            scope=scope,
+            authority_guard=guard,
+            planner=local_planner,
+        )
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():

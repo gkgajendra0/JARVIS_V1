@@ -528,3 +528,87 @@ async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     assert "network_discovery" not in other_payload
     assert "unverified_device_hints" not in other_payload
     assert runtime.consent_reads == runtime.suggestion_reads == 1
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_scan_requires_exact_latest_user_consent(
+    tmp_path: Path,
+) -> None:
+    """Voice never turns the original request or generic yes into scan authority."""
+    from tests.test_gicc_network_consent import _data
+
+    from jarvis.conversation import ConversationSession
+
+    store, goal, need = _data(tmp_path)
+    conversation = ConversationSession(session_id="owner-session")
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "Play my movie on the TV.")
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(need,),
+    )
+
+    class ExactConsentRuntime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.scan_calls = 0
+
+        def authorize_and_discover_network(self, *, goal_id, session_id):
+            assert goal_id == goal.goal_id
+            assert session_id == goal.source_session_id
+            self.scan_calls += 1
+            return SimpleNamespace(need=need)
+
+    runtime = ExactConsentRuntime()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    initial = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert initial["status"] == "explicit_discovery_permission_not_given"
+    conversation.accept_turn(ConversationRole.USER, "Yes.")
+    vague = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert vague["status"] == "explicit_discovery_permission_not_given"
+    assert runtime.scan_calls == 0
+
+    conversation.accept_turn(
+        ConversationRole.USER, "I approve the network discovery."
+    )
+    mismatch = await tools.authorize_bounded_network_discovery(
+        None, goal_id="other-goal"
+    )
+    assert mismatch["status"] == "discovery_goal_not_current_or_not_waiting"
+    assert runtime.scan_calls == 0
+
+    accepted = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert accepted["status"] == "authorized_discovery_observation_recorded"
+    assert accepted["verified_device_control"] is False
+    assert runtime.scan_calls == 1
+
+    from jarvis.conversation import ConversationSession as NewSession
+
+    another = NewSession(session_id="other-owner-session")
+    another.start()
+    another.accept_turn(
+        ConversationRole.USER, "I approve the network discovery."
+    )
+    other_tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        another,
+        store,
+        execution_runtime=runtime,
+    )
+    rejected = await other_tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert rejected["status"] == "discovery_goal_not_current_or_not_waiting"
+    assert runtime.scan_calls == 1

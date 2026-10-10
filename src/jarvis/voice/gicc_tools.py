@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from typing import Protocol
 
 from livekit.agents import RunContext, function_tool
@@ -85,6 +87,7 @@ class GiccAgentTools:
         return [
             self.pursue_owner_goal,
             self.resolve_goal_information,
+            self.authorize_bounded_network_discovery,
         ]
 
     @property
@@ -488,6 +491,112 @@ class GiccAgentTools:
             )
         payload = self._public_result(result)
         payload["canonical_user_turn_id"] = turn.turn_id
+        return payload
+
+    @function_tool()
+    async def authorize_bounded_network_discovery(
+        self,
+        context: RunContext,
+        goal_id: str,
+    ) -> dict[str, object]:
+        """Ask for one exact, owner-confirmed local-device discovery.
+
+        This action is ONLY for a fresh accepted USER turn explicitly approving
+        network discovery (for example, "approve the network discovery").
+        Never infer permission from the original goal, generic "yes", or an
+        older approval. Windows Hello and canonical AuthorityService must
+        independently approve the full current scope before any scan begins.
+        Unverified sightings are NOT paired or accepted as physical identity.
+        """
+        del context
+        turn = self._latest_user_turn()
+        spoken = turn.text.casefold()
+        if not (
+            re.search(r"\b(approv\w*|authoriz\w*|allow|permit)\b", spoken)
+            and re.search(r"\b(network|discovery|discover|scan|scanning)\b", spoken)
+        ):
+            return {
+                "ok": False,
+                "status": "explicit_discovery_permission_not_given",
+                "truth_note": (
+                    "The owner's latest accepted turn did not explicitly approve "
+                    "network discovery. Do not initiate a scan or treat generic "
+                    "acknowledgment as permission."
+                ),
+            }
+        goal = self._store.get_goal(str(goal_id).strip())
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or goal.source_session_id != self._conversation.session_id
+        ):
+            return {
+                "ok": False,
+                "status": "discovery_goal_not_current_or_not_waiting",
+            }
+        runtime = self._execution_runtime
+        execute = (
+            None
+            if runtime is None
+            else getattr(runtime, "authorize_and_discover_network", None)
+        )
+        if not callable(execute):
+            return {"ok": False, "status": "governed_discovery_unavailable"}
+        try:
+            # Windows Hello may block. Never run it on the audio event loop.
+            result = await asyncio.to_thread(
+                execute,
+                goal_id=goal.goal_id,
+                session_id=goal.source_session_id,
+            )
+        except Exception:
+            LOGGER.warning(
+                "GICC owner discovery authorization or execution denied",
+                exc_info=True,
+            )
+            return {
+                "ok": False,
+                "status": "discovery_not_authorized_or_unavailable",
+                "truth_note": (
+                    "No verified device control or successful discovery is "
+                    "established. Never claim that authorization was granted."
+                ),
+            }
+        if result is None:
+            return {
+                "ok": False,
+                "status": "discovery_scope_changed_or_unavailable",
+                "truth_note": "No device scan or control is verified.",
+            }
+        payload: dict[str, object] = {
+            "ok": True,
+            "status": "authorized_discovery_observation_recorded",
+            "goal_id": goal.goal_id,
+            "information_need_id": result.need.information_need_id,
+            "information_need_state": result.need.state.value,
+            "verified_device_control": False,
+            "truth_note": (
+                "The governed observation returned. Unverified device "
+                "advertisements do not prove identity, pairing, access or "
+                "TV control. Await corroborated registry confirmation before "
+                "restarting the same original goal."
+            ),
+        }
+        hints = getattr(runtime, "pending_network_device_suggestions", None)
+        if callable(hints):
+            candidates = hints(
+                goal_id=goal.goal_id,
+                session_id=goal.source_session_id,
+            )
+            payload["unverified_device_hints"] = [
+                {
+                    "display_hint": item.display_hint,
+                    "address": item.address,
+                    "protocol_observed": item.protocol,
+                    "verified_identity": False,
+                }
+                for item in candidates
+            ]
         return payload
 
     @function_tool()
