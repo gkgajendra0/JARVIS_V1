@@ -13,7 +13,6 @@ from pathlib import Path
 
 from tests.test_authority_foundation import LocalPolicy
 from tests.test_capability_acquisition_owner_flow_hardening import (
-    _DISCOVERED_TV_ID,
     _Backend,
     _empty_context,
     _QueueStructuredClient,
@@ -56,7 +55,7 @@ from jarvis.goal_intelligence.interpretation import (
     ShadowEntityCandidate,
     ShadowGoalInterpretationOutput,
 )
-from jarvis.goal_intelligence.models import GoalKind, WorldEntityRefV1
+from jarvis.goal_intelligence.models import GoalKind
 from jarvis.goal_intelligence.phase9 import Phase9GoalBridge
 from jarvis.goal_intelligence.requirements import (
     CapabilityRequirementProposal,
@@ -133,7 +132,7 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
                         CapabilityRequirementProposal(
                             semantic_capability="media_player.control",
                             operation="send_remote_key",
-                            target_entity_id=_DISCOVERED_TV_ID,
+                            target_entity_id=None,
                             target_entity_type="media_player",
                             expected_postconditions=["tv_responded"],
                             reason="Use a separately confirmed owner TV.",
@@ -225,7 +224,7 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         lambda **kw: WindowsAepIdentityBackend(
             platform="win32",
             watcher_factory=lambda _: watcher,
-            clock=lambda: 1000.0,
+            clock=time.time,
             **kw,
         ),
     )
@@ -245,7 +244,7 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
     assert runtime.pending_network_device_suggestions(
         goal_id=goal_id,
         session_id=conversation.session_id,
-        now_epoch=1001,
+        now_epoch=int(time.time()),
     )
     assert not runtime.apply_approved_network_discovery(
         goal_id="other-goal",
@@ -256,16 +255,17 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         planner=planner,
     )
 
-    # Only a separately reviewed inventory event grounds the identity.
-    tv = world.register_entity(
-        WorldEntityRefV1.create(
-            entity_id=_DISCOVERED_TV_ID,
-            entity_type="media_player",
-            canonical_name="Owner-reviewed television",
-            aliases=("my TV",),
-            provenance_refs=("owner_inventory:reviewed_tv",),
-        )
+    # A fresh, unique unverified hint is never enough. The owner separately
+    # confirms the identity; no static future target ID is provided to GICC.
+    tv = runtime.confirm_owner_discovered_device(
+        goal_id=goal_id,
+        information_need_id=need.information_need_id,
+        session_id=conversation.session_id,
+        owner_turn_id="owner-explicit-tv-identity-confirmation",
     )
+    assert tv is not None
+    assert tv.entity_id.startswith("owner_confirmed_network:")
+    assert world.bindings(entity_id=tv.entity_id) == ()
     resumed = asyncio.run(coordinator.continue_goal(goal_id, retry_information=True))
     assert resumed.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
     assert resumed.goal is not None
