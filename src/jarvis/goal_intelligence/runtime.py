@@ -899,6 +899,10 @@ class GiccApplyRuntime:
                 )
             for continuation in self.store.list_continuations(goal_id=key, limit=1000):
                 for work_id in continuation.work_ids:
+                    if work_id in work_ids:
+                        # Already proven by a direct goal or exact change owner
+                        # link (including phase9-external acceptance).
+                        continue
                     stage = changes.stage_for_work(work_id)
                     if stage is not None and stage.change_id not in change_ids:
                         raise GoalStoreConflict(
