@@ -123,12 +123,6 @@ def confirm_single_discovered_device(
         ):
             return existing  # exactly idempotent; never a new confirmation
         return None
-    if not store.claim_owner_device_confirmation(
-        goal_id=goal.goal_id,
-        need_id=need.information_need_id,
-        owner_turn_id=turn_id,
-    ):
-        return None
     entry = WorldEntityRefV1.create(
         entity_type=kind,
         canonical_name=canonical_name,
@@ -139,4 +133,11 @@ def confirm_single_discovered_device(
             f"unverified_aep_evidence:{chosen.evidence_ref}",
         ),
     )
-    return world.register_entity(entry)
+    if not store.claim_owner_device_confirmation(
+        goal_id=goal.goal_id,
+        need_id=need.information_need_id,
+        owner_turn_id=turn_id,
+        entity=entry,
+    ):
+        return None
+    return entry

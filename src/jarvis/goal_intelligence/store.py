@@ -1092,7 +1092,12 @@ class GoalStore:
         return True
 
     def claim_owner_device_confirmation(
-        self, *, goal_id: str, need_id: str, owner_turn_id: str
+        self,
+        *,
+        goal_id: str,
+        need_id: str,
+        owner_turn_id: str,
+        entity: WorldEntityRefV1 | None = None,
     ) -> bool:
         """Consume one canonical owner identity turn across every session goal.
 
@@ -1104,6 +1109,14 @@ class GoalStore:
         need_key = str(need_id).strip()
         if not turn_id or len(turn_id) > 128 or not goal_key or not need_key:
             return False
+        if entity is not None:
+            if (
+                not isinstance(entity, WorldEntityRefV1)
+                or entity.entity_id != f"owner_confirmed_network:{need_key}"
+                or f"owner_inventory:explicit_device_confirmation:{goal_key}:{turn_id}"
+                not in entity.provenance_refs
+            ):
+                raise ValueError("owner-confirmed entity provenance is not bound")
         with self.work.extension_transaction() as db:
             row = db.execute(
                 "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?",
@@ -1130,6 +1143,14 @@ class GoalStore:
                 InformationNeedState.WAITING_FOR_OWNER,
             }:
                 return False
+            if entity is not None:
+                evidence = tuple(
+                    value.removeprefix("unverified_aep_evidence:")
+                    for value in entity.provenance_refs
+                    if value.startswith("unverified_aep_evidence:")
+                )
+                if len(evidence) != 1 or evidence[0] not in need.evidence_refs:
+                    raise ValueError("owner device is not bound to this need evidence")
             claim = db.execute(
                 """
                 INSERT INTO gicc_owner_device_confirmations_v1
@@ -1139,7 +1160,32 @@ class GoalStore:
                 """,
                 (goal.source_session_id, turn_id, goal_key, need_key),
             )
-            return claim.rowcount == 1
+            if claim.rowcount != 1:
+                return False
+            if entity is not None:
+                # The turn claim and inventory registration commit or roll
+                # back together. A failed insertion must not spend consent.
+                existing = db.execute(
+                    "SELECT 1 FROM world_entities_v1 WHERE entity_id=?",
+                    (entity.entity_id,),
+                ).fetchone()
+                if existing is not None:
+                    raise GoalStoreConflict("owner device identity already exists")
+                db.execute(
+                    """
+                    INSERT INTO world_entities_v1 (
+                        entity_id, entity_type, lifecycle_state, payload, digest
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        entity.entity_id,
+                        entity.entity_type,
+                        entity.lifecycle_state.value,
+                        self._encode(entity.canonical_payload()),
+                        entity.digest,
+                    ),
+                )
+            return True
 
     def update_information_need_state(
         self,
