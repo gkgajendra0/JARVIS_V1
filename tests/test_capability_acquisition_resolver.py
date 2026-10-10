@@ -957,3 +957,36 @@ def test_reusable_sdk_does_not_require_owner_inventory_display_name() -> None:
     )
     assert rejected.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
     assert "target_conflict_entity_name" in rejected.reason_codes
+
+
+def test_ambiguous_canonical_platforms_cannot_prove_a_tv_adapter() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my Roku television",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "platform:roku"),
+        source_session_id="ambiguous-goal",
+        source_turn_id="original",
+        now_epoch=100.0,
+    )
+    sdk = _targeted_sdk(
+        identity="roku-ecp-adapter",
+        device_scopes=("entity_type:television", "platform:roku"),
+    )
+    result = evaluate_candidate_target_compatibility(
+        goal,
+        sdk,
+        canonical_target_hints=(
+            "entity_type:television",
+            "platform:roku",
+            "platform:vidaa",
+        ),
+    )
+    assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_ambiguous_canonical_platform" in result.reason_codes
+    assert not result.compatible

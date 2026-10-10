@@ -135,11 +135,9 @@ class AcquisitionWorkContextResolver:
             context.change_id,
             "gicc_capability_gap_link",
         )
-        if link is not None:
-            target_type = str(link.payload.get("target_entity_type") or "").strip()
-            if target_type:
-                hints.add(f"entity_type:{target_type}".casefold())
-
+        # The GICC gap link records the original interpreted target need;
+        # it is not independent observation. The Phase-9 goal already carries
+        # that claim. Only grounded target context belongs in canonical facts.
         target_context = self._store.latest_artifact(
             context.change_id,
             "gicc_target_context",

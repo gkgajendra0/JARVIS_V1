@@ -148,6 +148,15 @@ def evaluate_candidate_target_compatibility(
             if dimension in goal_facts and goal_facts[dimension].isdisjoint(observed)
         )
     )
+    # Each physical identity/platform/transport fact must be unambiguous.
+    # A canonical record simultaneously claiming both Roku and VIDAA must
+    # never match an adapter just because one claim overlaps.
+    ambiguous_canonical = tuple(
+        sorted(dimension for dimension, values in canonical_facts.items() if len(values) > 1)
+    )
+    ambiguous_goal = tuple(
+        sorted(dimension for dimension, values in goal_facts.items() if len(values) > 1)
+    )
 
     # A generic software utility is an abstract build target, not an
     # identified physical/remote endpoint. Do not require a manufacturer or
@@ -183,7 +192,16 @@ def evaluate_candidate_target_compatibility(
     missing: list[str] = []
     conflicting: list[str] = []
 
-    if provenance_conflicts:
+    if ambiguous_canonical or ambiguous_goal:
+        verdict = TargetCompatibilityVerdict.INCOMPATIBLE
+        conflicting.extend(ambiguous_canonical)
+        conflicting.extend(ambiguous_goal)
+        reasons = (
+            "target_incompatible",
+            *(f"target_ambiguous_canonical_{dim}" for dim in ambiguous_canonical),
+            *(f"target_ambiguous_goal_{dim}" for dim in ambiguous_goal),
+        )
+    elif provenance_conflicts:
         verdict = TargetCompatibilityVerdict.INCOMPATIBLE
         conflicting.extend(provenance_conflicts)
         reasons = (
