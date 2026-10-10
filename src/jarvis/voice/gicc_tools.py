@@ -661,7 +661,9 @@ class GiccAgentTools:
                 owner_turn_id=turn.turn_id,
             )
         except Exception:
-            LOGGER.warning("Canonical device identity confirmation failed", exc_info=True)
+            LOGGER.warning(
+                "Canonical device identity confirmation failed", exc_info=True
+            )
             return {"ok": False, "status": "device_identity_confirmation_failed"}
         if entity is None:
             return {

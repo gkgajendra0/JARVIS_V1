@@ -73,7 +73,9 @@ def test_owner_confirmed_unique_recent_hint_creates_identity_not_access(
     assert confirmed.lifecycle_state is EntityLifecycleState.ACTIVE
     assert "my tv" in confirmed.aliases
     assert any(x.startswith("owner_inventory:") for x in confirmed.provenance_refs)
-    assert any(x.startswith("unverified_aep_evidence:") for x in confirmed.provenance_refs)
+    assert any(
+        x.startswith("unverified_aep_evidence:") for x in confirmed.provenance_refs
+    )
     assert world.bindings(entity_id=confirmed.entity_id) == ()
     assert store.get_information_need(need.information_need_id).resolution_ref is None
     assert len(world.entities()) == 1

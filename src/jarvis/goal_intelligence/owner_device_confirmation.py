@@ -57,7 +57,8 @@ def confirm_single_discovered_device(
         need is None
         or need.goal_id != goal.goal_id
         or not can_rediscover_information(need)
-        or need.category not in {
+        or need.category
+        not in {
             InformationNeedCategory.MISSING_VALUE,
             InformationNeedCategory.AMBIGUOUS_REFERENCE,
             InformationNeedCategory.DISAMBIGUATION,
