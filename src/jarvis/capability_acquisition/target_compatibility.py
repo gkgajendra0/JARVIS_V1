@@ -206,11 +206,20 @@ def evaluate_candidate_target_compatibility(
             actual = declared.get(dimension)
             if actual is not None and expected.isdisjoint(actual):
                 conflicting.append(dimension)
+        for dimension in ("vendor", "platform", "protocol", "model"):
+            if dimension in declared and dimension not in required:
+                missing.append(dimension)
         if conflicting:
             verdict = TargetCompatibilityVerdict.INCOMPATIBLE
             reasons = (
                 "target_incompatible",
                 *(f"target_conflict_{dimension}" for dimension in sorted(conflicting)),
+            )
+        elif missing:
+            verdict = TargetCompatibilityVerdict.UNPROVEN
+            reasons = (
+                "target_compatibility_unproven",
+                *(f"target_unproven_{dimension}" for dimension in sorted(missing)),
             )
         else:
             verdict = TargetCompatibilityVerdict.COMPATIBLE

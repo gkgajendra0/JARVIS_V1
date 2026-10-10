@@ -765,3 +765,32 @@ def test_existing_roku_adapter_cannot_override_owner_vidaa_platform() -> None:
     assert compatibility.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
     assert "target_conflict_platform" in compatibility.reason_codes
     assert not compatibility.compatible
+
+
+def test_existing_roku_protocol_cannot_self_attest_owner_device_access() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = _targeted_goal()
+    existing = AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.EXISTING_CAPABILITY,
+        source_identity="registered-existing-roku-ecp",
+        source_version="1.0.0",
+        source_digest="f" * 64,
+        trust_class=AcquisitionTrustClass.ACCEPTED_RELEASE,
+        supported_operations=("power",),
+        strategy=AcquisitionStrategy.REUSE,
+        evidence_refs=("existing-runtime-binding",),
+        verification_requirements=("existing-binding-evidence",),
+        device_scopes=("entity_type:television", "protocol:roku-ecp"),
+    )
+    compatibility = evaluate_candidate_target_compatibility(
+        goal,
+        existing,
+        canonical_target_hints=("platform:vidaa",),
+    )
+    assert compatibility.verdict is TargetCompatibilityVerdict.UNPROVEN
+    assert "target_unproven_protocol" in compatibility.reason_codes
+    assert not compatibility.compatible
