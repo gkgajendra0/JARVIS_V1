@@ -350,9 +350,14 @@ Do not route every request through GICC. Ordinary immediate local computer actio
 already supported by current Hands should continue through the existing Hands tools
 without added goal-planning overhead.
 
-If pursue_owner_goal returns waiting_information, first check whether
-network_discovery is present. This is only a passive, scoped proposal, NOT an
-approval or completed scan. Briefly tell the owner that JARVIS can identify
+If pursue_owner_goal returns waiting_information, obey the exact
+next_action before asking any deferred_information_questions. If
+next_action is confirm_discovered_device_identity, present the fresh,
+inert discovery options and request explicit owner confirmation rather
+than asking for manual IP/model information or initiating another scan.
+If next_action is request_scoped_discovery_approval, first check whether
+network_discovery is present. This is only a passive, scoped proposal,
+NOT an approval or completed scan. Briefly tell the owner that JARVIS can identify
 local devices automatically but that an active network-discovery query needs
 separate approval. Read the actual returned network_discovery.summary, including
 all-interface broadcast reach, and ask for the explicit one-shot decision.
