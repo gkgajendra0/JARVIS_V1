@@ -152,7 +152,11 @@ def evaluate_candidate_target_compatibility(
     # A canonical record simultaneously claiming both Roku and VIDAA must
     # never match an adapter just because one claim overlaps.
     ambiguous_canonical = tuple(
-        sorted(dimension for dimension, values in canonical_facts.items() if len(values) > 1)
+        sorted(
+            dimension
+            for dimension, values in canonical_facts.items()
+            if len(values) > 1
+        )
     )
     ambiguous_goal = tuple(
         sorted(dimension for dimension, values in goal_facts.items() if len(values) > 1)
