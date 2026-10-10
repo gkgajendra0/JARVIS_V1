@@ -12,8 +12,8 @@ from jarvis.capability_acquisition.external_acceptance import (
     ExternalAcceptanceInvokeExecutor,
     ExternalAcceptanceRecordExecutor,
     _require_activation_authority,
-    requires_owner_physical_confirmation,
     external_acceptance_completion_guard,
+    requires_owner_physical_confirmation,
 )
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
