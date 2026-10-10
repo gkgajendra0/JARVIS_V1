@@ -36,6 +36,7 @@ from .models import (
     EntityLifecycleState,
     GoalContinuationV1,
     GoalKind,
+    GoalState,
     OwnerGoalV2,
 )
 from .monitoring import GICC_MONITOR_EVENT_CONTRACT
@@ -407,6 +408,14 @@ class Phase9GoalBridge:
         gap: CapabilityGapV1,
         goal: OwnerGoalV2,
     ) -> Phase9GapAdmission:
+        # A stale asynchronous caller must not resurrect a retired owner goal,
+        # even if it already holds an otherwise-valid gap snapshot.
+        current_goal = self._goals.get_goal(goal.goal_id)
+        if current_goal is not None and current_goal.state is GoalState.CANCELLED:
+            raise GoalStoreConflict("cancelled owner goal cannot admit new acquisition")
+        current_gap = self._goals.get_gap(gap.gap_id)
+        if current_gap is not None and current_gap.state is CapabilityGapState.CANCELLED:
+            raise GoalStoreConflict("cancelled capability gap cannot be re-admitted")
         # Recheck the physical target even if an alternate GICC caller bypasses
         # normal intake; research of an unbound device must not start a build.
         physical_types = {
