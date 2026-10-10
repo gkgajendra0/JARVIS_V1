@@ -681,6 +681,7 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
         "That TV seems familiar.",
         "Do not confirm that the discovered TV is mine.",
         "What if I confirm the discovered TV is mine?",
+        "I confirm the discovered device is mine.",
     ):
         conversation.accept_turn(ConversationRole.USER, unsafe_text)
         denied = await tools.confirm_discovered_device_identity(
@@ -690,6 +691,19 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
         )
         assert denied["status"] == "explicit_device_identity_confirmation_not_given"
         assert execution.confirmations == 0
+    for wrong_kind in (
+        "I confirm the discovered camera is mine.",
+        "I confirm the discovered TV is my camera.",
+    ):
+        conversation.accept_turn(ConversationRole.USER, wrong_kind)
+        denied = await tools.confirm_discovered_device_identity(
+            None,
+            goal_id=goal.goal_id,
+            information_need_id=need.information_need_id,
+        )
+        assert denied["status"] == "owner_device_confirmation_type_mismatch"
+        assert execution.confirmations == 0
+
     conversation.accept_turn(
         ConversationRole.USER, "I confirm the discovered TV is mine."
     )

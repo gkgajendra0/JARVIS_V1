@@ -27,6 +27,7 @@ from jarvis.goal_intelligence.telemetry import (
     DEFAULT_GICC_TELEMETRY,
     GiccTelemetrySink,
 )
+from jarvis.goal_intelligence.world import canonical_world_entity_type
 
 LOGGER = logging.getLogger(__name__)
 
@@ -734,10 +735,10 @@ class GiccAgentTools:
         turn = self._latest_user_turn()
         consent = re.fullmatch(
             r"(?:i\s+)?confirm\s+(?:that\s+)?(?:the|this)\s+"
-            r"(?:discovered|detected)\s+(?:tv|television|camera|device)\s+"
+            r"(?:discovered|detected)\s+(?P<kind>tv|television|camera)\s+"
             r"(?:option\s+(?P<option>[1-8])\s+)?"
             r"(?:is\s+mine|belongs\s+to\s+me|is\s+my\s+"
-            r"(?:tv|television|camera))[.!]?",
+            r"(?P<kind_suffix>tv|television|camera))[.!]?",
             turn.text.casefold().strip(),
         )
         if consent is None:
@@ -752,6 +753,26 @@ class GiccAgentTools:
             or goal.source_session_id != self._conversation.session_id
         ):
             return {"ok": False, "status": "device_confirmation_goal_not_current"}
+        need = self._store.get_information_need(str(information_need_id).strip())
+        expected_kind = (
+            None
+            if need is None or need.goal_id != goal.goal_id
+            else canonical_world_entity_type(need.answer_schema.get("entity_type"))
+        )
+        spoken_kind = canonical_world_entity_type(consent.group("kind"))
+        tail_kind = consent.group("kind_suffix")
+        if (
+            expected_kind not in {"media_player", "camera"}
+            or spoken_kind != expected_kind
+            or (
+                tail_kind is not None
+                and canonical_world_entity_type(tail_kind) != expected_kind
+            )
+        ):
+            return {
+                "ok": False,
+                "status": "owner_device_confirmation_type_mismatch",
+            }
         runtime = self._execution_runtime
         confirm = (
             None
@@ -764,12 +785,7 @@ class GiccAgentTools:
         option = consent.group("option")
         if option is not None:
             hints_method = getattr(runtime, "pending_network_device_suggestions", None)
-            need = self._store.get_information_need(str(information_need_id).strip())
-            if (
-                not callable(hints_method)
-                or need is None
-                or need.goal_id != goal.goal_id
-            ):
+            if not callable(hints_method):
                 return {"ok": False, "status": "owner_device_choice_is_not_current"}
             try:
                 hints = hints_method(
