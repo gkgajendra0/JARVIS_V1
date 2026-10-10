@@ -159,6 +159,20 @@ def build_production_voice_runtime(
     provider_migration_rollback_trigger: asyncio.Event | None = None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
+    blockers = config.autonomous_acquisition_acceptance_config_blockers()
+    LOGGER.info(
+        "Autonomous capability-acquisition configuration | "
+        "configuration_eligible=%s lane=%s gicc_mode=%s "
+        "work_orchestration=%s development_specialist=%s "
+        "blockers=%s provider_connected_unverified=True "
+        "physical_acceptance_unverified=True",
+        not blockers,
+        config.runtime_lane.value,
+        config.gicc_mode.value,
+        config.work_orchestration_enabled,
+        config.development_engine_enabled,
+        ",".join(blockers) if blockers else "none",
+    )
     if config.wake_model_path is None:
         raise RuntimeError("wake model is required for Step-2 wake mode")
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
