@@ -607,6 +607,10 @@ class GiccAgentTools:
                     "verified_identity": False,
                 }
                 for item in candidates
+                # Goal-wide suggestions can include another physical device.
+                # Never present or bind it to this information need; keep
+                # the next consent decision scoped to the actual target.
+                if getattr(item, "evidence_ref", None) in result.need.evidence_refs
             ]
         # If this strictly one-time observation produced no fresh device
         # suggestion, provide the NEXT bounded scope to the owner instead of

@@ -744,7 +744,16 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
             return SimpleNamespace(need=updated)
 
         def pending_network_device_suggestions(self, *, goal_id, session_id):
-            return ()
+            # A different waiting device in this owner goal has a suggestion.
+            # It must not suppress the next TV-specific discovery scope.
+            return (
+                SimpleNamespace(
+                    evidence_ref="some-other-information-need",
+                    display_hint="Another camera",
+                    address="192.168.1.12",
+                    protocol="upnp",
+                ),
+            )
 
         def prepare_network_discovery_consent(self, *, goal_id, session_id):
             return prepare_pending_device_discovery_consent(
