@@ -717,9 +717,7 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
     store, goal, need = _data(tmp_path)
     conversation = ConversationSession(session_id=goal.source_session_id)
     conversation.start()
-    conversation.accept_turn(
-        ConversationRole.USER, "I approve the network discovery."
-    )
+    conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     result = GoalIntakeResult(
         disposition=GoalIntakeDisposition.WAITING_INFORMATION,
         goal=goal,
@@ -731,9 +729,7 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
             super().__init__(result)
             self.executions = 0
 
-        def authorize_and_discover_network(
-            self, *, goal_id, session_id, owner_turn_id
-        ):
+        def authorize_and_discover_network(self, *, goal_id, session_id, owner_turn_id):
             assert goal_id == goal.goal_id
             assert session_id == goal.source_session_id
             assert owner_turn_id == conversation.turns[-1].turn_id
