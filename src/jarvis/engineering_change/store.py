@@ -422,6 +422,19 @@ class ChangeStore:
                     found[change.change_id] = (change, gap)
         return tuple(found[key] for key in sorted(found))
 
+    def owner_acquisition_work_ids(self, change_id: str) -> tuple[str, ...]:
+        """Identify exact change-owned jobs, including non-stage acceptance work."""
+        change = self.require(change_id)
+        if change.process_key != "owner_capability_acquisition":
+            raise ChangeConflict("not a capability-acquisition change")
+        with self.work._lock, self.work._connect() as db:
+            rows = db.execute(
+                "SELECT work_id FROM work_items WHERE source_session_id=? "
+                "UNION SELECT work_id FROM engineering_change_stages WHERE change_id=?",
+                (f"change:{change_id}", change_id),
+            ).fetchall()
+        return tuple(sorted(str(row["work_id"]) for row in rows))
+
     def supersede_cancelled_owner_acquisition(
         self, change_id: str, *, goal_id: str, gap_id: str
     ) -> EngineeringChange:
