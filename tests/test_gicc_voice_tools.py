@@ -779,3 +779,124 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
     assert payload["next_network_discovery"]["owner_approval_required"] is True
     assert payload["next_network_discovery"]["scan_started"] is False
     assert runtime.executions == 1
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_binds_owner_selected_option_to_displayed_set(
+    tmp_path: Path,
+) -> None:
+    """Ambiguous discovered devices require a new exact owner option choice."""
+    from tests.test_gicc_network_consent import _data
+
+    from jarvis.conversation import ConversationSession
+
+    store, goal, need = _data(tmp_path)
+    updated = store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=("fresh-aep-option-a", "fresh-aep-option-b"),
+    )
+    conversation = ConversationSession(session_id=goal.source_session_id)
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "Find my TV.")
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(updated,),
+    )
+    options = (
+        SimpleNamespace(
+            evidence_ref="fresh-aep-option-a",
+            display_hint="TV vendor A",
+            address="192.168.1.10",
+            protocol="upnp",
+            neighbor_correlated=False,
+        ),
+        SimpleNamespace(
+            evidence_ref="fresh-aep-option-b",
+            display_hint="TV vendor B",
+            address="192.168.1.20",
+            protocol="upnp",
+            neighbor_correlated=False,
+        ),
+    )
+
+    class OptionsRuntime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.confirmed_ref = None
+            self.resumes = 0
+
+        def pending_network_device_suggestions(self, *, goal_id, session_id):
+            assert goal_id == goal.goal_id
+            assert session_id == goal.source_session_id
+            return options
+
+        def confirm_owner_discovered_device(
+            self,
+            *,
+            goal_id,
+            information_need_id,
+            session_id,
+            owner_turn_id,
+            selected_evidence_ref,
+        ):
+            assert goal_id == goal.goal_id
+            assert information_need_id == need.information_need_id
+            assert session_id == goal.source_session_id
+            assert owner_turn_id == conversation.turns[-1].turn_id
+            self.confirmed_ref = selected_evidence_ref
+            return WorldEntityRefV1.create(
+                entity_type="media_player",
+                canonical_name="Confirmed TV option B",
+                aliases=("my tv",),
+                provenance_refs=("owner_inventory:chosen-candidate",),
+            )
+
+        async def continue_goal(self, goal_id, *, retry_information=False):
+            assert goal_id == goal.goal_id and retry_information
+            self.resumes += 1
+            return result
+
+    runtime = OptionsRuntime()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    offered = await tools.pursue_owner_goal(None)
+    choices = offered["device_choice_sets"][0]
+    assert choices["information_need_id"] == need.information_need_id
+    assert [item["option"] for item in choices["options"]] == [1, 2]
+    assert choices["options"][1]["display_hint"] == "TV vendor B"
+
+    conversation.accept_turn(
+        ConversationRole.USER, "I confirm the discovered TV option 2 is mine."
+    )
+    for wrong_reference, wrong_digest in (
+        ("fresh-aep-option-a", choices["digest"]),
+        ("fresh-aep-option-b", "stale-choice-set"),
+    ):
+        rejected = await tools.confirm_discovered_device_identity(
+            None,
+            goal_id=goal.goal_id,
+            information_need_id=need.information_need_id,
+            selected_evidence_ref=wrong_reference,
+            displayed_choice_set_digest=wrong_digest,
+        )
+        assert rejected["status"] == "owner_device_choice_is_not_current"
+        assert runtime.confirmed_ref is None
+
+    accepted = await tools.confirm_discovered_device_identity(
+        None,
+        goal_id=goal.goal_id,
+        information_need_id=need.information_need_id,
+        selected_evidence_ref=choices["options"][1]["evidence_ref"],
+        displayed_choice_set_digest=choices["digest"],
+    )
+    assert accepted["owner_inventory_only"] is True
+    assert accepted["device_control_verified"] is False
+    assert runtime.confirmed_ref == "fresh-aep-option-b"
+    assert runtime.resumes == 1
