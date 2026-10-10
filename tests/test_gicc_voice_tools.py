@@ -414,6 +414,8 @@ async def test_gicc_voice_status_reads_canonical_objective_projection(
     assert found["goal_id"] == "goal_tv"
     assert found["verified_completion"] is False
     assert "Never infer overall completion" in str(listed["truth_note"])
+
+
 @pytest.mark.asyncio
 async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     tmp_path: Path,
