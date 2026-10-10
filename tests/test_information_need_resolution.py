@@ -278,3 +278,30 @@ def test_cancelled_need_cannot_restart_probes_or_owner_interactions(
     assert result.attempted_strategies == ()
     assert probe.calls == 0
     assert store.get_information_need(original.information_need_id) == cancelled
+
+
+def test_canonical_store_rejects_resurrection_of_cancelled_need(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    need = store.create_information_need(_need(goal))
+    cancelled = store.update_information_need_state(
+        need.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=need.revision,
+    )
+
+    with pytest.raises(GoalStoreConflict, match="cancelled"):
+        store.update_information_need_state(
+            need.information_need_id,
+            InformationNeedState.WAITING_FOR_OWNER,
+            expected_revision=cancelled.revision,
+        )
+    with pytest.raises(GoalStoreConflict, match="cancelled"):
+        store.resolve_information_need(
+            need.information_need_id,
+            resolution_ref="entity:tv-a",
+            expected_revision=cancelled.revision,
+        )
+
+    assert store.get_information_need(need.information_need_id) == cancelled
