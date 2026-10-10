@@ -145,10 +145,34 @@ class AcquisitionWorkContextResolver:
             "gicc_target_context",
         )
         if target_context is not None:
-            for item in target_context.payload.get("target_hints", ()):
+            target_values = target_context.payload.get("target_hints", ())
+            if not isinstance(target_values, (list, tuple)):
+                raise AcquisitionProtocolError("GICC target hints are not a sequence")
+            for item in target_values:
                 normalized = " ".join(str(item).split()).strip().casefold()
-                if normalized:
+                if normalized and not normalized.startswith("entity_id:"):
                     hints.add(normalized)
+
+            # Project the actual canonical entity ID only from matching,
+            # independently owner-confirmed inventory lineage. Never treat
+            # a freeform artifact hint or the original goal's claimed ID as
+            # the independent fact that would allow a target mismatch.
+            target_id = str(
+                target_context.payload.get("target_entity_id") or ""
+            ).strip()
+            if (
+                link is not None
+                and target_id
+                and target_id == link.payload.get("target_entity_id")
+            ):
+                from jarvis.goal_intelligence.world import (
+                    has_independent_target_provenance,
+                )
+
+                if has_independent_target_provenance(
+                    target_context.payload.get("provenance_refs") or ()
+                ):
+                    hints.add(f"entity_id:{target_id}".casefold())
 
         # An acquisition architecture is an implementation *proposal*.
         # Its vendor, model, platform and protocol fields cannot establish

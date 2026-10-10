@@ -986,3 +986,48 @@ def test_canonical_target_context_does_not_reimport_stale_goal_platform(
     assert "platform:roku" not in independently_reviewed
     assert "entity_name:confirmed owner tv" in independently_reviewed
     assert "platform:roku" in goal.target_hints
+
+
+def test_canonical_target_id_is_independent_of_old_goal_binding(tmp_path) -> None:
+    _, store, _, changes = _changes(tmp_path)
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my actual TV",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "entity_id:old-roku"),
+        source_session_id="owner-target-drift",
+        source_turn_id="old-target-request",
+        now_epoch=100.0,
+    )
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(goal, source_revision=REVISION)
+    assert admission.change is not None
+    change_id = admission.change.change_id
+    store.add_artifact(
+        change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "target_entity_type": "television",
+            "target_entity_id": "verified-vidaa",
+        },
+    )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "target_entity_type": "television",
+            "target_entity_id": "verified-vidaa",
+            "provenance_refs": ["owner_inventory:explicit_verified_device"],
+            "target_hints": [
+                "entity_type:television",
+                "entity_id:untrusted-spoofed-id",
+            ],
+        },
+    )
+    context = SimpleNamespace(change_id=change_id, goal=goal)
+    canonical = AcquisitionWorkContextResolver(store).canonical_target_hints(context)
+    assert "entity_id:verified-vidaa" in canonical
+    assert "entity_id:old-roku" not in canonical
+    assert "entity_id:untrusted-spoofed-id" not in canonical
