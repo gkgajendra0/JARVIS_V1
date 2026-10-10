@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
@@ -17,6 +18,9 @@ from jarvis.capability_acquisition.source import (
     AcquisitionContextV1,
     CapabilitySourceRegistry,
 )
+from jarvis.capability_acquisition.target_compatibility import (
+    evaluate_candidate_target_compatibility,
+)
 from jarvis.capability_registry.compatibility import CompatibilityVerdict
 from jarvis.capability_registry.models import PackageDisposition
 from jarvis.capability_registry.projection import CapabilityManagementMode
@@ -24,6 +28,18 @@ from jarvis.capability_registry.projection import CapabilityManagementMode
 
 class AcquisitionResolutionError(RuntimeError):
     """Candidate evidence is contradictory or cannot be resolved safely."""
+
+
+class AcquisitionCandidateAdvisor(Protocol):
+    """Optional bounded advisor for equivalent already-safe candidates."""
+
+    def select(
+        self,
+        *,
+        goal: OwnerCapabilityGoalV1,
+        candidates: tuple[AcquisitionCandidateV1, ...],
+        evaluations: tuple[AcquisitionCandidateEvaluationV1, ...],
+    ) -> str | None: ...
 
 
 _STRATEGY_RANK = {
@@ -98,31 +114,45 @@ class AcquisitionResolutionResult:
 class CapabilityAcquisitionResolver:
     """Discover, evaluate and choose candidates without creating execution Authority."""
 
-    def __init__(self, sources: CapabilitySourceRegistry) -> None:
+    def __init__(
+        self,
+        sources: CapabilitySourceRegistry,
+        *,
+        advisor: AcquisitionCandidateAdvisor | None = None,
+    ) -> None:
         if not isinstance(sources, CapabilitySourceRegistry):
             raise TypeError("sources must be CapabilitySourceRegistry")
         self.sources = sources
+        self.advisor = advisor
 
     @staticmethod
     def _deduplicate(
         candidates: tuple[AcquisitionCandidateV1, ...],
     ) -> tuple[AcquisitionCandidateV1, ...]:
-        by_identity: dict[
-            tuple[AcquisitionSourceKind, str, str | None, str | None],
-            AcquisitionCandidateV1,
-        ] = {}
+        by_identity: dict[tuple[object, ...], AcquisitionCandidateV1] = {}
         for candidate in candidates:
-            key = (
-                candidate.source_kind,
-                candidate.source_identity,
-                candidate.source_version,
-                candidate.source_digest,
-            )
+            if candidate.source_digest is None:
+                # Discovery-time candidates are provisional observations, not
+                # immutable source identities. Keep semantically distinct
+                # observations separate until verification assigns a digest,
+                # while still collapsing exact duplicate payloads.
+                key = ("provisional", candidate.digest)
+            else:
+                key = (
+                    "immutable",
+                    candidate.source_kind,
+                    candidate.source_identity,
+                    candidate.source_version,
+                    candidate.source_digest,
+                )
             existing = by_identity.get(key)
             if existing is None:
                 by_identity[key] = candidate
                 continue
-            if existing.digest != candidate.digest:
+            if (
+                candidate.source_digest is not None
+                and existing.digest != candidate.digest
+            ):
                 raise AcquisitionResolutionError(
                     "one immutable source identity produced contradictory candidate evidence"
                 )
@@ -196,6 +226,8 @@ class CapabilityAcquisitionResolver:
         goal: OwnerCapabilityGoalV1,
         candidate: AcquisitionCandidateV1,
         context: AcquisitionContextV1,
+        *,
+        canonical_target_hints: tuple[str, ...] = (),
     ) -> AcquisitionCandidateEvaluationV1:
         evidence_complete = bool(candidate.evidence_refs) and (
             candidate.source_digest is not None
@@ -212,6 +244,14 @@ class CapabilityAcquisitionResolver:
             )
             reason_codes.extend(existing_reasons)
 
+        target = evaluate_candidate_target_compatibility(
+            goal,
+            candidate,
+            canonical_target_hints=canonical_target_hints,
+        )
+        requirements_compatible = requirements_compatible and target.compatible
+        reason_codes.extend(target.reason_codes)
+
         return AcquisitionCandidateEvaluationV1.create(
             candidate,
             requested_operations=goal.required_operations,
@@ -226,6 +266,8 @@ class CapabilityAcquisitionResolver:
         goal: OwnerCapabilityGoalV1,
         candidates: tuple[AcquisitionCandidateV1, ...],
         context: AcquisitionContextV1,
+        *,
+        canonical_target_hints: tuple[str, ...] = (),
     ) -> AcquisitionResolutionResult:
         """Evaluate/select an already evidenced candidate set deterministically."""
 
@@ -238,17 +280,22 @@ class CapabilityAcquisitionResolver:
 
         normalized = self._deduplicate(candidates)
         evaluations = tuple(
-            self.evaluate(goal, candidate, context) for candidate in normalized
+            self.evaluate(
+                goal,
+                candidate,
+                context,
+                canonical_target_hints=canonical_target_hints,
+            )
+            for candidate in normalized
         )
         selectable = [
             (candidate, evaluation)
             for candidate, evaluation in zip(normalized, evaluations, strict=True)
             if evaluation.disposition is AcquisitionDisposition.SELECTABLE
         ]
-        selected = (
-            None
-            if not selectable
-            else min(
+        selected = None
+        if selectable:
+            ranked = sorted(
                 selectable,
                 key=lambda pair: (
                     _STRATEGY_RANK[pair[0].strategy],
@@ -256,8 +303,37 @@ class CapabilityAcquisitionResolver:
                     _SOURCE_RANK[pair[0].source_kind],
                     pair[0].candidate_id,
                 ),
-            )[0].candidate_id
-        )
+            )
+            best = ranked[0]
+            best_hard_rank = (
+                _STRATEGY_RANK[best[0].strategy],
+                _TRUST_RANK[best[0].trust_class],
+                _SOURCE_RANK[best[0].source_kind],
+            )
+            equivalent = tuple(
+                pair
+                for pair in ranked
+                if (
+                    _STRATEGY_RANK[pair[0].strategy],
+                    _TRUST_RANK[pair[0].trust_class],
+                    _SOURCE_RANK[pair[0].source_kind],
+                )
+                == best_hard_rank
+            )
+            selected = best[0].candidate_id
+            if self.advisor is not None and len(equivalent) > 1:
+                advised = self.advisor.select(
+                    goal=goal,
+                    candidates=tuple(pair[0] for pair in equivalent),
+                    evaluations=tuple(pair[1] for pair in equivalent),
+                )
+                if advised is not None:
+                    allowed = {pair[0].candidate_id for pair in equivalent}
+                    if advised not in allowed:
+                        raise AcquisitionResolutionError(
+                            "candidate advisor selected outside deterministic safe tier"
+                        )
+                    selected = advised
         return AcquisitionResolutionResult(
             candidates=normalized,
             evaluations=evaluations,
@@ -268,6 +344,8 @@ class CapabilityAcquisitionResolver:
         self,
         goal: OwnerCapabilityGoalV1,
         context: AcquisitionContextV1,
+        *,
+        canonical_target_hints: tuple[str, ...] = (),
     ) -> AcquisitionResolutionResult:
         if not isinstance(goal, OwnerCapabilityGoalV1):
             raise TypeError("goal must be OwnerCapabilityGoalV1")
@@ -282,4 +360,9 @@ class CapabilityAcquisitionResolver:
                     "source adapter returned an invalid candidate"
                 )
             discovered.extend(results)
-        return self.resolve_candidates(goal, tuple(discovered), context)
+        return self.resolve_candidates(
+            goal,
+            tuple(discovered),
+            context,
+            canonical_target_hints=canonical_target_hints,
+        )

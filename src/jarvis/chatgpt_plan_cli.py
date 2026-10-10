@@ -53,10 +53,21 @@ def _select_model(
                 f"{requested_model}"
             )
         selected = requested_model
-    elif current in slugs:
+    elif current in slugs and "astra" not in str(current).casefold():
         selected = current
     else:
-        selected = slugs[0]
+        preferred_defaults = (
+            "gpt-6.1-sol",
+            "gpt-6-sol",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-6-luna",
+            "gpt-5.6-luna",
+        )
+        selected = next(
+            (candidate for candidate in preferred_defaults if candidate in slugs),
+            slugs[0],
+        )
 
     print("Available ChatGPT-plan models:")
     for model in models:

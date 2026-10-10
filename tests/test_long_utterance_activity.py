@@ -52,7 +52,7 @@ def _mark_session_ready(session: _FakeSession) -> None:
     )
 
 
-def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
+def test_voice_session_uses_provider_native_activity_without_local_vad(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -70,7 +70,8 @@ def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
     session, _bridge = create_voice_session(JarvisConfig())
 
     assert session is fake_session
-    assert "vad" not in captured
+    assert "vad" in captured
+    assert captured["vad"] is None
     turn_handling = captured["turn_handling"]
     assert turn_handling["turn_detection"] is None
     assert turn_handling["interruption"]["enabled"] is True

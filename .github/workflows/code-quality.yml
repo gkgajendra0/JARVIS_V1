@@ -1,5 +1,9 @@
 name: Code Quality
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  POWERSHELL_TELEMETRY_OPTOUT: "1"
+
 on:
   push:
     branches:
@@ -61,8 +65,19 @@ jobs:
               print(f"Playwright Chromium launch ready: {executable}")
           PY
 
-      - name: Run unit tests
-        run: python -m pytest -q
+      - name: Run unit tests without internet access
+        run: |
+          sudo --preserve-env=DOTNET_CLI_TELEMETRY_OPTOUT,POWERSHELL_TELEMETRY_OPTOUT unshare --net -- bash -c '
+            ip link set lo up
+            exec runuser -u "$1" -- "${@:2}"
+          ' _ "$(id -un)" "$(command -v python)" -m pytest -q --junitxml=full-suite.xml
+
+      - name: Preserve full-suite results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-suite-evidence
+          path: full-suite.xml
 
   windows-hello-helper:
     runs-on: windows-latest
@@ -191,6 +206,47 @@ jobs:
           import dulwich; import uroman; import jellyfish;
           print('Unified Windows Hands Python dependencies ready')"
 
+      - name: Parse C6 LLMLingua owner PowerShell
+        shell: powershell
+        run: |
+          $scripts = @(
+            "tools/research/c6_llmlingua_owner_acceptance.ps1",
+            "tools/research/c6_llmlingua_current_token_probe.ps1"
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "C6 owner PowerShell has parse errors: $script"
+            }
+          }
+
+      - name: Probe C6 current-token direct script execution
+        shell: powershell
+        run: |
+          & python tools/research/c6_llmlingua_current_token_probe.py --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "C6 current-token probe failed direct script import/argument parsing."
+          }
+
+      - name: Execute C6 owner dependency version probe
+        shell: powershell
+        run: |
+          $lines = & python tools/research/c6_dependency_probe.py
+          if ($LASTEXITCODE -ne 0) {
+            throw "C6 owner dependency probe failed to execute."
+          }
+          $probe = (($lines -join [Environment]::NewLine) | ConvertFrom-Json)
+          if ([string]$probe.jsonschema_version -ne "4.26.0") {
+            throw "Expected jsonschema==4.26.0, found '$($probe.jsonschema_version)'."
+          }
+
       - name: Run Windows multilingual Hands regressions
         run: >-
           python -m pytest -q
@@ -215,6 +271,14 @@ jobs:
           python -m pytest -q
           tests/test_windows_dpapi.py
           tests/test_engineering_substrate_secrets_windows.py
+
+      - name: Validate Windows passive and gated AEP device discovery
+        run: >-
+          python -m pytest -q
+          tests/test_gicc_passive_windows_neighbors.py
+          tests/test_gicc_windows_aep.py
+          tests/test_gicc_aep_authority.py
+          tests/test_gicc_windows_lan_scope.py
 
       - name: Run Phase 5E disposable secret acceptance
         run: python -m jarvis.engineering_substrate.secrets.acceptance
@@ -255,6 +319,64 @@ jobs:
           python -m pytest -q
           tests/test_phase9_evaluation.py
 
+      - name: Run Windows Phase 9 adversarial system hardening
+        env:
+          JARVIS_E2E_REPORT_DIR: windows-acquisition-evidence
+        run: >-
+          python -m pytest -q
+          tests/test_capability_acquisition_system_hardening.py
+          tests/test_capability_acquisition_vertical.py
+          tests/test_capability_acquisition_owner_flow_hardening.py
+          tests/test_capability_acquisition_completion_hardening.py
+          tests/test_capability_acquisition_architecture_gicc_contract.py
+          tests/test_capability_acquisition_promotion.py
+          tests/test_phase9_voice_entrypoint.py
+          tests/test_global_supervisor_existing_objective_preflight.py
+          tests/test_engineering_substrate_discovery_onvif.py
+          tests/test_goal_world_discovery.py
+          --junitxml=windows-acquisition-evidence/junit.xml
+
+      - name: Preserve Windows acquisition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-acquisition-evidence
+          path: windows-acquisition-evidence/
+
+
+  acquisition-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Preinstall LiveKit BlingFire wheel
+        run: >-
+          python -m pip install
+          "https://files.pythonhosted.org/packages/8f/27/408c435cbed31fa3601ff32ef0499ff594cd898b483c9b4017e9df906de6/livekit_blingfire-1.1.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl"
+      - name: Install acquisition test dependencies
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
+      - name: Build governed development sandbox
+        run: docker build -f tools/development-sandbox/Dockerfile -t jarvis-acquisition-test:ci .
+      - name: Run acquisition vertical with required Docker execution
+        env:
+          JARVIS_E2E_REQUIRE_DOCKER: "1"
+          JARVIS_DEVELOPMENT_TEST_IMAGE: jarvis-acquisition-test:ci
+          JARVIS_E2E_REPORT_DIR: acquisition-evidence
+        run: |
+          sudo --preserve-env=JARVIS_E2E_REQUIRE_DOCKER,JARVIS_DEVELOPMENT_TEST_IMAGE,JARVIS_E2E_REPORT_DIR,DOTNET_CLI_TELEMETRY_OPTOUT,POWERSHELL_TELEMETRY_OPTOUT unshare --net -- bash -c '
+            ip link set lo up
+            exec runuser -u "$1" -- "${@:2}"
+          ' _ "$(id -un)" "$(command -v python)" -m pytest tests/test_capability_acquisition_vertical.py -q --junitxml=acquisition-evidence/junit.xml
+      - name: Preserve acquisition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acquisition-docker-evidence
+          path: acquisition-evidence/
 
   promotion-policy:
     if: always()
@@ -263,15 +385,18 @@ jobs:
       - pytest
       - windows-hello-helper
       - windows-dpapi
+      - acquisition-docker
     runs-on: ubuntu-latest
     steps:
       - name: Require all promotion validations to succeed
         env:
+          ACQUISITION_DOCKER_RESULT: ${{ needs.acquisition-docker.result }}
           RUFF_RESULT: ${{ needs.ruff.result }}
           PYTEST_RESULT: ${{ needs.pytest.result }}
           WINDOWS_HELLO_RESULT: ${{ needs.windows-hello-helper.result }}
           WINDOWS_DPAPI_RESULT: ${{ needs.windows-dpapi.result }}
         run: |
+          test "$ACQUISITION_DOCKER_RESULT" = "success"
           test "$RUFF_RESULT" = "success"
           test "$PYTEST_RESULT" = "success"
           test "$WINDOWS_HELLO_RESULT" = "success"

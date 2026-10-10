@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.engineering_change.gates import GateChallenge, GateKind, GateService
 from jarvis.engineering_change.models import ChangeArtifact, ChangeConflict
 from jarvis.engineering_change.store import ChangeStore
@@ -199,19 +204,39 @@ class PromotionCoordinator:
             artifact.artifact_id,
         )
         work = self._changes.work.require(candidate.development_work_id)
+        owner_message = SupervisorOwnerCommunication.compile(
+            OwnerCommunicationIntentV1.create(
+                kind=OwnerCommunicationKind.CHANGE_GATE,
+                event_key=f"phase7:{attempt.attempt_id}:{artifact.digest}",
+                summary=(
+                    "Promotion approval is required for the exact verified release "
+                    "evidence; the gate itself is not an execution permit."
+                ),
+                change_id=change_id,
+                work_id=work.work_id,
+                gate_id=gate.gate_id,
+                artifact_digest=artifact.digest,
+                artifact_revision=artifact.revision,
+                proposal_summary={
+                    "review_kind": "promotion",
+                    "pr_number": evidence.pr_number,
+                    "candidate_head_sha": evidence.candidate_head_sha,
+                    "tested_merge_sha": evidence.tested_merge_sha,
+                    "evidence_digest": evidence.digest,
+                    "lkg_release_sha": evidence.lkg_release_sha,
+                },
+            )
+        )
+        if owner_message is None:
+            raise PromotionPreparationError(
+                "owner_promotion_message_suppressed",
+                "Supervisor suppressed required promotion review communication",
+            )
         self._changes.work.enqueue_delivery(
             work=work,
             kind=WorkDeliveryKind.OWNER_INPUT,
-            message=(
-                f"Review EngineeringChange {change_id} promotion evidence: "
-                f"PR #{evidence.pr_number}, candidate {evidence.candidate_head_sha}, "
-                f"tested merge {evidence.tested_merge_sha}, "
-                f"evidence SHA-256 {evidence.digest}, LKG {evidence.lkg_release_sha}. "
-                f"Approval authorizes only this exact evidence through the governed "
-                f"Phase-7 promotion/Authority path. Say 'approve promotion' if this "
-                f"is the only pending promotion, or 'approve {gate.gate_id}'."
-            ),
-            event_key=f"phase7:{attempt.attempt_id}:{artifact.digest}",
+            message=owner_message.message,
+            event_key=owner_message.event_key,
         )
         return PreparedPromotionReview(
             candidate=candidate,

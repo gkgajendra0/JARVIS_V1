@@ -19,6 +19,7 @@ from jarvis.brain_routing.models import (
     GlobalBrainRouteFacts,
 )
 from jarvis.brain_routing.store import BrainRouteStore
+from jarvis.engineering_substrate.canonical import canonical_digest
 from jarvis.model_routing.models import (
     EvidenceSizeClass,
     LocalityRequirement,
@@ -30,6 +31,7 @@ from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.brain import BrainDecision, BrainReasoner, BrainRequest
 from jarvis.work.context import WorkContextMode
 from jarvis.work.models import WorkStep
+from jarvis.work.reasoner import work_reasoning_contract_digest
 from jarvis.work.store import SQLiteWorkStore
 
 
@@ -179,6 +181,65 @@ def _validate_deterministic_decision(
     return decision
 
 
+def _context_replay_snapshot(
+    request: BrainRequest,
+    *,
+    all_steps: tuple[WorkStep, ...],
+) -> dict[str, object]:
+    """Capture bounded facts needed to reconstruct one exact C6 replay.
+
+    Canonical WorkStep payloads stay in WorkStore rather than being duplicated here.
+    Digests bind replay to the exact optimized projection shadowed by the legacy call.
+    If external context evidence cannot be reconstructed later, replay fails closed
+    instead of benchmarking a different prompt.
+    """
+
+    pack = request.context_pack
+    pack_payload = (
+        None
+        if pack is None
+        else {
+            "recent_steps": pack.recent_steps_payload(),
+            "evidence": list(pack.evidence),
+            "history_manifest": pack.history_manifest_payload(),
+        }
+    )
+    return {
+        "schema": "c6_work_reasoning_snapshot.v1",
+        "work_version": request.work.version,
+        "work_state": request.work.state.value,
+        "work_status_detail": request.work.status_detail,
+        "work_current_step_id": request.work.current_step_id,
+        "purpose": request.purpose,
+        "allowed_actions": [
+            {
+                "name": action.name,
+                "description": action.description,
+                "parameter_schema": action.parameter_schema,
+            }
+            for action in request.allowed_actions
+        ],
+        "recent_step_ids": [step.step_id for step in request.recent_steps],
+        "history_step_count": len(all_steps),
+        "history_step_ids_digest": canonical_digest(
+            [step.step_id for step in all_steps]
+        ),
+        "evidence": list(request.evidence),
+        "reasoner_contract_digest": work_reasoning_contract_digest(),
+        "context_version": None if pack is None else pack.version,
+        "context_selected_step_ids": (
+            [] if pack is None else [step.step_id for step in pack.selected_steps]
+        ),
+        "context_evidence_count": 0 if pack is None else len(pack.evidence),
+        "context_evidence_digest": (
+            None if pack is None else canonical_digest(list(pack.evidence))
+        ),
+        "context_pack_digest": (
+            None if pack_payload is None else canonical_digest(pack_payload)
+        ),
+    }
+
+
 class GlobalBrainRouterReasoner:
     """Choose deterministic vs model reasoning without executing any action."""
 
@@ -254,6 +315,7 @@ class GlobalBrainRouterReasoner:
         route_kind: BrainRouteKind,
         reason_codes: tuple[str, ...],
         selected_action: str | None,
+        decision: BrainDecision | None = None,
         resolution: DeterministicResolution | None = None,
         shadow_match: bool | None = None,
         model_decision_id: str | None = None,
@@ -285,6 +347,17 @@ class GlobalBrainRouterReasoner:
                 shadow_match=shadow_match,
                 model_decision_id=model_decision_id,
                 model_target_id=model_target_id,
+                goal_complete=(None if decision is None else decision.goal_complete),
+                needs_owner=(None if decision is None else decision.needs_owner),
+                owner_question=(None if decision is None else decision.owner_question),
+                parameters_digest=(
+                    None if decision is None else canonical_digest(decision.parameters)
+                ),
+                reasoner_contract_digest=(
+                    work_reasoning_contract_digest()
+                    if route_kind is BrainRouteKind.MODEL and decision is not None
+                    else None
+                ),
                 outcome_code=outcome_code,
             )
         )
@@ -328,6 +401,7 @@ class GlobalBrainRouterReasoner:
                 route_kind=BrainRouteKind.DETERMINISTIC,
                 reason_codes=resolution.reason_codes,
                 selected_action=decision.action,
+                decision=decision,
                 resolution=resolution,
                 outcome_code="model_bypassed",
             )
@@ -385,9 +459,39 @@ class GlobalBrainRouterReasoner:
                 route_kind=BrainRouteKind.MODEL,
                 reason_codes=reason_codes,
                 selected_action=actual.action,
+                decision=actual,
                 resolution=(resolution if resolution.matched else None),
                 shadow_match=shadow_match,
                 model_decision_id=model_decision_id,
                 model_target_id=model_target_id,
             )
+        if (
+            request.context_mode is WorkContextMode.SHADOW
+            and request.context_pack is not None
+        ):
+            # Keep replay provenance restart-safe without making optional C6
+            # benchmark evidence an availability dependency for ordinary Work.
+            # A retry may backfill a missing snapshot after a crash, but an
+            # existing snapshot produced by an older reasoning contract remains
+            # immutable. C6 replay will reject that older contract later.
+            snapshot = _context_replay_snapshot(
+                request,
+                all_steps=all_steps,
+            )
+            existing_snapshot = self._route_store.get_context_snapshot(
+                facts.route_request_id
+            )
+            recorded_route = self._route_store.get(facts.route_request_id)
+            if (
+                existing_snapshot is None
+                and recorded_route is not None
+                and recorded_route.reasoner_contract_digest
+                == snapshot.get("reasoner_contract_digest")
+            ):
+                self._route_store.record_context_snapshot(
+                    route_request_id=facts.route_request_id,
+                    work_id=request.work.work_id,
+                    snapshot=snapshot,
+                    created_at_epoch=float(self._clock()),
+                )
         return actual

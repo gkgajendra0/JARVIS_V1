@@ -59,6 +59,7 @@ class DeliveryPolicy(str, Enum):
 
 class WorkDeliveryKind(str, Enum):
     OWNER_INPUT = "owner_input"
+    CHANGE_GATE = "change_gate"
     RESOURCE_BLOCKER = "resource_blocker"
     PROGRESS = "progress"
     COMPLETION = "completion"
@@ -68,6 +69,7 @@ class WorkDeliveryKind(str, Enum):
 class WorkDeliveryState(str, Enum):
     PENDING = "pending"
     DELIVERED = "delivered"
+    CANCELLED = "cancelled"
 
 
 class WorkType(str, Enum):
@@ -182,7 +184,7 @@ class WorkDelivery:
             raise ValueError("delivery next_attempt_at must be timezone-aware")
 
     def retry_after(self, seconds: float, *, reason: str) -> WorkDelivery:
-        if self.state is WorkDeliveryState.DELIVERED:
+        if self.state in {WorkDeliveryState.DELIVERED, WorkDeliveryState.CANCELLED}:
             return self
         if seconds <= 0:
             raise ValueError("delivery retry delay must be positive")
@@ -197,7 +199,7 @@ class WorkDelivery:
         )
 
     def delivered(self) -> WorkDelivery:
-        if self.state is WorkDeliveryState.DELIVERED:
+        if self.state in {WorkDeliveryState.DELIVERED, WorkDeliveryState.CANCELLED}:
             return self
         return replace(
             self,

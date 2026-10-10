@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from jarvis.engineering_substrate.discovery_onvif import OnvifBackend
     from jarvis.engineering_substrate.discovery_ssdp import SsdpBackend
 
 from jarvis.capabilities.discovery import (
@@ -627,8 +628,13 @@ def default_discovery_broker(
     *,
     backend: MdnsBackend | None = None,
     ssdp_backend: SsdpBackend | None = None,
+    onvif_backend: OnvifBackend | None = None,
     clock=time.time,
 ) -> DiscoveryBroker:
+    from jarvis.engineering_substrate.discovery_onvif import (
+        DEFAULT_ONVIF_POLICY,
+        OnvifWsDiscoveryAdapter,
+    )
     from jarvis.engineering_substrate.discovery_ssdp import (
         DEFAULT_SSDP_POLICY,
         SsdpUpnpAdapter,
@@ -644,8 +650,13 @@ def default_discovery_broker(
         clock=clock,
         max_freshness_seconds=DEFAULT_SSDP_POLICY.max_freshness_seconds,
     )
+    onvif_adapter = OnvifWsDiscoveryAdapter(
+        backend=onvif_backend,
+        clock=clock,
+        max_freshness_seconds=DEFAULT_ONVIF_POLICY.max_freshness_seconds,
+    )
     return DiscoveryBroker(
-        policies=(DEFAULT_MDNS_POLICY, DEFAULT_SSDP_POLICY),
-        adapters=(mdns_adapter, ssdp_adapter),
+        policies=(DEFAULT_MDNS_POLICY, DEFAULT_SSDP_POLICY, DEFAULT_ONVIF_POLICY),
+        adapters=(mdns_adapter, ssdp_adapter, onvif_adapter),
         clock=clock,
     )

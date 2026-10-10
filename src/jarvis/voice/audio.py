@@ -15,6 +15,7 @@ import numpy as np
 from livekit import rtc
 from livekit.agents.voice import io
 
+from jarvis.voice.safe_media_devices import SafeMediaDevices
 from jarvis.voice.wakeword import LiveKitWakeDetector
 
 LOGGER = logging.getLogger(__name__)
@@ -648,7 +649,7 @@ class LocalAudioRuntime:
     async def start(self) -> None:
         if self._router_task is not None:
             raise RuntimeError("local audio runtime is already started")
-        self._media_devices = rtc.MediaDevices(
+        self._media_devices = SafeMediaDevices(
             input_sample_rate=DEVICE_SAMPLE_RATE,
             output_sample_rate=DEVICE_SAMPLE_RATE,
             num_channels=DEVICE_CHANNELS,

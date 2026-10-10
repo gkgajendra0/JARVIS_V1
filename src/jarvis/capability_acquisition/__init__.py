@@ -73,6 +73,11 @@ from .standard_sources import (
     owner_configured_evidence,
     sdk_library_evidence,
 )
+from .target_compatibility import (
+    CandidateTargetCompatibilityV1,
+    TargetCompatibilityVerdict,
+    evaluate_candidate_target_compatibility,
+)
 from .verification import (
     CapabilityAcquisitionDevelopmentCompletionHandler,
     CapabilityCandidateError,
@@ -104,6 +109,7 @@ __all__ = [
     "AcquisitionTrustClass",
     "AcquisitionWorkContextResolver",
     "AsyncApiCapabilitySourceAdapter",
+    "CandidateTargetCompatibilityV1",
     "CapabilityAcquisitionAdmission",
     "CapabilityAcquisitionAdmissionDisposition",
     "CapabilityAcquisitionArchitectureError",
@@ -140,6 +146,7 @@ __all__ = [
     "SourceEvidenceError",
     "StandardSourceEvidenceV1",
     "StaticAcquisitionContextProvider",
+    "TargetCompatibilityVerdict",
     "acquisition_completion_guard",
     "asyncapi_contract_evidence",
     "build_acquisition_protocol_executors",
@@ -148,6 +155,7 @@ __all__ = [
     "ensure_capability_candidate_acceptance_current",
     "ensure_capability_release_bridge_current",
     "ensure_capability_substrate_requirements_current",
+    "evaluate_candidate_target_compatibility",
     "mcp_server_evidence",
     "openapi_contract_evidence",
     "owner_configured_evidence",

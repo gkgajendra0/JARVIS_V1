@@ -59,10 +59,21 @@ PERSISTABLE_SETTINGS = frozenset(
         "JARVIS_MEMORY_SEMANTIC_RECALL_MODEL",
         "JARVIS_AUTONOMY_MODE",
         "JARVIS_WORK_ORCHESTRATION_ENABLED",
+        "JARVIS_WORK_PAID_FALLBACK_ENABLED",
+        "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+        "JARVIS_DEVELOPMENT_ENGINE_MODEL",
+        "JARVIS_WORK_CONTEXT_MODE",
         "JARVIS_GLOBAL_BRAIN_ROUTER_MODE",
+        "JARVIS_JEV_BOUNDED_DECISIONS_ENABLED",
+        "JARVIS_JEV_BENCHMARK_ADMITTED",
+        "JARVIS_JEV_BENCHMARK_REPORT_PATH",
+        "JARVIS_JEV_MODEL",
+        "JARVIS_JEV_ENDPOINT",
+        "JARVIS_JEV_MIN_CONFIDENCE",
         "JARVIS_WORK_ORCHESTRATION_MODEL",
         "JARVIS_WORK_GLOBAL_CONCURRENCY",
         "JARVIS_DEV_TEST_DOCKER_IMAGE",
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
         "JARVIS_UV_EXECUTABLE_PATH",
         "JARVIS_UV_EXECUTABLE_SHA256",
         "JARVIS_GITHUB_PROMOTION_ENABLED",
@@ -183,6 +194,41 @@ def save_machine_settings(
     )
     os.replace(temporary, target)
     return target
+
+
+def configured_alias_text(
+    names: tuple[str, ...],
+    machine_settings: Mapping[str, str],
+    default: str | None = None,
+) -> str | None:
+    """Resolve one logical setting across canonical/legacy names safely.
+
+    Persisted machine values remain authoritative across the whole alias family
+    unless runtime environment overrides were explicitly enabled. Names are
+    evaluated in priority order within the chosen source.
+    """
+
+    normalized = tuple(
+        dict.fromkeys(str(name).strip() for name in names if str(name).strip())
+    )
+    if not normalized:
+        raise ValueError("configured alias names must not be empty")
+
+    override = runtime_environment_overrides_enabled()
+    if not override:
+        for name in normalized:
+            if name in machine_settings:
+                return machine_settings[name]
+
+    for name in normalized:
+        environment_value = os.getenv(name)
+        if environment_value is not None:
+            return environment_value
+
+    for name in normalized:
+        if name in machine_settings:
+            return machine_settings[name]
+    return default
 
 
 def configured_text(

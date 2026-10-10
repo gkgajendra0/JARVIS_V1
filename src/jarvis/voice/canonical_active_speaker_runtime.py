@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
 
@@ -22,6 +22,8 @@ from jarvis.conversation import (
     ConversationSession,
     ConversationStatus,
 )
+from jarvis.engineering_change.gates import GateService
+from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.identity.speaker_identity import assess_speaker_segment
 from jarvis.identity.speaker_shadow import EnrolledSpeakerShadowObserver
 from jarvis.identity.speaker_turn import SpeakerTurnAudio
@@ -41,6 +43,12 @@ from jarvis.work.runtime import WorkRuntime
 LOGGER = logging.getLogger(__name__)
 
 
+class _ManagedBackgroundRuntime(Protocol):
+    def start(self) -> None: ...
+
+    async def close(self) -> None: ...
+
+
 class _SessionToolBundle:
     """Combine vision with per-session memory, research, and governed capabilities."""
 
@@ -54,6 +62,11 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        objective_status: OwnerObjectiveStatusResolver | None = None,
+        gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_tool_factory: Callable[[ConversationSession], list] | None = None,
+        allow_direct_capability_acquisition: bool = True,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -62,6 +75,23 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._objective_status = objective_status
+        if gicc_action_tool_factory is not None and gicc_tool_factory is not None:
+            raise ValueError(
+                "use either gicc_action_tool_factory or legacy gicc_tool_factory, not both"
+            )
+        self._gicc_action_tool_factory = (
+            gicc_action_tool_factory
+            if gicc_action_tool_factory is not None
+            else gicc_tool_factory
+        )
+        self._gicc_read_tool_factory = gicc_read_tool_factory
+        self._allow_direct_capability_acquisition = allow_direct_capability_acquisition
+        # A refreshed tool enumeration is not a new owner conversation. Keep
+        # status-bound engineering approvals and their per-turn replay guard
+        # on the same WorkAgentTools until the ConversationSession changes.
+        self._work_tool_session: ConversationSession | None = None
+        self._session_work_tools: WorkAgentTools | None = None
 
     @property
     def tools(self) -> list:
@@ -69,6 +99,14 @@ class _SessionToolBundle:
         conversation = self._conversation_getter()
         if conversation is None:
             return tools
+        pending_change_gate = False
+        if self._work_runtime is not None and self._work_runtime.changes is not None:
+            pending_change_gate = bool(
+                GateService(
+                    self._work_runtime.changes.store,
+                    verify_owner=lambda *_: False,
+                ).pending_gate_ids()
+            )
         if self._memory_runtime is not None:
             tools.extend(
                 MemoryAgentTools(
@@ -83,8 +121,30 @@ class _SessionToolBundle:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
             )
+        # A pending EngineeringChange decision is a protected continuation boundary.
+        # Keep read-only objective awareness available, but suppress goal-changing
+        # GICC actions so deictic speech such as "proceed" cannot become a new goal.
+        if self._gicc_read_tool_factory is not None:
+            tools.extend(self._gicc_read_tool_factory(conversation))
+        if self._gicc_action_tool_factory is not None and not pending_change_gate:
+            tools.extend(self._gicc_action_tool_factory(conversation))
         if self._work_runtime is not None:
-            tools.extend(WorkAgentTools(self._work_runtime, conversation).tools)
+            if (
+                self._work_tool_session is not conversation
+                or self._session_work_tools is None
+            ):
+                self._session_work_tools = WorkAgentTools(
+                    self._work_runtime,
+                    conversation,
+                    objective_status=self._objective_status,
+                    allow_capability_acquisition=self._allow_direct_capability_acquisition,
+                )
+                self._work_tool_session = conversation
+            tools.extend(
+                self._session_work_tools.tools_for(
+                    allow_capability_acquisition=not pending_change_gate,
+                )
+            )
         return tools
 
 
@@ -100,6 +160,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         research_service: CurrentResearchService | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
+        gicc_runtime: _ManagedBackgroundRuntime | None = None,
+        gicc_action_tool_factory: Callable[[ConversationSession], list] | None = None,
+        gicc_read_tool_factory: Callable[[ConversationSession], list] | None = None,
+        allow_direct_capability_acquisition: bool = True,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -203,11 +267,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._gicc_runtime = gicc_runtime
         if (
             memory_runtime is not None
             or research_service is not None
             or capability_runtime is not None
             or work_runtime is not None
+            or gicc_action_tool_factory is not None
+            or gicc_read_tool_factory is not None
         ):
             self._vision_tools = _SessionToolBundle(
                 self._vision_tools,
@@ -217,6 +284,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 research_service=research_service,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
+                objective_status=(
+                    None
+                    if gicc_runtime is None
+                    else getattr(gicc_runtime, "objective_status", None)
+                ),
+                gicc_action_tool_factory=gicc_action_tool_factory,
+                gicc_read_tool_factory=gicc_read_tool_factory,
+                allow_direct_capability_acquisition=(
+                    allow_direct_capability_acquisition
+                ),
             )
 
     @staticmethod
@@ -224,6 +301,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         normalized = " ".join(message.split())
         if kind is WorkDeliveryKind.OWNER_INPUT:
             return f"Sir, I need your input on a background task. {normalized}"
+        if kind is WorkDeliveryKind.CHANGE_GATE:
+            return (
+                f"Sir, an engineering change is waiting for your approval. {normalized}"
+            )
         if kind is WorkDeliveryKind.FAILURE:
             return f"Sir, a background task failed. {normalized}"
         return f"Sir, {normalized}"
@@ -234,6 +315,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         if kind is WorkDeliveryKind.OWNER_INPUT:
             return state is WorkState.WAITING_FOR_OWNER
+        if kind is WorkDeliveryKind.CHANGE_GATE:
+            return True
         if kind is WorkDeliveryKind.RESOURCE_BLOCKER:
             return state in {
                 WorkState.WAITING_RESOURCE,
@@ -322,6 +405,90 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         return owner_input_submitted.is_set()
 
+    @staticmethod
+    def _delivery_gate_id(event_key: str) -> str | None:
+        parts = str(event_key).split(":")
+        if len(parts) != 4 or parts[0] != "change-gate":
+            return None
+        gate_id = parts[2].strip()
+        if not gate_id.startswith("gate_"):
+            return None
+        return gate_id
+
+    async def _run_change_gate_interaction(
+        self,
+        *,
+        gate_id: str,
+        question: str,
+    ) -> bool:
+        """Open one bounded proactive conversation for an exact change gate."""
+
+        runtime = self._work_runtime
+        if runtime is None or runtime.changes is None:
+            raise RuntimeError(
+                "change-gate interaction requires EngineeringChange runtime"
+            )
+
+        normalized_question = " ".join(question.split())
+        if not normalized_question:
+            raise ValueError("change-gate question must not be empty")
+
+        bound_session: ConversationSession | None = None
+        bound_work_tools: WorkAgentTools | None = None
+
+        def session_tools(conversation: ConversationSession) -> list:
+            nonlocal bound_session, bound_work_tools
+            # Re-enumeration must not reset the same-turn approval replay guard.
+            if bound_session is not conversation or bound_work_tools is None:
+                bound_work_tools = WorkAgentTools(
+                    runtime,
+                    conversation,
+                    bound_change_gate_id=gate_id,
+                    allow_capability_acquisition=False,
+                )
+                bound_session = conversation
+            return [bound_work_tools.decide_bound_change_gate]
+
+        def gate_resolved() -> bool:
+            pending = GateService(
+                runtime.changes.store,
+                verify_owner=lambda *_: False,
+            ).pending_gate_ids()
+            return gate_id not in pending
+
+        spoken_prompt = (
+            "Sir, I have finished planning the requested engineering change. "
+            "I need your approval before development can start. "
+            "Should I proceed? Please say yes or no."
+        )
+        instructions = (
+            "Say exactly the following approval question and nothing else: "
+            + spoken_prompt
+            + " After the owner answers, use only the bound change-gate decision tool. "
+            "Natural affirmative or rejection wording is valid because the trusted "
+            "runtime already bound this session to one exact gate. Call the decision "
+            "tool at most once for each canonical USER turn. If the tool says the "
+            "answer was not understood, ask one concise yes-or-no clarification and "
+            "wait for a new USER turn; never retry the same turn."
+        )
+
+        try:
+            await self._run_one_session_owned(
+                initial_instructions=instructions,
+                initial_prompt_label="engineering change approval prompt",
+                fallback_prompt_text=spoken_prompt,
+                session_tool_factory=session_tools,
+                completion_predicate=gate_resolved,
+                completion_label=f"engineering change gate {gate_id}",
+            )
+        finally:
+            self._cancel_timeout()
+            self._active_end = None
+            if not self._shutdown.is_set():
+                self._state = VoiceRuntimeState.IDLE
+
+        return gate_resolved()
+
     async def _deliver_pending_work(self) -> None:
         """Speak durable Work notifications only at an exclusive idle boundary.
 
@@ -346,15 +513,42 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 await asyncio.sleep(0.25)
                 continue
 
-            due = runtime.store.list_due_deliveries(limit=5)
+            due = await asyncio.to_thread(runtime.store.list_due_deliveries, limit=5)
             if not due:
                 await asyncio.sleep(0.5)
                 continue
 
             delivery = due[0]
-            work = runtime.store.require(delivery.work_id)
+            work = await asyncio.to_thread(runtime.store.require, delivery.work_id)
+            if delivery.kind is WorkDeliveryKind.CHANGE_GATE:
+                gate_id = self._delivery_gate_id(delivery.event_key)
+                pending = (
+                    ()
+                    if runtime.changes is None
+                    else await asyncio.to_thread(
+                        lambda store=runtime.changes.store: GateService(
+                            store,
+                            verify_owner=lambda *_: False,
+                        ).pending_gate_ids()
+                    )
+                )
+                if gate_id is None or gate_id not in pending:
+                    await asyncio.to_thread(
+                        runtime.store.mark_delivery_delivered, delivery.delivery_id
+                    )
+                    LOGGER.info(
+                        "Obsolete engineering-change gate notification discarded | "
+                        "delivery_id=%s | work_id=%s | gate_id=%s",
+                        delivery.delivery_id,
+                        delivery.work_id,
+                        gate_id or "invalid",
+                    )
+                    await asyncio.sleep(0)
+                    continue
             if not self._work_delivery_is_current(delivery.kind, work.state):
-                runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                await asyncio.to_thread(
+                    runtime.store.mark_delivery_delivered, delivery.delivery_id
+                )
                 LOGGER.info(
                     "Obsolete background notification discarded | "
                     "delivery_id=%s | work_id=%s | kind=%s | current_state=%s",
@@ -400,7 +594,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                     provider_hint=None,
                                 ),
                             )
-                            deferred = runtime.store.schedule_delivery_retry(
+                            deferred = await asyncio.to_thread(
+                                runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="owner_input_unanswered",
@@ -416,14 +611,49 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             )
                         else:
                             spoken = True
+                    elif delivery.kind is WorkDeliveryKind.CHANGE_GATE:
+                        gate_id = self._delivery_gate_id(delivery.event_key)
+                        if gate_id is None:
+                            raise RuntimeError(
+                                "engineering-change delivery has no exact gate identity"
+                            )
+                        answered = await self._run_change_gate_interaction(
+                            gate_id=gate_id,
+                            question=delivery.message,
+                        )
+                        if not answered:
+                            retry_seconds = max(
+                                30.0,
+                                delivery_retry_delay_seconds(
+                                    failed_attempts=delivery.failed_attempts,
+                                    provider_hint=None,
+                                ),
+                            )
+                            deferred = await asyncio.to_thread(
+                                runtime.store.schedule_delivery_retry,
+                                delivery.delivery_id,
+                                delay_seconds=retry_seconds,
+                                reason="change_gate_unanswered",
+                            )
+                            LOGGER.info(
+                                "Engineering-change gate interaction ended without a "
+                                "decision; durable retry scheduled | delivery_id=%s | "
+                                "gate_id=%s | failed_attempts=%s | retry_in=%.1fs",
+                                delivery.delivery_id,
+                                gate_id,
+                                deferred.failed_attempts,
+                                retry_seconds,
+                            )
+                        else:
+                            spoken = True
                     else:
                         await self._speak_ephemeral_realtime_message(
                             output,
                             instructions=(
                                 "Deliver the following background-task notification to the "
-                                "owner in one or two brief, natural sentences using your "
-                                "established JARVIS voice and style. Preserve every concrete "
-                                "fact, number, blocker, question, and required owner action. "
+                                "owner in one short, natural sentence using your "
+                                "established JARVIS voice and style. Preserve the owner-relevant "
+                                "outcome, blocker, question, and required owner action. "
                                 "Do not mention prompts, models, tools, or internal routing. "
                                 "Do not add facts. Notification: " + delivery_text
                             ),
@@ -433,6 +663,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
+                    if isinstance(exc, TimeoutError) and delivery.kind in {
+                        WorkDeliveryKind.PROGRESS,
+                        WorkDeliveryKind.COMPLETION,
+                    }:
+                        spoken = True
+                        LOGGER.warning(
+                            "Background progress/completion speech timed out; "
+                            "consuming once without replay | delivery_id=%s | "
+                            "work_id=%s | kind=%s",
+                            delivery.delivery_id,
+                            delivery.work_id,
+                            delivery.kind.value,
+                        )
                     critical = delivery.kind in {
                         WorkDeliveryKind.RESOURCE_BLOCKER,
                         WorkDeliveryKind.FAILURE,
@@ -474,7 +717,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         else:
                             reason = f"realtime_voice_{type(exc).__name__.casefold()}"
 
-                        deferred = runtime.store.schedule_delivery_retry(
+                        deferred = await asyncio.to_thread(
+                            runtime.store.schedule_delivery_retry,
                             delivery.delivery_id,
                             delay_seconds=retry_seconds,
                             reason=reason,
@@ -508,6 +752,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 cooldown_seconds=self.config.wake_cooldown_seconds
                             )
                         except Exception:
+                            if self._shutdown.is_set():
+                                return
                             LOGGER.exception(
                                 "Wake detection could not resume after exclusive "
                                 "background speech"
@@ -523,7 +769,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     await asyncio.sleep(0.2)
                     continue
 
-                runtime.store.mark_delivery_delivered(delivery.delivery_id)
+                await asyncio.to_thread(
+                    runtime.store.mark_delivery_delivered, delivery.delivery_id
+                )
                 LOGGER.info(
                     "Background work notification delivered at exclusive idle boundary | "
                     "delivery_id=%s | work_id=%s | kind=%s | policy=%s",
@@ -619,6 +867,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "browser_control=%s | raw_shell=False",
                 bool(browser_hands and browser_hands.execution_enabled),
             )
+        gicc_runtime = self._gicc_runtime
+        if gicc_runtime is not None:
+            gicc_runtime.start()
+            LOGGER.info("GICC durable continuation reconciliation is active")
         if self._work_runtime is not None:
             delivery_task = asyncio.create_task(
                 self._deliver_pending_work(),
@@ -630,6 +882,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if delivery_task is not None:
                 delivery_task.cancel()
                 await asyncio.gather(delivery_task, return_exceptions=True)
+            if gicc_runtime is not None:
+                await gicc_runtime.close()
             self._session_ready_for_inactivity = False
             self._user_is_speaking = False
             self._session_conversation = None
@@ -638,7 +892,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if self._work_runtime is not None:
                 self._work_runtime.set_interactive_brain_active(False)
             if self._work_runtime is not None:
-                self._work_runtime.close()
+                await self._work_runtime.aclose()
             if capability_runtime is not None:
                 capability_runtime.close()
             if self._research_service is not None:

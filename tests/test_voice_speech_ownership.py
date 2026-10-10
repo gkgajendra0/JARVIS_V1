@@ -76,6 +76,18 @@ class FakeFailingRealtimeSpeech:
         raise RuntimeError("429 RESOURCE_EXHAUSTED")
 
 
+class FakeTimeoutRealtimeSpeech:
+    async def speak(
+        self,
+        output,
+        *,
+        instructions: str,
+        label: str,
+    ) -> None:
+        del output, instructions, label
+        raise TimeoutError("playout completion timed out")
+
+
 class FakeLocalStatusSpeech:
     def __init__(self, audio: FakeAudio) -> None:
         self._audio = audio
@@ -138,6 +150,16 @@ class FakeStore:
         return SimpleNamespace(failed_attempts=self.delivery.failed_attempts)
 
 
+async def _wait_until_delivered(store: FakeStore) -> None:
+    """Wait for durable delivery on its worker thread, not one loop tick."""
+
+    for _ in range(80):
+        if store.delivered:
+            return
+        await asyncio.sleep(0.025)
+    assert store.delivered, "delivery was not persisted within two seconds"
+
+
 class FakeWorkRuntime:
     def __init__(
         self,
@@ -196,7 +218,7 @@ async def test_owner_input_waits_for_idle_then_opens_interactive_session(
     runtime._live_session = None
 
     await asyncio.wait_for(interaction_started.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_until_delivered(work.store)
 
     assert calls == [
         (
@@ -246,7 +268,7 @@ async def test_owner_input_interaction_respects_shared_speech_lease() -> None:
 
     runtime._speech_ownership.release()
     await asyncio.wait_for(interaction_started.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_until_delivered(work.store)
 
     assert work.store.delivered is True
 
@@ -317,7 +339,7 @@ async def test_noninteractive_critical_notification_falls_back_to_local_speech()
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
 
     await asyncio.wait_for(local.spoken.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_until_delivered(work.store)
 
     assert local.messages == [
         "Sir, a background task failed. The capability build failed."
@@ -359,6 +381,41 @@ async def test_obsolete_owner_input_notification_is_discarded_without_speaking()
     assert work.store.delivered is True
     assert speech.instructions == []
     assert audio.detector.disable_calls == 0
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(delivery_task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_timed_out_noncritical_notification_is_consumed_without_replay() -> None:
+    audio = FakeAudio()
+    work = FakeWorkRuntime(
+        DeliveryPolicy.WHEN_IDLE,
+        work_state=WorkState.COMPLETED,
+        kind=WorkDeliveryKind.COMPLETION,
+        message="Research-stage planning is complete.",
+    )
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(wake_cooldown_seconds=0.01),
+        audio,  # type: ignore[arg-type]
+        work_runtime=work,  # type: ignore[arg-type]
+    )
+    timeout_speech = FakeTimeoutRealtimeSpeech()
+    runtime._speak_ephemeral_realtime_message = timeout_speech.speak  # type: ignore[method-assign]
+    runtime._state = VoiceRuntimeState.IDLE
+    runtime._live_session = None
+
+    delivery_task = asyncio.create_task(runtime._deliver_pending_work())
+
+    for _ in range(40):
+        if work.store.delivered:
+            break
+        await asyncio.sleep(0.025)
+
+    assert work.store.delivered is True
+    assert work.store.retry is None
+    assert audio.resume_calls == 1
+    assert audio.detector.enabled is True
 
     runtime.request_shutdown()
     await asyncio.wait_for(delivery_task, timeout=1)

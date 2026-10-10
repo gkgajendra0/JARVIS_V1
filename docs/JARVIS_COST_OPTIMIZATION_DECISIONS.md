@@ -158,3 +158,30 @@ The authoritative architecture and implementation sequence are now:
 - `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`
 
 The next chat should begin from Slice C0 (baseline/call inventory) and continue through the documented pre-credit gate before purchasing the ₹400–₹500 paid-brain experiment balance.
+
+
+## Decision 9 — Route model strength; do not default development to Astra
+
+The durable model-routing/Codex direction is recorded in
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`.
+
+Additional owner-approved direction:
+
+- Astra-class reasoning is an escalation tier, not the routine coding/default cloud tier;
+- normal coding/research should use the cheapest JARVIS-benchmarked model that satisfies
+  the task contract, with Sol-class or equivalent expected to cover substantial ordinary
+  work and Luna/Terra/local tiers covering cheaper work where proven;
+- current product model names are examples only; routing must remain registry/benchmark
+  driven so model lifecycle changes do not become architecture changes;
+- software-development work should preferentially use the provider-neutral
+  DevelopmentEngine/Codex path for coherent edit/test/debug loops rather than spend
+  repeated generic Work-reasoner calls;
+- supported ChatGPT-plan OAuth/Codex integration is preferred over browser automation of
+  the normal ChatGPT UI;
+- subscription-backed ChatGPT-plan use reduces direct API-key billing but is still
+  allowance-limited and must remain quota/cost governed;
+- C6 relevant-context reduction remains required upstream of model selection because
+  context size directly affects latency and shared-plan allowance consumption.
+
+No production target ordering changes are authorized by this decision alone. Candidate
+tiers must first pass JARVIS-specific benchmark and owner-machine acceptance.

@@ -46,6 +46,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 ".github/workflows/code-quality.yml",
                 ".github/workflows/step4-self-knowledge-sbom.yml",
                 ".github/workflows/step4-sqlcipher-417-windows.yml",
+                "src/jarvis/system_replay.py",
                 "tests",
             ),
             parent_component_id="jarvis",
@@ -111,6 +112,23 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "goal_intelligence",
+            "Canonical owner-goal intelligence, world/resource identity, typed "
+            "information needs, capability requirements, plans and continuations.",
+            ("src/jarvis/goal_intelligence",),
+            parent_component_id="jarvis",
+            tests=(
+                "tests/test_gicc_runtime_lane.py",
+                "tests/test_goal_intelligence_models.py",
+                "tests/test_goal_intelligence_store.py",
+            ),
+            logger_prefixes=("jarvis.goal_intelligence",),
+            docs=(
+                "docs/GICC_GOAL_INTELLIGENCE_ARCHITECTURE.md",
+                "docs/GICC_IMPLEMENTATION_AND_MIGRATION_PLAN.md",
+            ),
+        ),
+        C(
             "runtime.core",
             "Process bootstrap, configuration, preflight and core conversation lifecycle.",
             (
@@ -119,6 +137,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/app.py",
                 "src/jarvis/config.py",
                 "src/jarvis/conversation.py",
+                "src/jarvis/runtime_lane.py",
                 "src/jarvis/dev_control.py",
                 "src/jarvis/dev_supervisor.py",
                 "src/jarvis/runtime_supervisor.py",
@@ -126,6 +145,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/logging_config.py",
                 "src/jarvis/machine_config.py",
                 "src/jarvis/preflight.py",
+                "src/jarvis/provider_circuit.py",
                 "src/jarvis/setup.py",
             ),
             parent_component_id="jarvis",
@@ -695,6 +715,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "%LOCALAPPDATA%/JARVIS/work/work.sqlite3",
                 "%LOCALAPPDATA%/JARVIS/work/dbos.sqlite3",
             ),
+            config_keys=("JARVIS_WORK_CONTEXT_MODE",),
             logger_prefixes=("jarvis.work", "jarvis.voice.work_tools"),
         ),
         C(
@@ -745,6 +766,31 @@ def build_default_self_model() -> SelfModelRegistry:
             ("src/jarvis/work/development.py", "tools/development-sandbox"),
             parent_component_id="work",
             logger_prefixes=("jarvis.work.development",),
+        ),
+        C(
+            "work.development_engine",
+            "Provider-neutral engineering specialist boundary with JARVIS-owned "
+            "development authority and durable session lineage.",
+            (
+                "src/jarvis/development_engine",
+                "tools/research/development_engine_owner_acceptance.py",
+            ),
+            parent_component_id="work",
+            tests=(
+                "tests/test_development_engine_contracts.py",
+                "tests/test_development_engine_tools.py",
+                "tests/test_development_engine_session_store.py",
+                "tests/test_development_engine_codex.py",
+                "tests/test_development_engine_coordinator.py",
+                "tests/test_development_engine_phase9.py",
+                "tests/test_development_engine_work_control.py",
+            ),
+            config_keys=(
+                "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+                "JARVIS_DEVELOPMENT_ENGINE_MODEL",
+            ),
+            logger_prefixes=("jarvis.development_engine",),
+            docs=("docs/DEVELOPMENT_ENGINE_CONTROL_PLANE_ARCHITECTURE.md",),
         ),
         C(
             "work.engineering_change",
