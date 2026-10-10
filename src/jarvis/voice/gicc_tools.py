@@ -327,7 +327,7 @@ class GiccAgentTools:
                             goal_id=goal.goal_id,
                             session_id=goal.source_session_id,
                         )
-                    except Exception:  # noqa: BLE001 - passive observation must not break goal intake
+                    except Exception:
                         LOGGER.warning(
                             "GICC could not prepare passive network consent scope",
                             exc_info=True,
@@ -369,7 +369,7 @@ class GiccAgentTools:
                             goal_id=goal.goal_id,
                             session_id=goal.source_session_id,
                         )
-                    except Exception:  # noqa: BLE001 - read failure cannot advance authority
+                    except Exception:
                         LOGGER.warning(
                             "GICC could not read unverified device hints",
                             exc_info=True,
