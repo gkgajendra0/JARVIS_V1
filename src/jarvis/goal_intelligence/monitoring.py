@@ -207,6 +207,7 @@ class MonitorStartResult:
 
 
 class MonitorObservationDisposition(str, Enum):
+    CANCELLED = "cancelled"
     DUPLICATE = "duplicate"
     FALSE = "false"
     STABILIZING = "stabilizing"
@@ -477,6 +478,18 @@ class MonitorEventProcessor:
         payload = state.get("payload")
         if not isinstance(payload, dict):
             raise GoalStoreError("monitor runtime payload is invalid")
+
+        owner_goal = self._goals.get_goal(predicate.goal_id)
+        if owner_goal is None:
+            raise GoalStoreError("monitor owner goal is missing")
+        if owner_goal.state is GoalState.CANCELLED:
+            return MonitorObservationResult(
+                disposition=MonitorObservationDisposition.CANCELLED,
+                predicate_id=predicate.predicate_id,
+                observation_digest=digest,
+                notification_event_key=None,
+                runtime_state=state,
+            )
 
         if payload.get("last_observation_digest") == digest:
             return MonitorObservationResult(
