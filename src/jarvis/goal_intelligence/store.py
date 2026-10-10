@@ -1111,9 +1111,7 @@ class GoalStore:
             ).fetchone()
             if row is None:
                 return False
-            goal = OwnerGoalV2.from_payload(
-                self._decode(row["payload"]), row["digest"]
-            )
+            goal = OwnerGoalV2.from_payload(self._decode(row["payload"]), row["digest"])
             if goal.state is not GoalState.WAITING_INFORMATION:
                 return False
             row = db.execute(

@@ -24,7 +24,7 @@ from jarvis.goal_intelligence.windows_aep import AepIdentityCandidateV1
 from jarvis.goal_intelligence.world import WorldRegistry
 
 
-def _evidence(*, address: str, now: int) -> str:
+def _evidence(*, address: str, now: int, category: str = "Media Device") -> str:
     candidate = AepIdentityCandidateV1(
         endpoint_id=f"test-endpoint-{address}",
         address=address,
@@ -32,7 +32,7 @@ def _evidence(*, address: str, now: int) -> str:
         name="Unverified television advertisement",
         manufacturer="ExampleVendor",
         model="Screen",
-        category="Media Device",
+        category=category,
         observed_at_epoch=now,
     )
     return f"windows_aep_discovered_unverified:{address}:{candidate.evidence_ref}"
@@ -113,7 +113,9 @@ def test_owner_confirmation_refuses_ambiguous_or_stale_candidates(
         need.information_need_id,
         first.state,
         expected_revision=first.revision,
-        evidence_refs=(_evidence(address="192.168.1.11", now=now),),
+        evidence_refs=(
+            _evidence(address="192.168.1.11", now=now, category="Video Camera"),
+        ),
     )
     assert (
         confirm_single_discovered_device(
@@ -221,9 +223,9 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         OwnerGoalV2.create(
             source_session_id=first_goal.source_session_id,
             source_turn_id="independent-second-device-request",
-            exact_owner_request="Identify another TV",
+            exact_owner_request="Identify another camera",
             goal_kind=GoalKind.ONE_SHOT,
-            desired_outcome="Identify second television",
+            desired_outcome="Identify camera",
             state=GoalState.WAITING_INFORMATION,
         )
     )
@@ -231,8 +233,8 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         InformationNeedV1.create(
             goal_id=second_goal.goal_id,
             category=InformationNeedCategory.MISSING_VALUE,
-            subject="my TV",
-            required_fact="second canonical media_player",
+            subject="my camera",
+            required_fact="second canonical camera",
             why_required="unidentified physical device",
             allowed_resolution_sources=(
                 "world_registry",
@@ -240,7 +242,7 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
                 "bounded_local_discovery",
                 "owner_input",
             ),
-            answer_schema={"type": "entity_id", "entity_type": "television"},
+            answer_schema={"type": "entity_id", "entity_type": "camera"},
         )
     )
     store.update_information_need_state(
