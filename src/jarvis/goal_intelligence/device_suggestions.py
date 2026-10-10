@@ -57,9 +57,7 @@ class UnverifiedDeviceSuggestionV1:
         return " ".join(labels) or "Unidentified network device"
 
 
-def _decode(
-    ref: str, *, now_epoch: int
-) -> UnverifiedDeviceSuggestionV1 | None:
+def _decode(ref: str, *, now_epoch: int) -> UnverifiedDeviceSuggestionV1 | None:
     match = _AEP_RE.fullmatch(ref)
     if match is None:
         return None
@@ -130,8 +128,7 @@ def pending_owner_device_suggestions(
     suggestions: list[UnverifiedDeviceSuggestionV1] = []
     for address, items in sorted(grouped.items()):
         signatures = {
-            (row.manufacturer_hint, row.model_hint, row.category_hint)
-            for row in items
+            (row.manufacturer_hint, row.model_hint, row.category_hint) for row in items
         }
         if len(signatures) != 1:
             continue
