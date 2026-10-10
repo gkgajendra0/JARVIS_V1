@@ -211,6 +211,7 @@ class GiccApplyRuntime:
     objective_status: OwnerObjectiveStatusResolver | None = None
     replan_controller: ReplanController | None = None
     change_store: ChangeStore | None = None
+    work_runtime: WorkRuntime | None = None
     monitor_processor: MonitorEventProcessor | None = None
     monitor_bus: MonitorObservationBus | None = None
     supervisor_cutover: SupervisorCutoverController | None = None
@@ -821,6 +822,112 @@ class GiccApplyRuntime:
             self._information_last_recheck[result.goal.goal_id] = time.monotonic()
         return await self._advance_intake_result(result)
 
+    async def cancel_owner_goal(self, goal_id: str) -> dict[str, object]:
+        """Cancel an exact owner goal and retire its linked active work.
+
+        The old goal remains as an audited tombstone. Shared capabilities,
+        unrelated changes and historical approvals are never deleted. This
+        method is NOT a production activation or device-control permission.
+        """
+        key = str(goal_id).strip()
+        if not key:
+            raise ValueError("goal_id is required for cancellation")
+        async with self._advance_lock:
+            goal = self.store.get_goal(key)
+            if goal is None:
+                raise ValueError("unknown owner goal")
+            if goal.state is GoalState.CANCELLED:
+                return {
+                    "status": "cancelled", "goal_id": key,
+                    "idempotent": True, "historical_audit_retained": True,
+                }
+            if goal.state in {GoalState.COMPLETED, GoalState.FAILED}:
+                raise GoalStoreConflict("cannot cancel a completed or failed owner goal")
+            changes = self.change_store
+            work = self.work_runtime
+            if changes is None or work is None:
+                raise RuntimeError("linked change and work cancellation runtime unavailable")
+
+            gaps = self.store.list_gaps(goal_id=key, limit=1000)
+            gap_ids = tuple(gap.gap_id for gap in gaps)
+            linked = await asyncio.to_thread(
+                changes.owner_goal_acquisition_changes, key, gap_ids
+            )
+            change_ids = {change.change_id for change, _ in linked}
+            # Once a capability is promoted, cancellation needs a separate
+            # reviewed disable/deactivation. No silent live-capability removal.
+            for change, _ in linked:
+                if change.state.value in {"promoted", "observing", "closed"}:
+                    raise GoalStoreConflict(
+                        "linked capability reached activation; governed deactivation required"
+                    )
+
+            work_ids: set[str] = set()
+            for change, _ in linked:
+                work_ids.update(
+                    await asyncio.to_thread(
+                        changes.owner_acquisition_work_ids, change.change_id
+                    )
+                )
+            for continuation in self.store.list_continuations(
+                goal_id=key, limit=1000
+            ):
+                for work_id in continuation.work_ids:
+                    stage = changes.stage_for_work(work_id)
+                    if stage is not None and stage.change_id not in change_ids:
+                        raise GoalStoreConflict(
+                            "continuation references an unlinked EngineeringChange"
+                        )
+                    if stage is None:
+                        item = work.store.require(work_id)
+                        if not (
+                            item.source_session_id == f"gicc:{key}"
+                            or item.source_session_id == f"goal:{key}"
+                        ):
+                            raise GoalStoreConflict(
+                                "continuation contains an unproven external work owner"
+                            )
+                    work_ids.add(work_id)
+
+            stopped: list[str] = []
+            for work_id in sorted(work_ids):
+                result = await asyncio.to_thread(work.orchestrator.cancel, work_id)
+                if not result.state.terminal:
+                    raise RuntimeError("linked work cancellation did not terminate")
+                work.store.clear_status_update_interval(work_id)
+                stopped.append(work_id)
+
+            superseded: list[str] = []
+            for change, gap_id in linked:
+                updated = await asyncio.to_thread(
+                    changes.supersede_cancelled_owner_acquisition,
+                    change.change_id,
+                    goal_id=key,
+                    gap_id=gap_id,
+                )
+                if updated.state.value == "superseded":
+                    superseded.append(change.change_id)
+
+            updated_goal = await asyncio.to_thread(
+                self.store.cancel_goal_tree, key,
+                expected_revision=goal.goal_revision,
+            )
+            if updated_goal.state is not GoalState.CANCELLED:
+                raise RuntimeError("goal tombstone could not be verified")
+            self.telemetry.emit(
+                "gicc_owner_goal_cancelled", goal_id=key,
+                stopped_work_count=len(stopped),
+                superseded_change_count=len(superseded),
+            )
+            return {
+                "status": "cancelled",
+                "goal_id": key,
+                "cancelled_work_ids": stopped,
+                "superseded_change_ids": superseded,
+                "historical_audit_retained": True,
+                "no_network_or_device_action": True,
+            }
+
     async def continue_goal(
         self, goal_id: str, *, retry_information: bool = False
     ) -> GoalIntakeResult:
@@ -1277,6 +1384,7 @@ def build_gicc_apply_runtime(
             planner=planner,
         ),
         change_store=work_runtime.changes.store,
+        work_runtime=work_runtime,
         monitor_processor=monitor_processor,
         monitor_bus=DEFAULT_MONITOR_OBSERVATION_BUS,
         capability_runtime=capability_runtime,
