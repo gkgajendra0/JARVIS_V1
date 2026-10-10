@@ -150,8 +150,8 @@ def _runtime(work, goals, changes, *, orchestrator=None):
 async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
     tmp_path,
 ):
-    work, goals, changes, goal, gap, need, plan, continuation, change, item = (
-        _fixture(tmp_path)
+    work, goals, changes, goal, gap, need, plan, continuation, change, item = _fixture(
+        tmp_path
     )
     # A separate unrelated job must remain untouched.
     unrelated = WorkItem(
@@ -213,9 +213,12 @@ async def test_failed_work_stop_prevents_false_cancelled_goal(tmp_path):
         await runtime.cancel_owner_goal(goal.goal_id)
 
     assert goals.get_goal(goal.goal_id).state is GoalState.WAITING_CAPABILITY
-    assert changes.owner_goal_acquisition_changes(
-        goal.goal_id, tuple(g.gap_id for g in goals.list_gaps(goal_id=goal.goal_id))
-    )[0][0].state is ChangeState.PROPOSED
+    assert (
+        changes.owner_goal_acquisition_changes(
+            goal.goal_id, tuple(g.gap_id for g in goals.list_gaps(goal_id=goal.goal_id))
+        )[0][0].state
+        is ChangeState.PROPOSED
+    )
 
 
 def test_cancellation_rejects_stale_revision_and_terminal_goals(tmp_path):
