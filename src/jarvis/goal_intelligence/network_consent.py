@@ -10,7 +10,8 @@ from __future__ import annotations
 from jarvis.authority.proposal import ActionProposal
 
 from .aep_authority import build_aep_consent_proposal
-from .models import GoalState, InformationNeedCategory, InformationNeedState
+from .information import can_rediscover_information
+from .models import GoalState
 from .store import GoalStore
 from .windows_lan_scope import WindowsLanScopePlanner
 from .world import canonical_world_entity_type
@@ -44,15 +45,7 @@ def prepare_pending_device_discovery_consent(
     scope_planner = planner or WindowsLanScopePlanner()
     for need in store.list_information_needs(goal_id=goal.goal_id):
         if (
-            need.state is InformationNeedState.RESOLVED
-            or need.category
-            in {
-                InformationNeedCategory.OWNER_SECRET,
-                InformationNeedCategory.OWNER_PREFERENCE,
-                InformationNeedCategory.AUTHORIZATION,
-                InformationNeedCategory.SUCCESS_CRITERIA,
-                InformationNeedCategory.PHYSICAL_OBSERVATION,
-            }
+            not can_rediscover_information(need)
             or need.answer_schema.get("type") != "entity_id"
             or not _APPROVED_DISCOVERY_SOURCES.issubset(need.allowed_resolution_sources)
         ):
