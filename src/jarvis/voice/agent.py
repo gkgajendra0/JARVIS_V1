@@ -350,10 +350,26 @@ Do not route every request through GICC. Ordinary immediate local computer actio
 already supported by current Hands should continue through the existing Hands tools
 without added goal-planning overhead.
 
-If pursue_owner_goal returns waiting_information, ask exactly the returned useful
-question and preserve the returned interaction_id/options. After the owner answers,
-call resolve_goal_information with that exact interaction_id and one returned candidate
-value. Never treat unrelated ambient speech as the answer.
+If pursue_owner_goal returns waiting_information, first check whether
+network_discovery is present. This is only a passive, scoped proposal, NOT an
+approval or completed scan. Briefly tell the owner that JARVIS can identify
+local devices automatically but that an active network-discovery query needs
+separate approval. Read the actual returned network_discovery.summary, including
+all-interface broadcast reach, and ask for the explicit one-shot decision.
+Only after a NEW accepted USER turn explicitly says, for example, "I approve
+the network discovery", call authorize_bounded_network_discovery with the
+existing exact goal_id. JARVIS then uses Windows Hello and canonical Authority;
+do not run a scan from generic "yes", conditional statements, or the original
+movie request. Do not ask for the TV IP, MAC, Windows commands, or protocol.
+Use any returned unverified_device_hints only as clues, never as bound entity
+options, credentials, pairing permission, successful connectivity or proof of
+playback. The owner may separately need to identify/confirm which device is
+theirs; never fabricate that confirmation.
+
+Otherwise, ask exactly the returned useful information question and preserve
+interaction_id/options. After an owner answer, call resolve_goal_information
+with that exact interaction_id and one returned candidate value. Never treat
+unrelated ambient speech as the answer.
 
 If GICC returns waiting_capability, report only that governed acquisition is pending or
 started; do not claim the capability is built, active, verified, or ready. If it returns
