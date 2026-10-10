@@ -394,7 +394,9 @@ class ChangeStore:
                 if gap not in gaps:
                     continue
                 if payload.get("motivating_goal_id") != goal_key:
-                    raise ChangeConflict("acquisition gap has conflicting owner linkage")
+                    raise ChangeConflict(
+                        "acquisition gap has conflicting owner linkage"
+                    )
                 change_row = db.execute(
                     "SELECT * FROM engineering_changes WHERE change_id=?",
                     (row["change_id"],),
@@ -468,10 +470,15 @@ class ChangeStore:
                     payload.get("motivating_goal_id") != goal_id
                     or payload.get("gap_id") != gap_id
                 ):
-                    raise ChangeConflict("cancel scope mismatches canonical goal and gap")
+                    raise ChangeConflict(
+                        "cancel scope mismatches canonical goal and gap"
+                    )
             terminal = {
-                ChangeState.CLOSED, ChangeState.REJECTED, ChangeState.FAILED,
-                ChangeState.SUPERSEDED, ChangeState.ROLLED_BACK,
+                ChangeState.CLOSED,
+                ChangeState.REJECTED,
+                ChangeState.FAILED,
+                ChangeState.SUPERSEDED,
+                ChangeState.ROLLED_BACK,
             }
             if change.state in terminal:
                 return change
@@ -482,16 +489,28 @@ class ChangeStore:
             updated = db.execute(
                 "UPDATE engineering_changes SET state=?, version=?, updated_at=? "
                 "WHERE change_id=? AND version=? AND state=?",
-                (ChangeState.SUPERSEDED.value, change.version + 1,
-                 _now(), change_id, change.version, change.state.value),
+                (
+                    ChangeState.SUPERSEDED.value,
+                    change.version + 1,
+                    _now(),
+                    change_id,
+                    change.version,
+                    change.state.value,
+                ),
             )
             if updated.rowcount != 1:
                 raise ChangeConflict("owner cancellation lost change version race")
             self._event(
-                db, change_id, f"owner-goal-cancel:{change.version + 1}",
+                db,
+                change_id,
+                f"owner-goal-cancel:{change.version + 1}",
                 "owner_goal_cancelled",
-                {"goal_id": goal_id, "gap_id": gap_id,
-                 "from": change.state.value, "to": ChangeState.SUPERSEDED.value},
+                {
+                    "goal_id": goal_id,
+                    "gap_id": gap_id,
+                    "from": change.state.value,
+                    "to": ChangeState.SUPERSEDED.value,
+                },
             )
             updated_row = db.execute(
                 "SELECT * FROM engineering_changes WHERE change_id=?", (change_id,)
