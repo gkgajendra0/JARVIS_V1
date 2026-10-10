@@ -867,6 +867,26 @@ class GiccApplyRuntime:
                     raise GoalStoreConflict(
                         "linked capability reached activation; governed deactivation required"
                     )
+                activation = changes.latest_artifact(
+                    change.change_id, "capability_lifecycle_activation"
+                )
+                if (
+                    activation is not None
+                    and activation.payload.get("effective_enabled") is True
+                ):
+                    disabled = changes.latest_artifact(
+                        change.change_id, "capability_lifecycle_disable"
+                    )
+                    if (
+                        disabled is None
+                        or disabled.created_at < activation.created_at
+                        or disabled.payload.get("candidate_artifact_id")
+                        != activation.payload.get("candidate_artifact_id")
+                        or disabled.payload.get("effective_enabled") is not False
+                    ):
+                        raise GoalStoreConflict(
+                            "active lifecycle capability requires governed disable first"
+                        )
 
             work_ids: set[str] = set(
                 await asyncio.to_thread(work.store.owner_goal_work_ids, key)
