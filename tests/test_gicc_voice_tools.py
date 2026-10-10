@@ -622,3 +622,78 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
     )
     assert rejected["status"] == "discovery_goal_not_current_or_not_waiting"
     assert runtime.scan_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
+    tmp_path: Path,
+) -> None:
+    """The model cannot make an unverified network hint a trusted owner TV."""
+    from tests.test_gicc_network_consent import _data
+
+    from jarvis.conversation import ConversationSession
+
+    store, goal, need = _data(tmp_path)
+    conversation = ConversationSession(session_id=goal.source_session_id)
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "My television is missing.")
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(need,),
+    )
+
+    class ConfirmationRuntime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.confirmations = 0
+            self.resumes = 0
+
+        def confirm_owner_discovered_device(
+            self, *, goal_id, information_need_id, session_id, owner_turn_id
+        ):
+            assert goal_id == goal.goal_id
+            assert information_need_id == need.information_need_id
+            assert session_id == goal.source_session_id
+            assert owner_turn_id == conversation.turns[-1].turn_id
+            self.confirmations += 1
+            return WorldEntityRefV1.create(
+                entity_type="media_player",
+                canonical_name="Owner-confirmed TV",
+                aliases=("my tv",),
+                provenance_refs=("owner_inventory:test-confirmation",),
+            )
+
+        async def continue_goal(self, goal_id, *, retry_information=False):
+            assert goal_id == goal.goal_id and retry_information
+            self.resumes += 1
+            return self.result
+
+    execution = ConfirmationRuntime()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=execution,
+    )
+    for unsafe_text in (
+        "Yes.",
+        "That TV seems familiar.",
+        "Do not confirm that the discovered TV is mine.",
+        "What if I confirm the discovered TV is mine?",
+    ):
+        conversation.accept_turn(ConversationRole.USER, unsafe_text)
+        denied = await tools.confirm_discovered_device_identity(
+            None, goal_id=goal.goal_id,
+            information_need_id=need.information_need_id,
+        )
+        assert denied["status"] == "explicit_device_identity_confirmation_not_given"
+        assert execution.confirmations == 0
+    conversation.accept_turn(ConversationRole.USER, "I confirm the discovered TV is mine.")
+    accepted = await tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert accepted["owner_inventory_only"] is True
+    assert accepted["device_control_verified"] is False
+    assert accepted["network_access_verified"] is False
+    assert execution.confirmations == execution.resumes == 1

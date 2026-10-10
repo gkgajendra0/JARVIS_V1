@@ -88,6 +88,7 @@ class GiccAgentTools:
             self.pursue_owner_goal,
             self.resolve_goal_information,
             self.authorize_bounded_network_discovery,
+            self.confirm_discovered_device_identity,
         ]
 
     @property
@@ -607,6 +608,89 @@ class GiccAgentTools:
                 }
                 for item in candidates
             ]
+        return payload
+
+    @function_tool()
+    async def confirm_discovered_device_identity(
+        self,
+        context: RunContext,
+        goal_id: str,
+        information_need_id: str,
+    ) -> dict[str, object]:
+        """Confirm one recent discovered TV/camera as owner inventory.
+
+        Use ONLY after a fresh distinct USER turn explicitly confirming the
+        one displayed device is theirs. Mere "yes" cannot identify a device.
+        No scanner, new approval, pairing, endpoint binding or control action
+        is authorized. Multiple/conflicting/expired hints fail closed.
+        """
+        del context
+        turn = self._latest_user_turn()
+        consent = re.fullmatch(
+            r"(?:i\s+)?confirm\s+(?:that\s+)?(?:the|this)\s+"
+            r"(?:discovered|detected)\s+(?:tv|television|camera|device)\s+"
+            r"(?:is\s+mine|belongs\s+to\s+me|is\s+my\s+"
+            r"(?:tv|television|camera))[.!]?",
+            turn.text.casefold().strip(),
+        )
+        if consent is None:
+            return {
+                "ok": False,
+                "status": "explicit_device_identity_confirmation_not_given",
+            }
+        goal = self._store.get_goal(str(goal_id).strip())
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or goal.source_session_id != self._conversation.session_id
+        ):
+            return {"ok": False, "status": "device_confirmation_goal_not_current"}
+        runtime = self._execution_runtime
+        confirm = (
+            None
+            if runtime is None
+            else getattr(runtime, "confirm_owner_discovered_device", None)
+        )
+        if not callable(confirm):
+            return {"ok": False, "status": "owner_device_confirmation_unavailable"}
+        try:
+            entity = confirm(
+                goal_id=goal.goal_id,
+                information_need_id=str(information_need_id).strip(),
+                session_id=goal.source_session_id,
+                owner_turn_id=turn.turn_id,
+            )
+        except Exception:
+            LOGGER.warning("Canonical device identity confirmation failed", exc_info=True)
+            return {"ok": False, "status": "device_identity_confirmation_failed"}
+        if entity is None:
+            return {
+                "ok": False,
+                "status": "no_unique_recent_confirmable_device",
+                "truth_note": (
+                    "No single fresh device hint could be independently owner "
+                    "confirmed. Do not register an identity, guess an IP or "
+                    "claim connectivity."
+                ),
+            }
+        try:
+            continued = await runtime.continue_goal(
+                goal.goal_id, retry_information=True
+            )
+        except Exception as exc:
+            return self._internal_failure(
+                turn=turn, stage="resume_owner_confirmed_device_goal", error=exc
+            )
+        payload = self._public_result(continued)
+        payload.update(
+            {
+                "confirmed_entity_id": entity.entity_id,
+                "owner_inventory_only": True,
+                "network_access_verified": False,
+                "device_control_verified": False,
+                "canonical_user_turn_id": turn.turn_id,
+            }
+        )
         return payload
 
     @function_tool()

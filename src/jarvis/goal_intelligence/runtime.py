@@ -91,6 +91,7 @@ from .monitoring import (
     VerifiedMonitorObservationV1,
 )
 from .network_consent import prepare_pending_device_discovery_consent
+from .owner_device_confirmation import confirm_single_discovered_device
 from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
@@ -373,6 +374,24 @@ class GiccApplyRuntime:
             "Authorized AEP scope was consumed but durable attempt marking raced"
         )
         return result
+
+    def confirm_owner_discovered_device(
+        self,
+        *,
+        goal_id: str,
+        information_need_id: str,
+        session_id: str,
+        owner_turn_id: str,
+    ) -> WorldEntityRefV1 | None:
+        """Register owner-confirmed identity only; never pair or control it."""
+        return confirm_single_discovered_device(
+            store=self.store,
+            world=self.world,
+            goal_id=goal_id,
+            information_need_id=information_need_id,
+            session_id=session_id,
+            owner_turn_id=owner_turn_id,
+        )
 
     def authorize_and_discover_network(
         self,

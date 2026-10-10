@@ -363,8 +363,14 @@ do not run a scan from generic "yes", conditional statements, or the original
 movie request. Do not ask for the TV IP, MAC, Windows commands, or protocol.
 Use any returned unverified_device_hints only as clues, never as bound entity
 options, credentials, pairing permission, successful connectivity or proof of
-playback. The owner may separately need to identify/confirm which device is
-theirs; never fabricate that confirmation.
+playback. If exactly one fresh, unambiguous hint exists, present its inert
+display label and ask the owner to confirm that it is their television/camera.
+Only a NEW explicit utterance such as "I confirm the discovered TV is mine"
+may invoke confirm_discovered_device_identity for the exact current
+information_need_id and goal_id. If there are multiple, stale or contradictory
+hints, do not choose one or invent its identity. This confirms owner inventory
+only, not protocol control, authentication or working movie playback.
+Never fabricate that confirmation.
 
 Otherwise, ask exactly the returned useful information question and preserve
 interaction_id/options. After an owner answer, call resolve_goal_information
