@@ -482,7 +482,11 @@ class MonitorEventProcessor:
         owner_goal = self._goals.get_goal(predicate.goal_id)
         if owner_goal is None:
             raise GoalStoreError("monitor owner goal is missing")
-        if owner_goal.state is GoalState.CANCELLED:
+        monitor_work = self._work.require(str(state["work_id"]))
+        if (
+            owner_goal.state is GoalState.CANCELLED
+            or monitor_work.state is WorkState.CANCELLED
+        ):
             return MonitorObservationResult(
                 disposition=MonitorObservationDisposition.CANCELLED,
                 predicate_id=predicate.predicate_id,
