@@ -414,3 +414,91 @@ async def test_gicc_voice_status_reads_canonical_objective_projection(
     assert found["goal_id"] == "goal_tv"
     assert found["verified_completion"] is False
     assert "Never infer overall completion" in str(listed["truth_note"])
+
+@pytest.mark.asyncio
+async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
+    tmp_path: Path,
+) -> None:
+    """Owner sees a scope, never an invented permission or trusted TV."""
+    from tests.test_gicc_network_consent import _data, _planner
+
+    from jarvis.conversation import ConversationSession
+    from jarvis.goal_intelligence.network_consent import (
+        prepare_pending_device_discovery_consent,
+    )
+
+    store, goal, need = _data(tmp_path)
+    conversation = ConversationSession(session_id="owner-session")
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "Control my TV.")
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(need,),
+    )
+
+    class ReadOnlyDiscoveryRuntime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.consent_reads = 0
+            self.suggestion_reads = 0
+
+        def prepare_network_discovery_consent(self, *, goal_id, session_id):
+            self.consent_reads += 1
+            return prepare_pending_device_discovery_consent(
+                store=store,
+                goal_id=goal_id,
+                session_id=session_id,
+                planner=_planner(),
+            )
+
+        def pending_network_device_suggestions(self, *, goal_id, session_id):
+            self.suggestion_reads += 1
+            if goal_id != goal.goal_id or session_id != goal.source_session_id:
+                return ()
+            return (
+                SimpleNamespace(
+                    display_hint="Unverified Living Room device",
+                    address="192.168.1.15",
+                    protocol="upnp",
+                    neighbor_correlated=False,
+                ),
+            )
+
+    runtime = ReadOnlyDiscoveryRuntime()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    before_need = store.get_information_need(need.information_need_id)
+    payload = await tools.pursue_owner_goal(None)
+
+    assert payload["status"] == "waiting_information"
+    assert payload["network_discovery"]["state"] == "proposal_only_not_authorized"
+    assert payload["network_discovery"]["owner_approval_required"] is True
+    assert payload["network_discovery"]["scan_started"] is False
+    assert payload["network_discovery"]["protocol"] == "upnp"
+    assert payload["network_discovery"]["information_need_id"] == need.information_need_id
+    assert "all local network interfaces" in payload["network_discovery"]["summary"]
+    assert "has not registered an approval request" in payload["truth_note"]
+    assert payload["unverified_device_hints"][0]["verified_identity"] is False
+    assert payload["unverified_device_hints"][0]["control_access_verified"] is False
+    assert payload["questions"][0]["options"] == []
+    assert store.get_information_need(need.information_need_id) == before_need
+    assert runtime.consent_reads == runtime.suggestion_reads == 1
+
+    other_conversation = ConversationSession(session_id="unrelated-owner-session")
+    other_conversation.start()
+    other_conversation.accept_turn(ConversationRole.USER, "Control my TV.")
+    other_tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        other_conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    other_payload = await other_tools.pursue_owner_goal(None)
+    assert "network_discovery" not in other_payload
+    assert "unverified_device_hints" not in other_payload
+    assert runtime.consent_reads == runtime.suggestion_reads == 1
