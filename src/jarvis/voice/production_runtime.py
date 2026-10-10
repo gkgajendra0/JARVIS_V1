@@ -105,7 +105,7 @@ from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
-from jarvis.voice.gicc_tools import GiccAgentTools
+from jarvis.voice.gicc_tools import build_session_scoped_gicc_tools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.local_status_speech import build_local_status_speech
 from jarvis.voice.media_devices_audio import (
@@ -675,6 +675,18 @@ def build_production_voice_runtime(
             "JARVIS_AUDIO_OUTPUT_DEVICE through LiveKit MediaDevices"
         )
 
+    gicc_tool_provider = (
+        None
+        if gicc_apply_runtime is None
+        else build_session_scoped_gicc_tools(
+            gicc_apply_runtime.coordinator,
+            gicc_apply_runtime.store,
+            execution_runtime=gicc_apply_runtime,
+            objective_status=gicc_apply_runtime.objective_status,
+            telemetry=gicc_apply_runtime.telemetry,
+        )
+    )
+
     return CanonicalActiveSpeakerRuntimeController(
         config,
         audio,
@@ -692,31 +704,13 @@ def build_production_voice_runtime(
         gicc_runtime=gicc_apply_runtime,
         gicc_action_tool_factory=(
             None
-            if gicc_apply_runtime is None
-            else lambda conversation: (
-                GiccAgentTools(
-                    gicc_apply_runtime.coordinator,
-                    conversation,
-                    gicc_apply_runtime.store,
-                    execution_runtime=gicc_apply_runtime,
-                    objective_status=gicc_apply_runtime.objective_status,
-                    telemetry=gicc_apply_runtime.telemetry,
-                ).action_tools
-            )
+            if gicc_tool_provider is None
+            else lambda conversation: gicc_tool_provider(conversation).action_tools
         ),
         gicc_read_tool_factory=(
             None
-            if gicc_apply_runtime is None
-            else lambda conversation: (
-                GiccAgentTools(
-                    gicc_apply_runtime.coordinator,
-                    conversation,
-                    gicc_apply_runtime.store,
-                    execution_runtime=gicc_apply_runtime,
-                    objective_status=gicc_apply_runtime.objective_status,
-                    telemetry=gicc_apply_runtime.telemetry,
-                ).read_tools
-            )
+            if gicc_tool_provider is None
+            else lambda conversation: gicc_tool_provider(conversation).read_tools
         ),
         allow_direct_capability_acquisition=gicc_apply_runtime is None,
         session_factory=production_session_factory,

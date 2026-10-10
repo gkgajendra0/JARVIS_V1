@@ -47,6 +47,17 @@ class AuthorizedCapability:
     permit_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class AuthorizedNetworkDiscovery:
+    """Existing canonical Authority decision, not an active scan."""
+
+    authority: AuthorityService
+    proposal: ActionProposal
+    context: InteractionContext
+    permit_id: str
+    approval_id: str
+
+
 def _default_audit_path() -> pathlib.Path:
     configured = os.getenv("JARVIS_AUTHORITY_AUDIT_DB")
     if configured:
@@ -259,6 +270,79 @@ class CapabilityAuthorityBroker:
             proposal=proposal,
             context=context,
             permit_id=decision.execution_permit.permit_id,
+        )
+
+    def authorize_network_discovery_proposal(
+        self, proposal: ActionProposal
+    ) -> AuthorizedNetworkDiscovery:
+        """Ask Windows Hello for an exact GICC AEP scan via existing Authority.
+
+        This does not start a watcher, consume a permit or grant ambient voice
+        approval. Only a specific network-discovery proposal is admissible.
+        """
+        if not isinstance(proposal, ActionProposal):
+            raise CapabilityAuthorizationError("discovery requires ActionProposal")
+        target = proposal.target()
+        params = proposal.parameters()
+        if (
+            not proposal.has_valid_fingerprint()
+            or proposal.is_expired()
+            or proposal.capability != "network_discovery"
+            or proposal.operation != "enumerate_aep"
+            or proposal.origin is not ActionOrigin.PROACTIVE
+            or not proposal.attributes.external_side_effect
+            or target.get("resource") != "windows_association_endpoint_discovery"
+            or not str(target.get("gicc_goal_id") or "").strip()
+            or not str(target.get("gicc_need_id") or "").strip()
+            or target.get("protocol") not in {"upnp", "dns_sd", "wsd"}
+            or target.get("all_local_interfaces") is not True
+            or params.get("device_control") is not False
+            or params.get("pairing") is not False
+        ):
+            raise CapabilityAuthorizationError("invalid bounded GICC discovery scope")
+        try:
+            self._ensure_started()
+        except (LocalOpaError, OSError) as exc:
+            raise CapabilityAuthorizationError(
+                "canonical Authority runtime is unavailable"
+            ) from exc
+        authority = self._authority
+        strong = self._strong
+        if authority is None or strong is None:
+            raise CapabilityAuthorizationError("canonical Authority not initialized")
+        outcome = strong.verify_and_resolve(
+            proposal=proposal, session_id=proposal.session_id
+        )
+        if not outcome.granted:
+            raise CapabilityAuthorizationError(
+                "exact network-discovery owner confirmation not granted"
+            )
+        context = InteractionContext(
+            session_id=proposal.session_id,
+            trust_tier=TrustTier.VERIFIED_OWNER,
+            attention_state=AttentionState.ATTENTIVE,
+            actor_unambiguous=True,
+            windows_session_valid=True,
+        )
+        decision = authority.evaluate(
+            proposal=proposal,
+            context=context,
+            approval_id=outcome.approval.approval_id,
+        )
+        if (
+            decision.effect is not AuthorityEffect.ALLOW
+            or decision.execution_permit is None
+            or decision.approval_id != outcome.approval.approval_id
+        ):
+            raise CapabilityAuthorizationError(
+                "canonical Authority policy denied network discovery"
+            )
+        return AuthorizedNetworkDiscovery(
+            authority=authority,
+            proposal=proposal,
+            context=context,
+            permit_id=decision.execution_permit.permit_id,
+            approval_id=outcome.approval.approval_id,
         )
 
     def consume(self, authorized: AuthorizedCapability) -> None:

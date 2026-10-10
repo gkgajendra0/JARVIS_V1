@@ -113,6 +113,47 @@ def _generic_reference_types(mention: str) -> tuple[str, ...]:
     return tuple(sorted(set(inferred)))
 
 
+# A physical device identity is an explicit owner inventory entry or verified
+# local-computer binding, not arbitrary model/provider-generated evidence text.
+# Device advertisements and configuration routing hints never become identity.
+# Future device attestors must extend this reviewed contract and its tests
+# rather than relying on unknown provenance strings.
+_TRUSTED_OWNER_INVENTORY_PREFIXES = (
+    "owner_inventory:",
+    "owner-config:",
+    "owner:device",
+)
+_TRUSTED_LOCAL_COMPUTER_PROVENANCE = frozenset(
+    {"capability_runtime:local_machine", "machine:current"}
+)
+_PHYSICAL_TARGET_TYPES = frozenset(
+    {"media_player", "camera", "computer", "display", "speaker", "printer"}
+)
+
+
+def has_independent_target_provenance(refs: tuple[str, ...] | list[str]) -> bool:
+    """Require reviewed owner inventory or actual local computer identity.
+
+    This is a prerequisite for planning, NOT evidence of model, pairing,
+    remote endpoint authorization or a physical command succeeding.
+    """
+
+    if not isinstance(refs, tuple | list):
+        return False
+    for ref in refs:
+        if not isinstance(ref, str):
+            return False
+        normalized = ref.strip().casefold()
+        if normalized in _TRUSTED_LOCAL_COMPUTER_PROVENANCE:
+            return True
+        if normalized == "reviewed-owner-inventory":
+            return True
+        for prefix in _TRUSTED_OWNER_INVENTORY_PREFIXES:
+            if normalized.startswith(prefix) and len(normalized) > len(prefix):
+                return True
+    return False
+
+
 class WorldRegistry:
     """Thin canonical registry facade; no duplicate device truth is introduced."""
 
@@ -207,6 +248,12 @@ class EntityResolver:
         result = []
         for entity in self._registry.entities():
             if entity.lifecycle_state is not EntityLifecycleState.ACTIVE:
+                continue
+            if canonical_world_entity_type(
+                entity.entity_type
+            ) in _PHYSICAL_TARGET_TYPES and not has_independent_target_provenance(
+                entity.provenance_refs
+            ):
                 continue
             if (
                 expected
@@ -339,6 +386,11 @@ class EntityResolver:
             for entity in all_entities
             if entity.lifecycle_state is EntityLifecycleState.ACTIVE
             and (
+                canonical_world_entity_type(entity.entity_type)
+                not in _PHYSICAL_TARGET_TYPES
+                or has_independent_target_provenance(entity.provenance_refs)
+            )
+            and (
                 self._identity_matches(entity, query)
                 or self._alias_matches(entity, query)
             )
@@ -384,6 +436,7 @@ class EntityResolver:
 
         if allow_discovery:
             discovered: list[WorldEntityRefV1] = []
+            observation_refs: set[str] = set()
             for source in self._discoveries:
                 for entity in source.discover(
                     mention=query,
@@ -397,14 +450,34 @@ class EntityResolver:
                         not in expected
                     ):
                         continue
+                    if (
+                        canonical_world_entity_type(entity.entity_type)
+                        in _PHYSICAL_TARGET_TYPES
+                    ):
+                        # A discovery adapter can return arbitrary provenance
+                        # strings, including forged "owner-config:" labels.
+                        # Its own claim cannot elevate a physical target into
+                        # the owner-reviewed canonical inventory. A distinct,
+                        # explicitly verified admission path is required.
+                        observation_refs.update(entity.provenance_refs)
+                        continue
                     self._registry.register_entity(entity)
                     discovered.append(entity)
             unique = {entity.entity_id: entity for entity in discovered}
             if unique:
                 return self._result(
                     tuple(unique[key] for key in sorted(unique)),
-                    reason="bounded read-only discovery",
+                    reason="independently grounded bounded discovery",
                     evidence_prefix="world_discovery",
+                )
+            if observation_refs:
+                return EntityResolution(
+                    state=EntityResolutionState.MISSING,
+                    evidence_refs=(
+                        "world_discovery_unverified",
+                        *tuple(sorted(observation_refs))[:64],
+                    ),
+                    reason="service advertisements observed, physical identity unverified",
                 )
 
         return EntityResolution(

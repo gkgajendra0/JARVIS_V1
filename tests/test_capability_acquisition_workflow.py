@@ -32,6 +32,7 @@ from jarvis.capability_acquisition.external_contract import (
 )
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateEvaluationV1,
+    AcquisitionCandidateV1,
     AcquisitionSourceKind,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
@@ -50,6 +51,7 @@ from jarvis.capability_acquisition.standard_sources import (
 )
 from jarvis.capability_acquisition.workflow import (
     AcquisitionRecordCandidateExecutor,
+    AcquisitionWorkContextResolver,
     acquisition_completion_guard,
 )
 from jarvis.capability_registry.projection import (
@@ -232,7 +234,31 @@ def _persist_plan(
     resolver = CapabilityAcquisitionResolver(
         CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),))
     )
-    resolution = resolver.resolve(goal, _empty_context())
+    if "entity_type:television" not in goal.target_hints:
+        resolution = resolver.resolve(goal, _empty_context())
+    else:
+        # The legacy-migration fixture supplies an explicit synthetic target
+        # declaration; the normal blind custom-build source remains blocked.
+        original = CustomBuildCapabilitySourceAdapter().discover(
+            goal, _empty_context()
+        )[0]
+        fixture = AcquisitionCandidateV1.create(
+            source_kind=original.source_kind,
+            source_identity=original.source_identity,
+            source_version=original.source_version,
+            source_digest=original.source_digest,
+            trust_class=original.trust_class,
+            supported_operations=original.supported_operations,
+            strategy=original.strategy,
+            evidence_refs=(
+                *original.evidence_refs,
+                "test-fixture:explicit-device-compatibility-contract",
+            ),
+            verification_requirements=original.verification_requirements,
+            device_scopes=("entity_type:television",),
+            reason_codes=original.reason_codes,
+        )
+        resolution = resolver.resolve_candidates(goal, (fixture,), _empty_context())
     candidate = resolution.selected_candidate
     assert candidate is not None
     evaluation = resolution.evaluation(candidate.candidate_id)
@@ -770,6 +796,21 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
             "monitor_event_contract": None,
         },
     )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "schema": "gicc_target_context.v1",
+            "target_entity_type": "television",
+            "target_entity_id": "living-room",
+            "canonical_name": "Living room TV fixture",
+            "provenance_refs": ["owner_inventory:verified_fixture_television"],
+            "target_hints": [
+                "entity_type:television",
+                "entity_name:Living room TV fixture",
+            ],
+        },
+    )
     plan, plan_artifact = _persist_plan(
         store,
         change_id=change_id,
@@ -842,3 +883,151 @@ def test_legacy_gicc_acceptance_contract_migration_reopens_exact_owner_gate(
     challenge = getattr(gate, "challenge", gate)
     assert challenge.artifact_id == migrated.artifact_id
     assert challenge.artifact_digest == migrated.digest
+
+
+def test_architecture_cannot_create_canonical_device_facts(tmp_path) -> None:
+    """An approved or proposed Roku adapter cannot self-prove TV identity."""
+
+    _, store, _, changes = _changes(tmp_path)
+    goal = _goal("power")
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(goal, source_revision=REVISION)
+    assert admission.change is not None
+    change_id = admission.change.change_id
+
+    store.add_artifact(
+        change_id,
+        kind="gicc_capability_gap_link",
+        payload={"target_entity_type": "television"},
+    )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "target_hints": [
+                "entity_type:television",
+                "entity_name:living room TV",
+            ],
+        },
+    )
+    store.add_artifact(
+        change_id,
+        kind="architecture",
+        payload={
+            "target_entity_type": "television",
+            "target_vendor": "unverified-vendor",
+            "target_platform": "unverified-platform",
+            "target_protocol": "unverified-protocol",
+            "target_model": "unverified-model",
+        },
+    )
+
+    from types import SimpleNamespace
+
+    context = SimpleNamespace(change_id=change_id, goal=goal)
+    hints = AcquisitionWorkContextResolver(store).canonical_target_hints(context)
+
+    assert "entity_type:television" in hints
+    assert "entity_name:living room tv" in hints
+    assert not any(
+        value in hints
+        for value in (
+            "vendor:unverified-vendor",
+            "platform:unverified-platform",
+            "protocol:unverified-protocol",
+            "model:unverified-model",
+        )
+    )
+
+
+def test_canonical_target_context_does_not_reimport_stale_goal_platform(
+    tmp_path,
+) -> None:
+    """Owner claims and observed target facts must remain independent."""
+    _, store, _, changes = _changes(tmp_path)
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my television",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "platform:roku"),
+        source_session_id="stale-roku-session",
+        source_turn_id="original-stale-roku-claim",
+        now_epoch=100.0,
+    )
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(goal, source_revision=REVISION)
+    assert admission.change is not None
+    change_id = admission.change.change_id
+    store.add_artifact(
+        change_id,
+        kind="gicc_capability_gap_link",
+        payload={"target_entity_type": "television"},
+    )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "target_hints": (
+                "entity_type:television",
+                "entity_name:confirmed owner TV",
+                "platform:vidaa",
+            )
+        },
+    )
+    context = SimpleNamespace(change_id=change_id, goal=goal)
+    independently_reviewed = AcquisitionWorkContextResolver(
+        store
+    ).canonical_target_hints(context)
+    assert "platform:vidaa" in independently_reviewed
+    assert "platform:roku" not in independently_reviewed
+    assert "entity_name:confirmed owner tv" in independently_reviewed
+    assert "platform:roku" in goal.target_hints
+
+
+def test_canonical_target_id_is_independent_of_old_goal_binding(tmp_path) -> None:
+    _, store, _, changes = _changes(tmp_path)
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my actual TV",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "entity_id:old-roku"),
+        source_session_id="owner-target-drift",
+        source_turn_id="old-target-request",
+        now_epoch=100.0,
+    )
+    admission = CapabilityAcquisitionCoordinator(
+        changes=changes,
+        context_provider=StaticAcquisitionContextProvider(_empty_context()),
+    ).admit(goal, source_revision=REVISION)
+    assert admission.change is not None
+    change_id = admission.change.change_id
+    store.add_artifact(
+        change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "target_entity_type": "television",
+            "target_entity_id": "verified-vidaa",
+        },
+    )
+    store.add_artifact(
+        change_id,
+        kind="gicc_target_context",
+        payload={
+            "target_entity_type": "television",
+            "target_entity_id": "verified-vidaa",
+            "provenance_refs": ["owner_inventory:explicit_verified_device"],
+            "target_hints": [
+                "entity_type:television",
+                "entity_id:untrusted-spoofed-id",
+            ],
+        },
+    )
+    context = SimpleNamespace(change_id=change_id, goal=goal)
+    canonical = AcquisitionWorkContextResolver(store).canonical_target_hints(context)
+    assert "entity_id:verified-vidaa" in canonical
+    assert "entity_id:old-roku" not in canonical
+    assert "entity_id:untrusted-spoofed-id" not in canonical

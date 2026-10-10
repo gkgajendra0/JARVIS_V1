@@ -150,6 +150,16 @@ class FakeStore:
         return SimpleNamespace(failed_attempts=self.delivery.failed_attempts)
 
 
+async def _wait_until_delivered(store: FakeStore) -> None:
+    """Wait for durable delivery on its worker thread, not one loop tick."""
+
+    for _ in range(80):
+        if store.delivered:
+            return
+        await asyncio.sleep(0.025)
+    assert store.delivered, "delivery was not persisted within two seconds"
+
+
 class FakeWorkRuntime:
     def __init__(
         self,
@@ -208,7 +218,7 @@ async def test_owner_input_waits_for_idle_then_opens_interactive_session(
     runtime._live_session = None
 
     await asyncio.wait_for(interaction_started.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_until_delivered(work.store)
 
     assert calls == [
         (
@@ -258,7 +268,7 @@ async def test_owner_input_interaction_respects_shared_speech_lease() -> None:
 
     runtime._speech_ownership.release()
     await asyncio.wait_for(interaction_started.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_until_delivered(work.store)
 
     assert work.store.delivered is True
 
@@ -329,7 +339,7 @@ async def test_noninteractive_critical_notification_falls_back_to_local_speech()
     delivery_task = asyncio.create_task(runtime._deliver_pending_work())
 
     await asyncio.wait_for(local.spoken.wait(), timeout=1)
-    await asyncio.sleep(0)
+    await _wait_until_delivered(work.store)
 
     assert local.messages == [
         "Sir, a background task failed. The capability build failed."

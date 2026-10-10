@@ -218,3 +218,128 @@ def test_another_need_cannot_receive_bound_reply(tmp_path: Path) -> None:
             goal_id=goal.goal_id,
             information_need_id=second.need.information_need_id,
         )
+
+
+def test_resolution_merges_repeated_observation_evidence_without_duplicates(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    unresolved = store.create_information_need(
+        InformationNeedV1.create(
+            goal_id=goal.goal_id,
+            category=InformationNeedCategory.AMBIGUOUS_REFERENCE,
+            subject="my TV",
+            required_fact="independently reviewed TV target",
+            why_required="prevent an incorrect device action",
+            allowed_resolution_sources=("world_registry", "owner_input"),
+            evidence_refs=("owner_inventory:verified_owner_selection",),
+        )
+    )
+    resolved = store.resolve_information_need(
+        unresolved.information_need_id,
+        resolution_ref="entity:tv-a",
+        evidence_refs=(
+            "owner_inventory:verified_owner_selection",
+            "world_exact:entity:tv-a",
+        ),
+        expected_revision=unresolved.revision,
+        resolved_at="2026-10-01T12:05:00+00:00",
+    )
+    assert resolved.evidence_refs == (
+        "owner_inventory:verified_owner_selection",
+        "world_exact:entity:tv-a",
+    )
+    assert resolved.state is InformationNeedState.RESOLVED
+    assert store.get_information_need(unresolved.information_need_id) == resolved
+
+
+def test_cancelled_need_cannot_restart_probes_or_owner_interactions(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    original = store.create_information_need(_need(goal))
+    cancelled = store.update_information_need_state(
+        original.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=original.revision,
+    )
+    probe = StaticProbe(
+        InformationResolutionStrategy.WORLD_REGISTRY,
+        resolution_ref="entity:tv-a",
+    )
+    result = InformationResolver(store=store, probes=(probe,)).resolve(
+        original,
+        created_at="2026-10-01T12:10:00+00:00",
+    )
+
+    assert result.state is InformationResolutionState.UNRESOLVED
+    assert result.need == cancelled
+    assert result.interaction is None
+    assert result.attempted_strategies == ()
+    assert probe.calls == 0
+    assert store.get_information_need(original.information_need_id) == cancelled
+
+
+def test_canonical_store_rejects_resurrection_of_cancelled_need(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    need = store.create_information_need(_need(goal))
+    cancelled = store.update_information_need_state(
+        need.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=need.revision,
+    )
+
+    with pytest.raises(GoalStoreConflict, match="cancelled"):
+        store.update_information_need_state(
+            need.information_need_id,
+            InformationNeedState.WAITING_FOR_OWNER,
+            expected_revision=cancelled.revision,
+        )
+    with pytest.raises(GoalStoreConflict, match="cancelled"):
+        store.resolve_information_need(
+            need.information_need_id,
+            resolution_ref="entity:tv-a",
+            expected_revision=cancelled.revision,
+        )
+
+    assert store.get_information_need(need.information_need_id) == cancelled
+
+
+def test_cancellation_atomically_retires_active_owner_question(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    pending = InformationResolver(store=store).resolve(
+        _need(goal),
+        created_at="2026-10-01T12:02:00+00:00",
+    )
+    assert pending.interaction is not None
+    interaction_id = str(pending.interaction["interaction_id"])
+    assert store.get_information_interaction(interaction_id)["state"] == "active"
+    cancelled = store.update_information_need_state(
+        pending.need.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=pending.need.revision,
+    )
+
+    assert cancelled.state is InformationNeedState.CANCELLED
+    retired = store.get_information_interaction(interaction_id)
+    assert retired is not None
+    assert retired["state"] == "cancelled"
+    assert retired["resolution_ref"] is None
+    assert store.get_information_need(cancelled.information_need_id) == cancelled
+
+    conversation = ConversationSession(session_id="owner-bound-session")
+    conversation.start()
+    reply = conversation.accept_turn(ConversationRole.USER, "Use the other TV")
+    with pytest.raises(GoalStoreConflict):
+        store.submit_information_interaction_reply(
+            interaction_id=interaction_id,
+            goal_id=goal.goal_id,
+            need_id=cancelled.information_need_id,
+            source_turn_id=reply.turn_id,
+            resolution_ref="entity:tv-b",
+            resolved_at="2026-10-01T12:03:00+00:00",
+        )

@@ -109,6 +109,28 @@ class GoalStore:
                 CREATE INDEX IF NOT EXISTS idx_information_needs_goal_state
                     ON information_needs_v1(goal_id, state);
 
+                CREATE TABLE IF NOT EXISTS gicc_network_discovery_turn_claims_v1 (
+                    source_session_id TEXT NOT NULL,
+                    owner_turn_id TEXT NOT NULL,
+                    goal_id TEXT NOT NULL,
+                    information_need_id TEXT NOT NULL,
+                    PRIMARY KEY(source_session_id, owner_turn_id),
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
+                    FOREIGN KEY(information_need_id)
+                        REFERENCES information_needs_v1(information_need_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS gicc_owner_device_confirmations_v1 (
+                    source_session_id TEXT NOT NULL,
+                    owner_turn_id TEXT NOT NULL,
+                    goal_id TEXT NOT NULL,
+                    information_need_id TEXT NOT NULL,
+                    PRIMARY KEY(source_session_id, owner_turn_id),
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
+                    FOREIGN KEY(information_need_id)
+                        REFERENCES information_needs_v1(information_need_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS capability_requirement_graphs_v1 (
                     graph_id TEXT PRIMARY KEY,
                     goal_id TEXT NOT NULL,
@@ -979,6 +1001,191 @@ class GoalStore:
             for row in rows
         )
 
+    def claim_network_discovery_owner_turn(
+        self, *, goal_id: str, need_id: str, owner_turn_id: str
+    ) -> bool:
+        """Atomically consume one explicit owner turn for one GICC discovery.
+
+        The protected InformationNeed records the attempt; a separate unique
+        session/turn claim prevents the *same* speech being routed to another
+        waiting goal in the same session. Windows Hello remains an entirely
+        distinct mandatory confirmation. No approval or scan occurs here.
+        """
+        turn_id = str(owner_turn_id).strip()
+        if not turn_id or len(turn_id) > 128:
+            return False
+        goal_key = str(goal_id).strip()
+        need_key = str(need_id).strip()
+        if not goal_key or not need_key:
+            return False
+        marker = f"gicc_network_discovery_owner_turn_claimed:{turn_id}"
+        with self.work.extension_transaction() as db:
+            goal_row = db.execute(
+                "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?",
+                (goal_key,),
+            ).fetchone()
+            if goal_row is None:
+                return False
+            goal = OwnerGoalV2.from_payload(
+                self._decode(goal_row["payload"]), goal_row["digest"]
+            )
+            if goal.state is not GoalState.WAITING_INFORMATION:
+                return False
+            rows = db.execute(
+                "SELECT payload, digest FROM information_needs_v1 WHERE goal_id=?",
+                (goal_key,),
+            ).fetchall()
+            selected = None
+            for row in rows:
+                need = InformationNeedV1.from_payload(
+                    self._decode(row["payload"]), row["digest"]
+                )
+                if marker in need.evidence_refs:
+                    return False
+                if need.information_need_id == need_key:
+                    selected = need
+            if selected is None or selected.state not in {
+                InformationNeedState.OPEN,
+                InformationNeedState.SELF_RESOLVING,
+                InformationNeedState.WAITING_FOR_OWNER,
+            }:
+                return False
+            # One accepted owner turn can authorize AT MOST one scope across
+            # every goal in that canonical session. Claim and InfoNeed CAS
+            # share a single SQLite transaction; failure rolls back both.
+            claim = db.execute(
+                """
+                INSERT INTO gicc_network_discovery_turn_claims_v1
+                    (source_session_id, owner_turn_id, goal_id, information_need_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(source_session_id, owner_turn_id) DO NOTHING
+                """,
+                (goal.source_session_id, turn_id, goal_key, need_key),
+            )
+            if claim.rowcount != 1:
+                return False
+            updated = replace(
+                selected,
+                revision=selected.revision + 1,
+                evidence_refs=tuple(sorted({*selected.evidence_refs, marker})),
+                digest="pending",
+            )
+            updated = replace(
+                updated, digest=canonical_digest(updated.canonical_payload())
+            )
+            changed = db.execute(
+                """
+                UPDATE information_needs_v1
+                SET revision=?, payload=?, digest=?
+                WHERE information_need_id=? AND revision=?
+                """,
+                (
+                    updated.revision,
+                    self._encode(updated.canonical_payload()),
+                    updated.digest,
+                    selected.information_need_id,
+                    selected.revision,
+                ),
+            )
+            if changed.rowcount != 1:
+                raise GoalStoreConflict("network discovery owner-turn CAS lost")
+        return True
+
+    def claim_owner_device_confirmation(
+        self,
+        *,
+        goal_id: str,
+        need_id: str,
+        owner_turn_id: str,
+        entity: WorldEntityRefV1 | None = None,
+    ) -> bool:
+        """Consume one canonical owner identity turn across every session goal.
+
+        This is an identity-only replay guard, not proof of the device's
+        manufacturer, protocol, network connectivity, credentials or access.
+        """
+        turn_id = str(owner_turn_id).strip()
+        goal_key = str(goal_id).strip()
+        need_key = str(need_id).strip()
+        if not turn_id or len(turn_id) > 128 or not goal_key or not need_key:
+            return False
+        if entity is not None and (
+            not isinstance(entity, WorldEntityRefV1)
+            or entity.entity_id != f"owner_confirmed_network:{need_key}"
+            or f"owner_inventory:explicit_device_confirmation:{goal_key}:{turn_id}"
+            not in entity.provenance_refs
+        ):
+            raise ValueError("owner-confirmed entity provenance is not bound")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?",
+                (goal_key,),
+            ).fetchone()
+            if row is None:
+                return False
+            goal = OwnerGoalV2.from_payload(self._decode(row["payload"]), row["digest"])
+            if goal.state is not GoalState.WAITING_INFORMATION:
+                return False
+            row = db.execute(
+                "SELECT payload, digest FROM information_needs_v1 "
+                "WHERE information_need_id=? AND goal_id=?",
+                (need_key, goal_key),
+            ).fetchone()
+            if row is None:
+                return False
+            need = InformationNeedV1.from_payload(
+                self._decode(row["payload"]), row["digest"]
+            )
+            if need.state not in {
+                InformationNeedState.OPEN,
+                InformationNeedState.SELF_RESOLVING,
+                InformationNeedState.WAITING_FOR_OWNER,
+            }:
+                return False
+            if entity is not None:
+                evidence = tuple(
+                    value.removeprefix("unverified_aep_evidence:")
+                    for value in entity.provenance_refs
+                    if value.startswith("unverified_aep_evidence:")
+                )
+                if len(evidence) != 1 or evidence[0] not in need.evidence_refs:
+                    raise ValueError("owner device is not bound to this need evidence")
+            claim = db.execute(
+                """
+                INSERT INTO gicc_owner_device_confirmations_v1
+                    (source_session_id, owner_turn_id, goal_id, information_need_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(source_session_id, owner_turn_id) DO NOTHING
+                """,
+                (goal.source_session_id, turn_id, goal_key, need_key),
+            )
+            if claim.rowcount != 1:
+                return False
+            if entity is not None:
+                # The turn claim and inventory registration commit or roll
+                # back together. A failed insertion must not spend consent.
+                existing = db.execute(
+                    "SELECT 1 FROM world_entities_v1 WHERE entity_id=?",
+                    (entity.entity_id,),
+                ).fetchone()
+                if existing is not None:
+                    raise GoalStoreConflict("owner device identity already exists")
+                db.execute(
+                    """
+                    INSERT INTO world_entities_v1 (
+                        entity_id, entity_type, lifecycle_state, payload, digest
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        entity.entity_id,
+                        entity.entity_type,
+                        entity.lifecycle_state.value,
+                        self._encode(entity.canonical_payload()),
+                        entity.digest,
+                    ),
+                )
+            return True
+
     def update_information_need_state(
         self,
         need_id: str,
@@ -987,6 +1194,7 @@ class GoalStore:
         expected_revision: int,
         self_resolution_attempts: tuple[str, ...] | list[str] | None = None,
         owner_question: str | None = None,
+        evidence_refs: tuple[str, ...] | list[str] | None = None,
     ) -> InformationNeedV1:
         if not isinstance(state, InformationNeedState):
             raise TypeError("state must be InformationNeedState")
@@ -1011,6 +1219,13 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need revision changed before state update"
                 )
+            if (
+                current.state is InformationNeedState.CANCELLED
+                and state is not InformationNeedState.CANCELLED
+            ):
+                raise GoalStoreConflict(
+                    "cancelled information need cannot transition to another state"
+                )
             attempts = (
                 current.self_resolution_attempts
                 if self_resolution_attempts is None
@@ -1032,10 +1247,64 @@ class GoalStore:
                 if owner_question is None
                 else str(owner_question).strip() or None
             )
+            evidence = (
+                current.evidence_refs
+                if evidence_refs is None
+                else tuple(
+                    sorted(
+                        {
+                            *current.evidence_refs,
+                            *(
+                                str(item).strip()
+                                for item in evidence_refs
+                                if str(item).strip()
+                            ),
+                        }
+                    )
+                )
+            )
+            # The passive network watcher can run repeatedly while a device
+            # remains unidentified. Retain its newest bounded snapshots, not
+            # unlimited timestamped duplicates in a protected owner record.
+            snapshots = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_neighbor_cache_observed:")
+            )
+            if len(snapshots) > 8:
+                outdated = set(snapshots[:-8])
+                evidence = tuple(item for item in evidence if item not in outdated)
+            neighbor_refs = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_neighbor_unverified:")
+            )
+            if len(neighbor_refs) > 64:
+                outdated = set(neighbor_refs[:-64])
+                evidence = tuple(item for item in evidence if item not in outdated)
+            # Active WinRT advertisements are not canonical identity and may
+            # change repeatedly; keep only a bounded protected audit trail.
+            aep_refs = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_aep_neighbor_correlated_unverified:")
+            )
+            if len(aep_refs) > 32:
+                outdated = set(aep_refs[:-32])
+                evidence = tuple(item for item in evidence if item not in outdated)
+            standalone = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_aep_discovered_unverified:")
+            )
+            if len(standalone) > 32:
+                outdated = set(standalone[:-32])
+                evidence = tuple(item for item in evidence if item not in outdated)
             if (
                 current.state is state
                 and attempts == current.self_resolution_attempts
                 and question == current.owner_question
+                and evidence == current.evidence_refs
             ):
                 return current
             candidate = replace(
@@ -1044,6 +1313,7 @@ class GoalStore:
                 state=state,
                 self_resolution_attempts=attempts,
                 owner_question=question,
+                evidence_refs=evidence,
                 digest="pending",
             )
             updated = replace(
@@ -1069,6 +1339,39 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need compare-and-swap state update lost"
                 )
+            if state is InformationNeedState.CANCELLED:
+                # Retire the exact owner interaction in the same transaction.
+                # Otherwise a stale voice question can remain marked active.
+                interactions = db.execute(
+                    """
+                    SELECT interaction_id, payload, digest
+                    FROM information_need_interactions_v1
+                    WHERE information_need_id=? AND state='active'
+                    """,
+                    (need_id,),
+                ).fetchall()
+                for interaction_row in interactions:
+                    payload = self._decode(interaction_row["payload"])
+                    if canonical_digest(payload) != interaction_row["digest"]:
+                        raise GoalStoreError("information interaction digest mismatch")
+                    cancelled_interaction = {**payload, "state": "cancelled"}
+                    cancelled_digest = canonical_digest(cancelled_interaction)
+                    interaction_update = db.execute(
+                        """
+                        UPDATE information_need_interactions_v1
+                        SET state='cancelled', payload=?, digest=?
+                        WHERE interaction_id=? AND state='active'
+                        """,
+                        (
+                            self._encode(cancelled_interaction),
+                            cancelled_digest,
+                            interaction_row["interaction_id"],
+                        ),
+                    )
+                    if interaction_update.rowcount != 1:
+                        raise GoalStoreConflict(
+                            "cancelled information interaction CAS lost"
+                        )
         return updated
 
     def begin_information_interaction(
@@ -1346,6 +1649,8 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need is already resolved to another reference"
                 )
+            if current.state is InformationNeedState.CANCELLED:
+                raise GoalStoreConflict("cancelled information need cannot be resolved")
             if expected_revision is not None and current.revision != expected_revision:
                 raise GoalStoreConflict(
                     "information need revision changed before resolution"
@@ -1375,6 +1680,47 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need compare-and-swap resolution lost"
                 )
+
+            # Discovery can resolve a device while an owner question is still
+            # visible. Retire that exact bound interaction in the SAME
+            # transaction rather than leaving a misleading active prompt.
+            interactions = db.execute(
+                """
+                SELECT interaction_id, payload, digest
+                FROM information_need_interactions_v1
+                WHERE information_need_id=? AND state='active'
+                """,
+                (need_id,),
+            ).fetchall()
+            for interaction_row in interactions:
+                interaction = self._decode(interaction_row["payload"])
+                if canonical_digest(interaction) != interaction_row["digest"]:
+                    raise GoalStoreError("information interaction digest mismatch")
+                resolved_interaction = {
+                    **interaction,
+                    "state": "resolved",
+                    "resolved_at": updated.resolved_at,
+                    "resolved_turn_id": None,
+                    "resolution_ref": resolution_ref,
+                }
+                resolved_digest = canonical_digest(resolved_interaction)
+                interaction_update = db.execute(
+                    """
+                    UPDATE information_need_interactions_v1
+                    SET state='resolved', payload=?, digest=?, resolved_at=?
+                    WHERE interaction_id=? AND state='active'
+                    """,
+                    (
+                        self._encode(resolved_interaction),
+                        resolved_digest,
+                        updated.resolved_at,
+                        interaction_row["interaction_id"],
+                    ),
+                )
+                if interaction_update.rowcount != 1:
+                    raise GoalStoreConflict(
+                        "information interaction auto-resolution CAS lost"
+                    )
         return updated
 
     def put_requirement_graph(

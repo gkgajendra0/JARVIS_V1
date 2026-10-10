@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import logging
+import re
+from collections.abc import Callable
 from typing import Protocol
 
 from livekit.agents import RunContext, function_tool
@@ -13,7 +17,10 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeResult,
     GoalIntelligenceCoordinator,
 )
-from jarvis.goal_intelligence.information import BoundInformationInteraction
+from jarvis.goal_intelligence.information import (
+    BoundInformationInteraction,
+    can_rediscover_information,
+)
 from jarvis.goal_intelligence.models import GoalState, PlanState
 from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
@@ -21,8 +28,15 @@ from jarvis.goal_intelligence.telemetry import (
     DEFAULT_GICC_TELEMETRY,
     GiccTelemetrySink,
 )
+from jarvis.goal_intelligence.world import canonical_world_entity_type
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _device_choice_digest(hints: tuple[object, ...]) -> str:
+    """Bind the voice options to one exact live, ordered candidate set."""
+    refs = tuple(str(getattr(hint, "evidence_ref", "")) for hint in hints)
+    return hashlib.sha256("\n".join(refs).encode("utf-8")).hexdigest()
 
 
 class GiccToolGroundingError(ValueError):
@@ -74,6 +88,13 @@ class GiccAgentTools:
         self._conversation = conversation
         self._store = store
         self._telemetry = telemetry
+        # UI-offered option snapshots are session-local only; after restart,
+        # ask JARVIS to show the fresh options again instead of trusting a
+        # model-supplied digest as proof an owner actually saw them.
+        self._offered_device_options: dict[tuple[str, str], tuple[str, str]] = {}
+        # An accepted "approve discovery" utterance requires a *previously
+        # offered* scope for this exact goal in the same live conversation.
+        self._offered_network_discovery: dict[str, tuple[tuple[object, ...], str]] = {}
 
     @property
     def action_tools(self) -> list:
@@ -82,6 +103,8 @@ class GiccAgentTools:
         return [
             self.pursue_owner_goal,
             self.resolve_goal_information,
+            self.authorize_bounded_network_discovery,
+            self.confirm_discovered_device_identity,
         ]
 
     @property
@@ -311,6 +334,155 @@ class GiccAgentTools:
                 "submitted through resolve_goal_information with the exact "
                 "interaction ID and selected candidate value."
             )
+            # A passive OS scope check can prepare a consent summary. This is
+            # explicitly NOT a registered approval, permit, or active scan.
+            # An unverified AEP sighting must never be offered as a canonical
+            # candidate value for resolve_goal_information.
+            runtime = self._execution_runtime
+            if (
+                runtime is not None
+                and goal.source_session_id == self._conversation.session_id
+            ):
+                prepare = getattr(runtime, "prepare_network_discovery_consent", None)
+                if callable(prepare):
+                    try:
+                        proposal = prepare(
+                            goal_id=goal.goal_id,
+                            session_id=goal.source_session_id,
+                        )
+                    except Exception:
+                        LOGGER.warning(
+                            "GICC could not prepare passive network consent scope",
+                            exc_info=True,
+                        )
+                    else:
+                        valid_proposal = (
+                            proposal is not None
+                            and proposal.has_valid_fingerprint()
+                            and not proposal.is_expired()
+                            and proposal.session_id == goal.source_session_id
+                            and proposal.capability == "network_discovery"
+                            and proposal.operation == "enumerate_aep"
+                        )
+                        if valid_proposal:
+                            target = proposal.target()
+                            bound_need = self._store.get_information_need(
+                                str(target.get("gicc_need_id") or "")
+                            )
+                            valid_proposal = (
+                                target.get("gicc_goal_id") == goal.goal_id
+                                and bound_need is not None
+                                and bound_need.goal_id == goal.goal_id
+                                and can_rediscover_information(bound_need)
+                            )
+                        if valid_proposal:
+                            payload["network_discovery"] = {
+                                "state": "proposal_only_not_authorized",
+                                "summary": proposal.material_summary,
+                                "protocol": target.get("protocol"),
+                                "result_address_filters": target.get(
+                                    "address_result_filters"
+                                ),
+                                "all_local_interfaces": target.get(
+                                    "all_local_interfaces"
+                                ),
+                                "information_need_id": target.get("gicc_need_id"),
+                                "owner_approval_required": True,
+                                "scan_started": False,
+                            }
+                            payload["truth_note"] = (
+                                "An eligible bounded device discovery scope was "
+                                "prepared without active scanning. The owner must "
+                                "consent using the canonical AuthorityService "
+                                "approval path before any scan runs. This tool has "
+                                "not registered an approval request or executed "
+                                "network discovery; generic spoken agreement is "
+                                "not execution authority. Do not ask the owner to "
+                                "find the TV IP manually, invent devices, or "
+                                "treat unverified network observations as identity."
+                            )
+                suggestions = getattr(
+                    runtime, "pending_network_device_suggestions", None
+                )
+                if callable(suggestions):
+                    try:
+                        hints = suggestions(
+                            goal_id=goal.goal_id,
+                            session_id=goal.source_session_id,
+                        )
+                    except Exception:
+                        LOGGER.warning(
+                            "GICC could not read unverified device hints",
+                            exc_info=True,
+                        )
+                    else:
+                        if hints:
+                            # A runtime suggestion is untrusted until the exact
+                            # canonical current InformationNeed records both
+                            # this evidence ref and its authorized AEP scope.
+                            eligible_by_need = {
+                                need.information_need_id: tuple(
+                                    hint
+                                    for hint in hints
+                                    if getattr(hint, "evidence_ref", None)
+                                    in need.evidence_refs
+                                    and (
+                                        "windows_aep_authorized_scope_consumed:"
+                                        + str(getattr(hint, "protocol", ""))
+                                    )
+                                    in need.evidence_refs
+                                )
+                                for need in result.information_needs
+                                if need.goal_id == goal.goal_id
+                            }
+                            eligible_refs = {
+                                hint.evidence_ref
+                                for entries in eligible_by_need.values()
+                                for hint in entries
+                            }
+                            eligible = tuple(
+                                hint
+                                for hint in hints
+                                if getattr(hint, "evidence_ref", None) in eligible_refs
+                            )
+                            if eligible:
+                                payload["unverified_device_hints"] = [
+                                    {
+                                        "display_hint": hint.display_hint,
+                                        "address": hint.address,
+                                        "protocol_observed": hint.protocol,
+                                        "neighbor_correlated": hint.neighbor_correlated,
+                                        "verified_identity": False,
+                                        "control_access_verified": False,
+                                    }
+                                    for hint in eligible
+                                ]
+                            choice_sets = []
+                            for need in result.information_needs:
+                                candidates = eligible_by_need.get(
+                                    need.information_need_id, ()
+                                )
+                                if not candidates:
+                                    continue
+                                choice_sets.append(
+                                    {
+                                        "information_need_id": need.information_need_id,
+                                        "digest": _device_choice_digest(candidates),
+                                        "options": [
+                                            {
+                                                "option": index,
+                                                "display_hint": hint.display_hint,
+                                                "evidence_ref": hint.evidence_ref,
+                                                "verified_identity": False,
+                                            }
+                                            for index, hint in enumerate(
+                                                candidates, start=1
+                                            )
+                                        ],
+                                    }
+                                )
+                            if choice_sets:
+                                payload["device_choice_sets"] = choice_sets
             return payload
 
         if result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY:
@@ -390,7 +562,473 @@ class GiccAgentTools:
                 error=exc,
             )
         payload = self._public_result(result)
+        if result.goal is not None:
+            self._offered_network_discovery.pop(result.goal.goal_id, None)
+        scope = payload.get("network_discovery")
+        if isinstance(scope, dict) and result.goal is not None:
+            self._offered_network_discovery[result.goal.goal_id] = (
+                (
+                    scope["information_need_id"],
+                    scope["protocol"],
+                    scope["summary"],
+                    tuple(scope.get("result_address_filters") or ()),
+                    scope["all_local_interfaces"],
+                ),
+                turn.turn_id,
+            )
+        # Offering candidate options is separate from the later NEW owner
+        # choice; no option token can be invented by a model invocation.
+        for key in tuple(self._offered_device_options):
+            if result.goal is not None and key[0] == result.goal.goal_id:
+                self._offered_device_options.pop(key, None)
+        for options in payload.get("device_choice_sets", ()):
+            self._offered_device_options[
+                (payload["goal_id"], options["information_need_id"])
+            ] = (options["digest"], turn.turn_id)
         payload["canonical_user_turn_id"] = turn.turn_id
+        return payload
+
+    @function_tool()
+    async def authorize_bounded_network_discovery(
+        self,
+        context: RunContext,
+        goal_id: str,
+    ) -> dict[str, object]:
+        """Ask for one exact, owner-confirmed local-device discovery.
+
+        This action is ONLY for a fresh accepted USER turn explicitly approving
+        network discovery (for example, "approve the network discovery").
+        Never infer permission from the original goal, generic "yes", or an
+        older approval. Windows Hello and canonical AuthorityService must
+        independently approve the full current scope before any scan begins.
+        Unverified sightings are NOT paired or accepted as physical identity.
+        """
+        del context
+        turn = self._latest_user_turn()
+        # Deliberately recognize an affirmative, *whole utterance*, not
+        # keywords embedded in a refusal, quote, question or conditional.
+        # Windows Hello is still required independently after this check.
+        spoken = turn.text.casefold().strip()
+        explicit_scope_consent = re.fullmatch(
+            r"(?:jarvis[,\s:]+)?(?:yes[,\s]+)?(?:i\s+)?"
+            r"(?:explicitly\s+)?(?:approve|authorize|allow|permit)\s+"
+            r"(?:the\s+|this\s+)?"
+            r"(?:(?:bounded|local|one[- ]time)\s+)*"
+            r"network\s+(?:device\s+)?(?:discovery|scan|scanning)"
+            r"(?:\s+now)?[.!]?",
+            spoken,
+        )
+        if explicit_scope_consent is None:
+            return {
+                "ok": False,
+                "status": "explicit_discovery_permission_not_given",
+                "truth_note": (
+                    "The owner's latest accepted turn did not explicitly approve "
+                    "network discovery. Do not initiate a scan or treat generic "
+                    "acknowledgment as permission."
+                ),
+            }
+        goal = self._store.get_goal(str(goal_id).strip())
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or goal.source_session_id != self._conversation.session_id
+        ):
+            return {
+                "ok": False,
+                "status": "discovery_goal_not_current_or_not_waiting",
+            }
+        runtime = self._execution_runtime
+        execute = (
+            None
+            if runtime is None
+            else getattr(runtime, "authorize_and_discover_network", None)
+        )
+        if not callable(execute):
+            return {"ok": False, "status": "governed_discovery_unavailable"}
+        offered = self._offered_network_discovery.get(goal.goal_id)
+        if offered is None or offered[1] == turn.turn_id:
+            return {
+                "ok": False,
+                "status": "discovery_scope_not_previously_offered",
+            }
+        prepare = getattr(runtime, "prepare_network_discovery_consent", None)
+        if not callable(prepare):
+            return {"ok": False, "status": "governed_discovery_scope_unavailable"}
+        try:
+            current_proposal = prepare(
+                goal_id=goal.goal_id,
+                session_id=goal.source_session_id,
+            )
+            if (
+                current_proposal is None
+                or not current_proposal.has_valid_fingerprint()
+                or current_proposal.is_expired()
+                or current_proposal.session_id != goal.source_session_id
+                or current_proposal.capability != "network_discovery"
+                or current_proposal.operation != "enumerate_aep"
+            ):
+                return {
+                    "ok": False,
+                    "status": "discovery_scope_changed_reoffer_required",
+                }
+            current_target = current_proposal.target()
+            current_material = (
+                current_target.get("gicc_need_id"),
+                current_target.get("protocol"),
+                current_proposal.material_summary,
+                tuple(current_target.get("address_result_filters") or ()),
+                current_target.get("all_local_interfaces"),
+            )
+            if (
+                current_target.get("gicc_goal_id") != goal.goal_id
+                or current_material != offered[0]
+            ):
+                return {
+                    "ok": False,
+                    "status": "discovery_scope_changed_reoffer_required",
+                }
+        except Exception:
+            LOGGER.warning("GICC could not revalidate owner scan scope", exc_info=True)
+            return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
+        # Scope confirmation is a one-time voice decision, not a reusable
+        # credential. Even cancellation requires another explicit fresh offer.
+        self._offered_network_discovery.pop(goal.goal_id, None)
+        try:
+            # Windows Hello may block. Never run it on the audio event loop.
+            result = await asyncio.to_thread(
+                execute,
+                goal_id=goal.goal_id,
+                session_id=goal.source_session_id,
+                owner_turn_id=turn.turn_id,
+                expected_scope_material=offered[0],
+            )
+        except Exception:
+            LOGGER.warning(
+                "GICC owner discovery authorization or execution denied",
+                exc_info=True,
+            )
+            return {
+                "ok": False,
+                "status": "discovery_not_authorized_or_unavailable",
+                "truth_note": (
+                    "No verified device control or successful discovery is "
+                    "established. Never claim that authorization was granted."
+                ),
+            }
+        if result is None:
+            return {
+                "ok": False,
+                "status": "discovery_scope_changed_or_unavailable",
+                "truth_note": "No device scan or control is verified.",
+            }
+        payload: dict[str, object] = {
+            "ok": True,
+            "status": "authorized_discovery_observation_recorded",
+            "goal_id": goal.goal_id,
+            "information_need_id": result.need.information_need_id,
+            "information_need_state": result.need.state.value,
+            "verified_device_control": False,
+            "truth_note": (
+                "The governed observation returned. Unverified device "
+                "advertisements do not prove identity, pairing, access or "
+                "TV control. Await corroborated registry confirmation before "
+                "restarting the same original goal."
+            ),
+        }
+        hints = getattr(runtime, "pending_network_device_suggestions", None)
+        if callable(hints):
+            candidates = hints(
+                goal_id=goal.goal_id,
+                session_id=goal.source_session_id,
+            )
+            eligible = tuple(
+                item
+                for item in candidates
+                if getattr(item, "evidence_ref", None) in result.need.evidence_refs
+                and (
+                    "windows_aep_authorized_scope_consumed:"
+                    + str(getattr(item, "protocol", ""))
+                )
+                in result.need.evidence_refs
+            )
+            payload["unverified_device_hints"] = [
+                {
+                    "display_hint": item.display_hint,
+                    "address": item.address,
+                    "protocol_observed": item.protocol,
+                    "verified_identity": False,
+                }
+                for item in eligible
+            ]
+            if eligible:
+                offer_digest = _device_choice_digest(eligible)
+                self._offered_device_options[
+                    (goal.goal_id, result.need.information_need_id)
+                ] = (offer_digest, turn.turn_id)
+                payload["device_choice_set"] = {
+                    "information_need_id": result.need.information_need_id,
+                    "digest": offer_digest,
+                    "options": [
+                        {
+                            "option": index,
+                            "display_hint": item.display_hint,
+                            "evidence_ref": item.evidence_ref,
+                            "verified_identity": False,
+                        }
+                        for index, item in enumerate(eligible, start=1)
+                    ],
+                }
+        # If this strictly one-time observation produced no fresh device
+        # suggestion, provide the NEXT bounded scope to the owner instead of
+        # looping the exhausted protocol or asking for a manual IP. This is
+        # read-only disclosure, NEVER an automatic second scan/approval.
+        if not payload.get("unverified_device_hints"):
+            prepare = getattr(runtime, "prepare_network_discovery_consent", None)
+            if callable(prepare):
+                try:
+                    proposal = prepare(
+                        goal_id=goal.goal_id,
+                        session_id=goal.source_session_id,
+                    )
+                except Exception:
+                    LOGGER.warning(
+                        "GICC could not prepare follow-up discovery scope",
+                        exc_info=True,
+                    )
+                else:
+                    if (
+                        proposal is not None
+                        and proposal.has_valid_fingerprint()
+                        and not proposal.is_expired()
+                        and proposal.session_id == goal.source_session_id
+                        and proposal.capability == "network_discovery"
+                        and proposal.operation == "enumerate_aep"
+                    ):
+                        next_target = proposal.target()
+                        if (
+                            next_target.get("gicc_goal_id") == goal.goal_id
+                            and next_target.get("gicc_need_id")
+                            == result.need.information_need_id
+                        ):
+                            self._offered_network_discovery[goal.goal_id] = (
+                                (
+                                    result.need.information_need_id,
+                                    next_target.get("protocol"),
+                                    proposal.material_summary,
+                                    tuple(
+                                        next_target.get("address_result_filters") or ()
+                                    ),
+                                    next_target.get("all_local_interfaces"),
+                                ),
+                                turn.turn_id,
+                            )
+                            payload["next_network_discovery"] = {
+                                "state": "proposal_only_not_authorized",
+                                "summary": proposal.material_summary,
+                                "protocol": next_target.get("protocol"),
+                                "information_need_id": result.need.information_need_id,
+                                "result_address_filters": next_target.get(
+                                    "address_result_filters"
+                                ),
+                                "all_local_interfaces": next_target.get(
+                                    "all_local_interfaces"
+                                ),
+                                "owner_approval_required": True,
+                                "scan_started": False,
+                            }
+        return payload
+
+    @function_tool()
+    async def confirm_discovered_device_identity(
+        self,
+        context: RunContext,
+        goal_id: str,
+        information_need_id: str,
+        selected_evidence_ref: str = "",
+        displayed_choice_set_digest: str = "",
+    ) -> dict[str, object]:
+        """Confirm one recent discovered TV/camera as owner inventory.
+
+        Use ONLY after a fresh distinct USER turn explicitly confirming the
+        one displayed device is theirs. Mere "yes" cannot identify a device.
+        No scanner, new approval, pairing, endpoint binding or control action
+        is authorized. Multiple/conflicting/expired hints fail closed.
+        """
+        del context
+        turn = self._latest_user_turn()
+        consent = re.fullmatch(
+            r"(?:i\s+)?confirm\s+(?:that\s+)?(?:the|this)\s+"
+            r"(?:discovered|detected)\s+(?P<kind>tv|television|camera)\s+"
+            r"(?:option\s+(?P<option>[1-8])\s+)?"
+            r"(?:is\s+mine|belongs\s+to\s+me|is\s+my\s+"
+            r"(?P<kind_suffix>tv|television|camera))[.!]?",
+            turn.text.casefold().strip(),
+        )
+        if consent is None:
+            return {
+                "ok": False,
+                "status": "explicit_device_identity_confirmation_not_given",
+            }
+        goal = self._store.get_goal(str(goal_id).strip())
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or goal.source_session_id != self._conversation.session_id
+        ):
+            return {"ok": False, "status": "device_confirmation_goal_not_current"}
+        need = self._store.get_information_need(str(information_need_id).strip())
+        expected_kind = (
+            None
+            if need is None or need.goal_id != goal.goal_id
+            else canonical_world_entity_type(need.answer_schema.get("entity_type"))
+        )
+        spoken_kind = canonical_world_entity_type(consent.group("kind"))
+        tail_kind = consent.group("kind_suffix")
+        if (
+            expected_kind not in {"media_player", "camera"}
+            or spoken_kind != expected_kind
+            or (
+                tail_kind is not None
+                and canonical_world_entity_type(tail_kind) != expected_kind
+            )
+        ):
+            return {
+                "ok": False,
+                "status": "owner_device_confirmation_type_mismatch",
+            }
+        runtime = self._execution_runtime
+        confirm = (
+            None
+            if runtime is None
+            else getattr(runtime, "confirm_owner_discovered_device", None)
+        )
+        if not callable(confirm):
+            return {"ok": False, "status": "owner_device_confirmation_unavailable"}
+        selected: dict[str, object] = {}
+        option = consent.group("option")
+        if option is not None:
+            hints_method = getattr(runtime, "pending_network_device_suggestions", None)
+            if not callable(hints_method):
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            try:
+                hints = hints_method(
+                    goal_id=goal.goal_id,
+                    session_id=goal.source_session_id,
+                )
+            except Exception:
+                LOGGER.warning(
+                    "GICC could not verify owner device options", exc_info=True
+                )
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            candidates = tuple(
+                hint
+                for hint in hints
+                if getattr(hint, "evidence_ref", None) in need.evidence_refs
+                and (
+                    "windows_aep_authorized_scope_consumed:"
+                    + str(getattr(hint, "protocol", ""))
+                )
+                in need.evidence_refs
+            )
+            option_index = int(option) - 1
+            offered = self._offered_device_options.get(
+                (goal.goal_id, need.information_need_id)
+            )
+            if (
+                option_index >= len(candidates)
+                or len(candidates) < 2
+                or offered is None
+                or offered[0] != displayed_choice_set_digest
+                or offered[1] == turn.turn_id
+                or displayed_choice_set_digest != _device_choice_digest(candidates)
+                or selected_evidence_ref != candidates[option_index].evidence_ref
+            ):
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            selected["selected_evidence_ref"] = selected_evidence_ref
+        elif selected_evidence_ref or displayed_choice_set_digest:
+            # A model may not select a device that the owner did not name.
+            return {"ok": False, "status": "explicit_device_option_not_given"}
+        else:
+            # A single device also has to be visibly offered *before* the
+            # owner speaks. An agent must not turn a generic "this TV is mine"
+            # into confirmation of an unseen network advertisement.
+            offered = self._offered_device_options.get(
+                (goal.goal_id, need.information_need_id)
+            )
+            hints_method = getattr(runtime, "pending_network_device_suggestions", None)
+            if not callable(hints_method) or offered is None:
+                return {"ok": False, "status": "owner_device_not_previously_offered"}
+            try:
+                hints = hints_method(
+                    goal_id=goal.goal_id,
+                    session_id=goal.source_session_id,
+                )
+            except Exception:
+                LOGGER.warning(
+                    "GICC could not revalidate displayed device", exc_info=True
+                )
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            candidates = tuple(
+                hint
+                for hint in hints
+                if getattr(hint, "evidence_ref", None) in need.evidence_refs
+                and (
+                    "windows_aep_authorized_scope_consumed:"
+                    + str(getattr(hint, "protocol", ""))
+                )
+                in need.evidence_refs
+            )
+            if (
+                len(candidates) != 1
+                or offered[0] != _device_choice_digest(candidates)
+                or offered[1] == turn.turn_id
+            ):
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+        try:
+            entity = confirm(
+                goal_id=goal.goal_id,
+                information_need_id=str(information_need_id).strip(),
+                session_id=goal.source_session_id,
+                owner_turn_id=turn.turn_id,
+                **selected,
+            )
+        except Exception:
+            LOGGER.warning(
+                "Canonical device identity confirmation failed", exc_info=True
+            )
+            return {"ok": False, "status": "device_identity_confirmation_failed"}
+        if entity is None:
+            return {
+                "ok": False,
+                "status": "no_unique_recent_confirmable_device",
+                "truth_note": (
+                    "No single fresh device hint could be independently owner "
+                    "confirmed. Do not register an identity, guess an IP or "
+                    "claim connectivity."
+                ),
+            }
+        self._offered_device_options.pop(
+            (goal.goal_id, str(information_need_id).strip()), None
+        )
+        try:
+            continued = await runtime.continue_goal(
+                goal.goal_id, retry_information=True
+            )
+        except Exception as exc:  # noqa: BLE001 - voice boundary must remain truthful
+            return self._internal_failure(
+                turn=turn, stage="resume_owner_confirmed_device_goal", error=exc
+            )
+        payload = self._public_result(continued)
+        payload.update(
+            {
+                "confirmed_entity_id": entity.entity_id,
+                "owner_inventory_only": True,
+                "network_access_verified": False,
+                "device_control_verified": False,
+                "canonical_user_turn_id": turn.turn_id,
+            }
+        )
         return payload
 
     @function_tool()
@@ -482,3 +1120,39 @@ class GiccAgentTools:
             }
         )
         return payload
+
+
+def build_session_scoped_gicc_tools(
+    coordinator: GoalIntelligenceCoordinator,
+    store: GoalStore,
+    *,
+    execution_runtime: GiccExecutionRuntime | None = None,
+    objective_status: OwnerObjectiveStatusResolver | None = None,
+    telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
+) -> Callable[[ConversationSession], GiccAgentTools]:
+    """Reuse consent/choice offers across tool-list refreshes of one conversation.
+
+    Production may enumerate action/read tools on every speech turn. Creating
+    a new GiccAgentTools each time would lose the prior scoped consent offer
+    and the exact displayed device-choice set. A different conversation gets
+    a clean instance and cannot inherit the previous owner's offers.
+    """
+    current_session: ConversationSession | None = None
+    current_tools: GiccAgentTools | None = None
+
+    def get(conversation: ConversationSession) -> GiccAgentTools:
+        nonlocal current_session, current_tools
+        if current_session is conversation and current_tools is not None:
+            return current_tools
+        current_tools = GiccAgentTools(
+            coordinator,
+            conversation,
+            store,
+            execution_runtime=execution_runtime,
+            objective_status=objective_status,
+            telemetry=telemetry,
+        )
+        current_session = conversation
+        return current_tools
+
+    return get

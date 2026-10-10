@@ -502,6 +502,47 @@ def _targeted_custom_build(goal: OwnerCapabilityGoalV1) -> AcquisitionCandidateV
     )
 
 
+def test_abstract_software_utility_remains_buildable_without_device() -> None:
+    goal = OwnerCapabilityGoalV1.create(
+        request="Build a reusable numeric transformation",
+        requested_capability="example.utility",
+        required_operations=("transform",),
+        target_hints=("entity_type:software",),
+        source_session_id="generic-utility",
+        source_turn_id="generic-utility-turn",
+        now_epoch=100.0,
+    )
+    fallback = _targeted_custom_build(goal)
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (fallback,),
+        _core_context(),
+    )
+
+    assert result.selected_candidate_id == fallback.candidate_id
+    assert result.evaluation(fallback.candidate_id).disposition is (
+        AcquisitionDisposition.SELECTABLE
+    )
+
+
+def test_unidentified_television_must_not_select_custom_build_from_goal_alone() -> None:
+    goal = _targeted_goal()
+    fallback = _targeted_custom_build(goal)
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (fallback,),
+        _core_context(),
+    )
+
+    evaluation = result.evaluation(fallback.candidate_id)
+    assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in evaluation.reason_codes
+    assert "target_unproven_entity_type" in evaluation.reason_codes
+    assert result.selected_candidate_id is None
+
+
 def test_target_incompatible_samsung_candidate_cannot_win_hisense_vidaa_goal() -> None:
     goal = _targeted_goal()
     samsung = _targeted_sdk(
@@ -526,7 +567,12 @@ def test_target_incompatible_samsung_candidate_cannot_win_hisense_vidaa_goal() -
     assert "target_incompatible" in samsung_evaluation.reason_codes
     assert "target_conflict_vendor" in samsung_evaluation.reason_codes
     assert "target_conflict_platform" in samsung_evaluation.reason_codes
-    assert result.selected_candidate_id == custom.candidate_id
+    # Owner-goal lineage is not proof that this custom adapter would work
+    # with the verified physical television.
+    custom_evaluation = result.evaluation(custom.candidate_id)
+    assert custom_evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in custom_evaluation.reason_codes
+    assert result.selected_candidate_id is None
 
 
 def test_target_specific_external_candidate_requires_structured_target_proof() -> None:
@@ -546,7 +592,12 @@ def test_target_specific_external_candidate_requires_structured_target_proof() -
     assert "target_compatibility_unproven" in evaluation.reason_codes
     assert "target_unproven_vendor" in evaluation.reason_codes
     assert "target_unproven_platform" in evaluation.reason_codes
-    assert result.selected_candidate_id == custom.candidate_id
+    # Owner-goal lineage is not proof that this custom adapter would work
+    # with the verified physical television.
+    custom_evaluation = result.evaluation(custom.candidate_id)
+    assert custom_evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_compatibility_unproven" in custom_evaluation.reason_codes
+    assert result.selected_candidate_id is None
 
 
 def test_matching_target_proof_keeps_verified_sdk_selectable() -> None:
@@ -571,3 +622,371 @@ def test_matching_target_proof_keeps_verified_sdk_selectable() -> None:
     assert evaluation.disposition is AcquisitionDisposition.SELECTABLE
     assert "target_compatible" in evaluation.reason_codes
     assert result.selected_candidate_id == matching.candidate_id
+
+
+def test_candidate_cannot_self_attest_unverified_device_protocol() -> None:
+    goal = _targeted_goal()
+    guessed_transport = _targeted_sdk(
+        identity="blind-device-adapter",
+        device_scopes=(
+            "entity_type:television",
+            "protocol:unverified-control-transport",
+        ),
+    )
+
+    result = _resolver().resolve_candidates(
+        goal,
+        (guessed_transport,),
+        _core_context(),
+    )
+
+    evaluation = result.evaluation(guessed_transport.candidate_id)
+    assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+    assert "target_unproven_protocol" in evaluation.reason_codes
+    assert result.selected_candidate_id is None
+
+
+def test_independent_protocol_observation_allows_matching_adapter() -> None:
+    goal = _targeted_goal()
+    candidate = _targeted_sdk(
+        identity="verified-protocol-adapter",
+        device_scopes=(
+            "entity_type:television",
+            "protocol:reviewed-transport-v1",
+        ),
+    )
+    result = _resolver().resolve_candidates(
+        goal,
+        (candidate,),
+        _core_context(),
+        canonical_target_hints=("protocol:reviewed-transport-v1",),
+    )
+
+    assert result.selected_candidate_id == candidate.candidate_id
+    assert result.evaluation(candidate.candidate_id).disposition is (
+        AcquisitionDisposition.SELECTABLE
+    )
+
+
+def test_candidate_unverified_platform_is_not_inferred_from_device_type() -> None:
+    goal = _targeted_goal()
+    candidate = _targeted_sdk(
+        identity="platform-specific-adapter",
+        device_scopes=(
+            "entity_type:television",
+            "platform:unverified-operating-system",
+        ),
+    )
+    result = _resolver().resolve_candidates(goal, (candidate,), _core_context())
+
+    assert result.selected_candidate_id is None
+    assert (
+        "target_unproven_platform"
+        in result.evaluation(candidate.candidate_id).reason_codes
+    )
+
+
+def test_conflicting_owner_and_canonical_device_proof_fails_closed() -> None:
+    """Never resurrect a Roku plan by mixing it with VIDAA inventory facts."""
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my television",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "platform:roku"),
+        source_session_id="owner-target-conflict",
+        source_turn_id="owner-target-conflict-turn",
+        now_epoch=100.0,
+    )
+    for platform in ("roku", "vidaa"):
+        candidate = _targeted_sdk(
+            identity=f"adapter-for-{platform}",
+            device_scopes=("entity_type:television", f"platform:{platform}"),
+        )
+        result = _resolver().resolve_candidates(
+            goal,
+            (candidate,),
+            _core_context(),
+            canonical_target_hints=("platform:vidaa",),
+        )
+        evaluation = result.evaluation(candidate.candidate_id)
+        assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+        assert "target_incompatible" in evaluation.reason_codes
+        assert "target_conflict_platform" in evaluation.reason_codes
+        assert "target_conflicting_provenance_platform" in evaluation.reason_codes
+        assert result.selected_candidate_id is None
+
+
+def test_world_entity_type_alias_does_not_fake_a_provenance_conflict() -> None:
+    """TV and media_player name the same type; protocols do not."""
+    goal = _targeted_goal()
+    candidate = _targeted_sdk(
+        identity="reviewed-vidaa-tv-adapter",
+        device_scopes=("entity_type:television", "platform:vidaa"),
+    )
+    result = _resolver().resolve_candidates(
+        goal,
+        (candidate,),
+        _core_context(),
+        canonical_target_hints=(
+            "entity_type:media_player",
+            "platform:vidaa",
+        ),
+    )
+    assert result.selected_candidate_id == candidate.candidate_id
+    assert result.evaluation(candidate.candidate_id).disposition is (
+        AcquisitionDisposition.SELECTABLE
+    )
+
+
+def test_existing_roku_adapter_cannot_override_owner_vidaa_platform() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = _targeted_goal()
+    existing = AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.EXISTING_CAPABILITY,
+        source_identity="registered-existing-roku-tv",
+        source_version="1.0.0",
+        source_digest="e" * 64,
+        trust_class=AcquisitionTrustClass.ACCEPTED_RELEASE,
+        supported_operations=("power",),
+        strategy=AcquisitionStrategy.REUSE,
+        evidence_refs=("existing-runtime-binding",),
+        verification_requirements=("existing-binding-evidence",),
+        device_scopes=("entity_type:television", "platform:roku"),
+    )
+    compatibility = evaluate_candidate_target_compatibility(
+        goal,
+        existing,
+        canonical_target_hints=("platform:vidaa",),
+    )
+    assert compatibility.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflict_platform" in compatibility.reason_codes
+    assert not compatibility.compatible
+
+
+def test_existing_roku_protocol_cannot_self_attest_owner_device_access() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = _targeted_goal()
+    existing = AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.EXISTING_CAPABILITY,
+        source_identity="registered-existing-roku-ecp",
+        source_version="1.0.0",
+        source_digest="f" * 64,
+        trust_class=AcquisitionTrustClass.ACCEPTED_RELEASE,
+        supported_operations=("power",),
+        strategy=AcquisitionStrategy.REUSE,
+        evidence_refs=("existing-runtime-binding",),
+        verification_requirements=("existing-binding-evidence",),
+        device_scopes=("entity_type:television", "protocol:roku-ecp"),
+    )
+    compatibility = evaluate_candidate_target_compatibility(
+        goal,
+        existing,
+        canonical_target_hints=("platform:vidaa",),
+    )
+    assert compatibility.verdict is TargetCompatibilityVerdict.UNPROVEN
+    assert "target_unproven_protocol" in compatibility.reason_codes
+    assert not compatibility.compatible
+
+
+def test_legacy_reuse_rejects_specific_physical_device_without_binding() -> None:
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my actual living room TV",
+        requested_capability="TV control",
+        required_operations=("power",),
+        target_hints=(
+            "entity_type:media_player",
+            "entity_id:owner_confirmed_network_tv",
+        ),
+        source_session_id="owner-identity-goal",
+        source_turn_id="original-identity-turn",
+        now_epoch=100.0,
+    )
+    context = _core_context()
+    assert ExistingCapabilitySourceAdapter().discover(goal, context) == ()
+    resolution = _resolver().resolve(goal, context)
+    assert resolution.selected_candidate_id is None
+
+
+def test_exact_existing_device_binding_still_reuses_compatible_capability() -> None:
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my bound living room TV",
+        requested_capability="TV control",
+        required_operations=("power",),
+        target_hints=(
+            "entity_type:media_player",
+            "entity_id:owner_confirmed_network_tv",
+        ),
+        source_session_id="bound-identity-session",
+        source_turn_id="bound-identity-turn",
+        now_epoch=100.0,
+    )
+    descriptor = CapabilityDescriptor.create(
+        capability_id="tv.control",
+        source_id="local",
+        kind=CapabilityKind.NATIVE_API,
+        name="TV control",
+        description="An identity-bound TV capability",
+        operations=("power", "volume"),
+        execution_enabled=True,
+        metadata={
+            "acquisition_target_hints": list(goal.target_hints),
+        },
+    )
+    context = AcquisitionContextV1(
+        catalog=CapabilityCatalog(sources=(), capabilities=(descriptor,)),
+        inventory=(
+            CapabilityInventoryEntry(
+                capability_id=descriptor.capability_id,
+                capability_key=descriptor.key,
+                management_mode=CapabilityManagementMode.CORE_PINNED,
+            ),
+        ),
+    )
+    assert len(ExistingCapabilitySourceAdapter().discover(goal, context)) == 1
+
+
+def test_external_adapter_for_other_owner_entity_is_incompatible() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire control of the exact owner TV",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "entity_id:owner-tv-a"),
+        source_session_id="owner-tv-identity",
+        source_turn_id="original-tv-request",
+        now_epoch=100.0,
+    )
+    wrong = _targeted_sdk(
+        identity="adapter-bound-to-another-tv",
+        device_scopes=("entity_type:television", "entity_id:owner-tv-b"),
+    )
+    result = evaluate_candidate_target_compatibility(goal, wrong)
+    assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflict_entity_id" in result.reason_codes
+
+    general = _targeted_sdk(
+        identity="unbound-reusable-tv-adapter",
+        device_scopes=("entity_type:television",),
+    )
+    reusable = evaluate_candidate_target_compatibility(goal, general)
+    assert reusable.verdict is TargetCompatibilityVerdict.COMPATIBLE
+    assert reusable.compatible
+    # Candidate selection is not a verified endpoint binding or action result.
+
+
+def test_confirmed_target_id_overrides_conflicting_stale_owner_id() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire TV control",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "entity_id:previous-tv"),
+        source_session_id="owner-conflicting-target",
+        source_turn_id="owner-old-tv",
+        now_epoch=100.0,
+    )
+    sdk = _targeted_sdk(
+        identity="generic-tv-adapter",
+        device_scopes=("entity_type:television",),
+    )
+    result = evaluate_candidate_target_compatibility(
+        goal,
+        sdk,
+        canonical_target_hints=("entity_id:confirmed-tv",),
+    )
+    assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflicting_provenance_entity_id" in result.reason_codes
+
+
+def test_reusable_sdk_does_not_require_owner_inventory_display_name() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = _targeted_goal()
+    sdk = _targeted_sdk(
+        identity="generic-vidaa-library",
+        device_scopes=("entity_type:television", "platform:vidaa"),
+    )
+    result = evaluate_candidate_target_compatibility(
+        goal,
+        sdk,
+        canonical_target_hints=(
+            "entity_type:television",
+            "entity_name:Owner-confirmed TV",
+            "platform:vidaa",
+        ),
+    )
+    assert result.verdict is TargetCompatibilityVerdict.COMPATIBLE
+    assert result.compatible
+
+    # But claiming a different owner's concrete device name is not reusable.
+    wrong_name = _targeted_sdk(
+        identity="wrong-physical-tv-binding",
+        device_scopes=(
+            "entity_type:television",
+            "entity_name:Different owner's TV",
+            "platform:vidaa",
+        ),
+    )
+    rejected = evaluate_candidate_target_compatibility(
+        goal,
+        wrong_name,
+        canonical_target_hints=(
+            "entity_type:television",
+            "entity_name:Owner-confirmed TV",
+            "platform:vidaa",
+        ),
+    )
+    assert rejected.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflict_entity_name" in rejected.reason_codes
+
+
+def test_ambiguous_canonical_platforms_cannot_prove_a_tv_adapter() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my Roku television",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "platform:roku"),
+        source_session_id="ambiguous-goal",
+        source_turn_id="original",
+        now_epoch=100.0,
+    )
+    sdk = _targeted_sdk(
+        identity="roku-ecp-adapter",
+        device_scopes=("entity_type:television", "platform:roku"),
+    )
+    result = evaluate_candidate_target_compatibility(
+        goal,
+        sdk,
+        canonical_target_hints=(
+            "entity_type:television",
+            "platform:roku",
+            "platform:vidaa",
+        ),
+    )
+    assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_ambiguous_canonical_platform" in result.reason_codes
+    assert not result.compatible

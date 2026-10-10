@@ -76,6 +76,11 @@ def reconcile_owner_change_gates(
                 "allowed_components",
                 "allowed_paths",
                 "requested_operations",
+                "device_scopes",
+                "network_scopes",
+                "discovery_scopes",
+                "semantic_capability_contract",
+                "owner_acceptance_contract_ids",
                 "rollback_strategy",
             )
             if key in architecture.payload

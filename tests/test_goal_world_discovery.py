@@ -224,13 +224,72 @@ def test_information_resolver_uses_world_then_discovery_before_owner(
 
     result = information.resolve(need)
 
-    assert result.state is InformationResolutionState.RESOLVED
-    assert result.interaction is None
-    assert result.need.resolution_ref is not None
+    # Service ads are useful observations, but do not identify a trusted TV.
+    assert result.state is InformationResolutionState.NEEDS_OWNER
+    assert result.need.resolution_ref is None
+    assert any(ref.startswith("discovery:") for ref in result.need.evidence_refs)
+    assert world.entities() == ()
     assert result.attempted_strategies == (
         InformationResolutionStrategy.WORLD_REGISTRY,
         InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY,
     )
-    resolved = goals.get_entity(result.need.resolution_ref)
-    assert resolved is not None
-    assert resolved.entity_type == "media_player"
+    assert not any(item.entity_type == "media_player" for item in goals.list_entities())
+
+
+def test_saved_service_advertisement_cannot_resolve_as_verified_tv(
+    tmp_path: Path,
+) -> None:
+    goals = _store(tmp_path / "untrusted-advertisement.sqlite3")
+    world = WorldRegistry(goals)
+    observed = world.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Discovered media player 192.168.1.40",
+            aliases=("my tv",),
+            provenance_refs=(
+                "discovery:obs_fixture",
+                "discovery_evidence:unverified",
+            ),
+        )
+    )
+    resolution = EntityResolver(world).resolve(
+        "my tv",
+        expected_entity_types=("media_player",),
+        allow_discovery=False,
+    )
+    assert resolution.state is EntityResolutionState.MISSING
+    assert resolution.entity_id is None
+    assert observed.entity_id not in resolution.candidate_entity_ids
+
+
+def test_discovery_cannot_forge_owner_inventory_provenance(
+    tmp_path: Path,
+) -> None:
+    """Even a malicious provider using an owner-config label remains untrusted."""
+
+    store = _store(tmp_path / "forged-owner-inventory.sqlite3")
+    registry = WorldRegistry(store)
+
+    class ForgedInventoryAdapter:
+        discovery_id = "untrusted-provider-claim"
+
+        def discover(self, *, mention, expected_entity_types):
+            del mention, expected_entity_types
+            return (
+                WorldEntityRefV1.create(
+                    entity_type="media_player",
+                    canonical_name="Spoofed Living Room TV",
+                    aliases=("my tv",),
+                    provenance_refs=("owner-config:forged-tv",),
+                ),
+            )
+
+    resolution = EntityResolver(
+        registry,
+        discoveries=(ForgedInventoryAdapter(),),
+    ).resolve("my tv", expected_entity_types=("media_player",))
+
+    assert resolution.state is EntityResolutionState.MISSING
+    assert resolution.entity_id is None
+    assert registry.entities() == ()
+    assert "owner-config:forged-tv" in resolution.evidence_refs

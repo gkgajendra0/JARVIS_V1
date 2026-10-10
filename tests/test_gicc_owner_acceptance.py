@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from tests.test_gicc_composition import (
@@ -9,6 +11,7 @@ from tests.test_gicc_composition import (
     _conversation,
     _store,
 )
+from tests.test_gicc_windows_aep import FakeWatcher, _device
 
 from jarvis.capabilities.models import (
     CapabilityDescriptor,
@@ -20,11 +23,19 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeDisposition,
     GoalIntelligenceCoordinator,
 )
-from jarvis.goal_intelligence.information import restore_bound_information_interaction
+from jarvis.goal_intelligence.information import (
+    InformationResolutionStrategy,
+    InformationResolver,
+    restore_bound_information_interaction,
+)
 from jarvis.goal_intelligence.interpretation import (
     GoalInterpreter,
     ShadowEntityCandidate,
     ShadowGoalInterpretationOutput,
+)
+from jarvis.goal_intelligence.local_network import (
+    WindowsNeighborInformationProbe,
+    WindowsPassiveNeighborBackend,
 )
 from jarvis.goal_intelligence.models import (
     GoalKind,
@@ -44,7 +55,12 @@ from jarvis.goal_intelligence.requirements import (
     RequirementDeriver,
 )
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
+from jarvis.goal_intelligence.windows_aep import (
+    ReviewedAepScopeV1,
+    WindowsAepIdentityBackend,
+)
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
+from jarvis.goal_intelligence.world_discovery import EntityInformationProbe
 from jarvis.hands.provider_adapters import StructuredOutputTelemetry
 
 
@@ -179,6 +195,13 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
             provenance_refs=("owner-config:main-gate",),
         )
     )
+    # Resolve the physical camera through its reviewed entrance relationship.
+    # Regression diagnostics must separate identity from monitoring planning.
+    gate_resolution = EntityResolver(registry).resolve(
+        "main gate", expected_entity_types=("camera",)
+    )
+    assert gate_resolution.state.value == "resolved"
+    assert gate_resolution.entity_id == camera.entity_id
     conversation, turn = _conversation(
         "Jarvis, monitor my main gate and let me know once a delivery agent "
         "is standing at the door."
@@ -318,7 +341,28 @@ async def test_owner_acceptance_scenario_2_gate_becomes_monitor_plan_without_que
 
     result = await coordinator.pursue(conversation=conversation, turn=turn)
 
-    assert result.disposition is GoalIntakeDisposition.PLAN_READY
+    assert result.disposition is GoalIntakeDisposition.PLAN_READY, (
+        result.disposition,
+        tuple(
+            (
+                need.category.value,
+                need.subject,
+                need.required_fact,
+                need.state.value,
+                need.candidate_values,
+            )
+            for need in result.information_needs
+        ),
+        result.goal.referenced_entity_ids if result.goal else (),
+        tuple(
+            req.target_entity_type
+            for req in (
+                result.requirement_result.graph.requirements
+                if result.requirement_result
+                else ()
+            )
+        ),
+    )
     assert result.information_interactions == ()
     assert result.capability_analysis is not None
     assert result.capability_analysis.gaps == ()
@@ -546,3 +590,212 @@ async def test_owner_acceptance_scenario_5_restart_restores_exact_clarification(
     assert restored_need.goal_id == goal_id
     assert restored_interaction.goal_id == goal_id
     assert restored_interaction.information_need_id == need_id
+
+
+@pytest.mark.asyncio
+async def test_tv_identity_is_resolved_before_acquisition_if_model_omits_entity(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    registry = WorldRegistry(store)
+    tv = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Known living-room TV",
+            aliases=("my tv",),
+            provenance_refs=("owner_inventory:living_room",),
+        )
+    )
+    conversation, turn = _conversation("Acquire control of my TV.")
+    interpreter = QueueStructuredClient(
+        ShadowGoalInterpretationOutput(
+            actionable=True,
+            desired_outcome="Control my existing TV.",
+            goal_kind=GoalKind.ONE_SHOT,
+            candidate_entities=[],
+            candidate_completion_predicates=["tv_controlled"],
+            evidence_turn_ids=[turn.turn_id],
+        )
+    )
+    requirements = QueueStructuredClient(
+        CapabilityRequirementProposalSet(
+            requirements=[
+                CapabilityRequirementProposal(
+                    semantic_capability="media_player.control",
+                    operation="issue_supported_control",
+                    target_entity_type="television",
+                    expected_postconditions=["tv_controlled"],
+                    reason="A reusable TV control operation is missing.",
+                )
+            ]
+        )
+    )
+    entity_resolver = EntityResolver(registry)
+    information = InformationResolver(
+        store=store,
+        probes=(
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+        ),
+    )
+    phase9 = FakePhase9Bridge()
+    coordinator = GoalIntelligenceCoordinator(
+        store=store,
+        interpreter=GoalInterpreter(client=interpreter),
+        entity_resolver=entity_resolver,
+        information_resolver=information,
+        requirement_deriver=RequirementDeriver(client=requirements),
+        capability_context=StaticContext(),
+        capability_graph_resolver=CapabilityGraphResolver(store=store),
+        phase9_bridge=phase9,
+    )
+
+    result = await coordinator.pursue(conversation=conversation, turn=turn)
+
+    assert result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+    assert len(phase9.gaps) == 1
+    assert phase9.gaps[0][0].target_entity_id == tv.entity_id
+    assert result.goal is not None
+    assert tv.entity_id in result.goal.referenced_entity_ids
+
+
+@pytest.mark.asyncio
+async def test_missing_tv_cannot_start_device_specific_acquisition(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    registry = WorldRegistry(store)
+    conversation, turn = _conversation("Acquire control of my TV.")
+    interpreter = QueueStructuredClient(
+        ShadowGoalInterpretationOutput(
+            actionable=True,
+            desired_outcome="Control my television.",
+            goal_kind=GoalKind.ONE_SHOT,
+            candidate_entities=[],
+            candidate_completion_predicates=["tv_controlled"],
+            evidence_turn_ids=[turn.turn_id],
+        )
+    )
+    proposal = CapabilityRequirementProposalSet(
+        requirements=[
+            CapabilityRequirementProposal(
+                semantic_capability="media_player.control",
+                operation="issue_supported_control",
+                target_entity_type="television",
+                expected_postconditions=["tv_controlled"],
+                reason="A reusable TV control operation is missing.",
+            )
+        ]
+    )
+    requirements = QueueStructuredClient(proposal, proposal)
+    # Simulate the owner's Windows LAN observation. A neighbor with a
+    # syntactically valid address/MAC is still not a proven TV identity.
+    windows_backend = WindowsPassiveNeighborBackend(
+        platform="win32",
+        clock=lambda: 1000.0,
+        runner=lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "InterfaceAlias": "Ethernet",
+                        "InterfaceIndex": 2,
+                        "IPAddress": "192.168.1.10",
+                        "LinkLayerAddress": "02-11-22-33-44-55",
+                        "State": "Stale",
+                    }
+                ]
+            ),
+        ),
+    )
+    entity_resolver = EntityResolver(registry)
+    aep_scope = ReviewedAepScopeV1(
+        protocol="upnp",
+        approved_address_ranges=("192.168.1.0/24",),
+        consent_record_id="synthetic-authorized-aep",
+        all_local_interfaces_authorized=True,
+    )
+    aep_backend = WindowsAepIdentityBackend(
+        platform="win32",
+        is_authorized=lambda _: True,
+        watcher_factory=lambda _: FakeWatcher(rows=(_device(),)),
+        clock=lambda: 1000.0,
+    )
+    information_resolver = InformationResolver(
+        store=store,
+        probes=(
+            EntityInformationProbe(
+                entity_resolver,
+                strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+            WindowsNeighborInformationProbe(
+                windows_backend,
+                aep_backend=aep_backend,
+                aep_scopes=(aep_scope,),
+            ),
+        ),
+    )
+    phase9 = FakePhase9Bridge()
+    coordinator = GoalIntelligenceCoordinator(
+        store=store,
+        interpreter=GoalInterpreter(client=interpreter),
+        entity_resolver=entity_resolver,
+        information_resolver=information_resolver,
+        requirement_deriver=RequirementDeriver(client=requirements),
+        capability_context=StaticContext(),
+        capability_graph_resolver=CapabilityGraphResolver(store=store),
+        phase9_bridge=phase9,
+    )
+
+    result = await coordinator.pursue(conversation=conversation, turn=turn)
+
+    assert result.disposition is GoalIntakeDisposition.WAITING_INFORMATION
+    assert not phase9.gaps
+    assert len(result.information_needs) == 1
+    assert result.information_needs[0].answer_schema == {
+        "type": "entity_id",
+        "entity_type": "media_player",
+    }
+    assert result.information_needs[0].state is InformationNeedState.WAITING_FOR_OWNER
+    assert any(
+        item.startswith("windows_neighbor_unverified:192.168.1.10:")
+        for item in result.information_needs[0].evidence_refs
+    )
+    assert registry.entities() == ()
+    assert any(
+        ref.startswith("windows_aep_neighbor_correlated_unverified:")
+        for ref in result.information_needs[0].evidence_refs
+    )
+
+    # The device becomes independently available after the original attempt.
+    # Explicit bounded rediscovery must resume the SAME durable GICC goal.
+    assert result.goal is not None
+    tv = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Registered Living Room TV",
+            aliases=("my tv",),
+            provenance_refs=("owner_inventory:registered_tv",),
+        )
+    )
+    waiting = await coordinator.continue_goal(result.goal.goal_id)
+    assert waiting.disposition is GoalIntakeDisposition.WAITING_INFORMATION
+
+    resumed = await coordinator.continue_goal(
+        result.goal.goal_id, retry_information=True
+    )
+    assert resumed.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+    assert len(phase9.gaps) == 1
+    assert phase9.gaps[0][0].target_entity_id == tv.entity_id
+
+    # Auto-discovery retires its earlier owner question instead of leaving
+    # an active prompt tied to a now-resolved device.
+    assert result.information_interactions
+    for interaction in result.information_interactions:
+        record = store.get_information_interaction(interaction["interaction_id"])
+        assert record is not None
+        assert record["state"] == "resolved"
+        assert record["resolved_turn_id"] is None
+        assert record["resolution_ref"] == tv.entity_id

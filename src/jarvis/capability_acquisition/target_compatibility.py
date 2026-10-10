@@ -8,7 +8,6 @@ from enum import StrEnum
 from jarvis.capability_acquisition.models import (
     AcquisitionCandidateV1,
     AcquisitionSourceKind,
-    AcquisitionStrategy,
     OwnerCapabilityGoalV1,
 )
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -25,6 +24,7 @@ _TARGET_DIMENSIONS = frozenset(
     {
         "entity_type",
         "entity_name",
+        "entity_id",
         "vendor",
         "platform",
         "protocol",
@@ -42,6 +42,24 @@ def _hint(value: object) -> tuple[str, str] | None:
     target_value = raw_value.strip()
     if key not in _TARGET_DIMENSIONS or not target_value:
         return None
+    if key == "entity_type":
+        # Recognize equivalent names for the same canonical world resource.
+        # A TV vs media_player alias must not look like an owner/inventory
+        # contradiction, while platform/protocol claims remain exact.
+        target_value = {
+            "tv": "media_player",
+            "television": "media_player",
+            "smart_tv": "media_player",
+            "smart_television": "media_player",
+            "media": "media_player",
+            "desktop": "computer",
+            "laptop": "computer",
+            "pc": "computer",
+            "webcam": "camera",
+            "security_camera": "camera",
+            "monitor": "display",
+            "screen": "display",
+        }.get(target_value, target_value)
     return key, target_value
 
 
@@ -118,14 +136,50 @@ def evaluate_candidate_target_compatibility(
         )
     )
     required = _hint_map(required_values)
+    # A stale owner plan and an independently reviewed target inventory
+    # cannot be unioned into proof. One matching claimed protocol would
+    # otherwise hide the other, incompatible canonical target protocol.
+    goal_facts = _hint_map(goal.target_hints)
+    canonical_facts = _hint_map(canonical_target_hints)
+    provenance_conflicts = tuple(
+        sorted(
+            dimension
+            for dimension, observed in canonical_facts.items()
+            if dimension in goal_facts and goal_facts[dimension].isdisjoint(observed)
+        )
+    )
+    # Each physical identity/platform/transport fact must be unambiguous.
+    # A canonical record simultaneously claiming both Roku and VIDAA must
+    # never match an adapter just because one claim overlaps.
+    ambiguous_canonical = tuple(
+        sorted(
+            dimension
+            for dimension, values in canonical_facts.items()
+            if len(values) > 1
+        )
+    )
+    ambiguous_goal = tuple(
+        sorted(dimension for dimension, values in goal_facts.items() if len(values) > 1)
+    )
 
-    # A custom build is generated from this exact immutable owner goal. Existing
-    # capabilities have already passed descriptor target filtering before evaluation.
+    # A generic software utility is an abstract build target, not an
+    # identified physical/remote endpoint. Do not require a manufacturer or
+    # device-protocol attestation merely because GICC labels it "software".
+    # Additional dimensions (vendor, model, protocol, etc.) still require proof.
+    if set(required) == {"entity_type"} and required["entity_type"] <= {
+        "software",
+        "generic_external_resource",
+    }:
+        required = {}
+        required_values = ()
+
+    # Owner-goal provenance establishes *why* a custom build was proposed, not
+    # whether its claimed device/platform/protocol is compatible. In particular,
+    # never let a custom-build fallback bypass missing target evidence. Existing
+    # capabilities retain their separate descriptor/binding compatibility guard.
     intrinsically_bound = (
-        candidate.strategy is AcquisitionStrategy.BUILD_CUSTOM
-        and candidate.source_kind is AcquisitionSourceKind.CUSTOM_BUILD
-        and candidate.source_identity == f"owner-goal:{goal.goal_id}"
-    ) or candidate.source_kind is AcquisitionSourceKind.EXISTING_CAPABILITY
+        candidate.source_kind is AcquisitionSourceKind.EXISTING_CAPABILITY
+    )
 
     declared_values = tuple(
         sorted(
@@ -142,16 +196,67 @@ def evaluate_candidate_target_compatibility(
     missing: list[str] = []
     conflicting: list[str] = []
 
-    if not required:
+    if ambiguous_canonical or ambiguous_goal:
+        verdict = TargetCompatibilityVerdict.INCOMPATIBLE
+        conflicting.extend(ambiguous_canonical)
+        conflicting.extend(ambiguous_goal)
+        reasons = (
+            "target_incompatible",
+            *(f"target_ambiguous_canonical_{dim}" for dim in ambiguous_canonical),
+            *(f"target_ambiguous_goal_{dim}" for dim in ambiguous_goal),
+        )
+    elif provenance_conflicts:
+        verdict = TargetCompatibilityVerdict.INCOMPATIBLE
+        conflicting.extend(provenance_conflicts)
+        reasons = (
+            "target_incompatible",
+            *(f"target_conflict_{dimension}" for dimension in provenance_conflicts),
+            *(
+                f"target_conflicting_provenance_{dimension}"
+                for dimension in provenance_conflicts
+            ),
+        )
+    elif not required:
         verdict = TargetCompatibilityVerdict.NOT_REQUIRED
         reasons = ("target_compatibility_not_required",)
     elif intrinsically_bound:
-        verdict = TargetCompatibilityVerdict.COMPATIBLE
-        reasons = ("target_compatibility_intrinsic",)
-        matched = sorted(required)
+        # Registered existing capabilities carry a separate executable-binding
+        # gate, but that cannot excuse an EXPLICIT conflict with canonical
+        # target facts (e.g. old Roku adapter vs verified VIDAA owner TV).
+        # Missing scope declarations continue using their existing binding
+        # contract; present incompatible declarations fail closed here.
+        for dimension, expected in required.items():
+            actual = declared.get(dimension)
+            if actual is not None and expected.isdisjoint(actual):
+                conflicting.append(dimension)
+        for dimension in ("vendor", "platform", "protocol", "model"):
+            if dimension in declared and dimension not in required:
+                missing.append(dimension)
+        if conflicting:
+            verdict = TargetCompatibilityVerdict.INCOMPATIBLE
+            reasons = (
+                "target_incompatible",
+                *(f"target_conflict_{dimension}" for dimension in sorted(conflicting)),
+            )
+        elif missing:
+            verdict = TargetCompatibilityVerdict.UNPROVEN
+            reasons = (
+                "target_compatibility_unproven",
+                *(f"target_unproven_{dimension}" for dimension in sorted(missing)),
+            )
+        else:
+            verdict = TargetCompatibilityVerdict.COMPATIBLE
+            reasons = ("target_compatibility_intrinsic",)
+            matched = sorted(required)
     else:
         for dimension, expected in required.items():
             actual = declared.get(dimension)
+            if dimension in {"entity_id", "entity_name"} and actual is None:
+                # A reusable SDK may support this target class without being
+                # installed/bound to one owner entity yet. But if it CLAIMS
+                # an exact entity or owner-specific name, that claim must
+                # match. Binding and control remain separately governed.
+                continue
             if actual is None:
                 missing.append(dimension)
                 continue
@@ -159,6 +264,14 @@ def evaluate_candidate_target_compatibility(
                 conflicting.append(dimension)
             else:
                 matched.append(dimension)
+
+        # A candidate's own transport/model/vendor claims describe what the
+        # adapter supports; they cannot establish what the actual owner device
+        # provides. Require independent goal/observed target corroboration
+        # before treating a device-specific candidate as compatible.
+        for dimension in ("vendor", "platform", "protocol", "model"):
+            if dimension in declared and dimension not in required:
+                missing.append(dimension)
 
         if conflicting:
             verdict = TargetCompatibilityVerdict.INCOMPATIBLE

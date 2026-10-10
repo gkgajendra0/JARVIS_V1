@@ -118,6 +118,7 @@ def test_live_binding_requirement_rejects_unbound_or_stale_resource(
             entity_type="media_player",
             canonical_name="Living Room TV",
             aliases=("my tv",),
+            provenance_refs=("owner_inventory:living-room-tv",),
         )
     )
 
@@ -208,3 +209,40 @@ def test_current_computer_projection_is_restart_safe_and_revisioned(
     assert refreshed.binding_revision == initial.binding_revision + 1
     assert refreshed.capability_keys == ("computer:app", "computer:browser")
     assert restarted.bindings(entity_id=entity.entity_id) == (refreshed,)
+
+
+def test_unverified_physical_anchor_cannot_resolve_related_camera(
+    tmp_path: Path,
+) -> None:
+    registry = _registry(tmp_path)
+    wanted = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="camera",
+            canonical_name="Main Gate Camera",
+            provenance_refs=("owner_inventory:main-gate-camera",),
+        )
+    )
+    registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="camera",
+            canonical_name="Back Gate Camera",
+            provenance_refs=("owner_inventory:back-gate-camera",),
+        )
+    )
+    registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Unverified Media Service",
+            aliases=("my tv",),
+            relation_ids=(wanted.entity_id,),
+            provenance_refs=("discovery:spoofed",),
+        )
+    )
+
+    result = EntityResolver(registry).resolve(
+        "my tv",
+        expected_entity_types=("camera",),
+        allow_discovery=False,
+    )
+    assert result.state is EntityResolutionState.AMBIGUOUS
+    assert result.entity_id is None

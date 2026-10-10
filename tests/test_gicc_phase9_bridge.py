@@ -34,6 +34,7 @@ from jarvis.goal_intelligence.models import (
     PlanGraphV1,
     PlanNodeType,
     PlanNodeV1,
+    WorldEntityRefV1,
 )
 from jarvis.goal_intelligence.monitoring import GICC_MONITOR_EVENT_CONTRACT
 from jarvis.goal_intelligence.phase9 import (
@@ -331,12 +332,15 @@ def _goal(store: GoalStore) -> OwnerGoalV2:
     )
 
 
-def _graph(goal: OwnerGoalV2) -> CapabilityRequirementGraphV1:
+def _graph(
+    goal: OwnerGoalV2, *, target_entity_id: str | None = None
+) -> CapabilityRequirementGraphV1:
     requirement = CapabilityRequirementV1.create(
         goal_id=goal.goal_id,
         semantic_capability="media_player.control",
         operation="play",
         target_entity_type="media_player",
+        target_entity_id=target_entity_id,
         expected_postconditions=("playback_started",),
         reason="Start media playback.",
     )
@@ -492,11 +496,48 @@ def test_multiple_gaps_get_unique_phase9_bridge_sources(tmp_path: Path) -> None:
     assert first_request.bridge_source_turn_id != second_request.bridge_source_turn_id
 
 
-def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
+def _identified_tv_goal_and_gap(
+    store: GoalStore,
+) -> tuple[OwnerGoalV2, CapabilityGapV1]:
+    entity = store.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="media_player",
+            canonical_name="Verified owner television",
+            provenance_refs=("owner_inventory:test",),
+        )
+    )
+    goal = _goal(store)
+    goal = store.update_goal_referenced_entities(
+        goal.goal_id,
+        (entity.entity_id,),
+        expected_revision=goal.goal_revision,
+    )
+    return goal, _gap(store, goal, _graph(goal, target_entity_id=entity.entity_id))
+
+
+def test_phase9_bridge_blocks_unidentified_physical_device(tmp_path: Path) -> None:
+    from jarvis.goal_intelligence.store import GoalStoreConflict
+
     store = _store(tmp_path)
     goal = _goal(store)
-    graph = _graph(goal)
-    gap = _gap(store, goal, graph)
+    gap = _gap(store, goal, _graph(goal))
+    admitter = FakeAdmitter()
+    bridge = Phase9GoalBridge(
+        coordinator=admitter,
+        change_store=FakeArtifacts(),
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+    import pytest
+
+    with pytest.raises(GoalStoreConflict, match="resolved canonical"):
+        bridge.admit_gap(gap, goal)
+    assert not admitter.goals
+
+
+def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    goal, gap = _identified_tv_goal_and_gap(store)
     admitter = FakeAdmitter()
     bridge = Phase9GoalBridge(
         coordinator=admitter,
@@ -517,9 +558,7 @@ def test_phase9_bridge_admits_generic_v1_goal(tmp_path: Path) -> None:
 
 def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    goal = _goal(store)
-    graph = _graph(goal)
-    gap = _gap(store, goal, graph)
+    goal, gap = _identified_tv_goal_and_gap(store)
     admitter = LinkedFakeAdmitter()
     artifacts = CapturingArtifacts()
     bridge = Phase9GoalBridge(
@@ -558,7 +597,12 @@ def test_phase9_bridge_persists_exact_cross_lifecycle_lineage(tmp_path: Path) ->
     assert target["motivating_goal_id"] == goal.goal_id
     assert target["gap_id"] == gap.gap_id
     assert target["target_entity_type"] == gap.target_entity_type
-    assert target["target_hints"] == [f"entity_type:{gap.target_entity_type}"]
+    assert target["target_entity_id"] == gap.target_entity_id
+    assert target["canonical_name"] == "Verified owner television"
+    assert target["target_hints"] == [
+        f"entity_type:{gap.target_entity_type}",
+        "entity_name:Verified owner television",
+    ]
 
 
 def test_phase9_completion_requires_exact_current_lineage(tmp_path: Path) -> None:

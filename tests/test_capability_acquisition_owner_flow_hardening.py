@@ -122,10 +122,10 @@ def _empty_context() -> StaticAcquisitionContextProvider:
     )
 
 
-def test_owner_turn_discovers_target_and_enters_exact_phase9_lineage(
+def test_owner_turn_with_verified_target_enters_exact_phase9_lineage(
     tmp_path: Path,
 ) -> None:
-    """Exercise owner intake through real GICC -> Phase-9 persistence."""
+    """A reviewed owner inventory target permits GICC-to-Phase9 lineage."""
 
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     goals = GoalStore(work)
@@ -195,6 +195,15 @@ def test_owner_turn_discovers_target_and_enters_exact_phase9_lineage(
     )
     discovery = _DiscoveredTelevision()
     world = WorldRegistry(goals)
+    world.register_entity(
+        WorldEntityRefV1.create(
+            entity_id=_DISCOVERED_TV_ID,
+            entity_type="media_player",
+            canonical_name="Verified Living Room TV",
+            aliases=("my tv", "living room tv"),
+            provenance_refs=("owner_inventory:verified_living_room_tv",),
+        )
+    )
     coordinator = GoalIntelligenceCoordinator(
         store=goals,
         interpreter=GoalInterpreter(client=interpretation_client),
@@ -219,7 +228,7 @@ def test_owner_turn_discovers_target_and_enters_exact_phase9_lineage(
     assert result.goal is not None
     assert result.goal.exact_owner_request == turn.text
     assert result.goal.referenced_entity_ids == (_DISCOVERED_TV_ID,)
-    assert discovery.calls
+    assert not discovery.calls  # already reviewed inventory, no redundant scan
     assert goals.get_entity(_DISCOVERED_TV_ID) is not None
 
     assert result.requirement_result is not None
@@ -257,7 +266,7 @@ def test_owner_turn_discovers_target_and_enters_exact_phase9_lineage(
     assert link.payload["gap_id"] == gap.gap_id
     assert link.payload["engineering_change_id"] == change.change_id
     assert target.payload["target_entity_id"] == _DISCOVERED_TV_ID
-    assert target.payload["canonical_name"] == "Discovered Living Room TV"
+    assert target.payload["canonical_name"] == "Verified Living Room TV"
 
     source = changes.current_stage_attempt(change.change_id, "acquisition")
     assert source is not None

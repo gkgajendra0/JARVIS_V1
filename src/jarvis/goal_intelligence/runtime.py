@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field, replace
 
+from jarvis.authority.proposal import ActionProposal
 from jarvis.autonomy.existing_objective import ExistingObjectiveResumeController
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.autonomy.owner_communication import (
@@ -17,6 +19,10 @@ from jarvis.autonomy.owner_communication import (
 from jarvis.autonomy.supervisor_cutover import (
     SupervisorCutoverController,
     SupervisorCutoverDisposition,
+)
+from jarvis.capabilities.authority_bridge import (
+    AuthorizedNetworkDiscovery,
+    CapabilityAuthorizationError,
 )
 from jarvis.capabilities.models import CapabilityResult, CapabilityStatus
 from jarvis.capabilities.runtime import CapabilityRuntime
@@ -43,16 +49,27 @@ from jarvis.voice.hands_fast_path import FAST_PATH_OPERATIONS, execute_fast_hint
 from jarvis.work.models import WorkDeliveryKind
 from jarvis.work.runtime import WorkRuntime
 
+from .aep_authority import AepAuthorityExecutionGuard
 from .capability_graph import CapabilityGraphResolver
 from .composition import (
     GoalIntakeDisposition,
     GoalIntakeResult,
     GoalIntelligenceCoordinator,
 )
+from .device_suggestions import (
+    UnverifiedDeviceSuggestionV1,
+    pending_owner_device_suggestions,
+)
 from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
-from .information import InformationResolutionStrategy, InformationResolver
+from .information import (
+    InformationResolutionResult,
+    InformationResolutionStrategy,
+    InformationResolver,
+    can_rediscover_information,
+)
 from .interpretation import GoalInterpreter, build_goal_interpreter
+from .local_network import WindowsNeighborInformationProbe
 from .models import (
     ContinuationBlockerType,
     ContinuationState,
@@ -74,15 +91,19 @@ from .monitoring import (
     MonitorObservationBus,
     VerifiedMonitorObservationV1,
 )
+from .network_consent import prepare_pending_device_discovery_consent
+from .owner_device_confirmation import confirm_single_discovered_device
 from .phase9 import Phase9GoalBridge, migrate_legacy_phase9_gap_links
 from .planning import GoalPlanner
 from .requirements import RequirementDeriver
 from .service import GoalOrchestrator, SpecialistActionDispatch
 from .status import OwnerObjectiveStatusResolver
-from .store import GoalStore, build_default_goal_store
+from .store import GoalStore, GoalStoreConflict, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
+from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
+from .windows_lan_scope import WindowsLanScopePlanner
 from .workspace import ObjectiveWorkspaceProjector
-from .world import EntityResolver, WorldRegistry
+from .world import EntityResolver, WorldRegistry, canonical_world_entity_type
 from .world_discovery import (
     EntityInformationProbe,
     ReviewedLocalServiceEntityDiscovery,
@@ -195,6 +216,10 @@ class GiccApplyRuntime:
     supervisor_cutover: SupervisorCutoverController | None = None
     existing_objective_resume: ExistingObjectiveResumeController | None = None
     reconcile_interval_seconds: float = 1.0
+    information_recheck_interval_seconds: float = 120.0
+    _information_last_recheck: dict[str, float] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _monitor_subscription_id: str | None = field(default=None, init=False, repr=False)
     _event_loop: asyncio.AbstractEventLoop | None = field(
@@ -207,6 +232,266 @@ class GiccApplyRuntime:
         init=False,
         repr=False,
     )
+
+    def prepare_network_discovery_consent(
+        self,
+        *,
+        goal_id: str,
+        session_id: str,
+        planner: WindowsLanScopePlanner | None = None,
+    ) -> ActionProposal | None:
+        """Suggest one reviewed owner approval, never initiate a scan.
+
+        The caller must use existing AuthorityService for owner consent,
+        audit and exactly-once action-permit execution. This cannot turn a
+        network observation into a trusted device or a control permission.
+        """
+
+        return prepare_pending_device_discovery_consent(
+            store=self.store,
+            goal_id=goal_id,
+            session_id=session_id,
+            planner=planner,
+        )
+
+    def pending_network_device_suggestions(
+        self,
+        *,
+        goal_id: str,
+        session_id: str,
+        now_epoch: int | None = None,
+    ) -> tuple[UnverifiedDeviceSuggestionV1, ...]:
+        """Read short-lived identity hints; never confirm or control a device."""
+
+        return pending_owner_device_suggestions(
+            store=self.store,
+            goal_id=goal_id,
+            session_id=session_id,
+            now_epoch=now_epoch,
+        )
+
+    def apply_approved_network_discovery(
+        self,
+        *,
+        goal_id: str,
+        need_id: str,
+        session_id: str,
+        scope: ReviewedAepScopeV1,
+        authority_guard: AepAuthorityExecutionGuard,
+        planner: WindowsLanScopePlanner | None = None,
+    ) -> InformationResolutionResult | None:
+        """Execute one owner-authorized network observation for an existing goal.
+
+        No new goal, approval, entity, architecture or control ability is
+        created. The one-time permit is consumed by the AEP backend before
+        any WinRT watcher starts. An unverified result remains evidence on
+        the same canonical InformationNeed, enabling ordinary GICC recovery.
+        """
+
+        if not isinstance(scope, ReviewedAepScopeV1):
+            raise TypeError("network discovery needs a reviewed AEP scope")
+        if not isinstance(authority_guard, AepAuthorityExecutionGuard):
+            raise TypeError("network discovery needs an Authority execution guard")
+        if not isinstance(session_id, str) or not session_id.strip():
+            return None
+        session = session_id.strip()
+        goal = self.store.get_goal(goal_id)
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or goal.source_session_id != session
+            or authority_guard.session_id != session
+            or not authority_guard.binds_information_need(
+                goal_id=goal.goal_id, need_id=need_id
+            )
+            or not authority_guard.binds_scope(scope)
+        ):
+            return None
+        need = self.store.get_information_need(need_id)
+        if (
+            need is None
+            or need.goal_id != goal.goal_id
+            or not can_rediscover_information(need)
+            or need.answer_schema.get("type") != "entity_id"
+            or not {
+                "bounded_local_discovery",
+                "current_state_observation",
+            }.issubset(need.allowed_resolution_sources)
+        ):
+            return None
+
+        kind = canonical_world_entity_type(need.answer_schema.get("entity_type"))
+        if kind not in {"media_player", "camera"}:
+            return None
+        local_planner = planner or WindowsLanScopePlanner()
+        # Windows can broadcast on every interface. The consent proposal
+        # must still be valid against the CURRENT passive OS LAN scope.
+        if not any(
+            reviewed.protocol == scope.protocol
+            and reviewed.approved_address_ranges == scope.approved_address_ranges
+            and reviewed.all_local_interfaces_authorized
+            == scope.all_local_interfaces_authorized
+            and reviewed.timeout_seconds == scope.timeout_seconds
+            and reviewed.max_results == scope.max_results
+            for reviewed in local_planner.consent_scopes_for(kind)
+        ):
+            return None
+
+        probe = WindowsNeighborInformationProbe(
+            aep_backend=WindowsAepIdentityBackend(
+                is_authorized=authority_guard,
+            ),
+            aep_scopes=(scope,),
+        )
+        # Reuse the existing protected WorkStore CAS/evidence path. The
+        # candidate evidence cannot resolve a physical identity by itself.
+        resolver = InformationResolver(store=self.store, probes=(probe,))
+        result = resolver.resolve(need)
+        if not authority_guard.consumed_for(scope):
+            return result
+
+        # A zero-result or timed-out scan still consumed one exact owner
+        # permission. Persist that fact in the canonical InformationNeed so
+        # the next proposal can offer another bounded protocol instead of
+        # replaying UPnP indefinitely. Never record an attempt on denial.
+        marker = f"windows_aep_authorized_scope_consumed:{scope.protocol}"
+        for _ in range(3):
+            current = self.store.get_information_need(need_id)
+            if current is None or not can_rediscover_information(current):
+                return result
+            if marker in current.evidence_refs:
+                return replace(result, need=current)
+            try:
+                updated = self.store.update_information_need_state(
+                    need_id,
+                    current.state,
+                    expected_revision=current.revision,
+                    evidence_refs=(marker,),
+                )
+            except GoalStoreConflict:
+                continue
+            return replace(result, need=updated)
+        LOGGER.warning(
+            "Authorized AEP scope was consumed but durable attempt marking raced"
+        )
+        return result
+
+    def confirm_owner_discovered_device(
+        self,
+        *,
+        goal_id: str,
+        information_need_id: str,
+        session_id: str,
+        owner_turn_id: str,
+        selected_evidence_ref: str | None = None,
+    ) -> WorldEntityRefV1 | None:
+        """Register owner-confirmed identity only; never pair or control it."""
+        return confirm_single_discovered_device(
+            store=self.store,
+            world=self.world,
+            goal_id=goal_id,
+            information_need_id=information_need_id,
+            session_id=session_id,
+            owner_turn_id=owner_turn_id,
+            selected_evidence_ref=selected_evidence_ref,
+        )
+
+    def authorize_and_discover_network(
+        self,
+        *,
+        goal_id: str,
+        session_id: str,
+        planner: WindowsLanScopePlanner | None = None,
+        owner_turn_id: str,
+        expected_scope_material: tuple[object, ...] | None = None,
+    ) -> InformationResolutionResult | None:
+        """Run one reviewed AEP scan only after exact Windows Hello approval.
+
+        An existing CapabilityRuntime broker issues the AuthorityService
+        decision and permit. This never creates a separate approval service
+        and never treats observed devices as trusted world entities.
+        """
+        local_planner = planner or WindowsLanScopePlanner()
+        proposal = self.prepare_network_discovery_consent(
+            goal_id=goal_id,
+            session_id=session_id,
+            planner=local_planner,
+        )
+        if proposal is None:
+            return None
+        target = proposal.target()
+        actual_scope_material = (
+            target.get("gicc_need_id"),
+            target.get("protocol"),
+            proposal.material_summary,
+            tuple(target.get("address_result_filters") or ()),
+            target.get("all_local_interfaces"),
+        )
+        if (
+            expected_scope_material is not None
+            and tuple(expected_scope_material) != actual_scope_material
+        ):
+            # A network change after the voice summary but before Windows
+            # Hello cannot silently broaden the authorized scope.
+            return None
+        need_id = str(target["gicc_need_id"])
+        need = self.store.get_information_need(need_id)
+        if need is None or not can_rediscover_information(need):
+            return None
+        kind = canonical_world_entity_type(need.answer_schema.get("entity_type"))
+        reviewed = next(
+            (
+                scope
+                for scope in local_planner.consent_scopes_for(kind)
+                if scope.protocol == target.get("protocol")
+                and list(scope.approved_address_ranges)
+                == target.get("address_result_filters")
+                and scope.all_local_interfaces_authorized
+                == target.get("all_local_interfaces")
+            ),
+            None,
+        )
+        if reviewed is None:
+            return None
+        # Atomically consume the canonical USER utterance *before* the Windows
+        # Hello dialog. A replay cannot authorize another scan or protocol,
+        # even if the first confirmation is denied or the tool is called twice.
+        if not self.store.claim_network_discovery_owner_turn(
+            goal_id=goal_id,
+            need_id=need_id,
+            owner_turn_id=owner_turn_id,
+        ):
+            return None
+        authorized = self.capability_runtime.authorize_network_discovery_proposal(
+            proposal
+        )
+        if (
+            not isinstance(authorized, AuthorizedNetworkDiscovery)
+            or authorized.proposal != proposal
+            or authorized.context.session_id != session_id
+        ):
+            raise CapabilityAuthorizationError(
+                "discovery authorization was not bound to exact GICC proposal"
+            )
+        scope = replace(
+            reviewed,
+            consent_record_id=authorized.approval_id,
+        )
+        guard = AepAuthorityExecutionGuard(
+            authority=authorized.authority,
+            proposal=authorized.proposal,
+            context=authorized.context,
+            permit_id=authorized.permit_id,
+            approval_id=authorized.approval_id,
+        )
+        return self.apply_approved_network_discovery(
+            goal_id=goal_id,
+            need_id=need_id,
+            session_id=session_id,
+            scope=scope,
+            authority_guard=guard,
+            planner=local_planner,
+        )
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -529,10 +814,22 @@ class GiccApplyRuntime:
             conversation=conversation,
             turn=turn,
         )
+        if (
+            result.goal is not None
+            and result.goal.state is GoalState.WAITING_INFORMATION
+        ):
+            self._information_last_recheck[result.goal.goal_id] = time.monotonic()
         return await self._advance_intake_result(result)
 
-    async def continue_goal(self, goal_id: str) -> GoalIntakeResult:
-        result = await self.coordinator.continue_goal(goal_id)
+    async def continue_goal(
+        self, goal_id: str, *, retry_information: bool = False
+    ) -> GoalIntakeResult:
+        if retry_information:
+            result = await self.coordinator.continue_goal(
+                goal_id, retry_information=True
+            )
+        else:
+            result = await self.coordinator.continue_goal(goal_id)
         return await self._advance_intake_result(result)
 
     def _enqueue_background_terminal_delivery(self, goal: OwnerGoalV2) -> bool:
@@ -643,10 +940,15 @@ class GiccApplyRuntime:
         if not active:
             return 0
 
-        if any(goal.state is GoalState.WAITING_CAPABILITY for goal in active):
-            self.capability_runtime.refresh_catalog()
+        # Only retry deadlines are volatile. Goal, identity and approval
+        # evidence remains in the canonical protected store across restart.
+        active_ids = {goal.goal_id for goal in active}
+        for stale_id in tuple(self._information_last_recheck):
+            if stale_id not in active_ids:
+                self._information_last_recheck.pop(stale_id, None)
 
         advanced = 0
+        catalog_refreshed = False
         for goal in active:
             before_goal = self.store.get_goal(goal.goal_id)
             before_plan = self.store.latest_plan_for_goal(goal.goal_id)
@@ -683,7 +985,26 @@ class GiccApplyRuntime:
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
+                if not catalog_refreshed:
+                    # Catalog probes can block (including Windows subprocesses).
+                    # Refresh only when exact continuation evidence is ready, and
+                    # never on the realtime conversation asyncio event loop.
+                    await asyncio.to_thread(self.capability_runtime.refresh_catalog)
+                    catalog_refreshed = True
                 await self.continue_goal(goal.goal_id)
+            elif goal.state is GoalState.WAITING_INFORMATION:
+                if not any(
+                    can_rediscover_information(need)
+                    for need in self.store.list_information_needs(goal_id=goal.goal_id)
+                ):
+                    continue
+                now = time.monotonic()
+                last = self._information_last_recheck.get(goal.goal_id)
+                interval = max(60.0, self.information_recheck_interval_seconds)
+                if last is not None and now - last < interval:
+                    continue
+                self._information_last_recheck[goal.goal_id] = now
+                await self.continue_goal(goal.goal_id, retry_information=True)
             elif goal.state in {
                 GoalState.PLANNED,
                 GoalState.EXECUTING,
@@ -762,6 +1083,8 @@ def build_gicc_apply_runtime(
     work_runtime: WorkRuntime,
     capability_context: AcquisitionContextProvider,
     telemetry: GiccTelemetrySink = DEFAULT_GICC_TELEMETRY,
+    approved_aep_scopes: tuple[ReviewedAepScopeV1, ...] = (),
+    trusted_aep_consent_validator: AepAuthorityExecutionGuard | None = None,
 ) -> GiccApplyRuntime:
     """Compose GICC APPLY without creating new Authority or execution substrates."""
 
@@ -773,25 +1096,31 @@ def build_gicc_apply_runtime(
         raise TypeError("capability_context must provide current()")
     if not callable(getattr(telemetry, "emit", None)):
         raise TypeError("telemetry must provide emit()")
+    # Windows AEP may transmit discovery queries across *all* local adapters.
+    # The caller must supply an Authority-backed consent validator for every
+    # explicit scope; a config flag/voice command cannot activate this source.
+    if len(approved_aep_scopes) > 3:
+        raise ValueError("AEP protocol scope count exceeds reviewed bound")
+    if len({scope.protocol for scope in approved_aep_scopes}) != len(
+        approved_aep_scopes
+    ):
+        raise ValueError("AEP requires distinct reviewed protocol scopes")
+    if approved_aep_scopes and not isinstance(
+        trusted_aep_consent_validator, AepAuthorityExecutionGuard
+    ):
+        raise ValueError(
+            "AEP requires a policy-audited one-time Authority execution permit"
+        )
 
     store = build_default_goal_store()
     world = WorldRegistry(store)
     world.project_current_computer(capability_runtime.catalog)
 
-    default_media_target = str(config.default_media_target or "").strip()
-    if default_media_target:
-        world.register_entity(
-            WorldEntityRefV1.create(
-                entity_type="media_player",
-                canonical_name=default_media_target,
-                aliases=(
-                    "my tv",
-                    "my television",
-                    "default media target",
-                ),
-                provenance_refs=("machine_config:default_media_target",),
-            )
-        )
+    # A configured media target is a routing preference, not an observed
+    # physical device. Never manufacture an ACTIVE GICC media_player entity
+    # from its label: doing so would bypass device-identity preflight.
+    # Existing trusted registry entities and independently reviewed discovery
+    # remain the only sources for physical target binding.
 
     interpreter = build_goal_interpreter(
         provider=config.ai_provider,
@@ -816,6 +1145,16 @@ def build_gicc_apply_runtime(
             EntityInformationProbe(
                 entity_resolver,
                 strategy=InformationResolutionStrategy.WORLD_REGISTRY,
+            ),
+            WindowsNeighborInformationProbe(
+                aep_backend=(
+                    WindowsAepIdentityBackend(
+                        is_authorized=trusted_aep_consent_validator
+                    )
+                    if approved_aep_scopes
+                    else None
+                ),
+                aep_scopes=approved_aep_scopes,
             ),
             EntityInformationProbe(
                 entity_resolver,

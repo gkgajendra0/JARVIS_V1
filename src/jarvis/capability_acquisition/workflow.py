@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +34,7 @@ from jarvis.capability_acquisition.models import (
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import (
     AcquisitionCandidateAdvisor,
+    AcquisitionResolutionResult,
     CapabilityAcquisitionResolver,
 )
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
@@ -122,51 +124,61 @@ class AcquisitionWorkContextResolver:
         self,
         context: AcquisitionWorkContext,
     ) -> tuple[str, ...]:
-        """Project structured target facts without changing the immutable Phase-9 goal."""
+        """Project independently reviewed target facts, not the owner's plan claims.
 
-        hints = {
-            " ".join(str(item).split()).strip().casefold()
-            for item in context.goal.target_hints
-            if str(item).strip()
-        }
+        The acquisition resolver already reads context.goal.target_hints as
+        the original interpreted claim. Returning those same claims as
+        canonical target facts would make stale Roku and observed VIDAA
+        compatible by allowing a self-matching intersection.
+        """
+        hints: set[str] = set()
 
         link = self._store.latest_artifact(
             context.change_id,
             "gicc_capability_gap_link",
         )
-        if link is not None:
-            target_type = str(link.payload.get("target_entity_type") or "").strip()
-            if target_type:
-                hints.add(f"entity_type:{target_type}".casefold())
-
+        # The GICC gap link records the original interpreted target need;
+        # it is not independent observation. The Phase-9 goal already carries
+        # that claim. Only grounded target context belongs in canonical facts.
         target_context = self._store.latest_artifact(
             context.change_id,
             "gicc_target_context",
         )
         if target_context is not None:
-            for item in target_context.payload.get("target_hints", ()):
+            target_values = target_context.payload.get("target_hints", ())
+            if not isinstance(target_values, (list, tuple)):
+                raise AcquisitionProtocolError("GICC target hints are not a sequence")
+            for item in target_values:
                 normalized = " ".join(str(item).split()).strip().casefold()
-                if normalized:
+                if normalized and not normalized.startswith("entity_id:"):
                     hints.add(normalized)
 
-        architecture = self._store.latest_artifact(
-            context.change_id,
-            "architecture",
-        )
-        if architecture is not None:
-            fields = {
-                "target_entity_type": "entity_type",
-                "target_vendor": "vendor",
-                "target_platform": "platform",
-                "target_protocol": "protocol",
-                "target_model": "model",
-            }
-            for key, dimension in fields.items():
-                value = " ".join(
-                    str(architecture.payload.get(key) or "").split()
-                ).strip()
-                if value:
-                    hints.add(f"{dimension}:{value}".casefold())
+            # Project the actual canonical entity ID only from matching,
+            # independently owner-confirmed inventory lineage. Never treat
+            # a freeform artifact hint or the original goal's claimed ID as
+            # the independent fact that would allow a target mismatch.
+            target_id = str(
+                target_context.payload.get("target_entity_id") or ""
+            ).strip()
+            if (
+                link is not None
+                and target_id
+                and target_id == link.payload.get("target_entity_id")
+            ):
+                from jarvis.goal_intelligence.world import (
+                    has_independent_target_provenance,
+                )
+
+                if has_independent_target_provenance(
+                    target_context.payload.get("provenance_refs") or ()
+                ):
+                    hints.add(f"entity_id:{target_id}".casefold())
+
+        # An acquisition architecture is an implementation *proposal*.
+        # Its vendor, model, platform and protocol fields cannot establish
+        # canonical environmental facts; otherwise an incorrect guessed
+        # adapter could prove its own target compatibility. Owner approval
+        # of the proposal likewise does not transform it into observation.
 
         return tuple(sorted(hints))
 
@@ -431,14 +443,11 @@ class AcquisitionResolveExecutor:
             payload=payload,
         )
 
-    async def execute(
+    def _resolve_and_persist(
         self,
-        *,
-        work: WorkItem,
-        parameters: dict[str, Any],
-    ) -> dict[str, Any]:
-        del parameters
-        context = self._resolver.context_for(work.work_id)
+        work_id: str,
+    ) -> tuple[ChangeArtifact, AcquisitionResolutionResult]:
+        context = self._resolver.context_for(work_id)
         acquisition_context = self._context_provider.current()
         target_hints = self._resolver.canonical_target_hints(context)
         registered = self._acquisition.resolve(
@@ -446,7 +455,7 @@ class AcquisitionResolveExecutor:
             acquisition_context,
             canonical_target_hints=target_hints,
         )
-        steps = self._resolver.completed_steps(work.work_id)
+        steps = self._resolver.completed_steps(work_id)
         research_candidates = (
             *recorded_unverified_candidates(steps),
             *recorded_verified_candidates(steps),
@@ -466,6 +475,21 @@ class AcquisitionResolveExecutor:
             self._resolver.store,
             change_id=context.change_id,
             payload=payload,
+        )
+        return artifact, resolution
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        del parameters
+        # Registry discovery, candidate evaluation, Jev advice and persistence
+        # can block. Keep them off the realtime LiveKit/voice asyncio loop.
+        artifact, resolution = await asyncio.to_thread(
+            self._resolve_and_persist,
+            work.work_id,
         )
         selected = resolution.selected_candidate
         return {

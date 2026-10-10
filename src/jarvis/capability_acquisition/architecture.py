@@ -320,6 +320,55 @@ class CapabilityAcquisitionArchitecturePlan:
         return payload
 
 
+def require_gicc_physical_target_identity(
+    store: ChangeStore,
+    change_id: str,
+) -> None:
+    """Stop Phase-9 device-specific development without a canonical target.
+
+    This is an identity precondition only. It never claims that the selected
+    protocol works or that a device is reachable, authenticated or authorized.
+    """
+
+    link = store.latest_artifact(change_id, "gicc_capability_gap_link")
+    if link is None:
+        return
+    # Apply the existing GICC resource ontology. A "smart_tv" or "webcam"
+    # alias must not bypass the same physical-target identity safeguard.
+    from jarvis.goal_intelligence.world import (
+        canonical_world_entity_type,
+        has_independent_target_provenance,
+    )
+
+    kind = canonical_world_entity_type(link.payload.get("target_entity_type"))
+    if kind not in {
+        "media_player",
+        "camera",
+        "computer",
+        "display",
+        "speaker",
+        "printer",
+    }:
+        return
+    target_id = str(link.payload.get("target_entity_id") or "").strip()
+    target = store.latest_artifact(change_id, "gicc_target_context")
+    if (
+        not target_id
+        or target is None
+        or target.payload.get("target_entity_id") != target_id
+        or target.payload.get("target_entity_type")
+        != link.payload.get("target_entity_type")
+        or not str(target.payload.get("canonical_name") or "").strip()
+        or not has_independent_target_provenance(
+            target.payload.get("provenance_refs") or ()
+        )
+    ):
+        raise CapabilityAcquisitionArchitectureError(
+            "GICC physical target identity is unresolved; a device-specific "
+            "architecture may not be approved or developed"
+        )
+
+
 def _validate_completed_acquisition(
     store: ChangeStore,
     *,
@@ -423,6 +472,7 @@ def derive_capability_acquisition_architecture(
         change_id=change.change_id,
         goal=goal,
     )
+    require_gicc_physical_target_identity(store, change.change_id)
     architecture = CapabilityAcquisitionArchitecturePlan(
         goal_artifact_id=goal_artifact.artifact_id,
         goal_artifact_digest=goal_artifact.digest,
@@ -677,6 +727,7 @@ def ensure_capability_acquisition_architecture_current(
             raise CapabilityAcquisitionArchitectureError(
                 "GICC-linked capability architecture semantic contract drifted"
             )
+    require_gicc_physical_target_identity(store, change_id)
     if require_gicc_external_acceptance:
         ensure_gicc_external_acceptance_contract_current(
             store,

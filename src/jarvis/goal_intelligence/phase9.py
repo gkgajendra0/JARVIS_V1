@@ -33,12 +33,14 @@ from .models import (
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     ContinuationState,
+    EntityLifecycleState,
     GoalContinuationV1,
     GoalKind,
     OwnerGoalV2,
 )
 from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .store import GoalStore, GoalStoreConflict, GoalStoreError
+from .world import canonical_world_entity_type
 
 
 class CapabilityCatalogRefresher(Protocol):
@@ -405,6 +407,34 @@ class Phase9GoalBridge:
         gap: CapabilityGapV1,
         goal: OwnerGoalV2,
     ) -> Phase9GapAdmission:
+        # Recheck the physical target even if an alternate GICC caller bypasses
+        # normal intake; research of an unbound device must not start a build.
+        physical_types = {
+            "media_player",
+            "camera",
+            "computer",
+            "display",
+            "speaker",
+            "printer",
+        }
+        kind = canonical_world_entity_type(gap.target_entity_type)
+        if kind in physical_types:
+            if not gap.target_entity_id:
+                raise GoalStoreConflict(
+                    "device-specific acquisition requires a resolved canonical "
+                    "target entity before Phase 9 admission"
+                )
+            entity = self._goals.get_entity(gap.target_entity_id)
+            if (
+                entity is None
+                or entity.lifecycle_state is not EntityLifecycleState.ACTIVE
+                or canonical_world_entity_type(entity.entity_type) != kind
+            ):
+                raise GoalStoreConflict(
+                    "device-specific capability target is not an active "
+                    "canonical entity of the required type"
+                )
+
         request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
         phase9_goal = request.to_v1(owner_goal_created_at=goal.created_at)
         admission = self._coordinator.admit(

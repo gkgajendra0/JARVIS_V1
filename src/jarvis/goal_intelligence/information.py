@@ -78,6 +78,39 @@ _DEFAULT_ORDER = (
 )
 
 
+_AUTOMATIC_REDISCOVERY_SOURCES = frozenset(
+    {
+        InformationResolutionStrategy.WORLD_REGISTRY.value,
+        InformationResolutionStrategy.CURRENT_STATE_OBSERVATION.value,
+        InformationResolutionStrategy.BOUNDED_LOCAL_DISCOVERY.value,
+    }
+)
+
+
+def can_rediscover_information(need: InformationNeedV1) -> bool:
+    """Check only observation-based needs, never secrets or owner-only inputs."""
+
+    return (
+        need.state
+        in {
+            InformationNeedState.OPEN,
+            InformationNeedState.SELF_RESOLVING,
+            InformationNeedState.WAITING_FOR_OWNER,
+        }
+        and need.category
+        not in {
+            InformationNeedCategory.OWNER_SECRET,
+            InformationNeedCategory.OWNER_PREFERENCE,
+            InformationNeedCategory.AUTHORIZATION,
+            InformationNeedCategory.SUCCESS_CRITERIA,
+            InformationNeedCategory.PHYSICAL_OBSERVATION,
+        }
+        and bool(
+            _AUTOMATIC_REDISCOVERY_SOURCES.intersection(need.allowed_resolution_sources)
+        )
+    )
+
+
 class InformationResolver:
     """Try self-resolution in bounded order; owner input is always last."""
 
@@ -112,6 +145,13 @@ class InformationResolver:
                 need=current,
                 attempted_strategies=(),
             )
+        if current.state is InformationNeedState.CANCELLED:
+            # No probe, owner prompt or state resurrection after cancellation.
+            return InformationResolutionResult(
+                state=InformationResolutionState.UNRESOLVED,
+                need=current,
+                attempted_strategies=(),
+            )
 
         allowed = {
             InformationResolutionStrategy(item)
@@ -119,6 +159,7 @@ class InformationResolver:
             if item in {strategy.value for strategy in InformationResolutionStrategy}
         }
         attempted: list[InformationResolutionStrategy] = []
+        observed_evidence: set[str] = set()
 
         for strategy in _DEFAULT_ORDER:
             if strategy not in allowed:
@@ -128,11 +169,12 @@ class InformationResolver:
             if probe is None:
                 continue
             result = probe.resolve(current)
+            observed_evidence.update(result.evidence_refs)
             if result.resolved:
                 resolved = self._store.resolve_information_need(
                     current.information_need_id,
                     resolution_ref=str(result.resolution_ref),
-                    evidence_refs=result.evidence_refs,
+                    evidence_refs=tuple(sorted(observed_evidence)),
                     expected_revision=current.revision,
                     resolved_at=datetime.now(UTC).isoformat(),
                 )
@@ -160,6 +202,7 @@ class InformationResolver:
                     InformationResolutionStrategy.SECRET_FLOW.value,
                 ),
                 owner_question=owner_question,
+                evidence_refs=tuple(sorted(observed_evidence)),
             )
             interaction = self._store.begin_information_interaction(
                 need_id=updated.information_need_id,
@@ -182,6 +225,7 @@ class InformationResolver:
                 expected_revision=current.revision,
                 self_resolution_attempts=attempt_values,
                 owner_question=owner_question,
+                evidence_refs=tuple(sorted(observed_evidence)),
             )
             interaction = self._store.begin_information_interaction(
                 need_id=updated.information_need_id,
@@ -199,6 +243,7 @@ class InformationResolver:
             InformationNeedState.SELF_RESOLVING,
             expected_revision=current.revision,
             self_resolution_attempts=attempt_values,
+            evidence_refs=tuple(sorted(observed_evidence)),
         )
         return InformationResolutionResult(
             state=InformationResolutionState.UNRESOLVED,

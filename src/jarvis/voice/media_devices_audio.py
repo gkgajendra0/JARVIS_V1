@@ -34,6 +34,8 @@ from jarvis.voice.safe_media_devices import SafeMediaDevices
 LOGGER = logging.getLogger(__name__)
 
 _PLAYBACK_SETTLE_SECONDS = 0.05
+_PLAYBACK_PREBUFFER_SECONDS = 0.30
+_PLAYBACK_PREBUFFER_SAMPLES = int(DEVICE_SAMPLE_RATE * _PLAYBACK_PREBUFFER_SECONDS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,10 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_energy_samples = 0
         self._current_player_buffer_peak_bytes = 0
         self._current_player_stream_active_seen = False
+        self._prebuffer_frames: list[rtc.AudioFrame] = []
+        self._prebuffer_samples = 0
+        self._playback_started = False
+        self._flush_task: asyncio.Task[None] | None = None
         self._generation = 0
         self._segments: list[_PlaybackSegment] = []
         self._last_completed_quality: PlaybackQualitySnapshot | None = None
@@ -287,54 +293,112 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         assert self._resampler is not None
         return self._resampler.push(frame)
 
+    async def _release_prebuffer(
+        self,
+        *,
+        force: bool,
+        generation: int,
+    ) -> bool:
+        """Release the primed segment into the unchanged MediaDevices/AEC path."""
+
+        if (
+            self._playback_started
+            or self._current_samples <= 0
+            or not self._prebuffer_frames
+        ):
+            return self._playback_started
+        if not force and self._prebuffer_samples < _PLAYBACK_PREBUFFER_SAMPLES:
+            return False
+        if generation != self._generation or self._closed:
+            return False
+
+        source = self._source
+        if source is None:
+            raise RuntimeError("MediaDevices audio output is not started")
+
+        # Keep the exact historical AEC topology: the local render track still
+        # enters LiveKit's OutputPlayer from the same MediaDevices instance as
+        # the microphone APM. We only delay the head of a segment until there is
+        # enough PCM margin to survive normal realtime/network scheduling jitter.
+        await self._ensure_track_attached()
+        if generation != self._generation or self._closed:
+            return False
+
+        frames = tuple(self._prebuffer_frames)
+        buffered_samples = self._prebuffer_samples
+        self._prebuffer_frames.clear()
+        self._prebuffer_samples = 0
+
+        self._current_started_at_wall = time.time()
+        self._current_started_at_monotonic = time.monotonic()
+        self._playback_started = True
+
+        for buffered in frames:
+            if generation != self._generation or self._closed:
+                source.clear_queue()
+                return False
+            await source.capture_frame(buffered)
+            if generation != self._generation or self._closed:
+                source.clear_queue()
+                return False
+
+        player_buffered, player_active, player_stopped = self._observe_player_state()
+        LOGGER.info(
+            "Playback diagnostic | segment=%s event=started generation=%s "
+            "prebuffer=%.3fs queued=%.3fs pcm_peak=%s player_buffer=%sB "
+            "stream_active=%s stream_stopped=%s",
+            self._current_segment_sequence,
+            self._generation,
+            buffered_samples / DEVICE_SAMPLE_RATE,
+            self._source_queued_duration(source),
+            self._current_peak_abs,
+            player_buffered,
+            player_active,
+            player_stopped,
+        )
+        self.on_playback_started(created_at=self._current_started_at_wall)
+        return True
+
     async def capture_frame(self, frame: rtc.AudioFrame) -> None:
         if self._closed:
             return
+
+        flush_task = self._flush_task
+        if flush_task is not None and not flush_task.done():
+            await asyncio.shield(flush_task)
+
         source = self._source
         if source is None:
             raise RuntimeError("MediaDevices audio output is not started")
         await super().capture_frame(frame)
         canonical_frames = self._frames_at_canonical_rate(frame)
-        if canonical_frames:
-            await self._ensure_track_attached()
+
         for canonical in canonical_frames:
-            playback_started_at: float | None = None
             if self._current_samples == 0:
-                self._current_started_at_wall = time.time()
-                self._current_started_at_monotonic = time.monotonic()
                 self._current_segment_sequence = self._next_segment_sequence
                 self._next_segment_sequence += 1
                 self._reset_current_diagnostics()
-                playback_started_at = self._current_started_at_wall
 
             peak_abs, sum_squares, sample_count = self._frame_energy(canonical)
             self._current_peak_abs = max(self._current_peak_abs, peak_abs)
             self._current_sum_squares += sum_squares
             self._current_energy_samples += sample_count
+            self._current_samples += canonical.samples_per_channel
+
+            if not self._playback_started:
+                self._prebuffer_frames.append(canonical)
+                self._prebuffer_samples += canonical.samples_per_channel
+                await self._release_prebuffer(
+                    force=False,
+                    generation=self._generation,
+                )
+                continue
 
             await source.capture_frame(canonical)
-            self._current_samples += canonical.samples_per_channel
-            player_buffered, player_active, player_stopped = (
-                self._observe_player_state()
-            )
-            if playback_started_at is not None:
-                LOGGER.info(
-                    "Playback diagnostic | segment=%s event=started generation=%s "
-                    "queued=%.3fs pcm_peak=%s player_buffer=%sB "
-                    "stream_active=%s stream_stopped=%s",
-                    self._current_segment_sequence,
-                    self._generation,
-                    self._source_queued_duration(source),
-                    self._current_peak_abs,
-                    player_buffered,
-                    player_active,
-                    player_stopped,
-                )
-                self.on_playback_started(created_at=playback_started_at)
+            self._observe_player_state()
 
-    def flush(self) -> None:
-        super().flush()
-        if self._current_samples <= 0:
+    def _finalize_current_segment(self) -> None:
+        if self._current_samples <= 0 or not self._playback_started:
             return
         loop = self._loop
         if loop is None or loop.is_closed():
@@ -361,6 +425,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_started_at_wall = 0.0
         self._current_started_at_monotonic = 0.0
         self._current_segment_sequence = 0
+        self._prebuffer_frames.clear()
+        self._prebuffer_samples = 0
+        self._playback_started = False
         self._reset_current_diagnostics()
 
         duration = segment.samples / DEVICE_SAMPLE_RATE
@@ -387,6 +454,51 @@ class MediaDevicesAudioOutput(io.AudioOutput):
             player_stopped,
         )
         loop.call_later(remaining, self._finish_segment, segment)
+
+    async def _flush_current_segment(self, generation: int) -> None:
+        try:
+            if generation != self._generation or self._closed:
+                return
+            if not self._playback_started:
+                released = await self._release_prebuffer(
+                    force=True,
+                    generation=generation,
+                )
+                if not released:
+                    return
+            if generation != self._generation or self._closed:
+                return
+            self._finalize_current_segment()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOGGER.exception(
+                "MediaDevices output could not flush the primed realtime segment"
+            )
+            if self._flush_task is asyncio.current_task():
+                self._flush_task = None
+            self.clear_buffer()
+        finally:
+            if self._flush_task is asyncio.current_task():
+                self._flush_task = None
+
+    def flush(self) -> None:
+        super().flush()
+        if self._current_samples <= 0:
+            return
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        task = self._flush_task
+        if task is not None and not task.done():
+            LOGGER.warning(
+                "MediaDevices output received flush while prior segment flush is pending"
+            )
+            return
+        self._flush_task = loop.create_task(
+            self._flush_current_segment(self._generation),
+            name="jarvis-media-devices-output-flush",
+        )
 
     def _finish_segment(self, segment: _PlaybackSegment) -> None:
         if segment.completed or segment.generation != self._generation or self._closed:
@@ -439,16 +551,23 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         LOGGER.info(
             "Playback diagnostic | event=clear_buffer generation=%s current_segment=%s "
             "current_samples=%s pending_segments=%s queued_before=%.3fs "
-            "player_buffer=%sB stream_active=%s stream_stopped=%s",
+            "prebuffer=%.3fs player_buffer=%sB stream_active=%s stream_stopped=%s",
             self._generation,
             self._current_segment_sequence or "none",
             self._current_samples,
             len(pending),
             queued_before_clear,
+            self._prebuffer_samples / DEVICE_SAMPLE_RATE,
             player_buffered,
             player_active,
             player_stopped,
         )
+
+        flush_task = self._flush_task
+        if flush_task is not None and not flush_task.done():
+            flush_task.cancel()
+        self._flush_task = None
+
         if source is not None:
             source.clear_queue()
 
@@ -456,12 +575,13 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         current_sequence = self._current_segment_sequence
         current_samples = self._current_samples
         current_peak_abs = self._current_peak_abs
+        current_playback_started = self._playback_started
         current_rms_dbfs = self._rms_dbfs(
             self._current_sum_squares,
             self._current_energy_samples,
         )
         current_position = 0.0
-        if had_current:
+        if had_current and current_playback_started:
             duration = current_samples / DEVICE_SAMPLE_RATE
             elapsed = max(0.0, time.monotonic() - self._current_started_at_monotonic)
             current_position = min(duration, elapsed)
@@ -472,6 +592,9 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._current_started_at_wall = 0.0
         self._current_started_at_monotonic = 0.0
         self._current_segment_sequence = 0
+        self._prebuffer_frames.clear()
+        self._prebuffer_samples = 0
+        self._playback_started = False
         self._reset_current_diagnostics()
 
         if had_current:
@@ -522,8 +645,11 @@ class MediaDevicesAudioOutput(io.AudioOutput):
     async def aclose(self) -> None:
         if self._closed:
             return
+        flush_task = self._flush_task
         self.clear_buffer()
         self._closed = True
+        if flush_task is not None and not flush_task.done():
+            await asyncio.gather(flush_task, return_exceptions=True)
         detach_task = self._detach_task
         self._detach_task = None
         if detach_task is not None and not detach_task.done():

@@ -10,8 +10,10 @@ from jarvis.capability_acquisition.external_acceptance import (
     ExternalAcceptanceCoordinator,
     ExternalAcceptanceError,
     ExternalAcceptanceInvokeExecutor,
+    ExternalAcceptanceRecordExecutor,
     _require_activation_authority,
     external_acceptance_completion_guard,
+    requires_owner_physical_confirmation,
 )
 from jarvis.capability_acquisition.external_contract import (
     PHASE9_REAL_EXTERNAL_ACCEPTANCE_CONTRACT,
@@ -578,3 +580,158 @@ def test_external_acceptance_guard_requires_durable_real_world_evidence() -> Non
         False,
         "external acceptance real-world verdict did not pass",
     )
+    # No stale "pass" may survive a later denied or newly retried operation.
+    newer_failed = after_record + (
+        _completed_step(work_id, "external_acceptance_invoke", {"invoked": False}),
+    )
+    assert external_acceptance_completion_guard(newer_failed) == (
+        False,
+        "external acceptance live invocation has not succeeded",
+    )
+    newer_succeeded = after_record + (
+        _completed_step(work_id, "external_acceptance_invoke", {"invoked": True}),
+    )
+    assert external_acceptance_completion_guard(newer_succeeded) == (
+        False,
+        "external acceptance requires fresh evidence for latest invocation",
+    )
+    wrong_invocation = before_record + (
+        _completed_step(
+            work_id,
+            "external_acceptance_record",
+            {
+                "acceptance_recorded": True,
+                "verdict": "pass",
+                "invocation_step_id": "different-attempt",
+            },
+        ),
+    )
+    assert external_acceptance_completion_guard(wrong_invocation) == (
+        False,
+        "external acceptance evidence belongs to another invocation",
+    )
+    correctly_bound = before_record + (
+        _completed_step(
+            work_id,
+            "external_acceptance_record",
+            {
+                "acceptance_recorded": True,
+                "verdict": "pass",
+                "invocation_step_id": before_record[-1].step_id,
+            },
+        ),
+    )
+    assert external_acceptance_completion_guard(correctly_bound) == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful status plus claimed readback still needs owner observation."""
+    from jarvis.capability_acquisition import external_acceptance as module
+
+    work_store = SQLiteWorkStore(tmp_path / "physical-observation.sqlite3")
+    item = work_store.create(
+        WorkItem(
+            request="Verify actual TV playback after activation",
+            work_type=WorkType.EXTERNAL_ACCEPTANCE,
+            source_session_id="owner-physical-tv",
+            source_turn_id="activation-turn",
+            state=WorkState.RUNNING,
+        )
+    )
+    request = SimpleNamespace(
+        request_id="physical-request-1",
+        operation="play_media",
+        expected_observation="Movie visible on the actual television",
+    )
+    # A prior owner's yes to the same request ID is not a fresh observation
+    # of the following invocation. Otherwise a retry could certify old data.
+    work_store.add_step(
+        _completed_step(
+            item.work_id,
+            "owner_input",
+            {
+                "input_key": "external_effect_confirmation:physical-request-1",
+                "response": "yes",
+            },
+        )
+    )
+    work_store.add_step(
+        _completed_step(
+            item.work_id,
+            "external_acceptance_invoke",
+            {
+                "invoked": True,
+                "request_id": request.request_id,
+                "request_digest": "request-digest",
+                "acceptance_observation": {
+                    "observed": True,
+                    "method": "device_state_readback",
+                    "summary": "I played the movie",
+                    "evidence_refs": ("unverified-adapter-self-report",),
+                },
+            },
+        )
+    )
+
+    class FakeChangeStore:
+        work = work_store
+
+        def latest_artifact(self, change_id, kind):
+            assert change_id == "gicc-tv-change"
+            if kind == "gicc_capability_gap_link":
+                return SimpleNamespace(payload={"target_entity_type": "television"})
+            return None
+
+    change_store = FakeChangeStore()
+    assert requires_owner_physical_confirmation(change_store, "gicc-tv-change")
+    original_digest = module.canonical_digest
+    monkeypatch.setattr(
+        module,
+        "canonical_digest",
+        lambda value: "request-digest" if value is request else original_digest(value),
+    )
+    monkeypatch.setattr(
+        module,
+        "HardwareAcceptanceService",
+        lambda _store: SimpleNamespace(get_request=lambda _id: request),
+    )
+
+    class Resolver:
+        store = change_store
+
+        def context_for(self, work_id):
+            assert work_id == item.work_id
+            return SimpleNamespace(change_id="gicc-tv-change")
+
+    with pytest.raises(WorkOwnerInputRequired) as raised:
+        await ExternalAcceptanceRecordExecutor(Resolver()).execute(
+            work=item, parameters={}
+        )
+    assert raised.value.input_key == "external_effect_confirmation:physical-request-1"
+    assert "no independent device-state readback" in str(raised.value)
+    assert (
+        requires_owner_physical_confirmation(
+            SimpleNamespace(latest_artifact=lambda *_: None),
+            "ordinary-software-change",
+        )
+        is False
+    )
+    # Ambiguous acknowledgments are NOT evidence that a real movie played.
+    work_store.add_step(
+        _completed_step(
+            item.work_id,
+            "owner_input",
+            {
+                "input_key": "external_effect_confirmation:physical-request-1",
+                "response": "okay",
+            },
+        )
+    )
+    with pytest.raises(WorkOwnerInputRequired):
+        await ExternalAcceptanceRecordExecutor(Resolver()).execute(
+            work=item, parameters={}
+        )

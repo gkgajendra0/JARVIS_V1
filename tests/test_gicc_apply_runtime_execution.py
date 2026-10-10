@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,6 +32,8 @@ from jarvis.goal_intelligence.models import (
     GoalContinuationV1,
     GoalKind,
     GoalState,
+    InformationNeedCategory,
+    InformationNeedV1,
     MonitorPredicateV1,
     OwnerGoalV2,
     PlanGraphV1,
@@ -58,9 +61,11 @@ class FakeCapabilityRuntime:
     def __init__(self) -> None:
         self.requests = []
         self.refreshes = 0
+        self.refresh_thread_ids: list[int] = []
 
     def refresh_catalog(self):
         self.refreshes += 1
+        self.refresh_thread_ids.append(threading.get_ident())
 
     def execute(self, request):
         self.requests.append(request)
@@ -704,10 +709,12 @@ async def test_external_acceptance_fences_capability_continuation(
         change_store=changes,
     )
 
+    event_loop_thread = threading.get_ident()
     blocked = await runtime.reconcile_once()
 
     assert blocked == 0
     assert coordinator.calls == 0
+    assert capability_runtime.refreshes == 0
     assert store.get_goal(goal.goal_id).state is GoalState.WAITING_CAPABILITY
 
     changes.pass_current_acceptance()
@@ -716,6 +723,9 @@ async def test_external_acceptance_fences_capability_continuation(
     latest = store.get_goal(goal.goal_id)
     assert advanced == 1
     assert coordinator.calls == 1
+    assert capability_runtime.refreshes == 1
+    assert len(capability_runtime.refresh_thread_ids) == 1
+    assert capability_runtime.refresh_thread_ids[0] != event_loop_thread
     assert latest is not None
     assert latest.state is GoalState.COMPLETED
 
@@ -1026,3 +1036,46 @@ async def test_rejected_supervisor_cutover_fences_ready_capability_continuation(
     assert coordinator.calls == 0
     assert latest is not None
     assert latest.state is GoalState.WAITING_CAPABILITY
+
+
+@pytest.mark.asyncio
+async def test_waiting_device_rechecks_automatically_but_is_throttled(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    goal = _goal(store, state=GoalState.WAITING_INFORMATION)
+    store.create_information_need(
+        InformationNeedV1.create(
+            goal_id=goal.goal_id,
+            category=InformationNeedCategory.MISSING_VALUE,
+            subject="my television",
+            required_fact="canonical media_player identity",
+            why_required="cannot develop control for an unidentified device",
+            allowed_resolution_sources=(
+                "world_registry",
+                "bounded_local_discovery",
+                "owner_input",
+            ),
+        )
+    )
+
+    class TrackingCoordinator:
+        def __init__(self):
+            self.calls = []
+
+        async def continue_goal(self, goal_id, *, retry_information=False):
+            self.calls.append((goal_id, retry_information))
+            return GoalIntakeResult(
+                disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+                goal=store.get_goal(goal_id),
+                information_needs=store.list_information_needs(goal_id=goal_id),
+            )
+
+    coordinator = TrackingCoordinator()
+    runtime = _runtime(store, coordinator, FakeCapabilityRuntime())
+    assert await runtime.reconcile_once() == 0
+    assert coordinator.calls == [(goal.goal_id, True)]
+
+    # The one-second reconciler must not reissue network discovery on each tick.
+    assert await runtime.reconcile_once() == 0
+    assert coordinator.calls == [(goal.goal_id, True)]

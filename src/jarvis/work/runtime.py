@@ -513,50 +513,54 @@ class WorkRuntime:
         )
         return work
 
+    def _process_due_status_updates(self) -> None:
+        """Run durable progress-status database work off the realtime loop."""
+
+        due = self.store.list_due_status_updates(limit=20)
+        for work_id, interval_seconds, due_at in due:
+            work = self.store.require(work_id)
+            if work.state.terminal:
+                self.store.clear_status_update_interval(work_id)
+                continue
+            estimate = estimate_work(self.store, work)
+            parts = [
+                f"Background task update: approximately {estimate.progress_percent}% complete."
+            ]
+            if work.status_detail:
+                parts.append(f"Current status: {work.status_detail}.")
+            if estimate.blocked_reason:
+                parts.append(f"Blocker: {estimate.blocked_reason}.")
+            if estimate.remaining_work:
+                parts.append(
+                    "Remaining work: " + ", ".join(estimate.remaining_work[:3]) + "."
+                )
+            event_key = f"progress:{int(due_at.timestamp())}"
+            intent = OwnerCommunicationIntentV1.create(
+                kind=OwnerCommunicationKind.PROGRESS,
+                event_key=event_key,
+                summary=" ".join(parts),
+                work_id=work.work_id,
+                system_outcome_kind=work.state.value,
+                technical_detail=work.status_detail,
+            )
+            owner_message = SupervisorOwnerCommunication.compile(intent)
+            if owner_message is not None:
+                self.store.enqueue_delivery(
+                    work=work,
+                    kind=WorkDeliveryKind.PROGRESS,
+                    message=owner_message.message,
+                    event_key=owner_message.event_key,
+                )
+            self.store.advance_status_update_interval(
+                work_id,
+                interval_seconds=interval_seconds,
+            )
+
     async def _status_update_loop(self) -> None:
         while not self._closed:
             try:
-                due = self.store.list_due_status_updates(limit=20)
-                for work_id, interval_seconds, due_at in due:
-                    work = self.store.require(work_id)
-                    if work.state.terminal:
-                        self.store.clear_status_update_interval(work_id)
-                        continue
-                    estimate = estimate_work(self.store, work)
-                    parts = [
-                        f"Background task update: approximately {estimate.progress_percent}% complete."
-                    ]
-                    if work.status_detail:
-                        parts.append(f"Current status: {work.status_detail}.")
-                    if estimate.blocked_reason:
-                        parts.append(f"Blocker: {estimate.blocked_reason}.")
-                    if estimate.remaining_work:
-                        parts.append(
-                            "Remaining work: "
-                            + ", ".join(estimate.remaining_work[:3])
-                            + "."
-                        )
-                    event_key = f"progress:{int(due_at.timestamp())}"
-                    intent = OwnerCommunicationIntentV1.create(
-                        kind=OwnerCommunicationKind.PROGRESS,
-                        event_key=event_key,
-                        summary=" ".join(parts),
-                        work_id=work.work_id,
-                        system_outcome_kind=work.state.value,
-                        technical_detail=work.status_detail,
-                    )
-                    owner_message = SupervisorOwnerCommunication.compile(intent)
-                    if owner_message is not None:
-                        self.store.enqueue_delivery(
-                            work=work,
-                            kind=WorkDeliveryKind.PROGRESS,
-                            message=owner_message.message,
-                            event_key=owner_message.event_key,
-                        )
-                    self.store.advance_status_update_interval(
-                        work_id,
-                        interval_seconds=interval_seconds,
-                    )
+                # The DBOS/SQLite lock may wait; never stall LiveKit audio.
+                await asyncio.to_thread(self._process_due_status_updates)
             except asyncio.CancelledError:
                 raise
             except Exception:
