@@ -419,7 +419,10 @@ class GoalStore:
                 current = GoalContinuationV1.from_payload(
                     self._decode(item["payload"]), item["digest"]
                 )
-                if current.state is not ContinuationState.BLOCKED:
+                if current.state in {
+                    ContinuationState.CANCELLED,
+                    ContinuationState.RESUMED,
+                }:
                     continue
                 provisional = replace(
                     current,
