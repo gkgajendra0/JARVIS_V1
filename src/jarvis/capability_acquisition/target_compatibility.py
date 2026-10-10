@@ -210,10 +210,7 @@ def evaluate_candidate_target_compatibility(
             verdict = TargetCompatibilityVerdict.INCOMPATIBLE
             reasons = (
                 "target_incompatible",
-                *(
-                    f"target_conflict_{dimension}"
-                    for dimension in sorted(conflicting)
-                ),
+                *(f"target_conflict_{dimension}" for dimension in sorted(conflicting)),
             )
         else:
             verdict = TargetCompatibilityVerdict.COMPATIBLE
