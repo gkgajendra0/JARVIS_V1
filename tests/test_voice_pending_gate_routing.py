@@ -13,6 +13,7 @@ from jarvis.voice.canonical_active_speaker_runtime import (
     _SessionToolBundle,
 )
 from jarvis.voice.runtime import VoiceRuntimeState
+from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.models import WorkState
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import SQLiteWorkStore
@@ -188,15 +189,12 @@ def test_live_work_tool_refresh_keeps_exact_approval_and_replay_context(
     assert bundle._session_work_tools is bound
     assert bound._contextual_change_gate_id == gate.gate_id
     assert bound._last_gate_decision_attempt_turn_id == "seen-turn"
-    assert bound.start_capability_acquisition not in refreshed
-
-    # Gate visibility must change dynamically without replacing the instance.
-    assert bound.start_capability_acquisition in bound.tools_for(
-        allow_capability_acquisition=True,
-    )
-    assert bound.start_capability_acquisition not in bound.tools_for(
-        allow_capability_acquisition=False,
-    )
+    # LiveKit wraps each exposed method in a new FunctionTool on lookup.
+    # Verify visibility by exposed counts, not transient wrapper identity.
+    unmasked = bound.tools_for(allow_capability_acquisition=True)
+    masked = bound.tools_for(allow_capability_acquisition=False)
+    assert len(unmasked) == len(masked) + 1
+    assert len(refreshed) == len(masked)
 
     # The next wake session must never inherit the previous session's binding.
     next_session = ConversationSession(session_id="next-session")
@@ -242,11 +240,28 @@ async def test_proactive_gate_tool_factory_does_not_reset_same_turn_replay_guard
         conversation = ConversationSession(session_id="approval-session")
         conversation.start()
         first = session_tool_factory(conversation)
+
+        # Compare the captured WorkAgentTools, not FunctionTool wrappers that
+        # LiveKit freshly allocates on each decorated-method attribute access.
+        def underlying_work_tools():
+            return next(
+                cell.cell_contents
+                for cell in session_tool_factory.__closure__ or ()
+                if isinstance(cell.cell_contents, WorkAgentTools)
+            )
+
+        original = underlying_work_tools()
+        original._last_gate_decision_attempt_turn_id = "seen-turn"
         second = session_tool_factory(conversation)
-        assert first == second
+        assert len(first) == len(second) == 1
+        assert underlying_work_tools() is original
+        assert original._last_gate_decision_attempt_turn_id == "seen-turn"
+
         next_conversation = ConversationSession(session_id="other-session")
         next_conversation.start()
-        assert session_tool_factory(next_conversation) != first
+        _ = session_tool_factory(next_conversation)
+        assert underlying_work_tools() is not original
+        assert underlying_work_tools()._last_gate_decision_attempt_turn_id is None
 
     monkeypatch.setattr(controller, "_run_one_session_owned", fake_session_runner)
     assert not await controller._run_change_gate_interaction(
