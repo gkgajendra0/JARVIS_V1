@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from jarvis.goal_intelligence.models import (
     GoalKind,
+    GoalState,
     MonitorPredicateV1,
     OwnerGoalV2,
     PlanGraphV1,
@@ -300,3 +301,37 @@ def test_monitor_timeout_uses_supervisor_owner_voice(tmp_path: Path) -> None:
         "I can't continue with this objective: Monitoring stopped because the "
         "condition was not verified in time."
     )
+
+
+def test_cancelled_owner_goal_never_triggers_late_monitor_notification(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    predicate = _predicate(goal)
+    started = MonitoringWorkCoordinator(
+        goal_store=store,
+        work_starter=FakeWorkStarter(),
+    ).start(
+        predicate,
+        strategy=MonitoringStrategy.NATIVE_EVENT,
+        now_epoch=100.0,
+    )
+    work = FakeMonitorWorkStore()
+    work.add(started.work_id)
+    cancelled = store.cancel_goal_tree(
+        goal.goal_id,
+        expected_revision=goal.goal_revision,
+    )
+    assert cancelled.state is GoalState.CANCELLED
+    result = MonitorEventProcessor(
+        goal_store=store, work_store=work
+    ).process(
+        predicate=predicate,
+        observation_digest="late-observation",
+        condition_met=True,
+        observed_at_epoch=101.0,
+        notification_message="Should never be delivered",
+    )
+    assert result.disposition is MonitorObservationDisposition.CANCELLED
+    assert not work.deliveries
+    assert store.get_goal(goal.goal_id).state is GoalState.CANCELLED
