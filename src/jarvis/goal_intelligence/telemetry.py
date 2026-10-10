@@ -30,6 +30,8 @@ GICC_EVENTS = frozenset(
         "gicc_goal_owner_delivery_enqueued",
         "global_supervisor_cutover_observed",
         "gicc_goal_processing_error",
+        "gicc_owner_goal_cancelled",
+        "gicc_owner_goal_cancel_blocked",
     }
 )
 
