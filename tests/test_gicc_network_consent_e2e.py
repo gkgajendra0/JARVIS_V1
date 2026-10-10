@@ -11,7 +11,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-
 from tests.test_authority_foundation import LocalPolicy
 from tests.test_gicc_network_consent import _data, _planner
 from tests.test_gicc_passive_windows_neighbors import _backend
