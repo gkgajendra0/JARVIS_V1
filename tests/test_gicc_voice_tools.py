@@ -492,6 +492,29 @@ async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     assert store.get_information_need(need.information_need_id) == before_need
     assert runtime.consent_reads == runtime.suggestion_reads == 1
 
+    # A proposal with a valid fingerprint is still unusable if it points
+    # at a different goal. No pending permission should be advertised.
+    from jarvis.goal_intelligence.aep_authority import build_aep_consent_proposal
+
+    class WrongGoalDiscoveryRuntime(ReadOnlyDiscoveryRuntime):
+        def prepare_network_discovery_consent(self, *, goal_id, session_id):
+            del goal_id
+            return build_aep_consent_proposal(
+                scope=_planner().consent_scopes_for("media_player")[0],
+                session_id=session_id,
+                goal_id="other-owner-goal",
+                need_id=need.information_need_id,
+            )
+
+    mismatched_tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=WrongGoalDiscoveryRuntime(),
+    )
+    mismatched_payload = await mismatched_tools.pursue_owner_goal(None)
+    assert "network_discovery" not in mismatched_payload
+
     other_conversation = ConversationSession(session_id="unrelated-owner-session")
     other_conversation.start()
     other_conversation.accept_turn(ConversationRole.USER, "Control my TV.")
