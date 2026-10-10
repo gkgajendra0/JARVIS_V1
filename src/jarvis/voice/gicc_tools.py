@@ -189,43 +189,50 @@ class GiccAgentTools:
         turn = self._latest_user_turn()
         if not re.search(
             r"\b(cancel|stop|withdraw|remove|delete|abandon)\b",
-            turn.text, flags=re.IGNORECASE,
+            turn.text,
+            flags=re.IGNORECASE,
         ):
             return {
-                "ok": False, "status": "explicit_cancel_request_required",
+                "ok": False,
+                "status": "explicit_cancel_request_required",
                 "truth_note": "No owner cancellation was performed.",
             }
         key = str(goal_id).strip()
         if key not in self._listed_owner_goal_ids:
             return {
-                "ok": False, "status": "unverified_cancel_target",
+                "ok": False,
+                "status": "unverified_cancel_target",
                 "truth_note": (
                     "List current canonical owner objectives first and select "
                     "the exact goal ID; no cancellation was performed."
                 ),
             }
         runtime = self._execution_runtime
-        action = None if runtime is None else getattr(
-            runtime, "cancel_owner_goal", None
+        action = (
+            None if runtime is None else getattr(runtime, "cancel_owner_goal", None)
         )
         if not callable(action):
             return {
-                "ok": False, "status": "owner_goal_cancel_unavailable",
+                "ok": False,
+                "status": "owner_goal_cancel_unavailable",
                 "truth_note": "No owner cancellation was performed.",
             }
         try:
             result = await action(key)
         except Exception as exc:  # noqa: BLE001 - preserve truthful voice status
             LOGGER.exception(
-                "GICC owner goal cancellation was blocked | goal_id=%s", key,
+                "GICC owner goal cancellation was blocked | goal_id=%s",
+                key,
                 exc_info=exc,
             )
             self._telemetry.emit(
                 "gicc_owner_goal_cancel_blocked",
-                goal_id=key, error_type=type(exc).__name__,
+                goal_id=key,
+                error_type=type(exc).__name__,
             )
             return {
-                "ok": False, "status": "owner_goal_cancel_blocked",
+                "ok": False,
+                "status": "owner_goal_cancel_blocked",
                 "goal_id": key,
                 "truth_note": (
                     "Cancellation could not be verified across all linked "
