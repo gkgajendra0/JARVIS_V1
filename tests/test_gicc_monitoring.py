@@ -323,9 +323,7 @@ def test_cancelled_owner_goal_never_triggers_late_monitor_notification(
         expected_revision=goal.goal_revision,
     )
     assert cancelled.state is GoalState.CANCELLED
-    result = MonitorEventProcessor(
-        goal_store=store, work_store=work
-    ).process(
+    result = MonitorEventProcessor(goal_store=store, work_store=work).process(
         predicate=predicate,
         observation_digest="late-observation",
         condition_met=True,

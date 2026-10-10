@@ -620,10 +620,10 @@ class SQLiteWorkStore:
         with self._lock, self._connect() as db:
             for key in keys:
                 result = db.execute(
-                    "UPDATE work_deliveries SET state=? "
-                    "WHERE work_id=? AND state=?",
+                    "UPDATE work_deliveries SET state=? WHERE work_id=? AND state=?",
                     (
-                        WorkDeliveryState.CANCELLED.value, key,
+                        WorkDeliveryState.CANCELLED.value,
+                        key,
                         WorkDeliveryState.PENDING.value,
                     ),
                 )

@@ -774,7 +774,10 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "goal revision changed before compare-and-swap update"
                 )
-            if current.state is GoalState.CANCELLED and state is not GoalState.CANCELLED:
+            if (
+                current.state is GoalState.CANCELLED
+                and state is not GoalState.CANCELLED
+            ):
                 raise GoalStoreConflict("cancelled goal cannot be reactivated")
             if current.state is state:
                 return current
@@ -1993,7 +1996,10 @@ class GoalStore:
                 "SELECT state FROM owner_goals_v2 WHERE goal_id=?",
                 (gap.goal_id,),
             ).fetchone()
-            if owner_row is not None and owner_row["state"] == GoalState.CANCELLED.value:
+            if (
+                owner_row is not None
+                and owner_row["state"] == GoalState.CANCELLED.value
+            ):
                 raise GoalStoreConflict("cannot create or advance a cancelled goal")
             row = db.execute(
                 "SELECT payload, digest FROM capability_gaps_v1 WHERE gap_id=?",
@@ -2125,7 +2131,10 @@ class GoalStore:
                 "SELECT state FROM owner_goals_v2 WHERE goal_id=?",
                 (plan.goal_id,),
             ).fetchone()
-            if owner_row is not None and owner_row["state"] == GoalState.CANCELLED.value:
+            if (
+                owner_row is not None
+                and owner_row["state"] == GoalState.CANCELLED.value
+            ):
                 raise GoalStoreConflict("cannot create or advance a cancelled goal")
             row = db.execute(
                 "SELECT payload, digest FROM plan_graphs_v1 WHERE plan_id=?",
@@ -2206,7 +2215,10 @@ class GoalStore:
                 "SELECT state FROM owner_goals_v2 WHERE goal_id=?",
                 (plan.goal_id,),
             ).fetchone()
-            if owner_row is not None and owner_row["state"] == GoalState.CANCELLED.value:
+            if (
+                owner_row is not None
+                and owner_row["state"] == GoalState.CANCELLED.value
+            ):
                 raise GoalStoreConflict("cannot create or advance a cancelled goal")
             row = db.execute(
                 "SELECT payload, digest FROM plan_graphs_v1 WHERE plan_id=?",
