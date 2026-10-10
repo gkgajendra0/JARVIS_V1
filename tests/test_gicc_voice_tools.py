@@ -895,6 +895,23 @@ async def test_gicc_voice_binds_owner_selected_option_to_displayed_set(
     conversation.accept_turn(
         ConversationRole.USER, "I confirm the discovered TV option 2 is mine."
     )
+    # Another GICC tool instance after restart has never offered this exact
+    # choice set, even if a model guesses the digest and candidate evidence.
+    restarted = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    replayed = await restarted.confirm_discovered_device_identity(
+        None,
+        goal_id=goal.goal_id,
+        information_need_id=need.information_need_id,
+        selected_evidence_ref=choices["options"][1]["evidence_ref"],
+        displayed_choice_set_digest=choices["digest"],
+    )
+    assert replayed["status"] == "owner_device_choice_is_not_current"
+    assert runtime.confirmed_ref is None
     for wrong_reference, wrong_digest in (
         ("fresh-aep-option-a", choices["digest"]),
         ("fresh-aep-option-b", "stale-choice-set"),

@@ -87,6 +87,10 @@ class GiccAgentTools:
         self._conversation = conversation
         self._store = store
         self._telemetry = telemetry
+        # UI-offered option snapshots are session-local only; after restart,
+        # ask JARVIS to show the fresh options again instead of trusting a
+        # model-supplied digest as proof an owner actually saw them.
+        self._offered_device_options: dict[tuple[str, str], tuple[str, str]] = {}
 
     @property
     def action_tools(self) -> list:
@@ -554,6 +558,15 @@ class GiccAgentTools:
                 error=exc,
             )
         payload = self._public_result(result)
+        # Offering candidate options is separate from the later NEW owner
+        # choice; no option token can be invented by a model invocation.
+        for key in tuple(self._offered_device_options):
+            if result.goal is not None and key[0] == result.goal.goal_id:
+                self._offered_device_options.pop(key, None)
+        for options in payload.get("device_choice_sets", ()):
+            self._offered_device_options[
+                (payload["goal_id"], options["information_need_id"])
+            ] = (options["digest"], turn.turn_id)
         payload["canonical_user_turn_id"] = turn.turn_id
         return payload
 
@@ -682,9 +695,13 @@ class GiccAgentTools:
                 for item in eligible
             ]
             if eligible:
+                offer_digest = _device_choice_digest(eligible)
+                self._offered_device_options[
+                    (goal.goal_id, result.need.information_need_id)
+                ] = (offer_digest, turn.turn_id)
                 payload["device_choice_set"] = {
                     "information_need_id": result.need.information_need_id,
-                    "digest": _device_choice_digest(eligible),
+                    "digest": offer_digest,
                     "options": [
                         {
                             "option": index,
@@ -829,9 +846,15 @@ class GiccAgentTools:
                 in need.evidence_refs
             )
             option_index = int(option) - 1
+            offered = self._offered_device_options.get(
+                (goal.goal_id, need.information_need_id)
+            )
             if (
                 option_index >= len(candidates)
                 or len(candidates) < 2
+                or offered is None
+                or offered[0] != displayed_choice_set_digest
+                or offered[1] == turn.turn_id
                 or displayed_choice_set_digest != _device_choice_digest(candidates)
                 or selected_evidence_ref != candidates[option_index].evidence_ref
             ):
@@ -863,6 +886,9 @@ class GiccAgentTools:
                     "claim connectivity."
                 ),
             }
+        self._offered_device_options.pop(
+            (goal.goal_id, str(information_need_id).strip()), None
+        )
         try:
             continued = await runtime.continue_goal(
                 goal.goal_id, retry_information=True
