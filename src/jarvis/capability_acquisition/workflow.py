@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +34,7 @@ from jarvis.capability_acquisition.models import (
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
 from jarvis.capability_acquisition.resolver import (
     AcquisitionCandidateAdvisor,
+    AcquisitionResolutionResult,
     CapabilityAcquisitionResolver,
 )
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
@@ -441,14 +443,11 @@ class AcquisitionResolveExecutor:
             payload=payload,
         )
 
-    async def execute(
+    def _resolve_and_persist(
         self,
-        *,
-        work: WorkItem,
-        parameters: dict[str, Any],
-    ) -> dict[str, Any]:
-        del parameters
-        context = self._resolver.context_for(work.work_id)
+        work_id: str,
+    ) -> tuple[ChangeArtifact, AcquisitionResolutionResult]:
+        context = self._resolver.context_for(work_id)
         acquisition_context = self._context_provider.current()
         target_hints = self._resolver.canonical_target_hints(context)
         registered = self._acquisition.resolve(
@@ -456,7 +455,7 @@ class AcquisitionResolveExecutor:
             acquisition_context,
             canonical_target_hints=target_hints,
         )
-        steps = self._resolver.completed_steps(work.work_id)
+        steps = self._resolver.completed_steps(work_id)
         research_candidates = (
             *recorded_unverified_candidates(steps),
             *recorded_verified_candidates(steps),
@@ -476,6 +475,21 @@ class AcquisitionResolveExecutor:
             self._resolver.store,
             change_id=context.change_id,
             payload=payload,
+        )
+        return artifact, resolution
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        del parameters
+        # Registry discovery, candidate evaluation, Jev advice and persistence
+        # can block. Keep them off the realtime LiveKit/voice asyncio loop.
+        artifact, resolution = await asyncio.to_thread(
+            self._resolve_and_persist,
+            work.work_id,
         )
         selected = resolution.selected_candidate
         return {
