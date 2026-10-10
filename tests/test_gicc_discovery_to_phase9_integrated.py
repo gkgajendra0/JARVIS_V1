@@ -314,13 +314,9 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         goal_store=store,
         source_revision_provider=lambda: "a" * 40,
     )
-    assert not synthetic_bridge.completion_verified(
-        gap=gap, goal=goal_after_discovery
-    )
+    assert not synthetic_bridge.completion_verified(gap=gap, goal=goal_after_discovery)
     _install_current_external_pass(synthetic)
-    assert synthetic_bridge.completion_verified(
-        gap=gap, goal=goal_after_discovery
-    )
+    assert synthetic_bridge.completion_verified(gap=gap, goal=goal_after_discovery)
     # Even complete synthetic acquisition acceptance must not mark the
     # actual original TV goal PLAYBACK-COMPLETED or change its request.
     durable_goal = store.get_goal(goal_id)
