@@ -326,6 +326,24 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
     )
     assert next_proposal is not None
     assert next_proposal.target()["protocol"] == "dns_sd"
+    wrong_protocol_scope = replace(scope, protocol="dns_sd")
+    assert guard.consumed_for(scope) is True
+    assert guard.consumed_for(wrong_protocol_scope) is False
+    assert guard.binds_scope(wrong_protocol_scope) is False
+    assert (
+        runtime.apply_approved_network_discovery(
+            goal_id=goal.goal_id,
+            need_id=need.information_need_id,
+            session_id=goal.source_session_id,
+            scope=wrong_protocol_scope,
+            authority_guard=guard,
+            planner=planner,
+        )
+        is None
+    )
+    assert (
+        "windows_aep_authorized_scope_consumed:dns_sd" not in result.need.evidence_refs
+    )
     assert store.get_information_need(need.information_need_id) == result.need
     assert runtime.world.entities() == ()
 

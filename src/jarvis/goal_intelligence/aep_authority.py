@@ -197,13 +197,18 @@ class AepAuthorityExecutionGuard:
         self._context = context
         self._permit_id = permit_id.strip()
         self._approval_id = approval_id.strip()
-        self._consumed = False
+        self._consumed_scope: ReviewedAepScopeV1 | None = None
 
     @property
     def consumed(self) -> bool:
         """True only once Authority has consumed this exact one-time permit."""
 
-        return self._consumed
+        return self._consumed_scope is not None
+
+    def consumed_for(self, scope: ReviewedAepScopeV1) -> bool:
+        """Never credit a consumed permit to another discovery protocol."""
+
+        return self._consumed_scope == scope
 
     @property
     def session_id(self) -> str:
@@ -220,7 +225,9 @@ class AepAuthorityExecutionGuard:
             and target.get("gicc_need_id") == need_id
         )
 
-    def __call__(self, scope: ReviewedAepScopeV1) -> bool:
+    def binds_scope(self, scope: ReviewedAepScopeV1) -> bool:
+        """Match full approved network scope without consuming its permit."""
+
         if not isinstance(scope, ReviewedAepScopeV1):
             return False
         if scope.consent_record_id != self._approval_id:
@@ -234,9 +241,13 @@ class AepAuthorityExecutionGuard:
         if material is None:
             return False
         target, parameters = material
-        if self._proposal.target_json != canonical_json(
-            target
-        ) or self._proposal.parameters_json != canonical_json(parameters):
+        return (
+            self._proposal.target_json == canonical_json(target)
+            and self._proposal.parameters_json == canonical_json(parameters)
+        )
+
+    def __call__(self, scope: ReviewedAepScopeV1) -> bool:
+        if not self.binds_scope(scope):
             return False
         try:
             permit = self._authority.revalidate_and_consume(
@@ -251,5 +262,5 @@ class AepAuthorityExecutionGuard:
             and permit.approval_id == self._approval_id
         )
         if allowed:
-            self._consumed = True
+            self._consumed_scope = scope
         return allowed

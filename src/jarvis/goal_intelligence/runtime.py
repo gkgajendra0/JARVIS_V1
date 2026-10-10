@@ -298,6 +298,7 @@ class GiccApplyRuntime:
             or not authority_guard.binds_information_need(
                 goal_id=goal.goal_id, need_id=need_id
             )
+            or not authority_guard.binds_scope(scope)
         ):
             return None
         need = self.store.get_information_need(need_id)
@@ -340,7 +341,7 @@ class GiccApplyRuntime:
         # candidate evidence cannot resolve a physical identity by itself.
         resolver = InformationResolver(store=self.store, probes=(probe,))
         result = resolver.resolve(need)
-        if not authority_guard.consumed:
+        if not authority_guard.consumed_for(scope):
             return result
 
         # A zero-result or timed-out scan still consumed one exact owner
