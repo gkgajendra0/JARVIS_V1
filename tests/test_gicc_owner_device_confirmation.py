@@ -179,9 +179,7 @@ def test_owner_confirmation_never_creates_duplicate_of_known_tv(
 def test_owner_confirmation_rejects_expired_advertisements(tmp_path: Path) -> None:
     store, goal, need = _data(tmp_path)
     world = WorldRegistry(store)
-    stale_evidence = _evidence(
-        address="192.168.1.10", now=int(time.time()) - 600
-    )
+    stale_evidence = _evidence(address="192.168.1.10", now=int(time.time()) - 600)
     store.update_information_need_state(
         need.information_need_id,
         need.state,
