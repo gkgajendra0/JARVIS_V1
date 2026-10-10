@@ -120,6 +120,17 @@ class GoalStore:
                         REFERENCES information_needs_v1(information_need_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS gicc_owner_device_confirmations_v1 (
+                    source_session_id TEXT NOT NULL,
+                    owner_turn_id TEXT NOT NULL,
+                    goal_id TEXT NOT NULL,
+                    information_need_id TEXT NOT NULL,
+                    PRIMARY KEY(source_session_id, owner_turn_id),
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
+                    FOREIGN KEY(information_need_id)
+                        REFERENCES information_needs_v1(information_need_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS capability_requirement_graphs_v1 (
                     graph_id TEXT PRIMARY KEY,
                     goal_id TEXT NOT NULL,
@@ -1079,6 +1090,58 @@ class GoalStore:
             if changed.rowcount != 1:
                 raise GoalStoreConflict("network discovery owner-turn CAS lost")
         return True
+
+    def claim_owner_device_confirmation(
+        self, *, goal_id: str, need_id: str, owner_turn_id: str
+    ) -> bool:
+        """Consume one canonical owner identity turn across every session goal.
+
+        This is an identity-only replay guard, not proof of the device's
+        manufacturer, protocol, network connectivity, credentials or access.
+        """
+        turn_id = str(owner_turn_id).strip()
+        goal_key = str(goal_id).strip()
+        need_key = str(need_id).strip()
+        if not turn_id or len(turn_id) > 128 or not goal_key or not need_key:
+            return False
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?",
+                (goal_key,),
+            ).fetchone()
+            if row is None:
+                return False
+            goal = OwnerGoalV2.from_payload(
+                self._decode(row["payload"]), row["digest"]
+            )
+            if goal.state is not GoalState.WAITING_INFORMATION:
+                return False
+            row = db.execute(
+                "SELECT payload, digest FROM information_needs_v1 "
+                "WHERE information_need_id=? AND goal_id=?",
+                (need_key, goal_key),
+            ).fetchone()
+            if row is None:
+                return False
+            need = InformationNeedV1.from_payload(
+                self._decode(row["payload"]), row["digest"]
+            )
+            if need.state not in {
+                InformationNeedState.OPEN,
+                InformationNeedState.SELF_RESOLVING,
+                InformationNeedState.WAITING_FOR_OWNER,
+            }:
+                return False
+            claim = db.execute(
+                """
+                INSERT INTO gicc_owner_device_confirmations_v1
+                    (source_session_id, owner_turn_id, goal_id, information_need_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(source_session_id, owner_turn_id) DO NOTHING
+                """,
+                (goal.source_session_id, turn_id, goal_key, need_key),
+            )
+            return claim.rowcount == 1
 
     def update_information_need_state(
         self,

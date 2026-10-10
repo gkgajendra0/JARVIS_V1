@@ -90,6 +90,25 @@ def confirm_single_discovered_device(
             and any(alias in entity.aliases for alias in aliases)
         ):
             return None
+    existing = store.get_entity(entity_id)
+    if existing is not None:
+        exact_owner_provenance = (
+            f"owner_inventory:explicit_device_confirmation:{goal.goal_id}:{turn_id}"
+        )
+        if (
+            existing.lifecycle_state is EntityLifecycleState.ACTIVE
+            and exact_owner_provenance in existing.provenance_refs
+            and f"unverified_aep_evidence:{hints[0].evidence_ref}"
+            in existing.provenance_refs
+        ):
+            return existing  # exactly idempotent; never a new confirmation
+        return None
+    if not store.claim_owner_device_confirmation(
+        goal_id=goal.goal_id,
+        need_id=need.information_need_id,
+        owner_turn_id=turn_id,
+    ):
+        return None
     entry = WorldEntityRefV1.create(
         entity_type=kind,
         canonical_name=canonical_name,
