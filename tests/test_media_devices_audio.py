@@ -146,48 +146,110 @@ async def test_media_devices_output_does_not_cancel_inflight_track_detach() -> N
     assert output._track_attached is True
 
 
-def test_safe_media_devices_uses_jitter_tolerant_output_mixer(monkeypatch) -> None:
-    created: dict[str, int] = {}
-    player = SimpleNamespace()
+class _FakeAudioSource:
+    def __init__(self) -> None:
+        self.frames: list[rtc.AudioFrame] = []
+        self.queued_duration = 0.0
+        self.clear_calls = 0
 
-    def fake_open_output(self, *, output_device=None):
-        del self
-        created["device"] = -1 if output_device is None else int(output_device)
-        return player
+    async def capture_frame(self, frame: rtc.AudioFrame) -> None:
+        self.frames.append(frame)
+        self.queued_duration += frame.duration
 
-    class FakeMixer:
-        def __init__(
-            self,
-            *,
-            sample_rate: int,
-            num_channels: int,
-            stream_timeout_ms: int,
-        ) -> None:
-            created["sample_rate"] = sample_rate
-            created["num_channels"] = num_channels
-            created["stream_timeout_ms"] = stream_timeout_ms
+    def clear_queue(self) -> None:
+        self.frames.clear()
+        self.queued_duration = 0.0
+        self.clear_calls += 1
 
-    monkeypatch.setattr(rtc.MediaDevices, "open_output", fake_open_output)
-    monkeypatch.setattr(rtc, "AudioMixer", FakeMixer)
 
-    loop = asyncio.new_event_loop()
-    try:
-        devices = SafeMediaDevices(
-            loop=loop,
-            input_sample_rate=48_000,
-            output_sample_rate=48_000,
-            num_channels=1,
-            blocksize=480,
-        )
-        returned = devices.open_output(output_device=8)
-    finally:
-        loop.close()
+def _pcm_frame(duration_ms: int, *, value: int = 1_000) -> rtc.AudioFrame:
+    samples = 48_000 * duration_ms // 1_000
+    pcm = np.full(samples, value, dtype=np.int16)
+    return rtc.AudioFrame(
+        data=pcm.tobytes(),
+        sample_rate=48_000,
+        num_channels=1,
+        samples_per_channel=samples,
+    )
 
-    assert returned is player
-    assert created == {
-        "device": 8,
-        "sample_rate": 48_000,
-        "num_channels": 1,
-        "stream_timeout_ms": 300,
-    }
-    assert isinstance(player._mixer, FakeMixer)
+
+def _prebuffer_test_output() -> tuple[
+    MediaDevicesAudioOutput,
+    _FakeAudioSource,
+    _FakeOutputPlayer,
+    object,
+]:
+    output = MediaDevicesAudioOutput(object(), output_device=None)
+    source = _FakeAudioSource()
+    player = _FakeOutputPlayer()
+    track = object()
+    output._source = source  # type: ignore[assignment]
+    output._player = player
+    output._track = track  # type: ignore[assignment]
+    output._loop = asyncio.get_running_loop()
+    return output, source, player, track
+
+
+@pytest.mark.asyncio
+async def test_media_devices_output_primes_300ms_before_realtime_playout() -> None:
+    output, source, player, track = _prebuffer_test_output()
+    frame = _pcm_frame(100)
+
+    await output.capture_frame(frame)
+    await output.capture_frame(frame)
+
+    assert source.frames == []
+    assert player.added == []
+    assert output._playback_started is False
+
+    await output.capture_frame(frame)
+
+    assert player.added == [track]
+    assert len(source.frames) == 3
+    assert source.queued_duration == pytest.approx(0.3)
+    assert output._playback_started is True
+
+    output.clear_buffer()
+
+
+@pytest.mark.asyncio
+async def test_media_devices_output_flush_releases_short_primed_segment() -> None:
+    output, source, player, track = _prebuffer_test_output()
+
+    await output.capture_frame(_pcm_frame(100))
+    assert source.frames == []
+    assert player.added == []
+
+    output.flush()
+    flush_task = output._flush_task
+    assert flush_task is not None
+    await flush_task
+
+    assert player.added == [track]
+    assert len(source.frames) == 1
+    assert source.queued_duration == pytest.approx(0.1)
+    assert len(output._segments) == 1
+
+    output.clear_buffer()
+
+
+@pytest.mark.asyncio
+async def test_media_devices_output_interrupt_before_prebuffer_plays_no_stale_audio() -> (
+    None
+):
+    output, source, player, _ = _prebuffer_test_output()
+
+    await output.capture_frame(_pcm_frame(100))
+    output.clear_buffer()
+
+    assert player.added == []
+    assert source.frames == []
+    assert output._prebuffer_frames == []
+    assert output._prebuffer_samples == 0
+    assert output.last_completed_quality is not None
+    assert output.last_completed_quality.interrupted is True
+    assert output.last_completed_quality.duration_seconds == 0.0
+
+
+def test_safe_media_devices_keeps_upstream_output_player() -> None:
+    assert SafeMediaDevices.open_output is rtc.MediaDevices.open_output
