@@ -794,3 +794,60 @@ def test_existing_roku_protocol_cannot_self_attest_owner_device_access() -> None
     assert compatibility.verdict is TargetCompatibilityVerdict.UNPROVEN
     assert "target_unproven_protocol" in compatibility.reason_codes
     assert not compatibility.compatible
+
+
+def test_legacy_reuse_rejects_specific_physical_device_without_binding() -> None:
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my actual living room TV",
+        requested_capability="TV control",
+        required_operations=("power",),
+        target_hints=(
+            "entity_type:media_player",
+            "entity_id:owner_confirmed_network_tv",
+        ),
+        source_session_id="owner-identity-goal",
+        source_turn_id="original-identity-turn",
+        now_epoch=100.0,
+    )
+    context = _core_context()
+    assert ExistingCapabilitySourceAdapter().discover(goal, context) == ()
+    resolution = _resolver().resolve(goal, context)
+    assert resolution.selected_candidate_id is None
+
+
+def test_exact_existing_device_binding_still_reuses_compatible_capability() -> None:
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my bound living room TV",
+        requested_capability="TV control",
+        required_operations=("power",),
+        target_hints=(
+            "entity_type:media_player",
+            "entity_id:owner_confirmed_network_tv",
+        ),
+        source_session_id="bound-identity-session",
+        source_turn_id="bound-identity-turn",
+        now_epoch=100.0,
+    )
+    descriptor = CapabilityDescriptor.create(
+        capability_id="tv.control",
+        source_id="local",
+        kind=CapabilityKind.NATIVE_API,
+        name="TV control",
+        description="An identity-bound TV capability",
+        operations=("power", "volume"),
+        execution_enabled=True,
+        metadata={
+            "acquisition_target_hints": list(goal.target_hints),
+        },
+    )
+    context = AcquisitionContextV1(
+        catalog=CapabilityCatalog(sources=(), capabilities=(descriptor,)),
+        inventory=(
+            CapabilityInventoryEntry(
+                capability_id=descriptor.capability_id,
+                capability_key=descriptor.key,
+                management_mode=CapabilityManagementMode.CORE_PINNED,
+            ),
+        ),
+    )
+    assert len(ExistingCapabilitySourceAdapter().discover(goal, context)) == 1
