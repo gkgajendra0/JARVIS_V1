@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import replace
-import pytest
 from pathlib import Path
+
+import pytest
 
 from tests.test_authority_foundation import LocalPolicy
 from tests.test_gicc_network_consent import _data, _planner
@@ -29,6 +30,7 @@ from jarvis.authority import (
     RiskClassifier,
     TrustTier,
 )
+from jarvis.goal_intelligence import runtime as gicc_runtime
 from jarvis.goal_intelligence.aep_authority import AepAuthorityExecutionGuard
 from jarvis.goal_intelligence.information import (
     InformationResolutionState,
@@ -42,7 +44,6 @@ from jarvis.goal_intelligence.models import WorldEntityRefV1
 from jarvis.goal_intelligence.network_consent import (
     prepare_pending_device_discovery_consent,
 )
-from jarvis.goal_intelligence import runtime as gicc_runtime
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.windows_aep import WindowsAepIdentityBackend
 from jarvis.goal_intelligence.world import EntityResolver, WorldRegistry
