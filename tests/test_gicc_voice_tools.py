@@ -579,7 +579,10 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
                 planner=_planner(),
             )
 
-        def authorize_and_discover_network(self, *, goal_id, session_id, owner_turn_id):
+        def authorize_and_discover_network(
+            self, *, goal_id, session_id, owner_turn_id, expected_scope_material
+        ):
+            assert expected_scope_material[1] == "upnp"
             assert owner_turn_id == conversation.turns[-1].turn_id
             assert goal_id == goal.goal_id
             assert session_id == goal.source_session_id
@@ -791,7 +794,10 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
             super().__init__(result)
             self.executions = 0
 
-        def authorize_and_discover_network(self, *, goal_id, session_id, owner_turn_id):
+        def authorize_and_discover_network(
+            self, *, goal_id, session_id, owner_turn_id, expected_scope_material
+        ):
+            assert expected_scope_material[1] == "upnp"
             assert goal_id == goal.goal_id
             assert session_id == goal.source_session_id
             assert owner_turn_id == conversation.turns[-1].turn_id

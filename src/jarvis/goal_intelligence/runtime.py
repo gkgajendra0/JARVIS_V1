@@ -403,6 +403,7 @@ class GiccApplyRuntime:
         session_id: str,
         planner: WindowsLanScopePlanner | None = None,
         owner_turn_id: str,
+        expected_scope_material: tuple[object, ...] | None = None,
     ) -> InformationResolutionResult | None:
         """Run one reviewed AEP scan only after exact Windows Hello approval.
 
@@ -419,6 +420,20 @@ class GiccApplyRuntime:
         if proposal is None:
             return None
         target = proposal.target()
+        actual_scope_material = (
+            target.get("gicc_need_id"),
+            target.get("protocol"),
+            proposal.material_summary,
+            tuple(target.get("address_result_filters") or ()),
+            target.get("all_local_interfaces"),
+        )
+        if (
+            expected_scope_material is not None
+            and tuple(expected_scope_material) != actual_scope_material
+        ):
+            # A network change after the voice summary but before Windows
+            # Hello cannot silently broaden the authorized scope.
+            return None
         need_id = str(target["gicc_need_id"])
         need = self.store.get_information_need(need_id)
         if need is None or not can_rediscover_information(need):

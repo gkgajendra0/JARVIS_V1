@@ -700,6 +700,7 @@ class GiccAgentTools:
                 goal_id=goal.goal_id,
                 session_id=goal.source_session_id,
                 owner_turn_id=turn.turn_id,
+                expected_scope_material=offered[0],
             )
         except Exception:
             LOGGER.warning(
