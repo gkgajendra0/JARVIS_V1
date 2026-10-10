@@ -77,6 +77,14 @@ def confirm_single_discovered_device(
     # Never silently choose between conflicting or multiple network devices.
     if len(hints) != 1 or hints[0].evidence_ref not in need.evidence_refs:
         return None
+    # A bare or injected network advertisement does not prove it originated
+    # in an owner-approved, one-time Windows AEP scan. The same InfoNeed
+    # must carry the consumed authorization for the observed protocol.
+    consumed_scope = (
+        "windows_aep_authorized_scope_consumed:" + hints[0].protocol
+    )
+    if consumed_scope not in need.evidence_refs:
+        return None
     canonical_name, aliases = details
     # Existing canonical owner inventory should use the already bound
     # entity-disambiguation path rather than create a second "my TV".

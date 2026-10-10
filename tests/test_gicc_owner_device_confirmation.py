@@ -49,7 +49,7 @@ def test_owner_confirmed_unique_recent_hint_creates_identity_not_access(
         need.information_need_id,
         InformationNeedState.WAITING_FOR_OWNER,
         expected_revision=need.revision,
-        evidence_refs=(evidence,),
+        evidence_refs=(evidence, "windows_aep_authorized_scope_consumed:upnp"),
     )
     assert updated.resolution_ref is None
     assert (
@@ -107,7 +107,7 @@ def test_owner_confirmation_refuses_ambiguous_or_stale_candidates(
         need.information_need_id,
         need.state,
         expected_revision=need.revision,
-        evidence_refs=(_evidence(address="192.168.1.10", now=now),),
+        evidence_refs=(_evidence(address="192.168.1.10", now=now), "windows_aep_authorized_scope_consumed:upnp"),
     )
     second = store.update_information_need_state(
         need.information_need_id,
@@ -115,6 +115,7 @@ def test_owner_confirmation_refuses_ambiguous_or_stale_candidates(
         expected_revision=first.revision,
         evidence_refs=(
             _evidence(address="192.168.1.11", now=now, category="Video Camera"),
+            "windows_aep_authorized_scope_consumed:upnp",
         ),
     )
     assert (
@@ -166,7 +167,10 @@ def test_owner_confirmation_never_creates_duplicate_of_known_tv(
         need.information_need_id,
         need.state,
         expected_revision=need.revision,
-        evidence_refs=(_evidence(address="192.168.1.10", now=int(time.time())),),
+        evidence_refs=(
+            _evidence(address="192.168.1.10", now=int(time.time())),
+            "windows_aep_authorized_scope_consumed:upnp",
+        ),
     )
     assert updated is not None
     assert (
@@ -191,7 +195,7 @@ def test_owner_confirmation_rejects_expired_advertisements(tmp_path: Path) -> No
         need.information_need_id,
         need.state,
         expected_revision=need.revision,
-        evidence_refs=(stale_evidence,),
+        evidence_refs=(stale_evidence, "windows_aep_authorized_scope_consumed:upnp"),
     )
     assert (
         confirm_single_discovered_device(
@@ -217,7 +221,7 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         first_need.information_need_id,
         first_need.state,
         expected_revision=first_need.revision,
-        evidence_refs=(_evidence(address="192.168.1.10", now=now),),
+        evidence_refs=(_evidence(address="192.168.1.10", now=now), "windows_aep_authorized_scope_consumed:upnp"),
     )
     second_goal = store.create_goal(
         OwnerGoalV2.create(
@@ -273,3 +277,32 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         is None
     )
     assert world.entities() == (first,)
+
+
+def test_owner_confirmation_requires_consumed_discovery_authority(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    world = WorldRegistry(store)
+    store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=(
+            _evidence(address="192.168.1.10", now=int(time.time())),
+        ),
+    )
+    assert (
+        confirm_single_discovered_device(
+            store=store,
+            world=world,
+            goal_id=goal.goal_id,
+            information_need_id=need.information_need_id,
+            session_id=goal.source_session_id,
+            owner_turn_id="owner-intent-without-authorized-scan",
+        )
+        is None
+    )
+    assert world.entities() == ()
+    # Nothing was consumed: the owner can safely approve an actual
+    # bounded discovery and later confirm the observed device.
