@@ -253,3 +253,20 @@ def test_cancellation_rejects_stale_revision_and_terminal_goals(tmp_path):
         goals.cancel_goal_tree(goal.goal_id, expected_revision=goal.goal_revision + 1)
     assert goals.get_goal(goal.goal_id).state is GoalState.WAITING_CAPABILITY
     assert goals.get_goal(goal.goal_id).digest == goal.digest
+
+
+@pytest.mark.asyncio
+async def test_cancel_supersedes_previously_failed_acquisition_change(tmp_path):
+    work, goals, changes, goal, _, _, _, _, change, item = _fixture(tmp_path)
+    failed = changes.transition(
+        change.change_id,
+        ChangeState.FAILED,
+        expected_version=change.version,
+    )
+    assert failed.state is ChangeState.FAILED
+    runtime, _ = _runtime(work, goals, changes)
+    outcome = await runtime.cancel_owner_goal(goal.goal_id)
+    assert outcome["status"] == "cancelled"
+    assert changes.require(change.change_id).state is ChangeState.SUPERSEDED
+    assert work.require(item.work_id).state is WorkState.CANCELLED
+    assert goals.get_goal(goal.goal_id).state is GoalState.CANCELLED
