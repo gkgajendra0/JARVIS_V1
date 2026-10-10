@@ -572,15 +572,11 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
     )
     assert initial["status"] == "explicit_discovery_permission_not_given"
     conversation.accept_turn(ConversationRole.USER, "Yes.")
-    vague = await tools.authorize_bounded_network_discovery(
-        None, goal_id=goal.goal_id
-    )
+    vague = await tools.authorize_bounded_network_discovery(None, goal_id=goal.goal_id)
     assert vague["status"] == "explicit_discovery_permission_not_given"
     assert runtime.scan_calls == 0
 
-    conversation.accept_turn(
-        ConversationRole.USER, "I approve the network discovery."
-    )
+    conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     mismatch = await tools.authorize_bounded_network_discovery(
         None, goal_id="other-goal"
     )
@@ -598,9 +594,7 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
 
     another = NewSession(session_id="other-owner-session")
     another.start()
-    another.accept_turn(
-        ConversationRole.USER, "I approve the network discovery."
-    )
+    another.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     other_tools = GiccAgentTools(
         FailingGoalCoordinator(),
         another,

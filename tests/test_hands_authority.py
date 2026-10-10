@@ -318,9 +318,7 @@ def test_denied_network_discovery_never_issues_an_action_permit() -> None:
         goal_id="exact-goal",
         need_id="exact-need",
     )
-    strong.verify_and_resolve = lambda **kwargs: types.SimpleNamespace(
-        granted=False
-    )
+    strong.verify_and_resolve = lambda **kwargs: types.SimpleNamespace(granted=False)
     with pytest.raises(CapabilityAuthorizationError, match="not granted"):
         broker.authorize_network_discovery_proposal(proposal)
     assert canonical.evaluations == []
