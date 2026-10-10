@@ -667,7 +667,10 @@ class GiccAgentTools:
                 or current_proposal.capability != "network_discovery"
                 or current_proposal.operation != "enumerate_aep"
             ):
-                return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
+                return {
+                    "ok": False,
+                    "status": "discovery_scope_changed_reoffer_required",
+                }
             current_target = current_proposal.target()
             current_material = (
                 current_target.get("gicc_need_id"),
@@ -680,7 +683,10 @@ class GiccAgentTools:
                 current_target.get("gicc_goal_id") != goal.goal_id
                 or current_material != offered[0]
             ):
-                return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
+                return {
+                    "ok": False,
+                    "status": "discovery_scope_changed_reoffer_required",
+                }
         except Exception:
             LOGGER.warning("GICC could not revalidate owner scan scope", exc_info=True)
             return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
@@ -808,7 +814,9 @@ class GiccAgentTools:
                                     result.need.information_need_id,
                                     next_target.get("protocol"),
                                     proposal.material_summary,
-                                    tuple(next_target.get("address_result_filters") or ()),
+                                    tuple(
+                                        next_target.get("address_result_filters") or ()
+                                    ),
                                     next_target.get("all_local_interfaces"),
                                 ),
                                 turn.turn_id,
