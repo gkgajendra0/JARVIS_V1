@@ -192,6 +192,27 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
         planner=planner,
     )
     assert proposal is not None
+    # The owner was told a different protocol/address scope before saying
+    # yes. Refuse *before* Windows Hello, any durable utterance claim or
+    # device watcher starts, even if a fresh proposal exists now.
+    expected_from_wrong_offer = (
+        need.information_need_id,
+        "dns_sd",
+        "Previously offered DNS-SD scan",
+        tuple(proposal.target()["address_result_filters"]),
+        True,
+    )
+    assert (
+        runtime.authorize_and_discover_network(
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            owner_turn_id="owner-spoke-for-other-scope",
+            expected_scope_material=expected_from_wrong_offer,
+            planner=planner,
+        )
+        is None
+    )
+    assert store.get_information_need(need.information_need_id) == need
 
     clock = time.monotonic
     approvals = ApprovalService(clock=clock)
