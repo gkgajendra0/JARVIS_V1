@@ -24,6 +24,7 @@ _TARGET_DIMENSIONS = frozenset(
     {
         "entity_type",
         "entity_name",
+        "entity_id",
         "vendor",
         "platform",
         "protocol",
@@ -228,6 +229,12 @@ def evaluate_candidate_target_compatibility(
     else:
         for dimension, expected in required.items():
             actual = declared.get(dimension)
+            if dimension == "entity_id" and actual is None:
+                # A reusable SDK may support this target class without being
+                # installed/bound to one owner entity yet. But if it CLAIMS
+                # an exact entity, that claim must match. Binding and control
+                # remain separately governed and unverified at selection.
+                continue
             if actual is None:
                 missing.append(dimension)
                 continue

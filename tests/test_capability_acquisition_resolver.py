@@ -851,3 +851,64 @@ def test_exact_existing_device_binding_still_reuses_compatible_capability() -> N
         ),
     )
     assert len(ExistingCapabilitySourceAdapter().discover(goal, context)) == 1
+
+
+def test_external_adapter_for_other_owner_entity_is_incompatible() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire control of the exact owner TV",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "entity_id:owner-tv-a"),
+        source_session_id="owner-tv-identity",
+        source_turn_id="original-tv-request",
+        now_epoch=100.0,
+    )
+    wrong = _targeted_sdk(
+        identity="adapter-bound-to-another-tv",
+        device_scopes=("entity_type:television", "entity_id:owner-tv-b"),
+    )
+    result = evaluate_candidate_target_compatibility(goal, wrong)
+    assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflict_entity_id" in result.reason_codes
+
+    general = _targeted_sdk(
+        identity="unbound-reusable-tv-adapter",
+        device_scopes=("entity_type:television",),
+    )
+    reusable = evaluate_candidate_target_compatibility(goal, general)
+    assert reusable.verdict is TargetCompatibilityVerdict.COMPATIBLE
+    assert reusable.compatible
+    # Candidate selection is not a verified endpoint binding or action result.
+
+
+def test_confirmed_target_id_overrides_conflicting_stale_owner_id() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = OwnerCapabilityGoalV1.create(
+        request="Acquire TV control",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "entity_id:previous-tv"),
+        source_session_id="owner-conflicting-target",
+        source_turn_id="owner-old-tv",
+        now_epoch=100.0,
+    )
+    sdk = _targeted_sdk(
+        identity="generic-tv-adapter",
+        device_scopes=("entity_type:television",),
+    )
+    result = evaluate_candidate_target_compatibility(
+        goal,
+        sdk,
+        canonical_target_hints=("entity_id:confirmed-tv",),
+    )
+    assert result.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflicting_provenance_entity_id" in result.reason_codes
