@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import types
 
+import pytest
+
 from jarvis.authority.approval import ApprovalService
+from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.types import (
     ActionAttributes,
     ActionOrigin,
@@ -11,7 +14,10 @@ from jarvis.authority.types import (
     AuthorityEffect,
     TrustTier,
 )
-from jarvis.capabilities.authority_bridge import CapabilityAuthorityBroker
+from jarvis.capabilities.authority_bridge import (
+    CapabilityAuthorityBroker,
+    CapabilityAuthorizationError,
+)
 from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import CapabilityRequest
 
@@ -244,3 +250,78 @@ def test_close_clears_trusted_session() -> None:
 
     assert len(strong.calls) == 2
     assert canonical.evaluations[0][1].trust_tier is TrustTier.VERIFIED_OWNER
+
+
+def test_exact_network_discovery_authorization_requires_strong_confirmation() -> None:
+    """A GICC device scan never inherits an earlier trusted owner window."""
+    from tests.test_gicc_aep_authority import _scope
+
+    from jarvis.goal_intelligence.aep_authority import build_aep_consent_proposal
+
+    broker, canonical, strong, _ = configured_broker()
+    broker.authorize(prepared(ActionAttributes(reversible_local_change=True)))
+    proposal = build_aep_consent_proposal(
+        scope=_scope(),
+        session_id="owner-session",
+        goal_id="exact-goal",
+        need_id="exact-need",
+    )
+    assert proposal.has_valid_fingerprint()
+
+    # The canonical fake must carry the approval through to the guarded
+    # one-use permit. All real executions use the full AuthorityService.
+    def allow_with_approval(*, proposal, context, approval_id=None):
+        canonical.evaluations.append((proposal, context, approval_id))
+        return types.SimpleNamespace(
+            effect=AuthorityEffect.ALLOW,
+            execution_permit=types.SimpleNamespace(permit_id="permit-gicc"),
+            approval_id=approval_id,
+            reason_codes=(),
+        )
+
+    canonical.evaluate = allow_with_approval
+    authorized = broker.authorize_network_discovery_proposal(proposal)
+    assert len(strong.calls) == 2
+    assert authorized.proposal is proposal
+    assert authorized.authority is canonical
+    assert authorized.approval_id == "hands-approval"
+    assert authorized.permit_id == "permit-gicc"
+    assert authorized.context.trust_tier is TrustTier.VERIFIED_OWNER
+    assert canonical.consumed == []
+    assert canonical.evaluations[-1][0] is proposal
+
+    with pytest.raises(CapabilityAuthorizationError):
+        broker.authorize_network_discovery_proposal(
+            ActionProposal.create(
+                session_id="owner-session",
+                capability="network_discovery",
+                operation="enumerate_aep",
+                target=proposal.target(),
+                parameters={"pairing": True, "device_control": False},
+                material_summary="Wrong request: includes pairing",
+                attributes=ActionAttributes(external_side_effect=True),
+                origin=ActionOrigin.PROACTIVE,
+            )
+        )
+    assert len(strong.calls) == 2
+
+
+def test_denied_network_discovery_never_issues_an_action_permit() -> None:
+    from tests.test_gicc_aep_authority import _scope
+
+    from jarvis.goal_intelligence.aep_authority import build_aep_consent_proposal
+
+    broker, canonical, strong, _ = configured_broker()
+    proposal = build_aep_consent_proposal(
+        scope=_scope(),
+        session_id="owner-session",
+        goal_id="exact-goal",
+        need_id="exact-need",
+    )
+    strong.verify_and_resolve = lambda **kwargs: types.SimpleNamespace(
+        granted=False
+    )
+    with pytest.raises(CapabilityAuthorizationError, match="not granted"):
+        broker.authorize_network_discovery_proposal(proposal)
+    assert canonical.evaluations == []
+    assert canonical.consumed == []
