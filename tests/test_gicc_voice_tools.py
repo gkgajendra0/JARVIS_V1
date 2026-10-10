@@ -414,7 +414,6 @@ async def test_gicc_voice_status_reads_canonical_objective_projection(
     assert found["goal_id"] == "goal_tv"
     assert found["verified_completion"] is False
     assert "Never infer overall completion" in str(listed["truth_note"])
-
 @pytest.mark.asyncio
 async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     tmp_path: Path,
@@ -480,7 +479,9 @@ async def test_gicc_voice_surfaces_bounded_discovery_without_granting_it(
     assert payload["network_discovery"]["owner_approval_required"] is True
     assert payload["network_discovery"]["scan_started"] is False
     assert payload["network_discovery"]["protocol"] == "upnp"
-    assert payload["network_discovery"]["information_need_id"] == need.information_need_id
+    assert (
+        payload["network_discovery"]["information_need_id"] == need.information_need_id
+    )
     assert "all local network interfaces" in payload["network_discovery"]["summary"]
     assert "has not registered an approval request" in payload["truth_note"]
     assert payload["unverified_device_hints"][0]["verified_identity"] is False
