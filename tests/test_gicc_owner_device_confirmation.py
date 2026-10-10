@@ -174,3 +174,29 @@ def test_owner_confirmation_never_creates_duplicate_of_known_tv(
         is None
     )
     assert world.entities() == (known,)
+
+
+def test_owner_confirmation_rejects_expired_advertisements(tmp_path: Path) -> None:
+    store, goal, need = _data(tmp_path)
+    world = WorldRegistry(store)
+    stale_evidence = _evidence(
+        address="192.168.1.10", now=int(time.time()) - 600
+    )
+    store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=(stale_evidence,),
+    )
+    assert (
+        confirm_single_discovered_device(
+            store=store,
+            world=world,
+            goal_id=goal.goal_id,
+            information_need_id=need.information_need_id,
+            session_id=goal.source_session_id,
+            owner_turn_id="stale-owner-affirmation",
+        )
+        is None
+    )
+    assert world.entities() == ()
