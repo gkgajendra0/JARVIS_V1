@@ -282,5 +282,53 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
     assert changes.latest_artifact(change.change_id, "gicc_target_context") is not None
     assert backend.submissions
     assert world.entities() == (tv,)
-    # Development, pairing, promotion, real device effect and verified goal
-    # completion intentionally cannot be inferred from this admission.
+    # The same original goal must remain blocked throughout Phase-9 build,
+    # activation and external acceptance until durable lineage is completed.
+    # These are intentionally SYNTHETIC downstream artifacts: they verify
+    # the cross-lifecycle contracts, not execution on real owner hardware.
+    from tests.test_gicc_phase9_bridge import (
+        FakeAdmitter,
+        LineageArtifacts,
+        _install_current_external_pass,
+        _install_current_lineage,
+    )
+
+    admission = resumed.phase9_admissions[0]
+    goal_after_discovery = store.get_goal(goal_id)
+    gap = store.get_gap(admission.request.gap_id)
+    assert goal_after_discovery is not None
+    assert gap is not None
+    assert admission.request.target_entity_id == tv.entity_id
+    assert not phase9.completion_verified(gap=gap, goal=goal_after_discovery)
+
+    synthetic = LineageArtifacts()
+    _install_current_lineage(
+        synthetic,
+        request=admission.request,
+        goal=goal_after_discovery,
+        gap=gap,
+    )
+    synthetic_bridge = Phase9GoalBridge(
+        coordinator=FakeAdmitter(),
+        change_store=synthetic,
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+    assert not synthetic_bridge.completion_verified(
+        gap=gap, goal=goal_after_discovery
+    )
+    _install_current_external_pass(synthetic)
+    assert synthetic_bridge.completion_verified(
+        gap=gap, goal=goal_after_discovery
+    )
+    # Even complete synthetic acquisition acceptance must not mark the
+    # actual original TV goal PLAYBACK-COMPLETED or change its request.
+    durable_goal = store.get_goal(goal_id)
+    assert durable_goal is not None
+    assert durable_goal.exact_owner_request == turn.text
+    assert durable_goal.goal_id == goal_id
+    assert durable_goal.state == goal_after_discovery.state
+    assert world.bindings(entity_id=tv.entity_id) == ()
+
+    # Real device pairing, live effect, actual release/promotion and verified
+    # original-goal completion remain owner-machine acceptance gates.
