@@ -1209,7 +1209,17 @@ class ExternalAcceptanceRecordExecutor:
                 )
         else:
             input_key = f"external_effect_confirmation:{request_id}".casefold()
-            response = _owner_reply(steps, input_key=input_key)
+            # A "yes" from an older physical test cannot certify a newer
+            # invocation, even if both share the same durable request_id.
+            # Store.list_steps orders by creation time and step identity.
+            invocation_index = next(
+                index
+                for index, step in enumerate(steps)
+                if step.step_id == invoked.step_id
+            )
+            response = _owner_reply(
+                steps[invocation_index + 1 :], input_key=input_key
+            )
             if response is None:
                 raise WorkOwnerInputRequired(
                     (

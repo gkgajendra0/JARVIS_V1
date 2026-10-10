@@ -605,6 +605,18 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
         operation="play_media",
         expected_observation="Movie visible on the actual television",
     )
+    # A prior owner's yes to the same request ID is not a fresh observation
+    # of the following invocation. Otherwise a retry could certify old data.
+    work_store.add_step(
+        _completed_step(
+            item.work_id,
+            "owner_input",
+            {
+                "input_key": "external_effect_confirmation:physical-request-1",
+                "response": "yes",
+            },
+        )
+    )
     work_store.add_step(
         _completed_step(
             item.work_id,
