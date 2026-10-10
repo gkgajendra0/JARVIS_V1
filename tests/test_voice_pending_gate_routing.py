@@ -299,9 +299,10 @@ async def test_approval_tool_failure_does_not_forge_engineering_signoff(
     assert result["status"] == "approval_processing_error"
     assert result["retry_requires_new_owner_turn"] is True
     assert "approved" not in result
-    assert gate.gate_id in GateService(
-        store, verify_owner=lambda *_: False
-    ).pending_gate_ids()
+    assert (
+        gate.gate_id
+        in GateService(store, verify_owner=lambda *_: False).pending_gate_ids()
+    )
 
     # A second call on the same canonical owner utterance cannot retry approval.
     replay = await tools.decide_bound_change_gate(None)
