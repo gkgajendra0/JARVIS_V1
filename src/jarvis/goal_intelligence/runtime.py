@@ -47,14 +47,14 @@ from jarvis.work.runtime import WorkRuntime
 
 from .aep_authority import AepAuthorityExecutionGuard
 from .capability_graph import CapabilityGraphResolver
-from .device_suggestions import (
-    UnverifiedDeviceSuggestionV1,
-    pending_owner_device_suggestions,
-)
 from .composition import (
     GoalIntakeDisposition,
     GoalIntakeResult,
     GoalIntelligenceCoordinator,
+)
+from .device_suggestions import (
+    UnverifiedDeviceSuggestionV1,
+    pending_owner_device_suggestions,
 )
 from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
