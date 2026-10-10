@@ -107,7 +107,10 @@ def test_owner_confirmation_refuses_ambiguous_or_stale_candidates(
         need.information_need_id,
         need.state,
         expected_revision=need.revision,
-        evidence_refs=(_evidence(address="192.168.1.10", now=now), "windows_aep_authorized_scope_consumed:upnp"),
+        evidence_refs=(
+            _evidence(address="192.168.1.10", now=now),
+            "windows_aep_authorized_scope_consumed:upnp",
+        ),
     )
     second = store.update_information_need_state(
         need.information_need_id,
@@ -221,7 +224,10 @@ def test_owner_identity_confirmation_cannot_be_replayed_across_goals(
         first_need.information_need_id,
         first_need.state,
         expected_revision=first_need.revision,
-        evidence_refs=(_evidence(address="192.168.1.10", now=now), "windows_aep_authorized_scope_consumed:upnp"),
+        evidence_refs=(
+            _evidence(address="192.168.1.10", now=now),
+            "windows_aep_authorized_scope_consumed:upnp",
+        ),
     )
     second_goal = store.create_goal(
         OwnerGoalV2.create(
@@ -288,9 +294,7 @@ def test_owner_confirmation_requires_consumed_discovery_authority(
         need.information_need_id,
         need.state,
         expected_revision=need.revision,
-        evidence_refs=(
-            _evidence(address="192.168.1.10", now=int(time.time())),
-        ),
+        evidence_refs=(_evidence(address="192.168.1.10", now=int(time.time())),),
     )
     assert (
         confirm_single_discovered_device(

@@ -80,9 +80,7 @@ def confirm_single_discovered_device(
     # A bare or injected network advertisement does not prove it originated
     # in an owner-approved, one-time Windows AEP scan. The same InfoNeed
     # must carry the consumed authorization for the observed protocol.
-    consumed_scope = (
-        "windows_aep_authorized_scope_consumed:" + hints[0].protocol
-    )
+    consumed_scope = "windows_aep_authorized_scope_consumed:" + hints[0].protocol
     if consumed_scope not in need.evidence_refs:
         return None
     canonical_name, aliases = details
