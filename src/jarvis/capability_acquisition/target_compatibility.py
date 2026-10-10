@@ -197,9 +197,28 @@ def evaluate_candidate_target_compatibility(
         verdict = TargetCompatibilityVerdict.NOT_REQUIRED
         reasons = ("target_compatibility_not_required",)
     elif intrinsically_bound:
-        verdict = TargetCompatibilityVerdict.COMPATIBLE
-        reasons = ("target_compatibility_intrinsic",)
-        matched = sorted(required)
+        # Registered existing capabilities carry a separate executable-binding
+        # gate, but that cannot excuse an EXPLICIT conflict with canonical
+        # target facts (e.g. old Roku adapter vs verified VIDAA owner TV).
+        # Missing scope declarations continue using their existing binding
+        # contract; present incompatible declarations fail closed here.
+        for dimension, expected in required.items():
+            actual = declared.get(dimension)
+            if actual is not None and expected.isdisjoint(actual):
+                conflicting.append(dimension)
+        if conflicting:
+            verdict = TargetCompatibilityVerdict.INCOMPATIBLE
+            reasons = (
+                "target_incompatible",
+                *(
+                    f"target_conflict_{dimension}"
+                    for dimension in sorted(conflicting)
+                ),
+            )
+        else:
+            verdict = TargetCompatibilityVerdict.COMPATIBLE
+            reasons = ("target_compatibility_intrinsic",)
+            matched = sorted(required)
     else:
         for dimension, expected in required.items():
             actual = declared.get(dimension)

@@ -736,3 +736,32 @@ def test_world_entity_type_alias_does_not_fake_a_provenance_conflict() -> None:
     assert result.evaluation(candidate.candidate_id).disposition is (
         AcquisitionDisposition.SELECTABLE
     )
+
+
+def test_existing_roku_adapter_cannot_override_owner_vidaa_platform() -> None:
+    from jarvis.capability_acquisition.target_compatibility import (
+        TargetCompatibilityVerdict,
+        evaluate_candidate_target_compatibility,
+    )
+
+    goal = _targeted_goal()
+    existing = AcquisitionCandidateV1.create(
+        source_kind=AcquisitionSourceKind.EXISTING_CAPABILITY,
+        source_identity="registered-existing-roku-tv",
+        source_version="1.0.0",
+        source_digest="e" * 64,
+        trust_class=AcquisitionTrustClass.ACCEPTED_RELEASE,
+        supported_operations=("power",),
+        strategy=AcquisitionStrategy.REUSE,
+        evidence_refs=("existing-runtime-binding",),
+        verification_requirements=("existing-binding-evidence",),
+        device_scopes=("entity_type:television", "platform:roku"),
+    )
+    compatibility = evaluate_candidate_target_compatibility(
+        goal,
+        existing,
+        canonical_target_hints=("platform:vidaa",),
+    )
+    assert compatibility.verdict is TargetCompatibilityVerdict.INCOMPATIBLE
+    assert "target_conflict_platform" in compatibility.reason_codes
+    assert not compatibility.compatible
