@@ -90,12 +90,15 @@ def test_future_or_expired_metadata_cannot_be_displayed(
 ) -> None:
     store, goal, need = _data(tmp_path)
     _add(store, need, _evidence())
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id=goal.source_session_id,
-        now_epoch=now_epoch,
-    ) == ()
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            now_epoch=now_epoch,
+        )
+        == ()
+    )
 
 
 def test_cross_session_and_noncanonical_payload_denied(tmp_path: Path) -> None:
@@ -108,23 +111,28 @@ def test_cross_session_and_noncanonical_payload_denied(tmp_path: Path) -> None:
     _add(
         store,
         need,
-        "windows_aep_discovered_unverified:8.8.8.8:"
-        + valid.split(":", 2)[2],
+        "windows_aep_discovered_unverified:8.8.8.8:" + valid.split(":", 2)[2],
         invalid_address,
         "provider:unverified-other-system",
     )
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id="other-session",
-        now_epoch=1001,
-    ) == ()
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id=goal.source_session_id,
-        now_epoch=1001,
-    ) == ()
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id="other-session",
+            now_epoch=1001,
+        )
+        == ()
+    )
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            now_epoch=1001,
+        )
+        == ()
+    )
 
 
 def test_conflicting_recent_identification_is_not_suggested(tmp_path: Path) -> None:
@@ -135,23 +143,29 @@ def test_conflicting_recent_identification_is_not_suggested(tmp_path: Path) -> N
         _evidence(manufacturer="Vendor A", correlated=True),
         _evidence(manufacturer="Vendor B", protocol="dns_sd"),
     )
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id=goal.source_session_id,
-        now_epoch=1001,
-    ) == ()
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            now_epoch=1001,
+        )
+        == ()
+    )
 
 
 def test_suggestion_requires_real_vendor_or_model(tmp_path: Path) -> None:
     store, goal, need = _data(tmp_path)
     _add(store, need, _evidence(manufacturer="", model=""))
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id=goal.source_session_id,
-        now_epoch=1001,
-    ) == ()
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            now_epoch=1001,
+        )
+        == ()
+    )
 
 
 def test_owner_cannot_get_suggestions_for_resolved_need(tmp_path: Path) -> None:
@@ -162,12 +176,15 @@ def test_owner_cannot_get_suggestions_for_resolved_need(tmp_path: Path) -> None:
         resolution_ref="entity_previously_verified",
         expected_revision=current.revision,
     )
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id=goal.source_session_id,
-        now_epoch=1001,
-    ) == ()
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            now_epoch=1001,
+        )
+        == ()
+    )
 
 
 def test_owner_only_information_does_not_reveal_unverified_network_choices(
@@ -175,9 +192,12 @@ def test_owner_only_information_does_not_reveal_unverified_network_choices(
 ) -> None:
     store, goal, need = _data(tmp_path, sources=("owner_input",))
     _add(store, need, _evidence())
-    assert pending_owner_device_suggestions(
-        store=store,
-        goal_id=goal.goal_id,
-        session_id=goal.source_session_id,
-        now_epoch=1001,
-    ) == ()
+    assert (
+        pending_owner_device_suggestions(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            now_epoch=1001,
+        )
+        == ()
+    )
