@@ -473,16 +473,13 @@ class ChangeStore:
                     raise ChangeConflict(
                         "cancel scope mismatches canonical goal and gap"
                     )
-            terminal = {
-                ChangeState.CLOSED,
-                ChangeState.REJECTED,
-                ChangeState.FAILED,
-                ChangeState.SUPERSEDED,
-                ChangeState.ROLLED_BACK,
-            }
-            if change.state in terminal:
+            if change.state in {ChangeState.SUPERSEDED, ChangeState.ROLLED_BACK}:
                 return change
-            if change.state in {ChangeState.PROMOTED, ChangeState.OBSERVING}:
+            if change.state in {
+                ChangeState.PROMOTED,
+                ChangeState.OBSERVING,
+                ChangeState.CLOSED,
+            }:
                 raise ChangeConflict(
                     "promoted capability requires governed deactivation before cancel"
                 )
