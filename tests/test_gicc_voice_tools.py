@@ -558,8 +558,20 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
         def __init__(self) -> None:
             super().__init__(result)
             self.scan_calls = 0
+            self.tamper_scope = False
 
         def prepare_network_discovery_consent(self, *, goal_id, session_id):
+            if self.tamper_scope:
+                from jarvis.goal_intelligence.aep_authority import (
+                    build_aep_consent_proposal,
+                )
+
+                return build_aep_consent_proposal(
+                    scope=_planner().consent_scopes_for("media_player")[1],
+                    session_id=session_id,
+                    goal_id=goal_id,
+                    need_id=need.information_need_id,
+                )
             return prepare_pending_device_discovery_consent(
                 store=store,
                 goal_id=goal_id,
@@ -624,6 +636,16 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
     )
     assert mismatch["status"] == "discovery_goal_not_current_or_not_waiting"
     assert runtime.scan_calls == 0
+
+    # The owner saw the UPnP consent scope; changing it to DNS-SD after
+    # the offer must not spend the original approval or launch a scan.
+    runtime.tamper_scope = True
+    changed = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert changed["status"] == "discovery_scope_changed_reoffer_required"
+    assert runtime.scan_calls == 0
+    runtime.tamper_scope = False
 
     accepted = await tools.authorize_bounded_network_discovery(
         None, goal_id=goal.goal_id
