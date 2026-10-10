@@ -13,7 +13,10 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeResult,
     GoalIntelligenceCoordinator,
 )
-from jarvis.goal_intelligence.information import BoundInformationInteraction
+from jarvis.goal_intelligence.information import (
+    BoundInformationInteraction,
+    can_rediscover_information,
+)
 from jarvis.goal_intelligence.models import GoalState, PlanState
 from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
@@ -333,8 +336,26 @@ class GiccAgentTools:
                             exc_info=True,
                         )
                     else:
-                        if proposal is not None and proposal.has_valid_fingerprint():
+                        valid_proposal = (
+                            proposal is not None
+                            and proposal.has_valid_fingerprint()
+                            and not proposal.is_expired()
+                            and proposal.session_id == goal.source_session_id
+                            and proposal.capability == "network_discovery"
+                            and proposal.operation == "enumerate_aep"
+                        )
+                        if valid_proposal:
                             target = proposal.target()
+                            bound_need = self._store.get_information_need(
+                                str(target.get("gicc_need_id") or "")
+                            )
+                            valid_proposal = (
+                                target.get("gicc_goal_id") == goal.goal_id
+                                and bound_need is not None
+                                and bound_need.goal_id == goal.goal_id
+                                and can_rediscover_information(bound_need)
+                            )
+                        if valid_proposal:
                             payload["network_discovery"] = {
                                 "state": "proposal_only_not_authorized",
                                 "summary": proposal.material_summary,
