@@ -132,7 +132,7 @@ def pending_owner_device_suggestions(
         }
         if len(signatures) != 1:
             continue
-        best = sorted(
+        best = min(
             items,
             key=lambda row: (
                 -row.observed_at_epoch,
@@ -140,6 +140,6 @@ def pending_owner_device_suggestions(
                 row.protocol,
                 row.evidence_ref,
             ),
-        )[0]
+        )
         suggestions.append(best)
     return tuple(suggestions[:8])
