@@ -29,7 +29,7 @@ async def test_voice_cancel_uses_listed_exact_goal_and_explicit_owner_turn(tmp_p
 
     status = SimpleNamespace(
         list_active=lambda limit: (
-            SimpleNamespace(goal_id=target, public_payload=lambda: {"goal_id": target}),
+            SimpleNamespace(goal_id=target, public_payload=lambda: {"goal_id": target, "owner_request": "Acquire TV control"}),
         ),
     )
     runtime = SimpleNamespace(
@@ -48,7 +48,7 @@ async def test_voice_cancel_uses_listed_exact_goal_and_explicit_owner_turn(tmp_p
     # Listing presents exactly one active objective, but does not authorize
     # cancellation until a fresh explicit owner cancellation turn.
     listed = await tools.list_owner_objectives(None)
-    assert listed["objectives"] == [{"goal_id": target}]
+    assert listed["objectives"] == [{"goal_id": target, "owner_request": "Acquire TV control"}]
     assert (await tools.cancel_owner_goal(None, target))["status"] == (
         "explicit_cancel_request_required"
     )
@@ -144,3 +144,39 @@ async def test_voice_negated_cancellation_does_not_stop_a_goal(tmp_path):
     result = await tools.cancel_owner_goal(None, "goal_tv")
     assert result["status"] == "cancellation_negated"
     assert not recorded
+
+
+@pytest.mark.asyncio
+async def test_one_active_goal_rejects_cancel_request_for_different_device(tmp_path):
+    store = _store(tmp_path)
+    conversation, _ = _conversation("List my goals")
+    seen = []
+
+    async def cancel(goal_id):
+        seen.append(goal_id)
+        return {"status": "cancelled", "goal_id": goal_id}
+
+    status = SimpleNamespace(
+        list_active=lambda limit: (
+            SimpleNamespace(
+                public_payload=lambda: {
+                    "goal_id": "goal_tv",
+                    "owner_request": "Acquire TV control",
+                }
+            ),
+        ),
+    )
+    tools = GiccAgentTools(
+        object.__new__(GoalIntelligenceCoordinator),
+        conversation,
+        store,
+        objective_status=status,
+        execution_runtime=SimpleNamespace(cancel_owner_goal=cancel),
+    )
+    await tools.list_owner_objectives(None)
+    conversation.accept_turn(
+        ConversationRole.USER, "Cancel my old camera monitoring request."
+    )
+    result = await tools.cancel_owner_goal(None, "goal_tv")
+    assert result["status"] == "ambiguous_cancel_target"
+    assert not seen

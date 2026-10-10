@@ -244,7 +244,7 @@ class GiccAgentTools:
                 "truth_note": "The target is not grounded in canonical objective status.",
             }
         candidates = self._listed_owner_goal_payloads
-        if len(candidates) > 1 and key.casefold() not in turn.text.casefold():
+        if key.casefold() not in turn.text.casefold():
             topic_aliases = (
                 ("tv", "television", "hisense", "vidaa"),
                 ("camera", "webcam", "doorbell"),
@@ -260,9 +260,12 @@ class GiccAgentTools:
                     for alias in aliases
                 )
             ]
-            matches = set(candidates)
-            if not mentioned:
-                matches = set()
+            # If a specific device was mentioned, it must match the exact
+            # selected objective even if only one goal is currently active.
+            # Generic "cancel the previous goal" is unambiguous only for one.
+            matches = set(candidates) if mentioned else (
+                {key} if len(candidates) == 1 else set()
+            )
             for aliases in mentioned:
                 matches &= {
                     candidate_id
@@ -283,9 +286,9 @@ class GiccAgentTools:
                     "ok": False,
                     "status": "ambiguous_cancel_target",
                     "truth_note": (
-                        "Multiple objectives are active and this cancellation "
-                        "cannot be uniquely matched to the owner's words. "
-                        "Ask which exact request to cancel; none were stopped."
+                        "The cancellation target does not uniquely match the "
+                        "owner's words and canonical objectives. Ask which "
+                        "exact request to cancel; none were stopped."
                     ),
                 }
         runtime = self._execution_runtime
