@@ -510,8 +510,9 @@ class GiccAgentTools:
                     "A bounded discovery scope is available. Present its exact "
                     "scope and ask for explicit owner authorization before any "
                     "active scan; Windows Hello and the AuthorityService are "
-                    "still required. Defer the generic device identity question "
-                    "until governed discovery genuinely cannot resolve it. "
+                    "still required. This tool has not registered an approval "
+                    "request or started a scan. Defer the generic device identity "
+                    "question until governed discovery cannot resolve it. "
                     "Never ask the owner to identify an IP, model or protocol "
                     "as a substitute for discovery."
                 )
