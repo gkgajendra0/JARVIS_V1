@@ -554,9 +554,7 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
             super().__init__(result)
             self.scan_calls = 0
 
-        def authorize_and_discover_network(
-            self, *, goal_id, session_id, owner_turn_id
-        ):
+        def authorize_and_discover_network(self, *, goal_id, session_id, owner_turn_id):
             assert owner_turn_id == conversation.turns[-1].turn_id
             assert goal_id == goal.goal_id
             assert session_id == goal.source_session_id
@@ -578,6 +576,21 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
     vague = await tools.authorize_bounded_network_discovery(None, goal_id=goal.goal_id)
     assert vague["status"] == "explicit_discovery_permission_not_given"
     assert runtime.scan_calls == 0
+
+    for denied_text in (
+        "I do not approve the network discovery.",
+        "I might approve network discovery.",
+        "Why should I approve the network discovery?",
+        "I approve network discovery only if you ask again.",
+        "I revoke my approval of network discovery.",
+        "The phrase approve network discovery is not permission.",
+    ):
+        conversation.accept_turn(ConversationRole.USER, denied_text)
+        denied = await tools.authorize_bounded_network_discovery(
+            None, goal_id=goal.goal_id
+        )
+        assert denied["status"] == "explicit_discovery_permission_not_given"
+        assert runtime.scan_calls == 0
 
     conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     mismatch = await tools.authorize_bounded_network_discovery(

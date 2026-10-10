@@ -510,11 +510,20 @@ class GiccAgentTools:
         """
         del context
         turn = self._latest_user_turn()
-        spoken = turn.text.casefold()
-        if not (
-            re.search(r"\b(approv\w*|authoriz\w*|allow|permit)\b", spoken)
-            and re.search(r"\b(network|discovery|discover|scan|scanning)\b", spoken)
-        ):
+        # Deliberately recognize an affirmative, *whole utterance*, not
+        # keywords embedded in a refusal, quote, question or conditional.
+        # Windows Hello is still required independently after this check.
+        spoken = turn.text.casefold().strip()
+        explicit_scope_consent = re.fullmatch(
+            r"(?:jarvis[,\s:]+)?(?:yes[,\s]+)?(?:i\s+)?"
+            r"(?:explicitly\s+)?(?:approve|authorize|allow|permit)\s+"
+            r"(?:the\s+|this\s+)?"
+            r"(?:(?:bounded|local|one[- ]time)\s+)*"
+            r"network\s+(?:device\s+)?(?:discovery|scan|scanning)"
+            r"(?:\s+now)?[.!]?",
+            spoken,
+        )
+        if explicit_scope_consent is None:
             return {
                 "ok": False,
                 "status": "explicit_discovery_permission_not_given",
