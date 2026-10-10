@@ -862,7 +862,9 @@ class GiccApplyRuntime:
                         "linked capability reached activation; governed deactivation required"
                     )
 
-            work_ids: set[str] = set()
+            work_ids: set[str] = set(
+                await asyncio.to_thread(work.store.owner_goal_work_ids, key)
+            )
             for change, _ in linked:
                 work_ids.update(
                     await asyncio.to_thread(
@@ -896,6 +898,10 @@ class GiccApplyRuntime:
                     raise RuntimeError("linked work cancellation did not terminate")
                 work.store.clear_status_update_interval(work_id)
                 stopped.append(work_id)
+            suppressed_deliveries = await asyncio.to_thread(
+                work.store.suppress_pending_deliveries_for_work_ids,
+                tuple(sorted(work_ids)),
+            )
 
             superseded: list[str] = []
             for change, gap_id in linked:
@@ -924,6 +930,7 @@ class GiccApplyRuntime:
                 "goal_id": key,
                 "cancelled_work_ids": stopped,
                 "superseded_change_ids": superseded,
+                "suppressed_pending_notifications": suppressed_deliveries,
                 "historical_audit_retained": True,
                 "no_network_or_device_action": True,
             }
