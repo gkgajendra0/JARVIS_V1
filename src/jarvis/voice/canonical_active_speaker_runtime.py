@@ -517,8 +517,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 if gate_id is None or gate_id not in pending:
                     await asyncio.to_thread(
-                        runtime.store.mark_delivery_delivered, delivery.delivery_id
-                    )
+                    runtime.store.mark_delivery_delivered, delivery.delivery_id
+                )
                     LOGGER.info(
                         "Obsolete engineering-change gate notification discarded | "
                         "delivery_id=%s | work_id=%s | gate_id=%s",
@@ -530,8 +530,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     continue
             if not self._work_delivery_is_current(delivery.kind, work.state):
                 await asyncio.to_thread(
-                        runtime.store.mark_delivery_delivered, delivery.delivery_id
-                    )
+                    runtime.store.mark_delivery_delivered, delivery.delivery_id
+                )
                 LOGGER.info(
                     "Obsolete background notification discarded | "
                     "delivery_id=%s | work_id=%s | kind=%s | current_state=%s",
@@ -578,7 +578,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 ),
                             )
                             deferred = await asyncio.to_thread(
-                                runtime.store.schedule_delivery_retry,
+                            runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="owner_input_unanswered",
@@ -613,7 +613,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 ),
                             )
                             deferred = await asyncio.to_thread(
-                                runtime.store.schedule_delivery_retry,
+                            runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="change_gate_unanswered",
@@ -701,7 +701,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             reason = f"realtime_voice_{type(exc).__name__.casefold()}"
 
                         deferred = await asyncio.to_thread(
-                                runtime.store.schedule_delivery_retry,
+                            runtime.store.schedule_delivery_retry,
                             delivery.delivery_id,
                             delay_seconds=retry_seconds,
                             reason=reason,
@@ -753,8 +753,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     continue
 
                 await asyncio.to_thread(
-                        runtime.store.mark_delivery_delivered, delivery.delivery_id
-                    )
+                    runtime.store.mark_delivery_delivered, delivery.delivery_id
+                )
                 LOGGER.info(
                     "Background work notification delivered at exclusive idle boundary | "
                     "delivery_id=%s | work_id=%s | kind=%s | policy=%s",
