@@ -251,3 +251,30 @@ def test_resolution_merges_repeated_observation_evidence_without_duplicates(
     )
     assert resolved.state is InformationNeedState.RESOLVED
     assert store.get_information_need(unresolved.information_need_id) == resolved
+
+
+def test_cancelled_need_cannot_restart_probes_or_owner_interactions(
+    tmp_path: Path,
+) -> None:
+    store, goal = _store(tmp_path)
+    original = store.create_information_need(_need(goal))
+    cancelled = store.update_information_need_state(
+        original.information_need_id,
+        InformationNeedState.CANCELLED,
+        expected_revision=original.revision,
+    )
+    probe = StaticProbe(
+        InformationResolutionStrategy.WORLD_REGISTRY,
+        resolution_ref="entity:tv-a",
+    )
+    result = InformationResolver(store=store, probes=(probe,)).resolve(
+        original,
+        created_at="2026-10-01T12:10:00+00:00",
+    )
+
+    assert result.state is InformationResolutionState.UNRESOLVED
+    assert result.need == cancelled
+    assert result.interaction is None
+    assert result.attempted_strategies == ()
+    assert probe.calls == 0
+    assert store.get_information_need(original.information_need_id) == cancelled
