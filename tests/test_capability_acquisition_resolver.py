@@ -684,3 +684,33 @@ def test_candidate_unverified_platform_is_not_inferred_from_device_type() -> Non
         "target_unproven_platform"
         in result.evaluation(candidate.candidate_id).reason_codes
     )
+
+
+def test_conflicting_owner_and_canonical_device_proof_fails_closed() -> None:
+    """Never resurrect a Roku plan by mixing it with VIDAA inventory facts."""
+    goal = OwnerCapabilityGoalV1.create(
+        request="Control my television",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:television", "platform:roku"),
+        source_session_id="owner-target-conflict",
+        source_turn_id="owner-target-conflict-turn",
+        now_epoch=100.0,
+    )
+    for platform in ("roku", "vidaa"):
+        candidate = _targeted_sdk(
+            identity=f"adapter-for-{platform}",
+            device_scopes=("entity_type:television", f"platform:{platform}"),
+        )
+        result = _resolver().resolve_candidates(
+            goal,
+            (candidate,),
+            _core_context(),
+            canonical_target_hints=("platform:vidaa",),
+        )
+        evaluation = result.evaluation(candidate.candidate_id)
+        assert evaluation.disposition is AcquisitionDisposition.BLOCKED
+        assert "target_incompatible" in evaluation.reason_codes
+        assert "target_conflict_platform" in evaluation.reason_codes
+        assert "target_conflicting_provenance_platform" in evaluation.reason_codes
+        assert result.selected_candidate_id is None
