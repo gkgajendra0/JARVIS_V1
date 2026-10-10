@@ -91,6 +91,9 @@ class GiccAgentTools:
         # ask JARVIS to show the fresh options again instead of trusting a
         # model-supplied digest as proof an owner actually saw them.
         self._offered_device_options: dict[tuple[str, str], tuple[str, str]] = {}
+        # An accepted "approve discovery" utterance requires a *previously
+        # offered* scope for this exact goal in the same live conversation.
+        self._offered_network_discovery: dict[str, tuple[tuple[object, ...], str]] = {}
 
     @property
     def action_tools(self) -> list:
@@ -558,6 +561,20 @@ class GiccAgentTools:
                 error=exc,
             )
         payload = self._public_result(result)
+        if result.goal is not None:
+            self._offered_network_discovery.pop(result.goal.goal_id, None)
+        scope = payload.get("network_discovery")
+        if isinstance(scope, dict) and result.goal is not None:
+            self._offered_network_discovery[result.goal.goal_id] = (
+                (
+                    scope["information_need_id"],
+                    scope["protocol"],
+                    scope["summary"],
+                    tuple(scope.get("result_address_filters") or ()),
+                    scope["all_local_interfaces"],
+                ),
+                turn.turn_id,
+            )
         # Offering candidate options is separate from the later NEW owner
         # choice; no option token can be invented by a model invocation.
         for key in tuple(self._offered_device_options):
@@ -628,6 +645,48 @@ class GiccAgentTools:
         )
         if not callable(execute):
             return {"ok": False, "status": "governed_discovery_unavailable"}
+        offered = self._offered_network_discovery.get(goal.goal_id)
+        if offered is None or offered[1] == turn.turn_id:
+            return {
+                "ok": False,
+                "status": "discovery_scope_not_previously_offered",
+            }
+        prepare = getattr(runtime, "prepare_network_discovery_consent", None)
+        if not callable(prepare):
+            return {"ok": False, "status": "governed_discovery_scope_unavailable"}
+        try:
+            current_proposal = prepare(
+                goal_id=goal.goal_id,
+                session_id=goal.source_session_id,
+            )
+            if (
+                current_proposal is None
+                or not current_proposal.has_valid_fingerprint()
+                or current_proposal.is_expired()
+                or current_proposal.session_id != goal.source_session_id
+                or current_proposal.capability != "network_discovery"
+                or current_proposal.operation != "enumerate_aep"
+            ):
+                return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
+            current_target = current_proposal.target()
+            current_material = (
+                current_target.get("gicc_need_id"),
+                current_target.get("protocol"),
+                current_proposal.material_summary,
+                tuple(current_target.get("address_result_filters") or ()),
+                current_target.get("all_local_interfaces"),
+            )
+            if (
+                current_target.get("gicc_goal_id") != goal.goal_id
+                or current_material != offered[0]
+            ):
+                return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
+        except Exception:
+            LOGGER.warning("GICC could not revalidate owner scan scope", exc_info=True)
+            return {"ok": False, "status": "discovery_scope_changed_reoffer_required"}
+        # Scope confirmation is a one-time voice decision, not a reusable
+        # credential. Even cancellation requires another explicit fresh offer.
+        self._offered_network_discovery.pop(goal.goal_id, None)
         try:
             # Windows Hello may block. Never run it on the audio event loop.
             result = await asyncio.to_thread(
@@ -744,10 +803,27 @@ class GiccAgentTools:
                             and next_target.get("gicc_need_id")
                             == result.need.information_need_id
                         ):
+                            self._offered_network_discovery[goal.goal_id] = (
+                                (
+                                    result.need.information_need_id,
+                                    next_target.get("protocol"),
+                                    proposal.material_summary,
+                                    tuple(next_target.get("address_result_filters") or ()),
+                                    next_target.get("all_local_interfaces"),
+                                ),
+                                turn.turn_id,
+                            )
                             payload["next_network_discovery"] = {
                                 "state": "proposal_only_not_authorized",
                                 "summary": proposal.material_summary,
                                 "protocol": next_target.get("protocol"),
+                                "information_need_id": result.need.information_need_id,
+                                "result_address_filters": next_target.get(
+                                    "address_result_filters"
+                                ),
+                                "all_local_interfaces": next_target.get(
+                                    "all_local_interfaces"
+                                ),
                                 "owner_approval_required": True,
                                 "scan_started": False,
                             }

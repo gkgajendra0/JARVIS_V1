@@ -537,9 +537,12 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
     tmp_path: Path,
 ) -> None:
     """Voice never turns the original request or generic yes into scan authority."""
-    from tests.test_gicc_network_consent import _data
+    from tests.test_gicc_network_consent import _data, _planner
 
     from jarvis.conversation import ConversationSession
+    from jarvis.goal_intelligence.network_consent import (
+        prepare_pending_device_discovery_consent,
+    )
 
     store, goal, need = _data(tmp_path)
     conversation = ConversationSession(session_id="owner-session")
@@ -555,6 +558,14 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
         def __init__(self) -> None:
             super().__init__(result)
             self.scan_calls = 0
+
+        def prepare_network_discovery_consent(self, *, goal_id, session_id):
+            return prepare_pending_device_discovery_consent(
+                store=store,
+                goal_id=goal_id,
+                session_id=session_id,
+                planner=_planner(),
+            )
 
         def authorize_and_discover_network(self, *, goal_id, session_id, owner_turn_id):
             assert owner_turn_id == conversation.turns[-1].turn_id
@@ -574,6 +585,8 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
         None, goal_id=goal.goal_id
     )
     assert initial["status"] == "explicit_discovery_permission_not_given"
+    offer = await tools.pursue_owner_goal(None)
+    assert offer["network_discovery"]["protocol"] == "upnp"
     conversation.accept_turn(ConversationRole.USER, "Yes.")
     vague = await tools.authorize_bounded_network_discovery(None, goal_id=goal.goal_id)
     assert vague["status"] == "explicit_discovery_permission_not_given"
@@ -595,6 +608,17 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
         assert runtime.scan_calls == 0
 
     conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
+    not_offered_tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    without_scope = await not_offered_tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert without_scope["status"] == "discovery_scope_not_previously_offered"
+    assert runtime.scan_calls == 0
     mismatch = await tools.authorize_bounded_network_discovery(
         None, goal_id="other-goal"
     )
@@ -733,7 +757,7 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
     store, goal, need = _data(tmp_path)
     conversation = ConversationSession(session_id=goal.source_session_id)
     conversation.start()
-    conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
+    conversation.accept_turn(ConversationRole.USER, "Find my TV.")
     result = GoalIntakeResult(
         disposition=GoalIntakeDisposition.WAITING_INFORMATION,
         goal=goal,
@@ -786,6 +810,9 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
         store,
         execution_runtime=runtime,
     )
+    offered = await tools.pursue_owner_goal(None)
+    assert offered["network_discovery"]["protocol"] == "upnp"
+    conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     payload = await tools.authorize_bounded_network_discovery(
         None, goal_id=goal.goal_id
     )
