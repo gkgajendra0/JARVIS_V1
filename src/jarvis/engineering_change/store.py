@@ -368,6 +368,107 @@ class ChangeStore:
             rows = db.execute(query, tuple(parameters)).fetchall()
         return tuple(self._from_row(row) for row in rows)
 
+    def owner_goal_acquisition_changes(
+        self, goal_id: str, gap_ids: tuple[str, ...]
+    ) -> tuple[tuple[EngineeringChange, str], ...]:
+        """Find ONLY cryptographically validated, explicitly linked GICC changes.
+
+        A generic recent-change listing or a guessed vendor/target is not
+        sufficient authority to cancel somebody else's engineering work.
+        """
+        goal_key = str(goal_id).strip()
+        gaps = set(gap_ids)
+        if not goal_key or not gaps:
+            return ()
+        found: dict[str, tuple[EngineeringChange, str]] = {}
+        with self.work._lock, self.work._connect() as db:
+            rows = db.execute(
+                "SELECT change_id, payload, digest FROM engineering_change_artifacts "
+                "WHERE kind='gicc_capability_gap_link' ORDER BY created_at"
+            ).fetchall()
+            for row in rows:
+                payload = self.work._decode_json(row["payload"])
+                if _digest(payload) != row["digest"]:
+                    raise ChangeConflict("owner capability gap link digest mismatch")
+                gap = str(payload.get("gap_id") or "")
+                if gap not in gaps:
+                    continue
+                if payload.get("motivating_goal_id") != goal_key:
+                    raise ChangeConflict("acquisition gap has conflicting owner linkage")
+                change_row = db.execute(
+                    "SELECT * FROM engineering_changes WHERE change_id=?",
+                    (row["change_id"],),
+                ).fetchone()
+                if change_row is None:
+                    raise ChangeConflict("linked EngineeringChange is missing")
+                change = self._from_row(change_row)
+                if change.process_key != "owner_capability_acquisition":
+                    raise ChangeConflict("gap is linked to an unexpected process")
+                prior = found.get(change.change_id)
+                if prior is not None and prior[1] != gap:
+                    raise ChangeConflict("one change references different owner gaps")
+                found[change.change_id] = (change, gap)
+        return tuple(found[key] for key in sorted(found))
+
+    def supersede_cancelled_owner_acquisition(
+        self, change_id: str, *, goal_id: str, gap_id: str
+    ) -> EngineeringChange:
+        """Terminalise an unpromoted change after its live jobs were stopped."""
+        with self.work._lock, self.work._connect() as db:
+            row = db.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?", (change_id,)
+            ).fetchone()
+            if row is None:
+                raise ChangeConflict("unknown owner capability change")
+            change = self._from_row(row)
+            if change.process_key != "owner_capability_acquisition":
+                raise ChangeConflict("cannot cancel an unrelated change")
+            link = db.execute(
+                "SELECT payload, digest FROM engineering_change_artifacts "
+                "WHERE change_id=? AND kind='gicc_capability_gap_link' "
+                "ORDER BY revision DESC LIMIT 1",
+                (change_id,),
+            ).fetchone()
+            if link is None:
+                raise ChangeConflict("no verifiable GICC owner-goal link")
+            payload = self.work._decode_json(link["payload"])
+            if _digest(payload) != link["digest"]:
+                raise ChangeConflict("capability gap link integrity mismatch")
+            if (
+                payload.get("motivating_goal_id") != goal_id
+                or payload.get("gap_id") != gap_id
+            ):
+                raise ChangeConflict("cancel scope mismatches canonical goal and gap")
+            terminal = {
+                ChangeState.CLOSED, ChangeState.REJECTED, ChangeState.FAILED,
+                ChangeState.SUPERSEDED, ChangeState.ROLLED_BACK,
+            }
+            if change.state in terminal:
+                return change
+            if change.state in {ChangeState.PROMOTED, ChangeState.OBSERVING}:
+                raise ChangeConflict(
+                    "promoted capability requires governed deactivation before cancel"
+                )
+            updated = db.execute(
+                "UPDATE engineering_changes SET state=?, version=?, updated_at=? "
+                "WHERE change_id=? AND version=? AND state=?",
+                (ChangeState.SUPERSEDED.value, change.version + 1,
+                 _now(), change_id, change.version, change.state.value),
+            )
+            if updated.rowcount != 1:
+                raise ChangeConflict("owner cancellation lost change version race")
+            self._event(
+                db, change_id, f"owner-goal-cancel:{change.version + 1}",
+                "owner_goal_cancelled",
+                {"goal_id": goal_id, "gap_id": gap_id,
+                 "from": change.state.value, "to": ChangeState.SUPERSEDED.value},
+            )
+            updated_row = db.execute(
+                "SELECT * FROM engineering_changes WHERE change_id=?", (change_id,)
+            ).fetchone()
+            assert updated_row is not None
+            return self._from_row(updated_row)
+
     def active_ids(self) -> tuple[str, ...]:
         terminal = ("closed", "rejected", "failed", "superseded", "rolled_back")
         with self.work._lock, self.work._connect() as db:
