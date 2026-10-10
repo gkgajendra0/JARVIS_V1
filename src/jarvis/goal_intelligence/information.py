@@ -145,6 +145,13 @@ class InformationResolver:
                 need=current,
                 attempted_strategies=(),
             )
+        if current.state is InformationNeedState.CANCELLED:
+            # No probe, owner prompt or state resurrection after cancellation.
+            return InformationResolutionResult(
+                state=InformationResolutionState.UNRESOLVED,
+                need=current,
+                attempted_strategies=(),
+            )
 
         allowed = {
             InformationResolutionStrategy(item)
