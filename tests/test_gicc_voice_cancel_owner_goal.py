@@ -68,3 +68,79 @@ async def test_voice_cancel_uses_listed_exact_goal_and_explicit_owner_turn(tmp_p
     assert (await tools.cancel_owner_goal(None, target))["status"] == (
         "unverified_cancel_target"
     )
+
+
+@pytest.mark.asyncio
+async def test_voice_cancellation_does_not_target_wrong_active_goal(tmp_path):
+    store = _store(tmp_path)
+    conversation, _ = _conversation("Show my existing requests")
+    goals = (
+        {"goal_id": "goal_television", "owner_request": "Acquire TV control"},
+        {"goal_id": "goal_gate", "owner_request": "Monitor my entrance gate"},
+    )
+    recorded = []
+
+    async def cancel(goal_id):
+        recorded.append(goal_id)
+        return {"status": "cancelled", "goal_id": goal_id}
+
+    status = SimpleNamespace(
+        list_active=lambda limit: tuple(
+            SimpleNamespace(public_payload=lambda item=item: item) for item in goals
+        ),
+    )
+    runtime = SimpleNamespace(
+        pursue=lambda **kwargs: None,
+        continue_goal=lambda goal_id: None,
+        cancel_owner_goal=cancel,
+    )
+    tools = GiccAgentTools(
+        object.__new__(GoalIntelligenceCoordinator),
+        conversation,
+        store,
+        objective_status=status,
+        execution_runtime=runtime,
+    )
+    await tools.list_owner_objectives(None)
+
+    conversation.accept_turn(ConversationRole.USER, "Cancel my old TV request.")
+    rejected = await tools.cancel_owner_goal(None, "goal_gate")
+    assert rejected["status"] == "ambiguous_cancel_target"
+    assert not recorded
+
+    result = await tools.cancel_owner_goal(None, "goal_television")
+    assert result["ok"] is True
+    assert recorded == ["goal_television"]
+
+
+@pytest.mark.asyncio
+async def test_voice_negated_cancellation_does_not_stop_a_goal(tmp_path):
+    store = _store(tmp_path)
+    conversation, _ = _conversation("What is my active goal?")
+    recorded = []
+
+    async def cancel(goal_id):
+        recorded.append(goal_id)
+        return {"status": "cancelled", "goal_id": goal_id}
+
+    status = SimpleNamespace(
+        list_active=lambda limit: (
+            SimpleNamespace(public_payload=lambda: {"goal_id": "goal_tv"}),
+        ),
+    )
+    tools = GiccAgentTools(
+        object.__new__(GoalIntelligenceCoordinator),
+        conversation,
+        store,
+        objective_status=status,
+        execution_runtime=SimpleNamespace(
+            pursue=lambda **kwargs: None,
+            continue_goal=lambda goal_id: None,
+            cancel_owner_goal=cancel,
+        ),
+    )
+    await tools.list_owner_objectives(None)
+    conversation.accept_turn(ConversationRole.USER, "Don't cancel my TV request.")
+    result = await tools.cancel_owner_goal(None, "goal_tv")
+    assert result["status"] == "cancellation_negated"
+    assert not recorded
