@@ -122,6 +122,17 @@ class WorkAgentTools:
 
     @property
     def tools(self) -> list:
+        return self.tools_for(allow_capability_acquisition=True)
+
+    def tools_for(self, *, allow_capability_acquisition: bool) -> list:
+        """Enumerate tools with a current gate restriction, without losing turn context.
+
+        The trusted live voice runtime may refresh its exposed tool list while
+        a pending EngineeringChange gate opens/closes. The same WorkAgentTools
+        instance must retain its exact status-bound approval and replay guards.
+        """
+        if not isinstance(allow_capability_acquisition, bool):
+            raise TypeError("allow_capability_acquisition must be bool")
         tools = [
             self.start_background_work,
             self.list_background_work,
@@ -148,7 +159,7 @@ class WorkAgentTools:
         ]
         if self._bound_change_gate_id is not None:
             tools.append(self.decide_bound_change_gate)
-        if self._allow_capability_acquisition:
+        if self._allow_capability_acquisition and allow_capability_acquisition:
             tools.append(self.start_capability_acquisition)
         return tools
 
