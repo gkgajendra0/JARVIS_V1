@@ -331,22 +331,31 @@ class GoalStore:
                     self._decode(item["payload"]), item["digest"]
                 )
                 if current.state in {
-                    InformationNeedState.RESOLVED, InformationNeedState.CANCELLED
+                    InformationNeedState.RESOLVED,
+                    InformationNeedState.CANCELLED,
                 }:
                     continue
                 provisional = replace(
-                    current, revision=current.revision + 1,
-                    state=InformationNeedState.CANCELLED, digest="pending",
+                    current,
+                    revision=current.revision + 1,
+                    state=InformationNeedState.CANCELLED,
+                    digest="pending",
                 )
                 updated = replace(
-                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                    provisional,
+                    digest=canonical_digest(provisional.canonical_payload()),
                 )
                 db.execute(
                     "UPDATE information_needs_v1 SET revision=?, state=?, payload=?, digest=? "
                     "WHERE information_need_id=? AND revision=?",
-                    (updated.revision, updated.state.value,
-                     self._encode(updated.canonical_payload()), updated.digest,
-                     current.information_need_id, current.revision),
+                    (
+                        updated.revision,
+                        updated.state.value,
+                        self._encode(updated.canonical_payload()),
+                        updated.digest,
+                        current.information_need_id,
+                        current.revision,
+                    ),
                 )
             interactions = db.execute(
                 "SELECT interaction_id, payload, digest FROM "
@@ -362,7 +371,11 @@ class GoalStore:
                     "UPDATE information_need_interactions_v1 "
                     "SET state='cancelled', payload=?, digest=? "
                     "WHERE interaction_id=? AND state='active'",
-                    (self._encode(retired), canonical_digest(retired), item["interaction_id"]),
+                    (
+                        self._encode(retired),
+                        canonical_digest(retired),
+                        item["interaction_id"],
+                    ),
                 )
 
             gaps = db.execute(
@@ -376,18 +389,26 @@ class GoalStore:
                 if current.state is not CapabilityGapState.OPEN:
                     continue
                 provisional = replace(
-                    current, revision=current.revision + 1,
-                    state=CapabilityGapState.CANCELLED, digest="pending",
+                    current,
+                    revision=current.revision + 1,
+                    state=CapabilityGapState.CANCELLED,
+                    digest="pending",
                 )
                 updated = replace(
-                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                    provisional,
+                    digest=canonical_digest(provisional.canonical_payload()),
                 )
                 db.execute(
                     "UPDATE capability_gaps_v1 SET revision=?, state=?, payload=?, digest=? "
                     "WHERE gap_id=? AND revision=?",
-                    (updated.revision, updated.state.value,
-                     self._encode(updated.canonical_payload()), updated.digest,
-                     current.gap_id, current.revision),
+                    (
+                        updated.revision,
+                        updated.state.value,
+                        self._encode(updated.canonical_payload()),
+                        updated.digest,
+                        current.gap_id,
+                        current.revision,
+                    ),
                 )
 
             continuations = db.execute(
@@ -401,18 +422,26 @@ class GoalStore:
                 if current.state is not ContinuationState.BLOCKED:
                     continue
                 provisional = replace(
-                    current, revision=current.revision + 1,
-                    state=ContinuationState.CANCELLED, digest="pending",
+                    current,
+                    revision=current.revision + 1,
+                    state=ContinuationState.CANCELLED,
+                    digest="pending",
                 )
                 updated = replace(
-                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                    provisional,
+                    digest=canonical_digest(provisional.canonical_payload()),
                 )
                 db.execute(
                     "UPDATE goal_continuations_v1 SET revision=?, state=?, payload=?, digest=? "
                     "WHERE continuation_id=? AND revision=?",
-                    (updated.revision, updated.state.value,
-                     self._encode(updated.canonical_payload()), updated.digest,
-                     current.continuation_id, current.revision),
+                    (
+                        updated.revision,
+                        updated.state.value,
+                        self._encode(updated.canonical_payload()),
+                        updated.digest,
+                        current.continuation_id,
+                        current.revision,
+                    ),
                 )
 
             plans = db.execute(
@@ -424,22 +453,33 @@ class GoalStore:
                     self._decode(item["payload"]), item["digest"]
                 )
                 if current.state in {
-                    PlanState.CANCELLED, PlanState.SUCCEEDED,
-                    PlanState.FAILED, PlanState.SUPERSEDED,
+                    PlanState.CANCELLED,
+                    PlanState.SUCCEEDED,
+                    PlanState.FAILED,
+                    PlanState.SUPERSEDED,
                 }:
                     continue
                 provisional = replace(
-                    current, state=PlanState.CANCELLED,
-                    updated_at=datetime.now(UTC).isoformat(), digest="pending",
+                    current,
+                    state=PlanState.CANCELLED,
+                    updated_at=datetime.now(UTC).isoformat(),
+                    digest="pending",
                 )
                 updated = replace(
-                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                    provisional,
+                    digest=canonical_digest(provisional.canonical_payload()),
                 )
                 db.execute(
                     "UPDATE plan_graphs_v1 SET state=?, payload=?, digest=?, updated_at=? "
                     "WHERE plan_id=? AND digest=?",
-                    (updated.state.value, self._encode(updated.canonical_payload()),
-                     updated.digest, updated.updated_at, current.plan_id, current.digest),
+                    (
+                        updated.state.value,
+                        self._encode(updated.canonical_payload()),
+                        updated.digest,
+                        updated.updated_at,
+                        current.plan_id,
+                        current.digest,
+                    ),
                 )
 
             updated_goal = goal.with_state(GoalState.CANCELLED)
@@ -447,9 +487,15 @@ class GoalStore:
                 "UPDATE owner_goals_v2 "
                 "SET goal_revision=?, state=?, payload=?, digest=?, updated_at=? "
                 "WHERE goal_id=? AND goal_revision=?",
-                (updated_goal.goal_revision, updated_goal.state.value,
-                 self._encode(updated_goal.canonical_payload()), updated_goal.digest,
-                 updated_goal.updated_at, key, goal.goal_revision),
+                (
+                    updated_goal.goal_revision,
+                    updated_goal.state.value,
+                    self._encode(updated_goal.canonical_payload()),
+                    updated_goal.digest,
+                    updated_goal.updated_at,
+                    key,
+                    goal.goal_revision,
+                ),
             )
             if changed.rowcount != 1:
                 raise GoalStoreConflict("goal cancellation lost compare-and-swap")
