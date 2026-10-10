@@ -253,3 +253,56 @@ async def test_proactive_gate_tool_factory_does_not_reset_same_turn_replay_guard
         gate_id=gate.gate_id,
         question="Please review this architecture",
     )
+
+
+@pytest.mark.asyncio
+async def test_approval_tool_failure_does_not_forge_engineering_signoff(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A verifier/runtime exception leaves the exact pending gate undecided."""
+    from jarvis.voice.work_tools import WorkAgentTools
+
+    work = SQLiteWorkStore(tmp_path / "work.sqlite3")
+    store = ChangeStore(work)
+    coordinator = ChangeCoordinator(store, RecordingBackend())
+    change = coordinator.start("Verify approval failure", "source", "turn")
+    research = store.list_stages(change.change_id)[0]
+    _complete(work, research.work_id)
+    architecture = store.add_artifact(
+        change.change_id, kind="architecture", payload={"strategy": "build_custom"}
+    )
+    coordinator.reconcile(change.change_id)
+    gate = GateService(store, verify_owner=lambda *_: False).present(
+        change.change_id, GateKind.ARCHITECTURE, architecture.artifact_id
+    )
+    runtime = object.__new__(WorkRuntime)
+    runtime.changes = coordinator
+    conversation = ConversationSession(session_id="approval-session")
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, "Yes, I approve.")
+    tools = WorkAgentTools(
+        runtime,
+        conversation,
+        bound_change_gate_id=gate.gate_id,
+        allow_capability_acquisition=False,
+    )
+
+    class BrokenVerifier:
+        def decide_latest(self, *args, **kwargs):
+            del args, kwargs
+            raise RuntimeError("synthetic owner verification failure")
+
+    monkeypatch.setattr(tools, "_change_service", lambda: BrokenVerifier())
+    result = await tools.decide_bound_change_gate(None)
+    assert result["ok"] is False
+    assert result["status"] == "approval_processing_error"
+    assert result["retry_requires_new_owner_turn"] is True
+    assert "approved" not in result
+    assert gate.gate_id in GateService(
+        store, verify_owner=lambda *_: False
+    ).pending_gate_ids()
+
+    # A second call on the same canonical owner utterance cannot retry approval.
+    replay = await tools.decide_bound_change_gate(None)
+    assert replay["status"] == "approval_already_attempted_for_turn"
