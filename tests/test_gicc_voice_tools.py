@@ -700,3 +700,77 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
     assert accepted["device_control_verified"] is False
     assert accepted["network_access_verified"] is False
     assert execution.confirmations == execution.resumes == 1
+
+
+@pytest.mark.asyncio
+async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scanned(
+    tmp_path: Path,
+) -> None:
+    """One owner utterance can never recursively scan UPnP and DNS-SD."""
+    from tests.test_gicc_network_consent import _data, _planner
+
+    from jarvis.conversation import ConversationSession
+    from jarvis.goal_intelligence.network_consent import (
+        prepare_pending_device_discovery_consent,
+    )
+
+    store, goal, need = _data(tmp_path)
+    conversation = ConversationSession(session_id=goal.source_session_id)
+    conversation.start()
+    conversation.accept_turn(
+        ConversationRole.USER, "I approve the network discovery."
+    )
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(need,),
+    )
+
+    class SequentialRuntime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.executions = 0
+
+        def authorize_and_discover_network(
+            self, *, goal_id, session_id, owner_turn_id
+        ):
+            assert goal_id == goal.goal_id
+            assert session_id == goal.source_session_id
+            assert owner_turn_id == conversation.turns[-1].turn_id
+            self.executions += 1
+            current = store.get_information_need(need.information_need_id)
+            updated = store.update_information_need_state(
+                current.information_need_id,
+                current.state,
+                expected_revision=current.revision,
+                evidence_refs=("windows_aep_authorized_scope_consumed:upnp",),
+            )
+            return SimpleNamespace(need=updated)
+
+        def pending_network_device_suggestions(self, *, goal_id, session_id):
+            return ()
+
+        def prepare_network_discovery_consent(self, *, goal_id, session_id):
+            return prepare_pending_device_discovery_consent(
+                store=store,
+                goal_id=goal_id,
+                session_id=session_id,
+                planner=_planner(),
+            )
+
+    runtime = SequentialRuntime()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=runtime,
+    )
+    payload = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert payload["status"] == "authorized_discovery_observation_recorded"
+    assert payload["unverified_device_hints"] == []
+    assert payload["next_network_discovery"]["protocol"] == "dns_sd"
+    assert payload["next_network_discovery"]["owner_approval_required"] is True
+    assert payload["next_network_discovery"]["scan_started"] is False
+    assert runtime.executions == 1

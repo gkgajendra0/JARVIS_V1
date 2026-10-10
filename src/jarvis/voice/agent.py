@@ -370,7 +370,12 @@ may invoke confirm_discovered_device_identity for the exact current
 information_need_id and goal_id. If there are multiple, stale or contradictory
 hints, do not choose one or invent its identity. This confirms owner inventory
 only, not protocol control, authentication or working movie playback.
-Never fabricate that confirmation.
+Never fabricate that confirmation. If the scan returns no fresh identity
+and next_network_discovery exists, describe its actual scope and request a
+NEW explicit owner approval; do not replay the prior owner utterance or
+automatically begin another protocol scan. If no next scope is offered,
+report that automatic discovery has not established a device and preserve
+the original blocked goal.
 
 Otherwise, ask exactly the returned useful information question and preserve
 interaction_id/options. After an owner answer, call resolve_goal_information

@@ -608,6 +608,45 @@ class GiccAgentTools:
                 }
                 for item in candidates
             ]
+        # If this strictly one-time observation produced no fresh device
+        # suggestion, provide the NEXT bounded scope to the owner instead of
+        # looping the exhausted protocol or asking for a manual IP. This is
+        # read-only disclosure, NEVER an automatic second scan/approval.
+        if not payload.get("unverified_device_hints"):
+            prepare = getattr(runtime, "prepare_network_discovery_consent", None)
+            if callable(prepare):
+                try:
+                    proposal = prepare(
+                        goal_id=goal.goal_id,
+                        session_id=goal.source_session_id,
+                    )
+                except Exception:
+                    LOGGER.warning(
+                        "GICC could not prepare follow-up discovery scope",
+                        exc_info=True,
+                    )
+                else:
+                    if (
+                        proposal is not None
+                        and proposal.has_valid_fingerprint()
+                        and not proposal.is_expired()
+                        and proposal.session_id == goal.source_session_id
+                        and proposal.capability == "network_discovery"
+                        and proposal.operation == "enumerate_aep"
+                    ):
+                        next_target = proposal.target()
+                        if (
+                            next_target.get("gicc_goal_id") == goal.goal_id
+                            and next_target.get("gicc_need_id")
+                            == result.need.information_need_id
+                        ):
+                            payload["next_network_discovery"] = {
+                                "state": "proposal_only_not_authorized",
+                                "summary": proposal.material_summary,
+                                "protocol": next_target.get("protocol"),
+                                "owner_approval_required": True,
+                                "scan_started": False,
+                            }
         return payload
 
     @function_tool()
