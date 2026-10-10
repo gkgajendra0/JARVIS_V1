@@ -517,8 +517,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 if gate_id is None or gate_id not in pending:
                     await asyncio.to_thread(
-                    runtime.store.mark_delivery_delivered, delivery.delivery_id
-                )
+                        runtime.store.mark_delivery_delivered, delivery.delivery_id
+                    )
                     LOGGER.info(
                         "Obsolete engineering-change gate notification discarded | "
                         "delivery_id=%s | work_id=%s | gate_id=%s",
@@ -578,7 +578,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 ),
                             )
                             deferred = await asyncio.to_thread(
-                            runtime.store.schedule_delivery_retry,
+                                runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="owner_input_unanswered",
@@ -613,7 +613,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                                 ),
                             )
                             deferred = await asyncio.to_thread(
-                            runtime.store.schedule_delivery_retry,
+                                runtime.store.schedule_delivery_retry,
                                 delivery.delivery_id,
                                 delay_seconds=retry_seconds,
                                 reason="change_gate_unanswered",
