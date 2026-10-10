@@ -380,6 +380,7 @@ class GiccApplyRuntime:
         goal_id: str,
         session_id: str,
         planner: WindowsLanScopePlanner | None = None,
+        owner_turn_id: str,
     ) -> InformationResolutionResult | None:
         """Run one reviewed AEP scan only after exact Windows Hello approval.
 
@@ -414,6 +415,15 @@ class GiccApplyRuntime:
             None,
         )
         if reviewed is None:
+            return None
+        # Atomically consume the canonical USER utterance *before* the Windows
+        # Hello dialog. A replay cannot authorize another scan or protocol,
+        # even if the first confirmation is denied or the tool is called twice.
+        if not self.store.claim_network_discovery_owner_turn(
+            goal_id=goal_id,
+            need_id=need_id,
+            owner_turn_id=owner_turn_id,
+        ):
             return None
         authorized = self.capability_runtime.authorize_network_discovery_proposal(
             proposal

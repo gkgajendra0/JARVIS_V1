@@ -91,6 +91,7 @@ def test_real_canonical_authority_binds_one_strong_permitted_scan(
         goal_id=goal.goal_id,
         session_id=goal.source_session_id,
         planner=planner,
+        owner_turn_id="explicit-owner-turn-1",
     )
     assert result is not None
     assert verifier.calls == 1
@@ -125,9 +126,37 @@ def test_real_canonical_authority_binds_one_strong_permitted_scan(
             goal_id=goal.goal_id,
             session_id=goal.source_session_id,
             planner=planner,
+            owner_turn_id="explicit-owner-turn-2",
         )
     assert watcher.started == 1
     final = store.get_information_need(need.information_need_id)
     assert final is not None
     assert "windows_aep_authorized_scope_consumed:dns_sd" not in final.evidence_refs
     assert final.resolution_ref is None
+
+
+def test_owner_utterance_is_claimed_once_even_after_denied_windows_hello(
+    tmp_path: Path,
+) -> None:
+    """No audio-model retry can turn one approval into two device scans."""
+    store, goal, need = _data(tmp_path)
+    assert store.claim_network_discovery_owner_turn(
+        goal_id=goal.goal_id,
+        need_id=need.information_need_id,
+        owner_turn_id="spoken-consent-1",
+    )
+    assert not store.claim_network_discovery_owner_turn(
+        goal_id=goal.goal_id,
+        need_id=need.information_need_id,
+        owner_turn_id="spoken-consent-1",
+    )
+    assert store.claim_network_discovery_owner_turn(
+        goal_id=goal.goal_id,
+        need_id=need.information_need_id,
+        owner_turn_id="spoken-consent-2",
+    )
+    assert not store.claim_network_discovery_owner_turn(
+        goal_id="different-goal",
+        need_id=need.information_need_id,
+        owner_turn_id="spoken-consent-3",
+    )

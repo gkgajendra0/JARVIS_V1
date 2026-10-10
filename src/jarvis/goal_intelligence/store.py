@@ -979,6 +979,82 @@ class GoalStore:
             for row in rows
         )
 
+    def claim_network_discovery_owner_turn(
+        self, *, goal_id: str, need_id: str, owner_turn_id: str
+    ) -> bool:
+        """Atomically consume one explicit owner turn for one GICC discovery.
+
+        The canonical InfoNeed is a protected append-only record of the
+        proposed attempt. A model retry or a second protocol MUST require
+        another accepted owner utterance; Windows Hello remains a distinct
+        mandatory confirmation. No approval or network operation occurs here.
+        """
+        turn_id = str(owner_turn_id).strip()
+        if not turn_id or len(turn_id) > 128:
+            return False
+        goal_key = str(goal_id).strip()
+        need_key = str(need_id).strip()
+        if not goal_key or not need_key:
+            return False
+        marker = f"gicc_network_discovery_owner_turn_claimed:{turn_id}"
+        with self.work.extension_transaction() as db:
+            goal_row = db.execute(
+                "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?",
+                (goal_key,),
+            ).fetchone()
+            if goal_row is None:
+                return False
+            goal = OwnerGoalV2.from_payload(
+                self._decode(goal_row["payload"]), goal_row["digest"]
+            )
+            if goal.state is not GoalState.WAITING_INFORMATION:
+                return False
+            rows = db.execute(
+                "SELECT payload, digest FROM information_needs_v1 WHERE goal_id=?",
+                (goal_key,),
+            ).fetchall()
+            selected = None
+            for row in rows:
+                need = InformationNeedV1.from_payload(
+                    self._decode(row["payload"]), row["digest"]
+                )
+                if marker in need.evidence_refs:
+                    return False
+                if need.information_need_id == need_key:
+                    selected = need
+            if selected is None or selected.state not in {
+                InformationNeedState.OPEN,
+                InformationNeedState.SELF_RESOLVING,
+                InformationNeedState.WAITING_FOR_OWNER,
+            }:
+                return False
+            updated = replace(
+                selected,
+                revision=selected.revision + 1,
+                evidence_refs=tuple(sorted({*selected.evidence_refs, marker})),
+                digest="pending",
+            )
+            updated = replace(
+                updated, digest=canonical_digest(updated.canonical_payload())
+            )
+            changed = db.execute(
+                """
+                UPDATE information_needs_v1
+                SET revision=?, payload=?, digest=?
+                WHERE information_need_id=? AND revision=?
+                """,
+                (
+                    updated.revision,
+                    self._encode(updated.canonical_payload()),
+                    updated.digest,
+                    selected.information_need_id,
+                    selected.revision,
+                ),
+            )
+            if changed.rowcount != 1:
+                raise GoalStoreConflict("network discovery owner-turn CAS lost")
+        return True
+
     def update_information_need_state(
         self,
         need_id: str,

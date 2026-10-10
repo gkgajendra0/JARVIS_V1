@@ -554,7 +554,10 @@ async def test_gicc_voice_scan_requires_exact_latest_user_consent(
             super().__init__(result)
             self.scan_calls = 0
 
-        def authorize_and_discover_network(self, *, goal_id, session_id):
+        def authorize_and_discover_network(
+            self, *, goal_id, session_id, owner_turn_id
+        ):
+            assert owner_turn_id == conversation.turns[-1].turn_id
             assert goal_id == goal.goal_id
             assert session_id == goal.source_session_id
             self.scan_calls += 1

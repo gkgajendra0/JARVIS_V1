@@ -548,6 +548,7 @@ class GiccAgentTools:
                 execute,
                 goal_id=goal.goal_id,
                 session_id=goal.source_session_id,
+                owner_turn_id=turn.turn_id,
             )
         except Exception:
             LOGGER.warning(
