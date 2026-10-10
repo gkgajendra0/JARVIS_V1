@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from re import IGNORECASE
 from re import compile as re_compile
@@ -20,6 +21,31 @@ from jarvis.work.estimates import estimate_work
 from jarvis.work.models import DeliveryPolicy, WorkItem, WorkPriority, WorkType
 from jarvis.work.runtime import WorkRuntime
 from jarvis.work.store import WorkStoreError
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _approval_processing_error(
+    *, stage: str, gate_id: str, error: Exception
+) -> dict[str, object]:
+    """Keep tool failures visible without claiming that an approval was persisted."""
+    LOGGER.exception(
+        "Engineering change voice approval failed | stage=%s gate_id=%s",
+        stage,
+        gate_id,
+        exc_info=error,
+    )
+    return {
+        "ok": False,
+        "status": "approval_processing_error",
+        "gate_id": gate_id,
+        "retry_requires_new_owner_turn": True,
+        "truth_note": (
+            "The decision was not verified. Re-read the canonical pending gate "
+            "before announcing approval or attempting any dependent action."
+        ),
+    }
+
 
 _ACTIVATE_ACQUIRED_CAPABILITY_INTENT = re_compile(
     r"\b(?:activate|enable)\b|"
@@ -791,9 +817,14 @@ class WorkAgentTools:
         decide_contextual_change_gate for that conversational continuation instead.
         """
         del context
-        decision = await asyncio.to_thread(
-            self._change_service().decide_latest, gate_id
-        )
+        try:
+            decision = await asyncio.to_thread(
+                self._change_service().decide_latest, gate_id
+            )
+        except Exception as exc:  # noqa: BLE001 - preserve a truthful voice boundary
+            return _approval_processing_error(
+                stage="decide_change_gate", gate_id=gate_id, error=exc
+            )
         return {
             "ok": True,
             "change_id": decision.challenge.change_id,
@@ -874,6 +905,10 @@ class WorkAgentTools:
                 "reason": str(exc),
                 "retry_requires_new_owner_turn": True,
             }
+        except Exception as exc:  # noqa: BLE001 - preserve a truthful voice boundary
+            return _approval_processing_error(
+                stage="decide_contextual_change_gate", gate_id=gate_id, error=exc
+            )
 
         self._clear_contextual_change_gate()
         return {
@@ -937,6 +972,10 @@ class WorkAgentTools:
                 "reason": str(exc),
                 "retry_requires_new_owner_turn": True,
             }
+        except Exception as exc:  # noqa: BLE001 - preserve a truthful voice boundary
+            return _approval_processing_error(
+                stage="decide_bound_change_gate", gate_id=gate_id, error=exc
+            )
 
         return {
             "ok": True,
