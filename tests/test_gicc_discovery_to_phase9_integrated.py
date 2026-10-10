@@ -75,9 +75,7 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
 ) -> None:
     work = SQLiteWorkStore(tmp_path / "work.sqlite3")
     store = GoalStore(work)
-    changes = ChangeStore(
-        work, processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,)
-    )
+    changes = ChangeStore(work, processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,))
     backend = _Backend()
     context = _empty_context()
     phase9 = Phase9GoalBridge(
@@ -142,9 +140,7 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
         capability_graph_resolver=CapabilityGraphResolver(store=store),
         phase9_bridge=phase9,
     )
-    initial = asyncio.run(
-        coordinator.pursue(conversation=conversation, turn=turn)
-    )
+    initial = asyncio.run(coordinator.pursue(conversation=conversation, turn=turn))
     assert initial.disposition is GoalIntakeDisposition.WAITING_INFORMATION
     assert initial.goal is not None
     goal_id = initial.goal.goal_id
@@ -264,15 +260,16 @@ def test_one_owner_goal_survives_approved_discovery_then_enters_phase9(
             provenance_refs=("owner_inventory:reviewed_tv",),
         )
     )
-    resumed = asyncio.run(
-        coordinator.continue_goal(goal_id, retry_information=True)
-    )
+    resumed = asyncio.run(coordinator.continue_goal(goal_id, retry_information=True))
     assert resumed.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
     assert resumed.goal is not None
     assert resumed.goal.goal_id == goal_id
     assert resumed.goal.exact_owner_request == turn.text
     assert resumed.goal.referenced_entity_ids == (tv.entity_id,)
-    assert store.get_information_need(need.information_need_id).resolution_ref == tv.entity_id
+    assert (
+        store.get_information_need(need.information_need_id).resolution_ref
+        == tv.entity_id
+    )
     assert len(resumed.phase9_admissions) == 1
     change = resumed.phase9_admissions[0].admission.change
     assert change is not None
