@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -11,6 +12,7 @@ from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 from .models import (
     CapabilityGapState,
+    ContinuationState,
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
     GoalContinuationV1,
@@ -22,6 +24,7 @@ from .models import (
     MonitorPredicateV1,
     OwnerGoalV2,
     PlanGraphV1,
+    PlanState,
     ResourceBindingV1,
     WorldEntityRefV1,
 )
@@ -293,6 +296,164 @@ class GoalStore:
         if not isinstance(decoded, dict):
             raise GoalStoreError("stored GICC payload must decode to an object")
         return decoded
+
+    def cancel_goal_tree(self, goal_id: str, *, expected_revision: int) -> OwnerGoalV2:
+        """Atomically retire one goal's pending GICC state, never delete audit facts.
+
+        The owning runtime must first cancel all linked live WorkItems and
+        supersede unpromoted EngineeringChanges. This transaction only retires
+        canonical GICC projections; it never grants network/device authority.
+        """
+        key = str(goal_id).strip()
+        if not key:
+            raise ValueError("goal_id must not be empty")
+        with self.work.extension_transaction() as db:
+            row = db.execute(
+                "SELECT payload, digest FROM owner_goals_v2 WHERE goal_id=?", (key,)
+            ).fetchone()
+            if row is None:
+                raise GoalStoreError(f"unknown goal_id: {key}")
+            goal = OwnerGoalV2.from_payload(self._decode(row["payload"]), row["digest"])
+            if goal.state is GoalState.CANCELLED:
+                return goal
+            if goal.state in {GoalState.COMPLETED, GoalState.FAILED}:
+                raise GoalStoreConflict("terminal owner goal cannot be cancelled")
+            if goal.goal_revision != expected_revision:
+                raise GoalStoreConflict("goal revision changed before cancellation")
+
+            # Retire pending owner interactions before terminalising the goal.
+            needs = db.execute(
+                "SELECT payload, digest FROM information_needs_v1 WHERE goal_id=?",
+                (key,),
+            ).fetchall()
+            for item in needs:
+                current = InformationNeedV1.from_payload(
+                    self._decode(item["payload"]), item["digest"]
+                )
+                if current.state in {
+                    InformationNeedState.RESOLVED, InformationNeedState.CANCELLED
+                }:
+                    continue
+                provisional = replace(
+                    current, revision=current.revision + 1,
+                    state=InformationNeedState.CANCELLED, digest="pending",
+                )
+                updated = replace(
+                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                )
+                db.execute(
+                    "UPDATE information_needs_v1 SET revision=?, state=?, payload=?, digest=? "
+                    "WHERE information_need_id=? AND revision=?",
+                    (updated.revision, updated.state.value,
+                     self._encode(updated.canonical_payload()), updated.digest,
+                     current.information_need_id, current.revision),
+                )
+            interactions = db.execute(
+                "SELECT interaction_id, payload, digest FROM "
+                "information_need_interactions_v1 WHERE goal_id=? AND state='active'",
+                (key,),
+            ).fetchall()
+            for item in interactions:
+                payload = self._decode(item["payload"])
+                if canonical_digest(payload) != item["digest"]:
+                    raise GoalStoreError("information interaction digest mismatch")
+                retired = {**payload, "state": "cancelled"}
+                db.execute(
+                    "UPDATE information_need_interactions_v1 "
+                    "SET state='cancelled', payload=?, digest=? "
+                    "WHERE interaction_id=? AND state='active'",
+                    (self._encode(retired), canonical_digest(retired), item["interaction_id"]),
+                )
+
+            gaps = db.execute(
+                "SELECT payload, digest FROM capability_gaps_v1 WHERE goal_id=?",
+                (key,),
+            ).fetchall()
+            for item in gaps:
+                current = CapabilityGapV1.from_payload(
+                    self._decode(item["payload"]), item["digest"]
+                )
+                if current.state is not CapabilityGapState.OPEN:
+                    continue
+                provisional = replace(
+                    current, revision=current.revision + 1,
+                    state=CapabilityGapState.CANCELLED, digest="pending",
+                )
+                updated = replace(
+                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                )
+                db.execute(
+                    "UPDATE capability_gaps_v1 SET revision=?, state=?, payload=?, digest=? "
+                    "WHERE gap_id=? AND revision=?",
+                    (updated.revision, updated.state.value,
+                     self._encode(updated.canonical_payload()), updated.digest,
+                     current.gap_id, current.revision),
+                )
+
+            continuations = db.execute(
+                "SELECT payload, digest FROM goal_continuations_v1 WHERE goal_id=?",
+                (key,),
+            ).fetchall()
+            for item in continuations:
+                current = GoalContinuationV1.from_payload(
+                    self._decode(item["payload"]), item["digest"]
+                )
+                if current.state is not ContinuationState.BLOCKED:
+                    continue
+                provisional = replace(
+                    current, revision=current.revision + 1,
+                    state=ContinuationState.CANCELLED, digest="pending",
+                )
+                updated = replace(
+                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                )
+                db.execute(
+                    "UPDATE goal_continuations_v1 SET revision=?, state=?, payload=?, digest=? "
+                    "WHERE continuation_id=? AND revision=?",
+                    (updated.revision, updated.state.value,
+                     self._encode(updated.canonical_payload()), updated.digest,
+                     current.continuation_id, current.revision),
+                )
+
+            plans = db.execute(
+                "SELECT payload, digest FROM plan_graphs_v1 WHERE goal_id=?",
+                (key,),
+            ).fetchall()
+            for item in plans:
+                current = PlanGraphV1.from_payload(
+                    self._decode(item["payload"]), item["digest"]
+                )
+                if current.state in {
+                    PlanState.CANCELLED, PlanState.SUCCEEDED,
+                    PlanState.FAILED, PlanState.SUPERSEDED,
+                }:
+                    continue
+                provisional = replace(
+                    current, state=PlanState.CANCELLED,
+                    updated_at=datetime.now(UTC).isoformat(), digest="pending",
+                )
+                updated = replace(
+                    provisional, digest=canonical_digest(provisional.canonical_payload())
+                )
+                db.execute(
+                    "UPDATE plan_graphs_v1 SET state=?, payload=?, digest=?, updated_at=? "
+                    "WHERE plan_id=? AND digest=?",
+                    (updated.state.value, self._encode(updated.canonical_payload()),
+                     updated.digest, updated.updated_at, current.plan_id, current.digest),
+                )
+
+            updated_goal = goal.with_state(GoalState.CANCELLED)
+            changed = db.execute(
+                "UPDATE owner_goals_v2 "
+                "SET goal_revision=?, state=?, payload=?, digest=?, updated_at=? "
+                "WHERE goal_id=? AND goal_revision=?",
+                (updated_goal.goal_revision, updated_goal.state.value,
+                 self._encode(updated_goal.canonical_payload()), updated_goal.digest,
+                 updated_goal.updated_at, key, goal.goal_revision),
+            )
+            if changed.rowcount != 1:
+                raise GoalStoreConflict("goal cancellation lost compare-and-swap")
+            return updated_goal
 
     def create_goal(self, goal: OwnerGoalV2) -> OwnerGoalV2:
         if not isinstance(goal, OwnerGoalV2):
