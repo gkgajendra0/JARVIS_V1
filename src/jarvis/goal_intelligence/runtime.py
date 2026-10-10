@@ -79,6 +79,7 @@ from .models import (
     PlanNodeType,
     PlanNodeV1,
     PlanState,
+    WorldEntityRefV1,
 )
 from .monitoring import (
     DEFAULT_MONITOR_OBSERVATION_BUS,
