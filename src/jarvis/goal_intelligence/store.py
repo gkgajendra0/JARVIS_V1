@@ -1132,6 +1132,39 @@ class GoalStore:
                 raise GoalStoreConflict(
                     "information need compare-and-swap state update lost"
                 )
+            if state is InformationNeedState.CANCELLED:
+                # Retire the exact owner interaction in the same transaction.
+                # Otherwise a stale voice question can remain marked active.
+                interactions = db.execute(
+                    """
+                    SELECT interaction_id, payload, digest
+                    FROM information_need_interactions_v1
+                    WHERE information_need_id=? AND state='active'
+                    """,
+                    (need_id,),
+                ).fetchall()
+                for interaction_row in interactions:
+                    payload = self._decode(interaction_row["payload"])
+                    if canonical_digest(payload) != interaction_row["digest"]:
+                        raise GoalStoreError("information interaction digest mismatch")
+                    cancelled_interaction = {**payload, "state": "cancelled"}
+                    cancelled_digest = canonical_digest(cancelled_interaction)
+                    interaction_update = db.execute(
+                        """
+                        UPDATE information_need_interactions_v1
+                        SET state='cancelled', payload=?, digest=?
+                        WHERE interaction_id=? AND state='active'
+                        """,
+                        (
+                            self._encode(cancelled_interaction),
+                            cancelled_digest,
+                            interaction_row["interaction_id"],
+                        ),
+                    )
+                    if interaction_update.rowcount != 1:
+                        raise GoalStoreConflict(
+                            "cancelled information interaction CAS lost"
+                        )
         return updated
 
     def begin_information_interaction(
