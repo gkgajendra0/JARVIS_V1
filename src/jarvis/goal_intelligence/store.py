@@ -109,6 +109,17 @@ class GoalStore:
                 CREATE INDEX IF NOT EXISTS idx_information_needs_goal_state
                     ON information_needs_v1(goal_id, state);
 
+                CREATE TABLE IF NOT EXISTS gicc_network_discovery_turn_claims_v1 (
+                    source_session_id TEXT NOT NULL,
+                    owner_turn_id TEXT NOT NULL,
+                    goal_id TEXT NOT NULL,
+                    information_need_id TEXT NOT NULL,
+                    PRIMARY KEY(source_session_id, owner_turn_id),
+                    FOREIGN KEY(goal_id) REFERENCES owner_goals_v2(goal_id),
+                    FOREIGN KEY(information_need_id)
+                        REFERENCES information_needs_v1(information_need_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS capability_requirement_graphs_v1 (
                     graph_id TEXT PRIMARY KEY,
                     goal_id TEXT NOT NULL,
@@ -984,10 +995,10 @@ class GoalStore:
     ) -> bool:
         """Atomically consume one explicit owner turn for one GICC discovery.
 
-        The canonical InfoNeed is a protected append-only record of the
-        proposed attempt. A model retry or a second protocol MUST require
-        another accepted owner utterance; Windows Hello remains a distinct
-        mandatory confirmation. No approval or network operation occurs here.
+        The protected InformationNeed records the attempt; a separate unique
+        session/turn claim prevents the *same* speech being routed to another
+        waiting goal in the same session. Windows Hello remains an entirely
+        distinct mandatory confirmation. No approval or scan occurs here.
         """
         turn_id = str(owner_turn_id).strip()
         if not turn_id or len(turn_id) > 128:
@@ -1027,6 +1038,20 @@ class GoalStore:
                 InformationNeedState.SELF_RESOLVING,
                 InformationNeedState.WAITING_FOR_OWNER,
             }:
+                return False
+            # One accepted owner turn can authorize AT MOST one scope across
+            # every goal in that canonical session. Claim and InfoNeed CAS
+            # share a single SQLite transaction; failure rolls back both.
+            claim = db.execute(
+                """
+                INSERT INTO gicc_network_discovery_turn_claims_v1
+                    (source_session_id, owner_turn_id, goal_id, information_need_id)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(source_session_id, owner_turn_id) DO NOTHING
+                """,
+                (goal.source_session_id, turn_id, goal_key, need_key),
+            )
+            if claim.rowcount != 1:
                 return False
             updated = replace(
                 selected,

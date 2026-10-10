@@ -303,3 +303,55 @@ def test_previously_consumed_discovery_scopes_are_never_reproposed(
         )
         is None
     )
+
+
+def test_one_owner_discovery_utterance_cannot_scan_two_goals_in_one_session(
+    tmp_path: Path,
+) -> None:
+    store, first_goal, first_need = _data(tmp_path)
+    second_goal = store.create_goal(
+        OwnerGoalV2.create(
+            source_session_id=first_goal.source_session_id,
+            source_turn_id="a-different-original-goal",
+            exact_owner_request="Discover another camera",
+            goal_kind=GoalKind.ONE_SHOT,
+            desired_outcome="Identify camera",
+            state=GoalState.WAITING_INFORMATION,
+        )
+    )
+    second_need = store.create_information_need(
+        InformationNeedV1.create(
+            goal_id=second_goal.goal_id,
+            category=InformationNeedCategory.MISSING_VALUE,
+            subject="my camera",
+            required_fact="canonical camera identity",
+            why_required="camera not yet identified",
+            allowed_resolution_sources=(
+                "world_registry",
+                "current_state_observation",
+                "bounded_local_discovery",
+                "owner_input",
+            ),
+            answer_schema={"type": "entity_id", "entity_type": "camera"},
+        )
+    )
+    owner_turn = "single-spoken-consent-for-network-discovery"
+    assert store.claim_network_discovery_owner_turn(
+        goal_id=first_goal.goal_id,
+        need_id=first_need.information_need_id,
+        owner_turn_id=owner_turn,
+    )
+    # Distinct goal and device need in the SAME session cannot reuse speech.
+    assert not store.claim_network_discovery_owner_turn(
+        goal_id=second_goal.goal_id,
+        need_id=second_need.information_need_id,
+        owner_turn_id=owner_turn,
+    )
+    unchanged = store.get_information_need(second_need.information_need_id)
+    assert unchanged == second_need
+    # A genuinely NEW explicit owner decision remains eligible.
+    assert store.claim_network_discovery_owner_turn(
+        goal_id=second_goal.goal_id,
+        need_id=second_need.information_need_id,
+        owner_turn_id="second-owner-spoken-decision",
+    )
