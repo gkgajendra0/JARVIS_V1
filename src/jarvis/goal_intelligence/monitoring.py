@@ -662,6 +662,14 @@ class MonitorEventProcessor:
             else f"gicc-monitor:{predicate.predicate_id}:{digest}"
         )
         work = self._work.require(str(state["work_id"]))
+        if work.state is WorkState.CANCELLED:
+            return MonitorObservationResult(
+                disposition=MonitorObservationDisposition.CANCELLED,
+                predicate_id=predicate.predicate_id,
+                observation_digest=digest,
+                notification_event_key=None,
+                runtime_state=state,
+            )
         if predicate.notification_policy != "none":
             completes_goal = predicate.completion_policy == "complete_once"
             self._work.enqueue_delivery(
