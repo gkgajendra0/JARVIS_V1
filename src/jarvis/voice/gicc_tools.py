@@ -188,7 +188,7 @@ class GiccAgentTools:
         del context
         turn = self._latest_user_turn()
         if not re.search(
-            r"\\b(cancel|stop|withdraw|remove|delete|abandon)\\b",
+            r"\b(cancel|stop|withdraw|remove|delete|abandon)\b",
             turn.text, flags=re.IGNORECASE,
         ):
             return {
