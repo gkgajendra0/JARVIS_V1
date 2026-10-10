@@ -796,7 +796,10 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
     assert execution.confirmations == 0
     # Explicitly offer the actual single candidate, then require a NEW turn.
     offered = await tools.pursue_owner_goal(None)
-    assert offered["device_choice_sets"][0]["options"][0]["display_hint"] == "Unverified TV"
+    assert (
+        offered["device_choice_sets"][0]["options"][0]["display_hint"]
+        == "Unverified TV"
+    )
     conversation.accept_turn(
         ConversationRole.USER, "I confirm the discovered TV is mine."
     )
