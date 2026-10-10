@@ -184,7 +184,7 @@ class WorkDelivery:
             raise ValueError("delivery next_attempt_at must be timezone-aware")
 
     def retry_after(self, seconds: float, *, reason: str) -> WorkDelivery:
-        if self.state is WorkDeliveryState.DELIVERED:
+        if self.state in {WorkDeliveryState.DELIVERED, WorkDeliveryState.CANCELLED}:
             return self
         if seconds <= 0:
             raise ValueError("delivery retry delay must be positive")
@@ -199,7 +199,7 @@ class WorkDelivery:
         )
 
     def delivered(self) -> WorkDelivery:
-        if self.state is WorkDeliveryState.DELIVERED:
+        if self.state in {WorkDeliveryState.DELIVERED, WorkDeliveryState.CANCELLED}:
             return self
         return replace(
             self,
