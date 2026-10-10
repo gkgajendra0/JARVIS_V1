@@ -92,7 +92,7 @@ from .planning import GoalPlanner
 from .requirements import RequirementDeriver
 from .service import GoalOrchestrator, SpecialistActionDispatch
 from .status import OwnerObjectiveStatusResolver
-from .store import GoalStore, build_default_goal_store
+from .store import GoalStore, GoalStoreConflict, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 from .windows_lan_scope import WindowsLanScopePlanner
@@ -339,7 +339,35 @@ class GiccApplyRuntime:
         # Reuse the existing protected WorkStore CAS/evidence path. The
         # candidate evidence cannot resolve a physical identity by itself.
         resolver = InformationResolver(store=self.store, probes=(probe,))
-        return resolver.resolve(need)
+        result = resolver.resolve(need)
+        if not authority_guard.consumed:
+            return result
+
+        # A zero-result or timed-out scan still consumed one exact owner
+        # permission. Persist that fact in the canonical InformationNeed so
+        # the next proposal can offer another bounded protocol instead of
+        # replaying UPnP indefinitely. Never record an attempt on denial.
+        marker = f"windows_aep_authorized_scope_consumed:{scope.protocol}"
+        for _ in range(3):
+            current = self.store.get_information_need(need_id)
+            if current is None or not can_rediscover_information(current):
+                return result
+            if marker in current.evidence_refs:
+                return replace(result, need=current)
+            try:
+                updated = self.store.update_information_need_state(
+                    need_id,
+                    current.state,
+                    expected_revision=current.revision,
+                    evidence_refs=(marker,),
+                )
+            except GoalStoreConflict:
+                continue
+            return replace(result, need=updated)
+        LOGGER.warning(
+            "Authorized AEP scope was consumed but durable attempt marking raced"
+        )
+        return result
 
     def start(self) -> None:
         if self._task is not None and not self._task.done():

@@ -57,10 +57,16 @@ def prepare_pending_device_discovery_consent(
         if not scopes:
             continue
         # Protocol-specific approvals are sequential, not a blanket permission.
-        return build_aep_consent_proposal(
-            scope=scopes[0],
-            session_id=session,
-            goal_id=goal.goal_id,
-            need_id=need.information_need_id,
-        )
+        # A consumed, exact Authority permit is recorded on this same
+        # InformationNeed; never repeatedly propose the first protocol.
+        for scope in scopes:
+            marker = f"windows_aep_authorized_scope_consumed:{scope.protocol}"
+            if marker in need.evidence_refs:
+                continue
+            return build_aep_consent_proposal(
+                scope=scope,
+                session_id=session,
+                goal_id=goal.goal_id,
+                need_id=need.information_need_id,
+            )
     return None

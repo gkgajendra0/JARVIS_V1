@@ -258,3 +258,48 @@ def test_cancelled_need_does_not_request_network_permission(tmp_path: Path) -> N
         )
         is None
     )
+
+
+def test_previously_consumed_discovery_scopes_are_never_reproposed(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    first = prepare_pending_device_discovery_consent(
+        store=store,
+        goal_id=goal.goal_id,
+        session_id="owner-session",
+        planner=_planner(),
+    )
+    assert first is not None
+    assert first.target()["protocol"] == "upnp"
+
+    second_need = store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=("windows_aep_authorized_scope_consumed:upnp",),
+    )
+    second = prepare_pending_device_discovery_consent(
+        store=store,
+        goal_id=goal.goal_id,
+        session_id="owner-session",
+        planner=_planner(),
+    )
+    assert second is not None
+    assert second.target()["protocol"] == "dns_sd"
+
+    store.update_information_need_state(
+        need.information_need_id,
+        second_need.state,
+        expected_revision=second_need.revision,
+        evidence_refs=("windows_aep_authorized_scope_consumed:dns_sd",),
+    )
+    assert (
+        prepare_pending_device_discovery_consent(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id="owner-session",
+            planner=_planner(),
+        )
+        is None
+    )

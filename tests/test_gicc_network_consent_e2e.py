@@ -317,6 +317,15 @@ def test_existing_gicc_runtime_executes_exact_approved_discovery_once(
         for item in result.need.evidence_refs
     )
     assert watcher.started == watcher.stopped == 1
+    assert guard.consumed is True
+    assert "windows_aep_authorized_scope_consumed:upnp" in result.need.evidence_refs
+    next_proposal = runtime.prepare_network_discovery_consent(
+        goal_id=goal.goal_id,
+        session_id=goal.source_session_id,
+        planner=planner,
+    )
+    assert next_proposal is not None
+    assert next_proposal.target()["protocol"] == "dns_sd"
     assert store.get_information_need(need.information_need_id) == result.need
     assert runtime.world.entities() == ()
 

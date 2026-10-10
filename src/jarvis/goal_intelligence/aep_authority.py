@@ -197,6 +197,13 @@ class AepAuthorityExecutionGuard:
         self._context = context
         self._permit_id = permit_id.strip()
         self._approval_id = approval_id.strip()
+        self._consumed = False
+
+    @property
+    def consumed(self) -> bool:
+        """True only once Authority has consumed this exact one-time permit."""
+
+        return self._consumed
 
     @property
     def session_id(self) -> str:
@@ -239,7 +246,10 @@ class AepAuthorityExecutionGuard:
             )
         except Exception:  # noqa: BLE001 - policy, audit and permit failures deny
             return False
-        return (
+        allowed = (
             permit.status is PermitStatus.CONSUMED
             and permit.approval_id == self._approval_id
         )
+        if allowed:
+            self._consumed = True
+        return allowed
