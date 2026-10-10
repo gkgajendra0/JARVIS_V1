@@ -241,10 +241,9 @@ class AepAuthorityExecutionGuard:
         if material is None:
             return False
         target, parameters = material
-        return (
-            self._proposal.target_json == canonical_json(target)
-            and self._proposal.parameters_json == canonical_json(parameters)
-        )
+        return self._proposal.target_json == canonical_json(
+            target
+        ) and self._proposal.parameters_json == canonical_json(parameters)
 
     def __call__(self, scope: ReviewedAepScopeV1) -> bool:
         if not self.binds_scope(scope):
