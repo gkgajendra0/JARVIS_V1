@@ -797,7 +797,7 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
         def authorize_and_discover_network(
             self, *, goal_id, session_id, owner_turn_id, expected_scope_material
         ):
-            assert expected_scope_material[1] == "upnp"
+            assert expected_scope_material[1] == ("upnp" if self.executions == 0 else "dns_sd")
             assert goal_id == goal.goal_id
             assert session_id == goal.source_session_id
             assert owner_turn_id == conversation.turns[-1].turn_id
@@ -807,7 +807,9 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
                 current.information_need_id,
                 current.state,
                 expected_revision=current.revision,
-                evidence_refs=("windows_aep_authorized_scope_consumed:upnp",),
+                evidence_refs=(
+                    f"windows_aep_authorized_scope_consumed:{expected_scope_material[1]}",
+                ),
             )
             return SimpleNamespace(need=updated)
 
@@ -850,6 +852,22 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
     assert payload["next_network_discovery"]["owner_approval_required"] is True
     assert payload["next_network_discovery"]["scan_started"] is False
     assert runtime.executions == 1
+    # Reusing the same owner turn cannot silently spend the second scope.
+    replay = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert replay["status"] == "discovery_scope_not_previously_offered"
+    assert runtime.executions == 1
+    conversation.accept_turn(ConversationRole.USER, "I approve the network discovery.")
+    second = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert second["status"] == "authorized_discovery_observation_recorded"
+    assert runtime.executions == 2
+    assert "next_network_discovery" not in second
+    assert "windows_aep_authorized_scope_consumed:dns_sd" in store.get_information_need(
+        need.information_need_id
+    ).evidence_refs
 
 
 @pytest.mark.asyncio
