@@ -949,6 +949,42 @@ class GiccAgentTools:
         elif selected_evidence_ref or displayed_choice_set_digest:
             # A model may not select a device that the owner did not name.
             return {"ok": False, "status": "explicit_device_option_not_given"}
+        else:
+            # A single device also has to be visibly offered *before* the
+            # owner speaks. An agent must not turn a generic "this TV is mine"
+            # into confirmation of an unseen network advertisement.
+            offered = self._offered_device_options.get(
+                (goal.goal_id, need.information_need_id)
+            )
+            hints_method = getattr(runtime, "pending_network_device_suggestions", None)
+            if not callable(hints_method) or offered is None:
+                return {"ok": False, "status": "owner_device_not_previously_offered"}
+            try:
+                hints = hints_method(
+                    goal_id=goal.goal_id,
+                    session_id=goal.source_session_id,
+                )
+            except Exception:
+                LOGGER.warning(
+                    "GICC could not revalidate displayed device", exc_info=True
+                )
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
+            candidates = tuple(
+                hint
+                for hint in hints
+                if getattr(hint, "evidence_ref", None) in need.evidence_refs
+                and (
+                    "windows_aep_authorized_scope_consumed:"
+                    + str(getattr(hint, "protocol", ""))
+                )
+                in need.evidence_refs
+            )
+            if (
+                len(candidates) != 1
+                or offered[0] != _device_choice_digest(candidates)
+                or offered[1] == turn.turn_id
+            ):
+                return {"ok": False, "status": "owner_device_choice_is_not_current"}
         try:
             entity = confirm(
                 goal_id=goal.goal_id,

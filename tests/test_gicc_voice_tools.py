@@ -680,18 +680,28 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
     tmp_path: Path,
 ) -> None:
     """The model cannot make an unverified network hint a trusted owner TV."""
+    import time
+
     from tests.test_gicc_network_consent import _data
+    from tests.test_gicc_owner_device_confirmation import _evidence
 
     from jarvis.conversation import ConversationSession
 
     store, goal, need = _data(tmp_path)
+    evidence = _evidence(address="192.168.1.10", now=int(time.time()))
+    updated = store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=(evidence, "windows_aep_authorized_scope_consumed:upnp"),
+    )
     conversation = ConversationSession(session_id=goal.source_session_id)
     conversation.start()
     conversation.accept_turn(ConversationRole.USER, "My television is missing.")
     result = GoalIntakeResult(
         disposition=GoalIntakeDisposition.WAITING_INFORMATION,
         goal=goal,
-        information_needs=(need,),
+        information_needs=(updated,),
     )
 
     class ConfirmationRuntime(CompletedExecutionRuntime):
@@ -699,6 +709,19 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
             super().__init__(result)
             self.confirmations = 0
             self.resumes = 0
+
+        def pending_network_device_suggestions(self, *, goal_id, session_id):
+            assert goal_id == goal.goal_id
+            assert session_id == goal.source_session_id
+            return (
+                SimpleNamespace(
+                    evidence_ref=evidence,
+                    protocol="upnp",
+                    display_hint="Unverified TV",
+                    address="192.168.1.10",
+                    neighbor_correlated=False,
+                ),
+            )
 
         def confirm_owner_discovered_device(
             self, *, goal_id, information_need_id, session_id, owner_turn_id
@@ -755,6 +778,25 @@ async def test_gicc_voice_confirms_only_fresh_explicit_owner_device(
         assert denied["status"] == "owner_device_confirmation_type_mismatch"
         assert execution.confirmations == 0
 
+    conversation.accept_turn(
+        ConversationRole.USER, "I confirm the discovered TV is mine."
+    )
+    # A new tool instance has never shown this particular discovery, so a
+    # model cannot silently bind it from a guessed device-confirmation phrase.
+    fresh_tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        conversation,
+        store,
+        execution_runtime=execution,
+    )
+    unseen = await fresh_tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert unseen["status"] == "owner_device_not_previously_offered"
+    assert execution.confirmations == 0
+    # Explicitly offer the actual single candidate, then require a NEW turn.
+    offered = await tools.pursue_owner_goal(None)
+    assert offered["device_choice_sets"][0]["options"][0]["display_hint"] == "Unverified TV"
     conversation.accept_turn(
         ConversationRole.USER, "I confirm the discovered TV is mine."
     )
