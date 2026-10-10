@@ -1226,9 +1226,20 @@ class ExternalAcceptanceRecordExecutor:
                     },
                 )
             normalized = _normalize_owner_reply(response[0])
-            if normalized in _AFFIRMATIVE:
+            if requires_owner_physical_confirmation(
+                self._resolver.store, context.change_id
+            ):
+                # On a real GICC physical device, a conversational "okay",
+                # "approved", "done", "run" or "go ahead" is NOT evidence
+                # the actual effect happened after the live invocation.
+                affirmative = frozenset({"yes", "y"})
+                negative = frozenset({"no", "n"})
+            else:
+                affirmative = _AFFIRMATIVE
+                negative = _NEGATIVE
+            if normalized in affirmative:
                 verdict = HardwareAcceptanceVerdict.PASS
-            elif normalized in _NEGATIVE:
+            elif normalized in negative:
                 verdict = HardwareAcceptanceVerdict.FAIL
             else:
                 raise WorkOwnerInputRequired(

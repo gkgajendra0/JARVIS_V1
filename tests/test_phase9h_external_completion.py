@@ -666,3 +666,18 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
         )
         is False
     )
+    # Ambiguous acknowledgments are NOT evidence that a real movie played.
+    work_store.add_step(
+        _completed_step(
+            item.work_id,
+            "owner_input",
+            {
+                "input_key": "external_effect_confirmation:physical-request-1",
+                "response": "okay",
+            },
+        )
+    )
+    with pytest.raises(WorkOwnerInputRequired):
+        await ExternalAcceptanceRecordExecutor(Resolver()).execute(
+            work=item, parameters={}
+        )
