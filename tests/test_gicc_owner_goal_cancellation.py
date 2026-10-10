@@ -179,7 +179,14 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
         source_turn_id="predicate:tv",
     )
     work.create(monitor)
-    owned_ids = sorted((item.work_id, monitor.work_id))
+    external = WorkItem(
+        request="Physical acceptance of cancelled capability",
+        work_type=WorkType.EXTERNAL_ACCEPTANCE,
+        source_session_id=f"phase9-external:{change.change_id}",
+        source_turn_id="activation-proof",
+    )
+    work.create(external)
+    owned_ids = sorted((item.work_id, monitor.work_id, external.work_id))
     runtime, orchestrator = _runtime(work, goals, changes)
     stale = work.enqueue_delivery(
         work=work.require(item.work_id),
@@ -215,6 +222,7 @@ async def test_cancel_legacy_goal_stops_work_and_clears_only_active_projections(
     assert changes.require(change.change_id).state is ChangeState.SUPERSEDED
     assert work.require(item.work_id).state is WorkState.CANCELLED
     assert work.require(monitor.work_id).state is WorkState.CANCELLED
+    assert work.require(external.work_id).state is WorkState.CANCELLED
     assert work.require(unrelated.work_id).state is WorkState.QUEUED
     assert changes.get(change.change_id) is not None
     with pytest.raises(GoalStoreConflict, match="cancelled goal"):
