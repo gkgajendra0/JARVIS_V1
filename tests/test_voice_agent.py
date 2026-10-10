@@ -98,5 +98,5 @@ def test_gicc_voice_discovery_instructions_preserve_one_shot_authority() -> None
     assert "authorize_bounded_network_discovery" in instructions
     assert "Windows Hello" in instructions
     assert "Do not ask for the TV IP" in instructions
-    assert "never fabricate that confirmation" in instructions
+    assert "never fabricate that confirmation" in instructions.casefold()
     assert "unverified_device_hints" in instructions
