@@ -940,9 +940,6 @@ class GiccApplyRuntime:
         if not active:
             return 0
 
-        if any(goal.state is GoalState.WAITING_CAPABILITY for goal in active):
-            self.capability_runtime.refresh_catalog()
-
         # Only retry deadlines are volatile. Goal, identity and approval
         # evidence remains in the canonical protected store across restart.
         active_ids = {goal.goal_id for goal in active}
@@ -951,6 +948,7 @@ class GiccApplyRuntime:
                 self._information_last_recheck.pop(stale_id, None)
 
         advanced = 0
+        catalog_refreshed = False
         for goal in active:
             before_goal = self.store.get_goal(goal.goal_id)
             before_plan = self.store.latest_plan_for_goal(goal.goal_id)
@@ -987,6 +985,12 @@ class GiccApplyRuntime:
             if goal.state is GoalState.WAITING_CAPABILITY:
                 if not self._capability_continuation_acceptance_ready(goal):
                     continue
+                if not catalog_refreshed:
+                    # Catalog probes can block (including Windows subprocesses).
+                    # Refresh only when exact continuation evidence is ready, and
+                    # never on the realtime conversation asyncio event loop.
+                    await asyncio.to_thread(self.capability_runtime.refresh_catalog)
+                    catalog_refreshed = True
                 await self.continue_goal(goal.goal_id)
             elif goal.state is GoalState.WAITING_INFORMATION:
                 if not any(
