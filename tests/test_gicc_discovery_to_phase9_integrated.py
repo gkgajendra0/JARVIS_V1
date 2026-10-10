@@ -13,10 +13,10 @@ from pathlib import Path
 
 from tests.test_authority_foundation import LocalPolicy
 from tests.test_capability_acquisition_owner_flow_hardening import (
-    _Backend,
     _DISCOVERED_TV_ID,
-    _QueueStructuredClient,
+    _Backend,
     _empty_context,
+    _QueueStructuredClient,
 )
 from tests.test_gicc_network_consent import _planner
 from tests.test_gicc_windows_aep import FakeWatcher, _device
