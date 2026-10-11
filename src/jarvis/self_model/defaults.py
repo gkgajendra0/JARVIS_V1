@@ -137,6 +137,7 @@ def build_default_self_model() -> SelfModelRegistry:
                 "src/jarvis/app.py",
                 "src/jarvis/config.py",
                 "src/jarvis/conversation.py",
+                "src/jarvis/owner_text_console.py",
                 "src/jarvis/runtime_lane.py",
                 "src/jarvis/dev_control.py",
                 "src/jarvis/dev_supervisor.py",

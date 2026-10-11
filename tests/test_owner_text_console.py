@@ -98,6 +98,14 @@ async def test_typed_goal_admitted_to_real_tool():
     assert session.turns[-1].text == "Open Hotstar on my television"
 
 
+async def test_plain_goal_prefix_submits_original_outcome():
+    console, fake, session = _console()
+    result = await console.submit("goal Open Hotstar on my TV")
+    assert result["status"] == "waiting_capability"
+    assert fake.calls == [("pursue", None)]
+    assert session.turns[-1].text == "Open Hotstar on my TV"
+
+
 async def test_status_read_and_list_do_not_create_goal():
     console, fake, _ = _console([_objective("goal_tv1", "Acquire TV control")])
     a = await console.submit("goals")

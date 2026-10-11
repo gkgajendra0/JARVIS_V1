@@ -125,8 +125,9 @@ class OwnerTextConversation:
 
         # The canonical conversation is shared with GICC voice tools but
         # contains actual typed turns. Never synthesize owner approval speech.
-        if text.casefold().startswith("/goal "):
-            text = text[6:].strip()
+        command = re.match(r"^/?goal\s+", text, re.IGNORECASE)
+        if command is not None:
+            text = text[command.end() :].strip()
             if not text:
                 return {"ok": False, "status": "empty_goal"}
         self._conversation.accept_turn(ConversationRole.USER, text)
