@@ -611,9 +611,7 @@ async def test_discovery_evidence_read_is_persisted_and_never_authorizes_a_scan(
 
     tools = object.__new__(GiccAgentTools)
     tools._store = store
-    tools._execution_runtime = SimpleNamespace(
-        pending_network_device_suggestions=hints
-    )
+    tools._execution_runtime = SimpleNamespace(pending_network_device_suggestions=hints)
     tools._listed_owner_goal_payloads = {}
 
     blocked = await tools.inspect_network_discovery_evidence(None, goal.goal_id)
