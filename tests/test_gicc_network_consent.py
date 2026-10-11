@@ -264,9 +264,7 @@ async def test_resumed_scope_refuses_unlisted_or_negated_requests(
     store, goal, _need = _data(tmp_path)
     owner = ConversationSession(session_id="resumed-owner-session")
     owner.start()
-    owner.accept_turn(
-        ConversationRole.USER, "Jarvis, do not identify my TV or scan it"
-    )
+    owner.accept_turn(ConversationRole.USER, "Jarvis, do not identify my TV or scan it")
     calls = []
     def prepare(**kwargs):
         calls.append(kwargs)
@@ -280,17 +278,17 @@ async def test_resumed_scope_refuses_unlisted_or_negated_requests(
     )
     tools._offered_network_discovery = {}
     tools._listed_owner_goal_payloads = {}
-    assert (
-        await tools.offer_bounded_network_discovery(None, goal.goal_id)
-    )["ok"] is False
+    assert (await tools.offer_bounded_network_discovery(None, goal.goal_id))[
+        "ok"
+    ] is False
     tools._listed_owner_goal_payloads[goal.goal_id] = {
         "owner_request": goal.exact_owner_request,
         "goal_state": goal.state.value,
         "terminal": False,
     }
-    assert (
-        await tools.offer_bounded_network_discovery(None, goal.goal_id)
-    )["ok"] is False
+    assert (await tools.offer_bounded_network_discovery(None, goal.goal_id))[
+        "ok"
+    ] is False
     assert calls == []
 
 
