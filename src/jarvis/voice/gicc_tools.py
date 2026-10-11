@@ -256,7 +256,9 @@ class GiccAgentTools:
                 aliases
                 for aliases in topic_aliases
                 if any(
-                    re.search(r"\b" + re.escape(alias) + r"\b", turn.text, re.IGNORECASE)
+                    re.search(
+                        r"\b" + re.escape(alias) + r"\b", turn.text, re.IGNORECASE
+                    )
                     for alias in aliases
                 )
             ]
