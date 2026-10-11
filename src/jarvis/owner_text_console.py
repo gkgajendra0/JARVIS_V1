@@ -353,6 +353,8 @@ class OwnerTextConversation:
 
 
 def _render(result: dict[str, object]) -> str:
+    if result.get("status") == "chat_message":
+        return str(result.get("message") or "")
     if result.get("status") == "listed" and isinstance(result.get("objectives"), list):
         objectives = result["objectives"]
         if not objectives:
@@ -374,6 +376,7 @@ async def _run() -> None:
     # capability runtime and GICC/Work stores as voice. Crucially, we never
     # call VoiceRuntimeController.run(), so audio.start() is never invoked.
     from jarvis.config import JarvisConfig
+    from jarvis.owner_text_chat import OwnerNaturalTextChat, build_text_chat_client
     from jarvis.engineering_change.gates import GateService
     from jarvis.voice.gicc_tools import GiccAgentTools
     from jarvis.voice.production_runtime import build_production_voice_runtime
@@ -410,6 +413,11 @@ async def _run() -> None:
         ),
         gates=GateService(work.changes.store, verify_owner=lambda *_: False),
     )
+    chat = OwnerNaturalTextChat(
+        console=console,
+        conversation=conversation,
+        client=build_text_chat_client(config),
+    )
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
@@ -430,8 +438,8 @@ async def _run() -> None:
     )
     gicc.start()
     reader.start()
-    print("JARVIS TEXT CONSOLE - same GICC and Work runtime; microphone OFF")
-    print("Type 'goals', 'gates', 'work', 'goal <request>', or 'help'.")
+    print("JARVIS NATURAL TEXT CHAT - real GICC and Work runtime; microphone OFF")
+    print("Just talk naturally. Use /help for optional diagnostic commands.")
     try:
         while True:
             line = await queue.get()
@@ -445,7 +453,7 @@ async def _run() -> None:
                         flush=True,
                     )
                 task = asyncio.create_task(
-                    console.submit(line), name="jarvis-text-owner-command"
+                    chat.submit(line), name="jarvis-text-owner-command"
                 )
                 while True:
                     try:
