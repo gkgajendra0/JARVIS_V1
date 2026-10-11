@@ -252,3 +252,48 @@ async def test_loopback_http_requires_csrf_and_same_origin():
         await asyncio.to_thread(server.shutdown)
         server.server_close()
         thread.join(timeout=5)
+
+
+
+async def test_browser_chat_and_guarded_review_real_dom():
+    """Exercise the actual browser JS; mocks stop at the canonical tool boundary."""
+    playwright_api = pytest.importorskip("playwright.async_api")
+    gateway, console, chat = _gateway(asyncio.get_running_loop())
+    server = build_http_server(gateway, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        async with playwright_api.async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            try:
+                page = await browser.new_page()
+                await page.goto(f"http://127.0.0.1:{server.server_port}/")
+                await page.locator("#statePill").get_by_text(
+                    "waiting information"
+                ).wait_for(timeout=12000)
+                assert chat.calls == []
+                assert console.submitted == []
+
+                await page.locator("#messageInput").fill("Status of my TV")
+                await page.locator("#sendButton").click()
+                await page.locator(".message.assistant .bubble").get_by_text(
+                    "State checked."
+                ).wait_for(timeout=12000)
+                assert chat.calls == ["Status of my TV"]
+
+                await page.locator("#reviewGates").click()
+                await page.locator(".gate").wait_for(timeout=12000)
+                assert console.submitted == ["gates"]
+                # Confirm is required; dismissing it must not submit approval.
+                page.once(
+                    "dialog", lambda dialog: asyncio.create_task(dialog.dismiss())
+                )
+                await page.locator(".gate .approve").click()
+                # No API changes were made by merely reading the proposal.
+                assert console.submitted == ["gates"]
+            finally:
+                await browser.close()
+    finally:
+        await asyncio.to_thread(server.shutdown)
+        server.server_close()
+        thread.join(timeout=5)
