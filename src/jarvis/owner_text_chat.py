@@ -388,6 +388,14 @@ class OwnerNaturalTextChat:
         if not isinstance(decision, TextChatDecision):
             return {"ok": False, "status": "invalid_chat_decision"}
         action = decision.route
+        # A model may misroute "show my discovery evidence" to a fresh scope
+        # offer. Keep evidence inspection deterministically read-only.
+        if action == "offer_discovery" and re.search(
+            r"\b(evidence|results?|findings?|observations?)\b",
+            raw,
+            re.IGNORECASE,
+        ):
+            action = "inspect_discovery"
         target = decision.target_id.strip()
         selected = decision.selected_value.strip()
 
