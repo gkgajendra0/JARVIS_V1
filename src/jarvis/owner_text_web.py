@@ -200,11 +200,11 @@ def build_http_server(
         def _api_authorized(self, *, write: bool = False) -> bool:
             if self.headers.get("X-Jarvis-CSRF") != token:
                 return False
-            if write and self.headers.get("Origin") != (
-                f"http://127.0.0.1:{self.server.server_port}"
-            ):
-                return False
-            return True
+            return not (
+                write
+                and self.headers.get("Origin")
+                != f"http://127.0.0.1:{self.server.server_port}"
+            )
 
         def _invoke(self, coroutine: Any) -> dict[str, object]:
             future = asyncio.run_coroutine_threadsafe(coroutine, gateway.loop)
@@ -292,10 +292,10 @@ def build_http_server(
 
 async def _run(port: int = 8765) -> None:
     from jarvis.config import JarvisConfig
+    from jarvis.conversation import ConversationSession
     from jarvis.engineering_change.gates import GateService
     from jarvis.owner_text_chat import OwnerNaturalTextChat, build_text_chat_client
     from jarvis.owner_text_console import OwnerTextConversation
-    from jarvis.conversation import ConversationSession
     from jarvis.voice.gicc_tools import GiccAgentTools
     from jarvis.voice.production_runtime import build_production_voice_runtime
     from jarvis.voice.work_tools import WorkAgentTools
