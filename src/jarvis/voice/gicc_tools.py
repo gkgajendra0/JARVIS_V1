@@ -1253,8 +1253,18 @@ class GiccAgentTools:
         if (
             goal is None
             or goal.state is not GoalState.WAITING_INFORMATION
-            or goal.source_session_id != self._conversation.session_id
+            or (
+                goal.source_session_id != self._conversation.session_id
+                and (
+                    goal.goal_id,
+                    str(information_need_id).strip(),
+                )
+                not in self._offered_device_options
+            )
         ):
+            # A resumed owner goal is confirmable only after this SAME
+            # conversation actually offered the observed device choice set.
+            # The existing digest/fresh-turn checks below remain mandatory.
             return {"ok": False, "status": "device_confirmation_goal_not_current"}
         need = self._store.get_information_need(str(information_need_id).strip())
         expected_kind = (
