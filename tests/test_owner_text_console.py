@@ -185,7 +185,7 @@ class FakeGates:
 
 
 async def test_governed_gate_decision_requires_prior_listing_and_exact_id():
-    console, fake, session = _console()
+    console, _, session = _console()
     work = FakeWorkTools()
     gate_id = "gate_0123456789abcdef"
     gates = FakeGates([gate_id])

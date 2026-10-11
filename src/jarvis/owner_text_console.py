@@ -327,8 +327,8 @@ async def _run() -> None:
     from jarvis.config import JarvisConfig
     from jarvis.engineering_change.gates import GateService
     from jarvis.voice.gicc_tools import GiccAgentTools
-    from jarvis.voice.work_tools import WorkAgentTools
     from jarvis.voice.production_runtime import build_production_voice_runtime
+    from jarvis.voice.work_tools import WorkAgentTools
 
     config = JarvisConfig.from_environment()
     if config.gicc_mode.value != "apply" or not config.work_orchestration_enabled:
