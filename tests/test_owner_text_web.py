@@ -184,11 +184,7 @@ async def test_gate_decision_requires_review_and_keeps_existing_windows_gate():
     await gateway._requests[request_id]
     outcome = await gateway.request_result(request_id)
     assert outcome["result"]["status"] == "windows_hello_required"
-    assert console.submitted == [
-        "approve " + GATE,
-        "gates",
-        "approve " + GATE,
-    ]
+    assert console.submitted == ["approve " + GATE, "gates", "approve " + GATE]
 
 
 def _http_request(port, path, *, method="GET", payload=None, headers=None):
