@@ -298,6 +298,56 @@ class OwnerTextConversation:
                     "No new goal was created by this unrecognized console command."
                 ),
             }
+        # A repeated typed goal is a NEW canonical turn, so per-turn GICC
+        # idempotency alone cannot prevent duplicate active objectives.
+        # Before admission, reuse canonical status to detect an EXACT active
+        # request, including one submitted in an earlier console process.
+        if command is not None:
+            listing = await self._tools.list_owner_objectives(None)
+            if listing.get("ok") is not True or not isinstance(
+                listing.get("objectives"), list
+            ):
+                return {
+                    "ok": False,
+                    "status": "goal_deduplication_unavailable",
+                    "truth_note": (
+                        "Cannot verify existing active goals. No new goal "
+                        "was submitted; retry after goal status is available."
+                    ),
+                }
+            normalized = " ".join(text.casefold().split())
+            matches = [
+                item
+                for item in listing["objectives"]
+                if isinstance(item, dict)
+                and item.get("terminal") is not True
+                and " ".join(
+                    str(item.get("owner_request") or "").casefold().split()
+                ) == normalized
+            ]
+            if matches:
+                if len(matches) != 1:
+                    return {
+                        "ok": False,
+                        "status": "duplicate_active_goals",
+                        "goal_ids": [item["goal_id"] for item in matches],
+                        "truth_note": (
+                            "Identical active goals already exist. No new "
+                            "goal was created; review them before continuing."
+                        ),
+                    }
+                existing = matches[0]
+                return {
+                    "ok": True,
+                    "status": "existing_active_goal",
+                    "goal_id": existing["goal_id"],
+                    "goal_state": existing.get("goal_state"),
+                    "truth_note": (
+                        "Reused the already-active identical owner request. "
+                        "No duplicate goal was created."
+                    ),
+                }
+
         # This is the existing real GICC goal-admission pipeline; it may
         # create WorkItems and engineering changes after canonical admission.
         return await self._tools.pursue_owner_goal(None)
@@ -389,7 +439,27 @@ async def _run() -> None:
             if line is None:
                 return
             try:
-                result = await console.submit(line)
+                if re.match(r"^/?goal\\s+", line.strip(), re.IGNORECASE):
+                    print(
+                        "JARVIS> Processing owner goal through GICC. "
+                        "Do not submit it again while this is running.",
+                        flush=True,
+                    )
+                task = asyncio.create_task(
+                    console.submit(line), name="jarvis-text-owner-command"
+                )
+                while True:
+                    try:
+                        result = await asyncio.wait_for(
+                            asyncio.shield(task), timeout=15.0
+                        )
+                        break
+                    except TimeoutError:
+                        print(
+                            "JARVIS> Still processing the current instruction; "
+                            "other typed commands are queued.",
+                            flush=True,
+                        )
             except Exception:
                 LOGGER.exception("Text owner command failed")
                 print("JARVIS> Command failed; no completion is being claimed.")

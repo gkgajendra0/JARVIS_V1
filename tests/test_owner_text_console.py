@@ -94,7 +94,7 @@ async def test_typed_goal_admitted_to_real_tool():
     console, fake, session = _console()
     result = await console.submit("/goal Open Hotstar on my television")
     assert result["status"] == "waiting_capability"
-    assert fake.calls == [("pursue", None)]
+    assert fake.calls == [("list", None), ("pursue", None)]
     assert session.turns[-1].text == "Open Hotstar on my television"
 
 
@@ -104,6 +104,46 @@ async def test_plain_goal_prefix_submits_original_outcome():
     assert result["status"] == "waiting_capability"
     assert fake.calls == [("pursue", None)]
     assert session.turns[-1].text == "Open Hotstar on my TV"
+
+
+async def test_repeated_identical_active_goal_is_not_resubmitted():
+    request = "Open Hotstar on my TV"
+    console, fake, _ = _console([_objective("goal_tv1", request)])
+    result = await console.submit("goal " + request)
+    assert result["status"] == "existing_active_goal"
+    assert result["goal_id"] == "goal_tv1"
+    assert fake.calls == [("list", None)]
+
+
+async def test_duplicate_active_goals_are_flagged_not_admitted():
+    request = "Control my Hisense VIDAA TV"
+    console, fake, _ = _console(
+        [_objective("goal_tv1", request), _objective("goal_tv2", request)]
+    )
+    result = await console.submit("/goal " + request)
+    assert result["status"] == "duplicate_active_goals"
+    assert set(result["goal_ids"]) == {"goal_tv1", "goal_tv2"}
+    assert fake.calls == [("list", None)]
+
+
+async def test_cancelled_goal_does_not_block_new_identical_goal():
+    old = _objective("goal_tv1", "Control my TV")
+    old["terminal"] = True
+    console, fake, _ = _console([old])
+    result = await console.submit("goal Control my TV")
+    assert result["status"] == "waiting_capability"
+    assert fake.calls == [("list", None), ("pursue", None)]
+
+
+async def test_unavailable_canonical_active_goal_status_fails_closed():
+    console, fake, _ = _console()
+    async def unavailable(_context):
+        fake.calls.append(("list", None))
+        return {"ok": False, "status": "unavailable"}
+    fake.list_owner_objectives = unavailable
+    result = await console.submit("goal Acquire TV control")
+    assert result["status"] == "goal_deduplication_unavailable"
+    assert fake.calls == [("list", None)]
 
 
 async def test_status_read_and_list_do_not_create_goal():
