@@ -439,7 +439,7 @@ async def _run() -> None:
             if line is None:
                 return
             try:
-                if re.match(r"^/?goal\\s+", line.strip(), re.IGNORECASE):
+                if re.match(r"^/?goal\s+", line.strip(), re.IGNORECASE):
                     print(
                         "JARVIS> Processing owner goal through GICC. "
                         "Do not submit it again while this is running.",
