@@ -116,6 +116,81 @@ def _goal(goal_id, title):
     }
 
 
+def test_goal_status_displays_all_canonical_fields() -> None:
+    result = {
+        "ok": True,
+        "goal_id": "goal_tv",
+        "owner_request": "Control my television",
+        "desired_outcome": "Turn the TV on",
+        "goal_state": "waiting_information",
+        "overall_state": "waiting_owner",
+        "phase": "waiting_information",
+        "verified_completion": False,
+        "blocker": {
+            "kind": "information_need",
+            "detail": "Confirm which device is the TV",
+            "owner_action_required": True,
+        },
+        "capability_gap_ids": ["gap_1"],
+        "continuation_ids": ["continuation_1"],
+        "work": [{"work_id": "work_1", "state": "waiting_owner"}],
+        "engineering_changes": [{"change_id": "change_1", "state": "proposed"}],
+    }
+    answer = OwnerNaturalTextChat._show("inspect_goal", result)
+    for detail in (
+        "Control my television",
+        "Turn the TV on",
+        "waiting_owner",
+        "Confirm which device is the TV",
+        "Owner action required: True",
+        "gap_1",
+        "continuation_1",
+        "work_1",
+        "change_1",
+    ):
+        assert detail in answer
+
+
+def test_all_clarifications_and_full_gate_proposal_are_visible() -> None:
+    questions = [
+        {
+            "interaction_id": "interaction_a",
+            "question": "Which TV?",
+            "options": [{"value": "living_room"}],
+        },
+        {
+            "interaction_id": "interaction_b",
+            "question": "Which input?",
+            "options": [{"value": "hdmi_1"}],
+        },
+    ]
+    response = OwnerNaturalTextChat._show(
+        "create_goal",
+        {"ok": True, "goal_id": "goal_tv", "questions": questions},
+    )
+    assert "Which TV?" in response
+    assert "Which input?" in response
+    assert "interaction_a" in response
+    assert "interaction_b" in response
+    proposal = "Detailed owner-review evidence: " + "X" * 1500
+    gate_response = OwnerNaturalTextChat._show(
+        "list_gates",
+        {
+            "ok": True,
+            "gates": [
+                {
+                    "kind": "architecture",
+                    "gate_id": "gate_0123456789abcdef",
+                    "change_id": "change_1",
+                    "artifact_digest": "digest_1",
+                    "proposal": proposal,
+                }
+            ],
+        },
+    )
+    assert proposal in gate_response
+
+
 async def test_natural_chat_without_command_prefix() -> None:
     chat, goals, work, session, brain = _chat("respond")
     r = await chat.submit("Hey Jarvis, are you with me?")
