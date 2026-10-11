@@ -572,3 +572,62 @@ def test_one_owner_discovery_utterance_cannot_scan_two_goals_in_one_session(
         need_id=second_need.information_need_id,
         owner_turn_id="second-owner-spoken-decision",
     )
+
+
+@pytest.mark.asyncio
+async def test_discovery_evidence_read_is_persisted_and_never_authorizes_a_scan(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    ref = "windows_aep_discovered_unverified:192.168.1.10:device-ref"
+    store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=(
+            "windows_aep_authorized_scope_consumed:upnp",
+            "windows_aep_authorized_scope_consumed:dns_sd",
+            ref,
+        ),
+    )
+    reads = []
+
+    def hints(*, goal_id, session_id):
+        reads.append((goal_id, session_id))
+        return (
+            SimpleNamespace(
+                evidence_ref=ref,
+                display_hint="Unverified TV device",
+                address="192.168.1.10",
+                protocol="upnp",
+            ),
+            SimpleNamespace(
+                evidence_ref="unrelated-device-ref",
+                display_hint="Unapproved device",
+                address="192.168.1.20",
+                protocol="dns_sd",
+            ),
+        )
+
+    tools = object.__new__(GiccAgentTools)
+    tools._store = store
+    tools._execution_runtime = SimpleNamespace(
+        pending_network_device_suggestions=hints
+    )
+    tools._listed_owner_goal_payloads = {}
+
+    blocked = await tools.inspect_network_discovery_evidence(None, goal.goal_id)
+    assert blocked["status"] == "discovery_goal_not_previously_listed"
+    assert reads == []
+
+    tools._listed_owner_goal_payloads[goal.goal_id] = {"terminal": False}
+    result = await tools.inspect_network_discovery_evidence(None, goal.goal_id)
+    assert result["status"] == "discovery_evidence_inspected"
+    observation = result["observations"][0]
+    assert observation["authorized_permits_consumed_for"] == ["dns_sd", "upnp"]
+    assert observation["recorded_candidate_evidence_count"] == 1
+    assert len(observation["current_eligible_candidates"]) == 1
+    assert observation["current_eligible_candidates"][0]["address"] == "192.168.1.10"
+    assert result["verified_tv_control"] is False
+    assert reads == [(goal.goal_id, goal.source_session_id)]
+    assert store.get_goal(goal.goal_id).state is GoalState.WAITING_INFORMATION
