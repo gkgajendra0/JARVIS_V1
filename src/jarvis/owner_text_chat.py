@@ -23,6 +23,7 @@ Route = Literal[
     "respond",
     "list_goals",
     "inspect_goal",
+    "offer_discovery",
     "list_work",
     "inspect_work",
     "list_gates",
@@ -43,6 +44,11 @@ change must go through the existing audited GICC/Work/Authority tools. Select
 one of the provided routes based on the actual latest owner request:
 - respond: chat, explain, clarify, ask, discuss or express uncertainty;
 - list_goals / inspect_goal: report canonical goals and status;
+- offer_discovery: when the owner wants JARVIS to automatically identify a
+  TV/camera for an EXISTING waiting_information goal, or to show its discovery
+  plan, prepare the exact passive bounded network scope for that listed goal.
+  Never create a second goal, scan or treat this as owner approval. Prefer
+  this route over respond for requests to advance existing device discovery;
 - list_work / inspect_work: report real WorkItem status;
 - list_gates: review pending engineering approvals and exact artifacts;
 - cancel_goal: only if the latest user clearly requests cancellation;
@@ -204,6 +210,23 @@ class OwnerNaturalTextChat:
             if result.get("truth_note"):
                 lines.append(str(result["truth_note"]))
             return "\n".join(lines)
+        if action == "offer_discovery":
+            scope = result.get("network_discovery")
+            if not isinstance(scope, dict):
+                return "No eligible bounded discovery plan is available; no scan was performed."
+            return (
+                f"Existing goal {result.get('goal_id')}: bounded discovery proposal only. "
+                + str(scope.get("summary") or "Scope details unavailable")
+                + " Protocol: "
+                + str(scope.get("protocol") or "unavailable")
+                + ". Result address filters: "
+                + str(scope.get("result_address_filters") or [])
+                + ". All local interfaces: "
+                + str(scope.get("all_local_interfaces"))
+                + ". No scan has started. To proceed, make a fresh explicit "
+                "request: 'I approve the network discovery'. Windows Hello "
+                "will be required to authorize the exact offered scope."
+            )
         if action == "inspect_goal":
             blocker = result.get("blocker")
             explanation = ""
@@ -309,6 +332,12 @@ class OwnerNaturalTextChat:
         result: dict[str, object]
         if action == "list_goals":
             result = goals
+        elif action == "offer_discovery":
+            result = (
+                await self.console._tools.offer_bounded_network_discovery(None, target)
+                if target in goal_ids
+                else {"ok": False, "status": "goal_target_ambiguous"}
+            )
         elif action == "inspect_goal":
             result = (
                 await self.console._tools.get_owner_objective_status(None, target)
