@@ -158,7 +158,7 @@ class OwnerNaturalTextChat:
                 + "\n".join(
                     f"- {g.get('kind')}: {g.get('gate_id')} "
                     f"(change {g.get('change_id')}); artifact {g.get('artifact_digest')}. "
-                    f"Proposal: {str(g.get('proposal'))}"
+                    f"Proposal: {g.get('proposal')!s}"
                     for g in gates
                     if isinstance(g, dict)
                 )
@@ -171,8 +171,10 @@ class OwnerNaturalTextChat:
         if action in {"create_goal", "answer_information", "approve_discovery"}:
             state = str(result.get("goal_state") or status)
             lines = [
-                f"GICC recorded the result for goal {result.get('goal_id')} "
-                f"with state {state}. This does not establish completed TV control."
+                (
+                    f"GICC recorded the result for goal {result.get('goal_id')} "
+                    f"with state {state}. This does not establish completed TV control."
+                )
             ]
             scopes = result.get("network_discovery")
             if isinstance(scopes, dict):
