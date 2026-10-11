@@ -80,6 +80,7 @@ textarea::placeholder{color:#7d91af}
     <div class="goal-title" id="goalTitle">TV capability acquisition</div>
     <div class="mono" id="goalId">goal_3bf2a80a14ecb70dd5b6</div>
     <dl><dt>Phase</dt><dd id="goalPhase">Checking</dd><dt>Work items</dt><dd id="workCount">—</dd><dt>Approvals</dt><dd id="gateCount">—</dd></dl>
+    <div class="workitem" id="goalBlocker" role="status">Checking for the exact blocker…</div>
     <div class="truth" id="verification">Real-machine acceptance not confirmed.</div>
   </div>
   <button class="smallbtn full" id="refresh">↻ Refresh live status</button>
@@ -169,6 +170,11 @@ async function refreshStatus() {
     byId("goalTitle").textContent = (active && active.owner_request) || "Existing TV capability objective";
     byId("goalId").textContent = state.goal_id;
     byId("goalPhase").textContent = goal.phase || (active && active.phase) || "Not reported";
+    const blocker = goal.blocker;
+    byId("goalBlocker").textContent = blocker && typeof blocker === "object"
+      ? "Blocker: " + (blocker.detail || "Details unavailable") +
+        (blocker.owner_action_required === true ? " — Your input is required." : "")
+      : "No specific blocker reported by the canonical goal.";
     const work = Array.isArray(state.work) ? state.work : [];
     byId("workCount").textContent = state.work_available ? String(work.length) : "Unavailable";
     byId("gateCount").textContent = String(state.pending_gate_count);
