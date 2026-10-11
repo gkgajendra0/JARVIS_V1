@@ -45,6 +45,7 @@ class FakeGoalTools:
             "goal_state": "waiting_information",
             "phase": "research",
             "verified_completion": False,
+            "terminal": False,
         }
 
 
@@ -139,6 +140,21 @@ async def test_chat_idempotency_and_in_flight_polling():
     assert result["state"] == "finished"
     assert result["result"]["message"] == "State checked."
     assert chat.calls == ["Check the existing TV goal"]
+
+
+async def test_rephrased_tv_acquisition_reuses_existing_goal():
+    gateway, console, chat = _gateway(asyncio.get_running_loop())
+    request_id = "request_tv_12345"
+    response = await gateway.submit(
+        request_id, "Jarvis, acquire capability to control my TV"
+    )
+    assert response["ok"] is True
+    await gateway._requests[request_id]
+    result = (await gateway.request_result(request_id))["result"]
+    assert GOAL in result["message"]
+    assert "did not create another goal" in result["message"]
+    assert chat.calls == []
+    assert console.submitted == []
 
 
 async def test_invalid_requests_do_not_mutate_runtime():
