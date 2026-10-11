@@ -69,9 +69,7 @@ class OwnerWebGateway:
             "ok": True,
             "goal_id": self.goal_id,
             "goal": detail,
-            "active_goals": [
-                g for g in goals if isinstance(g, dict)
-            ],
+            "active_goals": [g for g in goals if isinstance(g, dict)],
             "work": work.get("work", []) if work.get("ok") else [],
             "work_available": bool(work.get("ok")),
             "pending_gate_count": len(gates),
@@ -142,9 +140,7 @@ class OwnerWebGateway:
             # visibility only; actual decisions stay bound to existing gates.
             return await self.console.submit("gates")
 
-    async def decide_gate(
-        self, gate_id: str, decision: str
-    ) -> dict[str, object]:
+    async def decide_gate(self, gate_id: str, decision: str) -> dict[str, object]:
         if not _GATE_ID.fullmatch(gate_id):
             return {"ok": False, "status": "invalid_gate_id"}
         if decision not in {"approve", "reject"}:
@@ -279,8 +275,7 @@ def build_http_server(
                 gate_id, decision = payload.get("gate_id"), payload.get("decision")
                 request_id = payload.get("request_id")
                 if not all(
-                    isinstance(value, str)
-                    for value in (gate_id, decision, request_id)
+                    isinstance(value, str) for value in (gate_id, decision, request_id)
                 ):
                     self._json(400, {"ok": False, "status": "invalid_payload"})
                     return
