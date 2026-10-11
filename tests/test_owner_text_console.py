@@ -128,3 +128,120 @@ async def test_help_and_quit_are_local_only():
     assert (await console.submit("quit"))["status"] == "exit"
     assert fake.calls == []
     assert session.turns == ()
+
+
+class FakeWorkTools:
+    def __init__(self):
+        self.calls: list[tuple[str, str | None]] = []
+
+    async def decide_change_gate(self, context, gate_id):
+        self.calls.append(("decision", gate_id))
+        return {"ok": True, "status": "decided", "gate_id": gate_id}
+
+    async def continue_background_work(self, context, work_id):
+        self.calls.append(("answer", work_id))
+        return {"ok": True, "status": "owner_input_submitted", "work_id": work_id}
+
+    async def list_background_work(self, context):
+        self.calls.append(("work_list", None))
+        return {"ok": True, "status": "work_listed", "work": []}
+
+    async def get_background_work_status(self, context, work_id):
+        self.calls.append(("work_status", work_id))
+        return {"ok": True, "status": "found", "work_id": work_id}
+
+
+class FakeGates:
+    def __init__(self, gate_ids, *, kind="architecture"):
+        from types import SimpleNamespace
+
+        self.ids = list(gate_ids)
+        self.kind = kind
+        self.store = SimpleNamespace(
+            get_artifact=lambda _key: SimpleNamespace(payload={"summary": "Review exact architecture"})
+        )
+
+    def pending_gate_ids(self):
+        return tuple(self.ids)
+
+    def get(self, gate_id):
+        from types import SimpleNamespace
+
+        if gate_id not in self.ids:
+            return None
+        return SimpleNamespace(
+            gate_id=gate_id,
+            artifact_id="artifact_test1",
+            change_id="change_test1",
+            artifact_digest="sha256",
+            kind=SimpleNamespace(value=self.kind),
+        )
+
+
+async def test_governed_gate_decision_requires_prior_listing_and_exact_id():
+    console, fake, session = _console()
+    work = FakeWorkTools()
+    gate_id = "gate_0123456789abcdef"
+    gates = FakeGates([gate_id])
+    console._work_tools = work
+    console._gates = gates
+
+    rejected = await console.submit(f"approve {gate_id}")
+    assert rejected["status"] == "gate_not_reviewed_in_current_text_session"
+    assert work.calls == []
+
+    listed = await console.submit("gates")
+    assert listed["gates"][0]["gate_id"] == gate_id
+    assert listed["gates"][0]["approval_requires_windows_hello"] is True
+    result = await console.submit(f"approve {gate_id}")
+    assert result["status"] == "decided"
+    assert work.calls == [("decision", gate_id)]
+    assert session.turns[-1].text == f"approve {gate_id}"
+
+
+async def test_text_gate_review_rejects_stale_or_promotion_gates():
+    console, _, _ = _console()
+    work = FakeWorkTools()
+    gate_id = "gate_0123456789abcdef"
+    gates = FakeGates([gate_id])
+    console._work_tools = work
+    console._gates = gates
+    await console.submit("gates")
+    gates.ids.clear()
+    assert (await console.submit(f"reject {gate_id}"))["status"] == "gate_no_longer_pending"
+    gates.ids.append(gate_id)
+    gates.kind = "promotion"
+    await console.submit("gates")
+    assert (
+        await console.submit(f"approve {gate_id}")
+    )["status"] == "promotion_approval_requires_dedicated_governed_path"
+    assert work.calls == []
+
+
+async def test_text_owner_input_passes_only_answer_as_canonical_turn():
+    console, _, session = _console()
+    work = FakeWorkTools()
+    console._work_tools = work
+    result = await console.submit("answer work_0123456789abcdef: TV is powered on")
+    assert result["status"] == "owner_input_submitted"
+    assert session.turns[-1].text == "TV is powered on"
+    assert work.calls == [("answer", "work_0123456789abcdef")]
+
+
+async def test_text_work_status_is_real_work_tool():
+    console, _, _ = _console()
+    work = FakeWorkTools()
+    console._work_tools = work
+    assert (await console.submit("work"))["status"] == "work_listed"
+    assert (await console.submit("work work_0123456789abcdef"))["status"] == "found"
+    assert work.calls == [
+        ("work_list", None),
+        ("work_status", "work_0123456789abcdef"),
+    ]
+
+
+async def test_unrecognized_chat_does_not_accidentally_create_goal():
+    console, fake, _ = _console()
+    response = await console.submit("What is the weather?")
+    assert response["status"] == "explicit_goal_prefix_required"
+    assert fake.calls == []

@@ -32,6 +32,11 @@ _LIST = re.compile(
     re.IGNORECASE,
 )
 _STATUS = re.compile(r"^(?:/)?(?:status|show status|goal status)\b", re.IGNORECASE)
+_GATES = re.compile(r"^/?gates$", re.IGNORECASE)
+_GATE_DECISION = re.compile(r"^(?:approve|reject)\s+(gate_[0-9a-f]{16})[.!]?$", re.IGNORECASE)
+_WORK_LIST = re.compile(r"^/?(?:work|works|tasks)$", re.IGNORECASE)
+_WORK_STATUS = re.compile(r"^(?:work|task)\s+(work_[a-z0-9]+)$", re.IGNORECASE)
+_WORK_ANSWER = re.compile(r"^(?:answer|reply)\s+(work_[a-z0-9]+):\s*(.+)$", re.IGNORECASE)
 _TOPICS = (
     ("tv", "television", "hisense", "vidaa"),
     ("camera", "webcam", "doorbell"),
@@ -44,6 +49,12 @@ _HELP = {
     "status": "help",
     "commands": (
         "goals - list active canonical owner goals",
+        "gates - list current artifact-bound engineering approval gates",
+        "approve gate_<16hex> - request governed Windows Hello approval",
+        "reject gate_<16hex> - request governed Windows Hello rejection",
+        "work - list active background work",
+        "work work_... - inspect exact work",
+        "answer work_...: <reply> - answer a waiting owner-input question",
         "status goal_... - inspect a canonical goal",
         "cancel goal_... - cancel a previously listed goal",
         "Cancel my previous TV-control request - unique topic-matched cancellation",
@@ -60,8 +71,18 @@ _HELP = {
 class OwnerTextConversation:
     """Transport-independent deterministic routing for typed owner turns."""
 
-    def __init__(self, tools: Any, conversation: ConversationSession) -> None:
+    def __init__(
+        self,
+        tools: Any,
+        conversation: ConversationSession,
+        *,
+        work_tools: Any = None,
+        gates: Any = None,
+    ) -> None:
         self._tools = tools
+        self._work_tools = work_tools
+        self._gates = gates
+        self._listed_gate_ids: set[str] = set()
         self._conversation = conversation
         if conversation.status is not ConversationStatus.ACTIVE:
             raise ValueError("text conversation must be active")
@@ -130,7 +151,83 @@ class OwnerTextConversation:
             text = text[command.end() :].strip()
             if not text:
                 return {"ok": False, "status": "empty_goal"}
+        answer = _WORK_ANSWER.fullmatch(text)
+        # The owner answer itself, not its console routing syntax, becomes the
+        # exact durable USER turn passed to the existing Work owner-input path.
+        if answer is not None:
+            if self._work_tools is None:
+                return {"ok": False, "status": "work_tools_unavailable"}
+            work_id, answer_text = answer.group(1), answer.group(2).strip()
+            if not answer_text:
+                return {"ok": False, "status": "empty_owner_answer"}
+            self._conversation.accept_turn(ConversationRole.USER, answer_text)
+            return await self._work_tools.continue_background_work(None, work_id)
+
         self._conversation.accept_turn(ConversationRole.USER, text)
+
+        if _GATES.fullmatch(text):
+            if self._gates is None:
+                return {"ok": False, "status": "change_gate_registry_unavailable"}
+            gate_ids = self._gates.pending_gate_ids()
+            self._listed_gate_ids = set(gate_ids)
+            gates: list[dict[str, object]] = []
+            for gate_id in gate_ids:
+                record = self._gates.get(gate_id)
+                if record is None:
+                    continue
+                challenge = getattr(record, "challenge", record)
+                artifact = self._gates.store.get_artifact(challenge.artifact_id)
+                gates.append(
+                    {
+                        "gate_id": challenge.gate_id,
+                        "change_id": challenge.change_id,
+                        "kind": challenge.kind.value,
+                        "artifact_digest": challenge.artifact_digest,
+                        "proposal": None if artifact is None else artifact.payload,
+                        "approval_requires_windows_hello": True,
+                    }
+                )
+            return {"ok": True, "status": "gates_listed", "gates": gates}
+
+        gate_decision = _GATE_DECISION.fullmatch(text)
+        if gate_decision is not None:
+            gate_id = gate_decision.group(1)
+            if self._gates is None or self._work_tools is None:
+                return {"ok": False, "status": "change_gate_tools_unavailable"}
+            if gate_id not in self._listed_gate_ids:
+                return {
+                    "ok": False,
+                    "status": "gate_not_reviewed_in_current_text_session",
+                    "truth_note": "List current gates first; none were approved.",
+                }
+            if gate_id not in self._gates.pending_gate_ids():
+                self._listed_gate_ids.discard(gate_id)
+                return {"ok": False, "status": "gate_no_longer_pending"}
+            record = self._gates.get(gate_id)
+            challenge = None if record is None else getattr(record, "challenge", record)
+            if challenge is None or challenge.kind.value == "promotion":
+                return {
+                    "ok": False,
+                    "status": "promotion_approval_requires_dedicated_governed_path",
+                }
+            # Same exact-gate decision tool as voice. It invokes canonical
+            # ChangeService, AuthorityService and the Windows Hello verifier.
+            result = await self._work_tools.decide_change_gate(None, gate_id)
+            if result.get("ok") is True:
+                self._listed_gate_ids.discard(gate_id)
+            return result
+
+        if _WORK_LIST.fullmatch(text):
+            if self._work_tools is None:
+                return {"ok": False, "status": "work_tools_unavailable"}
+            return await self._work_tools.list_background_work(None)
+        work_status = _WORK_STATUS.fullmatch(text)
+        if work_status is not None:
+            if self._work_tools is None:
+                return {"ok": False, "status": "work_tools_unavailable"}
+            return await self._work_tools.get_background_work_status(
+                None, work_status.group(1)
+            )
 
         if _LIST.fullmatch(text):
             return await self._tools.list_owner_objectives(None)
@@ -180,6 +277,15 @@ class OwnerTextConversation:
                 ),
             }
 
+        if command is None:
+            return {
+                "ok": False,
+                "status": "explicit_goal_prefix_required",
+                "truth_note": (
+                    "For a new owner objective type: goal <requested outcome>. "
+                    "No new goal was created by this unrecognized console command."
+                ),
+            }
         # This is the existing real GICC goal-admission pipeline; it may
         # create WorkItems and engineering changes after canonical admission.
         return await self._tools.pursue_owner_goal(None)
@@ -207,7 +313,9 @@ async def _run() -> None:
     # capability runtime and GICC/Work stores as voice. Crucially, we never
     # call VoiceRuntimeController.run(), so audio.start() is never invoked.
     from jarvis.config import JarvisConfig
+    from jarvis.engineering_change.gates import GateService
     from jarvis.voice.gicc_tools import GiccAgentTools
+    from jarvis.voice.work_tools import WorkAgentTools
     from jarvis.voice.production_runtime import build_production_voice_runtime
 
     config = JarvisConfig.from_environment()
@@ -231,7 +339,16 @@ async def _run() -> None:
         objective_status=gicc.objective_status,
         telemetry=gicc.telemetry,
     )
-    console = OwnerTextConversation(tools, conversation)
+    console = OwnerTextConversation(
+        tools,
+        conversation,
+        work_tools=WorkAgentTools(
+            work,
+            conversation,
+            objective_status=gicc.objective_status,
+        ),
+        gates=GateService(work.changes.store, verify_owner=lambda *_: False),
+    )
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
@@ -253,7 +370,7 @@ async def _run() -> None:
     gicc.start()
     reader.start()
     print("JARVIS TEXT CONSOLE - same GICC and Work runtime; microphone OFF")
-    print("Type 'goals', 'status goal_...', 'cancel goal_...', or 'help'.")
+    print("Type 'goals', 'gates', 'work', 'goal <request>', or 'help'.")
     try:
         while True:
             line = await queue.get()
