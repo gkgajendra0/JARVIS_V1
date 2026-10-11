@@ -33,10 +33,14 @@ _LIST = re.compile(
 )
 _STATUS = re.compile(r"^(?:/)?(?:status|show status|goal status)\b", re.IGNORECASE)
 _GATES = re.compile(r"^/?gates$", re.IGNORECASE)
-_GATE_DECISION = re.compile(r"^(?:approve|reject)\s+(gate_[0-9a-f]{16})[.!]?$", re.IGNORECASE)
+_GATE_DECISION = re.compile(
+    r"^(?:approve|reject)\s+(gate_[0-9a-f]{16})[.!]?$", re.IGNORECASE
+)
 _WORK_LIST = re.compile(r"^/?(?:work|works|tasks)$", re.IGNORECASE)
 _WORK_STATUS = re.compile(r"^(?:work|task)\s+(work_[a-z0-9]+)$", re.IGNORECASE)
-_WORK_ANSWER = re.compile(r"^(?:answer|reply)\s+(work_[a-z0-9]+):\s*(.+)$", re.IGNORECASE)
+_WORK_ANSWER = re.compile(
+    r"^(?:answer|reply)\s+(work_[a-z0-9]+):\s*(.+)$", re.IGNORECASE
+)
 _TOPICS = (
     ("tv", "television", "hisense", "vidaa"),
     ("camera", "webcam", "doorbell"),

@@ -158,7 +158,9 @@ class FakeGates:
         self.ids = list(gate_ids)
         self.kind = kind
         self.store = SimpleNamespace(
-            get_artifact=lambda _key: SimpleNamespace(payload={"summary": "Review exact architecture"})
+            get_artifact=lambda _key: SimpleNamespace(
+                payload={"summary": "Review exact architecture"}
+            )
         )
 
     def pending_gate_ids(self):
@@ -208,13 +210,15 @@ async def test_text_gate_review_rejects_stale_or_promotion_gates():
     console._gates = gates
     await console.submit("gates")
     gates.ids.clear()
-    assert (await console.submit(f"reject {gate_id}"))["status"] == "gate_no_longer_pending"
+    assert (await console.submit(f"reject {gate_id}"))[
+        "status"
+    ] == "gate_no_longer_pending"
     gates.ids.append(gate_id)
     gates.kind = "promotion"
     await console.submit("gates")
-    assert (
-        await console.submit(f"approve {gate_id}")
-    )["status"] == "promotion_approval_requires_dedicated_governed_path"
+    assert (await console.submit(f"approve {gate_id}"))[
+        "status"
+    ] == "promotion_approval_requires_dedicated_governed_path"
     assert work.calls == []
 
 
