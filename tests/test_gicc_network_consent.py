@@ -292,6 +292,79 @@ async def test_resumed_scope_refuses_unlisted_or_negated_requests(
     assert calls == []
 
 
+@pytest.mark.asyncio
+async def test_resumed_goal_scan_is_gated_by_fresh_approval_turn(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    owner = ConversationSession(session_id="new-owner-session")
+    owner.start()
+
+    class RecordedAuthorityRuntime:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def prepare_network_discovery_consent(self, **kwargs):
+            assert kwargs["resume_existing_goal"] is True
+            assert kwargs["session_id"] == owner.session_id
+            return prepare_pending_device_discovery_consent(
+                store=store, planner=_planner(), **kwargs
+            )
+
+        def authorize_and_discover_network(self, **kwargs):
+            # Fake downstream Authority for routing only; actual Windows
+            # Hello and permit security are separately exercised in CI.
+            assert kwargs["resume_existing_goal"] is True
+            assert kwargs["session_id"] == owner.session_id
+            assert kwargs["goal_id"] == goal.goal_id
+            assert kwargs["expected_scope_material"][1] == "upnp"
+            self.calls.append(kwargs)
+            return SimpleNamespace(need=need)
+
+    runtime = RecordedAuthorityRuntime()
+    tools = object.__new__(GiccAgentTools)
+    tools._store = store
+    tools._conversation = owner
+    tools._execution_runtime = runtime
+    tools._listed_owner_goal_payloads = {
+        goal.goal_id: {
+            "owner_request": goal.exact_owner_request,
+            "goal_state": goal.state.value,
+            "terminal": False,
+        }
+    }
+    tools._offered_network_discovery = {}
+    tools._offered_device_options = {}
+
+    owner.accept_turn(ConversationRole.USER, "I approve the network discovery.")
+    without_offer = await tools.authorize_bounded_network_discovery(
+        None, goal.goal_id
+    )
+    assert without_offer["status"] == "discovery_scope_not_previously_offered"
+    assert runtime.calls == []
+
+    owner.accept_turn(
+        ConversationRole.USER, "Jarvis, identify my TV automatically"
+    )
+    offered = await tools.offer_bounded_network_discovery(None, goal.goal_id)
+    assert offered["status"] == "discovery_scope_offered"
+    assert offered["network_discovery"]["scan_started"] is False
+    assert runtime.calls == []
+
+    # A proposal is not permission; the owner must authorize in another turn.
+    blocked = await tools.authorize_bounded_network_discovery(None, goal.goal_id)
+    assert blocked["status"] == "explicit_discovery_permission_not_given"
+    assert runtime.calls == []
+
+    owner.accept_turn(ConversationRole.USER, "I approve the network discovery.")
+    accepted = await tools.authorize_bounded_network_discovery(None, goal.goal_id)
+    assert accepted["status"] == "authorized_discovery_observation_recorded"
+    assert accepted["verified_device_control"] is False
+    assert len(runtime.calls) == 1
+    assert runtime.calls[0]["owner_turn_id"] == owner.turns[-1].turn_id
+    assert store.get_goal(goal.goal_id).source_session_id == "owner-session"
+
+
 def test_consent_requires_waiting_information_state(tmp_path: Path) -> None:
     store, goal, _ = _data(tmp_path, state=GoalState.PLANNED)
     assert (
