@@ -997,6 +997,13 @@ class GiccAgentTools:
                 "ok": False,
                 "status": "discovery_goal_not_current_or_not_waiting",
             }
+        # Preserve the established voice interface for same-session goals.
+        # Only a resumed goal needs the explicit, opt-in cross-session flag.
+        resume_options = (
+            {"resume_existing_goal": True}
+            if goal.source_session_id != self._conversation.session_id
+            else {}
+        )
         runtime = self._execution_runtime
         execute = (
             None
@@ -1018,7 +1025,7 @@ class GiccAgentTools:
             current_proposal = prepare(
                 goal_id=goal.goal_id,
                 session_id=self._conversation.session_id,
-                resume_existing_goal=True,
+                **resume_options,
             )
             if (
                 current_proposal is None
@@ -1062,7 +1069,7 @@ class GiccAgentTools:
                 session_id=self._conversation.session_id,
                 owner_turn_id=turn.turn_id,
                 expected_scope_material=offered[0],
-                resume_existing_goal=True,
+                **resume_options,
             )
         except Exception:
             LOGGER.warning(
@@ -1151,7 +1158,7 @@ class GiccAgentTools:
                     proposal = prepare(
                         goal_id=goal.goal_id,
                         session_id=self._conversation.session_id,
-                        resume_existing_goal=True,
+                        **resume_options,
                     )
                 except Exception:
                     LOGGER.warning(
