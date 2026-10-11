@@ -337,15 +337,11 @@ async def test_resumed_goal_scan_is_gated_by_fresh_approval_turn(
     tools._offered_device_options = {}
 
     owner.accept_turn(ConversationRole.USER, "I approve the network discovery.")
-    without_offer = await tools.authorize_bounded_network_discovery(
-        None, goal.goal_id
-    )
+    without_offer = await tools.authorize_bounded_network_discovery(None, goal.goal_id)
     assert without_offer["status"] == "discovery_scope_not_previously_offered"
     assert runtime.calls == []
 
-    owner.accept_turn(
-        ConversationRole.USER, "Jarvis, identify my TV automatically"
-    )
+    owner.accept_turn(ConversationRole.USER, "Jarvis, identify my TV automatically")
     offered = await tools.offer_bounded_network_discovery(None, goal.goal_id)
     assert offered["status"] == "discovery_scope_offered"
     assert offered["network_discovery"]["scan_started"] is False
