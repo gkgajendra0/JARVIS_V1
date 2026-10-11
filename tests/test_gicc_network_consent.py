@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.goal_intelligence.models import (
     GoalKind,
     GoalState,
@@ -21,7 +22,6 @@ from jarvis.goal_intelligence.network_consent import (
 )
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.store import GoalStore
-from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.goal_intelligence.windows_lan_scope import WindowsLanScopePlanner
 from jarvis.voice.gicc_tools import GiccAgentTools
 from jarvis.work.privacy import build_default_work_payload_codec
@@ -269,7 +269,6 @@ async def test_resumed_scope_refuses_unlisted_or_negated_requests(
 
     def prepare(**kwargs):
         calls.append(kwargs)
-        return None
 
     tools = object.__new__(GiccAgentTools)
     tools._store = store
