@@ -135,7 +135,7 @@ async def test_inspect_goal_explains_persisted_blocker():
     answer = OwnerNaturalTextChat._show("inspect_goal", status["goal"])
     assert "Confirm the exact device identity" in answer
     assert "Owner action required: True" in answer
-    assert "verified completion: False" in answer
+    assert "Verified completion: False" in answer
 
 
 async def test_chat_idempotency_and_in_flight_polling():
