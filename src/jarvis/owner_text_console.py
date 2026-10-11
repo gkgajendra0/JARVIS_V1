@@ -15,7 +15,11 @@ import sys
 import threading
 from typing import Any
 
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 
 LOGGER = logging.getLogger(__name__)
 _GOAL_ID = re.compile(r"\bgoal_[a-zA-Z0-9]+\b")
