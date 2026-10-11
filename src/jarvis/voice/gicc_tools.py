@@ -119,6 +119,7 @@ class GiccAgentTools:
         return [
             self.list_owner_objectives,
             self.get_owner_objective_status,
+            self.offer_bounded_network_discovery,
         ]
 
     @property
@@ -813,6 +814,139 @@ class GiccAgentTools:
         return payload
 
     @function_tool()
+    async def offer_bounded_network_discovery(
+        self,
+        context: RunContext,
+        goal_id: str,
+    ) -> dict[str, object]:
+        """Prepare an exact scope for an existing, listed waiting goal.
+
+        Resuming a persisted goal does not rewrite the origin session and never
+        implies authorization. A fresh, separate owner turn and Windows Hello
+        remain necessary for the offered current-session proposal.
+        """
+        del context
+        turn = self._latest_user_turn()
+        key = str(goal_id).strip()
+        listed = self._listed_owner_goal_payloads.get(key)
+        raw = turn.text
+        if (
+            listed is None
+            or listed.get("terminal") is True
+            or listed.get("goal_state") != "waiting_information"
+            or not re.search(
+                r"\b(identify|discover|detect|locate|find|show|prepare|propose|offer)\b",
+                raw,
+                re.IGNORECASE,
+            )
+            or re.search(
+                r"\b(?:do not|don't|never)\s+(?:\w+\s+){0,3}"
+                r"(?:identify|discover|detect|locate|find|show|prepare|propose|offer)\b",
+                raw,
+                re.IGNORECASE,
+            )
+            or (
+                key not in raw
+                and not any(
+                    re.search(r"\b" + re.escape(word) + r"\b", raw, re.IGNORECASE)
+                    and re.search(
+                        r"\b" + re.escape(word) + r"\b",
+                        str(listed.get("owner_request") or "")
+                        + " "
+                        + str(listed.get("desired_outcome") or ""),
+                        re.IGNORECASE,
+                    )
+                    for word in ("tv", "television", "camera", "webcam")
+                )
+            )
+        ):
+            return {"ok": False, "status": "explicit_listed_goal_discovery_request_required"}
+        goal = self._store.get_goal(key)
+        runtime = self._execution_runtime
+        prepare = (
+            None
+            if runtime is None
+            else getattr(runtime, "prepare_network_discovery_consent", None)
+        )
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or not callable(prepare)
+        ):
+            return {"ok": False, "status": "existing_goal_discovery_unavailable"}
+
+        # Never leave an older scope offer active when asking for a new one.
+        self._offered_network_discovery.pop(key, None)
+        try:
+            proposal = await asyncio.to_thread(
+                prepare,
+                goal_id=goal.goal_id,
+                session_id=self._conversation.session_id,
+                resume_existing_goal=True,
+            )
+        except Exception:
+            LOGGER.warning("GICC passive discovery scope preparation failed", exc_info=True)
+            return {"ok": False, "status": "discovery_scope_preparation_failed"}
+        if (
+            proposal is None
+            or not proposal.has_valid_fingerprint()
+            or proposal.is_expired()
+            or proposal.session_id != self._conversation.session_id
+            or proposal.capability != "network_discovery"
+            or proposal.operation != "enumerate_aep"
+        ):
+            return {
+                "ok": False,
+                "status": "no_eligible_bounded_discovery_scope",
+                "truth_note": (
+                    "No permitted private LAN scope or supported identity need "
+                    "was available. No scan ran, and the original goal remains unchanged."
+                ),
+            }
+        target = proposal.target()
+        need = self._store.get_information_need(str(target.get("gicc_need_id") or ""))
+        if (
+            target.get("gicc_goal_id") != goal.goal_id
+            or need is None
+            or need.goal_id != goal.goal_id
+            or not can_rediscover_information(need)
+        ):
+            return {"ok": False, "status": "discovery_need_not_current"}
+        scope = {
+            "state": "proposal_only_not_authorized",
+            "summary": proposal.material_summary,
+            "protocol": target.get("protocol"),
+            "result_address_filters": target.get("address_result_filters"),
+            "all_local_interfaces": target.get("all_local_interfaces"),
+            "information_need_id": need.information_need_id,
+            "owner_approval_required": True,
+            "scan_started": False,
+        }
+        self._offered_network_discovery[goal.goal_id] = (
+            (
+                need.information_need_id,
+                scope["protocol"],
+                scope["summary"],
+                tuple(scope["result_address_filters"] or ()),
+                scope["all_local_interfaces"],
+            ),
+            turn.turn_id,
+        )
+        return {
+            "ok": True,
+            "status": "discovery_scope_offered",
+            "goal_id": goal.goal_id,
+            "goal_state": goal.state.value,
+            "network_discovery": scope,
+            "original_source_session_preserved": True,
+            "truth_note": (
+                "This passive scope offer neither scans nor grants permission. "
+                "A new explicit owner approval turn and Windows Hello must "
+                "authorize one exact scope before any network activity."
+            ),
+        }
+
+    @function_tool()
     async def authorize_bounded_network_discovery(
         self,
         context: RunContext,
@@ -856,7 +990,6 @@ class GiccAgentTools:
         if (
             goal is None
             or goal.state is not GoalState.WAITING_INFORMATION
-            or goal.source_session_id != self._conversation.session_id
         ):
             return {
                 "ok": False,
@@ -882,13 +1015,14 @@ class GiccAgentTools:
         try:
             current_proposal = prepare(
                 goal_id=goal.goal_id,
-                session_id=goal.source_session_id,
+                session_id=self._conversation.session_id,
+                resume_existing_goal=True,
             )
             if (
                 current_proposal is None
                 or not current_proposal.has_valid_fingerprint()
                 or current_proposal.is_expired()
-                or current_proposal.session_id != goal.source_session_id
+                or current_proposal.session_id != self._conversation.session_id
                 or current_proposal.capability != "network_discovery"
                 or current_proposal.operation != "enumerate_aep"
             ):
@@ -923,9 +1057,10 @@ class GiccAgentTools:
             result = await asyncio.to_thread(
                 execute,
                 goal_id=goal.goal_id,
-                session_id=goal.source_session_id,
+                session_id=self._conversation.session_id,
                 owner_turn_id=turn.turn_id,
                 expected_scope_material=offered[0],
+                resume_existing_goal=True,
             )
         except Exception:
             LOGGER.warning(
@@ -1013,7 +1148,8 @@ class GiccAgentTools:
                 try:
                     proposal = prepare(
                         goal_id=goal.goal_id,
-                        session_id=goal.source_session_id,
+                        session_id=self._conversation.session_id,
+                        resume_existing_goal=True,
                     )
                 except Exception:
                     LOGGER.warning(
@@ -1025,7 +1161,7 @@ class GiccAgentTools:
                         proposal is not None
                         and proposal.has_valid_fingerprint()
                         and not proposal.is_expired()
-                        and proposal.session_id == goal.source_session_id
+                        and proposal.session_id == self._conversation.session_id
                         and proposal.capability == "network_discovery"
                         and proposal.operation == "enumerate_aep"
                     ):
