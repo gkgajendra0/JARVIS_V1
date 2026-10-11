@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
 from tests.test_gicc_composition import _conversation, _store
+
 from jarvis.conversation import ConversationRole
 from jarvis.goal_intelligence.composition import GoalIntelligenceCoordinator
 from jarvis.voice.gicc_tools import GiccAgentTools

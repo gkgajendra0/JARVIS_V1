@@ -256,7 +256,7 @@ class GiccAgentTools:
                 aliases
                 for aliases in topic_aliases
                 if any(
-                    re.search(r"\b" + re.escape(alias) + r"\b", turn.text, re.I)
+                    re.search(r"\b" + re.escape(alias) + r"\b", turn.text, re.IGNORECASE)
                     for alias in aliases
                 )
             ]
@@ -278,7 +278,7 @@ class GiccAgentTools:
                             str(payload.get("owner_request") or "")
                             + " "
                             + str(payload.get("desired_outcome") or ""),
-                            re.I,
+                            re.IGNORECASE,
                         )
                         for alias in aliases
                     )
@@ -305,7 +305,7 @@ class GiccAgentTools:
             }
         try:
             result = await action(key)
-        except Exception as exc:  # noqa: BLE001 - preserve truthful voice status
+        except Exception as exc:
             LOGGER.exception(
                 "GICC owner goal cancellation was blocked | goal_id=%s",
                 key,

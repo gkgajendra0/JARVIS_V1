@@ -12,9 +12,9 @@ from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 from .models import (
     CapabilityGapState,
-    ContinuationState,
     CapabilityGapV1,
     CapabilityRequirementGraphV1,
+    ContinuationState,
     GoalContinuationV1,
     GoalInterpretationCandidateV1,
     GoalKind,

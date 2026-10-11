@@ -266,7 +266,7 @@ async def test_failed_work_stop_prevents_false_cancelled_goal(tmp_path):
 
 
 def test_cancellation_rejects_stale_revision_and_terminal_goals(tmp_path):
-    work, goals, changes, goal, *_ = _fixture(tmp_path)
+    _, goals, _, goal, *_ = _fixture(tmp_path)
     with pytest.raises(GoalStoreConflict, match="revision"):
         goals.cancel_goal_tree(goal.goal_id, expected_revision=goal.goal_revision + 1)
     assert goals.get_goal(goal.goal_id).state is GoalState.WAITING_CAPABILITY
