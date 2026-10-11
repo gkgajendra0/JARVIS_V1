@@ -170,42 +170,38 @@ class OwnerNaturalTextChat:
             return f"That goal is already active as {result.get('goal_id')}; I did not create a duplicate."
         if action in {"create_goal", "answer_information", "approve_discovery"}:
             state = str(result.get("goal_state") or status)
-            base = (
+            lines = [
                 f"GICC recorded the result for goal {result.get('goal_id')} "
                 f"with state {state}. This does not establish completed TV control."
-            )
+            ]
             scopes = result.get("network_discovery")
             if isinstance(scopes, dict):
-                return (
-                    base + " JARVIS can request a bounded network discovery to "
-                    "identify the device. Scope: "
+                lines.append(
+                    "Bounded network discovery offered. Scope: "
                     + str(scopes.get("summary") or "not provided")
-                    + ". An explicit fresh network-discovery approval and Windows Hello "
-                    "are required before the scan begins."
+                    + ". Explicit fresh network-discovery approval and Windows Hello "
+                    "are required before any scan."
                 )
             choice_sets = result.get("device_choice_sets")
             if isinstance(choice_sets, list) and choice_sets:
-                return (
-                    base
-                    + " Discovered-device candidates require your identity confirmation: "
-                    + str(choice_sets)
+                lines.append(
+                    "Device identity confirmation required: " + str(choice_sets)
                 )
             questions = result.get("questions")
-            if isinstance(questions, list) and questions:
-                details = [
-                    (
-                        str(question.get("question") or "Please clarify.")
-                        + " Options: "
-                        + str(question.get("options") or [])
-                        + " Interaction: "
-                        + str(question.get("interaction_id") or "not supplied")
-                    )
-                    for question in questions
-                    if isinstance(question, dict)
-                ]
-                if details:
-                    return base + " Pending clarifications:\n" + "\n".join(details)
-            return base
+            if isinstance(questions, list):
+                for question in questions:
+                    if isinstance(question, dict):
+                        lines.append(
+                            "Clarification: "
+                            + str(question.get("question") or "Please clarify.")
+                            + " Options: "
+                            + str(question.get("options") or [])
+                            + " Interaction: "
+                            + str(question.get("interaction_id") or "not supplied")
+                        )
+            if result.get("truth_note"):
+                lines.append(str(result["truth_note"]))
+            return "\n".join(lines)
         if action == "inspect_goal":
             blocker = result.get("blocker")
             explanation = ""
