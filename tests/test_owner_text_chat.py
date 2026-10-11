@@ -63,6 +63,23 @@ class Goals:
             "goal_state": "waiting_capability",
         }
 
+    async def inspect_network_discovery_evidence(self, _context, goal_id):
+        self.calls.append(("inspect_discovery", goal_id))
+        return {
+            "ok": True,
+            "status": "discovery_evidence_inspected",
+            "goal_id": goal_id,
+            "observations": [{
+                "information_need_id": "need-tv",
+                "information_need_state": "waiting",
+                "authorized_permits_consumed_for": ["upnp", "dns_sd"],
+                "recorded_candidate_evidence_count": 0,
+                "current_eligible_candidates": [],
+                "candidate_lookup_available": True,
+            }],
+            "truth_note": "Permit consumption is not proof of emitted packets.",
+        }
+
     async def offer_bounded_network_discovery(self, _context, goal_id):
         self.calls.append(("offer_discovery", goal_id))
         return {
@@ -373,3 +390,53 @@ async def test_explicit_network_discovery_routes_to_governed_tool() -> None:
     result = await chat.submit("I approve the network discovery")
     assert result["ok"] is True
     assert ("approve_discovery", "goal_tv") in goals.calls
+
+
+async def test_browser_inspects_existing_discovery_evidence_without_offering_scan() -> None:
+    chat, goals, _, _, _ = _chat(
+        "inspect_discovery", [_goal("goal_tv", "Acquire TV control")], "goal_tv"
+    )
+    response = await chat.submit(
+        "Show the actual UPnP and DNS-SD discovery evidence for my TV goal."
+    )
+    assert response["ok"] is True
+    assert response["operation"] == "inspect_discovery"
+    assert ("inspect_discovery", "goal_tv") in goals.calls
+    assert not any(
+        action in {"offer_discovery", "approve_discovery", "pursue"}
+        for action, _ in goals.calls
+    )
+    for phrase in (
+        "upnp", "dns_sd", "No currently eligible unverified TV candidate",
+        "not proof of emitted packets",
+    ):
+        assert phrase in response["message"]
+
+
+def test_browser_approval_result_shows_real_candidates_and_next_scope() -> None:
+    result = {
+        "ok": True,
+        "status": "authorized_discovery_observation_recorded",
+        "goal_id": "goal_tv",
+        "unverified_device_hints": [],
+        "next_network_discovery": {
+            "summary": "Allow one dns_sd Windows network-discovery query"
+        },
+        "truth_note": "Identity remains unverified.",
+    }
+    reply = OwnerNaturalTextChat._show("approve_discovery", result)
+    assert "Eligible unverified device candidates retained: 0" in reply
+    assert "dns_sd" in reply
+    assert "NOT approved or run" in reply
+
+    result["unverified_device_hints"] = [{
+        "display_hint": "Potential media player",
+        "protocol_observed": "upnp",
+        "address": "192.168.1.10",
+    }]
+    result.pop("next_network_discovery")
+    result["device_choice_set"] = {"options": [{"option": 1}]}
+    reply = OwnerNaturalTextChat._show("approve_discovery", result)
+    assert "Potential media player" in reply
+    assert "192.168.1.10" in reply
+    assert "NEW" in reply
