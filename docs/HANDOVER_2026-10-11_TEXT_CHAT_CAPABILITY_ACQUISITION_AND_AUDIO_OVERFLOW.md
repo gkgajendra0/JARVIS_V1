@@ -181,3 +181,28 @@ It opens **http://127.0.0.1:8765/** in the local browser. The live page only *re
 Web security: bound exclusively to IPv4 loopback, Host validation, no third-party resources, strict CSP, no-store response headers, unpredictable CSRF for the local APIs, same-origin POST checks, explicit JSON content and size limits. Chat and gate actions are queued using idempotent request IDs so client polling does not repeat an owner action. The server is *not* safe to bind to a LAN address or publicly expose as implemented.
 
 **Acceptance still pending:** Do not call the browser UI production-ready until exact latest-commit CI is green and owner-machine browser interaction has been checked; do not call TV acquisition complete until its own physical external acceptance is witnessed. The microphone overflow issue remains deliberately deferred and untouched.
+
+
+## 9. Single JARVIS, transport-neutral conversation (owner requirement)
+
+The owner requires browser text and spoken JARVIS to be **the same assistant**, not
+separate personalities or reduced-information modes. A canonical goal, WorkItem,
+approval, discovery scope, information need, decision, and verified outcome must
+have the same meaning regardless of the transport used to ask about it. Never
+hide a known blocker or omit later questions merely because the owner typed.
+
+Current incremental improvement: text goal inspection renders the canonical
+blocker, requested outcome, related work and engineering changes; multiple
+clarifications and exact proposals are not arbitrarily truncated. Browser status
+shows the canonical blocker. These changes are presentation only and do not
+authorize any action or complete TV acceptance.
+
+**Still required for full parity:** a shared, durable owner conversation event
+stream with ordered typed turns, finalized voice transcriptions, and JARVIS
+responses visible in one browser timeline, together with transport-neutral
+reasoning/response composition. This is NOT implemented by the current
+text-only browser server. It must be designed and tested with the existing
+ConversationSession and security/authority controls, with no synthesized owner
+speech or implicit approvals. The audio/microphone runtime remains untouched
+until explicitly scheduled; the current browser is a text ingress, not a live
+voice transcript viewer. No second goal, no parallel authority or database.
