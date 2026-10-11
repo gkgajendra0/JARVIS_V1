@@ -23,6 +23,7 @@ Route = Literal[
     "respond",
     "list_goals",
     "inspect_goal",
+    "inspect_discovery",
     "offer_discovery",
     "list_work",
     "inspect_work",
@@ -44,6 +45,9 @@ change must go through the existing audited GICC/Work/Authority tools. Select
 one of the provided routes based on the actual latest owner request:
 - respond: chat, explain, clarify, ask, discuss or express uncertainty;
 - list_goals / inspect_goal: report canonical goals and status;
+- inspect_discovery: show recorded discovery evidence and unverified device
+  candidates for an EXISTING goal; never trigger another scan, create a new
+  goal or replace an evidence request with a new discovery proposal;
 - offer_discovery: when the owner wants JARVIS to automatically identify a
   TV/camera for an EXISTING waiting_information goal, or to show its discovery
   plan, prepare the exact passive bounded network scope for that listed goal.
@@ -207,8 +211,81 @@ class OwnerNaturalTextChat:
                             + " Interaction: "
                             + str(question.get("interaction_id") or "not supplied")
                         )
+            if action == "approve_discovery" and status == "authorized_discovery_observation_recorded":
+                hints = result.get("unverified_device_hints")
+                if isinstance(hints, list):
+                    lines.append(
+                        f"Eligible unverified device candidates retained: {len(hints)}."
+                    )
+                    for hint in hints[:16]:
+                        if isinstance(hint, dict):
+                            lines.append(
+                                f"- {hint.get('display_hint') or 'Unnamed device'} "
+                                f"({hint.get('protocol_observed') or 'unknown protocol'}; "
+                                f"address {hint.get('address') or 'not provided'}). "
+                                "Identity and control are unverified."
+                            )
+                choices = result.get("device_choice_set")
+                if isinstance(choices, dict):
+                    lines.append(
+                        "A displayed device choice must be confirmed in a NEW "
+                        "explicit owner turn before identity is recorded."
+                    )
+                next_scope = result.get("next_network_discovery")
+                if isinstance(next_scope, dict):
+                    lines.append(
+                        "Next discovery scope is proposed but NOT approved or run: "
+                        + str(next_scope.get("summary") or "details unavailable")
+                    )
+                elif isinstance(hints, list) and not hints:
+                    lines.append(
+                        "No further built-in discovery scope was offered. "
+                        "No retained candidate does not establish the TV is absent."
+                    )
             if result.get("truth_note"):
                 lines.append(str(result["truth_note"]))
+            return "\n".join(lines)
+        if action == "inspect_discovery":
+            lines = [
+                f"Recorded discovery evidence for existing goal {result.get('goal_id')}:"
+            ]
+            observations = result.get("observations")
+            if not isinstance(observations, list) or not observations:
+                lines.append("No relevant device-discovery information need was found.")
+            else:
+                for observation in observations:
+                    if not isinstance(observation, dict):
+                        continue
+                    protocols = observation.get("authorized_permits_consumed_for") or []
+                    lines.append(
+                        "Information need "
+                        + str(observation.get("information_need_id") or "unknown")
+                        + "; state "
+                        + str(observation.get("information_need_state") or "unknown")
+                        + "; consumed discovery permits: "
+                        + (", ".join(str(value) for value in protocols) or "none")
+                        + "; recorded candidate evidence: "
+                        + str(observation.get("recorded_candidate_evidence_count") or 0)
+                        + "."
+                    )
+                    candidates = observation.get("current_eligible_candidates")
+                    if observation.get("candidate_lookup_available") is not True:
+                        lines.append("Current candidate lookup unavailable.")
+                    elif not isinstance(candidates, list) or not candidates:
+                        lines.append("No currently eligible unverified TV candidate.")
+                    else:
+                        for candidate in candidates[:16]:
+                            if isinstance(candidate, dict):
+                                lines.append(
+                                    "- Unverified device: "
+                                    + str(candidate.get("display_hint") or "unnamed")
+                                    + "; protocol "
+                                    + str(candidate.get("protocol") or "unknown")
+                                    + "; address "
+                                    + str(candidate.get("address") or "not supplied")
+                                    + "."
+                                )
+            lines.append(str(result.get("truth_note") or "No TV control verified."))
             return "\n".join(lines)
         if action == "offer_discovery":
             scope = result.get("network_discovery")
@@ -341,6 +418,12 @@ class OwnerNaturalTextChat:
         elif action == "inspect_goal":
             result = (
                 await self.console._tools.get_owner_objective_status(None, target)
+                if target in goal_ids
+                else {"ok": False, "status": "goal_target_ambiguous"}
+            )
+        elif action == "inspect_discovery":
+            result = (
+                await self.console._tools.inspect_network_discovery_evidence(None, target)
                 if target in goal_ids
                 else {"ok": False, "status": "goal_target_ambiguous"}
             )
