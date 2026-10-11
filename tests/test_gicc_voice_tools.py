@@ -1143,3 +1143,127 @@ async def test_production_gicc_tool_provider_keeps_discovery_offers_across_turns
     )
     assert denied["status"] == "discovery_goal_not_current_or_not_waiting"
     assert runtime.scan_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_resumed_goal_device_confirmation_requires_current_session_choice_offer(
+    tmp_path: Path,
+) -> None:
+    """Resumed TV confirmation requires a displayed choice AND a later owner turn."""
+    import time
+
+    from tests.test_gicc_network_consent import _data
+    from tests.test_gicc_owner_device_confirmation import _evidence
+
+    from jarvis.conversation import ConversationSession
+    from jarvis.voice.gicc_tools import _device_choice_digest
+
+    store, goal, need = _data(tmp_path)
+    evidence = _evidence(address="192.168.1.10", now=int(time.time()))
+    updated = store.update_information_need_state(
+        need.information_need_id,
+        need.state,
+        expected_revision=need.revision,
+        evidence_refs=(evidence, "windows_aep_authorized_scope_consumed:upnp"),
+    )
+    owner = ConversationSession(session_id="resumed-owner-session")
+    owner.start()
+    hint = SimpleNamespace(
+        evidence_ref=evidence,
+        protocol="upnp",
+        display_hint="Unverified TV",
+        address="192.168.1.10",
+        neighbor_correlated=False,
+    )
+    result = GoalIntakeResult(
+        disposition=GoalIntakeDisposition.WAITING_INFORMATION,
+        goal=goal,
+        information_needs=(updated,),
+    )
+
+    class ResumedConfirmationRuntime(CompletedExecutionRuntime):
+        def __init__(self) -> None:
+            super().__init__(result)
+            self.confirmations = 0
+            self.resumes = 0
+
+        def pending_network_device_suggestions(self, *, goal_id, session_id):
+            assert goal_id == goal.goal_id
+            assert session_id == goal.source_session_id
+            return (hint,)
+
+        def confirm_owner_discovered_device(
+            self, *, goal_id, information_need_id, session_id, owner_turn_id
+        ):
+            assert goal_id == goal.goal_id
+            assert information_need_id == need.information_need_id
+            assert session_id == goal.source_session_id
+            assert owner_turn_id == owner.turns[-1].turn_id
+            self.confirmations += 1
+            return WorldEntityRefV1.create(
+                entity_type="media_player",
+                canonical_name="Owner-confirmed TV",
+                aliases=("my tv",),
+                provenance_refs=("owner_inventory:resumed-test",),
+            )
+
+        async def continue_goal(self, goal_id, *, retry_information=False):
+            assert goal_id == goal.goal_id and retry_information
+            self.resumes += 1
+            return self.result
+
+    runtime = ResumedConfirmationRuntime()
+    tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        owner,
+        store,
+        execution_runtime=runtime,
+    )
+    owner.accept_turn(ConversationRole.USER, "I confirm the discovered TV is mine.")
+    without_offer = await tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert without_offer["status"] == "device_confirmation_goal_not_current"
+    assert runtime.confirmations == 0
+
+    # Simulate the exact current-session choice set established by a governed
+    # prior discovery; mere possession of a persisted historical goal is not enough.
+    tools._offered_device_options[(goal.goal_id, need.information_need_id)] = (
+        _device_choice_digest((hint,)),
+        owner.turns[-1].turn_id,
+    )
+    same_turn = await tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert same_turn["status"] == "owner_device_choice_is_not_current"
+    assert runtime.confirmations == 0
+
+    owner.accept_turn(ConversationRole.USER, "Yes")
+    vague = await tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert vague["status"] == "explicit_device_identity_confirmation_not_given"
+
+    owner.accept_turn(ConversationRole.USER, "I confirm the discovered TV is mine.")
+    accepted = await tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert accepted["owner_inventory_only"] is True
+    assert accepted["device_control_verified"] is False
+    assert runtime.confirmations == runtime.resumes == 1
+    assert store.get_goal(goal.goal_id).source_session_id == goal.source_session_id
+
+    unrelated = ConversationSession(session_id="unrelated-owner-session")
+    unrelated.start()
+    unrelated.accept_turn(ConversationRole.USER, "I confirm the discovered TV is mine.")
+    other_tools = GiccAgentTools(
+        FailingGoalCoordinator(),
+        unrelated,
+        store,
+        execution_runtime=runtime,
+    )
+    denied = await other_tools.confirm_discovered_device_identity(
+        None, goal_id=goal.goal_id, information_need_id=need.information_need_id
+    )
+    assert denied["status"] == "device_confirmation_goal_not_current"
+    assert runtime.confirmations == 1
