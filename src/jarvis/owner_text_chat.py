@@ -29,6 +29,8 @@ Route = Literal[
     "cancel_goal",
     "create_goal",
     "answer_work",
+    "answer_information",
+    "approve_discovery",
     "review_gate",
 ]
 
@@ -47,6 +49,11 @@ one of the provided routes based on the actual latest owner request:
 - create_goal: only if the owner explicitly requests a new outcome/action,
   not a hypothetical, status question, tentative idea or quoted example;
 - answer_work: only when answering a clearly identified pending work question;
+- answer_information: only when the owner selects a candidate from a previously
+  offered exact information interaction; target_id must be its interaction_id,
+  selected_value must be an EXACT offered allowed candidate value;
+- approve_discovery: only after an exact scoped discovery offer and the owner
+  explicitly approves network discovery in a fresh turn; Windows Hello remains required;
 - review_gate: only for explicit current gate approval/rejection.
 
 Pick target_id ONLY from the supplied authoritative current snapshot. If multiple
@@ -66,6 +73,7 @@ class TextChatDecision(BaseModel):
 
     route: Route
     target_id: str
+    selected_value: str
     message: str
 
 
@@ -83,6 +91,7 @@ class OwnerNaturalTextChat:
         self.conversation = conversation
         self.client = client
         self.history: list[dict[str, str]] = []
+        self.pending_information: dict[str, tuple[str, ...]] = {}
 
     def _remember(self, user: str, response: str) -> None:
         self.history.extend(
@@ -158,13 +167,28 @@ class OwnerNaturalTextChat:
             return f"I cancelled {result.get('goal_id')} and its linked active work; audit history remains."
         if action == "create_goal" and status == "existing_active_goal":
             return f"That goal is already active as {result.get('goal_id')}; I did not create a duplicate."
-        if action == "create_goal":
-            return (
-                f"Your request was submitted to GICC. "
-                f"Goal: {result.get('goal_id')}; state: "
-                f"{result.get('goal_state') or status}. "
-                "This is not yet proof the outcome is complete."
+        if action in {"create_goal", "answer_information", "approve_discovery"}:
+            state = str(result.get("goal_state") or status)
+            base = (
+                f"GICC recorded the result for goal {result.get('goal_id')} "
+                f"with state {state}. This does not establish completed TV control."
             )
+            scopes = result.get("network_discovery")
+            if isinstance(scopes, dict):
+                return (
+                    base + " JARVIS can request a bounded network discovery to "
+                    "identify the device. Scope: "
+                    + str(scopes.get("summary") or "not provided")
+                    + ". An explicit fresh network-discovery approval and Windows Hello "
+                    "are required before the scan begins."
+                )
+            choice_sets = result.get("device_choice_sets")
+            if isinstance(choice_sets, list) and choice_sets:
+                return base + " Discovered-device candidates require your identity confirmation: " + str(choice_sets)
+            questions = result.get("questions")
+            if isinstance(questions, list) and questions:
+                return base + " I need one clarification: " + str(questions[0].get("question") or "Please clarify.") + " Options: " + str(questions[0].get("options") or [])
+            return base
         if action == "inspect_goal":
             return (
                 f"Goal {result.get('goal_id')}: {result.get('goal_state')}; "
@@ -207,6 +231,7 @@ class OwnerNaturalTextChat:
                     "active_goals": goals.get("objectives") if goals.get("ok") else [],
                     "active_work": work.get("work") if work.get("ok") else [],
                     "pending_gates": gates,
+                    "pending_information": self.pending_information,
                 },
                 response_model=TextChatDecision,
             )
@@ -220,6 +245,7 @@ class OwnerNaturalTextChat:
             return {"ok": False, "status": "invalid_chat_decision"}
         action = decision.route
         target = decision.target_id.strip()
+        selected = decision.selected_value.strip()
 
         # Do not create a canonical USER turn for a failed provider call.
         self.conversation.accept_turn(ConversationRole.USER, raw)
@@ -304,6 +330,29 @@ class OwnerNaturalTextChat:
                 result = {"ok": False, "status": "hypothetical_not_new_goal"}
             else:
                 result = await self.console._tools.pursue_owner_goal(None)
+        elif action == "answer_information":
+            allowed = self.pending_information.get(target, ())
+            if not allowed or selected not in allowed:
+                result = {"ok": False, "status": "information_choice_not_offered"}
+            else:
+                result = await self.console._tools.resolve_goal_information(
+                    None, target, selected
+                )
+                if result.get("ok") is True:
+                    self.pending_information.pop(target, None)
+        elif action == "approve_discovery":
+            # GICC verifies a previously offered exact scope, fresh explicit
+            # owner approval, current session lineage, and Windows Hello.
+            if target not in goal_ids or not re.fullmatch(
+                r"(?:jarvis[,\s:]+)?(?:yes[,\s]+)?(?:i\s+)?(?:explicitly\s+)?(?:approve|authorize|allow|permit)\s+(?:the\s+|this\s+)?(?:(?:bounded|local|one[- ]time)\s+)*network\s+(?:device\s+)?(?:discovery|scan|scanning)(?:\s+now)?[.!]?",
+                raw,
+                re.IGNORECASE,
+            ):
+                result = {"ok": False, "status": "explicit_discovery_permission_required"}
+            else:
+                result = await self.console._tools.authorize_bounded_network_discovery(
+                    None, target
+                )
         elif action == "answer_work":
             result = (
                 await self.console._work_tools.continue_background_work(None, target)
@@ -331,6 +380,22 @@ class OwnerNaturalTextChat:
         else:
             result = {"ok": False, "status": "unsupported_chat_action"}
 
+        if result.get("ok") is True:
+            questions = result.get("questions")
+            if isinstance(questions, list):
+                for question in questions:
+                    if not isinstance(question, dict):
+                        continue
+                    key = str(question.get("interaction_id") or "").strip()
+                    options = question.get("options")
+                    if key and isinstance(options, list):
+                        values = tuple(
+                            str(option["value"])
+                            for option in options
+                            if isinstance(option, dict) and "value" in option
+                        )
+                        if values:
+                            self.pending_information[key] = values
         message = self._show(action, result)
         self._remember(raw, message)
         return {
