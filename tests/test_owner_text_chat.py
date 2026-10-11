@@ -448,3 +448,17 @@ def test_browser_approval_result_shows_real_candidates_and_next_scope() -> None:
     assert "Potential media player" in reply
     assert "192.168.1.10" in reply
     assert "NEW" in reply
+
+
+async def test_evidence_request_cannot_be_misrouted_into_new_scope_offer() -> None:
+    chat, goals, _, _, _ = _chat(
+        "offer_discovery", [_goal("goal_tv", "Acquire TV control")], "goal_tv"
+    )
+    result = await chat.submit("Show the discovery evidence and results for my TV")
+    assert result["ok"] is True
+    assert result["operation"] == "inspect_discovery"
+    assert ("inspect_discovery", "goal_tv") in goals.calls
+    assert not any(
+        action in {"offer_discovery", "approve_discovery", "pursue"}
+        for action, _ in goals.calls
+    )
