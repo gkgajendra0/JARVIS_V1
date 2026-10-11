@@ -11,6 +11,7 @@ import urllib.request
 
 import pytest
 
+from jarvis.owner_text_chat import OwnerNaturalTextChat
 from jarvis.owner_text_web import OwnerWebGateway, build_http_server
 
 pytestmark = pytest.mark.asyncio
@@ -46,6 +47,12 @@ class FakeGoalTools:
             "phase": "research",
             "verified_completion": False,
             "terminal": False,
+            "blocker": {
+                "kind": "information_need",
+                "blocker_id": "need_test",
+                "detail": "Confirm the exact device identity",
+                "owner_action_required": True,
+            },
         }
 
 
@@ -114,11 +121,21 @@ async def test_state_reads_exact_existing_goal_without_new_turn():
     assert state["goal_id"] == GOAL
     assert state["goal"]["goal_state"] == "waiting_information"
     assert state["verified_goal_completion"] is False
+    assert state["goal"]["blocker"]["detail"] == "Confirm the exact device identity"
     assert state["pending_gate_count"] == 1
     assert len(state["work"]) == 1
     assert console._tools.calls == ["list", "status:" + GOAL]
     assert console.submitted == []
     assert chat.calls == []
+
+
+async def test_inspect_goal_explains_persisted_blocker():
+    gateway, _, _ = _gateway(asyncio.get_running_loop())
+    status = await gateway.status()
+    answer = OwnerNaturalTextChat._show("inspect_goal", status["goal"])
+    assert "Confirm the exact device identity" in answer
+    assert "Owner action required: True" in answer
+    assert "verified completion: False" in answer
 
 
 async def test_chat_idempotency_and_in_flight_polling():
