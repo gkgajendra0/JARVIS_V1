@@ -264,7 +264,9 @@ class OwnerNaturalTextChat:
             grounded = self.console._select_cancel_target(raw, goal_items)
             if (
                 not re.search(
-                    r"\b(cancel|stop|withdraw|remove|delete|abandon)\b", raw, re.IGNORECASE
+                    r"\b(cancel|stop|withdraw|remove|delete|abandon)\b",
+                    raw,
+                    re.IGNORECASE,
                 )
                 or re.match(
                     r"^(?:should|what if|why|how|whether|do you think)\b",
