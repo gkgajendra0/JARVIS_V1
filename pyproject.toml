@@ -177,6 +177,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
+"jarvis" = ["owner_text_web.html"]
 "jarvis.identity" = ["manifests/*.json"]
 "jarvis.memory" = ["migrations/*.sql"]
 "jarvis.incidents" = ["migrations/*.sql"]
