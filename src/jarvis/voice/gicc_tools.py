@@ -997,6 +997,16 @@ class GiccAgentTools:
                 "ok": False,
                 "status": "discovery_goal_not_current_or_not_waiting",
             }
+        # A fresh session cannot authorize someone else's historical goal
+        # unless that same session previously displayed its exact new scope.
+        if (
+            goal.source_session_id != self._conversation.session_id
+            and goal.goal_id not in self._offered_network_discovery
+        ):
+            return {
+                "ok": False,
+                "status": "discovery_goal_not_current_or_not_waiting",
+            }
         # Preserve the established voice interface for same-session goals.
         # Only a resumed goal needs the explicit, opt-in cross-session flag.
         resume_options = (
