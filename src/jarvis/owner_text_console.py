@@ -209,14 +209,24 @@ class OwnerTextConversation:
                 return {"ok": False, "status": "gate_no_longer_pending"}
             record = self._gates.get(gate_id)
             challenge = None if record is None else getattr(record, "challenge", record)
-            if challenge is None or challenge.kind.value == "promotion":
-                return {
-                    "ok": False,
-                    "status": "promotion_approval_requires_dedicated_governed_path",
-                }
-            # Same exact-gate decision tool as voice. It invokes canonical
-            # ChangeService, AuthorityService and the Windows Hello verifier.
-            result = await self._work_tools.decide_change_gate(None, gate_id)
+            if challenge is None:
+                return {"ok": False, "status": "gate_review_unavailable"}
+            if challenge.kind.value == "promotion":
+                if not text.casefold().startswith("approve "):
+                    return {
+                        "ok": False,
+                        "status": "promotion_rejection_requires_dedicated_review",
+                    }
+                # Promotion is never a normal architecture/acceptance gate.
+                # This exact owner turn uses Phase-7 one-shot Authority,
+                # Windows Hello, evidence/CI verification and release merge.
+                result = await self._work_tools.execute_change_promotion(
+                    None, gate_id
+                )
+            else:
+                # Existing exact-gate ChangeService uses bound owner turns,
+                # AuthorityService and Windows Hello; no special console path.
+                result = await self._work_tools.decide_change_gate(None, gate_id)
             if result.get("ok") is True:
                 self._listed_gate_ids.discard(gate_id)
             return result

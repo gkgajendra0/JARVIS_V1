@@ -138,6 +138,10 @@ class FakeWorkTools:
         self.calls.append(("decision", gate_id))
         return {"ok": True, "status": "decided", "gate_id": gate_id}
 
+    async def execute_change_promotion(self, context, gate_id):
+        self.calls.append(("promotion", gate_id))
+        return {"ok": True, "status": "merged", "gate_id": gate_id}
+
     async def continue_background_work(self, context, work_id):
         self.calls.append(("answer", work_id))
         return {"ok": True, "status": "owner_input_submitted", "work_id": work_id}
@@ -216,10 +220,13 @@ async def test_text_gate_review_rejects_stale_or_promotion_gates():
     gates.ids.append(gate_id)
     gates.kind = "promotion"
     await console.submit("gates")
-    assert (await console.submit(f"approve {gate_id}"))[
+    assert (await console.submit(f"reject {gate_id}"))[
         "status"
-    ] == "promotion_approval_requires_dedicated_governed_path"
+    ] == "promotion_rejection_requires_dedicated_review"
     assert work.calls == []
+    approved = await console.submit(f"approve {gate_id}")
+    assert approved["status"] == "merged"
+    assert work.calls == [("promotion", gate_id)]
 
 
 async def test_text_owner_input_passes_only_answer_as_canonical_turn():
