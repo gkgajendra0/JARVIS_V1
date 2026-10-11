@@ -266,6 +266,7 @@ async def test_resumed_scope_refuses_unlisted_or_negated_requests(
     owner.start()
     owner.accept_turn(ConversationRole.USER, "Jarvis, do not identify my TV or scan it")
     calls = []
+
     def prepare(**kwargs):
         calls.append(kwargs)
         return None
