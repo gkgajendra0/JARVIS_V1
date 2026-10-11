@@ -240,6 +240,7 @@ class GiccApplyRuntime:
         goal_id: str,
         session_id: str,
         planner: WindowsLanScopePlanner | None = None,
+        resume_existing_goal: bool = False,
     ) -> ActionProposal | None:
         """Suggest one reviewed owner approval, never initiate a scan.
 
@@ -253,6 +254,7 @@ class GiccApplyRuntime:
             goal_id=goal_id,
             session_id=session_id,
             planner=planner,
+            resume_existing_goal=resume_existing_goal,
         )
 
     def pending_network_device_suggestions(
@@ -280,6 +282,7 @@ class GiccApplyRuntime:
         scope: ReviewedAepScopeV1,
         authority_guard: AepAuthorityExecutionGuard,
         planner: WindowsLanScopePlanner | None = None,
+        resume_existing_goal: bool = False,
     ) -> InformationResolutionResult | None:
         """Execute one owner-authorized network observation for an existing goal.
 
@@ -300,7 +303,7 @@ class GiccApplyRuntime:
         if (
             goal is None
             or goal.state is not GoalState.WAITING_INFORMATION
-            or goal.source_session_id != session
+            or (goal.source_session_id != session and not resume_existing_goal)
             or authority_guard.session_id != session
             or not authority_guard.binds_information_need(
                 goal_id=goal.goal_id, need_id=need_id
@@ -405,6 +408,7 @@ class GiccApplyRuntime:
         planner: WindowsLanScopePlanner | None = None,
         owner_turn_id: str,
         expected_scope_material: tuple[object, ...] | None = None,
+        resume_existing_goal: bool = False,
     ) -> InformationResolutionResult | None:
         """Run one reviewed AEP scan only after exact Windows Hello approval.
 
@@ -417,6 +421,7 @@ class GiccApplyRuntime:
             goal_id=goal_id,
             session_id=session_id,
             planner=local_planner,
+            resume_existing_goal=resume_existing_goal,
         )
         if proposal is None:
             return None
@@ -492,6 +497,7 @@ class GiccApplyRuntime:
             scope=scope,
             authority_guard=guard,
             planner=local_planner,
+            resume_existing_goal=resume_existing_goal,
         )
 
     def start(self) -> None:
