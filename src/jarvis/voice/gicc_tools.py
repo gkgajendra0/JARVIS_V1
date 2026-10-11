@@ -860,7 +860,10 @@ class GiccAgentTools:
                 )
             )
         ):
-            return {"ok": False, "status": "explicit_listed_goal_discovery_request_required"}
+            return {
+                "ok": False,
+                "status": "explicit_listed_goal_discovery_request_required",
+            }
         goal = self._store.get_goal(key)
         runtime = self._execution_runtime
         prepare = (
@@ -885,7 +888,9 @@ class GiccAgentTools:
                 resume_existing_goal=True,
             )
         except Exception:
-            LOGGER.warning("GICC passive discovery scope preparation failed", exc_info=True)
+            LOGGER.warning(
+                "GICC passive discovery scope preparation failed", exc_info=True
+            )
             return {"ok": False, "status": "discovery_scope_preparation_failed"}
         if (
             proposal is None
@@ -987,10 +992,7 @@ class GiccAgentTools:
                 ),
             }
         goal = self._store.get_goal(str(goal_id).strip())
-        if (
-            goal is None
-            or goal.state is not GoalState.WAITING_INFORMATION
-        ):
+        if goal is None or goal.state is not GoalState.WAITING_INFORMATION:
             return {
                 "ok": False,
                 "status": "discovery_goal_not_current_or_not_waiting",
