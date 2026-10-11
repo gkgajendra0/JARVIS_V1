@@ -211,7 +211,10 @@ class OwnerNaturalTextChat:
                             + " Interaction: "
                             + str(question.get("interaction_id") or "not supplied")
                         )
-            if action == "approve_discovery" and status == "authorized_discovery_observation_recorded":
+            if (
+                action == "approve_discovery"
+                and status == "authorized_discovery_observation_recorded"
+            ):
                 hints = result.get("unverified_device_hints")
                 if isinstance(hints, list):
                     lines.append(
@@ -423,7 +426,9 @@ class OwnerNaturalTextChat:
             )
         elif action == "inspect_discovery":
             result = (
-                await self.console._tools.inspect_network_discovery_evidence(None, target)
+                await self.console._tools.inspect_network_discovery_evidence(
+                    None, target
+                )
                 if target in goal_ids
                 else {"ok": False, "status": "goal_target_ambiguous"}
             )
