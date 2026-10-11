@@ -102,7 +102,7 @@ async def test_plain_goal_prefix_submits_original_outcome():
     console, fake, session = _console()
     result = await console.submit("goal Open Hotstar on my TV")
     assert result["status"] == "waiting_capability"
-    assert fake.calls == [("pursue", None)]
+    assert fake.calls == [("list", None), ("pursue", None)]
     assert session.turns[-1].text == "Open Hotstar on my TV"
 
 
