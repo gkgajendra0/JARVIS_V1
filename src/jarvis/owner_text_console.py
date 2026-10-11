@@ -220,9 +220,7 @@ class OwnerTextConversation:
                 # Promotion is never a normal architecture/acceptance gate.
                 # This exact owner turn uses Phase-7 one-shot Authority,
                 # Windows Hello, evidence/CI verification and release merge.
-                result = await self._work_tools.execute_change_promotion(
-                    None, gate_id
-                )
+                result = await self._work_tools.execute_change_promotion(None, gate_id)
             else:
                 # Existing exact-gate ChangeService uses bound owner turns,
                 # AuthorityService and Windows Hello; no special console path.
