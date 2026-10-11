@@ -145,9 +145,7 @@ async def test_invalid_requests_do_not_mutate_runtime():
     gateway, console, chat = _gateway(asyncio.get_running_loop())
     assert (await gateway.submit("x", "Hi"))["ok"] is False
     assert (await gateway.submit("request_12345678", ""))["ok"] is False
-    assert (await gateway.submit("request_12345678", "a" * 2049))[
-        "ok"
-    ] is False
+    assert (await gateway.submit("request_12345678", "a" * 2049))["ok"] is False
     assert (await gateway.decide_gate("bad", "approve"))["ok"] is False
     assert (await gateway.decide_gate(GATE, "something_else"))["ok"] is False
     assert console.submitted == []
