@@ -24,6 +24,16 @@ TV_GOAL_ID = "goal_3bf2a80a14ecb70dd5b6"
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _GATE_ID = re.compile(r"^gate_[0-9a-f]{16}$")
 _MAX_BODY = 8192
+_TV_SUBJECT = re.compile(r"\b(?:tv|television|hisense|vidaa)\b", re.I)
+_TV_ACQUIRE = re.compile(
+    r"\b(?:acquire|acquisition|build|develop|create|add|obtain)\b", re.I
+)
+_TV_CONTROL = re.compile(r"\b(?:control|capability|manage)\b", re.I)
+_TV_COMMAND = re.compile(
+    r"^(?:jarvis[,\s:]+)?(?:please\s+)?(?:control|connect to|manage)\s+"
+    r"(?:my\s+)?(?:tv|television)\b",
+    re.I,
+)
 
 
 class OwnerWebGateway:
@@ -79,6 +89,28 @@ class OwnerWebGateway:
 
     async def _run_turn(self, text: str) -> dict[str, object]:
         async with self._turn_lock:
+            # Protect the active owner-TV acquisition from rephrased
+            # submissions which exact-string de-duplication would miss.
+            duplicate_tv_request = bool(_TV_SUBJECT.search(text)) and (
+                bool(_TV_ACQUIRE.search(text) and _TV_CONTROL.search(text))
+                or bool(_TV_COMMAND.search(text))
+            )
+            if duplicate_tv_request:
+                status = await self.console._tools.get_owner_objective_status(
+                    None, self.goal_id
+                )
+                if status.get("ok") is True and status.get("terminal") is False:
+                    return {
+                        "ok": True,
+                        "status": "chat_message",
+                        "message": (
+                            f"Your existing TV goal {self.goal_id} is still "
+                            f"{status.get('goal_state', 'active')}. "
+                            "I did not create another goal. Ask JARVIS for "
+                            "its current blocker or approve the exact offered "
+                            "discovery scope through the existing workflow."
+                        ),
+                    }
             return await self.chat.submit(text)
 
     async def submit(self, request_id: str, text: str) -> dict[str, object]:
