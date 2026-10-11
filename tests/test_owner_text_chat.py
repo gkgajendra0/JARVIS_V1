@@ -63,6 +63,20 @@ class Goals:
             "goal_state": "waiting_capability",
         }
 
+    async def offer_bounded_network_discovery(self, _context, goal_id):
+        self.calls.append(("offer_discovery", goal_id))
+        return {
+            "ok": True,
+            "status": "discovery_scope_offered",
+            "goal_id": goal_id,
+            "network_discovery": {
+                "summary": "Allow one scoped UPnP observation on the private LAN",
+                "protocol": "upnp",
+                "result_address_filters": ["192.168.1.0/24"],
+                "all_local_interfaces": True,
+            },
+        }
+
     async def authorize_bounded_network_discovery(self, _context, goal_id):
         self.calls.append(("approve_discovery", goal_id))
         return {"ok": True, "status": "waiting_information", "goal_id": goal_id}
@@ -189,6 +203,34 @@ def test_all_clarifications_and_full_gate_proposal_are_visible() -> None:
         },
     )
     assert proposal in gate_response
+
+
+async def test_existing_goal_device_identification_offers_scope_not_new_goal() -> None:
+    chat, goals, _, _, _ = _chat(
+        "offer_discovery",
+        [_goal("goal_tv", "Acquire TV control")],
+        "goal_tv",
+    )
+    result = await chat.submit(
+        "Jarvis, identify my TV automatically; show the discovery scope"
+    )
+    assert result["ok"] is True
+    assert result["operation"] == "offer_discovery"
+    assert "192.168.1.0/24" in result["message"]
+    assert "Windows Hello" in result["message"]
+    assert ("offer_discovery", "goal_tv") in goals.calls
+    assert not any(action == "pursue" for action, _ in goals.calls)
+
+
+async def test_offering_unlisted_goal_fails_without_runtime_action() -> None:
+    chat, goals, _, _, _ = _chat(
+        "offer_discovery",
+        [_goal("goal_tv", "Acquire TV control")],
+        "goal_unlisted",
+    )
+    result = await chat.submit("Jarvis, please identify my TV")
+    assert result["ok"] is False
+    assert not any(action == "offer_discovery" for action, _ in goals.calls)
 
 
 async def test_natural_chat_without_command_prefix() -> None:
