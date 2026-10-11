@@ -21,7 +21,9 @@ from jarvis.goal_intelligence.network_consent import (
 )
 from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.store import GoalStore
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.goal_intelligence.windows_lan_scope import WindowsLanScopePlanner
+from jarvis.voice.gicc_tools import GiccAgentTools
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore
 
@@ -207,6 +209,89 @@ def test_runtime_resumes_scope_without_rewriting_goal_source(
     assert proposal is not None
     assert proposal.session_id == "new-owner-session"
     assert store.get_goal(goal.goal_id).source_session_id == "owner-session"
+
+
+@pytest.mark.asyncio
+async def test_text_session_offers_persisted_tv_goal_without_new_goal_or_scan(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    owner = ConversationSession(session_id="resumed-owner-session")
+    owner.start()
+    owner.accept_turn(
+        ConversationRole.USER,
+        "Jarvis, identify my TV automatically and show the bounded discovery scope",
+    )
+    runtime = SimpleNamespace(
+        prepare_network_discovery_consent=lambda **args: (
+            prepare_pending_device_discovery_consent(
+                store=store, planner=_planner(), **args
+            )
+        ),
+    )
+    # Exercise the real guarded owner tool against canonical durable data.
+    # The production coordinator is not needed by this read-only operation.
+    tools = object.__new__(GiccAgentTools)
+    tools._store = store
+    tools._conversation = owner
+    tools._execution_runtime = runtime
+    tools._listed_owner_goal_payloads = {
+        goal.goal_id: {
+            "goal_id": goal.goal_id,
+            "goal_state": goal.state.value,
+            "owner_request": goal.exact_owner_request,
+            "terminal": False,
+        }
+    }
+    tools._offered_network_discovery = {}
+    original = store.get_goal(goal.goal_id)
+    result = await tools.offer_bounded_network_discovery(None, goal.goal_id)
+    assert result["ok"] is True
+    assert result["status"] == "discovery_scope_offered"
+    assert result["network_discovery"]["protocol"] == "upnp"
+    assert result["network_discovery"]["scan_started"] is False
+    assert "all local network interfaces" in result["network_discovery"]["summary"]
+    assert tools._offered_network_discovery[goal.goal_id][1] == owner.turns[-1].turn_id
+    assert store.get_goal(goal.goal_id) == original
+    assert len(store.list_active_goals()) == 1
+    assert store.get_information_need(need.information_need_id) == need
+
+
+@pytest.mark.asyncio
+async def test_resumed_scope_refuses_unlisted_or_negated_requests(
+    tmp_path: Path,
+) -> None:
+    store, goal, _need = _data(tmp_path)
+    owner = ConversationSession(session_id="resumed-owner-session")
+    owner.start()
+    owner.accept_turn(
+        ConversationRole.USER, "Jarvis, do not identify my TV or scan it"
+    )
+    calls = []
+    def prepare(**kwargs):
+        calls.append(kwargs)
+        return None
+
+    tools = object.__new__(GiccAgentTools)
+    tools._store = store
+    tools._conversation = owner
+    tools._execution_runtime = SimpleNamespace(
+        prepare_network_discovery_consent=prepare
+    )
+    tools._offered_network_discovery = {}
+    tools._listed_owner_goal_payloads = {}
+    assert (
+        await tools.offer_bounded_network_discovery(None, goal.goal_id)
+    )["ok"] is False
+    tools._listed_owner_goal_payloads[goal.goal_id] = {
+        "owner_request": goal.exact_owner_request,
+        "goal_state": goal.state.value,
+        "terminal": False,
+    }
+    assert (
+        await tools.offer_bounded_network_discovery(None, goal.goal_id)
+    )["ok"] is False
+    assert calls == []
 
 
 def test_consent_requires_waiting_information_state(tmp_path: Path) -> None:
