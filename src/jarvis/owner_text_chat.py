@@ -223,9 +223,7 @@ class OwnerNaturalTextChat:
             if explanation:
                 lines.append(explanation.strip())
             if result.get("plan_id"):
-                lines.append(
-                    f"Plan: {result['plan_id']} ({result.get('plan_state')})"
-                )
+                lines.append(f"Plan: {result['plan_id']} ({result.get('plan_state')})")
             for name, label in (
                 ("capability_gap_ids", "Capability gaps"),
                 ("continuation_ids", "Continuations"),
