@@ -25,8 +25,10 @@ _REQUEST_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _GATE_ID = re.compile(r"^gate_[0-9a-f]{16}$")
 _MAX_BODY = 8192
 _TV_SUBJECT = re.compile(r"\b(?:tv|television|hisense|vidaa)\b", re.IGNORECASE)
-_TV_ACQUIRE = re.compile(
-    r"\b(?:acquire|acquisition|build|develop|create|add|obtain)\b", re.IGNORECASE
+_TV_ACQUIRE_COMMAND = re.compile(
+    r"^(?:jarvis[,\\s:]+)?(?:please\\s+)?(?:i (?:want|need) you to\\s+|"
+    r"(?:can|could|would) you\\s+)?(?:acquire|build|develop|create|add|obtain)\\b",
+    re.IGNORECASE,
 )
 _TV_CONTROL = re.compile(r"\b(?:control|capability|manage)\b", re.IGNORECASE)
 _TV_COMMAND = re.compile(
@@ -92,7 +94,7 @@ class OwnerWebGateway:
             # Protect the active owner-TV acquisition from rephrased
             # submissions which exact-string de-duplication would miss.
             duplicate_tv_request = bool(_TV_SUBJECT.search(text)) and (
-                bool(_TV_ACQUIRE.search(text) and _TV_CONTROL.search(text))
+                bool(_TV_ACQUIRE_COMMAND.search(text) and _TV_CONTROL.search(text))
                 or bool(_TV_COMMAND.search(text))
             )
             if duplicate_tv_request:
