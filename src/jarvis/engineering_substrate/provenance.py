@@ -12,11 +12,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from pydantic import ValidationError
-from pypi_attestations import (
-    AttestationError,
-    Distribution,
-    Provenance,
-)
 
 from jarvis.engineering_substrate.artifacts import ArtifactStore
 from jarvis.engineering_substrate.canonical import canonical_digest
@@ -235,6 +230,17 @@ class PyPIAttestationVerifier:
             raise ProvenanceVerificationError(
                 "artifact content digest changed before provenance verification"
             )
+        # Native Sigstore/PEP-740 verification is only required for an actual
+        # provenance check, not when the browser or GICC imports substrate
+        # contracts. On Windows, application-control policy may forbid a
+        # native dependency; fail closed here without weakening the policy.
+        try:
+            from pypi_attestations import AttestationError, Distribution, Provenance
+        except (ImportError, OSError) as exc:
+            raise ProvenanceResourceUnavailable(
+                "PyPI attestation verifier is unavailable under current runtime policy"
+            ) from exc
+
         try:
             distribution = Distribution(
                 name=filename,
