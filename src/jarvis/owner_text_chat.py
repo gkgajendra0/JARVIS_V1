@@ -157,7 +157,8 @@ class OwnerNaturalTextChat:
                 "Current pending review gates:\n"
                 + "\n".join(
                     f"- {g.get('kind')}: {g.get('gate_id')} "
-                    f"(change {g.get('change_id')}); artifact {g.get('artifact_digest')}"
+                    f"(change {g.get('change_id')}); artifact {g.get('artifact_digest')}. "
+                    f"Proposal: {str(g.get('proposal'))[:1200]}"
                     for g in gates
                     if isinstance(g, dict)
                 )
@@ -293,6 +294,9 @@ class OwnerNaturalTextChat:
                 else {"ok": False, "status": "work_target_ambiguous"}
             )
         elif action == "list_gates":
+            # A review is recorded only when the exact proposal is shown to
+            # the owner, never merely because a model inspected the snapshot.
+            self.console._listed_gate_ids = set(gate_ids)
             result = {"ok": True, "status": "gates_listed", "gates": gates}
         elif action == "cancel_goal":
             # The model can *suggest* an exact ID but cannot grant cancellation.
@@ -378,6 +382,7 @@ class OwnerNaturalTextChat:
             if (
                 self.console._work_tools is None
                 or target not in gate_ids
+                or target not in self.console._listed_gate_ids
                 or not re.fullmatch(
                     r"(?:approve|reject)\s+(?:gate_[0-9a-f]{16}|architecture|acceptance)(?:\s+(?:proposal|gate))?[.!]?",
                     raw,
@@ -390,6 +395,8 @@ class OwnerNaturalTextChat:
                 }
             else:
                 result = await self.console._work_tools.decide_change_gate(None, target)
+                if result.get("ok") is True:
+                    self.console._listed_gate_ids.discard(target)
         else:
             result = {"ok": False, "status": "unsupported_chat_action"}
 
