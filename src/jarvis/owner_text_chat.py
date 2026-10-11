@@ -264,12 +264,12 @@ class OwnerNaturalTextChat:
             grounded = self.console._select_cancel_target(raw, goal_items)
             if (
                 not re.search(
-                    r"\b(cancel|stop|withdraw|remove|delete|abandon)\b", raw, re.I
+                    r"\b(cancel|stop|withdraw|remove|delete|abandon)\b", raw, re.IGNORECASE
                 )
                 or re.match(
                     r"^(?:should|what if|why|how|whether|do you think)\b",
                     raw,
-                    re.I,
+                    re.IGNORECASE,
                 )
                 or target not in goal_ids
                 or target != grounded
@@ -297,7 +297,7 @@ class OwnerNaturalTextChat:
                     "goal_state": matches[0].get("goal_state"),
                 }
             elif raw.endswith("?") and not re.match(
-                r"^(can|could|would|will) you\b", raw, re.I
+                r"^(can|could|would|will) you\b", raw, re.IGNORECASE
             ):
                 result = {"ok": False, "status": "hypothetical_not_new_goal"}
             else:
@@ -317,7 +317,7 @@ class OwnerNaturalTextChat:
                 or not re.fullmatch(
                     r"(?:approve|reject)\s+(?:gate_[0-9a-f]{16}|architecture|acceptance)(?:\s+(?:proposal|gate))?[.!]?",
                     raw,
-                    re.I,
+                    re.IGNORECASE,
                 )
             ):
                 result = {

@@ -376,8 +376,8 @@ async def _run() -> None:
     # capability runtime and GICC/Work stores as voice. Crucially, we never
     # call VoiceRuntimeController.run(), so audio.start() is never invoked.
     from jarvis.config import JarvisConfig
-    from jarvis.owner_text_chat import OwnerNaturalTextChat, build_text_chat_client
     from jarvis.engineering_change.gates import GateService
+    from jarvis.owner_text_chat import OwnerNaturalTextChat, build_text_chat_client
     from jarvis.voice.gicc_tools import GiccAgentTools
     from jarvis.voice.production_runtime import build_production_voice_runtime
     from jarvis.voice.work_tools import WorkAgentTools
