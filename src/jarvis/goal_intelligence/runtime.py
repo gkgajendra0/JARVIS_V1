@@ -352,7 +352,10 @@ class GiccApplyRuntime:
         resolver = InformationResolver(store=self.store, probes=(probe,))
         result = resolver.resolve(need)
         if not authority_guard.consumed_for(scope):
-            return result
+            # Passive neighbor evidence may have been gathered, but the
+            # one-time Authority permit was not consumed. Never report an
+            # authorized AEP observation when active enumeration was denied.
+            return None
 
         # A zero-result or timed-out scan still consumed one exact owner
         # permission. Persist that fact in the canonical InformationNeed so
