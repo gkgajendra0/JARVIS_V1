@@ -157,6 +157,32 @@ async def test_rephrased_tv_acquisition_reuses_existing_goal():
     assert console.submitted == []
 
 
+async def test_tv_acquisition_status_question_reaches_canonical_chat():
+    gateway, console, chat = _gateway(asyncio.get_running_loop())
+    question = (
+        "Jarvis, tell me the current status of my existing TV capability "
+        "acquisition goal, what is blocking it, and what you need from me to continue."
+    )
+    request_id = "request_status_12345"
+    assert (await gateway.submit(request_id, question))["ok"] is True
+    await gateway._requests[request_id]
+    result = (await gateway.request_result(request_id))["result"]
+    assert result["message"] == "State checked."
+    assert chat.calls == [question]
+    assert console.submitted == []
+
+
+async def test_new_tv_capability_command_still_reuses_existing_goal():
+    gateway, console, chat = _gateway(asyncio.get_running_loop())
+    request_id = "request_duplicate_12345"
+    assert (await gateway.submit(request_id, "Jarvis, please create a TV control capability"))["ok"] is True
+    await gateway._requests[request_id]
+    result = (await gateway.request_result(request_id))["result"]
+    assert GOAL in result["message"]
+    assert chat.calls == []
+    assert console.submitted == []
+
+
 async def test_invalid_requests_do_not_mutate_runtime():
     gateway, console, chat = _gateway(asyncio.get_running_loop())
     assert (await gateway.submit("x", "Hi"))["ok"] is False
