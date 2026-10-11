@@ -287,7 +287,7 @@ def main() -> int:
         return 0
     except KeyboardInterrupt:
         return 130
-    except Exception as exc:
+    except (RuntimeError, ValueError, OSError) as exc:
         print(f"JARVIS text console failed: {exc}", file=sys.stderr)
         return 2
 
