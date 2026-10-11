@@ -12,7 +12,8 @@ pytestmark = pytest.mark.asyncio
 
 
 class Model:
-    def __init__(self, route, target="", message="I'm here."):
+    def __init__(self, route, target="", message="I'm here.", selected=""):
+        self.selected = selected
         self.route = route
         self.target = target
         self.message = message
@@ -21,7 +22,10 @@ class Model:
     async def parse(self, *, system_prompt, input_payload, response_model):
         self.seen.append(input_payload)
         return response_model(
-            route=self.route, target_id=self.target, message=self.message
+            route=self.route,
+            target_id=self.target,
+            selected_value=self.selected,
+            message=self.message,
         )
 
 
@@ -48,6 +52,15 @@ class Goals:
     async def cancel_owner_goal(self, _context, goal_id):
         self.calls.append(("cancel", goal_id))
         return {"ok": True, "status": "cancelled", "goal_id": goal_id}
+
+    async def resolve_goal_information(self, _context, interaction_id, value):
+        self.calls.append(("answer_information", interaction_id))
+        self.last_value = value
+        return {"ok": True, "status": "waiting_capability", "goal_id": "goal_tv", "goal_state": "waiting_capability"}
+
+    async def authorize_bounded_network_discovery(self, _context, goal_id):
+        self.calls.append(("approve_discovery", goal_id))
+        return {"ok": True, "status": "waiting_information", "goal_id": goal_id}
 
     async def pursue_owner_goal(self, _context):
         self.calls.append(("pursue", None))
@@ -200,3 +213,41 @@ async def test_model_failure_fails_closed_without_canonical_turn() -> None:
     assert result["status"] == "chat_brain_unavailable"
     assert session.turns == ()
     assert not any(a == "pursue" for a, _ in goals.calls)
+
+
+async def test_followup_information_only_accepts_prior_offered_candidate() -> None:
+    chat, goals, _, _, brain = _chat("answer_information", target="interaction_123")
+    chat.pending_information["interaction_123"] = ("entity_tv1", "entity_tv2")
+    brain.selected = "entity_tv2"
+    result = await chat.submit("The second TV is mine")
+    assert result["ok"] is True
+    assert ("answer_information", "interaction_123") in goals.calls
+    assert goals.last_value == "entity_tv2"
+    assert "interaction_123" not in chat.pending_information
+
+
+async def test_model_cannot_invent_unoffered_information_value() -> None:
+    chat, goals, _, _, brain = _chat("answer_information", target="interaction_123")
+    chat.pending_information["interaction_123"] = ("entity_tv1",)
+    brain.selected = "entity_hallucinated"
+    result = await chat.submit("I want the other one")
+    assert result["ok"] is False
+    assert not any(a == "answer_information" for a, _ in goals.calls)
+
+
+async def test_discovery_cannot_be_approved_from_vague_assent() -> None:
+    chat, goals, _, _, _ = _chat(
+        "approve_discovery", [_goal("goal_tv", "Control my TV")], "goal_tv"
+    )
+    result = await chat.submit("Yes, go ahead")
+    assert result["ok"] is False
+    assert not any(a == "approve_discovery" for a, _ in goals.calls)
+
+
+async def test_explicit_network_discovery_routes_to_governed_tool() -> None:
+    chat, goals, _, _, _ = _chat(
+        "approve_discovery", [_goal("goal_tv", "Control my TV")], "goal_tv"
+    )
+    result = await chat.submit("I approve the network discovery")
+    assert result["ok"] is True
+    assert ("approve_discovery", "goal_tv") in goals.calls
