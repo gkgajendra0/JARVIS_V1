@@ -172,7 +172,7 @@ async function refreshStatus() {
     const work = Array.isArray(state.work) ? state.work : [];
     byId("workCount").textContent = state.work_available ? String(work.length) : "Unavailable";
     byId("gateCount").textContent = String(state.pending_gate_count);
-    const accepted = state.real_machine_accepted === true;
+    const accepted = state.verified_goal_completion === true;
     byId("verification").textContent = accepted ? "Canonical goal reports verified completion. Check witnessed hardware evidence before release." : "Real-machine TV acceptance is NOT verified.";
     byId("verification").className = "truth " + (accepted ? "good" : "bad");
     const list = byId("workList");
@@ -266,15 +266,25 @@ byId("reviewGates").addEventListener("click", async () => {
         button.type = "button";
         button.addEventListener("click", async () => {
           if (!confirm("Do you want to " + decision + " exact gate " + gate.gate_id + "? The existing authorization / Windows Hello policy applies.")) return;
-          button.disabled = true;
+          controls.querySelectorAll("button").forEach((item) => { item.disabled = true; });
           byId("events").textContent = "Submitting an exact guarded decision…";
+          const requestId = crypto.randomUUID().replaceAll("-", "");
           try {
-            const result = await api("/api/gates/decide", {gate_id: gate.gate_id, decision: decision});
-            byId("events").textContent = "Gate decision response: " + describeResult(result);
+            await api("/api/gates/decide", {request_id: requestId, gate_id: gate.gate_id, decision: decision});
+            for (;;) {
+              const state = await api("/api/requests/" + requestId);
+              if (state.state === "finished") {
+                const result = state.result || {};
+                if (result.ok !== true) throw new Error(result.truth_note || result.status || "Decision not accepted");
+                byId("events").textContent = "Governed gate response: " + describeResult(result);
+                break;
+              }
+              await sleep(1200);
+            }
             await refreshStatus();
           } catch (error) {
-            byId("events").textContent = "Gate decision not confirmed: " + error.message;
-          } finally { button.disabled = false; }
+            byId("events").textContent = "Gate decision NOT confirmed: " + error.message + ". Inspect exact gate state before any retry.";
+          } finally { controls.querySelectorAll("button").forEach((item) => { item.disabled = false; }); }
         });
         controls.append(button);
       }
