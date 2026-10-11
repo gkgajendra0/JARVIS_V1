@@ -268,16 +268,16 @@ async def test_browser_chat_and_guarded_review_real_dom():
             try:
                 page = await browser.new_page()
                 await page.goto(f"http://127.0.0.1:{server.server_port}/")
-                await page.locator("#statePill").get_by_text(
-                    "waiting information"
+                await page.get_by_text(
+                    "waiting information", exact=True
                 ).wait_for(timeout=12000)
                 assert chat.calls == []
                 assert console.submitted == []
 
                 await page.locator("#messageInput").fill("Status of my TV")
                 await page.locator("#sendButton").click()
-                await page.locator(".message.assistant .bubble").get_by_text(
-                    "State checked."
+                await page.get_by_text(
+                    "State checked.", exact=True
                 ).wait_for(timeout=12000)
                 assert chat.calls == ["Status of my TV"]
 
