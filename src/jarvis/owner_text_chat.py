@@ -201,10 +201,19 @@ class OwnerNaturalTextChat:
                 )
             return base
         if action == "inspect_goal":
+            blocker = result.get("blocker")
+            explanation = ""
+            if isinstance(blocker, dict):
+                explanation = (
+                    f" Blocker ({blocker.get('kind', 'unknown')}): "
+                    f"{blocker.get('detail') or 'No details reported'}. "
+                    f"Owner action required: {blocker.get('owner_action_required')}."
+                )
             return (
                 f"Goal {result.get('goal_id')}: {result.get('goal_state')}; "
                 f"phase: {result.get('phase')}; "
                 f"verified completion: {result.get('verified_completion')}."
+                + explanation
             )
         if action == "inspect_work":
             return f"Work {result.get('work_id')}: {result.get('state') or status}."
