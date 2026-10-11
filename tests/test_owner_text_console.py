@@ -137,9 +137,11 @@ async def test_cancelled_goal_does_not_block_new_identical_goal():
 
 async def test_unavailable_canonical_active_goal_status_fails_closed():
     console, fake, _ = _console()
+
     async def unavailable(_context):
         fake.calls.append(("list", None))
         return {"ok": False, "status": "unavailable"}
+
     fake.list_owner_objectives = unavailable
     result = await console.submit("goal Acquire TV control")
     assert result["status"] == "goal_deduplication_unavailable"
