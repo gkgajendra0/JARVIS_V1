@@ -20,8 +20,16 @@ from jarvis.hands.provider_adapters import (
 from jarvis.owner_text_console import OwnerTextConversation
 
 Route = Literal[
-    "respond", "list_goals", "inspect_goal", "list_work", "inspect_work",
-    "list_gates", "cancel_goal", "create_goal", "answer_work", "review_gate",
+    "respond",
+    "list_goals",
+    "inspect_goal",
+    "list_work",
+    "inspect_work",
+    "list_gates",
+    "cancel_goal",
+    "create_goal",
+    "answer_work",
+    "review_gate",
 ]
 
 _PROMPT = """You are JARVIS's genuine conversational, typed owner interface.
@@ -78,7 +86,10 @@ class OwnerNaturalTextChat:
 
     def _remember(self, user: str, response: str) -> None:
         self.history.extend(
-            ({"role": "user", "content": user}, {"role": "assistant", "content": response})
+            (
+                {"role": "user", "content": user},
+                {"role": "assistant", "content": response},
+            )
         )
         self.history = self.history[-16:]
 
@@ -107,9 +118,8 @@ class OwnerNaturalTextChat:
     @staticmethod
     def _show(action: str, result: dict[str, object]) -> str:
         if result.get("ok") is not True:
-            return (
-                "I couldn't complete that request. "
-                + str(result.get("truth_note") or result.get("reason") or result.get("status"))
+            return "I couldn't complete that request. " + str(
+                result.get("truth_note") or result.get("reason") or result.get("status")
             )
         status = str(result.get("status") or "")
         if action == "list_goals":
@@ -118,7 +128,8 @@ class OwnerNaturalTextChat:
                 return "There are no active owner goals."
             return "Your active goals:\n" + "\n".join(
                 f"- {g.get('owner_request')} ({g.get('goal_state')}; {g.get('goal_id')})"
-                for g in records if isinstance(g, dict)
+                for g in records
+                if isinstance(g, dict)
             )
         if action == "list_work":
             records = result.get("work") or []
@@ -126,19 +137,27 @@ class OwnerNaturalTextChat:
                 return "No active background work is currently recorded."
             return "Current work:\n" + "\n".join(
                 f"- {w.get('work_id')}: {w.get('state')}"
-                for w in records if isinstance(w, dict)
+                for w in records
+                if isinstance(w, dict)
             )
         if action == "list_gates":
             gates = result.get("gates") or []
             if not gates:
                 return "No engineering approval gates are currently pending."
-            return "Current pending review gates:\n" + "\n".join(
-                f"- {g.get('kind')}: {g.get('gate_id')} "
-                f"(change {g.get('change_id')}); artifact {g.get('artifact_digest')}"
-                for g in gates if isinstance(g, dict)
-            ) + "\nAn exact owner decision still requires Windows Hello."
+            return (
+                "Current pending review gates:\n"
+                + "\n".join(
+                    f"- {g.get('kind')}: {g.get('gate_id')} "
+                    f"(change {g.get('change_id')}); artifact {g.get('artifact_digest')}"
+                    for g in gates
+                    if isinstance(g, dict)
+                )
+                + "\nAn exact owner decision still requires Windows Hello."
+            )
         if action == "cancel_goal" and status == "cancelled":
             return f"I cancelled {result.get('goal_id')} and its linked active work; audit history remains."
+        if action == "create_goal" and status == "existing_active_goal":
+            return f"That goal is already active as {result.get('goal_id')}; I did not create a duplicate."
         if action == "create_goal":
             return (
                 f"Your request was submitted to GICC. "
@@ -205,12 +224,17 @@ class OwnerNaturalTextChat:
         # Do not create a canonical USER turn for a failed provider call.
         self.conversation.accept_turn(ConversationRole.USER, raw)
         if action == "respond":
-            message = decision.message.strip() or "Could you clarify what you'd like me to do?"
+            message = (
+                decision.message.strip()
+                or "Could you clarify what you'd like me to do?"
+            )
             result = {"ok": True, "status": "chat_message", "message": message}
             self._remember(raw, message)
             return result
 
-        goal_items = goals.get("objectives") if isinstance(goals.get("objectives"), list) else []
+        goal_items = (
+            goals.get("objectives") if isinstance(goals.get("objectives"), list) else []
+        )
         work_items = work.get("work") if isinstance(work.get("work"), list) else []
         goal_ids = {g.get("goal_id") for g in goal_items if isinstance(g, dict)}
         work_ids = {w.get("work_id") for w in work_items if isinstance(w, dict)}
@@ -221,7 +245,8 @@ class OwnerNaturalTextChat:
         elif action == "inspect_goal":
             result = (
                 await self.console._tools.get_owner_objective_status(None, target)
-                if target in goal_ids else {"ok": False, "status": "goal_target_ambiguous"}
+                if target in goal_ids
+                else {"ok": False, "status": "goal_target_ambiguous"}
             )
         elif action == "list_work":
             result = work
@@ -238,22 +263,36 @@ class OwnerNaturalTextChat:
             # Use the canonical GICC guard on the original, unsynthesized USER turn.
             grounded = self.console._select_cancel_target(raw, goal_items)
             if (
-                not re.search(r"\b(cancel|stop|withdraw|remove|delete|abandon)\b", raw, re.I)
+                not re.search(
+                    r"\b(cancel|stop|withdraw|remove|delete|abandon)\b", raw, re.I
+                )
+                or re.match(
+                    r"^(?:should|what if|why|how|whether|do you think)\b",
+                    raw,
+                    re.I,
+                )
                 or target not in goal_ids
                 or target != grounded
             ):
-                result = {"ok": False, "status": "explicit_unique_cancel_target_required"}
+                result = {
+                    "ok": False,
+                    "status": "explicit_unique_cancel_target_required",
+                }
             else:
                 result = await self.console._tools.cancel_owner_goal(None, target)
         elif action == "create_goal":
             normalized = " ".join(raw.casefold().split())
             matches = [
-                g for g in goal_items if isinstance(g, dict)
-                and " ".join(str(g.get("owner_request") or "").casefold().split()) == normalized
+                g
+                for g in goal_items
+                if isinstance(g, dict)
+                and " ".join(str(g.get("owner_request") or "").casefold().split())
+                == normalized
             ]
             if matches:
                 result = {
-                    "ok": True, "status": "existing_active_goal",
+                    "ok": True,
+                    "status": "existing_active_goal",
                     "goal_id": matches[0].get("goal_id"),
                     "goal_state": matches[0].get("goal_state"),
                 }
@@ -273,10 +312,12 @@ class OwnerNaturalTextChat:
             # Exact review can never be granted by LLM interpretation alone.
             # Reuse governed gate verifier, which also requires Windows Hello.
             if (
-                self.console._work_tools is None or target not in gate_ids
+                self.console._work_tools is None
+                or target not in gate_ids
                 or not re.fullmatch(
                     r"(?:approve|reject)\s+(?:gate_[0-9a-f]{16}|architecture|acceptance)(?:\s+(?:proposal|gate))?[.!]?",
-                    raw, re.I,
+                    raw,
+                    re.I,
                 )
             ):
                 result = {
@@ -306,7 +347,9 @@ def build_text_chat_client(config: Any) -> StructuredOutputClient:
         return build_chatgpt_plan_structured_output_client(
             model=config.chatgpt_plan_model
         )
-    model = str(config.hands_planner_model or config.work_orchestration_model or "").strip()
+    model = str(
+        config.hands_planner_model or config.work_orchestration_model or ""
+    ).strip()
     if not model:
         raise RuntimeError("Text chat needs a configured JARVIS reasoning model")
     return build_structured_output_client(provider=config.ai_provider, model=model)

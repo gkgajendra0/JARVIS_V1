@@ -37,8 +37,11 @@ class Goals:
     async def get_owner_objective_status(self, _context, goal_id):
         self.calls.append(("status", goal_id))
         return {
-            "ok": True, "status": "found", "goal_id": goal_id,
-            "goal_state": "waiting_capability", "phase": "developing",
+            "ok": True,
+            "status": "found",
+            "goal_id": goal_id,
+            "goal_state": "waiting_capability",
+            "phase": "developing",
             "verified_completion": False,
         }
 
@@ -49,7 +52,9 @@ class Goals:
     async def pursue_owner_goal(self, _context):
         self.calls.append(("pursue", None))
         return {
-            "ok": True, "status": "waiting_capability", "goal_id": "goal_new",
+            "ok": True,
+            "status": "waiting_capability",
+            "goal_id": "goal_new",
             "goal_state": "waiting_capability",
         }
 
@@ -79,16 +84,16 @@ def _chat(route, objectives=(), target="", message="I'm here.", work_items=()):
     work = Work(work_items)
     console = OwnerTextConversation(goals, session, work_tools=work)
     brain = Model(route, target=target, message=message)
-    chat = OwnerNaturalTextChat(
-        console=console, conversation=session, client=brain
-    )
+    chat = OwnerNaturalTextChat(console=console, conversation=session, client=brain)
     return chat, goals, work, session, brain
 
 
 def _goal(goal_id, title):
     return {
-        "goal_id": goal_id, "owner_request": title,
-        "desired_outcome": title, "terminal": False,
+        "goal_id": goal_id,
+        "owner_request": title,
+        "desired_outcome": title,
+        "terminal": False,
         "goal_state": "waiting_capability",
     }
 
@@ -186,8 +191,10 @@ async def test_duplicate_goal_not_readmitted() -> None:
 
 async def test_model_failure_fails_closed_without_canonical_turn() -> None:
     chat, goals, _, session, brain = _chat("create_goal")
+
     async def fail(**kwargs):
         raise RuntimeError("model offline")
+
     brain.parse = fail
     result = await chat.submit("Open my TV app")
     assert result["status"] == "chat_brain_unavailable"
