@@ -321,9 +321,8 @@ class OwnerTextConversation:
                 for item in listing["objectives"]
                 if isinstance(item, dict)
                 and item.get("terminal") is not True
-                and " ".join(
-                    str(item.get("owner_request") or "").casefold().split()
-                ) == normalized
+                and " ".join(str(item.get("owner_request") or "").casefold().split())
+                == normalized
             ]
             if matches:
                 if len(matches) != 1:
