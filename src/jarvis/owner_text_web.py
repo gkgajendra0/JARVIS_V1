@@ -24,15 +24,15 @@ TV_GOAL_ID = "goal_3bf2a80a14ecb70dd5b6"
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _GATE_ID = re.compile(r"^gate_[0-9a-f]{16}$")
 _MAX_BODY = 8192
-_TV_SUBJECT = re.compile(r"\b(?:tv|television|hisense|vidaa)\b", re.I)
+_TV_SUBJECT = re.compile(r"\b(?:tv|television|hisense|vidaa)\b", re.IGNORECASE)
 _TV_ACQUIRE = re.compile(
-    r"\b(?:acquire|acquisition|build|develop|create|add|obtain)\b", re.I
+    r"\b(?:acquire|acquisition|build|develop|create|add|obtain)\b", re.IGNORECASE
 )
-_TV_CONTROL = re.compile(r"\b(?:control|capability|manage)\b", re.I)
+_TV_CONTROL = re.compile(r"\b(?:control|capability|manage)\b", re.IGNORECASE)
 _TV_COMMAND = re.compile(
     r"^(?:jarvis[,\s:]+)?(?:please\s+)?(?:control|connect to|manage)\s+"
     r"(?:my\s+)?(?:tv|television)\b",
-    re.I,
+    re.IGNORECASE,
 )
 
 
