@@ -119,6 +119,7 @@ class GiccAgentTools:
         return [
             self.list_owner_objectives,
             self.get_owner_objective_status,
+            self.inspect_network_discovery_evidence,
             self.offer_bounded_network_discovery,
         ]
 
@@ -188,6 +189,107 @@ class GiccAgentTools:
             self._listed_owner_goal_ids.add(goal_id)
             self._listed_owner_goal_payloads[goal_id] = payload
         return {"ok": True, "status": "found", **payload}
+
+    @function_tool()
+    async def inspect_network_discovery_evidence(
+        self,
+        context: RunContext,
+        goal_id: str,
+    ) -> dict[str, object]:
+        """Read persisted AEP permit consumption and currently eligible TV hints.
+
+        Reading evidence must not offer scopes, grant permission, launch Windows
+        watchers, confirm an identity, or create another owner goal.
+        """
+        del context
+        key = str(goal_id).strip()
+        listed = self._listed_owner_goal_payloads.get(key)
+        if listed is None or listed.get("terminal") is True:
+            return {"ok": False, "status": "discovery_goal_not_previously_listed"}
+        goal = self._store.get_goal(key)
+        if goal is None:
+            return {"ok": False, "status": "discovery_goal_not_found"}
+
+        runtime = self._execution_runtime
+        hints_method = (
+            None if runtime is None
+            else getattr(runtime, "pending_network_device_suggestions", None)
+        )
+        hints_available = callable(hints_method)
+        try:
+            all_hints = (
+                tuple(hints_method(
+                    goal_id=goal.goal_id,
+                    session_id=goal.source_session_id,
+                ))
+                if hints_available else ()
+            )
+        except Exception:
+            LOGGER.warning("GICC evidence read could not load device hints", exc_info=True)
+            hints_available = False
+            all_hints = ()
+
+        observations: list[dict[str, object]] = []
+        for need in self._store.list_information_needs(goal_id=goal.goal_id):
+            if (
+                need.answer_schema.get("type") != "entity_id"
+                or canonical_world_entity_type(need.answer_schema.get("entity_type"))
+                not in {"media_player", "camera"}
+            ):
+                continue
+            evidence = set(need.evidence_refs)
+            prefix = "windows_aep_authorized_scope_consumed:"
+            protocols = sorted({
+                value[len(prefix):] for value in evidence
+                if value.startswith(prefix)
+                and value[len(prefix):] in {"upnp", "dns_sd", "wsd"}
+            })
+            recorded_candidate_refs = tuple(
+                value for value in evidence
+                if value.startswith((
+                    "windows_aep_discovered_unverified:",
+                    "windows_aep_neighbor_correlated_unverified:",
+                ))
+            )
+            eligible = tuple(
+                hint for hint in all_hints
+                if getattr(hint, "evidence_ref", None) in evidence
+                and str(getattr(hint, "protocol", "")) in protocols
+            )[:16]
+            observations.append({
+                "information_need_id": need.information_need_id,
+                "information_need_state": need.state.value,
+                "authorized_permits_consumed_for": protocols,
+                "recorded_candidate_evidence_count": len(recorded_candidate_refs),
+                "current_eligible_candidates": [
+                    {
+                        "display_hint": str(getattr(hint, "display_hint", "")),
+                        "address": str(getattr(hint, "address", "")),
+                        "protocol": str(getattr(hint, "protocol", "")),
+                        "verified_identity": False,
+                        "control_verified": False,
+                    }
+                    for hint in eligible
+                ],
+                "candidate_lookup_available": hints_available,
+            })
+
+        return {
+            "ok": True,
+            "status": "discovery_evidence_inspected",
+            "goal_id": goal.goal_id,
+            "goal_state": goal.state.value,
+            "observations": observations,
+            "verified_tv_identity": False,
+            "verified_tv_control": False,
+            "truth_note": (
+                "Consumed-permit markers prove approved discovery authorization "
+                "was used, not that network packets were emitted or a watcher "
+                "successfully enumerated devices. Missing eligible candidates "
+                "cannot prove there are no TVs on the LAN. Unverified sightings "
+                "never authorize pairing or control."
+            ),
+        }
 
     @function_tool()
     async def cancel_owner_goal(
