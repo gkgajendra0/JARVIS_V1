@@ -176,7 +176,9 @@ async def test_new_tv_capability_command_still_reuses_existing_goal():
     gateway, console, chat = _gateway(asyncio.get_running_loop())
     request_id = "request_duplicate_12345"
     assert (
-        await gateway.submit(request_id, "Jarvis, please create a TV control capability")
+        await gateway.submit(
+            request_id, "Jarvis, please create a TV control capability"
+        )
     )["ok"] is True
     await gateway._requests[request_id]
     result = (await gateway.request_result(request_id))["result"]
