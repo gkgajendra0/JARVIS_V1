@@ -26,8 +26,8 @@ _GATE_ID = re.compile(r"^gate_[0-9a-f]{16}$")
 _MAX_BODY = 8192
 _TV_SUBJECT = re.compile(r"\b(?:tv|television|hisense|vidaa)\b", re.IGNORECASE)
 _TV_ACQUIRE_COMMAND = re.compile(
-    r"^(?:jarvis[,\\s:]+)?(?:please\\s+)?(?:i (?:want|need) you to\\s+|"
-    r"(?:can|could|would) you\\s+)?(?:acquire|build|develop|create|add|obtain)\\b",
+    r"^(?:jarvis[,\s:]+)?(?:please\s+)?(?:i (?:want|need) you to\s+|"
+    r"(?:can|could|would) you\s+)?(?:acquire|build|develop|create|add|obtain)\b",
     re.IGNORECASE,
 )
 _TV_CONTROL = re.compile(r"\b(?:control|capability|manage)\b", re.IGNORECASE)
