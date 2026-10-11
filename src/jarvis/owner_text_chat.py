@@ -184,10 +184,20 @@ class OwnerNaturalTextChat:
                 )
             choice_sets = result.get("device_choice_sets")
             if isinstance(choice_sets, list) and choice_sets:
-                return base + " Discovered-device candidates require your identity confirmation: " + str(choice_sets)
+                return (
+                    base
+                    + " Discovered-device candidates require your identity confirmation: "
+                    + str(choice_sets)
+                )
             questions = result.get("questions")
             if isinstance(questions, list) and questions:
-                return base + " I need one clarification: " + str(questions[0].get("question") or "Please clarify.") + " Options: " + str(questions[0].get("options") or [])
+                return (
+                    base
+                    + " I need one clarification: "
+                    + str(questions[0].get("question") or "Please clarify.")
+                    + " Options: "
+                    + str(questions[0].get("options") or [])
+                )
             return base
         if action == "inspect_goal":
             return (
@@ -348,7 +358,10 @@ class OwnerNaturalTextChat:
                 raw,
                 re.IGNORECASE,
             ):
-                result = {"ok": False, "status": "explicit_discovery_permission_required"}
+                result = {
+                    "ok": False,
+                    "status": "explicit_discovery_permission_required",
+                }
             else:
                 result = await self.console._tools.authorize_bounded_network_discovery(
                     None, target

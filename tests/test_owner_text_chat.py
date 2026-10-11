@@ -56,7 +56,12 @@ class Goals:
     async def resolve_goal_information(self, _context, interaction_id, value):
         self.calls.append(("answer_information", interaction_id))
         self.last_value = value
-        return {"ok": True, "status": "waiting_capability", "goal_id": "goal_tv", "goal_state": "waiting_capability"}
+        return {
+            "ok": True,
+            "status": "waiting_capability",
+            "goal_id": "goal_tv",
+            "goal_state": "waiting_capability",
+        }
 
     async def authorize_bounded_network_discovery(self, _context, goal_id):
         self.calls.append(("approve_discovery", goal_id))
