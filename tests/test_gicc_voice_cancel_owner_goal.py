@@ -29,7 +29,13 @@ async def test_voice_cancel_uses_listed_exact_goal_and_explicit_owner_turn(tmp_p
 
     status = SimpleNamespace(
         list_active=lambda limit: (
-            SimpleNamespace(goal_id=target, public_payload=lambda: {"goal_id": target, "owner_request": "Acquire TV control"}),
+            SimpleNamespace(
+                goal_id=target,
+                public_payload=lambda: {
+                    "goal_id": target,
+                    "owner_request": "Acquire TV control",
+                },
+            ),
         ),
     )
     runtime = SimpleNamespace(
@@ -48,7 +54,9 @@ async def test_voice_cancel_uses_listed_exact_goal_and_explicit_owner_turn(tmp_p
     # Listing presents exactly one active objective, but does not authorize
     # cancellation until a fresh explicit owner cancellation turn.
     listed = await tools.list_owner_objectives(None)
-    assert listed["objectives"] == [{"goal_id": target, "owner_request": "Acquire TV control"}]
+    assert listed["objectives"] == [
+        {"goal_id": target, "owner_request": "Acquire TV control"}
+    ]
     assert (await tools.cancel_owner_goal(None, target))["status"] == (
         "explicit_cancel_request_required"
     )
@@ -171,7 +179,11 @@ async def test_one_active_goal_rejects_cancel_request_for_different_device(tmp_p
         conversation,
         store,
         objective_status=status,
-        execution_runtime=SimpleNamespace(cancel_owner_goal=cancel),
+        execution_runtime=SimpleNamespace(
+            pursue=lambda **kwargs: None,
+            continue_goal=lambda goal_id: None,
+            cancel_owner_goal=cancel,
+        ),
     )
     await tools.list_owner_objectives(None)
     conversation.accept_turn(

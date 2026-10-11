@@ -263,8 +263,10 @@ class GiccAgentTools:
             # If a specific device was mentioned, it must match the exact
             # selected objective even if only one goal is currently active.
             # Generic "cancel the previous goal" is unambiguous only for one.
-            matches = set(candidates) if mentioned else (
-                {key} if len(candidates) == 1 else set()
+            matches = (
+                set(candidates)
+                if mentioned
+                else ({key} if len(candidates) == 1 else set())
             )
             for aliases in mentioned:
                 matches &= {
