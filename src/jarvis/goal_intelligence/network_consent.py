@@ -27,8 +27,14 @@ def prepare_pending_device_discovery_consent(
     goal_id: str,
     session_id: str,
     planner: WindowsLanScopePlanner | None = None,
+    resume_existing_goal: bool = False,
 ) -> ActionProposal | None:
-    """Prepare at most one exact consent request, never perform discovery."""
+    """Prepare a read-only scope bound to the active owner conversation.
+
+    A resumed goal keeps its immutable source-session provenance. Only a trusted
+    caller with independently verified current goal selection may opt in to
+    proposing a fresh *current-session* approval. This never authorizes a scan.
+    """
 
     if not isinstance(store, GoalStore):
         raise TypeError("discovery consent must use the canonical GoalStore")
@@ -37,7 +43,7 @@ def prepare_pending_device_discovery_consent(
     if (
         not session
         or goal is None
-        or goal.source_session_id != session
+        or (goal.source_session_id != session and not resume_existing_goal)
         or goal.state is not GoalState.WAITING_INFORMATION
     ):
         return None
