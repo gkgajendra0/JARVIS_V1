@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import base64
+import builtins
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -20,6 +23,7 @@ from jarvis.engineering_substrate import (
 from jarvis.engineering_substrate.provenance import (
     ArtifactProvenanceResult,
     IntegrityProvenanceResponse,
+    ProvenanceResourceUnavailable,
     ProvenanceService,
     ProvenanceVerificationError,
     PyPIAttestationVerifier,
@@ -334,4 +338,46 @@ def test_content_hash_remains_mandatory_even_when_attestation_client_is_present(
             artifact,
             resolution=resolution,
             provenance_id="prov-1",
+        )
+
+
+def test_importing_owner_browser_does_not_load_native_attestation_verifier() -> None:
+    """A blocked Windows crypto extension must not prevent read-only startup."""
+    code = (
+        "import sys\n"
+        "import jarvis.owner_text_web\n"
+        "assert 'pypi_attestations' not in sys.modules, "
+        "'native verifier loaded during owner-browser import'\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_native_attestation_import_block_fails_closed_at_actual_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An OS policy denying a native verifier cannot produce valid provenance."""
+    wheel = tmp_path / "demo_package-1.2.3-py3-none-any.whl"
+    wheel.write_bytes(b"test wheel")
+    expected = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    original_import = builtins.__import__
+
+    def deny_attestation(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "pypi_attestations":
+            raise ImportError("Application Control rejected _rust.pyd")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", deny_attestation)
+    with pytest.raises(ProvenanceResourceUnavailable, match="verifier is unavailable"):
+        PyPIAttestationVerifier().verify(
+            artifact_path=wheel,
+            distribution_filename=wheel.name,
+            expected_sha256=expected,
+            provenance_payload=b'{"version":1,"attestation_bundles":[]}',
         )
