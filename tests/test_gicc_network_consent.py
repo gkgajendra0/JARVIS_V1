@@ -147,6 +147,68 @@ def test_consent_cannot_be_proposed_for_another_session(
     )
 
 
+def test_resumed_goal_scope_is_read_only_and_binds_new_session(
+    tmp_path: Path,
+) -> None:
+    store, goal, need = _data(tmp_path)
+    original_goal = store.get_goal(goal.goal_id)
+    original_need = store.get_information_need(need.information_need_id)
+    assert (
+        prepare_pending_device_discovery_consent(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id="new-owner-session",
+            planner=_planner(),
+        )
+        is None
+    )
+    proposal = prepare_pending_device_discovery_consent(
+        store=store,
+        goal_id=goal.goal_id,
+        session_id="new-owner-session",
+        planner=_planner(),
+        resume_existing_goal=True,
+    )
+    assert proposal is not None
+    assert proposal.session_id == "new-owner-session"
+    assert proposal.target()["gicc_goal_id"] == goal.goal_id
+    assert proposal.target()["gicc_need_id"] == need.information_need_id
+    assert proposal.parameters()["device_control"] is False
+    assert store.get_goal(goal.goal_id) == original_goal
+    assert store.get_information_need(need.information_need_id) == original_need
+
+
+def test_runtime_resumes_scope_without_rewriting_goal_source(
+    tmp_path: Path,
+) -> None:
+    store, goal, _ = _data(tmp_path)
+    runtime = GiccApplyRuntime(
+        store=store,
+        world=object(),
+        coordinator=object(),
+        dispatcher=object(),
+        telemetry=object(),
+        capability_runtime=object(),
+    )
+    assert (
+        runtime.prepare_network_discovery_consent(
+            goal_id=goal.goal_id,
+            session_id="new-owner-session",
+            planner=_planner(),
+        )
+        is None
+    )
+    proposal = runtime.prepare_network_discovery_consent(
+        goal_id=goal.goal_id,
+        session_id="new-owner-session",
+        planner=_planner(),
+        resume_existing_goal=True,
+    )
+    assert proposal is not None
+    assert proposal.session_id == "new-owner-session"
+    assert store.get_goal(goal.goal_id).source_session_id == "owner-session"
+
+
 def test_consent_requires_waiting_information_state(tmp_path: Path) -> None:
     store, goal, _ = _data(tmp_path, state=GoalState.PLANNED)
     assert (
