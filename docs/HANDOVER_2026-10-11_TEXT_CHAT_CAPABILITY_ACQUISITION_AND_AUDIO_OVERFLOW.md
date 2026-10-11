@@ -153,3 +153,31 @@ Diagnostics if needed: help, goals, status goal_3bf2a80a14ecb70dd5b6, work, gate
 | Actual Hisense VIDAA control | NOT VERIFIED | Real secure transport and physical end effect remain necessary |
 
 **Final rule:** JARVIS manages; ChatGPT/Codex engineers. The owner should not have to manually determine protocols, ports or IPs when a governed, discoverable route exists.
+
+
+## 8. Browser-based owner text workspace (2026-10-11 follow-up)
+
+An independent *loopback-only presentation layer* was added to this same draft PR:
+
+- **src/jarvis/owner_text_web.py** — Python-standard-library web server on 127.0.0.1:8765. It composes the same real GICC/Work/Change runtime and uses OwnerNaturalTextChat and OwnerTextConversation; it does not start microphone or speaker I/O.
+- **src/jarvis/owner_text_web.html** — responsive browser UI with normal conversational messages, durable goal status, background work and reviewed, exact EngineeringChange proposals.
+- **tests/test_owner_text_web.py** — synthetic tests for canonical status reads, no startup goal creation, idempotent chat requests, exact gate review, preserved Windows Hello denial, local HTTP CSRF/origin protection.
+- **pyproject.toml** — includes the standalone HTML asset in the installed jarvis distribution. No new third-party runtime dependency.
+
+**Run only ONE owner ingress at a time:** stop the PowerShell owner text console / audio supervisor cleanly before starting the browser UI. Do not run both against the same live Work/DBOS state.
+
+~~~powershell
+$repo = "C:\Users\gkgaj\Desktop\jarvis_v1"
+Set-Location $repo
+$env:PYTHONPATH = "$repo\src"
+$env:PYTHONUNBUFFERED = "1"
+$env:JARVIS_RUNTIME_LANE = "development"
+$env:JARVIS_GICC_MODE = "apply"
+& "$repo\.venv\Scripts\python.exe" -u -m jarvis.owner_text_web
+~~~
+
+It opens **http://127.0.0.1:8765/** in the local browser. The live page only *reads* the fixed, existing owner objective **goal_3bf2a80a14ecb70dd5b6** at startup; it never admits another objective automatically. Text chat actions use the original guarded backend. Network discovery still requires fresh, specific consent and Windows Hello; engineering/promotion actions still require review and the existing Authority checks. The sidebar's verified_goal_completion mirrors canonical durable goal state; it does **not** independently prove a witnessed physical-TV effect.
+
+Web security: bound exclusively to IPv4 loopback, Host validation, no third-party resources, strict CSP, no-store response headers, unpredictable CSRF for the local APIs, same-origin POST checks, explicit JSON content and size limits. Chat and gate actions are queued using idempotent request IDs so client polling does not repeat an owner action. The server is *not* safe to bind to a LAN address or publicly expose as implemented.
+
+**Acceptance still pending:** Do not call the browser UI production-ready until exact latest-commit CI is green and owner-machine browser interaction has been checked; do not call TV acquisition complete until its own physical external acceptance is witnessed. The microphone overflow issue remains deliberately deferred and untouched.
