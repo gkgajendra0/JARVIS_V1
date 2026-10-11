@@ -158,7 +158,7 @@ class OwnerNaturalTextChat:
                 + "\n".join(
                     f"- {g.get('kind')}: {g.get('gate_id')} "
                     f"(change {g.get('change_id')}); artifact {g.get('artifact_digest')}. "
-                    f"Proposal: {str(g.get('proposal'))[:1200]}"
+                    f"Proposal: {str(g.get('proposal'))}"
                     for g in gates
                     if isinstance(g, dict)
                 )
@@ -192,13 +192,19 @@ class OwnerNaturalTextChat:
                 )
             questions = result.get("questions")
             if isinstance(questions, list) and questions:
-                return (
-                    base
-                    + " I need one clarification: "
-                    + str(questions[0].get("question") or "Please clarify.")
-                    + " Options: "
-                    + str(questions[0].get("options") or [])
-                )
+                details = [
+                    (
+                        str(question.get("question") or "Please clarify.")
+                        + " Options: "
+                        + str(question.get("options") or [])
+                        + " Interaction: "
+                        + str(question.get("interaction_id") or "not supplied")
+                    )
+                    for question in questions
+                    if isinstance(question, dict)
+                ]
+                if details:
+                    return base + " Pending clarifications:\n" + "\n".join(details)
             return base
         if action == "inspect_goal":
             blocker = result.get("blocker")
@@ -209,12 +215,31 @@ class OwnerNaturalTextChat:
                     f"{blocker.get('detail') or 'No details reported'}. "
                     f"Owner action required: {blocker.get('owner_action_required')}."
                 )
-            return (
-                f"Goal {result.get('goal_id')}: {result.get('goal_state')}; "
-                f"phase: {result.get('phase')}; "
-                f"verified completion: {result.get('verified_completion')}."
-                + explanation
-            )
+            lines = [
+                f"Goal: {result.get('goal_id')}",
+                f"Request: {result.get('owner_request') or 'Not reported'}",
+                f"Desired outcome: {result.get('desired_outcome') or 'Not reported'}",
+                f"State: {result.get('goal_state')}",
+                f"Overall state: {result.get('overall_state') or 'Not reported'}",
+                f"Phase: {result.get('phase')}",
+                f"Verified completion: {result.get('verified_completion')}",
+            ]
+            if explanation:
+                lines.append(explanation.strip())
+            if result.get("plan_id"):
+                lines.append(
+                    f"Plan: {result['plan_id']} ({result.get('plan_state')})"
+                )
+            for name, label in (
+                ("capability_gap_ids", "Capability gaps"),
+                ("continuation_ids", "Continuations"),
+                ("work", "Linked work"),
+                ("engineering_changes", "Engineering changes"),
+            ):
+                value = result.get(name)
+                if value:
+                    lines.append(f"{label}: {value}")
+            return "\n".join(lines)
         if action == "inspect_work":
             return f"Work {result.get('work_id')}: {result.get('state') or status}."
         if action in {"answer_work", "review_gate"}:
