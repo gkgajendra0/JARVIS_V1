@@ -338,7 +338,10 @@ async def test_resumed_goal_scan_is_gated_by_fresh_approval_turn(
 
     owner.accept_turn(ConversationRole.USER, "I approve the network discovery.")
     without_offer = await tools.authorize_bounded_network_discovery(None, goal.goal_id)
-    assert without_offer["status"] == "discovery_scope_not_previously_offered"
+    # A historical goal in a new session must be denied before any scope is
+    # presented. The fresh-session guard intentionally returns the stronger
+    # goal-not-current status (not the same-session missing-offer status).
+    assert without_offer["status"] == "discovery_goal_not_current_or_not_waiting"
     assert runtime.calls == []
 
     owner.accept_turn(ConversationRole.USER, "Jarvis, identify my TV automatically")
