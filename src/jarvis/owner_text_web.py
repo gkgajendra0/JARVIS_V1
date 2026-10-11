@@ -75,9 +75,8 @@ class OwnerWebGateway:
             "work": work.get("work", []) if work.get("ok") else [],
             "work_available": bool(work.get("ok")),
             "pending_gate_count": len(gates),
-            "real_machine_accepted": bool(
-                detail.get("verified_completion") is True
-            ),
+            # This is durable goal verification, not independent hardware proof.
+            "verified_goal_completion": detail.get("verified_completion") is True,
         }
 
     async def _run_turn(self, text: str) -> dict[str, object]:
@@ -101,6 +100,22 @@ class OwnerWebGateway:
                 del self._requests[key]
         task = asyncio.create_task(self._run_turn(text), name="owner-web-text-turn")
         self._requests[request_id] = task
+        return {"ok": True, "request_id": request_id, "reused": False}
+
+    async def submit_gate_decision(
+        self, request_id: str, gate_id: str, decision: str
+    ) -> dict[str, object]:
+        if not _REQUEST_ID.fullmatch(request_id):
+            return {"ok": False, "status": "invalid_request_id"}
+        if not _GATE_ID.fullmatch(gate_id) or decision not in {"approve", "reject"}:
+            return {"ok": False, "status": "invalid_gate_decision"}
+        if request_id in self._requests:
+            return {"ok": True, "request_id": request_id, "reused": True}
+        if sum(not task.done() for task in self._requests.values()) >= 4:
+            return {"ok": False, "status": "queue_full"}
+        self._requests[request_id] = asyncio.create_task(
+            self.decide_gate(gate_id, decision), name="owner-web-gate-decision"
+        )
         return {"ok": True, "request_id": request_id, "reused": False}
 
     async def request_result(self, request_id: str) -> dict[str, object]:
@@ -146,7 +161,6 @@ def build_http_server(
     """Server accepts *only* local IPv4 loopback traffic."""
     token = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(24)
-    origin = f"http://127.0.0.1:{port}"
     html = (
         resources.files("jarvis")
         .joinpath("owner_text_web.html")
@@ -185,12 +199,14 @@ def build_http_server(
             self.wfile.write(body)
 
         def _valid_host(self) -> bool:
-            return self.headers.get("Host") == f"127.0.0.1:{port}"
+            return self.headers.get("Host") == f"127.0.0.1:{self.server.server_port}"
 
         def _api_authorized(self, *, write: bool = False) -> bool:
             if self.headers.get("X-Jarvis-CSRF") != token:
                 return False
-            if write and self.headers.get("Origin") != origin:
+            if write and self.headers.get("Origin") != (
+                f"http://127.0.0.1:{self.server.server_port}"
+            ):
                 return False
             return True
 
@@ -261,10 +277,16 @@ def build_http_server(
                 result = self._invoke(gateway.review_gates())
             elif self.path == "/api/gates/decide":
                 gate_id, decision = payload.get("gate_id"), payload.get("decision")
-                if not isinstance(gate_id, str) or not isinstance(decision, str):
+                request_id = payload.get("request_id")
+                if not all(
+                    isinstance(value, str)
+                    for value in (gate_id, decision, request_id)
+                ):
                     self._json(400, {"ok": False, "status": "invalid_payload"})
                     return
-                result = self._invoke(gateway.decide_gate(gate_id, decision))
+                result = self._invoke(
+                    gateway.submit_gate_decision(request_id, gate_id, decision)
+                )
             else:
                 self._json(404, {"ok": False, "status": "not_found"})
                 return
