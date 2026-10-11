@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.owner_text_console import OwnerTextConversation
+
+pytestmark = pytest.mark.asyncio
 
 
 class FakeGoalTools:

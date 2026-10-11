@@ -15,7 +15,7 @@ import sys
 import threading
 from typing import Any
 
-from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
 
 LOGGER = logging.getLogger(__name__)
 _GOAL_ID = re.compile(r"\bgoal_[a-zA-Z0-9]+\b")
@@ -27,9 +27,7 @@ _LIST = re.compile(
     r"^(?:/)?(?:goals|list (?:my )?(?:active )?(?:goals|objectives)|show (?:my )?(?:active )?(?:goals|objectives))\??$",
     re.IGNORECASE,
 )
-_STATUS = re.compile(
-    r"^(?:/)?(?:status|show status|goal status)\b", re.IGNORECASE
-)
+_STATUS = re.compile(r"^(?:/)?(?:status|show status|goal status)\b", re.IGNORECASE)
 _TOPICS = (
     ("tv", "television", "hisense", "vidaa"),
     ("camera", "webcam", "doorbell"),
@@ -61,7 +59,7 @@ class OwnerTextConversation:
     def __init__(self, tools: Any, conversation: ConversationSession) -> None:
         self._tools = tools
         self._conversation = conversation
-        if not conversation.status.value == "active":
+        if conversation.status is not ConversationStatus.ACTIVE:
             raise ValueError("text conversation must be active")
 
     @staticmethod
@@ -82,8 +80,7 @@ class OwnerTextConversation:
         active = [
             item
             for item in objectives
-            if item.get("terminal") is not True
-            and isinstance(item.get("goal_id"), str)
+            if item.get("terminal") is not True and isinstance(item.get("goal_id"), str)
         ]
         ids = set(_GOAL_ID.findall(text))
         if ids:
@@ -109,9 +106,7 @@ class OwnerTextConversation:
                     for alias in aliases
                 )
             ]
-        return (
-            str(candidates[0]["goal_id"]) if len(candidates) == 1 else None
-        )
+        return str(candidates[0]["goal_id"]) if len(candidates) == 1 else None
 
     async def submit(self, raw_text: str) -> dict[str, object]:
         text = raw_text.strip()
@@ -168,7 +163,9 @@ class OwnerTextConversation:
 
         # Generic "yes" and other protected approvals must not become goals
         # or silently bypass the dedicated canonical Authority gate.
-        if re.fullmatch(r"(?:yes|no|approve|approved|confirm|confirmed)[.!]?", text, re.I):
+        if re.fullmatch(
+            r"(?:yes|no|approve|approved|confirm|confirmed)[.!]?", text, re.IGNORECASE
+        ):
             return {
                 "ok": False,
                 "status": "approval_requires_bound_context",
@@ -184,9 +181,7 @@ class OwnerTextConversation:
 
 
 def _render(result: dict[str, object]) -> str:
-    if result.get("status") == "listed" and isinstance(
-        result.get("objectives"), list
-    ):
+    if result.get("status") == "listed" and isinstance(result.get("objectives"), list):
         objectives = result["objectives"]
         if not objectives:
             return "No active owner goals."
