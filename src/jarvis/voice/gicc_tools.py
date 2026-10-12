@@ -292,6 +292,11 @@ class GiccAgentTools:
                     "information_need_state": need.state.value,
                     "authorized_permits_consumed_for": protocols,
                     "recorded_candidate_evidence_count": len(recorded_candidate_refs),
+                    "vidaa_discovery_outcomes": sorted(
+                        value.removeprefix("windows_vidaa_discovery_outcome:")
+                        for value in evidence
+                        if value.startswith("windows_vidaa_discovery_outcome:")
+                    ),
                     "current_eligible_candidates": [
                         {
                             "display_hint": str(getattr(hint, "display_hint", "")),
@@ -1248,6 +1253,11 @@ class GiccAgentTools:
             "information_need_id": result.need.information_need_id,
             "information_need_state": result.need.state.value,
             "verified_device_control": False,
+            "vidaa_discovery_outcomes": sorted(
+                value.removeprefix("windows_vidaa_discovery_outcome:")
+                for value in result.need.evidence_refs
+                if value.startswith("windows_vidaa_discovery_outcome:")
+            ),
             "truth_note": (
                 "The governed observation returned. Unverified device "
                 "advertisements do not prove identity, pairing, access or "
