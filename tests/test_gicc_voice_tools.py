@@ -916,7 +916,14 @@ async def test_gicc_voice_next_protocol_is_disclosed_but_not_automatically_scann
     second = await tools.authorize_bounded_network_discovery(None, goal_id=goal.goal_id)
     assert second["status"] == "authorized_discovery_observation_recorded"
     assert runtime.executions == 2
-    assert "next_network_discovery" not in second
+    assert second["next_network_discovery"]["protocol"] == "vidaa_udp"
+    assert second["next_network_discovery"]["scan_started"] is False
+    assert second["next_network_discovery"]["owner_approval_required"] is True
+    replay_vidaa = await tools.authorize_bounded_network_discovery(
+        None, goal_id=goal.goal_id
+    )
+    assert replay_vidaa["status"] == "discovery_scope_not_previously_offered"
+    assert runtime.executions == 2
     assert (
         "windows_aep_authorized_scope_consumed:dns_sd"
         in store.get_information_need(need.information_need_id).evidence_refs
