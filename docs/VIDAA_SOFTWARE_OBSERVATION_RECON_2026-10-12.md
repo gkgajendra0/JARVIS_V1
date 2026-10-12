@@ -131,3 +131,59 @@ manufacturer/developer-supported cross-app observation mechanisms if available.
 If none exists, present tradeoffs and obtain owner approval before switching
 to a different input source (e.g. PC browser output) or external observation.
 
+
+## Owner follow-up — second legacy inspector and GitHub connectivity
+
+Owner directly tested `http://192.168.1.6:9222/json/version` using a
+read-only PowerShell HTTP request, which returned `No usable inspector
+response` and `InspectorConfirmed=False`. Together with the prior
+9226 result, **both publicly documented legacy inspector ports are
+nonresponsive/unusable under the TV's present configuration**.
+
+The first subsequent `git pull` failed with DNS resolution error
+`Could not resolve host: github.com`. Owner then ran
+`ipconfig /flushdns` and successfully fast-forward pulled
+`feat/manual-vidaa-tv-control` from `f27c137f` to `e92a74f5`.
+GitHub connectivity was restored. The direct HTTP 9222 check was
+already performed and need not be repeated.
+
+This does not establish that U7.6 has no supported debug interface.
+Do not request repeated probes of 9222/9226 or arbitrary port scans.
+
+## Remaining legitimate software-only option: authorized Ottium/DevTools
+
+Vendor documentation establishes a narrower path worth evaluating:
+
+- **Suitest** documents direct network screenshot support for
+  `VIDAA - Ottium`, but *not* for `VIDAA - Instrumentation library`.
+  Protected DRM content may not appear even in network screenshots.
+  Source: https://suitest.net/docs/video-capture/line-screenshots/
+- Ottium on VIDAA requires **DevTools enabled first** using VIDAA
+  partner documentation; a paired ordinary consumer remote interface
+  alone does not grant this feature.
+  Source: https://suitest.net/docs/devices/vidaa/
+- VIDAA applications may require app-specific Ottium support or owner/
+  developer-controlled instrumentation. For store-installed apps, Suitest
+  mentions the instrumentation requirement. This does **not** prove
+  Netflix, JioHotstar, Prime Video or TV launcher DOM/screen capture.
+  Source: https://suitest.net/docs/application/setting-up-vidaa-apps/
+- VIDAA partner resources are access-controlled and developer-mode
+  provisioning may be unavailable to retail U7.6 users.
+  Source: https://www.vidaa.com/partner-support/
+- Manufacturer/VIDAA support can be contacted to ask whether there is
+  an **official read-only remote screen or accessibility API on the
+  Hisense 55U7N VIDAA U7.6** available to end-user-authorized
+  integrations, plus availability across built-in third-party apps.
+  Source: https://www.vidaa.com/destek/
+
+**Decision gate:** Request manufacturer/vendor clarification on *retail
+U7.6 access and cross-app support* before committing JARVIS to
+Ottium or an external testing service. Do not request secrets,
+unlock hidden services, install instruments in third-party apps,
+capture DRM video, or claim real-time TV observation without owner's
+successful verified screen/focus observation.
+
+**Current acceptance:** L0 control PASS, L1 metadata PASS, L2 actual
+screen/focus observation NOT AVAILABLE via tested interfaces, L3-L5
+not implemented. The existing `observe` CLI and tests remain a
+safe diagnostic; it is not a navigation engine.
