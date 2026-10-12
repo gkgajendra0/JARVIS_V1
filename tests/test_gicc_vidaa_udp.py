@@ -204,6 +204,23 @@ def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> No
     )
     assert not has_consumed_discovery_permit("vidaa_udp", "192.168.1.10", ())
 
+    from jarvis.goal_intelligence.owner_device_confirmation import (
+        confirm_single_discovered_device,
+    )
+    from jarvis.goal_intelligence.world import WorldRegistry
+
+    confirmed = confirm_single_discovered_device(
+        store=store,
+        world=WorldRegistry(store),
+        goal_id=goal.goal_id,
+        information_need_id=need.information_need_id,
+        session_id=goal.source_session_id,
+        owner_turn_id="fresh-explicit-owner-confirmation",
+    )
+    assert confirmed is not None
+    assert confirmed.entity_type == "media_player"
+    assert "unverified_aep_evidence:" + candidate.evidence_ref in confirmed.provenance_refs
+
 
 def test_authorized_vidaa_observation_preserves_original_goal_and_records_send_outcome(
     tmp_path, monkeypatch
