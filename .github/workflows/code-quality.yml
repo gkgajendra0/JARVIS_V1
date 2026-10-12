@@ -332,6 +332,7 @@ jobs:
         run: >-
           python -m pytest -q
           tests/test_capability_acquisition_system_hardening.py
+          tests/test_phase9_autonomous_research_boundary.py
           tests/test_capability_acquisition_vertical.py
           tests/test_capability_acquisition_owner_flow_hardening.py
           tests/test_capability_acquisition_completion_hardening.py
