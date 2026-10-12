@@ -375,3 +375,106 @@ def test_no_udp_sightings_does_not_prove_no_tv() -> None:
     result = execute(args("discover"), udp_discover=lambda **kwargs: {})
     assert result["outcome"] == "no_vidaa_udp_candidates"
     assert result["candidates"] == []
+
+
+def test_known_protocol_bypasses_upnp_detection_and_keeps_dynamic_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = ModuleType("pyvidaa")
+    captured: dict[str, object] = {}
+
+    def construct(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    def fail_if_discovery(*args: object, **kwargs: object) -> None:
+        pytest.fail("Known MAC/protocol must not access UPnP or UDP discovery")
+
+    module.VidaaTV = construct  # type: ignore[attr-defined]
+    module.AuthMethod = SimpleNamespace(MODERN="modern")  # type: ignore[attr-defined]
+    module.probe_ip = fail_if_discovery  # type: ignore[attr-defined]
+    module.discover_udp = fail_if_discovery  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyvidaa", module)
+
+    new_client(
+        args(
+            "key",
+            mac="50:BA:02:AE:0D:18",
+            protocol_version=3290,
+            persist_tokens=True,
+        )
+    )
+    assert captured["auth_method"] == "modern"
+    assert captured["auto_detect_protocol"] is False
+    assert captured["use_dynamic_auth"] is True
+    assert captured["allow_static_auth"] is False
+    assert captured["enable_persistence"] is True
+
+
+def test_default_protocol_still_auto_detects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = ModuleType("pyvidaa")
+    captured: dict[str, object] = {}
+
+    def construct(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    module.VidaaTV = construct  # type: ignore[attr-defined]
+    module.probe_ip = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    module.discover_udp = lambda *args, **kwargs: {}  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyvidaa", module)
+    new_client(args("key", mac="AA:BB:CC:DD:EE:FF"))
+    assert captured["auto_detect_protocol"] is True
+    assert "auth_method" not in captured
+
+
+def test_session_reuses_one_authenticated_client() -> None:
+    client = FakeClient()
+    iterator = iter(("home", "volume-up", "exit"))
+
+    result = execute(
+        args("session"),
+        client_factory=lambda _: client,
+        command_reader=lambda _: next(iterator),
+    )
+    assert client.commands == ["KEY_HOME", "KEY_VOLUME_UP"]
+    assert result["outcome"] == "remote_session_ended"
+    assert result["keys_submitted"] == 2
+    assert result["tv_effect_verified"] is False
+    assert client.disconnected
+
+
+def test_session_rejects_unknown_commands_without_sending() -> None:
+    client = FakeClient()
+    iterator = iter(("send-secret", "mute", "quit"))
+    result = execute(
+        args("session"),
+        client_factory=lambda _: client,
+        command_reader=lambda _: next(iterator),
+    )
+    assert client.commands == ["KEY_MUTE"]
+    assert result["keys_submitted"] == 1
+    assert client.disconnected
+
+
+def test_protocol_argument_only_accepts_owner_verified_version() -> None:
+    parser = make_parser()
+    valid = parser.parse_args(
+        [
+            "--host",
+            "192.168.1.6",
+            "--mac",
+            "50:BA:02:AE:0D:18",
+            "--protocol-version",
+            "3290",
+            "session",
+        ]
+    )
+    assert valid.protocol_version == 3290
+    assert valid.command == "session"
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["--host", "192.168.1.6", "--protocol-version", "1234", "key", "home"]
+        )
