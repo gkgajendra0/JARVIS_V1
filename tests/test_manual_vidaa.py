@@ -192,5 +192,7 @@ def test_connect_failure_without_certs_explains_transport_blocker() -> None:
 
     client = FailingClient()
     with pytest.raises(VidaaManualError, match="mutual TLS"):
-        execute(args("pair"), client_factory=lambda _: client, cert_resolver=lambda: None)
+        execute(
+            args("pair"), client_factory=lambda _: client, cert_resolver=lambda: None
+        )
     assert client.disconnected
