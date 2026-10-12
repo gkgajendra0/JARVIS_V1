@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from jarvis.goal_intelligence.device_suggestions import (
@@ -168,11 +170,12 @@ def test_vidaa_offer_follows_both_consumed_aep_scopes_without_scan(tmp_path) -> 
 
 def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> None:
     store, goal, need = _data(tmp_path)
+    now = int(time.time())
     candidate = VidaaUdpCandidateV1(
         address="192.168.1.10",
         manufacturer="Hisense",
         model="U7N",
-        observed_at_epoch=1782000000,
+        observed_at_epoch=now,
     )
     store.update_information_need_state(
         need.information_need_id,
@@ -187,7 +190,7 @@ def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> No
         store=store,
         goal_id=goal.goal_id,
         session_id=goal.source_session_id,
-        now_epoch=1782000005,
+        now_epoch=now + 5,
     )
     assert len(hints) == 1
     assert hints[0].address == "192.168.1.10"
@@ -219,7 +222,10 @@ def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> No
     )
     assert confirmed is not None
     assert confirmed.entity_type == "media_player"
-    assert "unverified_vidaa_evidence:" + candidate.evidence_ref in confirmed.provenance_refs
+    assert (
+        "unverified_vidaa_evidence:" + candidate.evidence_ref
+        in confirmed.provenance_refs
+    )
 
 
 def test_authorized_vidaa_observation_preserves_original_goal_and_records_send_outcome(
