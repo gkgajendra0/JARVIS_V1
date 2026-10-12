@@ -144,7 +144,7 @@ def observe_software(
         inspector = (inspector_probe or probe_legacy_inspector)(host)
     except (OSError, TimeoutError, ValueError):
         inspector = {
-            "port": port,
+            "port": INSPECTOR_PORT,
             "result": "probe_failed",
             "inspector_confirmed": False,
         }
