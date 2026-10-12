@@ -164,8 +164,7 @@ async def test_unseen_device_research_is_executed_before_resolution_and_survives
     await engine.advance(work.work_id)  # deterministic canonical goal inspection
     await engine.advance(work.work_id)  # model chooses the real research executor
     research_steps = [
-        step for step in store.list_steps(work.work_id)
-        if step.kind == "research_web"
+        step for step in store.list_steps(work.work_id) if step.kind == "research_web"
     ]
     assert len(research_steps) == 1
     assert research_steps[0].observation["ok"] is source_available
@@ -182,7 +181,9 @@ async def test_unseen_device_research_is_executed_before_resolution_and_survives
     await engine.advance(work.work_id)  # completion is gated on good research
     steps = store.list_steps(work.work_id)
     assert [step.kind for step in steps] == [
-        "acq_inspect_goal", "research_web", "acq_resolve"
+        "acq_inspect_goal",
+        "research_web",
+        "acq_resolve",
     ]
     assert model.calls == 2
     assert len(provider.calls) == 1
