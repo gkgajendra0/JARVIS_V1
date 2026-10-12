@@ -223,6 +223,8 @@ def test_client_auto_reads_matching_tv_mac_for_dynamic_auth(
     monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
     new_client(args("status"))
     assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
+    assert observed["use_dynamic_auth"] is True
+    assert observed["auto_detect_protocol"] is True
 
 
 def test_modern_device_without_mac_requests_local_network_mac(
@@ -238,3 +240,25 @@ def test_modern_device_without_mac_requests_local_network_mac(
     monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
     with pytest.raises(VidaaManualError, match="MAC address"):
         new_client(args("pair"))
+
+
+def test_explicit_mac_still_enables_dynamic_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_module = ModuleType("pyvidaa")
+    observed: dict[str, object] = {}
+
+    def mock_client(**kwargs: object) -> object:
+        observed.update(kwargs)
+        return object()
+
+    def unexpected_probe(host: str, *, timeout: float) -> None:
+        pytest.fail("Explicit MAC must not trigger network discovery")
+
+    mock_module.VidaaTV = mock_client  # type: ignore[attr-defined]
+    mock_module.probe_ip = unexpected_probe  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
+
+    new_client(args("pair", mac="AA:BB:CC:DD:EE:FF"))
+    assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
+    assert observed["use_dynamic_auth"] is True
