@@ -15,6 +15,8 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
@@ -92,7 +94,7 @@ def _candidate_credentials(
                     continue
                 try:
                     cert.verify_directly_issued_by(ca)
-                except ValueError:
+                except (ValueError, InvalidSignature):
                     continue
                 now = datetime.now(timezone.utc)
                 if not cert.not_valid_before_utc <= now < cert.not_valid_after_utc:
@@ -116,7 +118,7 @@ def _candidate_credentials(
                 if public_a != public_b:
                     continue
                 pem = cert.public_bytes(serialization.Encoding.PEM)
-                fingerprint = cert.fingerprint(__import__("hashlib").sha256())
+                fingerprint = cert.fingerprint(hashes.SHA256())
                 matches[fingerprint] = (
                     pem,
                     private_key_bytes,
