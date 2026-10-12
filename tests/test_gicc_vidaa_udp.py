@@ -203,3 +203,63 @@ def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> No
         store.get_information_need(need.information_need_id).evidence_refs,
     )
     assert not has_consumed_discovery_permit("vidaa_udp", "192.168.1.10", ())
+
+
+
+def test_authorized_vidaa_observation_preserves_original_goal_and_proves_transmission(
+    tmp_path, monkeypatch
+) -> None:
+    from jarvis.goal_intelligence import runtime as runtime_module
+    from jarvis.goal_intelligence.information import InformationResolutionState
+    from jarvis.goal_intelligence.runtime import GiccApplyRuntime
+    from jarvis.goal_intelligence.vidaa_udp import VidaaAuthorityExecutionGuard
+
+    store, goal, need = _data(tmp_path)
+    scope = ReviewedVidaaScopeV1(cidr="192.168.1.0/24", interface_index=4)
+
+    class FakeGuard(VidaaAuthorityExecutionGuard):
+        def __init__(self) -> None:
+            pass
+
+        @property
+        def session_id(self) -> str:
+            return goal.source_session_id
+
+        def binds_information_need(self, *, goal_id, need_id):
+            return goal_id == goal.goal_id and need_id == need.information_need_id
+
+        def binds_scope(self, supplied):
+            return supplied == scope
+
+        def consumed_for(self, supplied):
+            return supplied == scope
+
+    class FakeBackend:
+        def __init__(self, *, is_authorized):
+            assert isinstance(is_authorized, FakeGuard)
+            self.last_status = "not_started"
+
+        def observe(self, supplied):
+            assert supplied == scope
+            self.last_status = "sent_no_candidates"
+            return ()
+
+    monkeypatch.setattr(runtime_module, "WindowsVidaaUdpBackend", FakeBackend)
+    runtime = object.__new__(GiccApplyRuntime)
+    runtime.store = store
+    result = runtime.apply_approved_vidaa_discovery(
+        goal_id=goal.goal_id,
+        need_id=need.information_need_id,
+        session_id=goal.source_session_id,
+        scope=scope,
+        authority_guard=FakeGuard(),
+        planner=_planner(),
+    )
+    assert result is not None
+    assert result.state is InformationResolutionState.UNRESOLVED
+    assert "windows_vidaa_discovery_outcome:sent_no_candidates" in result.need.evidence_refs
+    assert (
+        "windows_vidaa_authorized_scope_consumed:vidaa_udp:192.168.1.0/24"
+        in result.need.evidence_refs
+    )
+    assert store.get_goal(goal.goal_id).source_session_id == "owner-session"
