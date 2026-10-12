@@ -624,11 +624,7 @@ def test_text_entry_result_does_not_claim_app_search_or_echo_private_text() -> N
             return True
 
     client = TextClient()
-    from jarvis.vidaa.manual import make_parser
-
-    ns = make_parser().parse_args(
-        ["--host", "192.168.1.6", "text", "The Martian"]
-    )
+    ns = make_parser().parse_args(["--host", "192.168.1.6", "text", "The Martian"])
     result = execute(ns, client_factory=lambda _: client)
     assert result["outcome"] == "text_submitted_unverified"
     assert result["tv_effect_verified"] is False
