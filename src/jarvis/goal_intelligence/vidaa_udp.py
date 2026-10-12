@@ -213,7 +213,7 @@ class VidaaAuthorityExecutionGuard:
                 proposal=self._proposal,
                 context=self._context,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - deny on any Authority failure
             return False
         if (
             permit.status is not PermitStatus.CONSUMED
@@ -330,7 +330,7 @@ class WindowsVidaaUdpBackend:
             if self._authorize(scope) is not True:
                 self.last_status = "not_authorized"
                 return ()
-        except Exception:
+        except Exception:  # noqa: BLE001 - never open socket on guard failure
             self.last_status = "not_authorized"
             return ()
 
@@ -353,7 +353,7 @@ class WindowsVidaaUdpBackend:
                 opened.settimeout(min(remaining, 0.25))
                 try:
                     data, sender = opened.recvfrom(2049)
-                except (TimeoutError, socket.timeout):
+                except TimeoutError:
                     continue
                 if not isinstance(sender, tuple) or not sender:
                     continue

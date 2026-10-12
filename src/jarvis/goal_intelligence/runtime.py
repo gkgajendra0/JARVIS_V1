@@ -101,12 +101,12 @@ from .service import GoalOrchestrator, SpecialistActionDispatch
 from .status import OwnerObjectiveStatusResolver
 from .store import GoalStore, GoalStoreConflict, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
-from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 from .vidaa_udp import (
     ReviewedVidaaScopeV1,
     VidaaAuthorityExecutionGuard,
     WindowsVidaaUdpBackend,
 )
+from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 from .windows_lan_scope import WindowsLanScopePlanner
 from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry, canonical_world_entity_type

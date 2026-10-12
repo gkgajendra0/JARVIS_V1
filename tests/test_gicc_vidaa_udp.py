@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 import pytest
+from test_gicc_network_consent import _data, _planner
 
 from jarvis.goal_intelligence.device_suggestions import (
     has_consumed_discovery_permit,
@@ -21,8 +22,6 @@ from jarvis.goal_intelligence.vidaa_udp import (
     build_vidaa_consent_proposal,
     proposal_vidaa_scope,
 )
-
-from test_gicc_network_consent import _data, _planner
 
 
 def test_scope_is_private_and_exactly_bounded() -> None:

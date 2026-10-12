@@ -17,11 +17,11 @@ from jarvis.goal_intelligence.composition import (
     GoalIntakeResult,
     GoalIntelligenceCoordinator,
 )
+from jarvis.goal_intelligence.device_suggestions import has_consumed_discovery_permit
 from jarvis.goal_intelligence.information import (
     BoundInformationInteraction,
     can_rediscover_information,
 )
-from jarvis.goal_intelligence.device_suggestions import has_consumed_discovery_permit
 from jarvis.goal_intelligence.models import GoalState, PlanState
 from jarvis.goal_intelligence.passive_network_diagnostics import (
     inspect_passive_media_network,
