@@ -83,6 +83,8 @@ def execute(
     client_factory: Callable[[argparse.Namespace], Any] | None = None,
     pin_reader: Callable[[str], str] | None = None,
     socket_connector: Callable[..., Any] | None = None,
+    device_probe: Callable[..., Any] | None = None,
+    cert_resolver: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one explicitly requested action with test-injectable boundaries."""
     validate_target(args.host, args.port, args.mac)
@@ -105,9 +107,62 @@ def execute(
             "tv_verified": False,
         }
 
+    if args.command == "identify":
+        try:
+            from pyvidaa import probe_ip
+        except ImportError as exc:
+            raise VidaaManualError("Install pyvidaa in the active venv") from exc
+        device = (device_probe or probe_ip)(args.host, timeout=3.0)
+        if device is None:
+            return {
+                "outcome": "vidaa_upnp_not_observed",
+                "host": args.host,
+                "tv_verified": False,
+                "note": "No UPnP response does not prove this is not a TV.",
+            }
+        return {
+            "outcome": "vidaa_upnp_candidate",
+            "host": args.host,
+            "name": getattr(device, "name", None),
+            "model": getattr(device, "model", None),
+            "brand": getattr(device, "brand", None),
+            "protocol_version": getattr(device, "protocol_version", None),
+            "tv_verified": False,
+            "control_verified": False,
+        }
+
+    if args.command == "certs":
+        try:
+            from pyvidaa.certs import resolve_client_certs
+        except ImportError as exc:
+            raise VidaaManualError("Install pyvidaa in the active venv") from exc
+        found = (cert_resolver or resolve_client_certs)() is not None
+        return {
+            "outcome": "client_certificate_pair_present" if found else "client_certificate_pair_missing",
+            "tls_files_found": found,
+            "tls_handshake_verified": False,
+            "help": (
+                "See pyvidaa README: Obtaining the client certificate."
+                if not found
+                else "File presence does not prove TV TLS authentication."
+            ),
+        }
+
     client = (client_factory or new_client)(args)
     try:
         if not client.connect(timeout=10.0):
+            try:
+                from pyvidaa.certs import resolve_client_certs
+            except ImportError:
+                resolve_client_certs = None
+            if resolve_client_certs is not None:
+                certs = (cert_resolver or resolve_client_certs)()
+                if certs is None:
+                    raise VidaaManualError(
+                        "VIDAA connection failed with no client cert/key installed. "
+                        "Modern firmware may require mutual TLS. Run 'certs' and "
+                        "see the pyvidaa README for obtaining the client certificate."
+                    )
             raise VidaaManualError(
                 "VIDAA client did not connect; check protocol, TV settings and power"
             )
@@ -195,7 +250,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="Opt in to pyvidaa SDK's local token persistence",
     )
     actions = parser.add_subparsers(dest="command", required=True)
-    for name in ("probe", "pair", "status", "apps"):
+    for name in ("probe", "identify", "certs", "pair", "status", "apps"):
         actions.add_parser(name)
     key = actions.add_parser("key")
     key.add_argument("key", choices=sorted(REMOTE_KEYS))
