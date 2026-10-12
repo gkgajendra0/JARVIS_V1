@@ -17,6 +17,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -124,6 +125,12 @@ from jarvis.goal_intelligence.runtime import GiccApplyRuntime
 from jarvis.goal_intelligence.service import GoalOrchestrator, VerificationRegistry
 from jarvis.goal_intelligence.store import GoalStore
 from jarvis.goal_intelligence.telemetry import CapturingGiccTelemetry
+from jarvis.knowledge.research import (
+    CurrentResearchService,
+    EvidenceSource,
+    ProviderResearchEvidence,
+    ResearchMode,
+)
 from jarvis.promotion.authority import PromotionAuthorityBridge
 from jarvis.promotion.coordinator import PromotionCoordinator
 from jarvis.promotion.deployment import DeploymentCoordinator
@@ -138,6 +145,7 @@ from jarvis.promotion.observation import ObservationController
 from jarvis.promotion.release import DeploymentMetadataStore, GitReleaseStager
 from jarvis.promotion.store import PromotionStore
 from jarvis.self_model.health import HealthRegistry
+from jarvis.work.actions import ResearchWorkExecutor
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
     DockerDevelopmentTestRunner,
@@ -417,14 +425,55 @@ async def test_production_acquisition_vertical_develop_verify_promote_activate_r
     research = work.save(
         research.transition(WorkState.RUNNING), expected_version=research.version
     )
+    # Use the *real* Work research tool with an offline controlled provider.
+    # Merely fabricating a successful WorkStep would conceal broken research
+    # execution before development and activation.
+    research_query = "Python utility implementation, verification, and safe packaging"
+
+    class ControlledResearchProvider:
+        provider_name = "offline-acquisition-fixture"
+        model_name = "controlled-no-network"
+
+        def research(
+            self, query: str, mode: ResearchMode
+        ) -> ProviderResearchEvidence:
+            assert query == research_query
+            assert mode is ResearchMode.CURRENT
+            return ProviderResearchEvidence(
+                sources=(
+                    EvidenceSource(
+                        source_id="controlled-source",
+                        url="https://example.org/utility-implementation",
+                        title="Synthetic utility implementation reference",
+                        domain="example.org",
+                        retrieved_at=datetime.now(UTC),
+                        excerpt="Controlled non-executing implementation evidence.",
+                    ),
+                )
+            )
+
+        def close(self) -> None:
+            pass
+
+    research_evidence = await ResearchWorkExecutor(
+        CurrentResearchService(ControlledResearchProvider())
+    ).execute(
+        work=research,
+        parameters={"query": research_query, "mode": "current"},
+    )
+    assert research_evidence["ok"] is True
+    assert research_evidence["sources"][0]["url"] == (
+        "https://example.org/utility-implementation"
+    )
     work.add_step(
         WorkStep(
             work_id=research.work_id,
             kind="research_web",
-            summary="Controlled research boundary",
+            summary="Controlled provider-backed research boundary",
+            input_data={"query": research_query, "mode": "current"},
         )
         .start()
-        .complete({"ok": True, "test_boundary": "fixed_research_evidence"})
+        .complete(research_evidence)
     )
     resolver = AcquisitionWorkContextResolver(changes)
     await _action(work, AcquisitionInspectGoalExecutor(resolver), research, {})
