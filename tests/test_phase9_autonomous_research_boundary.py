@@ -180,9 +180,7 @@ async def test_unseen_device_research_is_executed_before_resolution_and_survives
     await engine.advance(work.work_id)  # deterministic re-resolution
     await engine.advance(work.work_id)  # completion is gated on good research
     steps = store.list_steps(work.work_id)
-    evidence_steps = [
-        step for step in steps if step.kind != "completion_guard"
-    ]
+    evidence_steps = [step for step in steps if step.kind != "completion_guard"]
     assert [step.kind for step in evidence_steps] == [
         "acq_inspect_goal",
         "research_web",
@@ -203,7 +201,5 @@ async def test_unseen_device_research_is_executed_before_resolution_and_survives
         assert research_steps[0].observation["sources"] == []
         # The WorkEngine must persist an explicit completion guard; absence
         # of research sources is never silently treated as successful work.
-        guard_steps = [
-            step for step in steps if step.kind == "completion_guard"
-        ]
+        guard_steps = [step for step in steps if step.kind == "completion_guard"]
         assert len(guard_steps) == 1
