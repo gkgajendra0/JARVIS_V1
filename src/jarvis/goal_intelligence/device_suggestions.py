@@ -27,6 +27,31 @@ _AEP_RE = re.compile(
     r"category=(?P<category>[a-z0-9_]{1,40}):"
     r"at=(?P<observed>\d{12}):(?P<digest>[a-f0-9]{24})$"
 )
+_VIDAA_RE = re.compile(
+    r"^windows_vidaa_udp_unverified:"
+    r"(?P<outer>\\d{1,3}(?:\\.\\d{1,3}){3}):"
+    r"vendor=(?P<vendor>[a-z0-9_]{1,40}):"
+    r"model=(?P<model>[a-z0-9_]{1,40}):"
+    r"category=media_player:at=(?P<observed>\\d{12}):"
+    r"(?P<digest>[a-f0-9]{24})$"
+)
+
+
+def authorized_discovery_marker(protocol: str, address: str = "") -> str:
+    """Return the exact consumed-permit prefix for a device observation."""
+    if protocol == "vidaa_udp":
+        try:
+            ip = ipaddress.IPv4Address(address)
+        except ValueError:
+            return ""
+        # VIDAA permit was granted to the owner's currently selected local
+        # CIDR, not to an arbitrary address/port.
+        return "windows_vidaa_authorized_scope_consumed:vidaa_udp:"
+    if protocol in {"upnp", "dns_sd", "wsd"}:
+        return "windows_aep_authorized_scope_consumed:" + protocol
+    return ""
+
+
 _LOCAL_NETWORKS = tuple(
     ipaddress.IPv4Network(value)
     for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
@@ -58,11 +83,12 @@ class UnverifiedDeviceSuggestionV1:
 
 
 def _decode(ref: str, *, now_epoch: int) -> UnverifiedDeviceSuggestionV1 | None:
-    match = _AEP_RE.fullmatch(ref)
-    if match is None:
+    aep_match = _AEP_RE.fullmatch(ref)
+    vidaa_match = _VIDAA_RE.fullmatch(ref)
+    if aep_match is None and vidaa_match is None:
         return None
-    fields = match.groupdict()
-    if fields["outer"] != fields["inner"]:
+    fields = (aep_match or vidaa_match).groupdict()
+    if aep_match is not None and fields["outer"] != fields["inner"]:
         return None
     try:
         address = ipaddress.IPv4Address(fields["outer"])
@@ -77,12 +103,14 @@ def _decode(ref: str, *, now_epoch: int) -> UnverifiedDeviceSuggestionV1 | None:
         return None
     return UnverifiedDeviceSuggestionV1(
         address=str(address),
-        protocol=fields["protocol"],
+        protocol=fields["protocol"] if aep_match is not None else "vidaa_udp",
         manufacturer_hint=fields["vendor"],
         model_hint=fields["model"],
-        category_hint=fields["category"],
+        category_hint=fields["category"] if aep_match is not None else "media_player",
         observed_at_epoch=observed,
-        neighbor_correlated=fields["source"] == "neighbor_correlated",
+        neighbor_correlated=(
+            aep_match is not None and fields["source"] == "neighbor_correlated"
+        ),
         evidence_ref=ref,
     )
 
