@@ -64,6 +64,7 @@ from .evaluation import ReplanController
 from .execution import GoalPlanDispatcher, PlanDispatchDisposition
 from .information import (
     InformationResolutionResult,
+    InformationResolutionState,
     InformationResolutionStrategy,
     InformationResolver,
     can_rediscover_information,
@@ -101,6 +102,11 @@ from .status import OwnerObjectiveStatusResolver
 from .store import GoalStore, GoalStoreConflict, build_default_goal_store
 from .telemetry import DEFAULT_GICC_TELEMETRY, GiccTelemetrySink
 from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
+from .vidaa_udp import (
+    ReviewedVidaaScopeV1,
+    VidaaAuthorityExecutionGuard,
+    WindowsVidaaUdpBackend,
+)
 from .windows_lan_scope import WindowsLanScopePlanner
 from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry, canonical_world_entity_type
@@ -380,6 +386,80 @@ class GiccApplyRuntime:
         )
         return result
 
+    def apply_approved_vidaa_discovery(
+        self,
+        *,
+        goal_id: str,
+        need_id: str,
+        session_id: str,
+        scope: ReviewedVidaaScopeV1,
+        authority_guard: VidaaAuthorityExecutionGuard,
+        planner: WindowsLanScopePlanner | None = None,
+        resume_existing_goal: bool = False,
+    ) -> InformationResolutionResult | None:
+        """One permit, one directed broadcast, append only untrusted evidence."""
+        if not isinstance(scope, ReviewedVidaaScopeV1) or not isinstance(
+            authority_guard, VidaaAuthorityExecutionGuard
+        ):
+            raise TypeError("VIDAA discovery requires reviewed scope and Authority")
+        goal = self.store.get_goal(goal_id)
+        need = self.store.get_information_need(need_id)
+        if (
+            goal is None
+            or goal.state is not GoalState.WAITING_INFORMATION
+            or (goal.source_session_id != session_id and not resume_existing_goal)
+            or need is None
+            or need.goal_id != goal_id
+            or not can_rediscover_information(need)
+            or canonical_world_entity_type(need.answer_schema.get("entity_type"))
+            != "media_player"
+            or authority_guard.session_id != session_id
+            or not authority_guard.binds_information_need(
+                goal_id=goal_id, need_id=need_id
+            )
+            or not authority_guard.binds_scope(scope)
+        ):
+            return None
+        routes = (planner or WindowsLanScopePlanner()).inspect()
+        if not any(
+            route.cidr == scope.cidr
+            and route.interface_index == scope.interface_index
+            for route in routes
+        ):
+            return None
+        # This is an ACTIVE observation, not a passive Windows neighbor lookup.
+        # The backend consumes the owner-bound Authority permit BEFORE creating
+        # the UDP socket, even if the network later refuses to transmit.
+        candidates = WindowsVidaaUdpBackend(is_authorized=authority_guard).observe(
+            scope
+        )
+        if not authority_guard.consumed_for(scope):
+            return None
+        marker = "windows_vidaa_authorized_scope_consumed:vidaa_udp:" + scope.cidr
+        refs = (marker, *(item.evidence_ref for item in candidates))
+        for _ in range(3):
+            current = self.store.get_information_need(need_id)
+            if current is None or not can_rediscover_information(current):
+                return None
+            try:
+                updated = self.store.update_information_need_state(
+                    need_id,
+                    current.state,
+                    expected_revision=current.revision,
+                    evidence_refs=refs,
+                )
+            except GoalStoreConflict:
+                continue
+            return InformationResolutionResult(
+                state=InformationResolutionState.UNRESOLVED,
+                need=updated,
+                attempted_strategies=(
+                    InformationResolutionStrategy.CURRENT_STATE_OBSERVATION,
+                ),
+            )
+        LOGGER.warning("VIDAA permit consumed but evidence CAS update raced")
+        return None
+
     def confirm_owner_discovered_device(
         self,
         *,
@@ -445,20 +525,37 @@ class GiccApplyRuntime:
         if need is None or not can_rediscover_information(need):
             return None
         kind = canonical_world_entity_type(need.answer_schema.get("entity_type"))
-        reviewed = next(
-            (
-                scope
-                for scope in local_planner.consent_scopes_for(kind)
-                if scope.protocol == target.get("protocol")
-                and list(scope.approved_address_ranges)
-                == target.get("address_result_filters")
-                and scope.all_local_interfaces_authorized
-                == target.get("all_local_interfaces")
-            ),
-            None,
-        )
-        if reviewed is None:
-            return None
+        if proposal.operation == "discover_vidaa_udp":
+            selected = next(
+                (
+                    net
+                    for net in local_planner.inspect()
+                    if [net.cidr] == target.get("address_result_filters")
+                    and net.interface_index == target.get("interface_index")
+                ),
+                None,
+            )
+            if selected is None or kind != "media_player":
+                return None
+            reviewed = ReviewedVidaaScopeV1(
+                cidr=selected.cidr,
+                interface_index=selected.interface_index,
+            )
+        else:
+            reviewed = next(
+                (
+                    scope
+                    for scope in local_planner.consent_scopes_for(kind)
+                    if scope.protocol == target.get("protocol")
+                    and list(scope.approved_address_ranges)
+                    == target.get("address_result_filters")
+                    and scope.all_local_interfaces_authorized
+                    == target.get("all_local_interfaces")
+                ),
+                None,
+            )
+            if reviewed is None:
+                return None
         # Atomically consume the canonical USER utterance *before* the Windows
         # Hello dialog. A replay cannot authorize another scan or protocol,
         # even if the first confirmation is denied or the tool is called twice.
@@ -483,6 +580,23 @@ class GiccApplyRuntime:
             reviewed,
             consent_record_id=authorized.approval_id,
         )
+        if isinstance(scope, ReviewedVidaaScopeV1):
+            guard_vidaa = VidaaAuthorityExecutionGuard(
+                authority=authorized.authority,
+                proposal=authorized.proposal,
+                context=authorized.context,
+                permit_id=authorized.permit_id,
+                approval_id=authorized.approval_id,
+            )
+            return self.apply_approved_vidaa_discovery(
+                goal_id=goal_id,
+                need_id=need_id,
+                session_id=session_id,
+                scope=scope,
+                authority_guard=guard_vidaa,
+                planner=local_planner,
+                resume_existing_goal=resume_existing_goal,
+            )
         guard = AepAuthorityExecutionGuard(
             authority=authorized.authority,
             proposal=authorized.proposal,
