@@ -54,10 +54,14 @@ def _read_metadata(client: Any, method_name: str, fields: frozenset[str]) -> dic
         return {"status": "request_failed", "available_fields": []}
     if not isinstance(response, dict):
         return {"status": "no_structured_response", "available_fields": []}
-    return {
+    result: dict[str, Any] = {
         "status": "metadata_received",
         "available_fields": _safe_field_names(response, fields),
     }
+    if method_name == "get_state":
+        result["state_type"] = _safe_state_value(response, "statetype")
+        result["state_source"] = _safe_state_value(response, "source")
+    return result
 
 
 def probe_legacy_inspector(
@@ -129,16 +133,6 @@ def observe_software(
     device_info = _read_metadata(client, "get_device_info", DEVICE_INFO_FIELDS)
     capability = _read_metadata(client, "get_capability", CAPABILITY_FIELDS)
 
-    # Read the simple state one additional time only when needed to extract
-    # enum-like state fields. Avoid returning full SDK payloads.
-    # Reusing cached SDK data is preferable to a duplicate MQTT request.
-    state_type = None
-    state_source = None
-    cached = getattr(client, "_tv_state", None)
-    if isinstance(cached, dict):
-        state_type = _safe_state_value(cached, "statetype")
-        state_source = _safe_state_value(cached, "source")
-
     try:
         inspector = inspector_probe(host)
     except (OSError, TimeoutError, ValueError):
@@ -155,8 +149,6 @@ def observe_software(
             "tv_info": tv_info,
             "device_info": device_info,
             "capability": capability,
-            "state_type": state_type,
-            "state_source": state_source,
         },
         "legacy_developer_inspector": inspector,
         "screen_observation": {
