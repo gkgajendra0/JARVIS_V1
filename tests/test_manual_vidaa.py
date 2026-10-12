@@ -1,7 +1,8 @@
 """Tests for manual VIDAA controls without network access or pyvidaa installed."""
 
+import sys
 from argparse import Namespace
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,7 @@ from jarvis.vidaa.manual import (
     VidaaManualError,
     execute,
     make_parser,
+    new_client,
     validate_target,
 )
 
@@ -196,3 +198,43 @@ def test_connect_failure_without_certs_explains_transport_blocker() -> None:
             args("pair"), client_factory=lambda _: client, cert_resolver=lambda: None
         )
     assert client.disconnected
+
+
+def test_client_auto_reads_matching_tv_mac_for_dynamic_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_module = ModuleType("pyvidaa")
+    observed: dict[str, object] = {}
+
+    def mock_client(**kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return observed
+
+    def mock_probe(host: str, *, timeout: float) -> SimpleNamespace:
+        assert timeout == 3.0
+        return SimpleNamespace(
+            ip=host,
+            mac="AA:BB:CC:DD:EE:FF",
+            protocol_version="3290",
+        )
+
+    mock_module.VidaaTV = mock_client  # type: ignore[attr-defined]
+    mock_module.probe_ip = mock_probe  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
+    new_client(args("status"))
+    assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
+
+
+def test_modern_device_without_mac_requests_local_network_mac(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_module = ModuleType("pyvidaa")
+    mock_module.VidaaTV = lambda **kwargs: kwargs  # type: ignore[attr-defined]
+    mock_module.probe_ip = (  # type: ignore[attr-defined]
+        lambda host, timeout: SimpleNamespace(
+            ip=host, mac=None, protocol_version="3290"
+        )
+    )
+    monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
+    with pytest.raises(VidaaManualError, match="MAC address"):
+        new_client(args("pair"))
