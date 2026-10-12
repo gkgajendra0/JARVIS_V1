@@ -293,3 +293,15 @@ def test_discovery_cannot_forge_owner_inventory_provenance(
     assert resolution.entity_id is None
     assert registry.entities() == ()
     assert "owner-config:forged-tv" in resolution.evidence_refs
+
+
+
+def test_production_gicc_entity_resolution_cannot_emit_implicit_network_packets() -> None:
+    """Unapproved goal resolution must not instantiate active mDNS/SSDP discovery."""
+    import inspect
+
+    from jarvis.goal_intelligence.runtime import build_gicc_apply_runtime
+
+    wiring = inspect.getsource(build_gicc_apply_runtime)
+    assert "EntityResolver(world, discoveries=())" in wiring
+    assert "ReviewedLocalServiceEntityDiscovery(" not in wiring
