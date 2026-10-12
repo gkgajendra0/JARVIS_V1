@@ -39,6 +39,7 @@ from .world import (
     EntityResolutionState,
     EntityResolver,
     canonical_world_entity_type,
+    has_independent_target_provenance,
 )
 
 _WORLD_RESOURCE_TYPES = frozenset(
@@ -95,11 +96,18 @@ def _entity_candidate(value: str) -> tuple[str | None, str]:
 
 def _task_specific_values(
     candidate: GoalInterpretationCandidateV1,
+    *,
+    grounded_entity_types: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
+    # Unfamiliar device categories may be owner-identified without appearing
+    # in the static world ontology. Their names must not be mistaken for movie
+    # titles, filenames, or other task arguments. Trust only canonical types
+    # resolved to independent owner inventory, never model-proposed labels.
+    world_types = _WORLD_RESOURCE_TYPES | frozenset(grounded_entity_types)
     values: list[str] = []
     for encoded in candidate.candidate_entities:
         proposed_type, mention = _entity_candidate(encoded)
-        if mention and proposed_type not in _WORLD_RESOURCE_TYPES:
+        if mention and proposed_type not in world_types:
             values.append(mention)
     return tuple(values)
 
@@ -494,11 +502,29 @@ class GoalIntelligenceCoordinator:
         candidate: GoalInterpretationCandidateV1,
         interpretation_result: GoalInterpretationResult | None,
     ) -> GoalIntakeResult:
+        # Treat a new physical device name as a resource identity only when
+        # the target is present in the independently reviewed inventory.
+        # Unresolved/model-invented entity types still count as task-specific
+        # and cannot be injected into capability family/operation identifiers.
+        grounded_entity_types = tuple(
+            sorted(
+                {
+                    canonical_world_entity_type(entity.entity_type)
+                    for entity_id in goal.referenced_entity_ids
+                    if (entity := self._store.get_entity(entity_id)) is not None
+                    and has_independent_target_provenance(entity.provenance_refs)
+                }
+            )
+        )
         requirement_result = await self._requirements.derive(
             goal=goal,
             interpretation=candidate,
             known_entity_ids=goal.referenced_entity_ids,
-            task_specific_terms=_task_terms(_task_specific_values(candidate)),
+            task_specific_terms=_task_terms(
+                _task_specific_values(
+                    candidate, grounded_entity_types=grounded_entity_types
+                )
+            ),
         )
         graph, missing_types = bind_physical_target_requirements(
             requirement_result.graph,
