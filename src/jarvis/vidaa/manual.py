@@ -112,7 +112,8 @@ def execute(
                 "VIDAA client did not connect; check protocol, TV settings and power"
             )
         if args.command == "pair":
-            client.start_pairing()
+            if client.start_pairing() is False:
+                raise VidaaManualError("TV rejected the pairing request; no PIN expected")
             reader = pin_reader or getpass.getpass
             pin = reader("PIN displayed on TV (not echoed): ").strip()
             if not re.fullmatch(r"\d{4,8}", pin):
