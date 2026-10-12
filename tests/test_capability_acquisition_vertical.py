@@ -84,7 +84,10 @@ from jarvis.capability_registry.runtime_composition import (
 )
 from jarvis.capability_registry.store import CapabilityRegistryStore
 from jarvis.development_engine.contracts import DevelopmentTicketV1
-from jarvis.development_engine.phase9 import Phase9DevelopmentTicketBuilder
+from jarvis.development_engine.phase9 import (
+    Phase9DevelopmentTicketBuilder,
+    Phase9ResearchControlPlaneDecider,
+)
 from jarvis.development_engine.tools import (
     DevelopmentToolDenied,
     WorkExecutorDevelopmentToolPort,
@@ -146,12 +149,13 @@ from jarvis.promotion.release import DeploymentMetadataStore, GitReleaseStager
 from jarvis.promotion.store import PromotionStore
 from jarvis.self_model.health import HealthRegistry
 from jarvis.work.actions import ResearchWorkExecutor
+from jarvis.work.brain import BrainCoordinator, BrainDecision
 from jarvis.work.development import (
     DevelopmentWorkspaceManager,
     DockerDevelopmentTestRunner,
     build_development_executors,
 )
-from jarvis.work.engine import WorkActionRegistry
+from jarvis.work.engine import WorkActionRegistry, WorkEngine
 from jarvis.work.models import WorkState, WorkStep
 from jarvis.work.privacy import ProtectedWorkPayloadCodec
 from jarvis.work.resources import ResourceLeaseManager, engineering_resource_capacities
@@ -453,38 +457,75 @@ async def test_production_acquisition_vertical_develop_verify_promote_activate_r
         def close(self) -> None:
             pass
 
-    research_evidence = await ResearchWorkExecutor(
-        CurrentResearchService(ControlledResearchProvider())
-    ).execute(
-        work=research,
-        parameters={"query": research_query, "mode": "current"},
+    provider = ControlledResearchProvider()
+
+    class ResearchReasoner:
+        """Controlled cloud-brain port, not a prewritten successful WorkStep."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def decide(self, request):
+            self.calls += 1
+            assert request.work.work_id == research.work_id
+            assert any(
+                step.kind == "acq_inspect_goal"
+                and step.state.value == "completed"
+                for step in request.full_history_steps
+            )
+            assert not any(
+                step.kind == "research_web" for step in request.full_history_steps
+            )
+            return BrainDecision(
+                action="research_web",
+                summary="Investigate safe implementation of the owner capability.",
+                parameters={"query": research_query, "mode": "current"},
+            )
+
+    reasoner = ResearchReasoner()
+    resolver = AcquisitionWorkContextResolver(changes)
+    engine = WorkEngine(
+        store=work,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry(
+            (
+                AcquisitionInspectGoalExecutor(resolver),
+                ResearchWorkExecutor(CurrentResearchService(provider)),
+                AcquisitionResolveExecutor(
+                    resolver,
+                    context_provider=context,
+                    sources=CapabilitySourceRegistry(
+                        (CustomBuildCapabilitySourceAdapter(),)
+                    ),
+                ),
+            )
+        ),
+        action_admission=changes.work_admitted,
+        control_plane_decider=Phase9ResearchControlPlaneDecider(
+            Phase9DevelopmentTicketBuilder(changes)
+        ),
     )
-    assert research_evidence["ok"] is True
-    assert research_evidence["sources"][0]["url"] == (
+    await engine.advance(research.work_id)  # canonical goal inspected
+    await engine.advance(research.work_id)  # real research executor invoked
+    await engine.advance(research.work_id)  # deterministic re-resolution
+
+    research_steps = [
+        step
+        for step in work.list_steps(research.work_id)
+        if step.kind == "research_web"
+    ]
+    assert [step.kind for step in work.list_steps(research.work_id)] == [
+        "acq_inspect_goal",
+        "research_web",
+        "acq_resolve",
+    ]
+    assert len(research_steps) == 1
+    assert research_steps[0].observation["ok"] is True
+    assert research_steps[0].observation["sources"][0]["url"] == (
         "https://example.org/utility-implementation"
     )
-    work.add_step(
-        WorkStep(
-            work_id=research.work_id,
-            kind="research_web",
-            summary="Controlled provider-backed research boundary",
-            input_data={"query": research_query, "mode": "current"},
-        )
-        .start()
-        .complete(research_evidence)
-    )
-    resolver = AcquisitionWorkContextResolver(changes)
-    await _action(work, AcquisitionInspectGoalExecutor(resolver), research, {})
-    await _action(
-        work,
-        AcquisitionResolveExecutor(
-            resolver,
-            context_provider=context,
-            sources=CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),)),
-        ),
-        research,
-        {},
-    )
+    assert reasoner.calls == 1  # JARVIS owns inspection and source resolution
+    assert work.require(research.work_id).state is WorkState.RUNNING
     paths = [
         "src/jarvis/acquired_capabilities/utility.py",
         "src/jarvis/acquired_capabilities/registry.py",
