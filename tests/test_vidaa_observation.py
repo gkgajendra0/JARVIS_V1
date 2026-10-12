@@ -91,7 +91,9 @@ def test_inaccessible_sdk_metadata_is_not_fabricated() -> None:
         },
     )
     for section in ("tv_state", "tv_info", "device_info", "capability"):
-        assert result["signal_inventory"][section]["status"] == "sdk_method_not_available"
+        assert (
+            result["signal_inventory"][section]["status"] == "sdk_method_not_available"
+        )
     assert result["software_ui_navigation_ready"] is False
 
 
