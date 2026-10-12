@@ -187,8 +187,29 @@ def execute(
                         "Modern firmware may require mutual TLS. Run 'certs' and "
                         "see the pyvidaa README for obtaining the client certificate."
                     )
+            # pyvidaa exposes the MQTT CONNACK return code separately from
+            # socket/TLS failures. Only report non-secret protocol status.
+            connack = getattr(client, "_last_connack_rc", None)
+            if connack in (4, 5):
+                reason = (
+                    "bad MQTT username/password"
+                    if connack == 4
+                    else "MQTT not authorized"
+                )
+                raise VidaaManualError(
+                    f"VIDAA MQTT rejected connection (CONNACK {connack}: {reason}). "
+                    "Check the TV clock, dynamically detected TV MAC and "
+                    "previously saved authorization. No PIN request was sent."
+                )
+            if connack is None:
+                raise VidaaManualError(
+                    "VIDAA connection failed without an observed MQTT CONNACK. "
+                    "TCP was previously reachable; TLS handshake, transport "
+                    "closure or timeout remain possible. No PIN request was sent."
+                )
             raise VidaaManualError(
-                "VIDAA client did not connect; check protocol, TV settings and power"
+                f"VIDAA broker refused connection (MQTT CONNACK {connack}). "
+                "No PIN request was sent."
             )
         if args.command == "pair":
             if client.start_pairing() is False:
