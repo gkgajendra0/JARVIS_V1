@@ -88,7 +88,7 @@ def new_client(args: argparse.Namespace) -> Any:
     # authentication requires the MAC; do not let pyvidaa silently downgrade.
     if not mac:
         raise VidaaManualError(
-            "TV MAC unavailable: targeted VIDAA UPnP discovery did not return "
+            "TV MAC unavailable: targeted VIDAA UPnP and UDP discovery did not return "
             "a usable MAC. Modern VIDAA auth requires it; do not fall back "
             "to legacy static credentials. Turn on the TV, verify its current "
             "IP, retry 'identify', or supply its verified network MAC via --mac."
@@ -161,7 +161,9 @@ def execute(
                 }
             )
         return {
-            "outcome": "vidaa_udp_candidates" if candidates else "no_vidaa_udp_candidates",
+            "outcome": "vidaa_udp_candidates"
+            if candidates
+            else "no_vidaa_udp_candidates",
             "candidates": candidates[:20],
             "note": "UDP sightings are unverified; confirm the TV's IP before control.",
         }
