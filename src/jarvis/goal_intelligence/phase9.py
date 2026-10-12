@@ -41,7 +41,11 @@ from .models import (
 )
 from .monitoring import GICC_MONITOR_EVENT_CONTRACT
 from .store import GoalStore, GoalStoreConflict, GoalStoreError
-from .world import canonical_world_entity_type
+from .world import (
+    canonical_world_entity_type,
+    has_independent_target_provenance,
+    is_physical_target_entity_type,
+)
 
 
 class CapabilityCatalogRefresher(Protocol):
@@ -421,16 +425,8 @@ class Phase9GoalBridge:
             raise GoalStoreConflict("cancelled capability gap cannot be re-admitted")
         # Recheck the physical target even if an alternate GICC caller bypasses
         # normal intake; research of an unbound device must not start a build.
-        physical_types = {
-            "media_player",
-            "camera",
-            "computer",
-            "display",
-            "speaker",
-            "printer",
-        }
         kind = canonical_world_entity_type(gap.target_entity_type)
-        if kind in physical_types:
+        if is_physical_target_entity_type(kind):
             if not gap.target_entity_id:
                 raise GoalStoreConflict(
                     "device-specific acquisition requires a resolved canonical "
@@ -441,6 +437,7 @@ class Phase9GoalBridge:
                 entity is None
                 or entity.lifecycle_state is not EntityLifecycleState.ACTIVE
                 or canonical_world_entity_type(entity.entity_type) != kind
+                or not has_independent_target_provenance(entity.provenance_refs)
             ):
                 raise GoalStoreConflict(
                     "device-specific capability target is not an active "

@@ -354,3 +354,39 @@ def test_architecture_rejects_observation_only_physical_provenance(
             ),
             "change-tv",
         )
+
+
+@pytest.mark.parametrize(
+    "entity_type", ("air_conditioner", "smart_light", "robot_vacuum")
+)
+def test_unfamiliar_physical_architecture_still_requires_owner_identity(
+    entity_type: str,
+) -> None:
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError, match="identity is unresolved"
+    ):
+        require_gicc_physical_target_identity(
+            _TargetEvidenceStore("new-device", entity_type=entity_type),
+            "change-tv",
+        )
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError, match="identity is unresolved"
+    ):
+        require_gicc_physical_target_identity(
+            _TargetEvidenceStore(
+                "new-device",
+                entity_type=entity_type,
+                context_id="new-device",
+                provenance=("discovery:unverified",),
+            ),
+            "change-tv",
+        )
+    require_gicc_physical_target_identity(
+        _TargetEvidenceStore(
+            "new-device",
+            entity_type=entity_type,
+            context_id="new-device",
+            provenance=("owner_inventory:explicit_confirmation",),
+        ),
+        "change-tv",
+    )

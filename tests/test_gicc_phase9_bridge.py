@@ -781,3 +781,40 @@ def test_completion_rechecks_actual_capability_truth_before_resume(
     persisted_gap = store.get_gap(gap.gap_id)
     assert persisted_gap is not None
     assert persisted_gap.state.value == "satisfied"
+
+
+def test_unfamiliar_device_cannot_enter_phase9_with_unverified_identity(
+    tmp_path: Path,
+) -> None:
+    import pytest
+
+    from jarvis.goal_intelligence.store import GoalStoreConflict
+
+    store = _store(tmp_path)
+    entity = store.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="air_conditioner",
+            canonical_name="Advertised unverified AC",
+            provenance_refs=("discovery:unverified-advertisement",),
+        )
+    )
+    goal = _goal(store)
+    gap = CapabilityGapV1.create(
+        goal_id=goal.goal_id,
+        requirement_ids=("req-ac",),
+        reusable_capability_family="air_conditioner.control",
+        target_entity_type="air_conditioner",
+        target_entity_id=entity.entity_id,
+        minimum_required_operations=("set_temperature",),
+        motivating_goal_id=goal.goal_id,
+    )
+    admitter = FakeAdmitter()
+    bridge = Phase9GoalBridge(
+        coordinator=admitter,
+        change_store=FakeArtifacts(),
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+    with pytest.raises(GoalStoreConflict, match="active canonical entity"):
+        bridge.admit_gap(gap, goal)
+    assert admitter.goals == []

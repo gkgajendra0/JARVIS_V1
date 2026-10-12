@@ -338,17 +338,11 @@ def require_gicc_physical_target_identity(
     from jarvis.goal_intelligence.world import (
         canonical_world_entity_type,
         has_independent_target_provenance,
+        is_physical_target_entity_type,
     )
 
     kind = canonical_world_entity_type(link.payload.get("target_entity_type"))
-    if kind not in {
-        "media_player",
-        "camera",
-        "computer",
-        "display",
-        "speaker",
-        "printer",
-    }:
+    if not is_physical_target_entity_type(kind):
         return
     target_id = str(link.payload.get("target_entity_id") or "").strip()
     target = store.latest_artifact(change_id, "gicc_target_context")
