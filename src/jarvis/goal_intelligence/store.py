@@ -1369,9 +1369,7 @@ class GoalStore:
                         "windows_aep_discovered_unverified:",
                         "windows_aep_neighbor_correlated_unverified:",
                     ),
-                    "unverified_vidaa_evidence:": (
-                        "windows_vidaa_udp_unverified:",
-                    ),
+                    "unverified_vidaa_evidence:": ("windows_vidaa_udp_unverified:",),
                 }
                 evidence = tuple(
                     value[len(prefix) :]
