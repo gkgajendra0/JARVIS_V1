@@ -37,19 +37,30 @@ _VIDAA_RE = re.compile(
 )
 
 
-def authorized_discovery_marker(protocol: str, address: str = "") -> str:
-    """Return the exact consumed-permit prefix for a device observation."""
+def has_consumed_discovery_permit(
+    protocol: str, address: str, evidence_refs: tuple[str, ...]
+) -> bool:
+    """Owner-confirmable candidate must belong to its own approved LAN scope."""
     if protocol == "vidaa_udp":
         try:
             ip = ipaddress.IPv4Address(address)
         except ValueError:
-            return ""
-        # VIDAA permit was granted to the owner's currently selected local
-        # CIDR, not to an arbitrary address/port.
-        return "windows_vidaa_authorized_scope_consumed:vidaa_udp:"
+            return False
+        prefix = "windows_vidaa_authorized_scope_consumed:vidaa_udp:"
+        for ref in evidence_refs:
+            if ref.startswith(prefix):
+                try:
+                    if ip in ipaddress.IPv4Network(ref[len(prefix) :]):
+                        return True
+                except ValueError:
+                    continue
+        return False
     if protocol in {"upnp", "dns_sd", "wsd"}:
-        return "windows_aep_authorized_scope_consumed:" + protocol
-    return ""
+        return (
+            "windows_aep_authorized_scope_consumed:" + protocol
+            in evidence_refs
+        )
+    return False
 
 
 _LOCAL_NETWORKS = tuple(
