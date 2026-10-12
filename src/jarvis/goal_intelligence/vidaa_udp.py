@@ -300,18 +300,23 @@ class WindowsVidaaUdpBackend:
         self._platform = sys.platform if platform is None else platform
         self._clock = clock
         self._epoch = epoch
+        self.last_status = "not_started"
 
     def observe(self, scope: ReviewedVidaaScopeV1) -> tuple[VidaaUdpCandidateV1, ...]:
         if not isinstance(scope, ReviewedVidaaScopeV1):
             raise TypeError("VIDAA backend requires reviewed scope")
         if self._platform != "win32" or self._authorize is None:
+            self.last_status = "unavailable"
             return ()
         try:
             if self._authorize(scope) is not True:
+                self.last_status = "not_authorized"
                 return ()
         except Exception:
+            self.last_status = "not_authorized"
             return ()
 
+        self.last_status = "authorized_no_transmission"
         result: dict[str, VidaaUdpCandidateV1] = {}
         opened = None
         try:
@@ -321,6 +326,7 @@ class WindowsVidaaUdpBackend:
             # If the port is already in use, fail closed.
             opened.bind(("", _DISCOVERY_PORT))
             opened.sendto(_PACKET, (scope.broadcast, _DISCOVERY_PORT))
+            self.last_status = "datagram_transmitted"
             deadline = self._clock() + scope.timeout_seconds
             while len(result) < scope.max_results:
                 remaining = deadline - self._clock()
@@ -337,8 +343,16 @@ class WindowsVidaaUdpBackend:
                 if candidate is not None:
                     result[candidate.address] = candidate
         except (OSError, ValueError, AttributeError, TypeError):
+            if self.last_status == "datagram_transmitted":
+                self.last_status = "receive_failed"
+            else:
+                self.last_status = "socket_or_send_failed"
             return ()
         finally:
             if opened is not None:
-                opened.close()
+                try:
+                    opened.close()
+                except OSError:
+                    pass
+        self.last_status = "candidates_observed" if result else "sent_no_candidates"
         return tuple(result[key] for key in sorted(result))
