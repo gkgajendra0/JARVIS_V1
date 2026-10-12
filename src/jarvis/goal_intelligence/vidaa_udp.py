@@ -344,7 +344,7 @@ class WindowsVidaaUdpBackend:
             # If the port is already in use, fail closed.
             opened.bind(("", _DISCOVERY_PORT))
             opened.sendto(_PACKET, (scope.broadcast, _DISCOVERY_PORT))
-            self.last_status = "datagram_transmitted"
+            self.last_status = "datagram_send_accepted"
             deadline = self._clock() + scope.timeout_seconds
             while len(result) < scope.max_results:
                 remaining = deadline - self._clock()
@@ -361,7 +361,7 @@ class WindowsVidaaUdpBackend:
                 if candidate is not None:
                     result[candidate.address] = candidate
         except (OSError, ValueError, AttributeError, TypeError):
-            if self.last_status == "datagram_transmitted":
+            if self.last_status == "datagram_send_accepted":
                 self.last_status = "receive_failed"
             else:
                 self.last_status = "socket_or_send_failed"
@@ -372,5 +372,5 @@ class WindowsVidaaUdpBackend:
                     opened.close()
                 except OSError:
                     pass
-        self.last_status = "candidates_observed" if result else "sent_no_candidates"
+        self.last_status = "candidates_observed" if result else "send_accepted_no_candidates"
         return tuple(result[key] for key in sorted(result))
