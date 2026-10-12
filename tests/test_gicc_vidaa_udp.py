@@ -109,6 +109,7 @@ def test_authorized_vidaa_udp_emits_one_bounded_packet_and_keeps_only_lan_hints(
     assert found[0].address == "192.168.1.10"
     assert found[0].model == "U7N"
     assert sum(row[0] == "send" for row in calls) == 1
+    assert ("bind", ("", 36671)) in calls
     assert ("send", b'{"request":"discover"}', ("192.168.1.255", 36671)) in calls
     assert calls[-1] == ("close",)
 
