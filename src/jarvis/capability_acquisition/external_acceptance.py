@@ -100,7 +100,7 @@ def requires_owner_physical_confirmation(store: ChangeStore, change_id: str) -> 
     GICC physical targets require a separate, explicit owner observation
     after actual invocation before the original goal may be marked done.
     """
-    from jarvis.goal_intelligence.world import canonical_world_entity_type
+    from jarvis.goal_intelligence.world import is_physical_target_entity_type
 
     link = store.latest_artifact(change_id, "gicc_capability_gap_link")
     if link is None:
@@ -108,14 +108,9 @@ def requires_owner_physical_confirmation(store: ChangeStore, change_id: str) -> 
     raw_type = str(link.payload.get("target_entity_type") or "").strip()
     if not raw_type:
         return True  # fail closed for malformed GICC physical lineage
-    return canonical_world_entity_type(raw_type) in {
-        "media_player",
-        "camera",
-        "computer",
-        "display",
-        "speaker",
-        "printer",
-    }
+    # Unknown device types (ACs, lighting, future hardware) are not allowed
+    # to self-certify the outcome through their own adapter's response.
+    return is_physical_target_entity_type(raw_type)
 
 
 def _normalize_owner_reply(value: str) -> str:

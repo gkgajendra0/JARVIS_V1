@@ -17,6 +17,7 @@ from .models import (
 from .world import (
     canonical_world_entity_type,
     has_independent_target_provenance,
+    is_physical_target_entity_type,
 )
 
 # Do not accidentally require device identification for generic capabilities,
@@ -52,7 +53,11 @@ def _target_type(requirement: CapabilityRequirementV1) -> str | None:
                 "physical capability family contradicts declared target type"
             )
         return family
-    return declared if declared in _PHYSICAL_ENTITY_TYPES else None
+    # Unlike the reviewed semantic family aliases, an explicitly declared
+    # target entity type may be a *new* device category. Requiring a canonical
+    # inventory binding also for an unknown type prevents a fake/new adapter
+    # from silently bypassing Phase-9 device identity validation.
+    return declared if is_physical_target_entity_type(declared) else None
 
 
 def bind_physical_target_requirements(

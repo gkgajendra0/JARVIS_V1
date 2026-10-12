@@ -126,9 +126,50 @@ _TRUSTED_OWNER_INVENTORY_PREFIXES = (
 _TRUSTED_LOCAL_COMPUTER_PROVENANCE = frozenset(
     {"capability_runtime:local_machine", "machine:current"}
 )
-_PHYSICAL_TARGET_TYPES = frozenset(
-    {"media_player", "camera", "computer", "display", "speaker", "printer"}
+# Device vendors and protocol types cannot be enumerated in advance. Treat any
+# explicit, unfamiliar entity type as a physical target until a reviewed
+# non-device classification exists; never elevate a new device advertisement
+# merely because its type is absent from an old TV/camera allowlist.
+_NON_DEVICE_ENTITY_TYPES = frozenset(
+    {
+        "account",
+        "api",
+        "application",
+        "calendar",
+        "cloud_resource",
+        "database",
+        "dataset",
+        "document",
+        "email",
+        "entrance",
+        "event",
+        "file",
+        "folder",
+        "generic_external_resource",
+        "location",
+        "media_content",
+        "message",
+        "notification",
+        "person",
+        "place",
+        "process",
+        "project",
+        "repository",
+        "room",
+        "service",
+        "software",
+        "task",
+        "web_service",
+        "website",
+        "workflow",
+    }
 )
+
+
+def is_physical_target_entity_type(value: object) -> bool:
+    """Fail closed for an unfamiliar declared device type, not for software."""
+    kind = canonical_world_entity_type(value)
+    return bool(kind and kind not in _NON_DEVICE_ENTITY_TYPES)
 
 
 def has_independent_target_provenance(refs: tuple[str, ...] | list[str]) -> bool:
@@ -249,11 +290,9 @@ class EntityResolver:
         for entity in self._registry.entities():
             if entity.lifecycle_state is not EntityLifecycleState.ACTIVE:
                 continue
-            if canonical_world_entity_type(
+            if is_physical_target_entity_type(
                 entity.entity_type
-            ) in _PHYSICAL_TARGET_TYPES and not has_independent_target_provenance(
-                entity.provenance_refs
-            ):
+            ) and not has_independent_target_provenance(entity.provenance_refs):
                 continue
             if (
                 expected
@@ -386,8 +425,7 @@ class EntityResolver:
             for entity in all_entities
             if entity.lifecycle_state is EntityLifecycleState.ACTIVE
             and (
-                canonical_world_entity_type(entity.entity_type)
-                not in _PHYSICAL_TARGET_TYPES
+                not is_physical_target_entity_type(entity.entity_type)
                 or has_independent_target_provenance(entity.provenance_refs)
             )
             and (
@@ -450,10 +488,7 @@ class EntityResolver:
                         not in expected
                     ):
                         continue
-                    if (
-                        canonical_world_entity_type(entity.entity_type)
-                        in _PHYSICAL_TARGET_TYPES
-                    ):
+                    if is_physical_target_entity_type(entity.entity_type):
                         # A discovery adapter can return arbitrary provenance
                         # strings, including forged "owner-config:" labels.
                         # Its own claim cannot elevate a physical target into

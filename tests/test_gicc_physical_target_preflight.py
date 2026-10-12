@@ -235,3 +235,46 @@ def test_explicit_display_target_still_requires_real_display() -> None:
         get_entity=lambda _: None,
     )
     assert missing == ("display",)
+
+
+@pytest.mark.parametrize("device_type", ("air_conditioner", "smart_light", "robot_vacuum"))
+def test_unseen_device_type_requires_unique_reviewed_inventory(device_type: str) -> None:
+    graph = _graph(target_type=device_type, family=f"{device_type}.control")
+    untouched, missing = bind_physical_target_requirements(
+        graph, referenced_entity_ids=(), get_entity=lambda _: None
+    )
+    assert untouched is graph
+    assert missing == (device_type,)
+
+    advertised = WorldEntityRefV1.create(
+        entity_type=device_type,
+        canonical_name="Untrusted device advertisement",
+        provenance_refs=("discovery:untrusted",),
+    )
+    with pytest.raises(PhysicalTargetPreflightError):
+        bind_physical_target_requirements(
+            _graph(
+                target_type=device_type,
+                target_id=advertised.entity_id,
+                family=f"{device_type}.control",
+            ),
+            referenced_entity_ids=(advertised.entity_id,),
+            get_entity=lambda _: advertised,
+        )
+
+    real = _entity("Owner-identified device", device_type)
+    bound, missing = bind_physical_target_requirements(
+        graph, referenced_entity_ids=(real.entity_id,), get_entity=lambda _: real
+    )
+    assert missing == ()
+    assert bound.requirements[0].target_entity_id == real.entity_id
+
+
+@pytest.mark.parametrize("software_type", ("software", "application", "dataset"))
+def test_generic_software_still_needs_no_physical_identity(software_type: str) -> None:
+    graph = _graph(target_type=software_type, family="processing.transform")
+    original, missing = bind_physical_target_requirements(
+        graph, referenced_entity_ids=(), get_entity=lambda _: None
+    )
+    assert original is graph
+    assert missing == ()

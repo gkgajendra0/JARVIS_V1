@@ -735,3 +735,33 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
         await ExternalAcceptanceRecordExecutor(Resolver()).execute(
             work=item, parameters={}
         )
+
+
+@pytest.mark.parametrize("device_type", ("air_conditioner", "smart_light", "robot_vacuum"))
+def test_future_physical_device_requires_independent_effect_confirmation(
+    device_type: str,
+) -> None:
+    # An unknown device category must not silently trust its own adapter's
+    # self-reported successful physical action.
+    change = SimpleNamespace(
+        latest_artifact=lambda _id, kind: (
+            SimpleNamespace(payload={"target_entity_type": device_type})
+            if kind == "gicc_capability_gap_link"
+            else None
+        )
+    )
+    assert requires_owner_physical_confirmation(change, "new-device-change")
+
+
+@pytest.mark.parametrize("software_type", ("software", "application", "dataset"))
+def test_unscoped_software_does_not_require_physical_observation(
+    software_type: str,
+) -> None:
+    change = SimpleNamespace(
+        latest_artifact=lambda _id, kind: (
+            SimpleNamespace(payload={"target_entity_type": software_type})
+            if kind == "gicc_capability_gap_link"
+            else None
+        )
+    )
+    assert not requires_owner_physical_confirmation(change, "software-change")

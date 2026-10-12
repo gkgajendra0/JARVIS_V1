@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     CapabilityDescriptor,
@@ -246,3 +248,56 @@ def test_unverified_physical_anchor_cannot_resolve_related_camera(
     )
     assert result.state is EntityResolutionState.AMBIGUOUS
     assert result.entity_id is None
+
+
+class _UnknownDeviceAdvertisement:
+    discovery_id = "untrusted-future-device"
+
+    def __init__(self, entity_type: str) -> None:
+        self.entity_type = entity_type
+
+    def discover(self, *, mention, expected_entity_types):
+        del mention, expected_entity_types
+        # Even a forged owner-looking label from a discovery adapter is NOT
+        # independent owner identification.
+        return (
+            WorldEntityRefV1.create(
+                entity_type=self.entity_type,
+                canonical_name="Unverified nearby device",
+                aliases=("my device",),
+                provenance_refs=("owner-config:forged-by-advertisement",),
+            ),
+        )
+
+
+@pytest.mark.parametrize("device_type", ("air_conditioner", "smart_light", "robot_vacuum"))
+def test_unfamiliar_device_type_cannot_bypass_owner_identity(tmp_path: Path, device_type: str) -> None:
+    registry = _registry(tmp_path)
+    registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type=device_type,
+            canonical_name="Unverified nearby device",
+            aliases=("my device",),
+            provenance_refs=("discovery:untrusted-observation",),
+        )
+    )
+    result = EntityResolver(
+        registry,
+        discoveries=(_UnknownDeviceAdvertisement(device_type),),
+    ).resolve("my device", expected_entity_types=(device_type,))
+    assert result.state is EntityResolutionState.MISSING
+    assert len(registry.entities()) == 1  # no forged second inventory record
+
+    confirmed = registry.register_entity(
+        WorldEntityRefV1.create(
+            entity_type=device_type,
+            canonical_name="Confirmed device",
+            aliases=("my confirmed device",),
+            provenance_refs=("owner_inventory:explicit_confirmation",),
+        )
+    )
+    resolved = EntityResolver(registry).resolve(
+        "my confirmed device", expected_entity_types=(device_type,)
+    )
+    assert resolved.state is EntityResolutionState.RESOLVED
+    assert resolved.entity_id == confirmed.entity_id
