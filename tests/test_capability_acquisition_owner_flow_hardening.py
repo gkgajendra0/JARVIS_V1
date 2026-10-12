@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from jarvis.capabilities.models import (
     CapabilityCatalog,
     DiscoverySnapshot,
@@ -285,3 +287,126 @@ def test_owner_turn_with_verified_target_enters_exact_phase9_lineage(
         goal_id=result.goal.goal_id,
     )
     assert report.passed is True
+
+
+@pytest.mark.parametrize(
+    ("device_type", "owner_text", "operation"),
+    [
+        ("air_conditioner", "Set my air conditioner to 24 degrees", "set_temperature"),
+        ("smart_light", "Turn on my smart light", "power_on"),
+        ("robot_vacuum", "Start cleaning with my robot vacuum", "start_cleaning"),
+    ],
+)
+def test_unfamiliar_owner_device_reaches_same_governed_phase9_lineage(
+    tmp_path: Path,
+    device_type: str,
+    owner_text: str,
+    operation: str,
+) -> None:
+    """Non-TV owner devices should acquire capabilities through one GICC path.
+
+    Model output is a controlled boundary. No network search, device control,
+    package promotion or live device acceptance occurs in this test.
+    """
+    work = SQLiteWorkStore(tmp_path / "generic-acquisition.sqlite3")
+    goals = GoalStore(work)
+    changes = ChangeStore(
+        work, processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,)
+    )
+    backend = _Backend()
+    capability_context = _empty_context()
+    phase9 = Phase9GoalBridge(
+        coordinator=CapabilityAcquisitionCoordinator(
+            changes=ChangeCoordinator(changes, backend),
+            context_provider=capability_context,
+        ),
+        change_store=changes,
+        goal_store=goals,
+        source_revision_provider=lambda: "a" * 40,
+    )
+    world = WorldRegistry(goals)
+    entity = world.register_entity(
+        WorldEntityRefV1.create(
+            entity_type=device_type,
+            canonical_name=f"Owner confirmed {device_type}",
+            aliases=(f"my {device_type.replace('_', ' ')}",),
+            provenance_refs=(f"owner_inventory:confirmed_{device_type}",),
+        )
+    )
+    conversation = ConversationSession(
+        session_id=f"generic-owner-session-{device_type}"
+    )
+    conversation.start()
+    turn = conversation.accept_turn(ConversationRole.USER, owner_text)
+    interpreter = _QueueStructuredClient(
+        ShadowGoalInterpretationOutput(
+            actionable=True,
+            desired_outcome=owner_text,
+            goal_kind=GoalKind.ONE_SHOT,
+            candidate_entities=[
+                ShadowEntityCandidate(
+                    mention=f"my {device_type.replace('_', ' ')}",
+                    proposed_type=device_type,
+                    evidence_turn_ids=[turn.turn_id],
+                )
+            ],
+            candidate_completion_predicates=[f"{operation}_observed"],
+            evidence_turn_ids=[turn.turn_id],
+        )
+    )
+    deriver = _QueueStructuredClient(
+        CapabilityRequirementProposalSet(
+            requirements=[
+                CapabilityRequirementProposal(
+                    semantic_capability=f"{device_type}.control",
+                    operation=operation,
+                    target_entity_id=entity.entity_id,
+                    target_entity_type=device_type,
+                    required_parameters_schema={
+                        "type": "object",
+                        "properties": {},
+                    },
+                    expected_postconditions=[f"{operation}_observed"],
+                    reason="Control the owner-identified physical device.",
+                )
+            ]
+        )
+    )
+    coordinator = GoalIntelligenceCoordinator(
+        store=goals,
+        interpreter=GoalInterpreter(client=interpreter),
+        entity_resolver=EntityResolver(world),
+        requirement_deriver=RequirementDeriver(client=deriver),
+        capability_context=capability_context,
+        capability_graph_resolver=CapabilityGraphResolver(store=goals),
+        phase9_bridge=phase9,
+    )
+
+    result = asyncio.run(coordinator.pursue(conversation=conversation, turn=turn))
+
+    assert result.disposition is GoalIntakeDisposition.WAITING_CAPABILITY
+    assert result.goal is not None
+    assert result.goal.exact_owner_request == owner_text
+    assert result.goal.referenced_entity_ids == (entity.entity_id,)
+    assert len(result.capability_analysis.gaps) == 1
+    gap = result.capability_analysis.gaps[0]
+    assert gap.reusable_capability_family == f"{device_type}.control"
+    assert gap.minimum_required_operations == (operation,)
+    assert gap.target_entity_id == entity.entity_id
+    assert len(result.phase9_admissions) == 1
+    change = result.phase9_admissions[0].admission.change
+    assert change is not None
+    assert change.source_session_id == f"gicc:{result.goal.goal_id}"
+    assert change.source_turn_id == f"gap:{gap.gap_id}"
+    source = changes.current_stage_attempt(change.change_id, "acquisition")
+    assert source is not None
+    assert source.work_id in backend.submissions
+    continuation = goals.list_continuations(goal_id=result.goal.goal_id)
+    assert len(continuation) == 1
+    assert continuation[0].blocked_by_id == gap.gap_id
+    assert continuation[0].work_ids == (source.work_id,)
+    assert assert_capability_system_invariants(
+        goal_store=goals,
+        change_store=changes,
+        goal_id=result.goal.goal_id,
+    ).passed
