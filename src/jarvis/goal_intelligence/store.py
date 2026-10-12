@@ -1517,6 +1517,16 @@ class GoalStore:
             if len(standalone) > 32:
                 outdated = set(standalone[:-32])
                 evidence = tuple(item for item in evidence if item not in outdated)
+            # VIDAA advertisements are equally untrusted and short-lived; never
+            # grow the owner record unboundedly through repeated observations.
+            vidaa_refs = sorted(
+                item
+                for item in evidence
+                if item.startswith("windows_vidaa_udp_unverified:")
+            )
+            if len(vidaa_refs) > 16:
+                outdated = set(vidaa_refs[:-16])
+                evidence = tuple(item for item in evidence if item not in outdated)
             if (
                 current.state is state
                 and attempts == current.self_resolution_attempts
