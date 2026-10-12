@@ -298,6 +298,33 @@ def test_api_key_is_required_before_session_construction(
         create_voice_session(JarvisConfig())
 
 
+def test_realtime_session_explicitly_disables_default_livekit_vad(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    class CapturingAgentSession(FakeAgentSession):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__()
+            captured.update(kwargs)
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-google-key")
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session.google.realtime.RealtimeModel",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session.AgentSession",
+        CapturingAgentSession,
+    )
+
+    create_voice_session(JarvisConfig(ai_provider="gemini"))
+
+    assert "vad" in captured
+    assert captured["vad"] is None
+    assert captured["turn_handling"]["turn_detection"] is None
+
+
 def test_gemini_api_key_is_required_only_for_gemini(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

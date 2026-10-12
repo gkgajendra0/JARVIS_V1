@@ -7,10 +7,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from jarvis.autonomy.owner_communication import (
+    OwnerCommunicationIntentV1,
+    OwnerCommunicationKind,
+    SupervisorOwnerCommunication,
+)
 from jarvis.model_routing.router import RoutingResourceBlocked
 from jarvis.work.brain import (
     BrainAction,
     BrainCoordinator,
+    BrainDecision,
     BrainPreempted,
     BrainRequest,
     ProviderPressure,
@@ -32,7 +38,7 @@ from jarvis.work.resources import ResourceLeaseManager, ResourcePressure
 from jarvis.work.store import SQLiteWorkStore
 
 _MAX_CONSECUTIVE_FAILURES = 3
-_PROVIDER_BACKOFF_SECONDS = (5.0, 10.0, 20.0, 40.0, 60.0)
+_PROVIDER_BACKOFF_SECONDS = (30.0, 60.0, 120.0, 300.0, 600.0)
 
 
 class WorkOwnerInputRequired(RuntimeError):
@@ -57,6 +63,55 @@ class WorkOwnerInputRequired(RuntimeError):
         self.sensitive = bool(sensitive)
         self.input_key = key
         self.resume_context = dict(resume_context or {})
+
+
+class WorkResourceBlocked(RuntimeError):
+    """An executor is temporarily blocked by a durable external/shared resource."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        retry_after_seconds: float,
+        blocker_code: str,
+        observation: dict[str, Any] | None = None,
+    ) -> None:
+        normalized = " ".join(str(reason).split()).strip()
+        code = str(blocker_code).strip().casefold()
+        retry_after = float(retry_after_seconds)
+        if not normalized:
+            raise ValueError("resource blocker reason must not be empty")
+        if not code:
+            raise ValueError("resource blocker code must not be empty")
+        if retry_after <= 0:
+            raise ValueError("resource blocker retry_after_seconds must be positive")
+        super().__init__(normalized)
+        self.reason = normalized
+        self.retry_after_seconds = retry_after
+        self.blocker_code = code
+        self.observation = dict(observation or {})
+
+
+class WorkTerminalFailure(RuntimeError):
+    """An executor reached a typed terminal failure that must fail canonical Work."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        failure_code: str,
+        observation: dict[str, Any] | None = None,
+    ) -> None:
+        normalized = " ".join(str(reason).split()).strip()
+        code = str(failure_code).strip().casefold()
+        if not normalized:
+            raise ValueError("terminal work failure reason must not be empty")
+        if not code:
+            raise ValueError("terminal work failure code must not be empty")
+        super().__init__(normalized)
+        self.reason = normalized
+        self.failure_code = code
+        self.observation = dict(observation or {})
 
 
 class WorkActionExecutor(Protocol):
@@ -96,6 +151,19 @@ class WorkActionRegistry:
             if work_type in executor.work_types
         )
 
+    def actions_for_work(self, work: WorkItem) -> tuple[BrainAction, ...]:
+        """Return only executors admitted for this exact canonical WorkItem."""
+
+        actions: list[BrainAction] = []
+        for executor in self._by_name.values():
+            if work.work_type not in executor.work_types:
+                continue
+            availability = getattr(executor, "available_for", None)
+            if callable(availability) and not bool(availability(work)):
+                continue
+            actions.append(executor.descriptor)
+        return tuple(actions)
+
     def require(self, action: str, work_type: WorkType) -> WorkActionExecutor:
         executor = self._by_name.get(action)
         if executor is None or work_type not in executor.work_types:
@@ -131,6 +199,13 @@ class WorkEngine:
             tuple[bool, str | None] | None,
         ]
         | None = None,
+        model_owner_request_handler: Callable[[WorkItem, str], str | None]
+        | None = None,
+        control_plane_decider: Callable[
+            [WorkItem, tuple[BrainAction, ...], tuple[WorkStep, ...]],
+            BrainDecision | None,
+        ]
+        | None = None,
         context_assembler: WorkContextAssembler | None = None,
         context_mode: WorkContextMode | str = WorkContextMode.SHADOW,
     ) -> None:
@@ -141,8 +216,70 @@ class WorkEngine:
         self._base_resource_keys = self._resources.normalize(base_resource_keys)
         self._action_admission = action_admission
         self._custom_completion_guard = completion_guard
+        self._model_owner_request_handler = model_owner_request_handler
+        self._control_plane_decider = control_plane_decider
         self._context_assembler = context_assembler or WorkContextAssembler()
         self._context_mode = normalize_work_context_mode(context_mode)
+
+    @staticmethod
+    def _governed_child(work: WorkItem) -> bool:
+        return work.source_session_id.startswith(("change:", "gicc:"))
+
+    def _enqueue_owner_delivery(
+        self,
+        *,
+        work: WorkItem,
+        kind: WorkDeliveryKind,
+        summary: str,
+        event_key: str,
+        owner_action_required: bool = False,
+        terminal: bool = False,
+        system_outcome_kind: str | None = None,
+    ):
+        governed_child = self._governed_child(work)
+        if kind is WorkDeliveryKind.RESOURCE_BLOCKER:
+            communication_kind = (
+                OwnerCommunicationKind.BLOCKER
+                if governed_child
+                else OwnerCommunicationKind.PROGRESS
+            )
+        else:
+            communication_kind = {
+                WorkDeliveryKind.OWNER_INPUT: OwnerCommunicationKind.OWNER_INPUT,
+                WorkDeliveryKind.PROGRESS: OwnerCommunicationKind.PROGRESS,
+                WorkDeliveryKind.COMPLETION: OwnerCommunicationKind.COMPLETION,
+                WorkDeliveryKind.FAILURE: OwnerCommunicationKind.FAILURE,
+            }.get(kind)
+        if communication_kind is None:
+            raise ValueError(
+                f"unsupported WorkEngine owner delivery kind: {kind.value}"
+            )
+
+        if governed_child and communication_kind in {
+            OwnerCommunicationKind.COMPLETION,
+            OwnerCommunicationKind.FAILURE,
+        }:
+            return None
+
+        intent = OwnerCommunicationIntentV1.create(
+            kind=communication_kind,
+            event_key=event_key,
+            summary=summary,
+            owner_action_required=owner_action_required,
+            terminal=terminal,
+            work_id=work.work_id,
+            system_outcome_kind=system_outcome_kind,
+            technical_detail=work.status_detail,
+        )
+        owner_message = SupervisorOwnerCommunication.compile(intent)
+        if owner_message is None:
+            return None
+        return self._store.enqueue_delivery(
+            work=work,
+            kind=kind,
+            message=owner_message.message,
+            event_key=owner_message.event_key,
+        )
 
     def _check_action_admission(self, work: WorkItem) -> WorkAdvanceResult | None:
         if self._action_admission is None or self._action_admission(work.work_id):
@@ -464,11 +601,13 @@ class WorkEngine:
                 current_step_id=current_step_id,
             )
             saved = self._store.save(failed, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.FAILURE,
-                message=reason,
+                summary=reason,
                 event_key=f"failure:{saved.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
 
@@ -596,11 +735,12 @@ class WorkEngine:
         )
         saved = self._store.save(waiting, expected_version=latest.version)
         blocker_digest = hashlib.sha256(exc.reason.encode()).hexdigest()[:24]
-        self._store.enqueue_delivery(
+        self._enqueue_owner_delivery(
             work=saved,
             kind=WorkDeliveryKind.RESOURCE_BLOCKER,
-            message=exc.reason,
+            summary=exc.reason,
             event_key=f"routing-resource:{blocker_digest}",
+            system_outcome_kind="temporary_resource",
         )
         return WorkAdvanceResult(
             saved.work_id,
@@ -628,11 +768,13 @@ class WorkEngine:
                     status_detail=f"dependency is missing: {dependency_id}",
                 )
                 saved = self._store.save(failed, expected_version=work.version)
-                self._store.enqueue_delivery(
+                self._enqueue_owner_delivery(
                     work=saved,
                     kind=WorkDeliveryKind.FAILURE,
-                    message=saved.status_detail or "Background work dependency failed.",
+                    summary=saved.status_detail or "Background work dependency failed.",
                     event_key=f"failure:{saved.version}",
+                    terminal=True,
+                    system_outcome_kind="terminal",
                 )
                 return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
             dependencies.append(dependency)
@@ -649,11 +791,13 @@ class WorkEngine:
                 status_detail=f"dependency did not complete successfully: {names}",
             )
             saved = self._store.save(failed, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.FAILURE,
-                message=saved.status_detail or "Background work dependency failed.",
+                summary=saved.status_detail or "Background work dependency failed.",
                 event_key=f"failure:{saved.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(saved.work_id, saved.state, progressed=True)
 
@@ -679,6 +823,72 @@ class WorkEngine:
             self._store.save(resumed, expected_version=work.version)
         return None
 
+    def _waiting_owner_has_typed_executor_evidence(self, work: WorkItem) -> bool:
+        """Return True only for owner waits emitted by a typed executor boundary."""
+
+        current_step_id = work.current_step_id
+        if not current_step_id:
+            return False
+        step = next(
+            (
+                candidate
+                for candidate in self._store.list_steps(work.work_id)
+                if candidate.step_id == current_step_id
+            ),
+            None,
+        )
+        return bool(
+            step is not None
+            and step.state.value == "completed"
+            and step.observation.get("needs_owner") is True
+        )
+
+    def reconcile_waiting_model_owner_requests(self) -> tuple[str, ...]:
+        """Migrate legacy model-authored owner waits through the current handler.
+
+        Before the Phase-9 architecture-revision handler existed, free-form model
+        needs_owner decisions could be persisted as WAITING_FOR_OWNER. On restart
+        those stale deliveries must not bypass the current lifecycle. Typed executor
+        owner-input boundaries are preserved because their completed WorkStep carries
+        explicit needs_owner evidence and a bound current_step_id.
+        """
+
+        handler = self._model_owner_request_handler
+        if handler is None:
+            return ()
+
+        reconciled: list[str] = []
+        waiting = self._store.list(
+            states=(WorkState.WAITING_FOR_OWNER,),
+            limit=10_000,
+        )
+        for work in waiting:
+            if self._waiting_owner_has_typed_executor_evidence(work):
+                continue
+            question = (
+                work.status_detail
+                or "This background work needs additional owner input."
+            )
+            handled_reason = handler(work, question)
+            if handled_reason is None:
+                continue
+            normalized_reason = " ".join(str(handled_reason).split()).strip()
+            if not normalized_reason:
+                raise ValueError("model owner request handler returned an empty reason")
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal:
+                continue
+            if latest.state is not WorkState.WAITING_FOR_OWNER:
+                continue
+            cancelled = latest.transition(
+                WorkState.CANCELLED,
+                status_detail=normalized_reason,
+                current_step_id=latest.current_step_id,
+            )
+            self._store.save(cancelled, expected_version=latest.version)
+            reconciled.append(work.work_id)
+        return tuple(reconciled)
+
     def reconcile_waiting_owner_deliveries(self) -> tuple[str, ...]:
         """Restore a pending OWNER_INPUT for every waiting non-silent WorkItem.
 
@@ -694,11 +904,13 @@ class WorkEngine:
             limit=10_000,
         )
         for work in waiting:
-            delivery = self._store.enqueue_delivery(
+            delivery = self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=work.status_detail or "This work needs your input.",
+                summary=work.status_detail or "This work needs your input.",
                 event_key=f"owner:{work.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
             if delivery is None:
                 continue
@@ -709,25 +921,30 @@ class WorkEngine:
 
     def _ensure_state_delivery(self, work: WorkItem) -> None:
         if work.state is WorkState.COMPLETED:
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.COMPLETION,
-                message=work.status_detail or "Background work completed.",
+                summary=work.status_detail or "Background work completed.",
                 event_key="completion",
+                system_outcome_kind="completed",
             )
         elif work.state is WorkState.FAILED:
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.FAILURE,
-                message=work.status_detail or "Background work failed.",
+                summary=work.status_detail or "Background work failed.",
                 event_key=f"failure:{work.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
         elif work.state is WorkState.WAITING_FOR_OWNER:
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=work,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=work.status_detail or "This work needs your input.",
+                summary=work.status_detail or "This work needs your input.",
                 event_key=f"owner:{work.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
 
     def reconcile_interrupted_steps(self) -> tuple[str, ...]:
@@ -816,38 +1033,62 @@ class WorkEngine:
 
         provider_pressure_attempt = self._provider_pressure_attempt(work)
         work = self._make_running(work)
-        actions = self._actions.actions_for(work.work_type)
+        actions = self._actions.actions_for_work(work)
         if not actions:
             failed = work.transition(
                 WorkState.FAILED,
                 status_detail=f"no registered executor for {work.work_type.value}",
             )
             self._store.save(failed, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=failed,
                 kind=WorkDeliveryKind.FAILURE,
-                message=failed.status_detail or "Background work failed.",
+                summary=failed.status_detail or "Background work failed.",
                 event_key=f"failure:{failed.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
             )
             return WorkAdvanceResult(work.work_id, failed.state, progressed=True)
 
         steps = self._store.list_steps(work.work_id)
-        context_pack = (
+        control_decision = (
             None
-            if self._context_mode is WorkContextMode.OFF
-            else self._context_assembler.build(work=work, steps=steps)
+            if self._control_plane_decider is None
+            else self._control_plane_decider(work, actions, steps)
         )
-        try:
-            decision = await self._brain.decide(
-                BrainRequest(
-                    work=work,
-                    recent_steps=steps[-12:],
-                    purpose="choose the next bounded step for this JARVIS-owned work item",
-                    allowed_actions=actions,
-                    context_pack=context_pack,
-                    context_mode=self._context_mode,
+        if control_decision is not None:
+            if control_decision.needs_owner:
+                raise ValueError(
+                    "control-plane decider may not create ad-hoc owner requests"
                 )
+            allowed_names = {item.name for item in actions}
+            if (
+                control_decision.action is not None
+                and control_decision.action not in allowed_names
+            ):
+                raise ValueError("control-plane decider selected an unavailable action")
+            decision = control_decision
+        else:
+            context_pack = (
+                None
+                if self._context_mode is WorkContextMode.OFF
+                else self._context_assembler.build(work=work, steps=steps)
             )
+        try:
+            if control_decision is None:
+                decision = await self._brain.decide(
+                    BrainRequest(
+                        work=work,
+                        recent_steps=steps[-12:],
+                        purpose=(
+                            "choose the next bounded step for this JARVIS-owned work item"
+                        ),
+                        allowed_actions=actions,
+                        full_history_steps=steps,
+                        context_pack=context_pack,
+                        context_mode=self._context_mode,
+                    )
+                )
         except BrainPreempted:
             latest = self._store.require(work.work_id)
             if latest.state.terminal or latest.state is WorkState.PAUSED:
@@ -936,6 +1177,29 @@ class WorkEngine:
                         "passed": True,
                         "sandbox": test_step.observation.get("sandbox"),
                     }
+                development_engine_step = next(
+                    (
+                        step
+                        for step in reversed(steps)
+                        if step.kind == "dev_engine_execute"
+                        and step.state.value == "completed"
+                        and isinstance(
+                            step.observation.get("development_result"),
+                            dict,
+                        )
+                    ),
+                    None,
+                )
+                if development_engine_step is not None:
+                    result_payload["development_engine"] = dict(
+                        development_engine_step.observation["development_result"]
+                    )
+                    result_payload["development_ticket_id"] = (
+                        development_engine_step.observation.get("ticket_id")
+                    )
+                    result_payload["development_ticket_digest"] = (
+                        development_engine_step.observation.get("ticket_digest")
+                    )
             completed = work.transition(
                 WorkState.COMPLETED,
                 status_detail=decision.summary,
@@ -943,31 +1207,68 @@ class WorkEngine:
             )
             self._store.save(completed, expected_version=work.version)
             self._store.clear_sensitive_inputs(work.work_id)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=completed,
                 kind=WorkDeliveryKind.COMPLETION,
-                message=decision.summary,
+                summary=decision.summary,
                 event_key="completion",
+                system_outcome_kind="completed",
             )
             return WorkAdvanceResult(work.work_id, completed.state, progressed=True)
 
         if decision.needs_owner:
+            owner_question = (
+                decision.owner_question
+                or "This background work needs additional owner input."
+            )
+            handler = self._model_owner_request_handler
+            handled_reason = None if handler is None else handler(work, owner_question)
+            if handled_reason is not None:
+                normalized_reason = " ".join(str(handled_reason).split()).strip()
+                if not normalized_reason:
+                    raise ValueError(
+                        "model owner request handler returned an empty reason"
+                    )
+                latest = self._store.require(work.work_id)
+                if latest.state.terminal:
+                    return WorkAdvanceResult(
+                        latest.work_id,
+                        latest.state,
+                        progressed=False,
+                    )
+                superseded = latest.transition(
+                    WorkState.CANCELLED,
+                    status_detail=normalized_reason,
+                    current_step_id=latest.current_step_id,
+                )
+                saved = self._store.save(
+                    superseded,
+                    expected_version=latest.version,
+                )
+                return WorkAdvanceResult(
+                    saved.work_id,
+                    saved.state,
+                    progressed=True,
+                )
+
             waiting = work.transition(
                 WorkState.WAITING_FOR_OWNER,
-                status_detail=decision.owner_question,
+                status_detail=owner_question,
             )
             self._store.save(waiting, expected_version=work.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=waiting,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=decision.owner_question or "This work needs your input.",
+                summary=owner_question,
                 event_key=f"owner:{waiting.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
             return WorkAdvanceResult(
                 work.work_id,
                 waiting.state,
                 progressed=True,
-                owner_question=decision.owner_question,
+                owner_question=owner_question,
             )
 
         assert decision.action is not None
@@ -1098,6 +1399,81 @@ class WorkEngine:
                 work=with_step,
                 parameters=dict(decision_parameters),
             )
+        except WorkResourceBlocked as exc:
+            blocked_observation: dict[str, Any] = {
+                "resource_blocked": True,
+                "reason": exc.reason,
+                "blocker_code": exc.blocker_code,
+                "retry_after_seconds": exc.retry_after_seconds,
+                **exc.observation,
+            }
+            blocked_step = running_step.complete(blocked_observation)
+            self._store.save_step(blocked_step)
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            waiting = latest.transition(
+                WorkState.WAITING_RESOURCE,
+                status_detail=exc.reason,
+                current_step_id=step.step_id,
+            )
+            saved = self._store.save(waiting, expected_version=latest.version)
+            blocker_digest = hashlib.sha256(
+                f"{exc.blocker_code}:{exc.reason}".encode()
+            ).hexdigest()[:24]
+            self._enqueue_owner_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.RESOURCE_BLOCKER,
+                summary=exc.reason,
+                event_key=f"executor-resource:{blocker_digest}",
+                system_outcome_kind="temporary_resource",
+            )
+            return WorkAdvanceResult(
+                saved.work_id,
+                saved.state,
+                progressed=True,
+                retry_after_seconds=exc.retry_after_seconds,
+            )
+        except WorkTerminalFailure as exc:
+            failure_observation: dict[str, Any] = {
+                "terminal_failure": True,
+                "reason": exc.reason,
+                "failure_code": exc.failure_code,
+                **exc.observation,
+            }
+            failed_step = running_step.complete(failure_observation)
+            self._store.save_step(failed_step)
+            latest = self._store.require(work.work_id)
+            if latest.state.terminal or latest.state is WorkState.PAUSED:
+                return WorkAdvanceResult(
+                    latest.work_id,
+                    latest.state,
+                    progressed=False,
+                )
+            failed = latest.transition(
+                WorkState.FAILED,
+                status_detail=exc.reason,
+                current_step_id=step.step_id,
+            )
+            saved = self._store.save(failed, expected_version=latest.version)
+            self._store.clear_sensitive_inputs(saved.work_id)
+            self._enqueue_owner_delivery(
+                work=saved,
+                kind=WorkDeliveryKind.FAILURE,
+                summary=exc.reason,
+                event_key=f"failure:{saved.version}",
+                terminal=True,
+                system_outcome_kind="terminal",
+            )
+            return WorkAdvanceResult(
+                saved.work_id,
+                saved.state,
+                progressed=True,
+            )
         except WorkOwnerInputRequired as exc:
             waiting_observation: dict[str, Any] = {
                 "needs_owner": True,
@@ -1123,11 +1499,13 @@ class WorkEngine:
                 current_step_id=step.step_id,
             )
             saved = self._store.save(waiting, expected_version=latest.version)
-            self._store.enqueue_delivery(
+            self._enqueue_owner_delivery(
                 work=saved,
                 kind=WorkDeliveryKind.OWNER_INPUT,
-                message=exc.question,
+                summary=exc.question,
                 event_key=f"owner:{saved.version}",
+                owner_action_required=True,
+                system_outcome_kind="needs_owner",
             )
             return WorkAdvanceResult(
                 saved.work_id,
@@ -1186,11 +1564,13 @@ class WorkEngine:
         )
         saved = self._store.save(failed, expected_version=work.version)
         self._store.clear_sensitive_inputs(saved.work_id)
-        self._store.enqueue_delivery(
+        self._enqueue_owner_delivery(
             work=saved,
             kind=WorkDeliveryKind.FAILURE,
-            message=normalized,
+            summary=normalized,
             event_key=f"failure:{saved.version}",
+            terminal=True,
+            system_outcome_kind="terminal",
         )
         return saved
 

@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
+from jarvis.capability_acquisition.architecture import (
+    validate_acquisition_sandbox_profiles,
+    validate_acquisition_verification_targets,
+)
 from jarvis.capability_acquisition.artifacts import (
     candidate_from_payload,
     candidate_payload,
@@ -24,12 +29,18 @@ from jarvis.capability_acquisition.models import (
     AcquisitionTrustClass,
     CapabilityAcquisitionPlanV1,
     OwnerCapabilityGoalV1,
+    normalize_python_distribution_identity,
 )
 from jarvis.capability_acquisition.process import OWNER_CAPABILITY_ACQUISITION_PROCESS
-from jarvis.capability_acquisition.resolver import CapabilityAcquisitionResolver
+from jarvis.capability_acquisition.resolver import (
+    AcquisitionCandidateAdvisor,
+    AcquisitionResolutionResult,
+    CapabilityAcquisitionResolver,
+)
 from jarvis.capability_acquisition.runtime_context import AcquisitionContextProvider
 from jarvis.capability_acquisition.source import CapabilitySourceRegistry
 from jarvis.engineering_change import ChangeArtifact, ChangeStore
+from jarvis.engineering_substrate.sandbox import default_sandbox_registry
 from jarvis.work.brain import BrainAction
 from jarvis.work.models import WorkItem, WorkStep, WorkType
 
@@ -108,6 +119,68 @@ class AcquisitionWorkContextResolver:
             for step in self._store.work.list_steps(str(work_id).strip())
             if step.state.value == "completed"
         )
+
+    def canonical_target_hints(
+        self,
+        context: AcquisitionWorkContext,
+    ) -> tuple[str, ...]:
+        """Project independently reviewed target facts, not the owner's plan claims.
+
+        The acquisition resolver already reads context.goal.target_hints as
+        the original interpreted claim. Returning those same claims as
+        canonical target facts would make stale Roku and observed VIDAA
+        compatible by allowing a self-matching intersection.
+        """
+        hints: set[str] = set()
+
+        link = self._store.latest_artifact(
+            context.change_id,
+            "gicc_capability_gap_link",
+        )
+        # The GICC gap link records the original interpreted target need;
+        # it is not independent observation. The Phase-9 goal already carries
+        # that claim. Only grounded target context belongs in canonical facts.
+        target_context = self._store.latest_artifact(
+            context.change_id,
+            "gicc_target_context",
+        )
+        if target_context is not None:
+            target_values = target_context.payload.get("target_hints", ())
+            if not isinstance(target_values, (list, tuple)):
+                raise AcquisitionProtocolError("GICC target hints are not a sequence")
+            for item in target_values:
+                normalized = " ".join(str(item).split()).strip().casefold()
+                if normalized and not normalized.startswith("entity_id:"):
+                    hints.add(normalized)
+
+            # Project the actual canonical entity ID only from matching,
+            # independently owner-confirmed inventory lineage. Never treat
+            # a freeform artifact hint or the original goal's claimed ID as
+            # the independent fact that would allow a target mismatch.
+            target_id = str(
+                target_context.payload.get("target_entity_id") or ""
+            ).strip()
+            if (
+                link is not None
+                and target_id
+                and target_id == link.payload.get("target_entity_id")
+            ):
+                from jarvis.goal_intelligence.world import (
+                    has_independent_target_provenance,
+                )
+
+                if has_independent_target_provenance(
+                    target_context.payload.get("provenance_refs") or ()
+                ):
+                    hints.add(f"entity_id:{target_id}".casefold())
+
+        # An acquisition architecture is an implementation *proposal*.
+        # Its vendor, model, platform and protocol fields cannot establish
+        # canonical environmental facts; otherwise an incorrect guessed
+        # adapter could prove its own target compatibility. Owner approval
+        # of the proposal likewise does not transform it into observation.
+
+        return tuple(sorted(hints))
 
 
 def recorded_unverified_candidates(
@@ -190,17 +263,25 @@ class AcquisitionInspectGoalExecutor:
         }
 
 
+_UNVERIFIED_VERIFICATION_CONTRACT_BY_SOURCE_KIND = {
+    AcquisitionSourceKind.MCP: "mcp-tools-list-contract",
+    AcquisitionSourceKind.OPENAPI: "openapi-contract-test",
+    AcquisitionSourceKind.ASYNCAPI: "asyncapi-contract-test",
+    AcquisitionSourceKind.SDK_LIBRARY: "sdk-adapter-contract-test",
+}
+
+
 class AcquisitionRecordCandidateExecutor:
-    """Record research-discovered source metadata without assigning trust."""
+    """Record unverified source identity/evidence; JARVIS owns governance contracts."""
 
     descriptor = BrainAction(
         name="acq_record_candidate",
         description=(
-            "Record one research-discovered capability source candidate and its "
-            "proposed dependency/network/device/acceptance requirements. This action "
-            "always stores the source as UNVERIFIED; model text cannot grant trust. "
-            "For a Python sdk_library intended for PyPI verification, source_identity "
-            "must be the distribution name and source_version should be exact."
+            "Record one research-discovered reusable source as UNVERIFIED. Provide only "
+            "source identity/version, supported semantic operations, evidence refs, and "
+            "optional source digest/license metadata. JARVIS deterministically assigns "
+            "the source-type verification contract; model text cannot invent trust, "
+            "network/device/discovery scope, or owner-acceptance policy."
         ),
         parameter_schema={
             "type": "object",
@@ -234,37 +315,6 @@ class AcquisitionRecordCandidateExecutor:
                     "minItems": 1,
                     "maxItems": 50,
                 },
-                "verification_requirements": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "minItems": 1,
-                    "maxItems": 30,
-                },
-                "secret_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 240},
-                    "maxItems": 30,
-                },
-                "network_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "device_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "discovery_scopes": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
-                "external_acceptance_requirements": {
-                    "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 500},
-                    "maxItems": 30,
-                },
                 "license_id": {
                     "type": ["string", "null"],
                     "maxLength": 240,
@@ -275,7 +325,6 @@ class AcquisitionRecordCandidateExecutor:
                 "source_identity",
                 "supported_operations",
                 "evidence_refs",
-                "verification_requirements",
             ],
             "additionalProperties": False,
         },
@@ -312,25 +361,26 @@ class AcquisitionRecordCandidateExecutor:
             AcquisitionSourceKind.ASYNCAPI: AcquisitionStrategy.GENERATE_CONTRACT_CLIENT,
             AcquisitionSourceKind.SDK_LIBRARY: AcquisitionStrategy.ADAPT_SDK,
         }[source_kind]
+        source_identity = str(parameters.get("source_identity") or "")
+        if source_kind is AcquisitionSourceKind.SDK_LIBRARY:
+            try:
+                source_identity = normalize_python_distribution_identity(
+                    source_identity
+                )
+            except ValueError as exc:
+                raise AcquisitionProtocolError(str(exc)) from exc
         candidate = AcquisitionCandidateV1.create(
             source_kind=source_kind,
-            source_identity=str(parameters.get("source_identity") or ""),
+            source_identity=source_identity,
             source_version=parameters.get("source_version"),
             source_digest=parameters.get("source_digest"),
             trust_class=AcquisitionTrustClass.UNVERIFIED_CANDIDATE,
             supported_operations=tuple(parameters.get("supported_operations") or ()),
             strategy=strategy,
             evidence_refs=tuple(parameters.get("evidence_refs") or ()),
-            secret_scopes=tuple(parameters.get("secret_scopes") or ()),
-            network_scopes=tuple(parameters.get("network_scopes") or ()),
-            device_scopes=tuple(parameters.get("device_scopes") or ()),
-            discovery_scopes=tuple(parameters.get("discovery_scopes") or ()),
             license_id=parameters.get("license_id"),
-            verification_requirements=tuple(
-                parameters.get("verification_requirements") or ()
-            ),
-            external_acceptance_requirements=tuple(
-                parameters.get("external_acceptance_requirements") or ()
+            verification_requirements=(
+                _UNVERIFIED_VERIFICATION_CONTRACT_BY_SOURCE_KIND[source_kind],
             ),
             reason_codes=("research_discovered_unverified",),
         )
@@ -360,10 +410,14 @@ class AcquisitionResolveExecutor:
         *,
         context_provider: AcquisitionContextProvider,
         sources: CapabilitySourceRegistry,
+        advisor: AcquisitionCandidateAdvisor | None = None,
     ) -> None:
         self._resolver = resolver
         self._context_provider = context_provider
-        self._acquisition = CapabilityAcquisitionResolver(sources)
+        self._acquisition = CapabilityAcquisitionResolver(
+            sources,
+            advisor=advisor,
+        )
 
     def resource_keys(
         self,
@@ -389,20 +443,19 @@ class AcquisitionResolveExecutor:
             payload=payload,
         )
 
-    async def execute(
+    def _resolve_and_persist(
         self,
-        *,
-        work: WorkItem,
-        parameters: dict[str, Any],
-    ) -> dict[str, Any]:
-        del parameters
-        context = self._resolver.context_for(work.work_id)
+        work_id: str,
+    ) -> tuple[ChangeArtifact, AcquisitionResolutionResult]:
+        context = self._resolver.context_for(work_id)
         acquisition_context = self._context_provider.current()
+        target_hints = self._resolver.canonical_target_hints(context)
         registered = self._acquisition.resolve(
             context.goal,
             acquisition_context,
+            canonical_target_hints=target_hints,
         )
-        steps = self._resolver.completed_steps(work.work_id)
+        steps = self._resolver.completed_steps(work_id)
         research_candidates = (
             *recorded_unverified_candidates(steps),
             *recorded_verified_candidates(steps),
@@ -411,6 +464,7 @@ class AcquisitionResolveExecutor:
             context.goal,
             (*registered.candidates, *research_candidates),
             acquisition_context,
+            canonical_target_hints=target_hints,
         )
         payload = resolution_payload(
             candidates=resolution.candidates,
@@ -422,11 +476,33 @@ class AcquisitionResolveExecutor:
             change_id=context.change_id,
             payload=payload,
         )
+        return artifact, resolution
+
+    async def execute(
+        self,
+        *,
+        work: WorkItem,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        del parameters
+        # Registry discovery, candidate evaluation, Jev advice and persistence
+        # can block. Keep them off the realtime LiveKit/voice asyncio loop.
+        artifact, resolution = await asyncio.to_thread(
+            self._resolve_and_persist,
+            work.work_id,
+        )
+        selected = resolution.selected_candidate
         return {
             "resolved": True,
             "resolution_artifact_id": artifact.artifact_id,
             "resolution_artifact_digest": artifact.digest,
             "selected_candidate_id": resolution.selected_candidate_id,
+            "selected_candidate_strategy": (
+                None if selected is None else selected.strategy.value
+            ),
+            "selected_candidate_source_kind": (
+                None if selected is None else selected.source_kind.value
+            ),
             "candidate_count": len(resolution.candidates),
             "blocked_candidate_count": sum(
                 item.disposition.value == "blocked" for item in resolution.evaluations
@@ -501,7 +577,13 @@ class AcquisitionFinalizeExecutor:
                 },
                 "sandbox_profile_ids": {
                     "type": "array",
-                    "items": {"type": "string", "minLength": 1, "maxLength": 180},
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            definition.profile.profile_id
+                            for definition in default_sandbox_registry().all()
+                        ],
+                    },
                     "minItems": 1,
                     "maxItems": 20,
                 },
@@ -512,6 +594,7 @@ class AcquisitionFinalizeExecutor:
                     "maxItems": 30,
                 },
                 "development_test_targets": {
+                    "description": "Executable repository-relative pytest paths or node selectors; no prose, options, absolute paths or traversal.",
                     "type": "array",
                     "items": {"type": "string", "minLength": 1, "maxLength": 500},
                     "minItems": 1,
@@ -595,12 +678,49 @@ class AcquisitionFinalizeExecutor:
             raise AcquisitionProtocolError(
                 "an existing reusable capability became available; engineering build is unnecessary"
             )
+
+        completed_steps = self._resolver.completed_steps(work.work_id)
+        if candidate.strategy is AcquisitionStrategy.BUILD_CUSTOM:
+            successful_research_indexes = [
+                index
+                for index, step in enumerate(completed_steps)
+                if step.kind == "research_web"
+                and step.state.value == "completed"
+                and step.observation.get("ok") is True
+            ]
+            if not successful_research_indexes:
+                raise AcquisitionProtocolError(
+                    "custom capability development requires successful current web "
+                    "research before finalization"
+                )
+            latest_resolve_index = max(
+                (
+                    index
+                    for index, step in enumerate(completed_steps)
+                    if step.kind == "acq_resolve"
+                    and step.state.value == "completed"
+                    and step.observation.get("resolved") is True
+                ),
+                default=-1,
+            )
+            if latest_resolve_index <= successful_research_indexes[-1]:
+                raise AcquisitionProtocolError(
+                    "custom capability development must re-resolve candidates after "
+                    "the latest successful web research"
+                )
+
         changed_components = tuple(parameters.get("changed_components") or ())
         changed_paths = tuple(parameters.get("changed_paths") or ())
         if not changed_components and not changed_paths:
             raise AcquisitionProtocolError(
                 "build acquisition plan requires bounded changed component/path scope"
             )
+        validate_acquisition_sandbox_profiles(
+            tuple(parameters.get("sandbox_profile_ids") or ())
+        )
+        validate_acquisition_verification_targets(
+            tuple(parameters.get("development_test_targets") or ())
+        )
         plan = CapabilityAcquisitionPlanV1.create(
             context.goal,
             candidate,
@@ -737,7 +857,35 @@ def acquisition_completion_guard(
     if not finalized:
         return False, "capability acquisition requires a canonical acq_finalize plan"
 
-    resolve_index, _ = resolved[-1]
+    resolve_index, resolve_step = resolved[-1]
+    selected_strategy = str(
+        resolve_step.observation.get("selected_candidate_strategy") or ""
+    ).strip()
+    if selected_strategy == AcquisitionStrategy.BUILD_CUSTOM.value:
+        successful_research = [
+            index
+            for index, step in enumerate(steps)
+            if step.kind == "research_web"
+            and step.state.value == "completed"
+            and step.observation.get("ok") is True
+        ]
+        if not successful_research:
+            return (
+                False,
+                (
+                    "custom capability development requires successful current web "
+                    "research before completion"
+                ),
+            )
+        if successful_research[-1] >= resolve_index:
+            return (
+                False,
+                (
+                    "custom capability development must re-resolve after latest "
+                    "successful web research"
+                ),
+            )
+
     source_evidence = {
         "research_web",
         "acq_discover_local",
@@ -770,6 +918,7 @@ def build_acquisition_protocol_executors(
     *,
     context_provider: AcquisitionContextProvider,
     sources: CapabilitySourceRegistry,
+    advisor: AcquisitionCandidateAdvisor | None = None,
 ) -> tuple[object, ...]:
     return (
         AcquisitionInspectGoalExecutor(resolver),
@@ -778,6 +927,7 @@ def build_acquisition_protocol_executors(
             resolver,
             context_provider=context_provider,
             sources=sources,
+            advisor=advisor,
         ),
         AcquisitionFinalizeExecutor(resolver),
     )

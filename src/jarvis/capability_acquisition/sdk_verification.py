@@ -10,6 +10,7 @@ from jarvis.capability_acquisition.artifacts import candidate_payload
 from jarvis.capability_acquisition.models import (
     AcquisitionSourceKind,
     AcquisitionTrustClass,
+    normalize_python_distribution_identity,
 )
 from jarvis.capability_acquisition.standard_sources import sdk_library_evidence
 from jarvis.capability_acquisition.workflow import (
@@ -116,7 +117,10 @@ class AcquisitionVerifyPyPiSdkExecutor:
                 "PyPI SDK verification accepts only sdk_library candidates"
             )
         version = _exact_version(candidate.source_version)
-        package = candidate.source_identity.strip().casefold()
+        try:
+            package = normalize_python_distribution_identity(candidate.source_identity)
+        except ValueError as exc:
+            raise AcquisitionProtocolError(str(exc)) from exc
         requirement_id = (
             "phase9:research-sdk:"
             + canonical_digest(

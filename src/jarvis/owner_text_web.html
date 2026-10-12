@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="jarvis-csrf" content="__JARVIS_CSRF__">
+<title>JARVIS | Owner Workspace</title>
+<style nonce="__JARVIS_NONCE__">
+:root{color-scheme:dark;font-family:Inter,"Segoe UI",system-ui,sans-serif;background:#080c15;color:#e5eaf7;font-size:14px}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 63% -18%,#192e51 0,transparent 47%),#080c15}
+button,textarea{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.48}
+.shell{display:grid;grid-template-columns:292px minmax(0,1fr) 300px;min-height:100vh;max-width:1900px;margin:auto}
+.side{background:rgba(12,20,34,.88);padding:25px 20px;border-right:1px solid #253147}
+.brand{display:flex;gap:12px;align-items:center;padding:1px 5px 28px}
+.logo{width:42px;height:42px;display:grid;place-items:center;border:1px solid #428cef;border-radius:14px;background:#13294c;color:#9dcbff;font-weight:800;font-size:22px}
+.brand b{display:block;font-size:19px;letter-spacing:2px}.brand small{color:#95a5c0;font-size:11px;letter-spacing:1.5px}
+.section-label{font-size:11px;color:#8093b3;letter-spacing:1.4px;text-transform:uppercase;margin:30px 0 12px;font-weight:700}
+.panel{border:1px solid #263650;border-radius:15px;background:#121e31;padding:16px;margin:8px 0}
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid #385b84;color:#bddcfc;border-radius:30px;background:#163255;padding:6px 10px;font-size:11px;font-weight:700;max-width:100%;overflow-wrap:anywhere}
+.pill:before{content:"";width:6px;height:6px;background:#65b4ff;border-radius:50%;flex-shrink:0}
+.kicker{color:#8c9fbb;font-size:12px}.goal-title{margin:13px 0;font-size:16px;line-height:1.4;font-weight:650}.mono{font-family:Consolas,"Cascadia Code",monospace;font-size:11px;color:#90a8c8;overflow-wrap:anywhere;line-height:1.65}
+dl{display:grid;grid-template-columns:85px 1fr;gap:9px;margin:14px 0 0;font-size:12px}dt{color:#8096b3}dd{margin:0;overflow-wrap:anywhere}
+.truth{margin-top:16px;border-top:1px solid #283a52;padding-top:15px;color:#d5b98b;font-size:12px;line-height:1.5}
+.truth.good{color:#8fe3b0}.truth.bad{color:#e4ac94}
+.smallbtn{background:#1e3150;color:#d8e5fa;border:1px solid #385377;border-radius:10px;padding:9px 11px;text-align:left;font-size:12px;font-weight:600}
+.smallbtn:hover{background:#294364}
+.full{width:100%}
+.workitem{padding:11px 0;border-bottom:1px solid #253449;font-size:12px;overflow-wrap:anywhere}.workitem:last-child{border:0}.workitem strong{display:block;color:#dce8fa}.workitem span{color:#96a9c6}
+.chat{display:flex;flex-direction:column;min-width:0;max-height:100vh}
+.topbar{height:77px;min-height:77px;border-bottom:1px solid #223148;display:flex;align-items:center;justify-content:space-between;padding:0 30px;background:rgba(9,16,27,.58)}
+.topbar h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+.topbar p{font-size:12px;margin:6px 0 0;color:#8da3c1}
+.connection{display:flex;align-items:center;gap:7px;font-size:12px;color:#abc7e5}
+.dot{height:8px;width:8px;border-radius:50%;background:#73cfa3;box-shadow:0 0 12px #73cfa380}
+.messages{flex:1;overflow:auto;padding:25px max(22px,7%);scroll-behavior:smooth}
+.welcome{text-align:center;max-width:610px;margin:9vh auto 38px}
+.orb{width:60px;height:60px;background:#142d51;border:1px solid #365785;border-radius:19px;display:grid;place-items:center;font-size:26px;font-weight:750;color:#b8d9ff;margin:auto}
+.welcome h2{font-size:23px;margin:20px 0 12px}
+.welcome p{color:#90a4c3;line-height:1.65}
+.message{max-width:760px;margin:0 auto 21px;display:flex;gap:14px;align-items:flex-start}
+.message.user{flex-direction:row-reverse}
+.avatar{height:32px;width:32px;flex:none;border-radius:11px;background:#1f3f68;border:1px solid #335984;color:#cce5ff;display:grid;place-items:center;font-size:12px;font-weight:800}
+.message.user .avatar{background:#39435a;border-color:#4c5871;color:#e6eefb}
+.bubble{padding:15px 18px;border-radius:15px;background:#15243a;border:1px solid #293d59;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;min-width:95px}
+.message.user .bubble{background:#213553;border-color:#335071}
+.message.error .bubble{border-color:#784a48;background:#382328;color:#f6c7bb}
+.composer-wrap{border-top:1px solid #223148;padding:18px max(22px,7%) 24px;background:rgba(9,16,27,.7)}
+.composer{display:flex;gap:12px;align-items:flex-end;max-width:760px;margin:auto;background:#142237;border:1px solid #36506c;border-radius:18px;padding:12px}
+textarea{resize:none;background:transparent;border:0;color:#f2f5ff;outline:none;flex:1;min-width:0;min-height:44px;max-height:170px;padding:11px 7px;line-height:1.5}
+textarea::placeholder{color:#7d91af}
+.send{background:#69adff;color:#08182d;border:0;border-radius:12px;width:44px;height:44px;flex:none;font-size:21px;font-weight:700}
+.send:hover{background:#a1cdff}
+.hint{max-width:760px;margin:11px auto 0;font-size:11px;color:#7085a2;line-height:1.6}
+.right{padding:27px 20px;border-left:1px solid #253147;background:rgba(11,19,33,.75)}
+.right h2{margin:2px 0 8px;font-size:17px}
+.right .kicker{line-height:1.55}
+.gate{background:#132238;border:1px solid #36506f;border-radius:12px;padding:14px;margin:13px 0}
+.gate b{display:block;margin:8px 0;font-size:14px}
+.gate pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#090f1c;padding:11px;border-radius:9px;border:1px solid #2b3b50;max-height:235px;overflow:auto;font-size:11px;line-height:1.5}
+.actions{display:flex;gap:8px;margin-top:13px}
+.approve,.reject{border:1px solid #426e7e;border-radius:9px;background:#204a51;color:#ccfcdd;padding:9px 12px;font-size:12px;font-weight:700}
+.reject{background:#4b2830;border-color:#7a4450;color:#ffcece}
+.notice{background:#201e2a;border:1px solid #544453;border-radius:12px;padding:14px;line-height:1.6;color:#d1bdbd;font-size:12px;margin-top:20px}
+#events{margin-top:14px;font-size:12px;line-height:1.6;white-space:pre-wrap;color:#a3b3cd}
+.hidden{display:none}
+@media(max-width:1180px){.shell{grid-template-columns:245px minmax(0,1fr)}.right{grid-column:1/-1;border-left:0;border-top:1px solid #253147}.chat{max-height:92vh}}
+@media(max-width:690px){.shell{display:flex;flex-direction:column}.side{padding:14px;border-right:0;border-bottom:1px solid #253147}.brand{padding-bottom:6px}.side .section-label{margin:14px 0 5px}.chat{height:72vh;max-height:72vh}.topbar{padding:0 16px}.connection{font-size:11px}.messages{padding:18px 13px}.welcome{margin:2vh auto 25px}.composer-wrap{padding:12px}.right{padding:20px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+  <div class="brand"><div class="logo">J</div><div><b>JARVIS</b><small>OWNER WORKSPACE</small></div></div>
+  <div class="section-label">Current objective</div>
+  <div class="panel">
+    <span class="pill" id="statePill">Checking live state</span>
+    <div class="goal-title" id="goalTitle">TV capability acquisition</div>
+    <div class="mono" id="goalId">goal_3bf2a80a14ecb70dd5b6</div>
+    <dl><dt>Phase</dt><dd id="goalPhase">Checking</dd><dt>Work items</dt><dd id="workCount">—</dd><dt>Approvals</dt><dd id="gateCount">—</dd></dl>
+    <div class="workitem" id="goalBlocker" role="status">Checking for the exact blocker…</div>
+    <div class="truth" id="verification">Real-machine acceptance not confirmed.</div>
+  </div>
+  <button class="smallbtn full" id="refresh">↻ Refresh live status</button>
+  <div class="section-label">Background work</div>
+  <div id="workList" class="kicker">Loading work queue…</div>
+</aside>
+<main class="chat">
+  <header class="topbar"><div><h1>Conversation</h1><p>Natural text · Canonical GICC / Work · Development</p></div><div class="connection"><span class="dot" id="connectionDot"></span><span id="connectionText">Connecting</span></div></header>
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome"><div class="orb">J</div><h2>Talk naturally to JARVIS</h2><p>The microphone is off. Ask about the existing TV objective, review what is blocked, or authorize a clearly described discovery when JARVIS offers one. This interface does not create an additional goal on startup.</p></div>
+  </div>
+  <div class="composer-wrap">
+    <form class="composer" id="chatForm"><textarea id="messageInput" maxlength="2048" rows="1" placeholder="Ask JARVIS what it needs to continue the existing TV goal…"></textarea><button class="send" id="sendButton" type="submit" aria-label="Send message">➤</button></form>
+    <div class="hint">Enter to send · Shift+Enter for new line · Protected approvals still require explicit review and Windows Hello.</div>
+  </div>
+</main>
+<aside class="right">
+  <h2>Approval center</h2>
+  <div class="kicker">Engineering proposals remain protected. Review the exact proposal before making a decision.</div>
+  <div class="section-label">Pending change gates</div>
+  <button id="reviewGates" class="smallbtn full">Review pending approvals</button>
+  <div id="gatesList" class="kicker" style="margin-top:12px">No approval details requested yet.</div>
+  <div class="notice"><b>Acceptance boundary</b><div>Discovery is not TV control. JARVIS must prove actual device effects and original-goal completion before reporting success.</div></div>
+  <div id="events" role="status" aria-live="polite"></div>
+</aside>
+</div>
+<script nonce="__JARVIS_NONCE__">
+"use strict";
+const csrf = document.querySelector('meta[name="jarvis-csrf"]').content;
+const byId = (id) => document.getElementById(id);
+const input = byId("messageInput");
+const messages = byId("messages");
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let sending = false;
+let refreshing = false;
+async function api(path, payload) {
+  const options = {
+    method: payload === undefined ? "GET" : "POST",
+    headers: {"X-Jarvis-CSRF": csrf}
+  };
+  if (payload !== undefined) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(payload);
+  }
+  let response;
+  try { response = await fetch(path, options); }
+  catch (_) { throw new Error("Cannot reach local JARVIS server."); }
+  let result;
+  try { result = await response.json(); }
+  catch (_) { throw new Error("Invalid JARVIS response."); }
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.message || result.truth_note || result.status || "Request failed");
+  }
+  return result;
+}
+function textNode(tag, value, className) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  node.textContent = value == null ? "" : String(value);
+  return node;
+}
+function addMessage(role, text, isError) {
+  byId("welcome").classList.add("hidden");
+  const line = document.createElement("div");
+  line.className = "message " + role + (isError ? " error" : "");
+  const avatar = textNode("div", role === "user" ? "YOU" : "J", "avatar");
+  const bubble = textNode("div", text, "bubble");
+  line.append(avatar, bubble);
+  messages.append(line);
+  messages.scrollTop = messages.scrollHeight;
+  return bubble;
+}
+function describeResult(result) {
+  if (typeof result.message === "string" && result.message) return result.message;
+  if (result.truth_note) return result.truth_note;
+  return JSON.stringify(result, null, 2);
+}
+async function refreshStatus() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const state = await api("/api/state");
+    const goal = state.goal || {};
+    const active = (state.active_goals || []).find((g) => g.goal_id === state.goal_id);
+    const status = goal.goal_state || (active && active.goal_state) || goal.status || "Unverified";
+    byId("statePill").textContent = status.replaceAll("_", " ");
+    byId("goalTitle").textContent = (active && active.owner_request) || "Existing TV capability objective";
+    byId("goalId").textContent = state.goal_id;
+    byId("goalPhase").textContent = goal.phase || (active && active.phase) || "Not reported";
+    const blocker = goal.blocker;
+    byId("goalBlocker").textContent = blocker && typeof blocker === "object"
+      ? "Blocker: " + (blocker.detail || "Details unavailable") +
+        (blocker.owner_action_required === true ? " — Your input is required." : "")
+      : "No specific blocker reported by the canonical goal.";
+    const work = Array.isArray(state.work) ? state.work : [];
+    byId("workCount").textContent = state.work_available ? String(work.length) : "Unavailable";
+    byId("gateCount").textContent = String(state.pending_gate_count);
+    const accepted = state.verified_goal_completion === true;
+    byId("verification").textContent = accepted ? "Canonical goal reports verified completion. Check witnessed hardware evidence before release." : "Real-machine TV acceptance is NOT verified.";
+    byId("verification").className = "truth " + (accepted ? "good" : "bad");
+    const list = byId("workList");
+    list.replaceChildren();
+    if (!state.work_available) list.append(textNode("div", "Work status unavailable."));
+    else if (!work.length) list.append(textNode("div", "No active work reported."));
+    for (const item of work.slice(0, 8)) {
+      const row = document.createElement("div");
+      row.className = "workitem";
+      row.append(textNode("strong", item.work_id || "Work item"), textNode("span", item.state || item.status || "State unavailable"));
+      list.append(row);
+    }
+    byId("connectionText").textContent = "Local runtime";
+    byId("connectionDot").style.background = "#73cfa3";
+  } catch (error) {
+    byId("connectionText").textContent = "Status unavailable";
+    byId("connectionDot").style.background = "#f0ab71";
+    byId("events").textContent = "Status refresh: " + error.message;
+  } finally { refreshing = false; }
+}
+async function sendMessage(text) {
+  if (sending) return;
+  sending = true;
+  byId("sendButton").disabled = true;
+  input.disabled = true;
+  addMessage("user", text, false);
+  const answer = addMessage("assistant", "JARVIS is processing this request…", false);
+  const requestId = crypto.randomUUID().replaceAll("-", "");
+  try {
+    await api("/api/chat", {request_id: requestId, text: text});
+    for (;;) {
+      const pending = await api("/api/requests/" + requestId);
+      if (pending.state === "finished") {
+        answer.textContent = describeResult(pending.result || {});
+        break;
+      }
+      await sleep(1200);
+    }
+    await refreshStatus();
+  } catch (error) {
+    answer.textContent = "Unable to confirm this result: " + error.message + ". Check the existing goal before retrying; do not duplicate the instruction.";
+    answer.parentElement.classList.add("error");
+  } finally {
+    sending = false;
+    input.disabled = false;
+    byId("sendButton").disabled = false;
+    input.focus();
+  }
+}
+byId("chatForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const message = input.value.trim();
+  if (!message || sending) return;
+  input.value = "";
+  sendMessage(message);
+});
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    byId("chatForm").requestSubmit();
+  }
+});
+byId("refresh").addEventListener("click", refreshStatus);
+byId("reviewGates").addEventListener("click", async () => {
+  const container = byId("gatesList");
+  container.textContent = "Loading exact approval proposals…";
+  try {
+    const response = await api("/api/gates/review", {});
+    container.replaceChildren();
+    const gates = Array.isArray(response.gates) ? response.gates : [];
+    if (!gates.length) {
+      container.append(textNode("div", "No pending engineering gates."));
+      return;
+    }
+    for (const gate of gates) {
+      const panel = document.createElement("div");
+      panel.className = "gate";
+      panel.append(
+        textNode("div", gate.kind || "Engineering approval", "kicker"),
+        textNode("b", gate.gate_id || "Unknown gate"),
+        textNode("div", "Change: " + (gate.change_id || "unknown"), "mono"),
+        textNode("div", "Artifact: " + (gate.artifact_digest || "unverified"), "mono")
+      );
+      const proposal = textNode("pre", JSON.stringify(gate.proposal, null, 2) || "Proposal unavailable");
+      panel.append(proposal);
+      const controls = document.createElement("div");
+      controls.className = "actions";
+      for (const decision of ["approve", "reject"]) {
+        if (gate.kind === "promotion" && decision === "reject") continue;
+        const button = textNode("button", decision === "approve" ? "Approve" : "Reject", decision);
+        button.type = "button";
+        button.addEventListener("click", async () => {
+          if (!confirm("Do you want to " + decision + " exact gate " + gate.gate_id + "? The existing authorization / Windows Hello policy applies.")) return;
+          controls.querySelectorAll("button").forEach((item) => { item.disabled = true; });
+          byId("events").textContent = "Submitting an exact guarded decision…";
+          const requestId = crypto.randomUUID().replaceAll("-", "");
+          try {
+            await api("/api/gates/decide", {request_id: requestId, gate_id: gate.gate_id, decision: decision});
+            for (;;) {
+              const state = await api("/api/requests/" + requestId);
+              if (state.state === "finished") {
+                const result = state.result || {};
+                if (result.ok !== true) throw new Error(result.truth_note || result.status || "Decision not accepted");
+                byId("events").textContent = "Governed gate response: " + describeResult(result);
+                break;
+              }
+              await sleep(1200);
+            }
+            await refreshStatus();
+          } catch (error) {
+            byId("events").textContent = "Gate decision NOT confirmed: " + error.message + ". Inspect exact gate state before any retry.";
+          } finally { controls.querySelectorAll("button").forEach((item) => { item.disabled = false; }); }
+        });
+        controls.append(button);
+      }
+      panel.append(controls);
+      container.append(panel);
+    }
+  } catch (error) { container.textContent = "Cannot review gates: " + error.message; }
+});
+refreshStatus();
+setInterval(refreshStatus, 12000);
+</script>
+</body>
+</html>

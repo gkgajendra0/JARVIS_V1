@@ -503,3 +503,22 @@ Acceptance must prove:
 13. DBOS/WorkItem remains durable execution truth.
 14. EngineeringChange remains governed engineering truth.
 15. External frameworks remain replaceable workers/adapters, never canonical JARVIS Authority/work/memory/package/promotion truth.
+
+
+## 22. Unverified candidate governance boundary
+
+Research may discover and propose reusable source identity, version, semantic operations,
+license metadata and evidence references. It may not establish canonical governance by
+free-form model prose.
+
+For `acq_record_candidate`:
+
+- verification requirements are deterministic source-type contract IDs;
+- trust remains `UNVERIFIED_CANDIDATE`;
+- model-authored secret/network/device/discovery scopes are not accepted at this step;
+- model-authored external/owner acceptance requirements are not accepted at this step;
+- later trusted source verification/evidence and deterministic plan/Authority layers own
+  those contracts and scopes.
+
+This keeps candidate identity/digests reproducible and enforces the existing invariant
+that discovery metadata is not Authority or trust.

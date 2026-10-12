@@ -41,10 +41,12 @@ def _goal() -> OwnerCapabilityGoalV1:
     )
 
 
-def _unverified() -> AcquisitionCandidateV1:
+def _unverified(
+    source_identity: str = "example-device-sdk",
+) -> AcquisitionCandidateV1:
     return AcquisitionCandidateV1.create(
         source_kind=AcquisitionSourceKind.SDK_LIBRARY,
-        source_identity="example-device-sdk",
+        source_identity=source_identity,
         source_version="1.2.3",
         source_digest=None,
         trust_class=AcquisitionTrustClass.UNVERIFIED_CANDIDATE,
@@ -205,3 +207,54 @@ def test_pypi_verifier_promotes_exact_sdk_without_executing_it(
     assert candidate.external_acceptance_requirements == (
         "physical-effect-observation",
     )
+
+
+def test_pypi_verifier_normalizes_legacy_pypi_project_url(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    work = WorkItem(
+        request="research reusable SDK",
+        work_type=WorkType.RESEARCH,
+        source_session_id="session-pypi",
+        source_turn_id="turn-pypi-url",
+    )
+    legacy = _unverified("https://pypi.org/project/example-device-sdk/1.2.3/")
+    resolver = FakeResolver(work.work_id, legacy)
+    broker = FakeBroker(tmp_path)
+    observed_packages: list[str] = []
+    original_resolve = broker.resolve_python
+
+    def resolve_python(requirement, *, workspace, environment):
+        observed_packages.append(requirement.package_name)
+        return original_resolve(
+            requirement,
+            workspace=workspace,
+            environment=environment,
+        )
+
+    broker.resolve_python = resolve_python
+    monkeypatch.setattr(
+        sdk_verification,
+        "dependency_work_root",
+        lambda work_id: tmp_path / work_id,
+    )
+    monkeypatch.setattr(
+        sdk_verification,
+        "ProvenanceService",
+        FakeProvenanceService,
+    )
+    executor = AcquisitionVerifyPyPiSdkExecutor(
+        resolver,  # type: ignore[arg-type]
+        broker_factory=lambda: broker,  # type: ignore[arg-type]
+    )
+
+    result = asyncio.run(
+        executor.execute(
+            work=work,
+            parameters={"candidate_id": legacy.candidate_id},
+        )
+    )
+
+    assert result["verified"] is True
+    assert observed_packages == ["example-device-sdk"]

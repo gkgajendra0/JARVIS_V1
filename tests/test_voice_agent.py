@@ -88,3 +88,15 @@ def test_voice_instructions_define_lenovo_primary_camera_semantics() -> None:
     assert "Lenovo has no pan, tilt, or zoom control" in normalized
     assert "only while Pocket 3 is the selected camera" in normalized
     assert '"locked" is internal status' in normalized
+
+
+def test_gicc_voice_discovery_instructions_preserve_one_shot_authority() -> None:
+    from jarvis.voice.agent import build_instructions
+
+    instructions = build_instructions(gicc_apply=True)
+    assert "network_discovery.summary" in instructions
+    assert "authorize_bounded_network_discovery" in instructions
+    assert "Windows Hello" in instructions
+    assert "Do not ask for the TV IP" in instructions
+    assert "never fabricate that confirmation" in instructions.casefold()
+    assert "unverified_device_hints" in instructions

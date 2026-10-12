@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Protocol
 
+from jarvis.work.execution import ensure_durable_execution
 from jarvis.work.models import WorkItem, WorkPriority, WorkState
 
 from .models import (
@@ -13,6 +15,7 @@ from .models import (
     ProcessStageRole,
     UnsupportedProcess,
 )
+from .outcomes import classify_work_system_outcome
 from .store import ChangeStore
 
 
@@ -114,6 +117,49 @@ class ChangeCoordinator:
         architecture = None
         if stage_contract.role is ProcessStageRole.ARCHITECTURE_SOURCE:
             request = change.request
+            revision_request = self.store.latest_artifact(
+                change_id,
+                "architecture_revision_request",
+            )
+            if (
+                revision_request is not None
+                and int(revision_request.payload.get("source_attempt", 0)) == attempt
+            ):
+                reason = " ".join(
+                    str(revision_request.payload.get("reason") or "").split()
+                )
+                if reason:
+                    request += (
+                        "\nThe previously approved architecture could not safely "
+                        "continue during governed development. Re-research the capability "
+                        "and derive a complete replacement architecture from current "
+                        "evidence. Revision reason: " + reason
+                    )
+                previous_id = str(
+                    revision_request.payload.get("previous_architecture_artifact_id")
+                    or ""
+                ).strip()
+                previous = (
+                    None if not previous_id else self.store.get_artifact(previous_id)
+                )
+                if previous is not None:
+                    request += (
+                        "\nCanonical previous approved architecture context: "
+                        + json.dumps(
+                            {
+                                "artifact_id": previous.artifact_id,
+                                "digest": previous.digest,
+                                "payload": previous.payload,
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            default=str,
+                        )
+                        + ". Preserve the owner target semantics while replacing only "
+                        "the architecture elements that current evidence proves cannot "
+                        "continue."
+                    )
             dependencies: tuple[str, ...] = ()
         elif stage_contract.role is ProcessStageRole.DEVELOPMENT:
             architecture = self.store.latest_artifact(change_id, "architecture")
@@ -125,14 +171,20 @@ class ChangeCoordinator:
                 f"digest {architecture.digest}: {architecture.payload}"
             )
             source_stage = process.architecture_source_stage
-            source_work = [
-                s.work_id for s in stages if s.stage_key == source_stage.stage_key
-            ]
-            if not source_work:
+            authoritative_source = self.store.current_stage_attempt(
+                change_id,
+                source_stage.stage_key,
+            )
+            if authoritative_source is None:
                 raise ChangeConflict(
-                    "development requires completed architecture-source work"
+                    "development requires authoritative architecture-source work"
                 )
-            dependencies = tuple(source_work)
+            source_item = self.store.work.require(authoritative_source.work_id)
+            if source_item.state is not WorkState.COMPLETED:
+                raise ChangeConflict(
+                    "authoritative architecture-source work is not completed"
+                )
+            dependencies = (authoritative_source.work_id,)
         else:  # pragma: no cover - ProcessContract validation owns known roles
             raise ChangeConflict("unregistered change stage role")
 
@@ -161,11 +213,18 @@ class ChangeCoordinator:
                 )
 
         if not item.state.terminal:
-            execution_id = self.backend.submit(item.work_id, priority=item.priority)
-            if execution_id != item.work_id:
-                raise ChangeConflict(
-                    "durable backend returned mismatched work identity"
+            try:
+                ensure_durable_execution(
+                    store=self.store.work,
+                    backend=self.backend,
+                    item=item,
                 )
+            except RuntimeError as exc:
+                if "durable backend must use work_id as execution_id" in str(exc):
+                    raise ChangeConflict(
+                        "durable backend returned mismatched work identity"
+                    ) from exc
+                raise
         return stage
 
     def prepare_failed_work_retry(
@@ -204,12 +263,62 @@ class ChangeCoordinator:
             )
 
         if change.state is ChangeState.RESEARCHING:
-            stage = self.submit_stage(change_id, source_stage.stage_key, 1)
+            source_attempt = 1
+            revision_request = self.store.latest_artifact(
+                change_id,
+                "architecture_revision_request",
+            )
+            current_architecture = self.store.latest_artifact(
+                change_id,
+                "architecture",
+            )
+            if revision_request is not None:
+                requested_attempt = revision_request.payload.get("source_attempt")
+                matching_revision_stage = next(
+                    (
+                        item
+                        for item in self.store.list_stages(change_id)
+                        if item.stage_key == source_stage.stage_key
+                        and item.attempt == requested_attempt
+                    ),
+                    None,
+                )
+                previous_architecture_id = revision_request.payload.get(
+                    "previous_architecture_artifact_id"
+                )
+                revision_is_current = matching_revision_stage is not None or (
+                    current_architecture is not None
+                    and previous_architecture_id == current_architecture.artifact_id
+                )
+                if (
+                    isinstance(requested_attempt, int)
+                    and requested_attempt > 1
+                    and revision_is_current
+                ):
+                    # Before the replacement architecture exists, the previous
+                    # architecture proves this is the active revision request.
+                    # After the handler has written a replacement but before the
+                    # state transition commits, the already-linked source stage
+                    # is the durable replay identity. Never fall back to attempt 1.
+                    source_attempt = requested_attempt
+            stage = self.submit_stage(
+                change_id,
+                source_stage.stage_key,
+                source_attempt,
+            )
             source_work = self.store.work.require(stage.work_id)
             if source_work.state in {WorkState.FAILED, WorkState.CANCELLED}:
-                return self.store.transition(
-                    change_id, ChangeState.FAILED, expected_version=change.version
+                outcome = classify_work_system_outcome(
+                    source_work,
+                    steps=self.store.work.list_steps(source_work.work_id),
                 )
+                if outcome.terminal:
+                    return self.store.transition(
+                        change_id,
+                        ChangeState.FAILED,
+                        expected_version=change.version,
+                    )
+                return self.store.require(change_id)
             if source_work.state is WorkState.COMPLETED:
                 handler = self._source_completion_handlers.get(
                     (change.process_key, change.process_version)
@@ -234,6 +343,27 @@ class ChangeCoordinator:
                     "architecture",
                 )
                 if architecture is not None:
+                    revision_request = self.store.latest_artifact(
+                        change_id,
+                        "architecture_revision_request",
+                    )
+                    produced_by_attempt = not (
+                        revision_request is not None
+                        and revision_request.payload.get("source_attempt")
+                        == stage.attempt
+                        and revision_request.payload.get(
+                            "previous_architecture_artifact_id"
+                        )
+                        == architecture.artifact_id
+                    )
+                    if produced_by_attempt:
+                        self.store.record_stage_outcome(
+                            change_id,
+                            stage.stage_key,
+                            stage.attempt,
+                            produced_artifact_id=architecture.artifact_id,
+                            accepted=True,
+                        )
                     change = self.store.require(change_id)
                     return self.store.transition(
                         change_id,
@@ -251,7 +381,12 @@ class ChangeCoordinator:
                 if s.stage_key == development_stage.stage_key
             ]
             matching = next(
-                (s for s in attempts if s.plan_artifact_id == architecture.artifact_id),
+                (
+                    stage
+                    for stage in reversed(attempts)
+                    if stage.plan_artifact_id == architecture.artifact_id
+                    and not self.store.work.require(stage.work_id).state.terminal
+                ),
                 None,
             )
             self.submit_stage(
@@ -259,7 +394,7 @@ class ChangeCoordinator:
                 development_stage.stage_key,
                 matching.attempt
                 if matching is not None
-                else max((s.attempt for s in attempts), default=0) + 1,
+                else max((stage.attempt for stage in attempts), default=0) + 1,
             )
             return self.store.transition(
                 change_id, ChangeState.DEVELOPING, expected_version=change.version
@@ -281,9 +416,17 @@ class ChangeCoordinator:
                 raise ChangeConflict("developing change has no WorkItem")
             item = self.store.work.require(stage.work_id)
             if item.state in {WorkState.FAILED, WorkState.CANCELLED}:
-                return self.store.transition(
-                    change_id, ChangeState.FAILED, expected_version=change.version
+                outcome = classify_work_system_outcome(
+                    item,
+                    steps=self.store.work.list_steps(item.work_id),
                 )
+                if outcome.terminal:
+                    return self.store.transition(
+                        change_id,
+                        ChangeState.FAILED,
+                        expected_version=change.version,
+                    )
+                return self.store.require(change_id)
             if item.state is WorkState.COMPLETED:
                 with self.store.work._lock, self.store.work._connect() as db:
                     self.store._admit_stage(
@@ -303,6 +446,17 @@ class ChangeCoordinator:
                     change = self.store.require(change_id)
                     if terminal_state is not None:
                         if change.state is not ChangeState.DEVELOPING:
+                            if (
+                                change.state is ChangeState.RESEARCHING
+                                and terminal_state is ChangeState.RESEARCHING
+                            ):
+                                # A DEVELOPMENT completion handler may atomically
+                                # reopen governed research (for example a typed
+                                # DevelopmentEngine architecture revision). Complete
+                                # that lifecycle escalation in the same reconciliation
+                                # so the replacement source attempt is durably linked
+                                # before returning to the caller.
+                                return self.reconcile(change_id)
                             return change
                         return self.store.transition(
                             change_id,

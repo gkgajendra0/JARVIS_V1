@@ -23,6 +23,7 @@ from jarvis.work.engine import (
     WorkActionRegistry,
     WorkEngine,
     WorkOwnerInputRequired,
+    WorkTerminalFailure,
 )
 from jarvis.work.models import (
     DeliveryPolicy,
@@ -126,6 +127,28 @@ class ConcurrentExecutor:
             return {"work_id": work.work_id, "verified": True}
         finally:
             self.active -= 1
+
+
+class TerminalFailureExecutor:
+    descriptor = BrainAction(
+        name="terminal_failure",
+        description="Emit one typed terminal failure",
+        parameter_schema={"type": "object"},
+    )
+    work_types = frozenset({WorkType.GENERIC})
+
+    async def execute(self, *, work: WorkItem, parameters: dict) -> dict:
+        del work, parameters
+        raise WorkTerminalFailure(
+            "Engineering specialist reached a terminal failure.",
+            failure_code="development_engine_failed",
+            observation={
+                "development_result": {
+                    "disposition": "failed",
+                    "summary": "Engineering specialist failed.",
+                }
+            },
+        )
 
 
 class FakeBackend:
@@ -344,12 +367,12 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
 
     first = await engine.advance(item.work_id)
     assert first.state is WorkState.WAITING_RESOURCE
-    assert first.retry_after_seconds == 5.0
+    assert first.retry_after_seconds == 30.0
     assert "Gemini rate limit" in (store.require(item.work_id).status_detail or "")
 
     second = await engine.advance(item.work_id)
     assert second.state is WorkState.WAITING_RESOURCE
-    assert second.retry_after_seconds == 10.0
+    assert second.retry_after_seconds == 60.0
 
     recovered = await engine.advance(item.work_id)
     assert recovered.state is WorkState.RUNNING
@@ -357,7 +380,7 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
 
     reset = await engine.advance(item.work_id)
     assert reset.state is WorkState.WAITING_RESOURCE
-    assert reset.retry_after_seconds == 5.0
+    assert reset.retry_after_seconds == 30.0
 
     pressure_steps = [
         step
@@ -370,6 +393,41 @@ async def test_provider_pressure_uses_durable_backoff_without_failure_budget(
         step.state.value == "failed" for step in store.list_steps(item.work_id)
     )
     assert store.list_pending_deliveries() == ()
+
+
+@pytest.mark.asyncio
+async def test_typed_executor_terminal_failure_fails_work_and_emits_failure(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    reasoner = ScriptedReasoner()
+    engine = WorkEngine(
+        store=store,
+        brain=BrainCoordinator(reasoner),
+        actions=WorkActionRegistry((TerminalFailureExecutor(),)),
+    )
+    item = create_item(store, request="Run a governed engineering specialist")
+    reasoner.decisions[item.work_id] = [
+        BrainDecision(
+            action="terminal_failure",
+            summary="Run the governed engineering specialist.",
+        )
+    ]
+
+    result = await engine.advance(item.work_id)
+
+    assert result.state is WorkState.FAILED
+    failed = store.require(item.work_id)
+    assert failed.state is WorkState.FAILED
+    assert "terminal failure" in (failed.status_detail or "").casefold()
+    steps = store.list_steps(item.work_id)
+    assert len(steps) == 1
+    assert steps[0].state.value == "completed"
+    assert steps[0].observation["terminal_failure"] is True
+    assert steps[0].observation["failure_code"] == "development_engine_failed"
+    deliveries = store.list_pending_deliveries()
+    assert len(deliveries) == 1
+    assert deliveries[0].kind is WorkDeliveryKind.FAILURE
 
 
 def test_work_state_rejects_invalid_terminal_transition() -> None:
@@ -585,6 +643,53 @@ def test_failed_change_work_retry_reopens_same_governing_stage(
         for event in changes.list_events(change.change_id)
     )
     assert any(step.kind == "owner_retry" for step in store.list_steps(work.work_id))
+
+
+def test_supervisor_retry_reopens_same_change_without_forging_owner_intent(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    changes = ChangeStore(store)
+    coordinator = ChangeCoordinator(changes, backend)
+    change = coordinator.start("Acquire TV control", "session-tv", "turn-tv")
+    stage = changes.list_stages(change.change_id)[0]
+    work = store.require(stage.work_id)
+    failed = work.transition(
+        WorkState.FAILED,
+        status_detail="research servers are currently overloaded",
+    )
+    store.save(failed, expected_version=work.version)
+
+    # Reproduce a persisted legacy state from before retryable failures stopped
+    # collapsing the parent EngineeringChange. Current coordinator behavior correctly
+    # keeps retryable work under RESEARCHING, so this historical FAILED state must be
+    # constructed explicitly for the Supervisor recovery regression.
+    current = changes.require(change.change_id)
+    changes.transition(
+        current.change_id,
+        ChangeState.FAILED,
+        expected_version=current.version,
+    )
+    assert changes.require(change.change_id).state is ChangeState.FAILED
+
+    runtime = object.__new__(WorkRuntime)
+    runtime.store = store
+    runtime.orchestrator = WorkOrchestrator(store, backend)
+    runtime.changes = coordinator
+
+    retried = runtime.retry_failed_work_from_supervisor(
+        work.work_id,
+        reason="Progress Ledger classified this failure as retryable.",
+    )
+
+    assert retried.work_id == work.work_id
+    assert retried.state is WorkState.RETRYING
+    assert changes.require(change.change_id).state is ChangeState.RESEARCHING
+    assert backend.restarted == [(work.work_id, f"v{retried.version}")]
+    steps = store.list_steps(work.work_id)
+    assert any(step.kind == "system_retry" for step in steps)
+    assert not any(step.kind == "owner_retry" for step in steps)
 
 
 def test_failed_change_retry_submission_failure_restores_failed_change(
@@ -1911,6 +2016,68 @@ def test_orchestrator_reconciles_active_execution_idempotently(
     assert store.require(item.work_id).state is WorkState.QUEUED
 
 
+def test_monitoring_work_is_event_driven_without_dbos_execution(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+
+    submission = orchestrator.start(
+        request="Monitor the main gate for a delivery agent.",
+        work_type=WorkType.MONITORING,
+        source_session_id="gicc-monitor:goal-gate",
+        source_turn_id="predicate:delivery-agent",
+    )
+
+    assert submission.work.state is WorkState.WAITING_RESOURCE
+    assert submission.work.status_detail == "waiting for monitored event"
+    assert submission.execution_id == submission.work.work_id
+    assert store.get_execution_id(submission.work.work_id) is None
+    assert backend.submitted == []
+
+    assert orchestrator.reconcile_active() == (submission.work.work_id,)
+    assert backend.submitted == []
+
+    paused = orchestrator.pause(submission.work.work_id)
+    assert paused.state is WorkState.PAUSED
+    assert backend.paused == []
+
+    resumed = orchestrator.resume(submission.work.work_id)
+    assert resumed.state is WorkState.WAITING_RESOURCE
+    assert backend.resumed == []
+
+    cancelled = orchestrator.cancel(submission.work.work_id)
+    assert cancelled.state is WorkState.CANCELLED
+    assert backend.cancelled == []
+
+
+def test_failed_event_driven_monitor_requires_goal_rearm_for_retry(
+    tmp_path: Path,
+) -> None:
+    store = SQLiteWorkStore(tmp_path / "work.sqlite")
+    backend = FakeBackend()
+    orchestrator = WorkOrchestrator(store, backend)
+    failed = WorkItem(
+        request="Monitor the main gate.",
+        work_type=WorkType.MONITORING,
+        source_session_id="gicc-monitor:goal-gate",
+        source_turn_id="predicate:delivery-agent",
+        state=WorkState.FAILED,
+    )
+    store.create(failed)
+
+    with pytest.raises(ValueError, match="goal to be re-armed"):
+        orchestrator.retry_failed(
+            failed.work_id,
+            owner_request="try that monitor again",
+            source_session_id="owner-session",
+            source_turn_id="owner-retry",
+        )
+
+    assert backend.restarted == []
+
+
 def test_apply_owner_input_is_idempotent_after_canonical_save(
     tmp_path: Path,
 ) -> None:
@@ -1952,6 +2119,26 @@ def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
         def set_interactive_active(self, active: bool) -> None:
             self.calls.append(active)
 
+    class Backend:
+        def __init__(self) -> None:
+            self.shutdown_started = False
+
+        def begin_shutdown(self) -> None:
+            self.shutdown_started = True
+
+        async def quiesce_active_advances(
+            self,
+            *,
+            timeout_seconds: float | None = None,
+        ) -> int:
+            assert timeout_seconds is None
+            return 0
+
+    class Orchestrator:
+        def list_active(self, *, limit: int = 100):
+            assert limit == 10_000
+            return ()
+
     drain_timeouts: list[int] = []
 
     def fake_shutdown(*, workflow_completion_timeout_sec: int = 0) -> None:
@@ -1962,9 +2149,15 @@ def test_work_runtime_close_preempts_reasoning_before_bounded_dbos_drain(
     runtime = object.__new__(WorkRuntime)
     runtime._closed = False
     runtime._interactive_brain_gate = Gate()
+    runtime._status_update_task = None
+    runtime._release_bridge_task = None
+    runtime._autonomy_periodic_reconciler = None
+    runtime.backend = Backend()
+    runtime.orchestrator = Orchestrator()
 
     runtime.close()
     runtime.close()
 
+    assert runtime.backend.shutdown_started is True
     assert runtime._interactive_brain_gate.calls == [True]
-    assert drain_timeouts == [5]
+    assert drain_timeouts == [70]

@@ -45,6 +45,30 @@ control capability and then execute the natural goal through JARVIS Hands/planni
 ChatGPT-plan reasoning is the primary strong model lane for this validation, removing the
 Gemini/OpenAI quota blocker that stopped the 2026-09-28 Phase-9 external run.
 
+### 2026-10-05 supervisor/control-plane priority correction
+
+The live D8 TV capability run is now **FROZEN before further local patching** while the
+existing JARVIS supervisor/control-plane is hardened at the system level. The owner has
+explicitly required that Research, Architecture, Development and Verification behave as
+internal contributors to one JARVIS system with one shared current truth, and that only
+the JARVIS Supervisor communicates with the owner.
+
+The governing research/architecture/implementation plan is:
+
+`GLOBAL_SUPERVISOR_GOVERNED_BLACKBOARD_RESEARCH_AND_PLAN_2026-10-05.md`.
+
+This is **not** authorization to replace GICC, WorkEngine, EngineeringChange, DBOS,
+DevelopmentEngine, Authority, gates or the capability lifecycle with a generic multi-agent
+framework. The direction is to upgrade the supervisor already present in those systems
+with a governed ObjectiveWorkspace/Blackboard, Task Ledger, Progress Ledger,
+current/superseded attempt semantics, authoritative dependency selection, typed failure
+propagation and manager-only owner communication.
+
+The immediate next implementation step is **S1 system scenario replay/fault harness**.
+Do not resume the live TV lifecycle until that replay safety net exists. Preserve the
+existing TV goal and EngineeringChange lineage; do not create a replacement TV goal.
+PR #252 remains draft/unmerged unless the owner explicitly authorizes merge.
+
 ## North-star program architecture
 
 The owner-approved **whole-JARVIS product north star** is defined by:
@@ -252,3 +276,274 @@ Historical experiments, old acceptance transcripts and superseded research remai
 ## Immediate next action
 
 **Start the JARVIS Cost Optimization interlude from Slice C0 in `JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md`. Do not purchase the ₹400–₹500 paid-brain experiment balance until the documented pre-credit gate passes. Preserve production SHADOW, existing Authority, accepted Phase-4 routing contracts and the deferred Phase-9 blind external lifecycle. Phase 11 remains next in the autonomous-engineering sequence after this bounded interlude unless the owner changes priority.**
+
+
+## 2026-10-04 D7 DevelopmentEngine owner-machine acceptance
+
+D7 is ACCEPTED on the owner Windows machine.
+
+Evidence from the real isolated DevelopmentEngine proof:
+
+- model: `gpt-5.6-sol`;
+- reviewed Codex SDK: `openai-codex==0.160.0`;
+- disposition: `completed`;
+- owner acceptance: `passed=true`;
+- one cloud DevelopmentEngine mission, six provider model turns and seven governed tool
+  calls;
+- Docker test evidence passed;
+- only the approved disposable path changed;
+- candidate commit was produced;
+- identical second execution reused the durable result without another cloud turn;
+- restart reconstruction reused the durable result before creating another Codex runtime;
+- protected JARVIS source revision and source tree remained unchanged/clean.
+
+D7 is no longer a blocker. The next milestone is D8 blind natural-goal capability
+acceptance. C6 remains PARKED/OFF and PR #252 remains draft/unmerged.
+
+## 2026-10-04 active routing/C6 decision
+
+The owner has explicitly directed that JARVIS must not use Astra-class reasoning as the
+routine/default path merely because it is available. The durable direction remains
+`JARVIS_MODEL_ROUTER_AND_CODEX_DIRECTION_2026-10-04.md`.
+
+The existing model router is now being promoted to an explicit tier policy rather than
+replaced by another router:
+
+- deterministic/bounded JARVIS control-plane decisions remain model-free where possible;
+- Luna-class ChatGPT-plan targets are the efficient tier when the connected account
+  exposes them;
+- Sol-class targets are the normal capable tier for substantial research/reasoning and
+  the default DevelopmentEngine/Codex model when no explicit development override is
+  configured;
+- Astra-class targets are frontier escalation only after repeated semantic/quality
+  failure evidence;
+- provider pressure/quota exhaustion never increases task difficulty and therefore never
+  justifies an Astra escalation;
+- the shared ChatGPT-plan provider circuit remains account/app scoped, so quota pressure
+  blocks all subscription-backed tiers together rather than hopping models to evade the
+  same allowance.
+
+The tier policy remains the accepted `engineering_stage.v1` contract; its policy digest now captures the tiered behavior. Runtime startup reads the connected
+ChatGPT-plan model catalog and registers only tier models actually exposed to the owner
+account. If model-catalog discovery fails, JARVIS preserves the configured legacy model
+rather than inventing access.
+
+C6 is now PARKED as an optimization track. Keep prompt compression OFF in production.
+The remaining one-call C6 token probe is not required before capability-creator
+validation and must not distract from the model-router + real Phase-9 mission path.
+
+
+## 2026-10-04 context-compression/local-development research update
+
+Before implementing more custom C6 compression logic, benchmark Microsoft's LLMLingua
+family as an existing local prompt-compression solution. LLMLingua-2's small official
+checkpoint is suitable for an owner-machine local experiment and supports structured
+compression/forced preservation. Compare legacy vs current C6 vs LLMLingua-assisted
+payloads under the same strict semantic-equivalence gate.
+
+For capability creation, also evaluate an ephemeral local coding-brain mode using the
+existing Ollama/local-residency substrate: evict the ordinary local model when required,
+load a benchmark-qualified coding model for the DevelopmentEngine mission, unload and
+verify VRAM release afterward, then restore ordinary JARVIS routing. The first practical
+8-GB-GPU candidate is Qwen2.5-Coder 7B; Qwen3-Coder 30B is too large for the intended
+fully-resident owner-machine tier.
+
+These are research/benchmark directions only. C6 remains SHADOW and no new production
+model route is authorized until owner-machine quality/resource evidence passes.
+
+
+## 2026-10-04 priority clarification — capability creator first
+
+This section supersedes the earlier same-day "compression first" priority.
+
+Current order:
+1. finish and verify the existing Global Model Router tier policy;
+2. keep C6 prompt compression OFF/PARKED;
+3. verify DevelopmentEngine defaults to the capable/Sol tier unless the owner explicitly
+   pins another development model;
+4. run one real Phase-9 capability-acquisition mission end to end;
+5. fix only blockers exposed by that mission;
+6. return to C6 only if measured context/quota pressure remains material after routing.
+
+Do not start another coding harness, local coding-brain project, or prompt-compression
+promotion before the capability creator has one real end-to-end proof.
+
+## 2026-10-04 LLMLingua implementation checkpoint
+
+The compression-first experiment is now implemented on draft PR #252 and is pending
+owner-machine acceptance only.
+
+The active first proof is the previously failing C6 research fixture, using a local,
+structure-preserving LLMLingua-2 compressor and at most two ChatGPT-plan A/B calls after
+a zero-cloud preflight. Production remains SHADOW. The dedicated local coding-brain idea
+remains deferred and must not be started unless compression/model-routing evidence later
+shows it is still needed.
+
+
+Runtime integration is also present behind
+`JARVIS_WORK_PROMPT_COMPRESSION_MODE`, which defaults to `off`. The first accepted
+scope is RESEARCH only. No production setting change is authorized until the local
+preflight plus strict legacy-vs-compressed owner-machine A/B passes.
+
+
+## 2026-10-04 compression implementation status
+
+The compression-first C6 implementation candidate is now on draft PR #252.
+
+It wraps Microsoft LLMLingua-2 locally behind a replaceable JARVIS adapter, preserves
+canonical Work state, defaults prompt compression to OFF, limits the first runtime
+admission to RESEARCH, falls back to the exact legacy payload on compressor failure, and
+adds strict legacy-vs-compressed decision/token benchmarks.
+
+The remaining acceptance boundary is owner-machine execution of
+`tools/research/c6_llmlingua_owner_acceptance.ps1`: install/load the reviewed optional
+compressor, prove zero-cloud local reduction on the previously failing research fixture,
+then use at most two ChatGPT-plan calls to prove the compressed request preserves all
+strict decision fields while reducing actual provider input tokens.
+
+Do not enable prompt-compression APPLY or reopen the deferred local coding-brain idea
+before this evidence is reviewed.
+
+
+## 2026-10-04 full-history compression correction
+
+The LLMLingua acceptance target is now explicitly **complete canonical RESEARCH history**,
+not merely compression of the existing latest-12 provider window.
+
+SHADOW keeps sending the exact current payload. The local compressor receives the complete
+available Work history only as an experiment/source view. A future APPLY may substitute
+the compressed full-history payload only when JARVIS independently proves it is smaller
+than the current payload and the owner-machine strict decision/token gate passes.
+
+This correction is important because the previously failing research fixture's exact
+owner goal was older than the current latest-12 window. The new A/B therefore tests
+whether compression can preserve that full decision story while still reducing tokens.
+
+
+## 2026-10-04 LLMLingua first owner result
+
+The first real owner-machine LLMLingua run proved local full-history compression and real
+provider-token savings, but rate `0.50` failed strict parameter equivalence.
+
+It reduced 102,333 full-history chars to 65,031 chars and reduced actual provider input
+tokens by 34.96%, but the compressed model decision omitted owner-governance action
+fields that were present in the full-history decision. Production remains OFF/SHADOW.
+
+The active next gate is now conservative compression, not more architecture expansion:
+the owner script locally sweeps from 0.95 downward and selects the least aggressive rate
+that makes full history at least 5% smaller than today's current payload. Only that one
+rate receives the bounded two-call model A/B.
+
+`JARVIS_WORK_PROMPT_COMPRESSION_RATE` is now configurable so a passing owner rate can
+later be reproduced exactly in runtime rather than falling back to the failed 0.50 rate.
+
+
+## 2026-10-04 LLMLingua second owner result
+
+Rate `0.75` reduced real provider input tokens by 16.05% versus the full-history
+baseline and produced a payload 5.02% smaller than today's current 12-step prompt, but
+strict parameter equivalence still failed.
+
+The active gate is now a fine local crossover search immediately below `0.80`, because
+rate `0.80` missed today's payload size by only ~0.03%. The owner test now checks
+0.795/0.790/0.785/... and selects the least aggressive rate that beats today's payload by
+at least 0.25%. Only that selected rate consumes the bounded two Astra calls.
+
+Do not weaken parameter equality. Production compression remains OFF.
+
+
+## 2026-10-04 baseline-stability gate
+
+Before spending more quota on fine-grained LLMLingua rates, the research fixture must
+prove exact same-input stability. The two previous owner runs produced different
+full-history parameter structures despite the same canonical full-history request.
+
+The LLMLingua live gate now calls the exact full-history request twice first. If any
+strict decision field differs, it stops after two calls and does not evaluate compressed
+context. Only a stable baseline is followed by one compressed-context call, for a maximum
+of three calls total.
+
+This gate takes precedence over rate tuning. Do not interpret another compression
+mismatch until `all_baselines_stable=true`.
+
+
+## 2026-10-04 candidate-governance stabilization
+
+The same full-history research request failed A/A stability because
+`acq_record_candidate` exposed free-form governance fields to the model.
+
+The action contract is now narrowed so the model chooses source/version/operations/evidence
+only. JARVIS assigns the existing deterministic source-type verification contract and
+does not accept model-authored secret/network/device/discovery/owner-acceptance scope at
+the unverified-candidate step.
+
+This is now the prerequisite for the next LLMLingua owner run. Strict parameter equality
+remains unchanged; production prompt compression remains OFF.
+
+
+## 2026-10-04 model-routed C6 research correction
+
+The previous LLMLingua owner fixture was exercising a Phase-9 state that production
+should handle through the deterministic research control plane, not Astra.
+
+Phase-9 now leaves the verifier choice model-owned after a candidate is recorded rather
+than auto-resolving immediately. This gives the registered verifier action a real chance
+to run without making the unsafe assumption that every generic SDK candidate is PyPI.
+Verified evidence still triggers deterministic re-resolution. The old re-resolve fixture
+is retired from model-equivalence promotion evidence.
+
+The active LLMLingua owner gate now targets
+`research_ready_for_digest_bound_finalize`: the canonical acquisition resolution is
+current and the next digest-bound `acq_finalize` decision is genuinely model-owned.
+Strict same-input stability remains mandatory before compressed context is evaluated.
+
+
+## 2026-10-04 LLMLingua semantic PASS
+
+The corrected model-routed owner gate PASSED at
+`3749bcea09556ea48ccbbcf6c2688eb67e0588c1`.
+
+`research_ready_for_digest_bound_finalize` produced a stable full-history A/A baseline
+and the rate-0.85 compressed full-history request produced the exact same action,
+parameters, completion state and owner state.
+
+Observed: 14 full-history steps, 12 current steps, 9.40% serialized reduction versus raw
+full history, 1.27% smaller serialized payload than today's current window, and 12.47%
+real provider input-token reduction versus raw full history. CPU compression took about
+16.1 seconds.
+
+Production prompt compression remains OFF. The active gate is now a one-call provider
+token probe that reuses the saved PASS report and measures accepted compressed-full-history
+tokens directly against today's current production payload. This avoids rerunning the
+already accepted three-call semantic proof.
+
+If compressed full history also beats current production in real provider input tokens,
+the next decision is deployment economics/canary design, including whether the extra full
+history is worth the measured local compression latency.
+
+
+## 2026-10-04 C6 promotion checkpoint
+
+C6 now has an explicit staged promotion design in
+`JARVIS_C6_PROMOTION_PLAN.md`.
+
+Current facts:
+
+- first valid model-owned LLMLingua semantic PASS remains bound to
+  `3749bcea09556ea48ccbbcf6c2688eb67e0588c1`;
+- production prompt compression remains OFF;
+- PR #252 remains draft/unmerged;
+- the current branch adds only admission/probe/docs/CI work after that accepted runtime;
+- the one-call current-production token probe is runtime-lineage guarded and is the next
+  owner-machine model action;
+- do not rerun the already passing three-call finalize fixture unless accepted runtime
+  lineage changes;
+- do not jump directly to global APPLY;
+- first serving exposure, if justified, is a bounded RESEARCH-only canary;
+- DEVELOPMENT/CODING compression requires separate acceptance;
+- sustained prompt-compression SHADOW is blocked until its current ~16-second
+  compression wait is removed from the serving path or isolated in a diagnostic harness.
+
+The next decision is economic/operational as well as semantic: measure real provider
+input-token savings versus today's current payload, then decide whether those savings
+justify local compression latency before investing in additional canary implementation.

@@ -378,6 +378,56 @@ def test_malformed_canonical_timestamp_is_explicitly_incomplete(
     assert {item.reason_code for item in result.errors} == {"source_timestamp_invalid"}
 
 
+def test_engineering_change_source_projects_gicc_phase9_lineage(
+    tmp_path: Path,
+) -> None:
+    work_store = SQLiteWorkStore(tmp_path / "gicc-lineage.sqlite3")
+    changes = ChangeStore(work_store)
+    change = changes.create(
+        request="Acquire reusable TV control capability.",
+        process_key=ChangeStore.DEFAULT_PROCESS.key,
+        process_version=ChangeStore.DEFAULT_PROCESS.version,
+        source_session_id="gicc:goal-tv",
+        source_turn_id="gap:gap-tv",
+    )
+    changes.add_artifact(
+        change.change_id,
+        kind="gicc_capability_gap_link",
+        payload={
+            "schema": "gicc_phase9_gap_link.v2",
+            "motivating_goal_id": "goal-tv",
+            "gap_id": "gap-tv",
+            "request_id": "phase9-request-tv",
+            "request_digest": "r" * 64,
+            "engineering_change_id": change.change_id,
+            "acquisition_work_id": "work-tv",
+        },
+    )
+
+    result = EngineeringChangeSource(changes).read(
+        SystemStateReadRequestV1(
+            requested_namespaces=("engineering_change",),
+            targets=(
+                SystemStateTargetV1(
+                    target_namespace="engineering_change",
+                    target_identity=change.change_id,
+                ),
+            ),
+            now_epoch=NOW,
+        )
+    )
+
+    assert len(result.facts) == 1
+    assert result.facts[0].value_json["gicc_capability_lineage"] == {
+        "motivating_goal_id": "goal-tv",
+        "gap_id": "gap-tv",
+        "request_id": "phase9-request-tv",
+        "engineering_change_id": change.change_id,
+        "acquisition_work_id": "work-tv",
+    }
+    assert "request" not in result.facts[0].value_json
+
+
 def test_work_change_and_incident_sources_do_not_copy_sensitive_requests(
     tmp_path: Path,
 ) -> None:

@@ -15,6 +15,7 @@ from jarvis.voice.audio import (
     SessionAudioInput,
 )
 from jarvis.voice.observed_audio import ObservedSessionAudioInput
+from jarvis.voice.safe_media_devices import BoundedAudioIngress
 
 
 def frame(value: int, samples: int = 480) -> rtc.AudioFrame:
@@ -50,6 +51,31 @@ class FakeApm:
 
     def process_reverse_stream(self, audio_frame: rtc.AudioFrame) -> None:
         self.reverse_frames.append(audio_frame)
+
+
+@pytest.mark.asyncio
+async def test_media_devices_ingress_absorbs_thread_burst_without_queuefull() -> None:
+    ingress = BoundedAudioIngress(
+        asyncio.get_running_loop(),
+        capacity_frames=2,
+    )
+
+    assert ingress.submit_from_audio_thread(frame(1)) is True
+    assert ingress.submit_from_audio_thread(frame(2)) is True
+    assert ingress.submit_from_audio_thread(frame(3)) is True
+
+    # call_soon_threadsafe drains only after this coroutine yields. The pending
+    # cross-thread buffer must remain bounded and retain the freshest PCM.
+    await asyncio.sleep(0)
+
+    first = await ingress.get()
+    second = await ingress.get()
+    assert np.frombuffer(first.data, dtype=np.int16)[0] == 2
+    assert np.frombuffer(second.data, dtype=np.int16)[0] == 3
+    assert ingress.dropped_frames == 1
+    assert ingress.pending_dropped_frames == 1
+    assert ingress.queue_dropped_frames == 0
+    assert ingress.max_drain_schedule_lag_ms >= 0.0
 
 
 @pytest.mark.asyncio

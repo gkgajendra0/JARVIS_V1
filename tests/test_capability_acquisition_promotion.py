@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -312,6 +313,38 @@ def _phase8_stack(tmp_path, release: ReleaseRecord, manifest: CapabilityManifest
     return registry, admission, reconciler
 
 
+def test_release_bridge_rejects_legacy_gicc_architecture_without_live_acceptance() -> (
+    None
+):
+    class _Changes:
+        def require(self, change_id: str):
+            assert change_id == "change_legacy_gicc"
+            return SimpleNamespace(
+                process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+                process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+            )
+
+        def latest_artifact(self, change_id: str, kind: str):
+            assert change_id == "change_legacy_gicc"
+            if kind == "gicc_capability_gap_link":
+                return SimpleNamespace(payload={})
+            if kind == "architecture":
+                return SimpleNamespace(payload={"owner_acceptance_contract_ids": []})
+            raise AssertionError(
+                "release bridge should fail before reading downstream lifecycle evidence"
+            )
+
+    with pytest.raises(CapabilityAcquisitionReleaseBridgeError) as exc:
+        ensure_capability_release_bridge_current(
+            _Changes(),
+            SimpleNamespace(),
+            "change_legacy_gicc",
+            attempt_id="promotion_legacy",
+        )
+
+    assert exc.value.reason_code == "gicc_external_acceptance_contract_missing"
+
+
 def test_phase7_promotion_verifier_uses_phase9_candidate_artifact(tmp_path) -> None:
     changes, promotions, change, candidate, acceptance, _ = _change_and_attempt(
         tmp_path
@@ -394,8 +427,9 @@ def test_promoted_package_is_admitted_without_auto_activation(
         item for item in pending if item.event_key.startswith("phase9-lifecycle:")
     )
     assert len(lifecycle_deliveries) == 1
-    assert change.change_id in lifecycle_deliveries[0].message
-    assert result.lifecycle_artifact.digest in lifecycle_deliveries[0].message
+    assert change.change_id not in lifecycle_deliveries[0].message
+    assert result.lifecycle_artifact.digest not in lifecycle_deliveries[0].message
+    assert "activate the acquired capability" in lifecycle_deliveries[0].message
 
     repeated = CapabilityAcquisitionReleaseBridge(
         changes,

@@ -11,8 +11,11 @@ docker build -f tools/development-sandbox/Dockerfile -t jarvis-dev-tests:local .
 Then configure the machine profile setting:
 
 ```text
-JARVIS_DEV_TEST_DOCKER_IMAGE=jarvis-dev-tests:local
+JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE=jarvis-dev-tests:local
 ```
+
+Existing machine profiles using `JARVIS_DEV_TEST_DOCKER_IMAGE` remain supported as a
+backward-compatible alias.
 
 The Work Orchestrator does **not** install Docker, build this image, or fall back to
 host execution automatically. If the image is not configured/available, development

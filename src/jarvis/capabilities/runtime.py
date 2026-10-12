@@ -8,9 +8,11 @@ from typing import Protocol
 
 from jarvis.ai_provider import configured_ai_provider
 from jarvis.authority.audit import AuditError
+from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.types import ActionOrigin
 from jarvis.capabilities.authority_bridge import (
     AuthorizedCapability,
+    AuthorizedNetworkDiscovery,
     CapabilityAuthorityBroker,
     CapabilityAuthorizationError,
 )
@@ -198,6 +200,16 @@ class CapabilityRuntime:
         best_rank = ranked[0][0]
         best = [key for rank, key in ranked if rank == best_rank]
         return best[0] if len(best) == 1 else None
+
+    def authorize_network_discovery_proposal(
+        self, proposal: ActionProposal
+    ) -> AuthorizedNetworkDiscovery:
+        """Delegate exact GICC approval to the existing governed broker."""
+        if not isinstance(self._authority, CapabilityAuthorityBroker):
+            raise CapabilityAuthorizationError(
+                "network discovery requires existing canonical Authority broker"
+            )
+        return self._authority.authorize_network_discovery_proposal(proposal)
 
     def execute_operation(
         self,

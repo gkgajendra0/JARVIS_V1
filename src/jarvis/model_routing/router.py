@@ -246,13 +246,16 @@ def build_default_work_targets(
     adapter_registry: ModelAdapterRegistry,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    chatgpt_plan_available_models: tuple[str, ...] = (),
+    paid_fallback_enabled: bool = False,
 ) -> DefaultWorkTargets:
     """Build the approved Work pool.
 
     Legacy mode is byte-for-byte compatible with the Phase-4 two-provider pool.
     When ChatGPT-plan usage is explicitly enabled, the subscription-backed target
-    becomes primary and the configured paid provider becomes the single bounded
-    fallback. The C5 Ollama target intentionally remains outside this durable pool.
+    becomes primary. A configured paid provider is included only when the owner has
+    explicitly enabled paid fallback. The C5 Ollama target intentionally remains
+    outside this durable pool.
     """
 
     primary_provider = normalize_ai_provider(configured_provider)
@@ -271,45 +274,134 @@ def build_default_work_targets(
         raise ValueError(
             "chatgpt_plan_model is required when ChatGPT-plan routing is enabled"
         )
-    plan_target = ModelTarget(
-        target_id=CHATGPT_PLAN_TARGET_ID,
-        adapter_id=CHATGPT_PLAN_PROVIDER_ID,
-        provider_id=CHATGPT_PLAN_PROVIDER_ID,
-        model_id=plan_model,
-        locality=ModelLocality.CLOUD,
-        capabilities=(
-            "engineering_reasoning",
-            "structured_output",
-        ),
-        roles=("efficient", "capable"),
-        max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
-        supports_structured_output=True,
-        supports_tools=False,
-        supports_streaming=True,
-        latency_class="standard",
-        benchmark_status=BenchmarkStatus.ACCEPTED,
-        registry_version=1,
-        endpoint_ref=CHATGPT_PLAN_RESOURCE,
-        credential_ref=None,
-        cost_profile=CostProfile(
-            profile_id="chatgpt-plan-subscription-2026-09",
-            version=1,
-            effective_from_epoch=0.0,
-            input_usd_per_million_tokens=0.0,
-            output_usd_per_million_tokens=0.0,
-        ),
-        enabled=True,
+
+    available = {
+        str(model).strip().casefold()
+        for model in chatgpt_plan_available_models
+        if str(model).strip()
+    }
+
+    def _first_available(*models: str) -> str | None:
+        if not available:
+            return None
+        for candidate in models:
+            if candidate.casefold() in available:
+                return candidate
+        return None
+
+    # Prefer the cheapest sufficient subscription-backed models when the
+    # connected account exposes them. If catalog discovery is unavailable we
+    # preserve the previously configured single-model behavior rather than
+    # guessing model access.
+    efficient_model = _first_available("gpt-6-luna", "gpt-5.6-luna")
+    capable_model = _first_available(
+        "gpt-6.1-sol",
+        "gpt-6-sol",
+        "gpt-5.6-sol",
     )
-    paid_fallback = _paid_work_target(
-        primary_provider,
-        configured_model=configured_model,
-    )
+    frontier_model = _first_available("gpt-6-astra")
+
+    def _plan_target(
+        *,
+        target_id: str,
+        model_id: str,
+        roles: tuple[str, ...],
+    ) -> ModelTarget:
+        return ModelTarget(
+            target_id=target_id,
+            adapter_id=CHATGPT_PLAN_PROVIDER_ID,
+            provider_id=CHATGPT_PLAN_PROVIDER_ID,
+            model_id=model_id,
+            locality=ModelLocality.CLOUD,
+            capabilities=(
+                "engineering_reasoning",
+                "structured_output",
+            ),
+            roles=roles,
+            max_context_tokens=_WORK_CONTEXT_BUDGET_TOKENS,
+            supports_structured_output=True,
+            supports_tools=False,
+            supports_streaming=True,
+            latency_class="standard",
+            benchmark_status=BenchmarkStatus.ACCEPTED,
+            registry_version=1,
+            endpoint_ref=CHATGPT_PLAN_RESOURCE,
+            credential_ref=None,
+            cost_profile=CostProfile(
+                profile_id="chatgpt-plan-subscription-2026-10",
+                version=1,
+                effective_from_epoch=0.0,
+                input_usd_per_million_tokens=0.0,
+                output_usd_per_million_tokens=0.0,
+            ),
+            enabled=True,
+        )
+
+    plan_targets: list[ModelTarget] = []
+    primary_target_id = CHATGPT_PLAN_TARGET_ID
+
+    if efficient_model is not None:
+        plan_targets.append(
+            _plan_target(
+                target_id=CHATGPT_PLAN_TARGET_ID,
+                model_id=efficient_model,
+                roles=("efficient",),
+            )
+        )
+    if capable_model is not None and capable_model != efficient_model:
+        capable_target_id = f"{CHATGPT_PLAN_TARGET_ID}.capable"
+        if not plan_targets:
+            primary_target_id = capable_target_id
+        plan_targets.append(
+            _plan_target(
+                target_id=capable_target_id,
+                model_id=capable_model,
+                roles=("capable",),
+            )
+        )
+    if frontier_model is not None and frontier_model not in {
+        efficient_model,
+        capable_model,
+    }:
+        frontier_target_id = f"{CHATGPT_PLAN_TARGET_ID}.frontier"
+        if not plan_targets:
+            primary_target_id = frontier_target_id
+        plan_targets.append(
+            _plan_target(
+                target_id=frontier_target_id,
+                model_id=frontier_model,
+                roles=("frontier",),
+            )
+        )
+
+    if not plan_targets:
+        # Catalog discovery can fail independently of authentication. Never let a
+        # saved frontier/Astra model become the routine fallback in that case.
+        # Failing closed preserves the owner's escalation-only policy.
+        if "astra" in plan_model.casefold():
+            raise ValueError(
+                "ChatGPT-plan model catalog is unavailable and the configured "
+                "fallback is frontier/Astra-class; refusing routine Astra fallback"
+            )
+        plan_targets.append(
+            _plan_target(
+                target_id=CHATGPT_PLAN_TARGET_ID,
+                model_id=plan_model,
+                roles=("efficient", "capable"),
+            )
+        )
+        primary_target_id = CHATGPT_PLAN_TARGET_ID
+
+    targets: tuple[ModelTarget, ...] = tuple(plan_targets)
+    if paid_fallback_enabled:
+        paid_fallback = _paid_work_target(
+            primary_provider,
+            configured_model=configured_model,
+        )
+        targets = (*targets, paid_fallback)
     return DefaultWorkTargets(
-        registry=ModelTargetRegistry(
-            adapter_registry,
-            (plan_target, paid_fallback),
-        ),
-        primary_target_id=CHATGPT_PLAN_TARGET_ID,
+        registry=ModelTargetRegistry(adapter_registry, targets),
+        primary_target_id=primary_target_id,
     )
 
 
@@ -409,20 +501,10 @@ class ModelRouter:
             record = self.routing_store.get_health(target.target_id)
             if record is None:
                 continue
+            # Expiry only makes the target eligible for one probe. It must not
+            # erase the failure streak: only a successful provider invocation may
+            # reset consecutive_failures via _mark_target_recovered().
             effective = record.effective_state(now_epoch=now_epoch)
-            if effective is not record.state:
-                recovered = record.recovered(now_epoch=now_epoch)
-                try:
-                    self.routing_store.save_health(
-                        recovered,
-                        expected_version=record.version,
-                    )
-                    record = recovered
-                except RoutingStoreError:
-                    refreshed = self.routing_store.get_health(target.target_id)
-                    if refreshed is not None:
-                        record = refreshed
-                        effective = record.effective_state(now_epoch=now_epoch)
             health[target.target_id] = effective
             versions[target.target_id] = record.version
 

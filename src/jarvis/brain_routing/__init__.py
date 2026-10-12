@@ -6,6 +6,17 @@ from jarvis.brain_routing.deterministic import (
     DeterministicResolverRegistry,
     default_work_deterministic_resolvers,
 )
+from jarvis.brain_routing.jev import (
+    DEFAULT_JEV_ENDPOINT,
+    DEFAULT_JEV_MODEL,
+    JevAdmissionPolicy,
+    JevChoiceDecision,
+    JevChoiceQuestion,
+    JevDecisionRequest,
+    JevDecisionResult,
+    JevProtocolError,
+    TypeSafeJevClient,
+)
 from jarvis.brain_routing.models import (
     BrainRouteKind,
     BrainRouteRecord,
@@ -20,6 +31,8 @@ from jarvis.brain_routing.work import (
 )
 
 __all__ = [
+    "DEFAULT_JEV_ENDPOINT",
+    "DEFAULT_JEV_MODEL",
     "BrainRouteKind",
     "BrainRouteRecord",
     "BrainRouteStore",
@@ -29,6 +42,13 @@ __all__ = [
     "DeterministicResolverRegistry",
     "GlobalBrainRouteFacts",
     "GlobalBrainRouterReasoner",
+    "JevAdmissionPolicy",
+    "JevChoiceDecision",
+    "JevChoiceQuestion",
+    "JevDecisionRequest",
+    "JevDecisionResult",
+    "JevProtocolError",
+    "TypeSafeJevClient",
     "build_work_global_route_facts",
     "default_work_deterministic_resolvers",
     "project_global_facts_to_model_request",

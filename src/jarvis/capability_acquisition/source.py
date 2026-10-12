@@ -171,6 +171,13 @@ class ExistingCapabilitySourceAdapter:
         if declared:
             return set(required).issubset(set(declared))
 
+        # A legacy capability name is NOT an entity-specific physical binding.
+        # GICC now carries a canonical entity_id for every targeted device;
+        # a core descriptor without those target hints must not silently
+        # operate against some other owner's or previous default TV.
+        if any(item.startswith("entity_id:") for item in required):
+            return False
+
         # Legacy/core descriptors predate explicit acquisition target metadata.
         # Preserve reuse only when the owner-interpreted capability identity itself
         # matches the descriptor's declared identity. This keeps a generic

@@ -187,9 +187,18 @@ def provider_retry_hint(exc: BaseException) -> ProviderRetryHint | None:
 
     status_code = _status_code_from_exception(exc)
     text = " ".join(str(item) for item in _exception_chain(exc)).casefold()
+    subscription_limit = any(
+        marker in text
+        for marker in (
+            "subscription_sharing_usage_limit_exceeded",
+            "subscription_sharing_usage_unavailable",
+            "subscription sharing usage limit",
+        )
+    )
     retryable = status_code in _RETRYABLE_STATUS_CODES
     if not retryable and (
-        "resource_exhausted" in text
+        subscription_limit
+        or "resource_exhausted" in text
         or "too many requests" in text
         or "temporarily unavailable" in text
     ):
@@ -198,7 +207,9 @@ def provider_retry_hint(exc: BaseException) -> ProviderRetryHint | None:
     if not retryable:
         return None
 
-    if status_code == 429 or "resource_exhausted" in text:
+    if subscription_limit:
+        reason = "subscription_usage_limit"
+    elif status_code == 429 or "resource_exhausted" in text:
         reason = "rate_limit"
     elif status_code == 503 or "temporarily unavailable" in text:
         reason = "temporarily_unavailable"

@@ -22,7 +22,7 @@ from livekit.agents.llm import ChatMessage
 from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.dev_control import DevControlClient, parse_explicit_update_decision
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
@@ -39,6 +39,7 @@ from jarvis.identity.speech_region import (
     SpeechRegionDetector,
 )
 from jarvis.logging_config import configure_logging
+from jarvis.runtime_lane import GiccMode
 from jarvis.sensors.gstreamer_av import (
     GStreamerPairedAVConfig,
     GStreamerPairedAVSource,
@@ -70,11 +71,12 @@ StartupReadinessWaiter = Callable[[float], bool]
 VoiceBehaviorObserver = Callable[[str, str, str, dict[str, object]], None]
 ConversationSuccessObserver = Callable[[], None]
 
+
 _UPDATE_APPROVAL_PROMPT = (
     "A JARVIS software update is available. Shall I install it and restart now? "
     "Please answer yes or no."
 )
-_REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 12.0
+_REALTIME_LIFECYCLE_TIMEOUT_SECONDS = 30.0
 _STANDBY_ACK_TIMEOUT_SECONDS = 8.0
 _WAKE_ACK_GRACE_SECONDS = 0.85
 _WAKE_ZERO_TURN_DEGRADED_THRESHOLD = 3
@@ -302,6 +304,7 @@ class VoiceRuntimeController:
                 agent=JarvisVoiceAgent(
                     tools=[],
                     default_media_target=self.config.default_media_target,
+                    gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                 )
             )
             handle = session.generate_reply(
@@ -820,6 +823,7 @@ class VoiceRuntimeController:
                     agent=JarvisVoiceAgent(
                         tools=[],
                         default_media_target=self.config.default_media_target,
+                        gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                     )
                 )
             except Exception:
@@ -864,6 +868,7 @@ class VoiceRuntimeController:
         pre_roll_after_monotonic: float | None = None,
         initial_instructions: str | None = None,
         initial_prompt_label: str = "proactive prompt",
+        fallback_prompt_text: str | None = None,
         session_tool_factory: Callable[[ConversationSession], list] | None = None,
         completion_predicate: Callable[[], bool] | None = None,
         completion_label: str = "proactive interaction",
@@ -873,6 +878,7 @@ class VoiceRuntimeController:
                 pre_roll_after_monotonic=pre_roll_after_monotonic,
                 initial_instructions=initial_instructions,
                 initial_prompt_label=initial_prompt_label,
+                fallback_prompt_text=fallback_prompt_text,
                 session_tool_factory=session_tool_factory,
                 completion_predicate=completion_predicate,
                 completion_label=completion_label,
@@ -884,6 +890,7 @@ class VoiceRuntimeController:
         pre_roll_after_monotonic: float | None = None,
         initial_instructions: str | None = None,
         initial_prompt_label: str = "proactive prompt",
+        fallback_prompt_text: str | None = None,
         session_tool_factory: Callable[[ConversationSession], list] | None = None,
         completion_predicate: Callable[[], bool] | None = None,
         completion_label: str = "proactive interaction",
@@ -1179,6 +1186,7 @@ class VoiceRuntimeController:
                     agent=JarvisVoiceAgent(
                         tools=tools,
                         default_media_target=self.config.default_media_target,
+                        gicc_apply=self.config.gicc_mode is GiccMode.APPLY,
                     )
                 )
             except Exception:
@@ -1192,19 +1200,58 @@ class VoiceRuntimeController:
                 # while JARVIS is still asking the question. Playback completion
                 # will arm the ordinary follow-up window for the owner's reply.
                 self._cancel_timeout()
-                prompt_handle = session.generate_reply(
-                    instructions=initial_instructions,
-                    allow_interruptions=True,
-                    input_modality="text",
-                )
-                await self._wait_for_realtime_speech(
-                    prompt_handle,
-                    label=initial_prompt_label,
-                )
+                realtime_prompt_ok = False
+                try:
+                    prompt_handle = session.generate_reply(
+                        instructions=initial_instructions,
+                        allow_interruptions=True,
+                        input_modality="text",
+                    )
+                    await self._wait_for_realtime_speech(
+                        prompt_handle,
+                        label=initial_prompt_label,
+                    )
+                    realtime_prompt_ok = True
+                    assistant_turns = [
+                        turn
+                        for turn in bridge.conversation.turns
+                        if turn.role is ConversationRole.ASSISTANT
+                    ]
+                    if assistant_turns:
+                        rendered = assistant_turns[-1].text.strip().casefold()
+                        realtime_prompt_ok = not rendered.startswith("<no speech>")
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.exception(
+                        "JARVIS %s realtime prompt failed",
+                        initial_prompt_label,
+                    )
+
+                if (
+                    not realtime_prompt_ok
+                    and fallback_prompt_text is not None
+                    and self._local_status_speech is not None
+                ):
+                    LOGGER.warning(
+                        "JARVIS %s used deterministic local speech fallback",
+                        initial_prompt_label,
+                    )
+                    await self._local_status_speech.speak(
+                        output,
+                        fallback_prompt_text,
+                    )
+                elif not realtime_prompt_ok and fallback_prompt_text is not None:
+                    raise RuntimeError(
+                        f"{initial_prompt_label} produced no usable speech and "
+                        "local fallback is unavailable"
+                    )
             if pre_roll_after_monotonic is not None:
-                wake_ack_task = asyncio.create_task(
-                    maybe_acknowledge_wake(),
-                    name="jarvis-wake-acknowledgement",
+                # A wake score alone is not enough evidence that the owner intended
+                # interaction. Stay silent until an actual user turn is committed.
+                # This prevents TV/background false accepts from making JARVIS talk.
+                LOGGER.info(
+                    "Wake session opened silently; acknowledgement waits for owner speech"
                 )
             if turn_capture is not None:
                 LOGGER.info(
@@ -1286,6 +1333,11 @@ def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:
         predictor,
         threshold=config.wake_threshold,
         debounce_seconds=config.wake_debounce_seconds,
+    )
+    LOGGER.info(
+        "Wake detector configured: decision_threshold=%.2f debounce_seconds=%.2f",
+        config.wake_threshold,
+        config.wake_debounce_seconds,
     )
 
     owner_context_state: OwnerContextState | None = None

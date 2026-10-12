@@ -593,6 +593,43 @@ class SQLiteWorkStore:
             )
         return delivery
 
+    def owner_goal_work_ids(self, goal_id: str) -> tuple[str, ...]:
+        """Return only canonical work directly sourced by this owner goal."""
+        key = str(goal_id).strip()
+        if not key:
+            raise ValueError("goal_id must not be empty")
+        with self._lock, self._connect() as db:
+            rows = db.execute(
+                "SELECT work_id FROM work_items WHERE source_session_id IN (?, ?, ?) "
+                "ORDER BY work_id",
+                (f"gicc:{key}", f"goal:{key}", f"gicc-monitor:{key}"),
+            ).fetchall()
+        return tuple(row["work_id"] for row in rows)
+
+    def suppress_pending_deliveries_for_work_ids(
+        self, work_ids: tuple[str, ...]
+    ) -> int:
+        """Retire stale owner notifications from cancelled work; keep audit rows.
+
+        No 'delivered' timestamp is written: the owner did not receive these.
+        """
+        keys = tuple(sorted({str(key).strip() for key in work_ids if str(key).strip()}))
+        if not keys:
+            return 0
+        suppressed = 0
+        with self._lock, self._connect() as db:
+            for key in keys:
+                result = db.execute(
+                    "UPDATE work_deliveries SET state=? WHERE work_id=? AND state=?",
+                    (
+                        WorkDeliveryState.CANCELLED.value,
+                        key,
+                        WorkDeliveryState.PENDING.value,
+                    ),
+                )
+                suppressed += result.rowcount
+        return suppressed
+
     def list_pending_deliveries(self, *, limit: int = 20) -> tuple[WorkDelivery, ...]:
         if limit <= 0:
             raise ValueError("delivery limit must be positive")

@@ -408,7 +408,7 @@ _OWNER_GATE_BY_STATE = {
 
 class EngineeringChangeSource:
     source_key = "engineering_change"
-    source_version = 1
+    source_version = 2
     namespaces = ("engineering_change",)
 
     def __init__(
@@ -491,12 +491,31 @@ class EngineeringChangeSource:
                     )
                 )
                 continue
+            gap_link = self.store.latest_artifact(
+                change.change_id,
+                "gicc_capability_gap_link",
+            )
+            gicc_lineage = None
+            if (
+                gap_link is not None
+                and gap_link.payload.get("schema") == "gicc_phase9_gap_link.v2"
+            ):
+                gicc_lineage = {
+                    "motivating_goal_id": gap_link.payload.get("motivating_goal_id"),
+                    "gap_id": gap_link.payload.get("gap_id"),
+                    "request_id": gap_link.payload.get("request_id"),
+                    "engineering_change_id": gap_link.payload.get(
+                        "engineering_change_id"
+                    ),
+                    "acquisition_work_id": gap_link.payload.get("acquisition_work_id"),
+                }
             payload = {
                 "state": change.state.value,
                 "process_key": change.process_key,
                 "process_version": change.process_version,
                 "version": change.version,
                 "owner_gate": _OWNER_GATE_BY_STATE.get(change.state),
+                "gicc_capability_lineage": gicc_lineage,
                 "stages": [
                     {
                         "stage_key": stage.stage_key,

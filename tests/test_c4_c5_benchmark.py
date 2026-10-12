@@ -9,6 +9,9 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = _REPO_ROOT / "tools" / "research" / "c4_c5_benchmark.py"
 _CASES = _REPO_ROOT / "tools" / "research" / "c4_c5_benchmark_cases.json"
+_PHASE9_CASES = (
+    _REPO_ROOT / "tools" / "research" / "jev_phase9_candidate_benchmark_cases.json"
+)
 
 
 def _load_module():
@@ -376,3 +379,16 @@ def test_ollama_runner_can_disable_thinking_and_cap_output(
     )
     assert result.raw_metadata["ollama_think"] is False
     assert result.raw_metadata["ollama_num_predict"] == 256
+
+
+def test_phase9_jev_candidate_corpus_is_frozen_and_complete() -> None:
+    module = _load_module()
+    suite, cases = module._load_cases(_PHASE9_CASES)
+
+    assert suite == "jarvis-jev-phase9-candidate-selection-v1"
+    assert len(cases) == 8
+    assert len({case.case_id for case in cases}) == 8
+    assert all(
+        tuple(question.name for question in case.questions) == ("candidate",)
+        for case in cases
+    )
