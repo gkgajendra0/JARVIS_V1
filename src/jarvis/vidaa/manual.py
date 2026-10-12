@@ -83,6 +83,10 @@ def new_client(args: argparse.Namespace) -> Any:
         candidate = discovered.get(args.host)
         if candidate is not None and getattr(candidate, "ip", None) == args.host:
             mac = getattr(candidate, "mac", None)
+    # UDP discovery sometimes reports a flat 12-character hexadecimal MAC.
+    # Normalize this before the strict RFC1918-target + MAC validation.
+    if isinstance(mac, str) and re.fullmatch(r"[0-9a-fA-F]{12}", mac):
+        mac = ":".join(mac[i : i + 2] for i in range(0, 12, 2))
     # A prior UPnP sighting of protocol 3290 does not make static auth
     # acceptable when the TV temporarily stops answering discovery. Modern
     # authentication requires the MAC; do not let pyvidaa silently downgrade.
