@@ -1,11 +1,11 @@
 # JARVIS V1 Current Plan
 
-## 2026-10-12 owner direction: pause automatic TV capability acquisition
+## 2026-10-12 owner direction: pause automatic capability acquisition
 
-The owner has explicitly paused further automatic capability-acquisition attempts for
-Hisense/VIDAA TV control. **Do not resume the D8 TV acquisition/research/
-development/promotion loop or create replacement automatic TV goals until the owner
-re-authorizes it.** Retain the complete original goal, attempts, approvals, discovery
+The owner has explicitly paused further automatic capability-acquisition attempts,
+including the Hisense/VIDAA TV objective. **Do not initiate new automatic capability-acquisition workflows or resume the D8
+TV acquisition/research/development/promotion loop until the owner re-authorizes
+it.** Retain the complete original goal, attempts, approvals, discovery
 and failure evidence. This records a project-level decision; it does not attest a
 live JARVIS process or durable goal has been programmatically stopped.
 
