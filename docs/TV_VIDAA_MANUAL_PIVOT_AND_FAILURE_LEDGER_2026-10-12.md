@@ -3,7 +3,7 @@ _Date: 2026-10-12 | Status: manual prototype; no physical TV acceptance_
 
 ## 1. Owner decision / scope
 
-**PAUSE automatic capability acquisition for the TV use case.** This is a project
+**PAUSE automatic capability acquisition, including the TV use case.** This is a project
 direction and repository-level freeze, **not** a claim that a running JARVIS
 process or durable goal was remotely stopped. No local runtime/process access was
 available when this record was authored. Preserve all existing GICC,
