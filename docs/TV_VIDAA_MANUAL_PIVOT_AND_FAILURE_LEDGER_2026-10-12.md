@@ -54,6 +54,8 @@ key working. Media search/playback is **not** implemented by this prototype.
 | 2026-10-12 | Manual Windows setup | Owner fetched `feat/manual-vidaa-tv-control` and installed `pyvidaa==2.3.0` plus `paho-mqtt==2.1.0` in `.venv`; installation exited successfully | SDK dependency available on owner Windows machine; pairing still untested |
 | 2026-10-12 | Manual TCP candidate probe | `python -m jarvis.vidaa.manual --host 192.168.1.10 probe` returned `{"outcome":"tcp_reachable_only","host":"192.168.1.10","port":36669,"tv_verified":false}` | Port 36669 reachable on candidate; **no actual device identity, PIN pairing or control confirmed** |
 | 2026-10-12 | New manual-branch CI | First Ruff run exposed formatting/style defects, corrected; comprehensive pytest then reported new `vidaa` namespace missing in self-model; added explicit experimental self-model descriptor. Follow-up CI still pending in this record | Do not claim all tests pass until new branch CI concludes |
+| 2026-10-12 | Owner attempted VIDAA PIN pairing twice after successful TCP probe | `pyvidaa 2.3.0` warned `Vidaa client certificate not found`; searched `C:\\Users\\gkgaj\\.config\\pyvidaa\\certs` for `vidaa_client.pem` and `vidaa_client.key`. First run ended `{"outcome":"blocked","reason":"VIDAA client did not connect; check protocol, TV settings and power"}`; second log only displayed the certificate warning, without a terminal outcome | Connection to VIDAA MQTT/auth not established; no PIN shown or pairing confirmed. Do not rerun `pair` before identifying TV/protocol and obtaining proper credentials where required |
+
 
 
 Primary repository references:
@@ -99,8 +101,9 @@ Source references:
 
 ## 6. Manual implementation and boundaries
 
-- `src/jarvis/vidaa/manual.py`: operator-invoked CLI: `probe`, `pair`,
-  `status`, `apps`, `key`, `launch`.
+- `src/jarvis/vidaa/manual.py`: operator-invoked CLI: `probe`, UPnP
+  `identify`, local certificate-pair `certs` check, `pair`, `status`, `apps`,
+  `key`, `launch`.
 - `tests/test_manual_vidaa.py`: dependency-injected tests with fake SDK and
   socket; **not a physical-device demonstration**.
 - No runtime auto-discovery, no background polling, no execution from voice,
@@ -115,6 +118,51 @@ Source references:
 - App launch accepts only an exact app name returned by `apps`. Streaming
   title search and playback automation is deferred until remote/key transport
   is physically verified.
+
+### VIDAA mutual-TLS certificate blocker (observed 2026-10-12)
+
+The owner confirmed TCP reachability on port 36669. However the VIDAA client
+itself failed to connect because `pyvidaa` could not locate a certificate/key
+pair. This failure occurs **before PIN pairing**. A TCP response is not proof
+of a successful MQTT TLS handshake. Repeating `git pull` or the PIN request
+without the appropriate certificate will not resolve a missing-key condition.
+
+The `pyvidaa` README says newer TV firmware requires a **mutual TLS client
+certificate**, which is not distributed in the library. It identifies the
+official VIDAA Android application's PKCS#12 keystore as a possible owner-
+controlled source. Some older firmware can work without these files. We must
+identify the actual device and transport protocol before treating modern mTLS
+as established for this specific TV.
+
+Manual diagnostic commands after pulling current branch:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m jarvis.vidaa.manual --host 192.168.1.10 identify
+.\\.venv\\Scripts\\python.exe -m jarvis.vidaa.manual --host 192.168.1.10 certs
+```
+
+`identify` performs targeted UPnP descriptor probing (not pairing/control);
+if it cannot read the description, do **not** conclude the endpoint isn't a
+TV. `certs` reports file presence only, never prints certificate or private
+key material.
+
+**Obtaining missing credentials when required:** install the official VIDAA
+mobile app via the TV's **Settings > Support > Mobile App** QR code, and if
+there is an owner-controlled Android installation/APK available, follow the
+upstream "Obtaining the client certificate" instructions to extract the APK's
+client PKCS#12 keystore into local PEM cert/key files. The documented
+locations may include `assets/client_mobile_android.p12` or an obfuscated
+`res/*.p12` path in newer builds. Store locally in
+`%USERPROFILE%\\.config\\pyvidaa\\certs`, under exactly
+`vidaa_client.pem` and `vidaa_client.key`; do not commit, upload,
+paste or redistribute key material. Private keys must have restricted
+permissions. If there is no owner-sourced APK or the TV doesn't match the
+supported protocol, do not invent a substitute client identity.
+
+Upstream references:
+- https://github.com/warrenrees/pyvidaa/blob/master/README.md#obtaining-the-client-certificate
+- https://github.com/warrenrees/pyvidaa/blob/master/VIDAA_PROTOCOL_ANALYSIS.md
+- https://www.vidaa.com/customer_support/how-do-i-install-the-vidaa-app/
 
 ### Owner Windows acceptance sequence
 
