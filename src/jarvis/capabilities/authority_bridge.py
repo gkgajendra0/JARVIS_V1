@@ -284,20 +284,30 @@ class CapabilityAuthorityBroker:
             raise CapabilityAuthorizationError("discovery requires ActionProposal")
         target = proposal.target()
         params = proposal.parameters()
+        valid_aep = (
+            proposal.operation == "enumerate_aep"
+            and target.get("resource") == "windows_association_endpoint_discovery"
+            and target.get("protocol") in {"upnp", "dns_sd", "wsd"}
+            and target.get("all_local_interfaces") is True
+            and params.get("device_control") is False
+            and params.get("pairing") is False
+        )
+        valid_vidaa = False
+        if proposal.operation == "discover_vidaa_udp":
+            # Import lazily: capability runtime must not silently activate a
+            # new local-network transport during ordinary startup.
+            from jarvis.goal_intelligence.vidaa_udp import proposal_vidaa_scope
+
+            valid_vidaa = proposal_vidaa_scope(proposal) is not None
         if (
             not proposal.has_valid_fingerprint()
             or proposal.is_expired()
             or proposal.capability != "network_discovery"
-            or proposal.operation != "enumerate_aep"
             or proposal.origin is not ActionOrigin.PROACTIVE
             or not proposal.attributes.external_side_effect
-            or target.get("resource") != "windows_association_endpoint_discovery"
             or not str(target.get("gicc_goal_id") or "").strip()
             or not str(target.get("gicc_need_id") or "").strip()
-            or target.get("protocol") not in {"upnp", "dns_sd", "wsd"}
-            or target.get("all_local_interfaces") is not True
-            or params.get("device_control") is not False
-            or params.get("pairing") is not False
+            or not (valid_aep or valid_vidaa)
         ):
             raise CapabilityAuthorizationError("invalid bounded GICC discovery scope")
         try:
