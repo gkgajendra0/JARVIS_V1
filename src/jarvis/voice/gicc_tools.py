@@ -22,6 +22,9 @@ from jarvis.goal_intelligence.information import (
     can_rediscover_information,
 )
 from jarvis.goal_intelligence.models import GoalState, PlanState
+from jarvis.goal_intelligence.passive_network_diagnostics import (
+    inspect_passive_media_network,
+)
 from jarvis.goal_intelligence.status import OwnerObjectiveStatusResolver
 from jarvis.goal_intelligence.store import GoalStore, GoalStoreConflict
 from jarvis.goal_intelligence.telemetry import (
@@ -289,10 +292,14 @@ class GiccAgentTools:
                 }
             )
 
+        # Only cached OS metadata and local WinRT import readiness; this
+        # never starts a watcher, opens a socket or consumes an action permit.
+        passive_diagnostics = await asyncio.to_thread(inspect_passive_media_network)
         return {
             "ok": True,
             "status": "discovery_evidence_inspected",
             "goal_id": goal.goal_id,
+            "passive_network_diagnostics": passive_diagnostics,
             "goal_state": goal.state.value,
             "observations": observations,
             "verified_tv_identity": False,
