@@ -11,6 +11,7 @@ from jarvis.vidaa.manual import (
     execute,
     make_parser,
     new_client,
+    publish_focused_text,
     run_acceptance,
     validate_target,
 )
@@ -577,3 +578,60 @@ def test_acceptance_argument_defaults_to_jiohotstar() -> None:
     )
     assert ns.command == "acceptance"
     assert ns.app == "JioHotstar"
+
+
+def test_focused_text_sends_only_allowlisted_ui_action() -> None:
+    observed: list[tuple[str, dict[str, str]]] = []
+
+    class TextClient:
+        client_id = "owner_valid_client"
+
+        def _publish(self, topic: str, payload: dict[str, str]) -> bool:
+            observed.append((topic, payload))
+            return True
+
+    assert publish_focused_text(TextClient(), "The Martian") is True
+    assert observed == [
+        (
+            "/remoteapp/tv/ui_service/owner_valid_client/actions/sendtext",
+            {"text": "The Martian"},
+        )
+    ]
+
+
+@pytest.mark.parametrize("value", ["", "a" * 121, "secret\nline"])
+def test_focused_text_rejects_invalid_input(value: str) -> None:
+    class TextClient:
+        client_id = "owner_valid_client"
+
+        def _publish(self, topic: str, payload: object) -> bool:
+            pytest.fail("Invalid text must not reach the TV")
+
+    with pytest.raises(VidaaManualError, match="printable characters"):
+        publish_focused_text(TextClient(), value)
+
+
+def test_focused_text_refuses_sdk_without_publishing() -> None:
+    with pytest.raises(VidaaManualError, match="does not expose"):
+        publish_focused_text(object(), "The Martian")
+
+
+def test_text_entry_result_does_not_claim_app_search_or_echo_private_text() -> None:
+    class TextClient(FakeClient):
+        client_id = "paired_client"
+
+        def _publish(self, topic: str, payload: dict[str, str]) -> bool:
+            return True
+
+    client = TextClient()
+    from jarvis.vidaa.manual import make_parser
+
+    ns = make_parser().parse_args(
+        ["--host", "192.168.1.6", "text", "The Martian"]
+    )
+    result = execute(ns, client_factory=lambda _: client)
+    assert result["outcome"] == "text_submitted_unverified"
+    assert result["tv_effect_verified"] is False
+    assert result["characters_sent"] == 11
+    assert "The Martian" not in str(result)
+    assert client.disconnected
