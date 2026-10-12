@@ -194,7 +194,12 @@ def run_acceptance(
 
     # Ask only once, after displaying all physical effects. The owner observes
     # the TV; do not treat successful publishes as acceptance without this.
-    if checks["home"] == "submitted_unverified" and checks["volume_up"] == "submitted_unverified" and checks["volume_down"] == "submitted_unverified" and checks["app_launch"] == "submitted_unverified":
+    if (
+        checks["home"] == "submitted_unverified"
+        and checks["volume_up"] == "submitted_unverified"
+        and checks["volume_down"] == "submitted_unverified"
+        and checks["app_launch"] == "submitted_unverified"
+    ):
         try:
             observed = observation_reader(
                 "Did Home, volume change and JioHotstar launch all work on TV? [y/N]: "
@@ -554,7 +559,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"outcome": "sdk_error", "error_type": type(exc).__name__}))
         return 3
     print(json.dumps(result, default=str))
-    return 2 if result["outcome"] in {"tcp_unreachable", "no_state", "acceptance_failed"} else 0
+    return (
+        2
+        if result["outcome"] in {"tcp_unreachable", "no_state", "acceptance_failed"}
+        else 0
+    )
 
 
 if __name__ == "__main__":
