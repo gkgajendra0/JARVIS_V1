@@ -327,7 +327,7 @@ def test_udp_discovery_when_upnp_is_unavailable(
     module.probe_ip = lambda host, timeout: None  # type: ignore[attr-defined]
     module.discover_udp = (  # type: ignore[attr-defined]
         lambda timeout, retries: {
-            "192.168.1.10": SimpleNamespace(ip="192.168.1.10", mac="AA:BB:CC:DD:EE:FF")
+            "192.168.1.10": SimpleNamespace(ip="192.168.1.10", mac="AABBCCDDEEFF")
         }
     )
     monkeypatch.setitem(sys.modules, "pyvidaa", module)
