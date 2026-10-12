@@ -9,6 +9,7 @@ observable TV effect. The operator must confirm that effect separately.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
 import ipaddress
 import json
@@ -176,10 +177,8 @@ def execute(
             }
         raise VidaaManualError("Unsupported action")
     finally:
-        try:
+        with contextlib.suppress(OSError):
             client.disconnect()
-        except Exception:
-            pass  # Do not hide the primary operation result on close.
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -211,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     except VidaaManualError as exc:
         print(json.dumps({"outcome": "blocked", "reason": str(exc)}))
         return 2
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - sanitize opaque SDK failures
         # Raw SDK errors may contain authentication material; print only the type.
         print(json.dumps({"outcome": "sdk_error", "error_type": type(exc).__name__}))
         return 3
