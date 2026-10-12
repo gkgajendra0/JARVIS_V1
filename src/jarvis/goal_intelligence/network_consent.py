@@ -88,8 +88,7 @@ def prepare_pending_device_discovery_consent(
             if networks:
                 selected = networks[0]
                 marker = (
-                    "windows_vidaa_authorized_scope_consumed:vidaa_udp:"
-                    + selected.cidr
+                    "windows_vidaa_authorized_scope_consumed:vidaa_udp:" + selected.cidr
                 )
                 if marker not in need.evidence_refs:
                     try:
