@@ -63,15 +63,29 @@ def validate_target(host: str, port: int, mac: str | None) -> None:
 def new_client(args: argparse.Namespace) -> Any:
     """Lazy import: production JARVIS does not require the optional SDK."""
     try:
-        from pyvidaa import VidaaTV
+        from pyvidaa import VidaaTV, probe_ip
     except ImportError as exc:
         raise VidaaManualError(
             "Optional dependency unavailable: install pyvidaa in the active venv"
         ) from exc
+    mac = args.mac
+    if mac is None:
+        # Modern VIDAA (including observed protocol 3290) requires the TV MAC
+        # for dynamic MQTT credentials. Use only a targeted, matching descriptor.
+        device = probe_ip(args.host, timeout=3.0)
+        if device is not None and getattr(device, "ip", None) == args.host:
+            mac = getattr(device, "mac", None)
+            protocol = getattr(device, "protocol_version", None)
+            if not mac and protocol and int(protocol) >= 3000:
+                raise VidaaManualError(
+                    "Modern VIDAA protocol discovered without a MAC address; "
+                    "provide the TV network-interface MAC via --mac"
+                )
+    validate_target(args.host, args.port, mac)
     return VidaaTV(
         host=args.host,
         port=args.port,
-        mac_address=args.mac,
+        mac_address=mac,
         auto_detect_protocol=True,
         enable_persistence=args.persist_tokens,
     )
@@ -129,6 +143,7 @@ def execute(
             "model": getattr(device, "model", None),
             "brand": getattr(device, "brand", None),
             "protocol_version": getattr(device, "protocol_version", None),
+            "mac_available": bool(getattr(device, "mac", None)),
             "tv_verified": False,
             "control_verified": False,
         }
