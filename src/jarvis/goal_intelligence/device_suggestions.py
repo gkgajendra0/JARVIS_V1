@@ -56,10 +56,7 @@ def has_consumed_discovery_permit(
                     continue
         return False
     if protocol in {"upnp", "dns_sd", "wsd"}:
-        return (
-            "windows_aep_authorized_scope_consumed:" + protocol
-            in evidence_refs
-        )
+        return "windows_aep_authorized_scope_consumed:" + protocol in evidence_refs
     return False
 
 
