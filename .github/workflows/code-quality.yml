@@ -70,7 +70,7 @@ jobs:
           sudo --preserve-env=DOTNET_CLI_TELEMETRY_OPTOUT,POWERSHELL_TELEMETRY_OPTOUT unshare --net -- bash -c '
             ip link set lo up
             exec runuser -u "$1" -- "${@:2}"
-          ' _ "$(id -un)" "$(command -v python)" -m pytest -q --junitxml=full-suite.xml
+          ' _ "$(id -un)" "$(command -v timeout)" --signal=INT --kill-after=30s 1800s "$(command -v python)" -m pytest -vv -o faulthandler_timeout=120 --junitxml=full-suite.xml
 
       - name: Preserve full-suite results
         if: always()
