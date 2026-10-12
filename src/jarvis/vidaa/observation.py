@@ -3,8 +3,8 @@
 VIDAA MQTT state and device metadata are NOT screenshots, an accessibility
 tree, current focus, or evidence of video playback.
 
-A bounded read-only check of the documented *older* VIDAA U4 port 9226 can
-find a possible developer-inspection service. It does not turn on debugging,
+Two bounded checks of documented older VIDAA ports 9226 and 9222 can
+find possible developer-inspection services. It does not turn on debugging,
 retrieve DOM or screenshots, or assume commercial apps are inspectable.
 """
 
@@ -17,6 +17,8 @@ from collections.abc import Callable
 from typing import Any
 
 INSPECTOR_PORT = 9226
+ALTERNATE_INSPECTOR_PORT = 9222
+DOCUMENTED_INSPECTOR_PORTS = frozenset((INSPECTOR_PORT, ALTERNATE_INSPECTOR_PORT))
 MAX_HTTP_RESPONSE = 8192
 
 # Never publish raw device identifiers, serial numbers, certificate materials,
@@ -69,6 +71,7 @@ def _read_metadata(
 def probe_legacy_inspector(
     host: str,
     *,
+    port: int = INSPECTOR_PORT,
     connector: Callable[..., Any] = socket.create_connection,
 ) -> dict[str, Any]:
     """Make one bounded read-only request to a known legacy debug port.
@@ -76,23 +79,25 @@ def probe_legacy_inspector(
     No port range scan, debug enablement, authentication bypass, URL redirect,
     JS execution, inspection of page content, or leaking of response bodies.
     """
+    if port not in DOCUMENTED_INSPECTOR_PORTS:
+        raise ValueError("Only documented VIDAA inspector ports are permitted")
     address = ipaddress.IPv4Address(host)
     if not address.is_private or address.is_loopback or address.is_link_local:
         raise ValueError("Inspector probe requires private non-loopback IPv4")
 
     sock = None
     try:
-        sock = connector((host, INSPECTOR_PORT), timeout=0.8)
+        sock = connector((host, port), timeout=0.8)
         sock.settimeout(0.8)
         request = (
-            f"GET /json/version HTTP/1.1\r\nHost: {host}:{INSPECTOR_PORT}\r\n"
+            f"GET /json/version HTTP/1.1\r\nHost: {host}:{port}\r\n"
             "Accept: application/json\r\nConnection: close\r\n\r\n"
         ).encode("ascii")
         sock.sendall(request)
         response = sock.recv(MAX_HTTP_RESPONSE)
     except (OSError, TimeoutError):
         return {
-            "port": INSPECTOR_PORT,
+            "port": port,
             "result": "unreachable_or_no_response",
             "inspector_confirmed": False,
         }
@@ -117,7 +122,7 @@ def probe_legacy_inspector(
                 result = "cdp_version_endpoint_detected"
 
     return {
-        "port": INSPECTOR_PORT,
+        "port": port,
         "result": result,
         "inspector_confirmed": result == "cdp_version_endpoint_detected",
     }
@@ -127,7 +132,7 @@ def observe_software(
     client: Any,
     host: str,
     *,
-    inspector_probe: Callable[[str], dict[str, Any]] = probe_legacy_inspector,
+    inspector_probe: Callable[[str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Inventory available software signals, without claiming screen visibility."""
     state = _read_metadata(client, "get_state", STATE_FIELDS)
@@ -136,13 +141,40 @@ def observe_software(
     capability = _read_metadata(client, "get_capability", CAPABILITY_FIELDS)
 
     try:
-        inspector = inspector_probe(host)
+        inspector = (inspector_probe or probe_legacy_inspector)(host)
     except (OSError, TimeoutError, ValueError):
         inspector = {
-            "port": INSPECTOR_PORT,
+            "port": port,
             "result": "probe_failed",
             "inspector_confirmed": False,
         }
+
+    # VIDAA's older developer guide lists both 9226 and 9222 depending
+    # on chipset. Neither is guaranteed on the owner's newer VIDAA U7.6.
+    # Don't touch the LAN for offline tests that injected their boundary.
+    if inspector_probe is not None:
+        alternate = {
+            "port": ALTERNATE_INSPECTOR_PORT,
+            "result": "not_probed_injected_boundary",
+            "inspector_confirmed": False,
+        }
+    elif inspector.get("inspector_confirmed"):
+        alternate = {
+            "port": ALTERNATE_INSPECTOR_PORT,
+            "result": "not_needed_primary_inspector_detected",
+            "inspector_confirmed": False,
+        }
+    else:
+        try:
+            alternate = probe_legacy_inspector(
+                host, port=ALTERNATE_INSPECTOR_PORT
+            )
+        except (OSError, TimeoutError, ValueError):
+            alternate = {
+                "port": ALTERNATE_INSPECTOR_PORT,
+                "result": "probe_failed",
+                "inspector_confirmed": False,
+            }
 
     return {
         "outcome": "software_observation_probe_complete",
@@ -153,6 +185,7 @@ def observe_software(
             "capability": capability,
         },
         "legacy_developer_inspector": inspector,
+        "alternate_legacy_inspector": alternate,
         "screen_observation": {
             "screenshot": "not_observed",
             "ui_tree": "not_observed",
