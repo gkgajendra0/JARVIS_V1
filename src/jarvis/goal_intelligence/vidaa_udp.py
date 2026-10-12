@@ -372,5 +372,7 @@ class WindowsVidaaUdpBackend:
                     opened.close()
                 except OSError:
                     pass
-        self.last_status = "candidates_observed" if result else "send_accepted_no_candidates"
+        self.last_status = (
+            "candidates_observed" if result else "send_accepted_no_candidates"
+        )
         return tuple(result[key] for key in sorted(result))
