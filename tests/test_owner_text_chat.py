@@ -79,6 +79,13 @@ class Goals:
                     "candidate_lookup_available": True,
                 }
             ],
+            "passive_network_diagnostics": {
+                "winrt_backend": "loadable",
+                "network_probe_performed": False,
+                "cached_neighbor_candidates": [
+                    {"address": "192.168.1.10", "verified_tv_identity": False}
+                ],
+            },
             "truth_note": "Permit consumption is not proof of emitted packets.",
         }
 
@@ -415,6 +422,9 @@ async def test_browser_inspects_existing_discovery_evidence_without_offering_sca
         "dns_sd",
         "No currently eligible unverified TV candidate",
         "not proof of emitted packets",
+        "WinRT backend loadable",
+        "network probe performed: False",
+        "192.168.1.10",
     ):
         assert phrase in response["message"]
 
