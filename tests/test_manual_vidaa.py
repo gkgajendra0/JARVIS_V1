@@ -1,6 +1,7 @@
 """Tests for manual VIDAA controls without network access or pyvidaa installed."""
 
 from argparse import Namespace
+from types import SimpleNamespace
 
 import pytest
 
@@ -145,3 +146,51 @@ def test_status_does_not_claim_visual_confirmation() -> None:
     result = execute(args("status"), client_factory=lambda _: FakeClient())
     assert result["state"]["statetype"] == "livetv"
     assert result["tv_effect_verified"] is False
+
+
+def test_identify_detects_vidaa_descriptor_without_pairing() -> None:
+    def fake_probe(host: str, *, timeout: float) -> SimpleNamespace:
+        assert host == "192.168.1.10"
+        assert timeout == 3.0
+        return SimpleNamespace(
+            name="Living Room",
+            model="Hisense U7N",
+            brand="Hisense",
+            protocol_version="3290",
+        )
+
+    result = execute(args("identify"), device_probe=fake_probe)
+    assert result["outcome"] == "vidaa_upnp_candidate"
+    assert result["model"] == "Hisense U7N"
+    assert result["tv_verified"] is False
+    assert result["control_verified"] is False
+
+
+def test_identify_no_descriptor_is_not_negative_proof() -> None:
+    result = execute(args("identify"), device_probe=lambda host, timeout: None)
+    assert result["outcome"] == "vidaa_upnp_not_observed"
+    assert result["tv_verified"] is False
+
+
+def test_certificate_check_never_returns_key_material() -> None:
+    result = execute(args("certs"), cert_resolver=lambda: ("cert.pem", "secret.key"))
+    assert result["tls_files_found"] is True
+    assert "secret.key" not in str(result)
+    assert result["tls_handshake_verified"] is False
+
+
+def test_certificate_check_reports_missing_without_connecting() -> None:
+    result = execute(args("certs"), cert_resolver=lambda: None)
+    assert result["outcome"] == "client_certificate_pair_missing"
+    assert result["tls_files_found"] is False
+
+
+def test_connect_failure_without_certs_explains_transport_blocker() -> None:
+    class FailingClient(FakeClient):
+        def connect(self, *, timeout: float) -> bool:
+            return False
+
+    client = FailingClient()
+    with pytest.raises(VidaaManualError, match="mutual TLS"):
+        execute(args("pair"), client_factory=lambda _: client, cert_resolver=lambda: None)
+    assert client.disconnected
