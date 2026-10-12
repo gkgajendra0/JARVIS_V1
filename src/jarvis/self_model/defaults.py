@@ -928,6 +928,16 @@ def build_default_self_model() -> SelfModelRegistry:
             ),
         ),
         C(
+            "vidaa.manual",
+            "Experimental owner-operated VIDAA TV CLI; not a production Hands "
+            "capability or an autonomous acquisition success.",
+            ("src/jarvis/vidaa",),
+            parent_component_id="jarvis",
+            lifecycle="experimental",
+            tests=("tests/test_manual_vidaa.py",),
+            docs=("docs/TV_VIDAA_MANUAL_PIVOT_AND_FAILURE_LEDGER_2026-10-12.md",),
+        ),
+        C(
             "performance",
             "Runtime CPU/RAM/thread/GPU profiling and accepted performance diagnostics.",
             ("src/jarvis/performance",),
