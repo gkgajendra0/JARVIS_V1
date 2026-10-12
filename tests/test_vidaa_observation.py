@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
 
@@ -72,7 +71,12 @@ def test_metadata_diagnostic_does_not_claim_screen_or_leak_secrets() -> None:
     assert result["screen_observation"]["ui_tree"] == "not_observed"
     assert result["software_ui_navigation_ready"] is False
     raw = json.dumps(result)
-    for secret in ("never-log-me", "private-serial-123", "sensitive device metadata", "secret"):
+    for secret in (
+        "never-log-me",
+        "private-serial-123",
+        "sensitive device metadata",
+        "secret",
+    ):
         assert secret not in raw
 
 
@@ -135,9 +139,7 @@ def test_inspector_probe_detects_only_protocol_signature() -> None:
 
 def test_html_response_does_not_claim_cdp_endpoint() -> None:
     sock = FakeSocket(b"HTTP/1.1 200 OK\r\n\r\n<html>login</html>")
-    result = probe_legacy_inspector(
-        "192.168.1.6", connector=lambda *a, **k: sock
-    )
+    result = probe_legacy_inspector("192.168.1.6", connector=lambda *a, **k: sock)
     assert result["result"] == "http_service_unidentified"
     assert result["inspector_confirmed"] is False
 
@@ -195,6 +197,7 @@ def test_cli_observe_requires_no_new_pairing_or_remote_keys() -> None:
     original = observation.observe_software
     observed: list[str] = []
     try:
+
         def fake_observe(client: object, host: str) -> dict[str, object]:
             observed.append(host)
             return {"outcome": "software_observation_probe_complete"}
