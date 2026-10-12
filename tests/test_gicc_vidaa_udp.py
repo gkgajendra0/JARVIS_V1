@@ -241,7 +241,7 @@ def test_authorized_vidaa_observation_preserves_original_goal_and_proves_transmi
 
         def observe(self, supplied):
             assert supplied == scope
-            self.last_status = "sent_no_candidates"
+            self.last_status = "send_accepted_no_candidates"
             return ()
 
     monkeypatch.setattr(runtime_module, "WindowsVidaaUdpBackend", FakeBackend)
@@ -257,7 +257,7 @@ def test_authorized_vidaa_observation_preserves_original_goal_and_proves_transmi
     )
     assert result is not None
     assert result.state is InformationResolutionState.UNRESOLVED
-    assert "windows_vidaa_discovery_outcome:sent_no_candidates" in result.need.evidence_refs
+    assert "windows_vidaa_discovery_outcome:send_accepted_no_candidates" in result.need.evidence_refs
     assert (
         "windows_vidaa_authorized_scope_consumed:vidaa_udp:192.168.1.0/24"
         in result.need.evidence_refs
