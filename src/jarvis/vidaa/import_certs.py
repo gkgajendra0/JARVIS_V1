@@ -158,11 +158,15 @@ def import_from_apk(
     """Validate app certificate against expected CA before any file is written."""
     apk_path = Path(apk_path)
     if not apk_path.is_file() or apk_path.suffix.lower() != ".apk":
-        raise CertImportError("Provide a local .apk file from your own app installation")
+        raise CertImportError(
+            "Provide a local .apk file from your own app installation"
+        )
     if apk_path.stat().st_size > 500 * 1024 * 1024:
         raise CertImportError("APK exceeds maximum supported size")
 
-    ca_pem = trust_anchor_pem if trust_anchor_pem is not None else _default_trust_anchor()
+    ca_pem = (
+        trust_anchor_pem if trust_anchor_pem is not None else _default_trust_anchor()
+    )
     cert_bytes, key_bytes, expires_on = _candidate_credentials(apk_path, ca_pem)
     directory = output_dir or (Path.home() / ".config" / "pyvidaa" / "certs")
     directory = Path(directory).expanduser()
@@ -185,7 +189,9 @@ def import_from_apk(
     except OSError as exc:
         for item in created:
             item.unlink(missing_ok=True)
-        raise CertImportError("Could not securely create new certificate files") from exc
+        raise CertImportError(
+            "Could not securely create new certificate files"
+        ) from exc
     return {
         "outcome": "local_vidaa_client_credentials_imported",
         "directory": str(directory),
