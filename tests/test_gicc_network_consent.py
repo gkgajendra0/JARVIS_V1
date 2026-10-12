@@ -511,6 +511,24 @@ def test_previously_consumed_discovery_scopes_are_never_reproposed(
         expected_revision=second_need.revision,
         evidence_refs=("windows_aep_authorized_scope_consumed:dns_sd",),
     )
+    third = prepare_pending_device_discovery_consent(
+        store=store,
+        goal_id=goal.goal_id,
+        session_id="owner-session",
+        planner=_planner(),
+    )
+    assert third is not None
+    assert third.target()["protocol"] == "vidaa_udp"
+    assert third.operation == "discover_vidaa_udp"
+    current = store.get_information_need(need.information_need_id)
+    store.update_information_need_state(
+        current.information_need_id,
+        current.state,
+        expected_revision=current.revision,
+        evidence_refs=(
+            "windows_vidaa_authorized_scope_consumed:vidaa_udp:192.168.1.0/24",
+        ),
+    )
     assert (
         prepare_pending_device_discovery_consent(
             store=store,
