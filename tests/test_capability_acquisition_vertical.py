@@ -434,9 +434,7 @@ async def test_production_acquisition_vertical_develop_verify_promote_activate_r
         provider_name = "offline-acquisition-fixture"
         model_name = "controlled-no-network"
 
-        def research(
-            self, query: str, mode: ResearchMode
-        ) -> ProviderResearchEvidence:
+        def research(self, query: str, mode: ResearchMode) -> ProviderResearchEvidence:
             assert query == research_query
             assert mode is ResearchMode.CURRENT
             return ProviderResearchEvidence(
