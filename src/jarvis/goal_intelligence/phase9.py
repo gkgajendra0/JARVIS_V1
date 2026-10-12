@@ -443,6 +443,18 @@ class Phase9GoalBridge:
                     "device-specific capability target is not an active "
                     "canonical entity of the required type"
                 )
+            # Existence in inventory alone is not authorization to target an
+            # unrelated device. The current owner goal must independently
+            # reference exactly this physical identity before Phase 9 work.
+            if (
+                gap.target_entity_id not in goal.referenced_entity_ids
+                or current_goal is None
+                or gap.target_entity_id not in current_goal.referenced_entity_ids
+            ):
+                raise GoalStoreConflict(
+                    "device-specific capability target is not referenced "
+                    "by the current owner goal"
+                )
 
         request = Phase9AcquisitionRequestV2.create(gap=gap, goal=goal)
         phase9_goal = request.to_v1(owner_goal_created_at=goal.created_at)

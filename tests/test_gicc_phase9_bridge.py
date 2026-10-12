@@ -818,3 +818,40 @@ def test_unfamiliar_device_cannot_enter_phase9_with_unverified_identity(
     with pytest.raises(GoalStoreConflict, match="active canonical entity"):
         bridge.admit_gap(gap, goal)
     assert admitter.goals == []
+
+
+def test_phase9_bridge_rejects_unrelated_trusted_device(
+    tmp_path: Path,
+) -> None:
+    import pytest
+
+    from jarvis.goal_intelligence.store import GoalStoreConflict
+
+    store = _store(tmp_path)
+    entity = store.put_entity(
+        WorldEntityRefV1.create(
+            entity_type="air_conditioner",
+            canonical_name="Guest room air conditioner",
+            provenance_refs=("owner_inventory:guest_room_ac",),
+        )
+    )
+    goal = _goal(store)  # This owner's request does not reference the AC.
+    gap = CapabilityGapV1.create(
+        goal_id=goal.goal_id,
+        requirement_ids=("req-guest-ac",),
+        reusable_capability_family="air_conditioner.control",
+        target_entity_type="air_conditioner",
+        target_entity_id=entity.entity_id,
+        minimum_required_operations=("set_temperature",),
+        motivating_goal_id=goal.goal_id,
+    )
+    admitter = FakeAdmitter()
+    bridge = Phase9GoalBridge(
+        coordinator=admitter,
+        change_store=FakeArtifacts(),
+        goal_store=store,
+        source_revision_provider=lambda: "a" * 40,
+    )
+    with pytest.raises(GoalStoreConflict, match="current owner goal"):
+        bridge.admit_gap(gap, goal)
+    assert admitter.goals == []
