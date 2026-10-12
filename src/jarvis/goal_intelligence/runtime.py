@@ -104,10 +104,7 @@ from .windows_aep import ReviewedAepScopeV1, WindowsAepIdentityBackend
 from .windows_lan_scope import WindowsLanScopePlanner
 from .workspace import ObjectiveWorkspaceProjector
 from .world import EntityResolver, WorldRegistry, canonical_world_entity_type
-from .world_discovery import (
-    EntityInformationProbe,
-    ReviewedLocalServiceEntityDiscovery,
-)
+from .world_discovery import EntityInformationProbe
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1294,10 +1291,12 @@ def build_gicc_apply_runtime(
 
     reasoning_client = _reasoning_client(config)
     planner = GoalPlanner(client=reasoning_client)
-    entity_resolver = EntityResolver(
-        world,
-        discoveries=(ReviewedLocalServiceEntityDiscovery(),),
-    )
+    # GICC information resolution is not an owner approval for network traffic.
+    # The generic mDNS/SSDP adapters emit packets and must never be wired as
+    # implicit identity-resolution probes. Discovery runs only through an
+    # explicit scope-bound Authority permit (or a future separately reviewed
+    # local service discovery workflow).
+    entity_resolver = EntityResolver(world, discoveries=())
     information_resolver = InformationResolver(
         store=store,
         probes=(
