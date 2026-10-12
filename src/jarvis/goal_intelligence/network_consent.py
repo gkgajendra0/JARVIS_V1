@@ -13,6 +13,7 @@ from .aep_authority import build_aep_consent_proposal
 from .information import can_rediscover_information
 from .models import GoalState
 from .store import GoalStore
+from .vidaa_udp import ReviewedVidaaScopeV1, build_vidaa_consent_proposal
 from .windows_lan_scope import WindowsLanScopePlanner
 from .world import canonical_world_entity_type
 
@@ -75,4 +76,33 @@ def prepare_pending_device_discovery_consent(
                 goal_id=goal.goal_id,
                 need_id=need.information_need_id,
             )
+
+        # An exhausted media-player AEP attempt is NOT authority to broadcast.
+        # Offer a separately scoped, fresh Windows Hello-protected VIDAA
+        # directed broadcast only after both prior methods were consumed.
+        if kind == "media_player" and {
+            "windows_aep_authorized_scope_consumed:upnp",
+            "windows_aep_authorized_scope_consumed:dns_sd",
+        }.issubset(need.evidence_refs):
+            networks = scope_planner.inspect()
+            if networks:
+                selected = networks[0]
+                marker = (
+                    "windows_vidaa_authorized_scope_consumed:vidaa_udp:"
+                    + selected.cidr
+                )
+                if marker not in need.evidence_refs:
+                    try:
+                        reviewed_vidaa = ReviewedVidaaScopeV1(
+                            cidr=selected.cidr,
+                            interface_index=selected.interface_index,
+                        )
+                    except (ValueError, TypeError):
+                        continue
+                    return build_vidaa_consent_proposal(
+                        scope=reviewed_vidaa,
+                        session_id=session,
+                        goal_id=goal.goal_id,
+                        need_id=need.information_need_id,
+                    )
     return None
