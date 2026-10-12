@@ -21,6 +21,7 @@ from jarvis.goal_intelligence.information import (
     BoundInformationInteraction,
     can_rediscover_information,
 )
+from jarvis.goal_intelligence.device_suggestions import has_consumed_discovery_permit
 from jarvis.goal_intelligence.models import GoalState, PlanState
 from jarvis.goal_intelligence.passive_network_diagnostics import (
     inspect_passive_media_network,
@@ -255,6 +256,16 @@ class GiccAgentTools:
                     if value.startswith(prefix)
                     and value[len(prefix) :] in {"upnp", "dns_sd", "wsd"}
                 }
+                | (
+                    {"vidaa_udp"}
+                    if any(
+                        value.startswith(
+                            "windows_vidaa_authorized_scope_consumed:vidaa_udp:"
+                        )
+                        for value in evidence
+                    )
+                    else set()
+                )
             )
             recorded_candidate_refs = tuple(
                 value
@@ -263,6 +274,7 @@ class GiccAgentTools:
                     (
                         "windows_aep_discovered_unverified:",
                         "windows_aep_neighbor_correlated_unverified:",
+                        "windows_vidaa_udp_unverified:",
                     )
                 )
             )
@@ -270,7 +282,9 @@ class GiccAgentTools:
                 hint
                 for hint in all_hints
                 if getattr(hint, "evidence_ref", None) in evidence
-                and str(getattr(hint, "protocol", "")) in protocols
+                and has_consumed_discovery_permit(
+                    hint.protocol, hint.address, need.evidence_refs
+                )
             )[:16]
             observations.append(
                 {
@@ -729,11 +743,11 @@ class GiccAgentTools:
                                     for hint in hints
                                     if getattr(hint, "evidence_ref", None)
                                     in need.evidence_refs
-                                    and (
-                                        "windows_aep_authorized_scope_consumed:"
-                                        + str(getattr(hint, "protocol", ""))
+                                    and has_consumed_discovery_permit(
+                                        hint.protocol,
+                                        hint.address,
+                                        need.evidence_refs,
                                     )
-                                    in need.evidence_refs
                                 )
                                 for need in result.information_needs
                                 if need.goal_id == goal.goal_id
@@ -1022,7 +1036,7 @@ class GiccAgentTools:
             or proposal.is_expired()
             or proposal.session_id != self._conversation.session_id
             or proposal.capability != "network_discovery"
-            or proposal.operation != "enumerate_aep"
+            or proposal.operation not in {"enumerate_aep", "discover_vidaa_udp"}
         ):
             return {
                 "ok": False,
@@ -1167,7 +1181,10 @@ class GiccAgentTools:
                 or current_proposal.is_expired()
                 or current_proposal.session_id != self._conversation.session_id
                 or current_proposal.capability != "network_discovery"
-                or current_proposal.operation != "enumerate_aep"
+                or current_proposal.operation not in {
+                    "enumerate_aep",
+                    "discover_vidaa_udp",
+                }
             ):
                 return {
                     "ok": False,
@@ -1248,11 +1265,9 @@ class GiccAgentTools:
                 item
                 for item in candidates
                 if getattr(item, "evidence_ref", None) in result.need.evidence_refs
-                and (
-                    "windows_aep_authorized_scope_consumed:"
-                    + str(getattr(item, "protocol", ""))
+                and has_consumed_discovery_permit(
+                    item.protocol, item.address, result.need.evidence_refs
                 )
-                in result.need.evidence_refs
             )
             payload["unverified_device_hints"] = [
                 {
