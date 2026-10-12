@@ -10,14 +10,13 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 
@@ -96,7 +95,7 @@ def _candidate_credentials(
                     cert.verify_directly_issued_by(ca)
                 except (ValueError, InvalidSignature):
                     continue
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if not cert.not_valid_before_utc <= now < cert.not_valid_after_utc:
                     continue
                 try:
