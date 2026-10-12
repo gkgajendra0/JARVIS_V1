@@ -317,7 +317,9 @@ class WindowsVidaaUdpBackend:
         try:
             opened = self._factory(socket.AF_INET, socket.SOCK_DGRAM)
             opened.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            opened.bind(("", 0))
+            # VIDAA discovery responders normally use UDP/36671.
+            # If the port is already in use, fail closed.
+            opened.bind(("", _DISCOVERY_PORT))
             opened.sendto(_PACKET, (scope.broadcast, _DISCOVERY_PORT))
             deadline = self._clock() + scope.timeout_seconds
             while len(result) < scope.max_results:
