@@ -7,7 +7,10 @@ identity; it does not verify an endpoint, a transport, pairing, or execution.
 
 from __future__ import annotations
 
-from .device_suggestions import pending_owner_device_suggestions
+from .device_suggestions import (
+    has_consumed_discovery_permit,
+    pending_owner_device_suggestions,
+)
 from .information import can_rediscover_information
 from .models import (
     EntityLifecycleState,
@@ -81,8 +84,9 @@ def confirm_single_discovered_device(
         hint
         for hint in hints
         if hint.evidence_ref in need.evidence_refs
-        and f"windows_aep_authorized_scope_consumed:{hint.protocol}"
-        in need.evidence_refs
+        and has_consumed_discovery_permit(
+            hint.protocol, hint.address, need.evidence_refs
+        )
     )
     if selected_evidence_ref is None:
         if len(candidates) != 1:
