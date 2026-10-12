@@ -13,15 +13,15 @@ from jarvis.vidaa.manual import (
 
 
 def args(command: str, **extra: object) -> Namespace:
-    values = dict(
-        host="192.168.1.10",
-        port=36669,
-        mac=None,
-        persist_tokens=False,
-        command=command,
-        key=None,
-        app=None,
-    )
+    values = {
+        "host": "192.168.1.10",
+        "port": 36669,
+        "mac": None,
+        "persist_tokens": False,
+        "command": command,
+        "key": None,
+        "app": None,
+    }
     values.update(extra)
     return Namespace(**values)
 
