@@ -119,6 +119,23 @@ def new_client(args: argparse.Namespace) -> Any:
     return VidaaTV(**sdk_options)
 
 
+def publish_focused_text(client: Any, value: str) -> bool:
+    """Experimental VIDAA input; only works if TV focuses a text field.
+
+    Source: community VIDAA ui_service/sendtext protocol. No guaranteed
+    acknowledgement, no display observation, and no text echoed in logs.
+    """
+    if not value or len(value) > 120 or not value.isprintable():
+        raise VidaaManualError("Text input must be 1-120 printable characters")
+    publisher = getattr(client, "_publish", None)
+    client_id = getattr(client, "client_id", None)
+    if not callable(publisher) or not isinstance(client_id, str):
+        raise VidaaManualError("The SDK does not expose supported text publishing")
+    # Use the already authenticated MQTT client ID and local-only SDK session.
+    topic = f"/remoteapp/tv/ui_service/{client_id}/actions/sendtext"
+    return publisher(topic, {"text": value}) is not False
+
+
 def run_acceptance(
     client: Any,
     *,
@@ -384,6 +401,19 @@ def execute(
                 f"VIDAA broker refused connection (MQTT CONNACK {connack}). "
                 "No PIN request was sent."
             )
+        if args.command == "text":
+            published = publish_focused_text(client, args.text)
+            if not published:
+                raise VidaaManualError("VIDAA text publish was rejected")
+            return {
+                "outcome": "text_submitted_unverified",
+                "characters_sent": len(args.text),
+                "tv_effect_verified": False,
+                "note": (
+                    "Text delivery and focused search field are not observable "
+                    "via current VIDAA SDK. Some TVs ignore sendtext."
+                ),
+            }
         if args.command == "acceptance":
             return run_acceptance(
                 client,
@@ -538,6 +568,10 @@ def make_parser() -> argparse.ArgumentParser:
     key.add_argument("key", choices=sorted(REMOTE_KEYS))
     launch = actions.add_parser("launch")
     launch.add_argument("app", help="Exact app name returned by 'apps'")
+    text_input = actions.add_parser(
+        "text", help="Experimental text entry into an already focused TV input field"
+    )
+    text_input.add_argument("text", help="Printable text; not echoed in response")
     acceptance = actions.add_parser(
         "acceptance", help="Single-run safe TV smoke test with one visual confirmation"
     )
