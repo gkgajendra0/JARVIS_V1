@@ -51,7 +51,11 @@ def test_unapproved_or_unavailable_backend_never_opens_socket() -> None:
         opens.append(args)
         raise AssertionError("permission must precede socket use")
 
-    for checker, platform in ((lambda _scope: False, "win32"), (None, "win32"), (lambda _scope: True, "linux")):
+    for checker, platform in (
+        (lambda _scope: False, "win32"),
+        (None, "win32"),
+        (lambda _scope: True, "linux"),
+    ):
         observed = WindowsVidaaUdpBackend(
             is_authorized=checker, platform=platform, socket_factory=prohibited_socket
         ).observe(scope)
@@ -59,7 +63,9 @@ def test_unapproved_or_unavailable_backend_never_opens_socket() -> None:
     assert opens == []
 
 
-def test_authorized_vidaa_udp_emits_one_bounded_packet_and_keeps_only_lan_hints() -> None:
+def test_authorized_vidaa_udp_emits_one_bounded_packet_and_keeps_only_lan_hints() -> (
+    None
+):
     scope = ReviewedVidaaScopeV1(cidr="192.168.1.0/24", interface_index=4)
     calls = []
     auth = []
@@ -69,7 +75,10 @@ def test_authorized_vidaa_udp_emits_one_bounded_packet_and_keeps_only_lan_hints(
             self.responses = iter(
                 (
                     (b'{"name":"Unrelated device"}', ("192.168.2.20", 36671)),
-                    (b'{"devicename":"Hisense TV","model":"U7N","manufacturer":"Hisense"}', ("192.168.1.10", 36671)),
+                    (
+                        b'{"devicename":"Hisense TV","model":"U7N","manufacturer":"Hisense"}',
+                        ("192.168.1.10", 36671),
+                    ),
                     (b'{"request":"discover"}', ("192.168.1.11", 36671)),
                 )
             )
@@ -126,7 +135,9 @@ def test_vidaa_offer_follows_both_consumed_aep_scopes_without_scan(tmp_path) -> 
         ),
     )
     offered = prepare_pending_device_discovery_consent(
-        store=store, goal_id=goal.goal_id, session_id=goal.source_session_id,
+        store=store,
+        goal_id=goal.goal_id,
+        session_id=goal.source_session_id,
         planner=_planner(),
     )
     assert offered is not None
@@ -144,10 +155,15 @@ def test_vidaa_offer_follows_both_consumed_aep_scopes_without_scan(tmp_path) -> 
             "windows_vidaa_authorized_scope_consumed:vidaa_udp:192.168.1.0/24",
         ),
     )
-    assert prepare_pending_device_discovery_consent(
-        store=store, goal_id=goal.goal_id, session_id=goal.source_session_id,
-        planner=_planner(),
-    ) is None
+    assert (
+        prepare_pending_device_discovery_consent(
+            store=store,
+            goal_id=goal.goal_id,
+            session_id=goal.source_session_id,
+            planner=_planner(),
+        )
+        is None
+    )
 
 
 def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> None:
