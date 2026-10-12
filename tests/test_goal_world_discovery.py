@@ -295,7 +295,6 @@ def test_discovery_cannot_forge_owner_inventory_provenance(
     assert "owner-config:forged-tv" in resolution.evidence_refs
 
 
-
 def test_production_gicc_entity_resolution_cannot_emit_implicit_network_packets() -> (
     None
 ):
