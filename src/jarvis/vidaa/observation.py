@@ -44,7 +44,9 @@ def _safe_state_value(payload: Any, name: str) -> str | None:
     return value
 
 
-def _read_metadata(client: Any, method_name: str, fields: frozenset[str]) -> dict[str, Any]:
+def _read_metadata(
+    client: Any, method_name: str, fields: frozenset[str]
+) -> dict[str, Any]:
     method = getattr(client, method_name, None)
     if not callable(method):
         return {"status": "sdk_method_not_available", "available_fields": []}
