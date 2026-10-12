@@ -172,6 +172,14 @@ Upstream references:
 The official Android app is [VIDAA Smart TV on Google Play](https://play.google.com/store/apps/details?id=com.universal.remote.multi)
 (package `com.universal.remote.multi`), published by V America Operations
 Inc. Only use an APK copied from the owner's/authorized Android app installation.
+The target's UPnP protocol `3290` also uses dynamic MQTT credentials. The
+manual client now reads the interface MAC from the **same targeted TV UPnP
+descriptor** when available, so the owner normally does not have to type it.
+The `identify` diagnostic reports only `mac_available`, without revealing
+the interface MAC. If the targeted descriptor lacks one, the client fails
+closed with a request to specify the MAC via `--mac` instead of silently using
+legacy fixed MQTT credentials.
+
 Google Play does **not** provide a simple direct APK download to Windows.
 Avoid downloading random APKs/private keys from third-party upload websites.
 
