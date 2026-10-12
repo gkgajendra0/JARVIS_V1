@@ -86,6 +86,7 @@ def new_client(args: argparse.Namespace) -> Any:
         host=args.host,
         port=args.port,
         mac_address=mac,
+        use_dynamic_auth=True,
         auto_detect_protocol=True,
         enable_persistence=args.persist_tokens,
     )
