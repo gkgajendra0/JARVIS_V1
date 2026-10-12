@@ -142,7 +142,9 @@ def execute(
             cert_resolver = resolve_client_certs
         found = cert_resolver() is not None
         return {
-            "outcome": "client_certificate_pair_present" if found else "client_certificate_pair_missing",
+            "outcome": "client_certificate_pair_present"
+            if found
+            else "client_certificate_pair_missing",
             "tls_files_found": found,
             "tls_handshake_verified": False,
             "help": (
@@ -174,7 +176,9 @@ def execute(
             )
         if args.command == "pair":
             if client.start_pairing() is False:
-                raise VidaaManualError("TV rejected the pairing request; no PIN expected")
+                raise VidaaManualError(
+                    "TV rejected the pairing request; no PIN expected"
+                )
             reader = pin_reader or getpass.getpass
             pin = reader("PIN displayed on TV (not echoed): ").strip()
             if not re.fullmatch(r"\d{4,8}", pin):
