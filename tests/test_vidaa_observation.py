@@ -266,7 +266,7 @@ def test_alternate_port_skipped_after_documented_inspector_detected(
 
 def test_documented_alternate_debug_port_request_is_bounded() -> None:
     response = (
-        b"HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\\r\\n"
+        b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
         b'{"Browser":"Chrome/99","Protocol-Version":"1.3"}'
     )
     sock = FakeSocket(response)
@@ -276,9 +276,7 @@ def test_documented_alternate_debug_port_request_is_bounded() -> None:
         assert timeout == 0.8
         return sock
 
-    result = probe_legacy_inspector(
-        "192.168.1.6", port=9222, connector=connector
-    )
+    result = probe_legacy_inspector("192.168.1.6", port=9222, connector=connector)
     assert result["inspector_confirmed"] is True
     assert result["port"] == 9222
     assert b"Host: 192.168.1.6:9222" in sock.sent
