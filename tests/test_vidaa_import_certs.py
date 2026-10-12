@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -27,7 +27,7 @@ def create_test_keystore(
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     client_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "RemoteCA")])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     ca = (
         x509.CertificateBuilder()
         .subject_name(ca_name)
