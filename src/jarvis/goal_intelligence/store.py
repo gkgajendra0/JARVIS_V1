@@ -1360,10 +1360,25 @@ class GoalStore:
             }:
                 return False
             if entity is not None:
+                # Both discovery methods produce *unverified* observations.
+                # The atomic identity claim must accept only a single
+                # method-matching observation already saved for this need;
+                # neither a protocol label nor the owner turn proves control.
+                evidence_prefixes = {
+                    "unverified_aep_evidence:": (
+                        "windows_aep_discovered_unverified:",
+                        "windows_aep_neighbor_correlated_unverified:",
+                    ),
+                    "unverified_vidaa_evidence:": (
+                        "windows_vidaa_udp_unverified:",
+                    ),
+                }
                 evidence = tuple(
-                    value.removeprefix("unverified_aep_evidence:")
+                    value[len(prefix) :]
                     for value in entity.provenance_refs
-                    if value.startswith("unverified_aep_evidence:")
+                    for prefix, allowed in evidence_prefixes.items()
+                    if value.startswith(prefix)
+                    and value[len(prefix) :].startswith(allowed)
                 )
                 if len(evidence) != 1 or evidence[0] not in need.evidence_refs:
                     raise ValueError("owner device is not bound to this need evidence")
