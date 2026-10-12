@@ -469,8 +469,7 @@ async def test_production_acquisition_vertical_develop_verify_promote_activate_r
             self.calls += 1
             assert request.work.work_id == research.work_id
             assert any(
-                step.kind == "acq_inspect_goal"
-                and step.state.value == "completed"
+                step.kind == "acq_inspect_goal" and step.state.value == "completed"
                 for step in request.full_history_steps
             )
             assert not any(
