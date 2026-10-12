@@ -51,7 +51,9 @@ def test_cached_neighbors_and_winrt_readiness_are_passive_and_scope_filtered() -
         calls.append("import_module")
         return SimpleNamespace(
             DeviceInformation=SimpleNamespace(
-                create_watcher_with_kind_aqs_filter_and_additional_properties=lambda *a: None
+                create_watcher_with_kind_aqs_filter_and_additional_properties=lambda *a: (
+                    None
+                )
             ),
             DeviceInformationKind=SimpleNamespace(ASSOCIATION_ENDPOINT=1),
         )
