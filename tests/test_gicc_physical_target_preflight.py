@@ -237,8 +237,12 @@ def test_explicit_display_target_still_requires_real_display() -> None:
     assert missing == ("display",)
 
 
-@pytest.mark.parametrize("device_type", ("air_conditioner", "smart_light", "robot_vacuum"))
-def test_unseen_device_type_requires_unique_reviewed_inventory(device_type: str) -> None:
+@pytest.mark.parametrize(
+    "device_type", ("air_conditioner", "smart_light", "robot_vacuum")
+)
+def test_unseen_device_type_requires_unique_reviewed_inventory(
+    device_type: str,
+) -> None:
     graph = _graph(target_type=device_type, family=f"{device_type}.control")
     untouched, missing = bind_physical_target_requirements(
         graph, referenced_entity_ids=(), get_entity=lambda _: None

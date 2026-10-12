@@ -270,8 +270,12 @@ class _UnknownDeviceAdvertisement:
         )
 
 
-@pytest.mark.parametrize("device_type", ("air_conditioner", "smart_light", "robot_vacuum"))
-def test_unfamiliar_device_type_cannot_bypass_owner_identity(tmp_path: Path, device_type: str) -> None:
+@pytest.mark.parametrize(
+    "device_type", ("air_conditioner", "smart_light", "robot_vacuum")
+)
+def test_unfamiliar_device_type_cannot_bypass_owner_identity(
+    tmp_path: Path, device_type: str
+) -> None:
     registry = _registry(tmp_path)
     registry.register_entity(
         WorldEntityRefV1.create(

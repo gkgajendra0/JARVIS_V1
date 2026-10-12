@@ -737,7 +737,9 @@ async def test_gicc_physical_adapter_cannot_self_certify_external_effect(
         )
 
 
-@pytest.mark.parametrize("device_type", ("air_conditioner", "smart_light", "robot_vacuum"))
+@pytest.mark.parametrize(
+    "device_type", ("air_conditioner", "smart_light", "robot_vacuum")
+)
 def test_future_physical_device_requires_independent_effect_confirmation(
     device_type: str,
 ) -> None:
