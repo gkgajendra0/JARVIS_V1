@@ -679,7 +679,7 @@ class GiccAgentTools:
                             and not proposal.is_expired()
                             and proposal.session_id == goal.source_session_id
                             and proposal.capability == "network_discovery"
-                            and proposal.operation == "enumerate_aep"
+                            and proposal.operation in {"enumerate_aep", "discover_vidaa_udp"}
                         )
                         if valid_proposal:
                             target = proposal.target()
@@ -1321,7 +1321,7 @@ class GiccAgentTools:
                         and not proposal.is_expired()
                         and proposal.session_id == self._conversation.session_id
                         and proposal.capability == "network_discovery"
-                        and proposal.operation == "enumerate_aep"
+                        and proposal.operation in {"enumerate_aep", "discover_vidaa_udp"}
                     ):
                         next_target = proposal.target()
                         if (
@@ -1453,11 +1453,9 @@ class GiccAgentTools:
                 hint
                 for hint in hints
                 if getattr(hint, "evidence_ref", None) in need.evidence_refs
-                and (
-                    "windows_aep_authorized_scope_consumed:"
-                    + str(getattr(hint, "protocol", ""))
+                and has_consumed_discovery_permit(
+                    hint.protocol, hint.address, need.evidence_refs
                 )
-                in need.evidence_refs
             )
             option_index = int(option) - 1
             offered = self._offered_device_options.get(
@@ -1501,11 +1499,9 @@ class GiccAgentTools:
                 hint
                 for hint in hints
                 if getattr(hint, "evidence_ref", None) in need.evidence_refs
-                and (
-                    "windows_aep_authorized_scope_consumed:"
-                    + str(getattr(hint, "protocol", ""))
+                and has_consumed_discovery_permit(
+                    hint.protocol, hint.address, need.evidence_refs
                 )
-                in need.evidence_refs
             )
             if (
                 len(candidates) != 1
