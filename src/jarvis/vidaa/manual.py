@@ -108,11 +108,13 @@ def execute(
         }
 
     if args.command == "identify":
-        try:
-            from pyvidaa import probe_ip
-        except ImportError as exc:
-            raise VidaaManualError("Install pyvidaa in the active venv") from exc
-        device = (device_probe or probe_ip)(args.host, timeout=3.0)
+        if device_probe is None:
+            try:
+                from pyvidaa import probe_ip
+            except ImportError as exc:
+                raise VidaaManualError("Install pyvidaa in the active venv") from exc
+            device_probe = probe_ip
+        device = device_probe(args.host, timeout=3.0)
         if device is None:
             return {
                 "outcome": "vidaa_upnp_not_observed",
@@ -132,11 +134,13 @@ def execute(
         }
 
     if args.command == "certs":
-        try:
-            from pyvidaa.certs import resolve_client_certs
-        except ImportError as exc:
-            raise VidaaManualError("Install pyvidaa in the active venv") from exc
-        found = (cert_resolver or resolve_client_certs)() is not None
+        if cert_resolver is None:
+            try:
+                from pyvidaa.certs import resolve_client_certs
+            except ImportError as exc:
+                raise VidaaManualError("Install pyvidaa in the active venv") from exc
+            cert_resolver = resolve_client_certs
+        found = cert_resolver() is not None
         return {
             "outcome": "client_certificate_pair_present" if found else "client_certificate_pair_missing",
             "tls_files_found": found,
@@ -151,12 +155,14 @@ def execute(
     client = (client_factory or new_client)(args)
     try:
         if not client.connect(timeout=10.0):
-            try:
-                from pyvidaa.certs import resolve_client_certs
-            except ImportError:
-                resolve_client_certs = None
-            if resolve_client_certs is not None:
-                certs = (cert_resolver or resolve_client_certs)()
+            if cert_resolver is None:
+                try:
+                    from pyvidaa.certs import resolve_client_certs
+                except ImportError:
+                    resolve_client_certs = None
+                cert_resolver = resolve_client_certs
+            if cert_resolver is not None:
+                certs = cert_resolver()
                 if certs is None:
                     raise VidaaManualError(
                         "VIDAA connection failed with no client cert/key installed. "
