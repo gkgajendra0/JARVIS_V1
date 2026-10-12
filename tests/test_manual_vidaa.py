@@ -220,11 +220,13 @@ def test_client_auto_reads_matching_tv_mac_for_dynamic_auth(
 
     mock_module.VidaaTV = mock_client  # type: ignore[attr-defined]
     mock_module.probe_ip = mock_probe  # type: ignore[attr-defined]
+    mock_module.discover_udp = lambda **kwargs: {}  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
     new_client(args("status"))
     assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
     assert observed["use_dynamic_auth"] is True
     assert observed["auto_detect_protocol"] is True
+    assert observed["allow_static_auth"] is False
 
 
 def test_modern_device_without_mac_requests_local_network_mac(
@@ -237,8 +239,9 @@ def test_modern_device_without_mac_requests_local_network_mac(
             ip=host, mac=None, protocol_version="3290"
         )
     )
+    mock_module.discover_udp = lambda **kwargs: {}  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
-    with pytest.raises(VidaaManualError, match="MAC address"):
+    with pytest.raises(VidaaManualError, match="TV MAC unavailable"):
         new_client(args("pair"))
 
 
@@ -257,11 +260,13 @@ def test_explicit_mac_still_enables_dynamic_auth(
 
     mock_module.VidaaTV = mock_client  # type: ignore[attr-defined]
     mock_module.probe_ip = unexpected_probe  # type: ignore[attr-defined]
+    mock_module.discover_udp = unexpected_probe  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "pyvidaa", mock_module)
 
     new_client(args("pair", mac="AA:BB:CC:DD:EE:FF"))
     assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
     assert observed["use_dynamic_auth"] is True
+    assert observed["allow_static_auth"] is False
 
 
 @pytest.mark.parametrize(
@@ -306,3 +311,73 @@ def test_connection_failure_without_connack_does_not_claim_auth_rejection() -> N
             cert_resolver=lambda: ("cert.pem", "secret.key"),
         )
     assert client.disconnected
+
+
+def test_udp_discovery_when_upnp_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = ModuleType("pyvidaa")
+    observed: dict[str, object] = {}
+
+    def construct(**kwargs: object) -> object:
+        observed.update(kwargs)
+        return object()
+
+    module.VidaaTV = construct  # type: ignore[attr-defined]
+    module.probe_ip = lambda host, timeout: None  # type: ignore[attr-defined]
+    module.discover_udp = (  # type: ignore[attr-defined]
+        lambda timeout, retries: {
+            "192.168.1.10": SimpleNamespace(
+                ip="192.168.1.10", mac="AA:BB:CC:DD:EE:FF"
+            )
+        }
+    )
+    monkeypatch.setitem(sys.modules, "pyvidaa", module)
+    new_client(args("pair"))
+    assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
+    assert observed["allow_static_auth"] is False
+
+
+def test_udp_identity_from_different_host_not_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = ModuleType("pyvidaa")
+    module.VidaaTV = lambda **kwargs: object()  # type: ignore[attr-defined]
+    module.probe_ip = lambda host, timeout: None  # type: ignore[attr-defined]
+    module.discover_udp = (  # type: ignore[attr-defined]
+        lambda timeout, retries: {
+            "192.168.1.13": SimpleNamespace(
+                ip="192.168.1.13", mac="AA:BB:CC:DD:EE:FF"
+            )
+        }
+    )
+    monkeypatch.setitem(sys.modules, "pyvidaa", module)
+    with pytest.raises(VidaaManualError, match="TV MAC unavailable"):
+        new_client(args("pair"))
+
+
+def test_discover_reports_unverified_targets_without_mac_secrets() -> None:
+    def candidates(*, timeout: float, retries: int) -> dict[str, SimpleNamespace]:
+        assert timeout == 4.0
+        assert retries == 2
+        return {
+            "192.168.1.10": SimpleNamespace(
+                name="Living Room TV", model=None, mac="AA:BB:CC:DD:EE:FF"
+            ),
+            "8.8.8.8": SimpleNamespace(name="Untrusted", model=None, mac="SECRET"),
+        }
+
+    result = execute(args("discover"), udp_discover=candidates)
+    assert result["outcome"] == "vidaa_udp_candidates"
+    assert len(result["candidates"]) == 1
+    assert result["candidates"][0]["matches_requested_host"] is True
+    assert result["candidates"][0]["tv_verified"] is False
+    assert "AA:BB:CC:DD:EE:FF" not in str(result)
+
+
+def test_no_udp_sightings_does_not_prove_no_tv() -> None:
+    result = execute(
+        args("discover"), udp_discover=lambda **kwargs: {}
+    )
+    assert result["outcome"] == "no_vidaa_udp_candidates"
+    assert result["candidates"] == []
