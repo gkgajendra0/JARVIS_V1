@@ -310,9 +310,7 @@ def test_unfamiliar_owner_device_reaches_same_governed_phase9_lineage(
     """
     work = SQLiteWorkStore(tmp_path / "generic-acquisition.sqlite3")
     goals = GoalStore(work)
-    changes = ChangeStore(
-        work, processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,)
-    )
+    changes = ChangeStore(work, processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,))
     backend = _Backend()
     capability_context = _empty_context()
     phase9 = Phase9GoalBridge(
