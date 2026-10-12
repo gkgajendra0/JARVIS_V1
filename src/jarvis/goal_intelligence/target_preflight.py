@@ -66,9 +66,8 @@ def _target_type(requirement: CapabilityRequirementV1) -> str | None:
     # identity. Apply this conservative fallback to control/operate verbs only;
     # monitoring, computations, application and service families remain generic.
     operation_family = requirement.semantic_capability.split(".", 2)[1]
-    if (
-        operation_family in {"control", "operate"}
-        and is_physical_target_entity_type(family)
+    if operation_family in {"control", "operate"} and is_physical_target_entity_type(
+        family
     ):
         return canonical_world_entity_type(family)
     return None
