@@ -282,3 +282,35 @@ def test_generic_software_still_needs_no_physical_identity(software_type: str) -
     )
     assert original is graph
     assert missing == ()
+
+
+@pytest.mark.parametrize(
+    "device_type", ("air_conditioner", "smart_light", "robot_vacuum")
+)
+@pytest.mark.parametrize("declared_type", (None, "generic_external_resource"))
+def test_unseen_physical_control_without_declared_type_requires_identity(
+    device_type: str,
+    declared_type: str | None,
+) -> None:
+    graph = _graph(
+        target_type=declared_type, family=f"{device_type}.control"
+    )
+    unchanged, missing = bind_physical_target_requirements(
+        graph, referenced_entity_ids=(), get_entity=lambda _: None
+    )
+    assert unchanged is graph
+    assert missing == (device_type,)
+
+
+@pytest.mark.parametrize(
+    "family", ("software.control", "application.control", "service.control")
+)
+def test_generic_software_control_does_not_invent_physical_target(
+    family: str,
+) -> None:
+    graph = _graph(target_type=None, family=family)
+    unchanged, missing = bind_physical_target_requirements(
+        graph, referenced_entity_ids=(), get_entity=lambda _: None
+    )
+    assert unchanged is graph
+    assert missing == ()

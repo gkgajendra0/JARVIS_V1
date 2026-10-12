@@ -57,7 +57,21 @@ def _target_type(requirement: CapabilityRequirementV1) -> str | None:
     # target entity type may be a *new* device category. Requiring a canonical
     # inventory binding also for an unknown type prevents a fake/new adapter
     # from silently bypassing Phase-9 device identity validation.
-    return declared if is_physical_target_entity_type(declared) else None
+    if is_physical_target_entity_type(declared):
+        return declared
+
+    # The model may omit the target type when proposing a previously unseen
+    # physical control family, e.g. air_conditioner.control. That omission must
+    # result in owner clarification, not a software-only path bypassing device
+    # identity. Apply this conservative fallback to control/operate verbs only;
+    # monitoring, computations, application and service families remain generic.
+    operation_family = requirement.semantic_capability.split(".", 2)[1]
+    if (
+        operation_family in {"control", "operate"}
+        and is_physical_target_entity_type(family)
+    ):
+        return canonical_world_entity_type(family)
+    return None
 
 
 def bind_physical_target_requirements(
