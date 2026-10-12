@@ -215,6 +215,13 @@ class OwnerNaturalTextChat:
                 action == "approve_discovery"
                 and status == "authorized_discovery_observation_recorded"
             ):
+                outcomes = result.get("vidaa_discovery_outcomes")
+                if isinstance(outcomes, list) and outcomes:
+                    lines.append(
+                        "VIDAA UDP network outcome: "
+                        + ", ".join(str(item) for item in outcomes)
+                        + "."
+                    )
                 hints = result.get("unverified_device_hints")
                 if isinstance(hints, list):
                     lines.append(
@@ -271,6 +278,13 @@ class OwnerNaturalTextChat:
                         + str(observation.get("recorded_candidate_evidence_count") or 0)
                         + "."
                     )
+                    outcomes = observation.get("vidaa_discovery_outcomes")
+                    if isinstance(outcomes, list) and outcomes:
+                        lines.append(
+                            "VIDAA UDP network outcome: "
+                            + ", ".join(str(item) for item in outcomes)
+                            + "."
+                        )
                     candidates = observation.get("current_eligible_candidates")
                     if observation.get("candidate_lookup_available") is not True:
                         lines.append("Current candidate lookup unavailable.")
