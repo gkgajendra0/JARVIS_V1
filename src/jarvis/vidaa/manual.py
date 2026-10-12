@@ -160,7 +160,7 @@ def execute(
                 str(app["name"])
                 for app in apps
                 if isinstance(app, dict)
-                and app.get("name", "").casefold() == args.app.casefold()
+                and str(app.get("name") or "").casefold() == args.app.casefold()
             ]
             if not matches:
                 raise VidaaManualError(
@@ -213,11 +213,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except Exception as exc:
         # Raw SDK errors may contain authentication material; print only the type.
-        print(
-            json.dumps(
-                {"outcome": "sdk_error", "error_type": type(exc).__name__}
-            )
-        )
+        print(json.dumps({"outcome": "sdk_error", "error_type": type(exc).__name__}))
         return 3
     print(json.dumps(result, default=str))
     return 2 if result["outcome"] in {"tcp_unreachable", "no_state"} else 0
