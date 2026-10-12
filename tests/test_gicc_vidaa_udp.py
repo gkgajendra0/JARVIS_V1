@@ -219,7 +219,7 @@ def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> No
     )
     assert confirmed is not None
     assert confirmed.entity_type == "media_player"
-    assert "unverified_aep_evidence:" + candidate.evidence_ref in confirmed.provenance_refs
+    assert "unverified_vidaa_evidence:" + candidate.evidence_ref in confirmed.provenance_refs
 
 
 def test_authorized_vidaa_observation_preserves_original_goal_and_records_send_outcome(
