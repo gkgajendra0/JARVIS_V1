@@ -166,9 +166,7 @@ def observe_software(
         }
     else:
         try:
-            alternate = probe_legacy_inspector(
-                host, port=ALTERNATE_INSPECTOR_PORT
-            )
+            alternate = probe_legacy_inspector(host, port=ALTERNATE_INSPECTOR_PORT)
         except (OSError, TimeoutError, ValueError):
             alternate = {
                 "port": ALTERNATE_INSPECTOR_PORT,
