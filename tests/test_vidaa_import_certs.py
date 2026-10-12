@@ -26,9 +26,7 @@ def create_test_keystore(
 ) -> tuple[bytes, bytes]:
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     client_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    ca_name = x509.Name(
-        [x509.NameAttribute(NameOID.COMMON_NAME, "RemoteCA")]
-    )
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "RemoteCA")])
     now = datetime.now(timezone.utc)
     ca = (
         x509.CertificateBuilder()
@@ -43,9 +41,7 @@ def create_test_keystore(
     )
     client = (
         x509.CertificateBuilder()
-        .subject_name(
-            x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject_cn)])
-        )
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject_cn)]))
         .issuer_name(ca_name)
         .public_key(client_key.public_key())
         .serial_number(x509.random_serial_number())
@@ -78,11 +74,15 @@ def test_imports_expected_signed_identity_without_exposing_key(tmp_path: Path) -
     assert result["outcome"] == "local_vidaa_client_credentials_imported"
     assert result["pairing_completed"] is False
     assert "PRIVATE KEY" not in str(result)
-    assert (destination / "vidaa_client.pem").read_bytes().startswith(
-        b"-----BEGIN CERTIFICATE-----"
+    assert (
+        (destination / "vidaa_client.pem")
+        .read_bytes()
+        .startswith(b"-----BEGIN CERTIFICATE-----")
     )
-    assert (destination / "vidaa_client.key").read_bytes().startswith(
-        b"-----BEGIN PRIVATE KEY-----"
+    assert (
+        (destination / "vidaa_client.key")
+        .read_bytes()
+        .startswith(b"-----BEGIN PRIVATE KEY-----")
     )
     assert not (tmp_path / "ignore.txt").exists()
     if os.name != "nt":
