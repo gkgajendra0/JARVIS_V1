@@ -401,6 +401,10 @@ def execute(
                 f"VIDAA broker refused connection (MQTT CONNACK {connack}). "
                 "No PIN request was sent."
             )
+        if args.command == "observe":
+            from jarvis.vidaa.observation import observe_software
+
+            return observe_software(client, args.host)
         if args.command == "text":
             published = publish_focused_text(client, args.text)
             if not published:
@@ -561,6 +565,7 @@ def make_parser() -> argparse.ArgumentParser:
         "pair",
         "status",
         "apps",
+        "observe",
         "session",
     ):
         actions.add_parser(name)
