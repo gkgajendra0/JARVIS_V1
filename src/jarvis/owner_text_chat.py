@@ -288,6 +288,29 @@ class OwnerNaturalTextChat:
                                     + str(candidate.get("address") or "not supplied")
                                     + "."
                                 )
+            diagnostics = result.get("passive_network_diagnostics")
+            if isinstance(diagnostics, dict):
+                lines.append(
+                    "Read-only Windows diagnostics: WinRT backend "
+                    + str(diagnostics.get("winrt_backend") or "unknown")
+                    + "; network probe performed: "
+                    + str(diagnostics.get("network_probe_performed"))
+                    + "."
+                )
+                cached = diagnostics.get("cached_neighbor_candidates")
+                if isinstance(cached, list):
+                    lines.append(
+                        "Windows OS-cached LAN neighbors (not TV identification): "
+                        + str(len(cached))
+                        + "."
+                    )
+                    for candidate in cached[:16]:
+                        if isinstance(candidate, dict):
+                            lines.append(
+                                "- Cached local address "
+                                + str(candidate.get("address") or "unavailable")
+                                + " (not a verified TV)."
+                            )
             lines.append(str(result.get("truth_note") or "No TV control verified."))
             return "\n".join(lines)
         if action == "offer_discovery":
