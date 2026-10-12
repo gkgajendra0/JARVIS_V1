@@ -55,6 +55,9 @@ key working. Media search/playback is **not** implemented by this prototype.
 | 2026-10-12 | Manual TCP candidate probe | `python -m jarvis.vidaa.manual --host 192.168.1.10 probe` returned `{"outcome":"tcp_reachable_only","host":"192.168.1.10","port":36669,"tv_verified":false}` | Port 36669 reachable on candidate; **no actual device identity, PIN pairing or control confirmed** |
 | 2026-10-12 | New manual-branch CI | First Ruff run exposed formatting/style defects, corrected; comprehensive pytest then reported new `vidaa` namespace missing in self-model; added explicit experimental self-model descriptor. Follow-up CI still pending in this record | Do not claim all tests pass until new branch CI concludes |
 | 2026-10-12 | Owner attempted VIDAA PIN pairing twice after successful TCP probe | `pyvidaa 2.3.0` warned `Vidaa client certificate not found`; searched `C:\\Users\\gkgaj\\.config\\pyvidaa\\certs` for `vidaa_client.pem` and `vidaa_client.key`. First run ended `{"outcome":"blocked","reason":"VIDAA client did not connect; check protocol, TV settings and power"}`; second log only displayed the certificate warning, without a terminal outcome | Connection to VIDAA MQTT/auth not established; no PIN shown or pairing confirmed. Do not rerun `pair` before identifying TV/protocol and obtaining proper credentials where required |
+| 2026-10-12 | Targeted UPnP identity diagnostic | Owner ran `identify` at `192.168.1.10`: `{"outcome":"vidaa_upnp_candidate","name":"Living Room TV","model":null,"brand":"his","protocol_version":"3290","tv_verified":false,"control_verified":false}` | VIDAA-specific descriptor and modern protocol 3290 confirmed as a device *candidate*. Exact U7N model and remote control effect are unverified |
+| 2026-10-12 | Local certificate diagnostic | Owner ran `certs`: `{"outcome":"client_certificate_pair_missing","tls_files_found":false,"tls_handshake_verified":false}` | Cert/key pair absent on Windows. This explains the prior certificate warning; obtaining legitimate client identity is the next prerequisite for mTLS/pairing |
+| 2026-10-12 | Owner-source APK importer added (offline prototype) | `src/jarvis/vidaa/import_certs.py` extracts only the documented VIDAA PKCS#12 identity signed by bundled RemoteCA, refuses overwrite, writes only into per-user certs directory; tests in `tests/test_vidaa_import_certs.py` | Code/CI pending; no APK, key, TLS session, or TV response observed |
 
 
 
@@ -163,6 +166,43 @@ Upstream references:
 - https://github.com/warrenrees/pyvidaa/blob/master/README.md#obtaining-the-client-certificate
 - https://github.com/warrenrees/pyvidaa/blob/master/VIDAA_PROTOCOL_ANALYSIS.md
 - https://www.vidaa.com/customer_support/how-do-i-install-the-vidaa-app/
+
+### Offline certificate import from official Android app APK (not yet owner-tested)
+
+The official Android app is [VIDAA Smart TV on Google Play](https://play.google.com/store/apps/details?id=com.universal.remote.multi)
+(package `com.universal.remote.multi`), published by V America Operations
+Inc. Only use an APK copied from the owner's/authorized Android app installation.
+Google Play does **not** provide a simple direct APK download to Windows.
+Avoid downloading random APKs/private keys from third-party upload websites.
+
+An optional local-only importer has been added to this branch to avoid
+hand-running OpenSSL and copying certificate/key files:
+
+```powershell
+# After obtaining a local authorized APK at a path YOU know:
+git pull --ff-only origin feat/manual-vidaa-tv-control
+.\\.venv\\Scripts\\python.exe -m jarvis.vidaa.import_certs --apk "$HOME\\Downloads\\vidaa_official.apk"
+.\\.venv\\Scripts\\python.exe -m jarvis.vidaa.manual --host 192.168.1.10 certs
+```
+
+`vidaa_official.apk` is an example filename, not a file known to exist. On a
+split-APK Android installation, the client keystore may reside in an APK
+other than the base package; pass the APK that contains the documented P12
+entry. The importer rejects unknown client identity, wrong RemoteCA signer,
+expired certificates, malformed archives, oversized P12 entries, and
+overwriting existing keys. It never downloads APKs or shares secret files.
+It uses the upstream documented P12 store password internally, which is
+not a personal credential. It writes `vidaa_client.pem` and
+`vidaa_client.key` only under the current user's local pyvidaa cert directory;
+the PEM private key is unencrypted because the library requires it, so Windows
+user-profile permissions and backups must be protected. This is a local
+engineering utility, not authorization to use unrelated devices.
+
+The import only establishes locally present client credential files. It does
+**not** prove that the TV accepted TLS, MQTT, PIN pairing or any command.
+After import, retest `pair` with the actual TV ON and verify a PIN appears.
+Do not attempt pairing before the importer reports success (or another trusted
+cert/key pair is locally available).
 
 ### Owner Windows acceptance sequence
 
