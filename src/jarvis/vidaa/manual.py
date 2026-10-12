@@ -98,15 +98,24 @@ def new_client(args: argparse.Namespace) -> Any:
             "IP, retry 'identify', or supply its verified network MAC via --mac."
         )
     validate_target(args.host, args.port, mac)
-    return VidaaTV(
-        host=args.host,
-        port=args.port,
-        mac_address=mac,
-        use_dynamic_auth=True,
-        auto_detect_protocol=True,
-        allow_static_auth=False,
-        enable_persistence=args.persist_tokens,
-    )
+    sdk_options: dict[str, Any] = {
+        "host": args.host,
+        "port": args.port,
+        "mac_address": mac,
+        "use_dynamic_auth": True,
+        "auto_detect_protocol": True,
+        "allow_static_auth": False,
+        "enable_persistence": args.persist_tokens,
+    }
+    if getattr(args, "protocol_version", None) == 3290:
+        # Owner previously confirmed this exact protocol from the TV's
+        # VIDAA-specific descriptor. Avoid slow HTTP retries to unreachable
+        # UPnP ports for every command; do not silently guess other versions.
+        from pyvidaa import AuthMethod
+
+        sdk_options["auth_method"] = AuthMethod.MODERN
+        sdk_options["auto_detect_protocol"] = False
+    return VidaaTV(**sdk_options)
 
 
 def execute(
@@ -118,6 +127,7 @@ def execute(
     device_probe: Callable[..., Any] | None = None,
     cert_resolver: Callable[[], Any] | None = None,
     udp_discover: Callable[..., Any] | None = None,
+    command_reader: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     """Execute one explicitly requested action with test-injectable boundaries."""
     validate_target(args.host, args.port, args.mac)
@@ -261,6 +271,47 @@ def execute(
                 f"VIDAA broker refused connection (MQTT CONNACK {connack}). "
                 "No PIN request was sent."
             )
+        if args.command == "session":
+            # Reuse one authenticated MQTT/TLS connection for fast repeated
+            # remote presses. CLI-only, no automatic device actions.
+            read = command_reader or input
+            submitted = 0
+            while True:
+                try:
+                    command = read("VIDAA remote (home/volume-up/.../exit)> ")
+                except (EOFError, KeyboardInterrupt):
+                    break
+                command = command.strip().lower()
+                if command in ("exit", "quit"):
+                    break
+                if command not in REMOTE_KEYS:
+                    print(
+                        json.dumps(
+                            {
+                                "outcome": "invalid_remote_key",
+                                "supported": sorted(REMOTE_KEYS),
+                            }
+                        )
+                    )
+                    continue
+                code = REMOTE_KEYS[command]
+                if client.send_key(code) is False:
+                    raise VidaaManualError("SDK rejected remote key command")
+                submitted += 1
+                print(
+                    json.dumps(
+                        {
+                            "outcome": "key_submitted_unverified",
+                            "key": code,
+                            "tv_effect_verified": False,
+                        }
+                    )
+                )
+            return {
+                "outcome": "remote_session_ended",
+                "keys_submitted": submitted,
+                "tv_effect_verified": False,
+            }
         if args.command == "pair":
             if client.start_pairing() is False:
                 raise VidaaManualError(
@@ -342,12 +393,27 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=TV_PORT)
     parser.add_argument("--mac", help="Optional verified TV MAC address")
     parser.add_argument(
+        "--protocol-version",
+        type=int,
+        choices=(3290,),
+        help="Owner-verified VIDAA version; 3290 skips slow UPnP protocol probing",
+    )
+    parser.add_argument(
         "--persist-tokens",
         action="store_true",
         help="Opt in to pyvidaa SDK's local token persistence",
     )
     actions = parser.add_subparsers(dest="command", required=True)
-    for name in ("probe", "discover", "identify", "certs", "pair", "status", "apps"):
+    for name in (
+        "probe",
+        "discover",
+        "identify",
+        "certs",
+        "pair",
+        "status",
+        "apps",
+        "session",
+    ):
         actions.add_parser(name)
     key = actions.add_parser("key")
     key.add_argument("key", choices=sorted(REMOTE_KEYS))
