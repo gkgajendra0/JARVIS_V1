@@ -594,6 +594,10 @@ async def test_production_acquisition_vertical_develop_verify_promote_activate_r
         },
     )
     assert acquisition_completion_guard(work.list_steps(research.work_id))[0]
+    # The governed Work Engine advances the durable work revision at every
+    # step. Always reload before the terminal CAS update; the original
+    # pre-research snapshot must never overwrite an active revision.
+    research = work.require(research.work_id)
     work.save(
         research.transition(
             WorkState.COMPLETED, result={"summary": "Research complete"}
