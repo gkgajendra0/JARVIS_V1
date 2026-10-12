@@ -262,3 +262,47 @@ def test_explicit_mac_still_enables_dynamic_auth(
     new_client(args("pair", mac="AA:BB:CC:DD:EE:FF"))
     assert observed["mac_address"] == "AA:BB:CC:DD:EE:FF"
     assert observed["use_dynamic_auth"] is True
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        (4, "bad MQTT username/password"),
+        (5, "MQTT not authorized"),
+    ],
+)
+def test_connect_failure_reports_mqtt_rejection_without_secrets(
+    code: int, expected: str
+) -> None:
+    class RejectedClient(FakeClient):
+        _last_connack_rc = code
+
+        def connect(self, *, timeout: float) -> bool:
+            return False
+
+    client = RejectedClient()
+    with pytest.raises(VidaaManualError, match=expected) as failure:
+        execute(
+            args("pair"),
+            client_factory=lambda _: client,
+            cert_resolver=lambda: ("cert.pem", "secret.key"),
+        )
+    assert "secret.key" not in str(failure.value)
+    assert client.disconnected
+
+
+def test_connection_failure_without_connack_does_not_claim_auth_rejection() -> None:
+    class DroppedClient(FakeClient):
+        _last_connack_rc = None
+
+        def connect(self, *, timeout: float) -> bool:
+            return False
+
+    client = DroppedClient()
+    with pytest.raises(VidaaManualError, match="without an observed MQTT CONNACK"):
+        execute(
+            args("pair"),
+            client_factory=lambda _: client,
+            cert_resolver=lambda: ("cert.pem", "secret.key"),
+        )
+    assert client.disconnected
