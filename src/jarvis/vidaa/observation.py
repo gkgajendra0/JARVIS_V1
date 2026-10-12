@@ -105,7 +105,7 @@ def probe_legacy_inspector(
     else:
         headers, payload = response.split(b"\r\n\r\n", 1)
         result = "http_service_unidentified"
-        if headers.startswith(b"HTTP/1.1 200 ") or headers.startswith(b"HTTP/1.0 200 "):
+        if headers.startswith((b"HTTP/1.1 200 ", b"HTTP/1.0 200 ")):
             try:
                 doc = json.loads(payload)
             except (UnicodeDecodeError, json.JSONDecodeError):
