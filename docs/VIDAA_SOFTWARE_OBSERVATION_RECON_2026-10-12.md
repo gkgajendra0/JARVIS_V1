@@ -23,15 +23,24 @@ does not inspect the streaming-app UI or prove a film is playing.
    screenshot, accessibility tree, focused-UI-element, or streaming-app
    playback-state interface there.
    Source: https://github.com/warrenrees/pyvidaa/blob/master/docs/API.md
-2. VIDAA's *older U4* WebApp technical guide describes an application
-   remote debugging service at `http://TV_IP:9226` after developer mode
-   has been enabled. This is web-app inspection, not a guaranteed general
+2. VIDAA's *older U4* WebApp technical guide describes application
+   remote debugging services at `http://TV_IP:9226` or `:9222` depending
+   on legacy chipset, after developer mode has been enabled. This is web-app inspection, not a guaranteed general
    screenshot service and not proof of access to proprietary streaming apps.
    Source: https://www.vidaa.com/wp-content/uploads/2020/12/WebApp_Development_Guide_for_VIDAA.pdf
-3. The separate VIDAA application-testing vendor Suitest supports some
+3. The separate VIDAA application-testing vendor Suitest supports
    device-specific developer inspection in partner/testing setups and
-   requires device setup; this doesn't establish unprivileged full-screen
-   access on the owner's modern U7N.
+   requires DevTools and app setup. Its documentation distinguishes Ottium
+   and application instrumentation; it does not establish unprivileged
+   cross-app screen access on a consumer U7N.
+   Sources: https://suite.st/docs/devices/vidaa/ and
+   https://suite.st/docs/application/setting-up-vidaa-apps/
+4. Hisense India lists the 55U7N operating system as **VIDAA U7.6**,
+   whereas the public developer-guide ports concern older VIDAA devices.
+   Source: https://www.hisense-india.com/tv-series/mini-led/hisense-139-cm-55-inch-4k-ultra-hd-mini-led-55u7n
+5. VIDAA U7N screen sharing is described as Android-device-to-TV mirroring,
+   not as a reverse TV-to-PC screen-feed API.
+   Source: https://www.hisense-india.com/tv-series/mini-led/hisense-139-cm-55-inch-4k-ultra-hd-mini-led-55u7n
    Source: https://s45rlq5r-0.suitest.tv/docs/devices/vidaa/
 
 Do **not** confuse other TV operating systems' tools (Android ADB,
@@ -51,8 +60,8 @@ git pull --ff-only origin feat/manual-vidaa-tv-control
 - Queries TV state, TV info, device info, capabilities with short timeouts.
 - Reports only allowlisted field names and constrained state enums, NOT
   raw device IDs, certificates, device details, account data, or tokens.
-- Checks **only documented legacy port 9226**, with short TCP timeout and
-  a bounded read-only `GET /json/version` request. Does not execute JS,
+- Checks **only documented legacy ports 9226 and 9222**, each with short
+  TCP timeout and a bounded read-only `GET /json/version` request. Does not execute JS,
   enable developer settings, scan other ports, download DOM, or collect
   browser page URLs.
 - A positive CDP handshake would be a *candidate inspector endpoint*, not
@@ -68,7 +77,7 @@ git pull --ff-only origin feat/manual-vidaa-tv-control
 | Stage | Meaning | Status |
 |---|---|---|
 | L0 | Authenticated TV control | Owner-verified PASS |
-| L1 | Read-only TV metadata (state/device/capability) | Await owner probe |
+| L1 | Read-only TV metadata (state/device/capability) | Owner-verified PASS |
 | L2 | Read-only UI representation (screen image or per-app DOM/accessibility tree) | Unverified |
 | L3 | Identify focused element/search field/profile from observations | Not built |
 | L4 | Closed-loop choose key, observe changed UI, recover safely | Not built |
@@ -93,3 +102,32 @@ Run one read-only `observe` command, report diagnostic JSON. From real
 results decide whether a legitimate on-device screen/DOM path exists,
 what app scope it covers, and how to build a safe closed-loop UI observer.
 Do not demand a separate video walkthrough for each streaming app.
+
+## Owner observation — 2026-10-12 (verified on physical U7N)
+
+Owner ran `observe` against the previously paired TV at its confirmed LAN
+address, and reported:
+
+- Outcome: `software_observation_probe_complete`.
+- `tv_state.status=metadata_received`, `state_type=app`.
+- TV info, device info, capability metadata were all received.
+- First documented legacy debug port 9226:
+  `unreachable_or_no_response`; inspector not confirmed.
+- Screenshot, UI tree, focused element, movie playback: all
+  `not_observed`.
+- `software_ui_navigation_ready=false`.
+
+**Interpretation:** L1 successful; L2 remains blocked/unproven.
+Knowing `statetype=app` does NOT identify the JioHotstar profile,
+search field, focused element, playing title or playback verification.
+Legacy inspector port 9226 failed to respond; it is not proof that all
+software-only observation methods are impossible.
+
+The follow-up implementation checks **only the second documented legacy
+port 9222**, without enabling developer modes or inspecting proprietary
+streaming content. If neither responds, do not ask for more arbitrary port
+scans or pretend an app API provides screenshots. Prefer legitimate
+manufacturer/developer-supported cross-app observation mechanisms if available.
+If none exists, present tradeoffs and obtain owner approval before switching
+to a different input source (e.g. PC browser output) or external observation.
+
