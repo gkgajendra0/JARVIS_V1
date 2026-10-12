@@ -63,7 +63,7 @@ def validate_target(host: str, port: int, mac: str | None) -> None:
 def new_client(args: argparse.Namespace) -> Any:
     """Lazy import: production JARVIS does not require the optional SDK."""
     try:
-        from pyvidaa import VidaaTV, probe_ip
+        from pyvidaa import VidaaTV, discover_udp, probe_ip
     except ImportError as exc:
         raise VidaaManualError(
             "Optional dependency unavailable: install pyvidaa in the active venv"
@@ -75,12 +75,14 @@ def new_client(args: argparse.Namespace) -> Any:
         device = probe_ip(args.host, timeout=3.0)
         if device is not None and getattr(device, "ip", None) == args.host:
             mac = getattr(device, "mac", None)
-            protocol = getattr(device, "protocol_version", None)
-            if not mac and protocol and int(protocol) >= 3000:
-                raise VidaaManualError(
-                    "Modern VIDAA protocol discovered without a MAC address; "
-                    "provide the TV network-interface MAC via --mac"
-                )
+    if not mac:
+        # VIDAA-specific UDP discovery can return the TV's MAC when its
+        # UPnP HTTP descriptor is temporarily unavailable. Never borrow
+        # identity from a different IP or a generic SSDP neighbor.
+        discovered = discover_udp(timeout=4.0, retries=2)
+        candidate = discovered.get(args.host)
+        if candidate is not None and getattr(candidate, "ip", None) == args.host:
+            mac = getattr(candidate, "mac", None)
     # A prior UPnP sighting of protocol 3290 does not make static auth
     # acceptable when the TV temporarily stops answering discovery. Modern
     # authentication requires the MAC; do not let pyvidaa silently downgrade.
@@ -98,6 +100,7 @@ def new_client(args: argparse.Namespace) -> Any:
         mac_address=mac,
         use_dynamic_auth=True,
         auto_detect_protocol=True,
+        allow_static_auth=False,
         enable_persistence=args.persist_tokens,
     )
 
@@ -110,6 +113,7 @@ def execute(
     socket_connector: Callable[..., Any] | None = None,
     device_probe: Callable[..., Any] | None = None,
     cert_resolver: Callable[[], Any] | None = None,
+    udp_discover: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Execute one explicitly requested action with test-injectable boundaries."""
     validate_target(args.host, args.port, args.mac)
@@ -130,6 +134,36 @@ def execute(
             "host": args.host,
             "port": args.port,
             "tv_verified": False,
+        }
+
+    if args.command == "discover":
+        if udp_discover is None:
+            try:
+                from pyvidaa import discover_udp
+            except ImportError as exc:
+                raise VidaaManualError("Install pyvidaa in the active venv") from exc
+            udp_discover = discover_udp
+        observed = udp_discover(timeout=4.0, retries=2)
+        candidates = []
+        for host, device in sorted(observed.items()):
+            try:
+                validate_target(host, args.port, None)
+            except VidaaManualError:
+                continue
+            candidates.append(
+                {
+                    "ip": host,
+                    "name": getattr(device, "name", None),
+                    "model": getattr(device, "model", None),
+                    "mac_available": bool(getattr(device, "mac", None)),
+                    "matches_requested_host": host == args.host,
+                    "tv_verified": False,
+                }
+            )
+        return {
+            "outcome": "vidaa_udp_candidates" if candidates else "no_vidaa_udp_candidates",
+            "candidates": candidates[:20],
+            "note": "UDP sightings are unverified; confirm the TV's IP before control.",
         }
 
     if args.command == "identify":
@@ -307,7 +341,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="Opt in to pyvidaa SDK's local token persistence",
     )
     actions = parser.add_subparsers(dest="command", required=True)
-    for name in ("probe", "identify", "certs", "pair", "status", "apps"):
+    for name in ("probe", "discover", "identify", "certs", "pair", "status", "apps"):
         actions.add_parser(name)
     key = actions.add_parser("key")
     key.add_argument("key", choices=sorted(REMOTE_KEYS))
