@@ -684,7 +684,8 @@ class GiccAgentTools:
                             and not proposal.is_expired()
                             and proposal.session_id == goal.source_session_id
                             and proposal.capability == "network_discovery"
-                            and proposal.operation in {"enumerate_aep", "discover_vidaa_udp"}
+                            and proposal.operation
+                            in {"enumerate_aep", "discover_vidaa_udp"}
                         )
                         if valid_proposal:
                             target = proposal.target()
@@ -1186,7 +1187,8 @@ class GiccAgentTools:
                 or current_proposal.is_expired()
                 or current_proposal.session_id != self._conversation.session_id
                 or current_proposal.capability != "network_discovery"
-                or current_proposal.operation not in {
+                or current_proposal.operation
+                not in {
                     "enumerate_aep",
                     "discover_vidaa_udp",
                 }
@@ -1331,7 +1333,8 @@ class GiccAgentTools:
                         and not proposal.is_expired()
                         and proposal.session_id == self._conversation.session_id
                         and proposal.capability == "network_discovery"
-                        and proposal.operation in {"enumerate_aep", "discover_vidaa_udp"}
+                        and proposal.operation
+                        in {"enumerate_aep", "discover_vidaa_udp"}
                     ):
                         next_target = proposal.target()
                         if (
