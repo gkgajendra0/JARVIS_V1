@@ -10,6 +10,12 @@ on:
       - main
   pull_request:
 
+# Keep only the newest CI run for a PR or push branch. Old revisions must not
+# occupy runners while validation waits on the current reviewed commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ruff:
     runs-on: ubuntu-latest
