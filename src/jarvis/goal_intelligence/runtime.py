@@ -422,8 +422,7 @@ class GiccApplyRuntime:
             return None
         routes = (planner or WindowsLanScopePlanner()).inspect()
         if not any(
-            route.cidr == scope.cidr
-            and route.interface_index == scope.interface_index
+            route.cidr == scope.cidr and route.interface_index == scope.interface_index
             for route in routes
         ):
             return None
