@@ -16,6 +16,7 @@ import json
 import re
 import socket
 import sys
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -116,6 +117,113 @@ def new_client(args: argparse.Namespace) -> Any:
         sdk_options["auth_method"] = AuthMethod.MODERN
         sdk_options["auto_detect_protocol"] = False
     return VidaaTV(**sdk_options)
+
+
+def run_acceptance(
+    client: Any,
+    *,
+    app_name: str = "JioHotstar",
+    observation_reader: Callable[[str], str] = input,
+    wait: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """One safe, owner-initiated live TV smoke test with one observation prompt.
+
+    Never switches power off, guesses app navigation, or attempts movie playback.
+    MQTT publish success alone is never reported as observable TV control.
+    """
+    checks: dict[str, str] = {"mqtt_connected": "passed"}
+    print("VIDAA acceptance: connected. Watch the TV during this test.", flush=True)
+
+    try:
+        installed = client.get_apps()
+    except Exception:  # noqa: BLE001 - never expose SDK payloads or tokens
+        installed = None
+    if not isinstance(installed, list):
+        checks["app_inventory"] = "failed"
+    else:
+        checks["app_inventory"] = "passed"
+
+    matching = [
+        app
+        for app in (installed or [])
+        if isinstance(app, dict)
+        and str(app.get("name") or "").casefold() == app_name.casefold()
+    ]
+    checks["target_app_found"] = "passed" if matching else "failed"
+
+    # The TV should be on already. Each key is a permitted remote action.
+    for name, key in (
+        ("home", "KEY_HOME"),
+        ("volume_up", "KEY_VOLUME_UP"),
+        ("volume_down", "KEY_VOLUME_DOWN"),
+    ):
+        print(f"VIDAA acceptance: {name.replace('_', ' ')}", flush=True)
+        try:
+            sent = client.send_key(key)
+        except Exception:  # noqa: BLE001 - no raw SDK error detail
+            sent = False
+        checks[name] = "submitted_unverified" if sent is not False else "failed"
+        wait(1.0)
+
+    if matching:
+        print(f"VIDAA acceptance: launching {app_name}", flush=True)
+        # Use the TV-supplied app descriptor to avoid a second slow app-list
+        # request in pyvidaa.launch_app().
+        app = matching[0]
+        payload = {k: app[k] for k in ("appId", "name", "url") if k in app}
+        try:
+            launched = client.launch_app(payload)
+        except Exception:  # noqa: BLE001 - no raw SDK payloads
+            launched = False
+        checks["app_launch"] = (
+            "submitted_unverified" if launched is not False else "failed"
+        )
+        wait(2.0)
+    else:
+        checks["app_launch"] = "skipped_target_app_not_found"
+
+    # Reconnect with the same client and persisted credentials. This does not
+    # prove handling a changed DHCP IP address or TV wake from standby.
+    print("VIDAA acceptance: reconnecting MQTT session", flush=True)
+    try:
+        client.disconnect()
+        reconnected = client.connect(timeout=10.0)
+    except Exception:  # noqa: BLE001 - do not expose SDK auth details
+        reconnected = False
+    checks["mqtt_reconnect"] = "passed" if reconnected else "failed"
+
+    # Ask only once, after displaying all physical effects. The owner observes
+    # the TV; do not treat successful publishes as acceptance without this.
+    if checks["home"] == "submitted_unverified" and checks["volume_up"] == "submitted_unverified" and checks["volume_down"] == "submitted_unverified" and checks["app_launch"] == "submitted_unverified":
+        try:
+            observed = observation_reader(
+                "Did Home, volume change and JioHotstar launch all work on TV? [y/N]: "
+            )
+        except (EOFError, KeyboardInterrupt):
+            observed = ""
+        checks["owner_visual_effects"] = (
+            "confirmed" if observed.strip().lower() in ("y", "yes") else "unverified"
+        )
+    else:
+        checks["owner_visual_effects"] = "unverified"
+
+    # Explicitly identify scope gaps rather than inventing passing results.
+    checks["movie_search_and_playback"] = "skipped_not_implemented"
+    checks["power_on_from_standby"] = "skipped_not_verified"
+    checks["dynamic_ip_recovery"] = "skipped_not_verified"
+    checks["jarvis_voice_integration"] = "skipped_not_integrated"
+
+    failures = [name for name, value in checks.items() if value == "failed"]
+    return {
+        "outcome": "acceptance_failed" if failures else "acceptance_completed",
+        "checks": checks,
+        "failed_checks": failures,
+        "physical_tv_verified": checks["owner_visual_effects"] == "confirmed",
+        "notes": (
+            "One-run smoke test for implemented VIDAA controls; remaining "
+            "unimplemented or unverified features are explicitly skipped."
+        ),
+    }
 
 
 def execute(
@@ -271,6 +379,12 @@ def execute(
                 f"VIDAA broker refused connection (MQTT CONNACK {connack}). "
                 "No PIN request was sent."
             )
+        if args.command == "acceptance":
+            return run_acceptance(
+                client,
+                app_name=args.app,
+                observation_reader=command_reader or input,
+            )
         if args.command == "session":
             # Reuse one authenticated MQTT/TLS connection for fast repeated
             # remote presses. CLI-only, no automatic device actions.
@@ -419,6 +533,12 @@ def make_parser() -> argparse.ArgumentParser:
     key.add_argument("key", choices=sorted(REMOTE_KEYS))
     launch = actions.add_parser("launch")
     launch.add_argument("app", help="Exact app name returned by 'apps'")
+    acceptance = actions.add_parser(
+        "acceptance", help="Single-run safe TV smoke test with one visual confirmation"
+    )
+    acceptance.add_argument(
+        "--app", default="JioHotstar", help="Exact installed TV app to launch"
+    )
     return parser
 
 
@@ -434,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"outcome": "sdk_error", "error_type": type(exc).__name__}))
         return 3
     print(json.dumps(result, default=str))
-    return 2 if result["outcome"] in {"tcp_unreachable", "no_state"} else 0
+    return 2 if result["outcome"] in {"tcp_unreachable", "no_state", "acceptance_failed"} else 0
 
 
 if __name__ == "__main__":
