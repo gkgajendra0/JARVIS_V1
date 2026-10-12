@@ -296,7 +296,9 @@ def test_discovery_cannot_forge_owner_inventory_provenance(
 
 
 
-def test_production_gicc_entity_resolution_cannot_emit_implicit_network_packets() -> None:
+def test_production_gicc_entity_resolution_cannot_emit_implicit_network_packets() -> (
+    None
+):
     """Unapproved goal resolution must not instantiate active mDNS/SSDP discovery."""
     import inspect
 
