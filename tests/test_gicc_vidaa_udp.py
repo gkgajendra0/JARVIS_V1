@@ -205,8 +205,7 @@ def test_vidaa_candidate_can_only_be_offered_under_consumed_cidr(tmp_path) -> No
     assert not has_consumed_discovery_permit("vidaa_udp", "192.168.1.10", ())
 
 
-
-def test_authorized_vidaa_observation_preserves_original_goal_and_proves_transmission(
+def test_authorized_vidaa_observation_preserves_original_goal_and_records_send_outcome(
     tmp_path, monkeypatch
 ) -> None:
     from jarvis.goal_intelligence import runtime as runtime_module
@@ -257,7 +256,10 @@ def test_authorized_vidaa_observation_preserves_original_goal_and_proves_transmi
     )
     assert result is not None
     assert result.state is InformationResolutionState.UNRESOLVED
-    assert "windows_vidaa_discovery_outcome:send_accepted_no_candidates" in result.need.evidence_refs
+    assert (
+        "windows_vidaa_discovery_outcome:send_accepted_no_candidates"
+        in result.need.evidence_refs
+    )
     assert (
         "windows_vidaa_authorized_scope_consumed:vidaa_udp:192.168.1.0/24"
         in result.need.evidence_refs
