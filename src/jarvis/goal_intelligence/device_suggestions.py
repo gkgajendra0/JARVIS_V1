@@ -29,10 +29,10 @@ _AEP_RE = re.compile(
 )
 _VIDAA_RE = re.compile(
     r"^windows_vidaa_udp_unverified:"
-    r"(?P<outer>\\d{1,3}(?:\\.\\d{1,3}){3}):"
+    r"(?P<outer>\d{1,3}(?:\.\d{1,3}){3}):"
     r"vendor=(?P<vendor>[a-z0-9_]{1,40}):"
     r"model=(?P<model>[a-z0-9_]{1,40}):"
-    r"category=media_player:at=(?P<observed>\\d{12}):"
+    r"category=media_player:at=(?P<observed>\d{12}):"
     r"(?P<digest>[a-f0-9]{24})$"
 )
 
