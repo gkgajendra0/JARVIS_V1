@@ -188,17 +188,17 @@ class VidaaAuthorityExecutionGuard:
 
     def binds_information_need(self, *, goal_id: str, need_id: str) -> bool:
         target = self._proposal.target()
-        return target.get("gicc_goal_id") == goal_id and target.get("gicc_need_id") == need_id
+        return (
+            target.get("gicc_goal_id") == goal_id
+            and target.get("gicc_need_id") == need_id
+        )
 
     def binds_scope(self, scope: ReviewedVidaaScopeV1) -> bool:
         expected = proposal_vidaa_scope(self._proposal)
-        return (
-            expected is not None
-            and scope == ReviewedVidaaScopeV1(
-                cidr=expected.cidr,
-                interface_index=expected.interface_index,
-                consent_record_id=self._approval_id,
-            )
+        return expected is not None and scope == ReviewedVidaaScopeV1(
+            cidr=expected.cidr,
+            interface_index=expected.interface_index,
+            consent_record_id=self._approval_id,
         )
 
     def consumed_for(self, scope: ReviewedVidaaScopeV1) -> bool:
@@ -225,7 +225,10 @@ class VidaaAuthorityExecutionGuard:
 
 
 def _label(value: object) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", str(value or "").casefold()).strip("_")[:40] or "unknown"
+    return (
+        re.sub(r"[^a-z0-9]+", "_", str(value or "").casefold()).strip("_")[:40]
+        or "unknown"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,8 +243,12 @@ class VidaaUdpCandidateV1:
         vendor = _label(self.manufacturer)
         model = _label(self.model)
         digest = canonical_digest(
-            {"address": self.address, "manufacturer": vendor,
-             "model": model, "time": self.observed_at_epoch}
+            {
+                "address": self.address,
+                "manufacturer": vendor,
+                "model": model,
+                "time": self.observed_at_epoch,
+            }
         )[:24]
         return (
             f"windows_vidaa_udp_unverified:{self.address}:vendor={vendor}:"
@@ -250,9 +257,9 @@ class VidaaUdpCandidateV1:
         )
 
 
-def _candidate(packet: bytes, address: object, scope: ReviewedVidaaScopeV1, now: int) -> (
-    VidaaUdpCandidateV1 | None
-):
+def _candidate(
+    packet: bytes, address: object, scope: ReviewedVidaaScopeV1, now: int
+) -> VidaaUdpCandidateV1 | None:
     try:
         host = ipaddress.IPv4Address(str(address))
         subnet = ipaddress.IPv4Network(scope.cidr)
@@ -267,10 +274,21 @@ def _candidate(packet: bytes, address: object, scope: ReviewedVidaaScopeV1, now:
             return None
         vendor = decoded.get("manufacturer") or decoded.get("brand") or ""
         model = decoded.get("model") or decoded.get("model_name") or ""
-        name = decoded.get("devicename") or decoded.get("name") or decoded.get("device_name") or ""
-        if not any(isinstance(value, str) and value.strip() for value in (vendor, model, name)):
+        name = (
+            decoded.get("devicename")
+            or decoded.get("name")
+            or decoded.get("device_name")
+            or ""
+        )
+        if not any(
+            isinstance(value, str) and value.strip() for value in (vendor, model, name)
+        ):
             return None
-        if not isinstance(vendor, str) or not isinstance(model, str) or not isinstance(name, str):
+        if (
+            not isinstance(vendor, str)
+            or not isinstance(model, str)
+            or not isinstance(name, str)
+        ):
             return None
         # Name is an unverified research hint, not manufacturer attestation.
         return VidaaUdpCandidateV1(
