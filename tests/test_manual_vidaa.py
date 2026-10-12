@@ -11,6 +11,7 @@ from jarvis.vidaa.manual import (
     execute,
     make_parser,
     new_client,
+    run_acceptance,
     validate_target,
 )
 
@@ -478,3 +479,101 @@ def test_protocol_argument_only_accepts_owner_verified_version() -> None:
         parser.parse_args(
             ["--host", "192.168.1.6", "--protocol-version", "1234", "key", "home"]
         )
+
+
+class AcceptanceClient(FakeClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.connects = 0
+        self.apps: list[dict[str, str]] | None = [
+            {"name": "JioHotstar", "appId": "test-app", "url": "vidaa:test"},
+            {"name": "YouTube"},
+        ]
+
+    def connect(self, *, timeout: float) -> bool:
+        self.connects += 1
+        return super().connect(timeout=timeout)
+
+    def get_apps(self) -> list[dict[str, str]] | None:
+        return self.apps
+
+    def launch_app(self, app: dict[str, str]) -> bool:
+        self.commands.append("launch:" + app["name"])
+        return True
+
+
+def test_acceptance_runs_all_supported_steps_in_one_session() -> None:
+    client = AcceptanceClient()
+    client.connect(timeout=10.0)
+    result = run_acceptance(
+        client,
+        observation_reader=lambda _: "yes",
+        wait=lambda _: None,
+    )
+    assert result["outcome"] == "acceptance_completed"
+    assert result["physical_tv_verified"] is True
+    assert result["checks"]["mqtt_reconnect"] == "passed"
+    assert result["checks"]["app_inventory"] == "passed"
+    assert result["checks"]["app_launch"] == "submitted_unverified"
+    assert client.connects == 2
+    assert client.commands == [
+        "KEY_HOME",
+        "KEY_VOLUME_UP",
+        "KEY_VOLUME_DOWN",
+        "launch:JioHotstar",
+    ]
+    assert result["checks"]["movie_search_and_playback"] == "skipped_not_implemented"
+    assert result["checks"]["power_on_from_standby"] == "skipped_not_verified"
+    assert result["checks"]["dynamic_ip_recovery"] == "skipped_not_verified"
+    assert result["checks"]["jarvis_voice_integration"] == "skipped_not_integrated"
+
+
+def test_acceptance_does_not_claim_tv_effect_without_observation() -> None:
+    client = AcceptanceClient()
+    result = run_acceptance(
+        client,
+        observation_reader=lambda _: "no",
+        wait=lambda _: None,
+    )
+    assert result["outcome"] == "acceptance_completed"
+    assert result["physical_tv_verified"] is False
+    assert result["checks"]["owner_visual_effects"] == "unverified"
+
+
+def test_acceptance_skips_app_launch_when_inventory_missing() -> None:
+    client = AcceptanceClient()
+    client.apps = None
+    result = run_acceptance(
+        client,
+        observation_reader=lambda _: "yes",
+        wait=lambda _: None,
+    )
+    assert result["outcome"] == "acceptance_failed"
+    assert result["checks"]["app_inventory"] == "failed"
+    assert result["checks"]["app_launch"] == "skipped_target_app_not_found"
+    assert result["physical_tv_verified"] is False
+    assert not any(cmd.startswith("launch:") for cmd in client.commands)
+
+
+def test_acceptance_reconnect_failure_is_reported() -> None:
+    client = AcceptanceClient()
+
+    def reject_connect(*, timeout: float) -> bool:
+        return False
+
+    client.connect = reject_connect  # type: ignore[method-assign]
+    result = run_acceptance(
+        client,
+        observation_reader=lambda _: "yes",
+        wait=lambda _: None,
+    )
+    assert result["outcome"] == "acceptance_failed"
+    assert result["checks"]["mqtt_reconnect"] == "failed"
+
+
+def test_acceptance_argument_defaults_to_jiohotstar() -> None:
+    ns = make_parser().parse_args(
+        ["--host", "192.168.1.6", "--protocol-version", "3290", "acceptance"]
+    )
+    assert ns.command == "acceptance"
+    assert ns.app == "JioHotstar"
