@@ -51,6 +51,10 @@ key working. Media search/playback is **not** implemented by this prototype.
 | 2026-10-11 | DNS-SD, UPnP/SSDP and VIDAA UDP discovery | Permits marked consumed; candidate count **0**; VIDAA UDP result `send_accepted_no_candidates` | Does NOT prove no TV on LAN, or prove that packets were emitted |
 | 2026-10-11 | Windows network diagnostics | WinRT backend loadable; network probe `False`; OS-cached neighbors 192.168.1.1, .2, .10, .13 | Cached addresses are not verified TV identities; no permission to pair or control |
 | 2026-10-12 | Decision | Owner suspended automatic acquisition and directed manual VIDAA development | This document and an isolated prototype branch record the pivot |
+| 2026-10-12 | Manual Windows setup | Owner fetched `feat/manual-vidaa-tv-control` and installed `pyvidaa==2.3.0` plus `paho-mqtt==2.1.0` in `.venv`; installation exited successfully | SDK dependency available on owner Windows machine; pairing still untested |
+| 2026-10-12 | Manual TCP candidate probe | `python -m jarvis.vidaa.manual --host 192.168.1.10 probe` returned `{"outcome":"tcp_reachable_only","host":"192.168.1.10","port":36669,"tv_verified":false}` | Port 36669 reachable on candidate; **no actual device identity, PIN pairing or control confirmed** |
+| 2026-10-12 | New manual-branch CI | First Ruff run exposed formatting/style defects, corrected; comprehensive pytest then reported new `vidaa` namespace missing in self-model; added explicit experimental self-model descriptor. Follow-up CI still pending in this record | Do not claim all tests pass until new branch CI concludes |
+
 
 Primary repository references:
 - `docs/GLOBAL_SUPERVISOR_GOVERNED_BLACKBOARD_RESEARCH_AND_PLAN_2026-10-05.md` (failed/superseded attempt poisoning, target incompatibility, replay scenarios)
