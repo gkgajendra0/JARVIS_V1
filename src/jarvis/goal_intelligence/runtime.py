@@ -430,13 +430,16 @@ class GiccApplyRuntime:
         # This is an ACTIVE observation, not a passive Windows neighbor lookup.
         # The backend consumes the owner-bound Authority permit BEFORE creating
         # the UDP socket, even if the network later refuses to transmit.
-        candidates = WindowsVidaaUdpBackend(is_authorized=authority_guard).observe(
-            scope
-        )
+        backend = WindowsVidaaUdpBackend(is_authorized=authority_guard)
+        candidates = backend.observe(scope)
         if not authority_guard.consumed_for(scope):
             return None
         marker = "windows_vidaa_authorized_scope_consumed:vidaa_udp:" + scope.cidr
-        refs = (marker, *(item.evidence_ref for item in candidates))
+        refs = (
+            marker,
+            "windows_vidaa_discovery_outcome:" + backend.last_status,
+            *(item.evidence_ref for item in candidates),
+        )
         for _ in range(3):
             current = self.store.get_information_need(need_id)
             if current is None or not can_rediscover_information(current):
