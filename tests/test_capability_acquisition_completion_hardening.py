@@ -141,7 +141,7 @@ def test_exact_completion_lineage_fences_and_resumes_original_goal(
             entity_type="media_player",
             canonical_name="Living Room TV",
             aliases=("my tv",),
-            provenance_refs=("hardening:target",),
+            provenance_refs=("owner_inventory:hardening_target",),
         )
     )
     goal = goals.create_goal(

@@ -40,6 +40,7 @@ from .world import (
     EntityResolver,
     canonical_world_entity_type,
     has_independent_target_provenance,
+    is_physical_target_entity_type,
 )
 
 _WORLD_RESOURCE_TYPES = frozenset(
@@ -205,13 +206,26 @@ class GoalIntelligenceCoordinator:
             if not mention:
                 continue
             if proposed_type not in _WORLD_RESOURCE_TYPES:
-                task_specific_values.append(mention)
-                continue
-            resolution = self._entities.resolve(
-                mention,
-                expected_entity_types=(proposed_type,),
-                require_live_binding=False,
-            )
+                # A new physical device type need not be hard-coded into the
+                # world ontology. Keep its model-proposed label untrusted:
+                # only independently reviewed inventory can resolve it.
+                # Unmatched physical devices require an information need,
+                # not an invented device identity or build authorization.
+                if not is_physical_target_entity_type(proposed_type):
+                    task_specific_values.append(mention)
+                    continue
+                resolution = self._entities.resolve(
+                    mention,
+                    expected_entity_types=(proposed_type,),
+                    require_live_binding=False,
+                    allow_discovery=False,
+                )
+            else:
+                resolution = self._entities.resolve(
+                    mention,
+                    expected_entity_types=(proposed_type,),
+                    require_live_binding=False,
+                )
             self._telemetry.emit(
                 "gicc_entity_resolved",
                 source_turn_id=turn.turn_id,
