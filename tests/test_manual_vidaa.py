@@ -327,9 +327,7 @@ def test_udp_discovery_when_upnp_is_unavailable(
     module.probe_ip = lambda host, timeout: None  # type: ignore[attr-defined]
     module.discover_udp = (  # type: ignore[attr-defined]
         lambda timeout, retries: {
-            "192.168.1.10": SimpleNamespace(
-                ip="192.168.1.10", mac="AA:BB:CC:DD:EE:FF"
-            )
+            "192.168.1.10": SimpleNamespace(ip="192.168.1.10", mac="AA:BB:CC:DD:EE:FF")
         }
     )
     monkeypatch.setitem(sys.modules, "pyvidaa", module)
@@ -346,9 +344,7 @@ def test_udp_identity_from_different_host_not_used(
     module.probe_ip = lambda host, timeout: None  # type: ignore[attr-defined]
     module.discover_udp = (  # type: ignore[attr-defined]
         lambda timeout, retries: {
-            "192.168.1.13": SimpleNamespace(
-                ip="192.168.1.13", mac="AA:BB:CC:DD:EE:FF"
-            )
+            "192.168.1.13": SimpleNamespace(ip="192.168.1.13", mac="AA:BB:CC:DD:EE:FF")
         }
     )
     monkeypatch.setitem(sys.modules, "pyvidaa", module)
@@ -376,8 +372,6 @@ def test_discover_reports_unverified_targets_without_mac_secrets() -> None:
 
 
 def test_no_udp_sightings_does_not_prove_no_tv() -> None:
-    result = execute(
-        args("discover"), udp_discover=lambda **kwargs: {}
-    )
+    result = execute(args("discover"), udp_discover=lambda **kwargs: {})
     assert result["outcome"] == "no_vidaa_udp_candidates"
     assert result["candidates"] == []
