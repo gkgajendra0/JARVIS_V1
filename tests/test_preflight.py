@@ -9,7 +9,6 @@ from jarvis.config import JarvisConfig
 from jarvis.preflight import PreflightCheck, StartupPreflightError
 
 
-
 def _mock_authority_prerequisites(monkeypatch: pytest.MonkeyPatch) -> None:
     """These preflight unit tests are not host-tool installation acceptance."""
     monkeypatch.setattr(
