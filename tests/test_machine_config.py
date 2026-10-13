@@ -83,10 +83,12 @@ def test_forward_compatible_development_settings_are_preserved(
 def test_unsupported_persisted_setting_still_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / "machine.json"
     path.write_text(
-        json.dumps({
-            "schema_version": 1,
-            "settings": {"JARVIS_UNREVIEWED_FEATURE": "true"},
-        }),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "settings": {"JARVIS_UNREVIEWED_FEATURE": "true"},
+            }
+        ),
         encoding="utf-8",
     )
     with pytest.raises(RuntimeError, match="Unsupported persisted JARVIS setting"):
