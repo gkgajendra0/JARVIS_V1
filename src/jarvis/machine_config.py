@@ -63,6 +63,12 @@ PERSISTABLE_SETTINGS = frozenset(
         "JARVIS_WORK_ORCHESTRATION_MODEL",
         "JARVIS_WORK_GLOBAL_CONCURRENCY",
         "JARVIS_DEV_TEST_DOCKER_IMAGE",
+        # Preserve known non-secret settings written by newer unmerged branches.
+        # They do not activate a feature in this older accepted runtime.
+        "JARVIS_DEVELOPMENT_ENGINE_ENABLED",
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE",
+        "JARVIS_WORK_CONTEXT_MODE",
+        "JARVIS_WORK_PAID_FALLBACK_ENABLED",
         "JARVIS_UV_EXECUTABLE_PATH",
         "JARVIS_UV_EXECUTABLE_SHA256",
         "JARVIS_GITHUB_PROMOTION_ENABLED",
