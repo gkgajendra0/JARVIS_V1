@@ -256,6 +256,34 @@ jobs:
           tests/test_phase9_evaluation.py
 
 
+  windows-full-pytest:
+    runs-on: windows-latest
+    steps:
+      - name: Check out clean accepted revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Preinstall Windows LiveKit BlingFire wheel
+        run: >-
+          python -m pip install
+          "https://files.pythonhosted.org/packages/2f/12/c826a40b32bfda29e7f826e50dfbd3c0a70726cb8c0cb5023d2311823bd2/livekit_blingfire-1.1.0-cp311-cp311-win_amd64.whl"
+
+      - name: Install Windows JARVIS full-test dependencies
+        run: python -m pip install -e ".[dev,phase45d-acceptance,hands]"
+
+      - name: Provision Playwright Chromium
+        run: python -m playwright install chromium
+
+      - name: Run full Windows pytest against isolated machine profile
+        shell: pwsh
+        run: |
+          $env:JARVIS_MACHINE_CONFIG = Join-Path $env:RUNNER_TEMP "jarvis-windows-ci-isolated.json"
+          python -m pytest -q
+
   promotion-policy:
     if: always()
     needs:
@@ -263,6 +291,7 @@ jobs:
       - pytest
       - windows-hello-helper
       - windows-dpapi
+      - windows-full-pytest
     runs-on: ubuntu-latest
     steps:
       - name: Require all promotion validations to succeed
@@ -271,8 +300,10 @@ jobs:
           PYTEST_RESULT: ${{ needs.pytest.result }}
           WINDOWS_HELLO_RESULT: ${{ needs.windows-hello-helper.result }}
           WINDOWS_DPAPI_RESULT: ${{ needs.windows-dpapi.result }}
+          WINDOWS_FULL_PYTEST_RESULT: ${{ needs.windows-full-pytest.result }}
         run: |
           test "$RUFF_RESULT" = "success"
           test "$PYTEST_RESULT" = "success"
           test "$WINDOWS_HELLO_RESULT" = "success"
           test "$WINDOWS_DPAPI_RESULT" = "success"
+          test "$WINDOWS_FULL_PYTEST_RESULT" = "success"

@@ -485,15 +485,25 @@ def test_periodic_wrapper_starts_sweeps_and_stops_cleanly(tmp_path: Path) -> Non
         instance_token="test-instance",
     )
 
+    # Reconciliation includes SQLite writes and may take longer than 70ms on a
+    # cold or busy Windows CI runner. Await the observable result, not a guess
+    # about scheduler timing; still fail if periodic reconciliation never runs.
+    run_count = 0
     periodic.start()
-    time.sleep(0.07)
-    periodic.stop(timeout_seconds=1.0)
+    try:
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with sqlite3.connect(store.path, timeout=1.0) as db:
+                run_count = db.execute(
+                    "SELECT COUNT(*) FROM autonomy_reconcile_runs"
+                ).fetchone()[0]
+            if run_count >= 2:
+                break
+            time.sleep(0.025)
+    finally:
+        periodic.stop(timeout_seconds=5.0)
 
     assert periodic.running is False
-    with sqlite3.connect(store.path) as db:
-        run_count = db.execute(
-            "SELECT COUNT(*) FROM autonomy_reconcile_runs"
-        ).fetchone()[0]
     assert run_count >= 2
 
 

@@ -167,7 +167,10 @@ def _write_package(
     )
 
 
-def test_package_managed_provider_is_disabled_until_lifecycle_enable(tmp_path) -> None:
+def test_package_managed_provider_is_disabled_until_lifecycle_enable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(tmp_path / "isolated.json"))
     release = _release(tmp_path)
     definition = _definition()
     _write_package(release, definition)
