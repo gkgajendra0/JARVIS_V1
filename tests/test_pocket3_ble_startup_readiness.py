@@ -108,7 +108,9 @@ def _run_pair_auth(
     owner_approval_delay_seconds: float = 0.0,
 ) -> list[int]:
     monkeypatch.setattr(pocket3_native, "_BLE_PAIR_AUTH_RETRY_SECONDS", 0.01)
-    monkeypatch.setattr(pocket3_native, "_BLE_PAIR_CONFIRM_TIMEOUT_SECONDS", 0.08)
+    # The simulated retry should not time out because a busy Windows CI runner
+    # delayed the event loop. Timeout behavior has its own 30ms bounded test.
+    monkeypatch.setattr(pocket3_native, "_BLE_PAIR_CONFIRM_TIMEOUT_SECONDS", 3.0)
     client = Pocket3NativeTrackerClient(Pocket3NativeConfig())
 
     async def run() -> list[int]:
