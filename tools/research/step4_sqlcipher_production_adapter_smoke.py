@@ -164,6 +164,11 @@ def main() -> None:
             reopened,
             "SELECT count(*) FROM jarvis_schema_migration",
         )
+        embedding_schema_count = scalar(
+            reopened,
+            "SELECT count(*) FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'semantic_assertion_embedding'",
+        )
         reopened.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
         reopened.close()
@@ -180,8 +185,9 @@ def main() -> None:
         "cipher_status": int(first_cipher_status or 0) == 1,
         "cipher_version": str(first_cipher_version).startswith("4.17.0"),
         "sqlite_version": first_sqlite_version == "3.53.3",
-        "migration_version": first_user_version == 1,
-        "migration_ledger_single": migration_count == 1,
+        "migration_version": first_user_version == 2,
+        "migration_ledger_complete": migration_count == 2,
+        "semantic_retrieval_schema": embedding_schema_count == 1,
         "fts_first_open": first_fts_hits == 1,
         "reopen_current_assertion": reopened_count == 1,
         "reopen_fts": reopened_fts_hits == 1,
