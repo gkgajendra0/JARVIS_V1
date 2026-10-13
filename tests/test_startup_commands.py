@@ -16,6 +16,8 @@ def test_dev_supervisor_launches_same_production_runtime_as_jarvis_voice(
 ) -> None:
     captured: dict[str, object] = {}
     sentinel = SimpleNamespace(pid=12345)
+    attached: list[object] = []
+    monkeypatch.setattr(supervisor, "_attach_windows_runtime_job", attached.append)
 
     def fake_popen(args, **kwargs):
         captured["args"] = args
@@ -27,6 +29,7 @@ def test_dev_supervisor_launches_same_production_runtime_as_jarvis_voice(
     process = supervisor._start_jarvis(Path("."), FakeControl())  # type: ignore[arg-type]
 
     assert process is sentinel
+    assert attached == [sentinel]
     assert captured["args"] == [
         supervisor.sys.executable,
         "-m",

@@ -9,6 +9,19 @@ from jarvis.config import JarvisConfig
 from jarvis.preflight import PreflightCheck, StartupPreflightError
 
 
+
+def _mock_authority_prerequisites(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These preflight unit tests are not host-tool installation acceptance."""
+    monkeypatch.setattr(
+        preflight,
+        "_authority_checks",
+        lambda: [
+            PreflightCheck("OPA policy engine", True, "mocked"),
+            PreflightCheck("Windows Hello helper", True, "mocked"),
+        ],
+    )
+
+
 def test_preflight_reports_all_core_checks_without_opening_devices(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -16,6 +29,7 @@ def test_preflight_reports_all_core_checks_without_opening_devices(
     wake = tmp_path / "jarvis.onnx"
     wake.write_bytes(b"model")
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    _mock_authority_prerequisites(monkeypatch)
     monkeypatch.setattr(
         preflight,
         "_audio_checks",
@@ -121,6 +135,7 @@ def test_preflight_allows_audio_only_speaker_shadow(
     wake = tmp_path / "jarvis.onnx"
     wake.write_bytes(b"model")
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+    _mock_authority_prerequisites(monkeypatch)
     monkeypatch.setattr(preflight, "_audio_checks", lambda _config: [])
 
     checks = preflight.run_startup_preflight(

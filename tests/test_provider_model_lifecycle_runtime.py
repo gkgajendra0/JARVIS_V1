@@ -21,6 +21,7 @@ class FakeRuntime:
 async def test_lifecycle_trigger_reconciles_immediately_and_recycles_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(production_runtime, "load_machine_settings", lambda: {})
     calls = 0
 
     async def reconcile(config: JarvisConfig):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from jarvis.self_model.defaults import build_default_self_model
@@ -26,8 +27,17 @@ def test_default_self_model_is_hierarchical_and_covers_jarvis_namespaces() -> No
     assert model.ancestors_of("voice.wake")[0].component_id == "runtime.voice"
 
     source_root = Path("src/jarvis")
+    # Limit the catalog obligation to the checked-out revision. Ignored files
+    # left by another branch must never change this revision's expected model.
+    tracked_files = subprocess.run(
+        ["git", "ls-files", "--", source_root.as_posix()],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert tracked_files, "self-model coverage requires a repository checkout"
     immediate = {
-        path.name for path in source_root.iterdir() if path.name != "__pycache__"
+        Path(file).relative_to(source_root).parts[0] for file in tracked_files
     }
     mapped = set()
     for descriptor in model.components:

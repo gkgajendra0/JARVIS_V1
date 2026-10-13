@@ -26,7 +26,7 @@ from jarvis.machine_config import (
 
 
 def _provider_status() -> tuple[str, str, bool]:
-    settings = load_machine_settings()
+    settings = load_machine_settings(default_machine_config_path())
     provider = configured_ai_provider(settings)
     credential_name = credential_environment_name(provider)
     credential_available = provider_api_key(provider) is not None
@@ -34,7 +34,7 @@ def _provider_status() -> tuple[str, str, bool]:
 
 
 def _tts_status() -> tuple[str, str, bool, bool]:
-    settings = load_machine_settings()
+    settings = load_machine_settings(default_machine_config_path())
     provider = configured_tts_provider(settings)
     credential_name = tts_credential_environment_name(provider)
     credential_available = tts_provider_api_key(provider) is not None
@@ -61,7 +61,7 @@ def show_provider() -> int:
     print(f"TTS credential variable: {tts_credential_name}")
     print(f"TTS credential available: {'yes' if tts_credential_available else 'no'}")
     print(f"TTS credential separated: {'yes' if tts_separated else 'no'}")
-    settings = load_machine_settings()
+    settings = load_machine_settings(default_machine_config_path())
     project_verified = settings.get(
         "JARVIS_TTS_PROJECT_BILLING_ISOLATION_VERIFIED", ""
     ).strip().casefold() in {"1", "true", "yes", "on"}
