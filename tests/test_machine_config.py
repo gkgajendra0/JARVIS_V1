@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,46 @@ def test_machine_config_persists_tts_provider_but_never_tts_secret(
             {"JARVIS_TTS_GOOGLE_API_KEY": "secret"},
             tmp_path / "secret-machine.json",
         )
+
+
+def test_forward_compatible_development_settings_are_preserved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Accepted main must not destroy newer branch settings during setup."""
+    path = tmp_path / "machine.json"
+    newer_settings = {
+        "JARVIS_DEVELOPMENT_ENGINE_ENABLED": "true",
+        "JARVIS_DEVELOPMENT_TEST_DOCKER_IMAGE": "jarvis-dev-tests:local",
+        "JARVIS_WORK_CONTEXT_MODE": "shadow",
+        "JARVIS_WORK_PAID_FALLBACK_ENABLED": "false",
+    }
+    save_machine_settings({"JARVIS_AI_PROVIDER": "gemini", **newer_settings}, path)
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+
+    assert JarvisConfig.from_environment().ai_provider == "gemini"
+    assert all(
+        load_machine_settings(path)[key] == value
+        for key, value in newer_settings.items()
+    )
+
+    # A read-then-save workflow must round-trip all four unmerged settings.
+    save_machine_settings(load_machine_settings(path), path)
+    persisted = json.loads(path.read_text(encoding="utf-8"))["settings"]
+    assert all(persisted[key] == value for key, value in newer_settings.items())
+
+
+def test_unsupported_persisted_setting_still_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "machine.json"
+    path.write_text(
+        json.dumps({
+            "schema_version": 1,
+            "settings": {"JARVIS_UNREVIEWED_FEATURE": "true"},
+        }),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="Unsupported persisted JARVIS setting"):
+        load_machine_settings(path)
 
 
 def test_machine_config_refuses_unapproved_secret(tmp_path: Path) -> None:
