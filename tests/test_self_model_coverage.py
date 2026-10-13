@@ -36,9 +36,7 @@ def test_default_self_model_is_hierarchical_and_covers_jarvis_namespaces() -> No
         text=True,
     ).stdout.splitlines()
     assert tracked_files, "self-model coverage requires a repository checkout"
-    immediate = {
-        Path(file).relative_to(source_root).parts[0] for file in tracked_files
-    }
+    immediate = {Path(file).relative_to(source_root).parts[0] for file in tracked_files}
     mapped = set()
     for descriptor in model.components:
         if descriptor.component_id == "jarvis":
