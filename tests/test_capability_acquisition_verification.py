@@ -10,6 +10,7 @@ import pytest
 from jarvis.capabilities.models import CapabilityCatalog
 from jarvis.capability_acquisition.admission import CapabilityAcquisitionCoordinator
 from jarvis.capability_acquisition.architecture import (
+    CapabilityAcquisitionArchitectureError,
     CapabilityAcquisitionDevelopmentRevisionResolver,
     CapabilityAcquisitionSourceCompletionHandler,
 )
@@ -132,6 +133,9 @@ def _build_change(
     tmp_path: Path,
     repository_root: Path,
     revision: str,
+    *,
+    owner_goal: OwnerCapabilityGoalV1 | None = None,
+    gicc_link: dict[str, object] | None = None,
 ):
     work_store = SQLiteWorkStore(tmp_path / "work.sqlite3")
     change_store = ChangeStore(
@@ -159,14 +163,20 @@ def _build_change(
             ),
         ),
     )
+    goal = owner_goal or _goal()
     admission = CapabilityAcquisitionCoordinator(
         changes=coordinator,
         context_provider=StaticAcquisitionContextProvider(_context()),
-    ).admit(_goal(), source_revision=revision)
+    ).admit(goal, source_revision=revision)
     assert admission.change is not None
     assert admission.acquisition_work_id is not None
+    if gicc_link is not None:
+        change_store.add_artifact(
+            admission.change.change_id,
+            kind="gicc_capability_gap_link",
+            payload=gicc_link,
+        )
 
-    goal = _goal()
     resolver = CapabilityAcquisitionResolver(
         CapabilitySourceRegistry((CustomBuildCapabilitySourceAdapter(),))
     )
@@ -429,6 +439,90 @@ def test_verification_requires_exact_approved_test_targets() -> None:
             work,
             steps,
             ("tests/test_tv_control.py",),
+        )
+
+
+def _gicc_owner_goal() -> OwnerCapabilityGoalV1:
+    return OwnerCapabilityGoalV1.create(
+        request="Acquire reusable media-player control.",
+        requested_capability="media_player.control",
+        required_operations=("power",),
+        target_hints=("entity_type:media_player", "entity_id:entity_tv"),
+        source_session_id="gicc:goal-tv",
+        source_turn_id="gap:gap-tv",
+        now_epoch=100.0,
+    )
+
+
+def _gicc_link(*, family: str = "media_player.control") -> dict[str, object]:
+    return {
+        "schema": "gicc_phase9_gap_link.v1",
+        "request_id": "phase9_gicc_test",
+        "request_digest": "a" * 64,
+        "motivating_goal_id": "goal-tv",
+        "gap_id": "gap-tv",
+        "reusable_capability_family": family,
+        "minimum_required_operations": ["power"],
+        "target_entity_type": "media_player",
+        "target_entity_id": "entity_tv",
+        "owner_source_session_id": "owner-session",
+        "owner_source_turn_id": "owner-turn",
+    }
+
+
+def test_gicc_semantic_identity_flows_into_phase9_development_architecture(
+    tmp_path: Path,
+    acquisition_repo: tuple[Path, str],
+) -> None:
+    repository_root, revision = acquisition_repo
+    (
+        _,
+        _,
+        _,
+        _,
+        _,
+        _,
+        architecture,
+        development_work,
+    ) = _build_change(
+        tmp_path,
+        repository_root,
+        revision,
+        owner_goal=_gicc_owner_goal(),
+        gicc_link=_gicc_link(),
+    )
+
+    assert architecture.payload["semantic_capability_contract"] == {
+        "schema": "semantic_capability_build_contract.v1",
+        "semantic_capability_family": "media_player.control",
+        "target_entity_type": "media_player",
+        "target_entity_id": "entity_tv",
+        "required_operations": ["power"],
+        "descriptor_requirements": {
+            "semantic_capability_family": "media_player.control",
+            "target_entity_types": ["media_player"],
+        },
+    }
+    assert "semantic_capability_contract" in development_work.request
+    assert "media_player.control" in development_work.request
+
+
+def test_gicc_semantic_identity_drift_blocks_phase9_architecture(
+    tmp_path: Path,
+    acquisition_repo: tuple[Path, str],
+) -> None:
+    repository_root, revision = acquisition_repo
+
+    with pytest.raises(
+        CapabilityAcquisitionArchitectureError,
+        match="semantic family differs",
+    ):
+        _build_change(
+            tmp_path,
+            repository_root,
+            revision,
+            owner_goal=_gicc_owner_goal(),
+            gicc_link=_gicc_link(family="unrelated.control"),
         )
 
 

@@ -14,6 +14,13 @@ from jarvis.ai_provider import (
 )
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.machine_config import configured_text, load_machine_settings
+from jarvis.runtime_lane import (
+    GiccMode,
+    RuntimeLane,
+    configured_gicc_mode,
+    configured_runtime_lane,
+    validate_gicc_runtime_policy,
+)
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -124,6 +131,8 @@ class JarvisConfig:
     work_orchestration_enabled: bool = False
     work_orchestration_model: str | None = None
     global_brain_router_mode: str = "shadow"
+    runtime_lane: RuntimeLane = RuntimeLane.PRODUCTION
+    gicc_mode: GiccMode = GiccMode.OFF
     work_dbos_database_url: str | None = field(default=None, repr=False)
     work_global_concurrency: int = 4
     development_test_docker_image: str | None = None
@@ -204,6 +213,12 @@ class JarvisConfig:
             "global_brain_router_mode",
             brain_router_mode,
         )
+
+        if not isinstance(self.runtime_lane, RuntimeLane):
+            raise TypeError("runtime_lane must be RuntimeLane")
+        if not isinstance(self.gicc_mode, GiccMode):
+            raise TypeError("gicc_mode must be GiccMode")
+        validate_gicc_runtime_policy(self.runtime_lane, self.gicc_mode)
 
         camera_source = str(self.vision_default_camera).strip().lower()
         if camera_source not in {"lenovo", "pocket3"}:
@@ -401,6 +416,8 @@ class JarvisConfig:
         """
 
         machine = load_machine_settings()
+        runtime_lane = configured_runtime_lane()
+        gicc_mode = configured_gicc_mode(runtime_lane)
         return cls(
             log_level=_configured_required_text("JARVIS_LOG_LEVEL", "INFO", machine),
             ai_provider=configured_ai_provider(machine),
@@ -453,6 +470,8 @@ class JarvisConfig:
                 "shadow",
                 machine,
             ),
+            runtime_lane=runtime_lane,
+            gicc_mode=gicc_mode,
             work_dbos_database_url=_configured_optional_text(
                 "JARVIS_WORK_DBOS_DATABASE_URL", machine
             ),

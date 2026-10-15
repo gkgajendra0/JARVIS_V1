@@ -490,15 +490,25 @@ class WorkRuntime:
             name="jarvis-work-status-updates",
         )
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
+        """Gracefully park durable work before tearing down DBOS.
+
+        DBOS destroy does not interrupt workflows that outlive its completion
+        timeout. Because DBOS steps call back onto JARVIS's asyncio loop, running
+        destroy synchronously on that same loop prevents those steps from reaching
+        a checkpoint. Shutdown therefore preempts provider reasoning, stops local
+        schedulers, durably parks exact DBOS executions, and performs the blocking
+        DBOS drain on a worker thread while the canonical event loop remains alive.
+        """
+
         if self._closed:
             return
         self._closed = True
 
-        # A jarvis-dev restart must not tear DBOS down while a provider reasoning
-        # cycle is still using the canonical event loop. Preempt background
-        # reasoning first, then give already-running DBOS workflow code a bounded
-        # window to checkpoint before database connections are closed.
+        begin_shutdown = getattr(self.backend, "begin_shutdown", None)
+        if callable(begin_shutdown):
+            begin_shutdown()
+
         shutdown_preempt = getattr(
             self._interactive_brain_gate,
             "preempt_background_for_shutdown",
@@ -508,16 +518,86 @@ class WorkRuntime:
             shutdown_preempt()
         else:
             self._interactive_brain_gate.set_interactive_active(True)
+
         status_task = getattr(self, "_status_update_task", None)
         if status_task is not None and not status_task.done():
             status_task.cancel()
+
         autonomy = getattr(self, "_autonomy_periodic_reconciler", None)
         if autonomy is not None:
             autonomy.stop()
-        task = getattr(self, "_release_bridge_task", None)
-        if task is not None and not task.done():
-            task.cancel()
-        shutdown_dbos_work_runtime(workflow_completion_timeout_sec=5)
+
+        release_task = getattr(self, "_release_bridge_task", None)
+        if release_task is not None and not release_task.done():
+            release_task.cancel()
+
+        pending_tasks = tuple(
+            task
+            for task in (status_task, release_task)
+            if task is not None and not task.done()
+        )
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+        # Let the provider cancellation scheduled by the interactive-brain gate
+        # run before DBOS begins waiting for active workflow steps to checkpoint.
+        await asyncio.sleep(0)
+
+        execution_ids = tuple(
+            sorted(
+                {
+                    self.store.get_execution_id(work.work_id) or work.work_id
+                    for work in self.orchestrator.list_active(limit=10_000)
+                    if work.work_type is not WorkType.MONITORING
+                }
+            )
+        )
+        park_for_shutdown = getattr(self.backend, "park_for_shutdown", None)
+        if execution_ids and callable(park_for_shutdown):
+            parked = await asyncio.to_thread(
+                park_for_shutdown,
+                execution_ids,
+            )
+            LOGGER.info(
+                "Durably parked active DBOS executions for shutdown: %s",
+                ", ".join(parked),
+            )
+
+        # DBOS cancellation prevents another durable step from starting, while
+        # InteractiveBrainGate separately preempts provider reasoning. Do not
+        # cancel an already-admitted action: it may have produced an external
+        # side effect that still needs its canonical JARVIS evidence checkpoint.
+        quiesce_advances = getattr(self.backend, "quiesce_active_advances", None)
+        if callable(quiesce_advances):
+            quiesced = await quiesce_advances()
+            if quiesced:
+                LOGGER.info(
+                    "Quiesced active JARVIS engine advances before DBOS shutdown: %s",
+                    quiesced,
+                )
+
+        # Keep the canonical event loop free while DBOS drains. New
+        # WAITING_RESOURCE history uses wakeable DBOS.recv timeouts that preserve
+        # absolute durable timing. The longer bound only exists for one legacy
+        # single DBOS.sleep (historically capped at 60s); PAUSED recv calls are
+        # explicitly woken by park_for_shutdown().
+        await asyncio.to_thread(
+            shutdown_dbos_work_runtime,
+            workflow_completion_timeout_sec=70,
+        )
+
+    def close(self) -> None:
+        """Synchronous compatibility wrapper for non-async callers only."""
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self.aclose())
+            return
+        raise RuntimeError(
+            "WorkRuntime.close() cannot block an active event loop; "
+            "use 'await WorkRuntime.aclose()'"
+        )
 
 
 def build_work_runtime(

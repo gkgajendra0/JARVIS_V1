@@ -28,6 +28,7 @@ from jarvis.ai_provider import require_provider_api_key
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.memory.live_context import LiveContext
+from jarvis.runtime_lane import GiccMode
 from jarvis.voice.agent import build_instructions
 
 LOGGER = logging.getLogger(__name__)
@@ -81,7 +82,8 @@ def _create_realtime_model(config: JarvisConfig):
             voice=config.gemini_realtime_voice,
             api_key=api_key,
             instructions=build_instructions(
-                default_media_target=config.default_media_target
+                default_media_target=config.default_media_target,
+                gicc_apply=config.gicc_mode is GiccMode.APPLY,
             ),
             input_audio_transcription={},
             output_audio_transcription={},
@@ -325,13 +327,13 @@ def create_voice_session(
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
     conversation = ConversationSession()
     live_context = LiveContext(max_recent_turns=config.live_context_recent_turns)
-    # Do not pass vad=None here. LiveKit auto-provisions its bundled local Silero VAD
-    # when the argument is omitted. JARVIS uses that VAD only for local user-activity
-    # state (speaking/listening) so inactivity timers cannot expire during continuous
-    # speech. Realtime Gemini/OpenAI still own actual turn completion through their
-    # provider-native server-side turn detection.
+    # Realtime Gemini/OpenAI already emit provider-native input-speech start/stop
+    # events. LiveKit 1.8.3 maps those events to user speaking/listening state when
+    # vad=None, so a second local Silero VAD is redundant here. Explicitly disabling
+    # it also avoids constructing/loading an inference VAD on every wake activation.
     livekit_session = AgentSession(
         llm=_create_realtime_model(config),
+        vad=None,
         turn_handling=TurnHandlingOptions(
             turn_detection=None,
             interruption={"enabled": True},

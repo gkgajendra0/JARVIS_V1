@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from jarvis.conversation import ConversationSession
 from jarvis.voice.agent import INSTRUCTIONS, build_instructions
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.development import DevelopmentWorkspaceManager
@@ -167,3 +168,35 @@ def test_voice_instructions_preserve_referential_retry_context() -> None:
     assert "retry_failed_background_work" in NORMALIZED_INSTRUCTIONS
     assert "referential retry utterance" in NORMALIZED_INSTRUCTIONS
     assert "set_background_work_update_interval" in NORMALIZED_INSTRUCTIONS
+
+
+def test_gicc_apply_instructions_override_direct_phase9_entry() -> None:
+    instructions = " ".join(build_instructions(gicc_apply=True).split())
+
+    assert "GICC APPLY mode is active" in instructions
+    assert "call pursue_owner_goal" in instructions
+    assert (
+        "Direct start_capability_acquisition is intentionally unavailable"
+        in instructions
+    )
+    assert "Ordinary immediate local computer actions" in instructions
+    assert "resolve_goal_information" in instructions
+    assert "Never treat unrelated ambient speech as the answer" in instructions
+
+
+def test_work_tools_can_hide_direct_capability_acquisition_in_apply() -> None:
+    runtime = object.__new__(WorkRuntime)
+    conversation = ConversationSession(session_id="gicc-apply-work-tools")
+    conversation.start()
+
+    legacy = WorkAgentTools(runtime, conversation).tools
+    apply_tools = WorkAgentTools(
+        runtime,
+        conversation,
+        allow_capability_acquisition=False,
+    ).tools
+
+    assert "start_capability_acquisition" in [tool.id for tool in legacy]
+    assert "start_capability_acquisition" not in [tool.id for tool in apply_tools]
+    assert "activate_acquired_capability" in [tool.id for tool in apply_tools]
+    assert "disable_acquired_capability" in [tool.id for tool in apply_tools]

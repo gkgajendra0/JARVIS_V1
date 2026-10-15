@@ -23,6 +23,12 @@ from jarvis.capability_registry.runtime_composition import (
     build_package_managed_runtime_stack,
 )
 from jarvis.config import JarvisConfig
+from jarvis.goal_intelligence.interpretation import (
+    GoalInterpretationShadowRuntime,
+    build_goal_interpreter,
+)
+from jarvis.goal_intelligence.runtime import build_gicc_apply_runtime
+from jarvis.goal_intelligence.store import build_default_goal_store
 from jarvis.health_adapters import (
     CapabilityExecutionHealthObserver,
     ProviderResilienceHealthObserver,
@@ -78,6 +84,7 @@ from jarvis.provider_resilience import (
     ProviderFailureKind,
     ProviderResilienceState,
 )
+from jarvis.runtime_lane import GiccMode
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
@@ -97,6 +104,7 @@ from jarvis.vision.service import build_default_vision_service
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
 )
+from jarvis.voice.gicc_tools import GiccAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.local_status_speech import build_local_status_speech
 from jarvis.voice.media_devices_audio import (
@@ -422,6 +430,11 @@ def build_production_voice_runtime(
         len(package_executors),
     )
 
+    acquisition_context = CapabilityRuntimeAcquisitionContextProvider(
+        capability_runtime,
+        projection=None if package_stack is None else package_stack.projection,
+    )
+
     work_runtime = None
     if config.work_orchestration_enabled:
         deployment_metadata = DeploymentMetadataStore(default_deployment_root())
@@ -437,14 +450,7 @@ def build_production_voice_runtime(
             dbos_database_url=config.work_dbos_database_url,
             event_loop=asyncio.get_running_loop(),
             capability_runtime=capability_runtime,
-            acquisition_context_provider=(
-                CapabilityRuntimeAcquisitionContextProvider(
-                    capability_runtime,
-                    projection=(
-                        None if package_stack is None else package_stack.projection
-                    ),
-                )
-            ),
+            acquisition_context_provider=acquisition_context,
             capability_lifecycle_service=(
                 None if package_stack is None else package_stack.lifecycle
             ),
@@ -479,6 +485,60 @@ def build_production_voice_runtime(
             config.global_brain_router_mode,
             bool(config.development_test_docker_image),
         )
+
+    gicc_apply_runtime = None
+    if config.gicc_mode is GiccMode.APPLY:
+        if work_runtime is None:
+            raise RuntimeError(
+                "GICC APPLY requires persistent work orchestration to be enabled"
+            )
+        gicc_apply_runtime = build_gicc_apply_runtime(
+            config=config,
+            capability_runtime=capability_runtime,
+            work_runtime=work_runtime,
+            capability_context=acquisition_context,
+        )
+        LOGGER.warning(
+            "GICC APPLY configured for development runtime: "
+            "canonical_goal_writes=True exact_information_binding=True "
+            "phase9_bridge=True direct_phase9_voice_entry=False "
+            "production_activation=False"
+        )
+
+    gicc_shadow_interpreter = None
+    gicc_goal_store = None
+    if config.gicc_mode is GiccMode.SHADOW:
+        try:
+            gicc_shadow_interpreter = build_goal_interpreter(
+                provider=config.ai_provider,
+                chatgpt_plan_enabled=config.chatgpt_plan_enabled,
+                chatgpt_plan_model=config.chatgpt_plan_model,
+                reasoning_model=(
+                    config.hands_planner_model or config.work_orchestration_model
+                ),
+            )
+            if gicc_shadow_interpreter is not None:
+                gicc_goal_store = build_default_goal_store()
+                LOGGER.info(
+                    "GICC-1 shadow interpreter configured: provider=%s model=%s "
+                    "canonical_goal_writes=False owner_questions=False "
+                    "phase9_acquisition=False actions=False",
+                    gicc_shadow_interpreter.provider_name,
+                    gicc_shadow_interpreter.model_name,
+                )
+            else:
+                LOGGER.warning(
+                    "GICC SHADOW requested but no configured reasoning model is "
+                    "available; existing JARVIS behavior remains authoritative"
+                )
+        except Exception as exc:
+            LOGGER.exception(
+                "GICC SHADOW initialization failed; existing JARVIS behavior "
+                "remains authoritative: %s",
+                type(exc).__name__,
+            )
+            gicc_shadow_interpreter = None
+            gicc_goal_store = None
 
     provider_resilience_state = ProviderResilienceState()
     provider_health_observer = (
@@ -575,6 +635,14 @@ def build_production_voice_runtime(
             )
             bridge.add_accepted_turn_observer(candidate_runtime.observe_turn)
             bridge.add_close_observer(candidate_runtime.close)
+        if gicc_shadow_interpreter is not None and gicc_goal_store is not None:
+            gicc_shadow_runtime = GoalInterpretationShadowRuntime(
+                conversation=bridge.conversation,
+                interpreter=gicc_shadow_interpreter,
+                store=gicc_goal_store,
+            )
+            bridge.add_accepted_turn_observer(gicc_shadow_runtime.observe_turn)
+            bridge.add_close_observer(gicc_shadow_runtime.close)
         return session, bridge
 
     if config.audio_output_wasapi_device is not None:
@@ -597,6 +665,21 @@ def build_production_voice_runtime(
         research_service=research_service,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
+        gicc_runtime=gicc_apply_runtime,
+        gicc_tool_factory=(
+            None
+            if gicc_apply_runtime is None
+            else lambda conversation: (
+                GiccAgentTools(
+                    gicc_apply_runtime.coordinator,
+                    conversation,
+                    gicc_apply_runtime.store,
+                    execution_runtime=gicc_apply_runtime,
+                    telemetry=gicc_apply_runtime.telemetry,
+                ).tools
+            )
+        ),
+        allow_direct_capability_acquisition=gicc_apply_runtime is None,
         session_factory=production_session_factory,
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(
