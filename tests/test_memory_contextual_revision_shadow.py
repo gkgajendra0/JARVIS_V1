@@ -737,3 +737,41 @@ async def test_explicit_memory_command_remains_blocked_from_contextual_model(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_equal_but_unaccepted_turn_copy_cannot_trigger_context_or_retrieval(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "copy.db")
+    session, real_turn = _session()
+    cloned_turn = replace(real_turn)
+    assert cloned_turn == real_turn
+    assert cloned_turn is not real_turn
+    extractor = FakeContextExtractor()
+    encoder = FakeLocalQueryEncoder()
+    try:
+        direct = await review_contextual_revision_shadow(
+            conversation=session,
+            turn=cloned_turn,
+            retrieved=(),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        scoped = await review_with_existing_retrieval_shadow(
+            conversation=session,
+            turn=cloned_turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert direct.reason_code == "untrusted_turn"
+        assert scoped.reason_code == "untrusted_turn"
+        assert encoder.calls == []
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
