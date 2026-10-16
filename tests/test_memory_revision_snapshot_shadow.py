@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from jarvis.memory.assertions import SemanticAssertionDraft
+from jarvis.memory.candidates import MemoryExtractionSensitivity
 from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
@@ -31,7 +32,6 @@ from jarvis.memory.types import (
     Sensitivity,
     ValueType,
 )
-from jarvis.memory.candidates import MemoryExtractionSensitivity
 from jarvis.memory.worker import SerialConnectionWorker
 
 BASE = datetime(2026, 9, 5, 9, 0, tzinfo=UTC)
