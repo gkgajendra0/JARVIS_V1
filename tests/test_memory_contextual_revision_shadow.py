@@ -860,9 +860,7 @@ async def test_three_call_followup_rejects_model_selected_target_when_two_are_va
         )
     )
     try:
-        first = await lifecycle.create(
-            _draft("Short explanations"), _source("first")
-        )
+        first = await lifecycle.create(_draft("Short explanations"), _source("first"))
         second = await lifecycle.create(
             _draft("Hall B", key="workshop_room"), _source("second")
         )
