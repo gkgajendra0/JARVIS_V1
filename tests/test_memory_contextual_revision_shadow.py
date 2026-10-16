@@ -653,10 +653,19 @@ async def test_bad_embedding_fails_closed_before_provider_extraction(
             "Jo maine pehle bola tha galat tha. Ab detailed jawab chahiye.",
             ContextualBoundaryDisposition.CONTEXT_REVIEW,
         ),
-        ("That's wrong, I prefer detailed explanations.", ContextualBoundaryDisposition.CONTEXT_REVIEW),
+        (
+            "That's wrong, I prefer detailed explanations.",
+            ContextualBoundaryDisposition.CONTEXT_REVIEW,
+        ),
         ("गलत था, अब समझ में आया।", ContextualBoundaryDisposition.CONTEXT_REVIEW),
-        ("Please remember that I prefer short replies.", ContextualBoundaryDisposition.EXPLICIT_CONTROL),
-        ("Correct my stored memory about preferences.", ContextualBoundaryDisposition.EXPLICIT_CONTROL),
+        (
+            "Please remember that I prefer short replies.",
+            ContextualBoundaryDisposition.EXPLICIT_CONTROL,
+        ),
+        (
+            "Correct my stored memory about preferences.",
+            ContextualBoundaryDisposition.EXPLICIT_CONTROL,
+        ),
         ("Kya yaad hai tumhe?", ContextualBoundaryDisposition.EXPLICIT_CONTROL),
     ),
 )
@@ -675,8 +684,10 @@ async def test_informal_hinglish_correction_can_reach_review_but_cannot_write(
         current="Jo maine pehle bola tha galat tha. Ab mujhe detailed jawab chahiye."
     )
     extractor = FakeContextExtractor(
-        _proposal(intent=MemoryExtractionIntent.CORRECTION,
-                  candidate_type=MemoryCandidateType.FACT_CORRECTION)
+        _proposal(
+            intent=MemoryExtractionIntent.CORRECTION,
+            candidate_type=MemoryCandidateType.FACT_CORRECTION,
+        )
     )
     try:
         stored = await lifecycle.create(
@@ -707,9 +718,7 @@ async def test_explicit_memory_command_remains_blocked_from_contextual_model(
     tmp_path: Path,
 ) -> None:
     writer, reader, lifecycle, resolver = _fixture(tmp_path / "explicit.db")
-    conversation, turn = _session(
-        current="Correct my stored memory about reply style."
-    )
+    conversation, turn = _session(current="Correct my stored memory about reply style.")
     encoder = FakeLocalQueryEncoder()
     extractor = FakeContextExtractor()
     try:
