@@ -9,7 +9,6 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
 from tools.research.step4_memory_shadow_benchmark import (
     DEFAULT_CASES,
     evaluate,
