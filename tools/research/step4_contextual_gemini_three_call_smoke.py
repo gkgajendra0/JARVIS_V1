@@ -78,8 +78,7 @@ SYNTHETIC_CASES = (
             "मेरी काल्पनिक नील परियोजना की साप्ताहिक रिपोर्ट सोमवार को जाती थी।",
         ),
         current_turn=(
-            "पहले मैं नील परियोजना की रिपोर्ट सोमवार को भेजता था, "
-            "अब उसे गुरुवार को भेजता हूँ।"
+            "पहले मैं नील परियोजना की रिपोर्ट सोमवार को भेजता था, अब उसे गुरुवार को भेजता हूँ।"
         ),
         verified_memories=(("weekly_project_report_day", "Monday"),),
         expected_intent=MemoryExtractionIntent.HISTORICAL_CHANGE,
@@ -154,8 +153,7 @@ def _score(case: SyntheticCase, proposal: MemoryExtractionProposal) -> dict[str,
     correct_target = proposal.predicate == case.expected_predicate
     value_text = (proposal.value or "").casefold()
     value_supported = any(
-        fragment.casefold() in value_text
-        for fragment in case.required_value_fragments
+        fragment.casefold() in value_text for fragment in case.required_value_fragments
     )
     passed = correct_intent and correct_type and correct_target and value_supported
     return {
