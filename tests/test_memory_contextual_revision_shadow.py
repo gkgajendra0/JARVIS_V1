@@ -842,3 +842,118 @@ async def test_non_synthetic_memory_source_is_not_exported_to_contextual_model(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_three_call_followup_rejects_model_selected_target_when_two_are_valid(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "multi-target.db")
+    conversation, turn = _session(
+        current="I said something about the workshop yesterday was wrong, "
+        "but no replacement details are final."
+    )
+    extractor = FakeContextExtractor(
+        _proposal(
+            intent=MemoryExtractionIntent.RETRACTION,
+            candidate_type=MemoryCandidateType.FACT_RETRACTION,
+        )
+    )
+    try:
+        first = await lifecycle.create(
+            _draft("Short explanations"), _source("first")
+        )
+        second = await lifecycle.create(
+            _draft("Hall B", key="workshop_room"), _source("second")
+        )
+        outcome = await review_contextual_revision_shadow(
+            conversation=conversation,
+            turn=turn,
+            retrieved=(_retrieval(first), _retrieval(second)),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert outcome.disposition is RevisionDisposition.NEEDS_CLARIFICATION
+        assert outcome.reason_code == "multiple_verified_targets_need_clarification"
+        assert len(extractor.calls) == 1
+        still_active = await resolver.resolve_exact(
+            subject_scope="personal", subject="owner", predicate="reply_style"
+        )
+        assert still_active.witness is not None
+        assert still_active.witness.assertion_id == first.assertion_id
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_three_call_followup_rejects_invented_retraction_without_withdrawal(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "weak-retraction.db")
+    conversation, turn = _session(
+        current="What I said earlier was wrong, but the new detail is not final."
+    )
+    extractor = FakeContextExtractor(
+        _proposal(
+            intent=MemoryExtractionIntent.RETRACTION,
+            candidate_type=MemoryCandidateType.FACT_RETRACTION,
+        )
+    )
+    try:
+        current = await lifecycle.create(
+            _draft("Short explanations"), _source("original")
+        )
+        outcome = await review_contextual_revision_shadow(
+            conversation=conversation,
+            turn=turn,
+            retrieved=(_retrieval(current),),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert outcome.disposition is RevisionDisposition.NEEDS_CLARIFICATION
+        assert outcome.reason_code == "retraction_not_supported_by_current_turn"
+        assert len(extractor.calls) == 1
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_three_call_followup_explicit_withdrawal_only_requests_review(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "withdrawal.db")
+    conversation, turn = _session(
+        current="I withdraw my earlier statement about reply style."
+    )
+    extractor = FakeContextExtractor(
+        _proposal(
+            intent=MemoryExtractionIntent.RETRACTION,
+            candidate_type=MemoryCandidateType.FACT_RETRACTION,
+        )
+    )
+    try:
+        current = await lifecycle.create(
+            _draft("Short explanations"), _source("original")
+        )
+        outcome = await review_contextual_revision_shadow(
+            conversation=conversation,
+            turn=turn,
+            retrieved=(_retrieval(current),),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert outcome.disposition is RevisionDisposition.CONFLICT_REVIEW
+        assert outcome.reason_code == "verified_lifecycle_review"
+        still_active = await resolver.resolve_exact(
+            subject_scope="personal", subject="owner", predicate="reply_style"
+        )
+        assert still_active.witness is not None
+        assert still_active.witness.assertion_id == current.assertion_id
+    finally:
+        await reader.close()
+        await writer.close()
