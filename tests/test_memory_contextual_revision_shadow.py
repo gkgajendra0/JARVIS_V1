@@ -22,6 +22,10 @@ from jarvis.memory.candidates import (
     MemoryExtractionProposal,
     MemoryExtractionSensitivity,
 )
+from jarvis.memory.contextual_control_shadow import (
+    ContextualBoundaryDisposition,
+    assess_contextual_memory_boundary,
+)
 from jarvis.memory.contextual_extractors import (
     ContextualGeminiMemoryExtractor,
     ContextualOpenAIMemoryExtractor,
@@ -636,6 +640,204 @@ async def test_bad_embedding_fails_closed_before_provider_extraction(
         )
         assert result.disposition is RevisionDisposition.SKIP
         assert result.reason_code == "bounded_retrieval_failed"
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        (
+            "Jo maine pehle bola tha galat tha. Ab detailed jawab chahiye.",
+            ContextualBoundaryDisposition.CONTEXT_REVIEW,
+        ),
+        (
+            "That's wrong, I prefer detailed explanations.",
+            ContextualBoundaryDisposition.CONTEXT_REVIEW,
+        ),
+        ("गलत था, अब समझ में आया।", ContextualBoundaryDisposition.CONTEXT_REVIEW),
+        (
+            "Please remember that I prefer short replies.",
+            ContextualBoundaryDisposition.EXPLICIT_CONTROL,
+        ),
+        (
+            "Correct my stored memory about preferences.",
+            ContextualBoundaryDisposition.EXPLICIT_CONTROL,
+        ),
+        ("Kya yaad hai tumhe?", ContextualBoundaryDisposition.EXPLICIT_CONTROL),
+    ),
+)
+def test_research_only_control_boundary_separates_informal_corrections(
+    text: str, expected: ContextualBoundaryDisposition
+) -> None:
+    assert assess_contextual_memory_boundary(text) is expected
+
+
+@pytest.mark.asyncio
+async def test_informal_hinglish_correction_can_reach_review_but_cannot_write(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "informal.db")
+    conversation, turn = _session(
+        current="Jo maine pehle bola tha galat tha. Ab mujhe detailed jawab chahiye."
+    )
+    extractor = FakeContextExtractor(
+        _proposal(
+            intent=MemoryExtractionIntent.CORRECTION,
+            candidate_type=MemoryCandidateType.FACT_CORRECTION,
+        )
+    )
+    try:
+        stored = await lifecycle.create(
+            _draft("Short explanations"), _source("original")
+        )
+        result = await review_contextual_revision_shadow(
+            conversation=conversation,
+            turn=turn,
+            retrieved=(_retrieval(stored),),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert result.disposition is RevisionDisposition.CONFLICT_REVIEW
+        assert len(extractor.calls) == 1
+        still_current = await resolver.resolve_exact(
+            subject_scope="personal", subject="owner", predicate="reply_style"
+        )
+        assert still_current.witness is not None
+        assert still_current.witness.assertion_id == stored.assertion_id
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_explicit_memory_command_remains_blocked_from_contextual_model(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "explicit.db")
+    conversation, turn = _session(current="Correct my stored memory about reply style.")
+    encoder = FakeLocalQueryEncoder()
+    extractor = FakeContextExtractor()
+    try:
+        skipped = await review_with_existing_retrieval_shadow(
+            conversation=conversation,
+            turn=turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert skipped.reason_code == "explicit_memory_control_boundary"
+        assert encoder.calls == []
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_equal_but_unaccepted_turn_copy_cannot_trigger_context_or_retrieval(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "copy.db")
+    session, real_turn = _session()
+    cloned_turn = replace(real_turn)
+    assert cloned_turn == real_turn
+    assert cloned_turn is not real_turn
+    extractor = FakeContextExtractor()
+    encoder = FakeLocalQueryEncoder()
+    try:
+        direct = await review_contextual_revision_shadow(
+            conversation=session,
+            turn=cloned_turn,
+            retrieved=(),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        scoped = await review_with_existing_retrieval_shadow(
+            conversation=session,
+            turn=cloned_turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert direct.reason_code == "untrusted_turn"
+        assert scoped.reason_code == "untrusted_turn"
+        assert encoder.calls == []
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_research_context_never_invokes_models_on_owner_style_session_ids(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "owner-session.db")
+    session = ConversationSession(session_id="owner-real-session")
+    session.start()
+    turn = session.accept_turn(
+        ConversationRole.USER, "I prefer detailed explanations now."
+    )
+    extractor = FakeContextExtractor()
+    encoder = FakeLocalQueryEncoder()
+    try:
+        direct = await review_contextual_revision_shadow(
+            conversation=session,
+            turn=turn,
+            retrieved=(),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        scoped = await review_with_existing_retrieval_shadow(
+            conversation=session,
+            turn=turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert direct.reason_code == "synthetic_session_required"
+        assert scoped.reason_code == "synthetic_session_required"
+        assert encoder.calls == []
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_non_synthetic_memory_source_is_not_exported_to_contextual_model(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "owner-source.db")
+    session, turn = _session()
+    extractor = FakeContextExtractor()
+    try:
+        owner_source = replace(
+            _source("live-looking-source"),
+            canonical_ref="conversation:real-owner-turn",
+        )
+        assertion = await lifecycle.create(_draft("Short explanations"), owner_source)
+        refused = await review_contextual_revision_shadow(
+            conversation=session,
+            turn=turn,
+            retrieved=(_retrieval(assertion),),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert refused.reason_code == "unverified_retrieval_candidate"
         assert extractor.calls == []
     finally:
         await reader.close()

@@ -13,6 +13,10 @@ import asyncio
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 
+from .contextual_control_shadow import (
+    ContextualBoundaryDisposition,
+    assess_contextual_memory_boundary,
+)
 from .contextual_revision_shadow import (
     ContextualMemoryExtractor,
     ContextualRevisionReview,
@@ -20,7 +24,6 @@ from .contextual_revision_shadow import (
 )
 from .explicit import (
     MemorySecretRejectedError,
-    is_explicit_memory_control_text,
     reject_prohibited_secret,
 )
 from .retrieval import (
@@ -73,11 +76,23 @@ async def review_with_existing_retrieval_shadow(
     if not callable(getattr(extractor, "extract_contextual", None)):
         raise TypeError("extractor must support extract_contextual")
 
-    if turn.role is not ConversationRole.USER or turn not in conversation.turns:
+    # Research data-egress interlock: only disposable synthetic conversations
+    # can reach the optional contextual extractor in this draft.
+    if not conversation.session_id.startswith("synthetic"):
+        return ContextualRevisionReview(
+            RevisionDisposition.SKIP, "synthetic_session_required"
+        )
+
+    if turn.role is not ConversationRole.USER or not any(
+        accepted is turn for accepted in conversation.turns
+    ):
         return ContextualRevisionReview(RevisionDisposition.SKIP, "untrusted_turn")
-    if not conversation.turns or conversation.turns[-1].turn_id != turn.turn_id:
+    if not conversation.turns or conversation.turns[-1] is not turn:
         return ContextualRevisionReview(RevisionDisposition.SKIP, "not_latest_turn")
-    if is_explicit_memory_control_text(turn.text):
+    if (
+        assess_contextual_memory_boundary(turn.text)
+        is ContextualBoundaryDisposition.EXPLICIT_CONTROL
+    ):
         return ContextualRevisionReview(
             RevisionDisposition.SKIP, "explicit_memory_control_boundary"
         )

@@ -25,9 +25,12 @@ from .candidates import (
     MemoryExtractionProposal,
     MemoryExtractionSensitivity,
 )
+from .contextual_control_shadow import (
+    ContextualBoundaryDisposition,
+    assess_contextual_memory_boundary,
+)
 from .explicit import (
     MemorySecretRejectedError,
-    is_explicit_memory_control_text,
     reject_prohibited_secret,
 )
 from .retrieval import RetrievalCandidate
@@ -74,7 +77,10 @@ def _safe_prior_turns(
             continue
         if not seen_current or turn.role is not ConversationRole.USER:
             continue
-        if is_explicit_memory_control_text(turn.text):
+        if (
+            assess_contextual_memory_boundary(turn.text)
+            is ContextualBoundaryDisposition.EXPLICIT_CONTROL
+        ):
             continue
         try:
             reject_prohibited_secret(predicate="prior_user_turn", value=turn.text)
@@ -115,12 +121,24 @@ async def review_contextual_revision_shadow(
     if isinstance(retrieved, (str, bytes)) or not isinstance(retrieved, Sequence):
         raise TypeError("retrieved must be a sequence of RetrievalCandidate")
 
+    # Research data-egress interlock: only disposable synthetic conversations
+    # can reach the optional contextual extractor in this draft.
+    if not conversation.session_id.startswith("synthetic"):
+        return ContextualRevisionReview(
+            RevisionDisposition.SKIP, "synthetic_session_required"
+        )
+
     # Strict accepted-turn guard before any memory reader or model invocation.
-    if turn.role is not ConversationRole.USER or turn not in conversation.turns:
+    if turn.role is not ConversationRole.USER or not any(
+        accepted is turn for accepted in conversation.turns
+    ):
         return ContextualRevisionReview(RevisionDisposition.SKIP, "untrusted_turn")
-    if not conversation.turns or conversation.turns[-1].turn_id != turn.turn_id:
+    if not conversation.turns or conversation.turns[-1] is not turn:
         return ContextualRevisionReview(RevisionDisposition.SKIP, "not_latest_turn")
-    if is_explicit_memory_control_text(turn.text):
+    if (
+        assess_contextual_memory_boundary(turn.text)
+        is ContextualBoundaryDisposition.EXPLICIT_CONTROL
+    ):
         return ContextualRevisionReview(
             RevisionDisposition.SKIP, "explicit_memory_control_boundary"
         )
