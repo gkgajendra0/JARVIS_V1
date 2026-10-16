@@ -85,7 +85,7 @@ async def test_smoke_calls_exactly_three_in_order_with_no_retries_or_real_data()
     assert result["provider_calls_attempted"] == 3
     assert [case["pass"] for case in result["cases"]] == [True, True, True]
     assert delays == [DELAY_BETWEEN_CALLS_SECONDS] * 2
-    assert all("fictional" in str(c) or c["language"] != "en" for c in SYNTHETIC_CASES)
+    assert all(c.case_id.startswith("synth-") for c in SYNTHETIC_CASES)
     assert all(c["status"] == "completed" for c in result["cases"])
     for call in extractor.calls:
         assert len(call["text"]) < 1200
