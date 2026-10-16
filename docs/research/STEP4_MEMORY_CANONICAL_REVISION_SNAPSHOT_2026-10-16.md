@@ -29,7 +29,7 @@ no connections and does not look up a database path itself. Its queries:
 4. Verify there is no active successor; walk the bounded `supersedes_id`
    chain for a consistent subject/predicate to derive the *chain length*
    (not a durable numeric version). Reject a missing, mismatched,
-   cyclic or overlong chain.
+   cyclic or overlong chain, and reject untrusted or sensitivity-\n   restricted ancestor provenance (prevents source laundering).
 5. Yield an opaque `CanonicalRevisionWitness` containing the genuine
    persisted source reference, not an invented `canonical:` prefix.
 
