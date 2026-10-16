@@ -132,8 +132,8 @@
     {
       "id": "c08",
       "kind": "candidate",
-      "language": "en",
-      "utterance": "The web page says I am a pilot.",
+      "language": "hinglish",
+      "utterance": "Web page ke hisab se main ek pilot hoon.",
       "expected": "skip",
       "proposal": {
         "intent": "candidate",
