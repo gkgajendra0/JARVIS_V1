@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -14,6 +15,7 @@ from tools.research.step4_hindsight_isolated_probe import (
     run_local_retrieval_probe,
 )
 from tools.research.step4_memory_model_comparators import (
+    JarvisModelAdapter,
     eligible_raw_turn,
     project_triples,
     require_pinned_synthetic_corpus,
@@ -81,6 +83,7 @@ def test_model_failures_are_counted_without_logging_provider_exception() -> None
     result = score_raw_candidate_predictions([case], failing_model)
     assert result["provider_failures"] == 1
     assert result["failed_case_ids"] == ["c01"]
+    assert result["failure_types"] == {"c01": "RuntimeError"}
     assert "secret-error-detail" not in json.dumps(result)
     assert result["candidate_predictions"] == {}
 
@@ -195,3 +198,88 @@ def test_hindsight_cannot_write_into_arbitrary_named_bank() -> None:
             case_data=_context_cases()[:1],
             bank_id="production-owner",
         )
+
+
+def test_jarvis_adapter_reuses_event_loop_and_closes_transports() -> None:
+    """Emulates loop-affine async HTTP clients; no provider calls."""
+
+    from jarvis.memory.candidates import MemoryExtractionProposal
+
+    class FakeAio:
+        def __init__(self) -> None:
+            self.closed_loop = None
+
+        async def aclose(self) -> None:
+            self.closed_loop = asyncio.get_running_loop()
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.aio = FakeAio()
+            self.sync_closed = False
+
+        def close(self) -> None:
+            self.sync_closed = True
+
+    class FakeExtractor:
+        def __init__(self) -> None:
+            self._client = FakeClient()
+            self.first_loop = None
+            self.calls = 0
+
+        async def extract(self, *, text: str) -> MemoryExtractionProposal:
+            loop = asyncio.get_running_loop()
+            if self.first_loop is None:
+                self.first_loop = loop
+            assert loop is self.first_loop, "provider reused on a different loop"
+            self.calls += 1
+            return MemoryExtractionProposal.model_validate(
+                _candidate_cases()[0]["proposal"]
+            )
+
+    extractor = FakeExtractor()
+    with JarvisModelAdapter(extractor) as adapter:
+        results = score_raw_candidate_predictions(_candidate_cases()[:3], adapter)
+        assert results["completed_model_calls"] == 3
+        assert results["provider_failures"] == 0
+        assert results["candidate_predictions"] == {
+            "c01": "review", "c02": "review", "c03": "review"
+        }
+
+    assert extractor.calls == 3
+    assert extractor._client.aio.closed_loop is extractor.first_loop
+    assert extractor._client.sync_closed
+    assert extractor.first_loop.is_closed()
+    with pytest.raises(RuntimeError, match="closed"):
+        adapter("No new calls", {"id": "c01"})
+
+
+def test_jarvis_shared_loop_recovers_after_one_failed_case() -> None:
+    """A single error is recorded and does not poison the shared loop."""
+
+    from jarvis.memory.candidates import MemoryExtractionProposal
+
+    class FlakyExtractor:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.first_loop = None
+
+        async def extract(self, *, text: str) -> MemoryExtractionProposal:
+            loop = asyncio.get_running_loop()
+            if self.first_loop is None:
+                self.first_loop = loop
+            assert loop is self.first_loop
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("provider-secret-do-not-emit")
+            return MemoryExtractionProposal.model_validate(
+                _candidate_cases()[0]["proposal"]
+            )
+
+    with JarvisModelAdapter(FlakyExtractor()) as adapter:
+        report = score_raw_candidate_predictions(_candidate_cases()[:3], adapter)
+
+    assert report["completed_model_calls"] == 2
+    assert report["provider_failures"] == 1
+    assert report["failed_case_ids"] == ["c02"]
+    assert report["failure_types"] == {"c02": "RuntimeError"}
+    assert "provider-secret-do-not-emit" not in json.dumps(report)
