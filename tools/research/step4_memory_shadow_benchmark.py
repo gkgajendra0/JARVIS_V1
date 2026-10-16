@@ -48,7 +48,10 @@ UTILITY_LABELS = frozenset({"essential", "helpful", "unnecessary", "steering_ris
 
 
 def load_cases(path: Path) -> tuple[dict[str, Any], str]:
-    raw = path.read_bytes()
+    # Git checkout may convert LF to CRLF on Windows. Normalize only line
+    # endings before hashing so the exact same fixture is portable, while
+    # any semantic/content alteration still invalidates the pinned SHA-256.
+    raw = path.read_bytes().replace(b"\r\n", b"\n")
     data = json.loads(raw)
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise ValueError("expected schema_version=1 corpus object")
