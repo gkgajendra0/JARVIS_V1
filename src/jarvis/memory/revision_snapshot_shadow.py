@@ -89,7 +89,16 @@ def _resolve_metadata(
     if len(rows) != 1:
         return CanonicalSnapshotResolution(None, "ambiguous_current_assertions")
 
-    assertion_id, predecessor, source_id, sensitivity, source_class, authority, source_sensitivity, source_ref = rows[0]
+    (
+        assertion_id,
+        predecessor,
+        source_id,
+        sensitivity,
+        source_class,
+        authority,
+        source_sensitivity,
+        source_ref,
+    ) = rows[0]
     if (
         sensitivity != Sensitivity.STANDARD.value
         or source_sensitivity != Sensitivity.STANDARD.value
