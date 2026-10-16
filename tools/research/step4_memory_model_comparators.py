@@ -28,7 +28,7 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -185,7 +185,7 @@ class JarvisModelAdapter:
         self._loop = asyncio.new_event_loop()
         self._closed = False
 
-    def __enter__(self) -> "JarvisModelAdapter":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_exc: object) -> None:
