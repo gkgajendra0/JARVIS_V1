@@ -16,7 +16,6 @@ from tools.research.step4_contextual_gemini_three_call_smoke import (
     main,
     run_smoke,
 )
-
 from jarvis.memory.candidates import (
     MemoryCandidateType,
     MemoryExtractionIntent,
