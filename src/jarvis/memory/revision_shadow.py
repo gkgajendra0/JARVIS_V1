@@ -98,6 +98,7 @@ def assess_revision_shadow(evidence: RevisionShadowInput) -> RevisionShadowDecis
         or not isinstance(witness.canonical_source_ref, str)
         or not witness.canonical_source_ref.startswith("canonical:")
         or not witness.active
+        or not witness.latest_version_verified
         or not witness.owner_authority_verified
     ):
         return RevisionShadowDecision(
