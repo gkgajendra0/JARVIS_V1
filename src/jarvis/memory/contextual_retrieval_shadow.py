@@ -76,6 +76,13 @@ async def review_with_existing_retrieval_shadow(
     if not callable(getattr(extractor, "extract_contextual", None)):
         raise TypeError("extractor must support extract_contextual")
 
+    # Research data-egress interlock: only disposable synthetic conversations
+    # can reach the optional contextual extractor in this draft.
+    if not conversation.session_id.startswith("synthetic"):
+        return ContextualRevisionReview(
+            RevisionDisposition.SKIP, "synthetic_session_required"
+        )
+
     if turn.role is not ConversationRole.USER or not any(
         accepted is turn for accepted in conversation.turns
     ):
