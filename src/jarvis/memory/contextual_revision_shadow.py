@@ -121,6 +121,13 @@ async def review_contextual_revision_shadow(
     if isinstance(retrieved, (str, bytes)) or not isinstance(retrieved, Sequence):
         raise TypeError("retrieved must be a sequence of RetrievalCandidate")
 
+    # Research data-egress interlock: only disposable synthetic conversations
+    # can reach the optional contextual extractor in this draft.
+    if not conversation.session_id.startswith("synthetic"):
+        return ContextualRevisionReview(
+            RevisionDisposition.SKIP, "synthetic_session_required"
+        )
+
     # Strict accepted-turn guard before any memory reader or model invocation.
     if turn.role is not ConversationRole.USER or not any(
         accepted is turn for accepted in conversation.turns
