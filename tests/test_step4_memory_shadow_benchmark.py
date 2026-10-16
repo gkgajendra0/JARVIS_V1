@@ -145,3 +145,17 @@ def test_cli_reports_dev_only_markers_and_never_claims_live_success() -> None:
     assert "no_memory" in report["context_results"]
     assert "hindsight" not in report["context_results"]
     assert "jev" not in report["context_results"]
+
+
+def test_development_corpus_hash_is_portable_across_windows_crlf(
+    tmp_path: Path,
+) -> None:
+    original = DEFAULT_CASES.read_bytes().replace(b"\r\n", b"\n")
+    altered_line_endings = tmp_path / "windows-crlf.json"
+    altered_line_endings.write_bytes(original.replace(b"\n", b"\r\n"))
+    _, baseline_hash = load_cases(DEFAULT_CASES)
+    _, windows_hash = load_cases(altered_line_endings)
+    assert windows_hash == baseline_hash
+    assert baseline_hash == (
+        "68930a93390e896088b383cc39739279459f63017bed2054d746fcdc0933cf61"
+    )
