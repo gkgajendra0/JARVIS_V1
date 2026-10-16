@@ -136,7 +136,7 @@ def test_unresolved_subject_match_requests_clarification() -> None:
         _evidence(RevisionIntent.FACT_CORRECTION, _witness()),
         replace(
             _evidence(RevisionIntent.FACT_CORRECTION, _witness()),
-            source_class=MemorySourceClass.TOOL_UNTRUSTED,
+            source_class=MemorySourceClass.TOOL,
         ),
     ],
 )
