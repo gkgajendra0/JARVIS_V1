@@ -23,6 +23,7 @@ def _witness(*, equivalent: bool | None = None) -> CanonicalRevisionWitness:
         assertion_version=4,
         canonical_source_ref="canonical:accepted-owner-turn",
         active=True,
+        latest_version_verified=True,
         owner_authority_verified=True,
         same_subject_predicate_verified=True,
         meaning_equivalent_verified=equivalent,
