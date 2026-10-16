@@ -242,7 +242,9 @@ def test_jarvis_adapter_reuses_event_loop_and_closes_transports() -> None:
         assert results["completed_model_calls"] == 3
         assert results["provider_failures"] == 0
         assert results["candidate_predictions"] == {
-            "c01": "review", "c02": "review", "c03": "review"
+            "c01": "review",
+            "c02": "review",
+            "c03": "review",
         }
 
     assert extractor.calls == 3
