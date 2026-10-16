@@ -110,9 +110,7 @@ def test_compiler_fails_closed(reason: str) -> None:
     elif reason == "current_turn_conflict":
         candidate = replace(
             candidate,
-            evidence=replace(
-                candidate.evidence, conflicts_with_current_turn=True
-            ),
+            evidence=replace(candidate.evidence, conflicts_with_current_turn=True),
         )
     elif reason == "steering_risk":
         candidate = replace(
