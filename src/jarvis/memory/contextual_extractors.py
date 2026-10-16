@@ -53,7 +53,7 @@ def _payload(*, text: str, context: str) -> str:
     except (ValueError, TypeError) as exc:
         raise ValueError("context must be valid JSON") from exc
     if not isinstance(extra, dict):
-        raise ValueError("context must be a JSON object")
+        raise TypeError("context must be a JSON object")
     return json.dumps(
         {"current_accepted_user_turn": current, "review_context": extra},
         ensure_ascii=False,
