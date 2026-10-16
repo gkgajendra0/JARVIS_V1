@@ -13,14 +13,14 @@ import asyncio
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 
+from .contextual_control_shadow import (
+    ContextualBoundaryDisposition,
+    assess_contextual_memory_boundary,
+)
 from .contextual_revision_shadow import (
     ContextualMemoryExtractor,
     ContextualRevisionReview,
     review_contextual_revision_shadow,
-)
-from .contextual_control_shadow import (
-    ContextualBoundaryDisposition,
-    assess_contextual_memory_boundary,
 )
 from .explicit import (
     MemorySecretRejectedError,
