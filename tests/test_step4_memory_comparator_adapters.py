@@ -377,3 +377,109 @@ def test_jarvis_adapter_awaits_async_provider_client_close() -> None:
     assert extractor._client.closed
     assert extractor._client.closed_loop is extractor.extract_loop
     assert extractor.extract_loop.is_closed()
+
+
+def test_hindsight_bounded_retention_paces_and_limits_cloud_work() -> None:
+    """Three fake retain batches, two queries, no calls to the cloud."""
+
+    class BoundedFake(FakeHindsight):
+        def __init__(self) -> None:
+            super().__init__()
+            self.batch_sizes: list[int] = []
+
+        def retain_batch(self, *, bank_id: str, items: list) -> None:
+            self.batch_sizes.append(len(items))
+            super().retain_batch(bank_id=bank_id, items=items)
+
+    now = [0.0]
+    pauses: list[float] = []
+
+    def advance(seconds: float) -> None:
+        pauses.append(seconds)
+        now[0] += seconds
+
+    client = BoundedFake()
+    report = run_local_retrieval_probe(
+        client=client,
+        case_data=_context_cases(),
+        bank_id="jarvis-dev-only-capped-pacing",
+        max_seed_items=3,
+        max_queries=2,
+        retain_batch_size=1,
+        min_seconds_between_retain_batches=65,
+        clock=lambda: now[0],
+        sleep=advance,
+    )
+    assert client.batch_sizes == [1, 1, 1]
+    assert len(client.retained) == 3
+    assert len(client.queries) == 2
+    assert pauses == [65, 65]
+    assert report["seeded_documents_including_distractors"] == 3
+    assert report["retain_batches"] == 3
+    assert report["queried"] == 2
+    assert report["synthetic_bank_cleanup_verified"]
+    assert client.created == client.deleted
+
+
+def test_hindsight_quota_error_stops_further_retain_batches_and_deletes_bank() -> None:
+    class FailSecondBatch(FakeHindsight):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def retain_batch(self, *, bank_id: str, items: list) -> None:
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("synthetic quota 429")
+            super().retain_batch(bank_id=bank_id, items=items)
+
+    client = FailSecondBatch()
+    with pytest.raises(RuntimeError, match="synthetic quota"):
+        run_local_retrieval_probe(
+            client=client,
+            case_data=_context_cases(),
+            bank_id="jarvis-dev-only-quota-stop",
+            max_seed_items=3,
+            retain_batch_size=1,
+            min_seconds_between_retain_batches=65,
+            clock=lambda: 0.0,
+            sleep=lambda _: None,
+        )
+    assert client.calls == 2
+    assert len(client.retained) == 1
+    assert not client.queries
+    assert client.created == client.deleted
+
+
+def test_hindsight_cli_refuses_accidental_24_memory_bulk_run() -> None:
+    script = ROOT / "tools/research/step4_hindsight_isolated_probe.py"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--allow-local-server-writes",
+            "--max-seed-items",
+            "24",
+            "--max-queries",
+            "3",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert "--allow-large-synthetic-run" in completed.stderr
+
+
+def test_hindsight_budget_validation_happens_before_any_bank_creation() -> None:
+    client = FakeHindsight()
+    with pytest.raises(ValueError, match="max_queries"):
+        run_local_retrieval_probe(
+            client=client,
+            case_data=_context_cases(),
+            bank_id="jarvis-dev-only-bad-budget",
+            max_seed_items=2,
+            max_queries=3,
+        )
+    assert not client.created
