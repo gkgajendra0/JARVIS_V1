@@ -67,7 +67,9 @@ class FakeExtractor:
                 "weekly_project_report_day",
                 "गुरुवार",
             )
-        return _proposal(MemoryExtractionIntent.NONE, MemoryCandidateType.NONE, None, None)
+        return _proposal(
+            MemoryExtractionIntent.NONE, MemoryCandidateType.NONE, None, None
+        )
 
 
 @pytest.mark.asyncio
