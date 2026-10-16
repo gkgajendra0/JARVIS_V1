@@ -14,10 +14,16 @@ from pathlib import Path
 import pytest
 
 from jarvis.memory.assertions import SemanticAssertionDraft
-from jarvis.memory.candidates import MemoryExtractionSensitivity
+from jarvis.memory.candidates import (
+    MemoryCandidateType,
+    MemoryExtractionIntent,
+    MemoryExtractionProposal,
+    MemoryExtractionSensitivity,
+)
 from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
+from jarvis.memory.revision_proposal_shadow import review_extracted_revision_shadow
 from jarvis.memory.revision_shadow import (
     RevisionDisposition,
     RevisionIntent,
@@ -266,6 +272,194 @@ async def test_correction_cannot_launder_an_untrusted_ancestor(
         )
         assert resolved.witness is None
         assert resolved.reason_code == "canonical_lineage_source_unverified"
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+def _proposal(
+    intent: MemoryExtractionIntent,
+    candidate_type: MemoryCandidateType,
+    *,
+    predicate: str = "reply_style",
+    subject: str = "owner",
+    durable: bool = True,
+    sensitivity: MemoryExtractionSensitivity = MemoryExtractionSensitivity.NORMAL,
+) -> MemoryExtractionProposal:
+    return MemoryExtractionProposal(
+        intent=intent,
+        candidate_type=candidate_type,
+        durable_candidate=durable,
+        subject=subject,
+        predicate=predicate,
+        value="fictional revision candidate",
+        sensitivity=sensitivity,
+        confidence=0.85,
+    )
+
+
+@pytest.mark.asyncio
+async def test_proposal_bridge_matches_a_real_synthetic_canonical_revision(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _setup(tmp_path / "bridge.db")
+    try:
+        first = await lifecycle.create(_draft("initial"), _source("first-owner"))
+        await lifecycle.correct(
+            first.assertion_id, _draft("changed"), _source("second-owner")
+        )
+        for intent, kind in (
+            (MemoryExtractionIntent.HISTORICAL_CHANGE, MemoryCandidateType.FACT_CHANGE),
+            (MemoryExtractionIntent.CORRECTION, MemoryCandidateType.FACT_CORRECTION),
+            (MemoryExtractionIntent.RETRACTION, MemoryCandidateType.FACT_RETRACTION),
+        ):
+            decision = await review_extracted_revision_shadow(
+                proposal=_proposal(intent, kind),
+                accepted_user_turn=True,
+                source_class=MemorySourceClass.OWNER_DIRECT,
+                reader=resolver,
+            )
+            assert decision.disposition is RevisionDisposition.CONFLICT_REVIEW
+            assert decision.reason_code == "verified_lifecycle_review"
+            assert not hasattr(decision, "source_ref")
+            assert not hasattr(decision, "memory_value")
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_proposal_bridge_does_not_guess_missing_or_duplicate_memories(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _setup(tmp_path / "bridge-missing.db")
+    try:
+        await writer.start()
+        change = await review_extracted_revision_shadow(
+            proposal=_proposal(
+                MemoryExtractionIntent.CORRECTION, MemoryCandidateType.FACT_CORRECTION
+            ),
+            accepted_user_turn=True,
+            source_class=MemorySourceClass.OWNER_DIRECT,
+            reader=resolver,
+        )
+        assert change.disposition is RevisionDisposition.NEEDS_CLARIFICATION
+        new = await review_extracted_revision_shadow(
+            proposal=_proposal(
+                MemoryExtractionIntent.CANDIDATE, MemoryCandidateType.PREFERENCE
+            ),
+            accepted_user_turn=True,
+            source_class=MemorySourceClass.OWNER_DIRECT,
+            reader=resolver,
+        )
+        assert new.disposition is RevisionDisposition.REVIEW
+
+        await lifecycle.create(_draft("one"), _source("owner-1"))
+        await lifecycle.create(_draft("two"), _source("owner-2"))
+        ambiguous = await review_extracted_revision_shadow(
+            proposal=_proposal(
+                MemoryExtractionIntent.RETRACTION, MemoryCandidateType.FACT_RETRACTION
+            ),
+            accepted_user_turn=True,
+            source_class=MemorySourceClass.OWNER_DIRECT,
+            reader=resolver,
+        )
+        assert ambiguous.disposition is RevisionDisposition.NEEDS_CLARIFICATION
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_proposal_bridge_rejects_source_laundering_and_sensitive_metadata(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _setup(tmp_path / "bridge-protect.db")
+    try:
+        await lifecycle.create(
+            _draft("private", sensitivity=Sensitivity.PRIVATE),
+            _source("private", sensitivity=Sensitivity.PRIVATE),
+        )
+        result = await review_extracted_revision_shadow(
+            proposal=_proposal(
+                MemoryExtractionIntent.CORRECTION, MemoryCandidateType.FACT_CORRECTION
+            ),
+            accepted_user_turn=True,
+            source_class=MemorySourceClass.OWNER_DIRECT,
+            reader=resolver,
+        )
+        assert result.disposition is RevisionDisposition.SKIP
+        assert result.reason_code == "canonical_sensitivity_restricted"
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_proposal_bridge_preflight_skips_untrusted_non_durable_and_bad_pairs(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _setup(tmp_path / "bridge-denied.db")
+    try:
+        # Reader is deliberately unopened. Any accidental read will fail,
+        # so these pre-provider/source policy cases prove early exit.
+        cases = (
+            (
+                _proposal(
+                    MemoryExtractionIntent.CORRECTION,
+                    MemoryCandidateType.FACT_CORRECTION,
+                ),
+                False,
+                MemorySourceClass.OWNER_DIRECT,
+                RevisionDisposition.SKIP,
+            ),
+            (
+                _proposal(
+                    MemoryExtractionIntent.CORRECTION,
+                    MemoryCandidateType.FACT_CORRECTION,
+                ),
+                True,
+                MemorySourceClass.EXTERNAL_WEB,
+                RevisionDisposition.SKIP,
+            ),
+            (
+                _proposal(
+                    MemoryExtractionIntent.CANDIDATE,
+                    MemoryCandidateType.PREFERENCE,
+                    durable=False,
+                ),
+                True,
+                MemorySourceClass.OWNER_DIRECT,
+                RevisionDisposition.SKIP,
+            ),
+            (
+                _proposal(
+                    MemoryExtractionIntent.CANDIDATE,
+                    MemoryCandidateType.FACT_CORRECTION,
+                ),
+                True,
+                MemorySourceClass.OWNER_DIRECT,
+                RevisionDisposition.SKIP,
+            ),
+            (
+                _proposal(
+                    MemoryExtractionIntent.CORRECTION,
+                    MemoryCandidateType.FACT_CORRECTION,
+                    subject="other_person",
+                ),
+                True,
+                MemorySourceClass.OWNER_DIRECT,
+                RevisionDisposition.NEEDS_CLARIFICATION,
+            ),
+        )
+        for proposal, accepted, origin, expected in cases:
+            result = await review_extracted_revision_shadow(
+                proposal=proposal,
+                accepted_user_turn=accepted,
+                source_class=origin,
+                reader=resolver,
+            )
+            assert result.disposition is expected
     finally:
         await reader.close()
         await writer.close()
