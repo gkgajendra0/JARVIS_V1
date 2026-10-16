@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 from tools.research.step4_hindsight_isolated_probe import (
+    ResearchBankCleanupError,
     require_loopback,
     run_local_retrieval_probe,
 )
@@ -483,3 +484,19 @@ def test_hindsight_budget_validation_happens_before_any_bank_creation() -> None:
             max_queries=3,
         )
     assert not client.created
+
+
+def test_hindsight_cleanup_failure_returns_bank_identifier() -> None:
+    class UndeletableFake(FakeHindsight):
+        def delete_bank(self, *, bank_id: str) -> None:
+            raise RuntimeError("cleanup provider detail must not be emitted")
+
+    bank_id = "jarvis-dev-only-undeletion"
+    with pytest.raises(ResearchBankCleanupError) as info:
+        run_local_retrieval_probe(
+            client=UndeletableFake(),
+            case_data=_context_cases()[:1],
+            bank_id=bank_id,
+        )
+    assert info.value.bank_id == bank_id
+    assert "provider detail" not in str(info.value)
