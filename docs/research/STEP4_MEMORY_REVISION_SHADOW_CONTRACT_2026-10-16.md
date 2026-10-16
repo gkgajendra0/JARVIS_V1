@@ -23,7 +23,8 @@ decision function receiving:
 - A **caller-supplied** revision intent (new candidate, duplicate suspect,
   change, correction, retraction or none).
 - An optional, opaque `CanonicalRevisionWitness`: versioned assertion ID,
-  canonical source reference, active status, verified owner authority,
+  canonical source reference, active status, independently verified latest
+  version, verified owner authority,
   verified subject/predicate identity, and independently verified semantic
   equivalence (True/False/unknown).
 
