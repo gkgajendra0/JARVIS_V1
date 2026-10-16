@@ -170,9 +170,7 @@ def test_context_shadow_is_only_measurement_never_injection() -> None:
         ),
     ],
 )
-def test_context_shadow_rejects_unproven_influence(
-    changes: dict, reason: str
-) -> None:
+def test_context_shadow_rejects_unproven_influence(changes: dict, reason: str) -> None:
     result = assess_context_shadow(replace(_context(), **changes))
     assert result.disposition is ContextShadowDisposition.SKIP
     assert result.reason_code == reason
