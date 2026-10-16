@@ -1,0 +1,66 @@
+name: Step 4 Memory Comparator SDK Compatibility
+
+on:
+  push:
+    branches:
+      - research/step4-memory-comparator-adapters-20261016
+  pull_request:
+    paths:
+      - "tools/research/step4_memory_model_comparators.py"
+      - "tools/research/step4_hindsight_isolated_probe.py"
+      - "src/jarvis/memory/task_context_shadow.py"
+      - "tests/test_step4_memory_comparator_adapters.py"
+      - "tests/test_task_context_shadow.py"
+      - ".github/workflows/step4-memory-comparator-compatibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-contract:
+    name: Import real SDK contracts only (no model inference)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned SDKs in disposable venv
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/compare-venv"
+          "$RUNNER_TEMP/compare-venv/bin/python" -m pip install --disable-pip-version-check "langmem==0.0.30" "hindsight-client==0.10.3"
+      - name: Run isolated shadow contracts and adapter tests
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/compare-venv/bin/python" -m pip install --disable-pip-version-check "pytest>=8,<10"
+          "$RUNNER_TEMP/compare-venv/bin/python" -m pytest -q tests/test_task_context_shadow.py tests/test_step4_memory_comparator_adapters.py tests/test_step4_memory_blind_scorer.py tests/test_step4_memory_owner_preflight.py
+      - name: Verify actual entry points without API calls or stores
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/compare-venv/bin/python" - <<'PY'
+          from importlib.metadata import version
+          from langmem import create_memory_manager
+          from hindsight_client import Hindsight
+
+          assert callable(create_memory_manager)
+          for method in ("create_bank", "retain_batch", "recall", "delete_bank", "close"):
+              assert callable(getattr(Hindsight, method, None)), method
+          assert version("langmem") == "0.0.30"
+          assert version("hindsight-client") == "0.10.3"
+          print("SDK import contracts PASS; 0 model calls, 0 bank writes")
+          PY
+
+  windows-research-setup:
+    name: Windows isolated research setup (no model inference)
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install and test with Windows PowerShell 5.1
+        shell: powershell
+        run: .\\tools\\research\\setup_step4_memory_windows.ps1
