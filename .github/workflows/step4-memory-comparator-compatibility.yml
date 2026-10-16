@@ -51,3 +51,16 @@ jobs:
           assert version("hindsight-client") == "0.10.3"
           print("SDK import contracts PASS; 0 model calls, 0 bank writes")
           PY
+
+  windows-research-setup:
+    name: Windows isolated research setup (no model inference)
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install and test with Windows PowerShell 5.1
+        shell: powershell
+        run: .\\tools\\research\\setup_step4_memory_windows.ps1
