@@ -109,6 +109,7 @@ def test_semantic_duplicate_requires_independently_verified_equivalence() -> Non
         replace(_witness(), assertion_version=0),
         replace(_witness(), canonical_source_ref="model:hallucinated-reference"),
         replace(_witness(), active=False),
+        replace(_witness(), latest_version_verified=False),
         replace(_witness(), owner_authority_verified=False),
     ],
 )
