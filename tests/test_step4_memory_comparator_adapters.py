@@ -343,3 +343,37 @@ def test_hindsight_missing_provenance_cannot_count_as_retrieval_hit() -> None:
     assert result["positive_top3_correct_document"] == 0
     assert result["results_missing_document_id"] == 1
     assert result["results_outside_synthetic_bank_ids"] == 1
+
+
+def test_jarvis_adapter_awaits_async_provider_client_close() -> None:
+    """OpenAI's AsyncOpenAI close is awaited before the event loop closes."""
+
+    from jarvis.memory.candidates import MemoryExtractionProposal
+
+    class FakeAsyncClient:
+        def __init__(self) -> None:
+            self.closed = False
+            self.closed_loop = None
+
+        async def close(self) -> None:
+            self.closed = True
+            self.closed_loop = asyncio.get_running_loop()
+
+    class FakeAsyncExtractor:
+        def __init__(self) -> None:
+            self._client = FakeAsyncClient()
+            self.extract_loop = None
+
+        async def extract(self, *, text: str) -> MemoryExtractionProposal:
+            self.extract_loop = asyncio.get_running_loop()
+            return MemoryExtractionProposal.model_validate(
+                _candidate_cases()[0]["proposal"]
+            )
+
+    extractor = FakeAsyncExtractor()
+    with JarvisModelAdapter(extractor) as adapter:
+        assert adapter("Synthetic", {"id": "c01"}) == "review"
+
+    assert extractor._client.closed
+    assert extractor._client.closed_loop is extractor.extract_loop
+    assert extractor.extract_loop.is_closed()
