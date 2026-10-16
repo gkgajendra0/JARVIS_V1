@@ -7,7 +7,6 @@ import json
 from typing import Any
 
 import pytest
-
 from tools.research.step4_contextual_gemini_three_call_smoke import (
     DELAY_BETWEEN_CALLS_SECONDS,
     MAX_PROVIDER_CALLS,
@@ -16,6 +15,7 @@ from tools.research.step4_contextual_gemini_three_call_smoke import (
     main,
     run_smoke,
 )
+
 from jarvis.memory.candidates import (
     MemoryCandidateType,
     MemoryExtractionIntent,
