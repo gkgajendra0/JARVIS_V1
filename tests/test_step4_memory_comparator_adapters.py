@@ -120,9 +120,7 @@ def test_hindsight_refuses_nonlocal_or_credential_urls(url: str) -> None:
 
 
 def test_hindsight_accepts_only_local_http() -> None:
-    assert require_loopback("http://127.0.0.1:8888/") == (
-        "http://127.0.0.1:8888"
-    )
+    assert require_loopback("http://127.0.0.1:8888/") == ("http://127.0.0.1:8888")
 
 
 class FakeHindsight:
