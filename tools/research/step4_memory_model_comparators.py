@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import json
 import statistics
 import sys
@@ -208,9 +209,11 @@ class JarvisModelAdapter:
             async_close = getattr(async_client, "aclose", None)
             if callable(async_close):
                 self._loop.run_until_complete(async_close())
-            sync_close = getattr(client, "close", None)
-            if callable(sync_close):
-                sync_close()
+            close_client = getattr(client, "close", None)
+            if callable(close_client):
+                maybe_awaitable = close_client()
+                if inspect.isawaitable(maybe_awaitable):
+                    self._loop.run_until_complete(maybe_awaitable)
         finally:
             try:
                 self._loop.run_until_complete(self._loop.shutdown_asyncgens())
