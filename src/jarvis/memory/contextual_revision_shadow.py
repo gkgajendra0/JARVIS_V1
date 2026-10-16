@@ -122,9 +122,11 @@ async def review_contextual_revision_shadow(
         raise TypeError("retrieved must be a sequence of RetrievalCandidate")
 
     # Strict accepted-turn guard before any memory reader or model invocation.
-    if turn.role is not ConversationRole.USER or turn not in conversation.turns:
+    if turn.role is not ConversationRole.USER or not any(
+        accepted is turn for accepted in conversation.turns
+    ):
         return ContextualRevisionReview(RevisionDisposition.SKIP, "untrusted_turn")
-    if not conversation.turns or conversation.turns[-1].turn_id != turn.turn_id:
+    if not conversation.turns or conversation.turns[-1] is not turn:
         return ContextualRevisionReview(RevisionDisposition.SKIP, "not_latest_turn")
     if (
         assess_contextual_memory_boundary(turn.text)
