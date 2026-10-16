@@ -237,3 +237,32 @@ async def test_retraction_removes_current_target_from_revision_resolver(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_correction_cannot_launder_an_untrusted_ancestor(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _setup(tmp_path / "laundered.db")
+    try:
+        external = await lifecycle.create(
+            _draft("external claim"),
+            _source(
+                "untrusted-original",
+                source_class=MemorySourceClass.EXTERNAL_WEB,
+                authority=AuthorityClass.UNTRUSTED,
+            ),
+        )
+        await lifecycle.correct(
+            external.assertion_id,
+            _draft("owner replacement"),
+            _source("owner-correction"),
+        )
+        resolved = await resolver.resolve_exact(
+            subject_scope="personal", subject="owner", predicate="reply_style"
+        )
+        assert resolved.witness is None
+        assert resolved.reason_code == "canonical_lineage_source_unverified"
+    finally:
+        await reader.close()
+        await writer.close()
