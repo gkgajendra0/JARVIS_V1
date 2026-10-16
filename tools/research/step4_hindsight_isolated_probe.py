@@ -9,8 +9,11 @@ Run in a disposable research environment:
   python tools/research/step4_hindsight_isolated_probe.py \
       --allow-local-server-writes --max-queries 3
 
-The script creates a random prefixed bank, seeds synthetic memory hints,
-queries it, reports only aggregate counts, and deletes only its own bank.
+The script creates a random prefixed bank, seeds at most THREE synthetic
+memory hints by default (one retention request at a time, 65s start-to-start),
+queries them, reports only aggregates, and deletes only its own bank.
+It DOES NOT guarantee provider quota compliance: one retain may invoke
+multiple provider calls, and other processes share the same quota.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ import statistics
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -35,6 +39,14 @@ from tools.research.step4_memory_shadow_benchmark import load_cases
 
 CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 SAFE_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+class ResearchBankCleanupError(RuntimeError):
+    """Raised only if deletion of a disposable research bank fails."""
+
+    def __init__(self, bank_id: str) -> None:
+        super().__init__("disposable research bank cleanup failed")
+        self.bank_id = bank_id
 
 
 def require_loopback(url: str) -> str:
@@ -54,6 +66,11 @@ def run_local_retrieval_probe(
     case_data: list[dict],
     bank_id: str,
     max_queries: int | None = None,
+    max_seed_items: int | None = None,
+    retain_batch_size: int = 1,
+    min_seconds_between_retain_batches: float = 0,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict:
     """Seed distractors, query a bounded subset, and always delete the bank.
 
@@ -70,10 +87,17 @@ def run_local_retrieval_probe(
             raise ValueError("expected synthetic context cases")
     if len({case["id"] for case in case_data}) != len(case_data):
         raise ValueError("duplicate synthetic case id")
-    if max_queries is not None and not 1 <= max_queries <= len(case_data):
-        raise ValueError("max_queries outside synthetic corpus size")
-    queried_cases = case_data[:max_queries] if max_queries else case_data
-    known_docs = {f"dev_{case['id']}" for case in case_data}
+    if max_seed_items is not None and not 1 <= max_seed_items <= len(case_data):
+        raise ValueError("max_seed_items outside synthetic corpus size")
+    seeded_cases = case_data[:max_seed_items] if max_seed_items else case_data
+    if max_queries is not None and not 1 <= max_queries <= len(seeded_cases):
+        raise ValueError("max_queries outside seeded cases")
+    if not 1 <= retain_batch_size <= len(seeded_cases):
+        raise ValueError("retain_batch_size outside seeded cases")
+    if not 0 <= min_seconds_between_retain_batches <= 600:
+        raise ValueError("invalid retain pacing interval")
+    queried_cases = seeded_cases[:max_queries] if max_queries else seeded_cases
+    known_docs = {f"dev_{case['id']}" for case in seeded_cases}
     created = False
     observed: list[float] = []
     results_count = 0
@@ -88,17 +112,30 @@ def run_local_retrieval_probe(
     try:
         client.create_bank(bank_id=bank_id)
         created = True
-        client.retain_batch(
-            bank_id=bank_id,
-            items=[
-                {
-                    "content": case["memory_hint"],
-                    "document_id": f"dev_{case['id']}",
-                    "context": "synthetic Jarvis development fixture",
-                }
-                for case in case_data
-            ],
-        )
+        previous_start: float | None = None
+        for offset in range(0, len(seeded_cases), retain_batch_size):
+            # Bound server work: unlike a single 24-document retain_batch,
+            # each request contains at most retain_batch_size records.
+            # One retain request can still invoke MULTIPLE Gemini calls.
+            if previous_start is not None:
+                remaining = min_seconds_between_retain_batches - (
+                    clock() - previous_start
+                )
+                if remaining > 0:
+                    sleep(remaining)
+            previous_start = clock()
+            batch = seeded_cases[offset : offset + retain_batch_size]
+            client.retain_batch(
+                bank_id=bank_id,
+                items=[
+                    {
+                        "content": case["memory_hint"],
+                        "document_id": f"dev_{case['id']}",
+                        "context": "synthetic Jarvis development fixture",
+                    }
+                    for case in batch
+                ],
+            )
         for case in queried_cases:
             start = time.monotonic()
             response = client.recall(bank_id=bank_id, query=case["request"])
@@ -127,14 +164,20 @@ def run_local_retrieval_probe(
                 negative_self_doc_top3 += int(own_doc in document_ids[:3])
     finally:
         if created:
-            # Failure to delete cannot be hidden: this function raises.
-            client.delete_bank(bank_id=bank_id)
-            cleanup_verified = True
+            # Fail closed, preserving only the synthetic bank ID for recovery.
+            try:
+                client.delete_bank(bank_id=bank_id)
+                cleanup_verified = True
+            except Exception:  # noqa: BLE001
+                raise ResearchBankCleanupError(bank_id) from None
     ordered = sorted(observed)
     p95_index = max(0, math.ceil(len(ordered) * 0.95) - 1)
     return {
         "result_kind": "LOCAL_RETRIEVAL_DIAGNOSTIC_NOT_UTILITY_ACCEPTANCE",
-        "seeded_documents_including_distractors": len(case_data),
+        "seeded_documents_including_distractors": len(seeded_cases),
+        "retain_batches": math.ceil(len(seeded_cases) / retain_batch_size),
+        "retain_batch_size": retain_batch_size,
+        "min_seconds_between_retain_batches": min_seconds_between_retain_batches,
         "queried": len(observed),
         "retrieved_entries_total": results_count,
         "positive_queries": positive_queries,
@@ -158,12 +201,37 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:8888")
     parser.add_argument("--max-queries", type=int, default=3)
+    parser.add_argument(
+        "--max-seed-items",
+        type=int,
+        default=3,
+        help="Number of synthetic documents actually retained; default 3, NOT 24",
+    )
+    parser.add_argument("--retain-batch-size", type=int, default=1)
+    parser.add_argument(
+        "--min-seconds-between-retain-batches", type=float, default=65.0
+    )
+    parser.add_argument(
+        "--allow-large-synthetic-run",
+        action="store_true",
+        help="Explicit opt-in for more than three retained synthetic documents",
+    )
     parser.add_argument("--allow-local-server-writes", action="store_true")
     args = parser.parse_args()
     if not args.allow_local_server_writes:
         parser.error("explicit --allow-local-server-writes approval required")
-    if not 1 <= args.max_queries <= 24:
-        parser.error("--max-queries must be 1..24")
+    if not 1 <= args.max_seed_items <= 24:
+        parser.error("--max-seed-items must be 1..24")
+    if not 1 <= args.max_queries <= args.max_seed_items:
+        parser.error("--max-queries must be 1..max-seed-items")
+    if not 1 <= args.retain_batch_size <= args.max_seed_items:
+        parser.error("--retain-batch-size exceeds the seeded budget")
+    if not 0 <= args.min_seconds_between_retain_batches <= 600:
+        parser.error("invalid retain pacing interval")
+    if args.max_seed_items > 3 and not args.allow_large_synthetic_run:
+        parser.error("over 3 seeds requires --allow-large-synthetic-run")
+    if args.retain_batch_size > 1 and not args.allow_large_synthetic_run:
+        parser.error("batch size >1 requires --allow-large-synthetic-run")
     url = require_loopback(args.url)
     from hindsight_client import Hindsight
 
@@ -178,7 +246,54 @@ def main() -> None:
             case_data=cases,
             bank_id=bank,
             max_queries=args.max_queries,
+            max_seed_items=args.max_seed_items,
+            retain_batch_size=args.retain_batch_size,
+            min_seconds_between_retain_batches=(
+                args.min_seconds_between_retain_batches
+            ),
         )
+    except Exception as exc:  # noqa: BLE001
+        # Do not print a server/SDK response body: it may contain prompts,
+        # keys or owner information. No auto-retry on 429, ever.
+        cleanup_failed = isinstance(exc, ResearchBankCleanupError)
+        body = getattr(exc, "body", None)
+        status = getattr(exc, "status", None)
+        quota = not cleanup_failed and (
+            status == 429
+            or (
+                isinstance(body, str)
+                and (
+                    '"code": 429' in body
+                    or "RESOURCE_EXHAUSTED" in body
+                    or "quota exceeded" in body.lower()
+                )
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "reason_code": (
+                        "cleanup_failed"
+                        if cleanup_failed
+                        else "quota_exhausted"
+                        if quota
+                        else "probe_failed"
+                    ),
+                    "exception_class": type(exc).__name__,
+                    "cleanup": (
+                        "FAILED"
+                        if cleanup_failed
+                        else "attempted; verify bank list after failure"
+                    ),
+                    "research_bank_id": exc.bank_id if cleanup_failed else None,
+                    "no_automatic_retry": True,
+                },
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        raise SystemExit(1) from None
     finally:
         client.close()
     print(json.dumps(report, sort_keys=True, indent=2))
