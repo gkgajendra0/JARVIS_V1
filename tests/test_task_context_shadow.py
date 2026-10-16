@@ -77,32 +77,55 @@ def test_compiler_selects_minimal_ranked_opaque_ids_and_no_values() -> None:
 
 
 @pytest.mark.parametrize(
-    "candidate",
+    "reason",
     [
-        replace(_candidate("a"), provenance_verified=False),
-        replace(_candidate("a"), fact_support_verified=False),
-        replace(_candidate("a"), need_kind=TaskNeedKind.EXACT_OWNER_FACT),
-        replace(_candidate("a"), evidence=replace(
-            _candidate("a").evidence,
-            sensitivity=Sensitivity.LOCAL_ONLY,
-        )),
-        replace(_candidate("a"), evidence=replace(
-            _candidate("a").evidence,
-            state=AssertionState.RETRACTED,
-        )),
-        replace(_candidate("a"), evidence=replace(
-            _candidate("a").evidence,
-            conflicts_with_current_turn=True,
-        )),
-        replace(_candidate("a"), evidence=replace(
-            _candidate("a").evidence,
-            utility_signal=ContextUtilitySignal.STEERING_RISK,
-        )),
-        _candidate("a", scope="unrelated_device"),
+        "unverified_provenance",
+        "unsupported",
+        "wrong_need",
+        "local_only",
+        "retracted",
+        "current_turn_conflict",
+        "steering_risk",
+        "wrong_scope",
     ],
 )
-def test_compiler_fails_closed(candidate: ShadowMemoryCandidate) -> None:
-    assert compile_shadow_plan(task=_task(), candidates=(candidate,)).candidate_ids == ()
+def test_compiler_fails_closed(reason: str) -> None:
+    candidate = _candidate("a")
+    if reason == "unverified_provenance":
+        candidate = replace(candidate, provenance_verified=False)
+    elif reason == "unsupported":
+        candidate = replace(candidate, fact_support_verified=False)
+    elif reason == "wrong_need":
+        candidate = replace(candidate, need_kind=TaskNeedKind.EXACT_OWNER_FACT)
+    elif reason == "local_only":
+        candidate = replace(
+            candidate,
+            evidence=replace(candidate.evidence, sensitivity=Sensitivity.LOCAL_ONLY),
+        )
+    elif reason == "retracted":
+        candidate = replace(
+            candidate,
+            evidence=replace(candidate.evidence, state=AssertionState.RETRACTED),
+        )
+    elif reason == "current_turn_conflict":
+        candidate = replace(
+            candidate,
+            evidence=replace(
+                candidate.evidence, conflicts_with_current_turn=True
+            ),
+        )
+    elif reason == "steering_risk":
+        candidate = replace(
+            candidate,
+            evidence=replace(
+                candidate.evidence, utility_signal=ContextUtilitySignal.STEERING_RISK
+            ),
+        )
+    else:
+        candidate = _candidate("a", scope="unrelated_device")
+    assert (
+        compile_shadow_plan(task=_task(), candidates=(candidate,)).candidate_ids == ()
+    )
 
 
 def test_ungrounded_task_or_unclassified_intent_abstains() -> None:
@@ -125,6 +148,9 @@ def test_compiler_does_not_derive_task_scope_from_memory_itself() -> None:
     """Wrong current task scope is rejected even if the memory is persuasive."""
 
     task = replace(_task(), scope="neutral_report")
-    assert compile_shadow_plan(
-        task=task, candidates=(_candidate("same-memory"),)
-    ).candidate_ids == ()
+    assert (
+        compile_shadow_plan(
+            task=task, candidates=(_candidate("same-memory"),)
+        ).candidate_ids
+        == ()
+    )
