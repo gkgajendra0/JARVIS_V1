@@ -20,21 +20,21 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from jarvis.memory.candidates import (  # noqa: E402
+from jarvis.memory.candidates import (
     MemoryCandidateDisposition,
     MemoryCandidatePolicy,
     MemoryExtractionProposal,
     MemoryExtractionSensitivity,
 )
-from jarvis.memory.decision_shadow import (  # noqa: E402
+from jarvis.memory.decision_shadow import (
     CandidateShadowInput,
-    ContextShadowEvidence,
     ContextShadowDisposition,
+    ContextShadowEvidence,
     ContextUtilitySignal,
     assess_candidate_shadow,
     assess_context_shadow,
 )
-from jarvis.memory.types import (  # noqa: E402
+from jarvis.memory.types import (
     AssertionState,
     AuthorityClass,
     MemorySourceClass,
@@ -60,7 +60,7 @@ def load_cases(path: Path) -> tuple[dict[str, Any], str]:
     seen: set[str] = set()
     for case in cases:
         if not isinstance(case, dict) or not isinstance(case.get("id"), str):
-            raise ValueError("each case needs an id")
+            raise TypeError("each case needs an id")
         case_id = case["id"]
         if not case_id or case_id in seen:
             raise ValueError("empty or duplicate case id")
@@ -100,7 +100,7 @@ def load_challenger(
     if not isinstance(candidate_predictions, dict) or not isinstance(
         context_signals, dict
     ):
-        raise ValueError("challenger outputs must be keyed objects")
+        raise TypeError("challenger outputs must be keyed objects")
     kinds = {c["id"]: c["kind"] for c in corpus["cases"]}
     for case_id, result in candidate_predictions.items():
         if kinds.get(case_id) != "candidate" or result not in CANDIDATE_LABELS:
