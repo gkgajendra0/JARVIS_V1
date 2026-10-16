@@ -82,7 +82,7 @@ def _contextual_predicate_schema(
     predicates: list[str] = []
     for candidate in candidates:
         if not isinstance(candidate, dict):
-            raise ValueError("invalid contextual memory candidate")
+            raise TypeError("invalid contextual memory candidate")
         key = candidate.get("predicate")
         if not isinstance(key, str) or not key.strip() or len(key) > 160:
             raise ValueError("invalid contextual memory predicate")
