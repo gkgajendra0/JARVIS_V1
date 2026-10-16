@@ -77,9 +77,7 @@ def eligible_raw_turn(case: dict[str, Any]) -> bool:
     return True
 
 
-def project_proposal(
-    proposal: MemoryExtractionProposal, case: dict[str, Any]
-) -> str:
+def project_proposal(proposal: MemoryExtractionProposal, case: dict[str, Any]) -> str:
     """Projection of *actual* JARVIS model output, never an authorized write."""
 
     if MemoryCandidatePolicy().evaluate(proposal).disposition is (
