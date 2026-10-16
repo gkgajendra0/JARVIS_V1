@@ -136,7 +136,6 @@ def score_locked(
     sum_counts = Counter()
     for row in by_lang.values():
         sum_counts.update(row)
-    negative_total = sum_counts["negative_context_total"]
     steering_risk_total = sum_counts["steering_risk_total"]
     useful_total = sum_counts["useful_total"]
     unsafe = sum_counts["unsafe_steering_selections"]
