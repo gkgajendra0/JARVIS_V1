@@ -41,6 +41,7 @@ class CanonicalRevisionWitness:
     assertion_version: int
     canonical_source_ref: str
     active: bool
+    latest_version_verified: bool
     owner_authority_verified: bool
     same_subject_predicate_verified: bool
     meaning_equivalent_verified: bool | None = None
