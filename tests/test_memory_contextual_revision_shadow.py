@@ -828,9 +828,7 @@ async def test_non_synthetic_memory_source_is_not_exported_to_contextual_model(
             _source("live-looking-source"),
             canonical_ref="conversation:real-owner-turn",
         )
-        assertion = await lifecycle.create(
-            _draft("Short explanations"), owner_source
-        )
+        assertion = await lifecycle.create(_draft("Short explanations"), owner_source)
         refused = await review_contextual_revision_shadow(
             conversation=session,
             turn=turn,
