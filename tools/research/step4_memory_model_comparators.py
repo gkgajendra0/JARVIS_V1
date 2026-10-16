@@ -34,6 +34,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
+from tools.research.step4_memory_shadow_benchmark import load_cases
+
 from jarvis.memory.candidates import (
     MemoryCandidateDisposition,
     MemoryCandidatePolicy,
@@ -50,7 +52,6 @@ from jarvis.memory.explicit import (
     reject_prohibited_secret,
 )
 from jarvis.memory.types import MemorySourceClass
-from tools.research.step4_memory_shadow_benchmark import load_cases
 
 DEFAULT_CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 _VALID_PREDICTIONS = frozenset(x.value for x in CandidateReviewDisposition)
@@ -133,7 +134,8 @@ def score_raw_candidate_predictions(
             if predicted not in _VALID_PREDICTIONS:
                 raise ValueError("adapter supplied invalid prediction")
             predictions[case["id"]] = predicted
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Intentional isolation of arbitrary provider SDK failures.
             # No provider exception text, which can contain prompt/credentials.
             failures.append(case["id"])
         else:
