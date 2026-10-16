@@ -56,6 +56,9 @@ for tuning, model selection or claims of fresh generalization.
 | MemCompiler | May-2026 *state-conditioned memory compilation* improves embodied-agent benchmarks vs monolithic injection. | Adapt its textual task-brief idea. Its latent/learned executor mechanism is NOT a demonstrated plug-in for Gemini Live or private multilingual chat. |
 | Mem0 (current) | Managed platform advertises strong long-context benchmarks, with proprietary managed-vs-OSS differences. | Research comparator, not a canonical-store replacement. Its current ADD-only accumulation is not a substitute for JARVIS corrections/forget. |
 | Memory-R1/MemRL | Outcome-trained write/update/noop or utility-value retrieval techniques. | Later research only; needs reliable outcome labels/compute and must not grant write authority. |
+| Cognee | Can build local knowledge-graph memories using GLiNER and a local embedding model; further modeling/quality validation is required. | Isolated graph/extraction comparator only; no graph database migration or GPU model admission without measurement. |
+| MemOS | Local-first hybrid search, asynchronous ingest and memory feedback; publishes broad benchmarks, but scores are vendor-reported. | Comparator only if lightweight APIs beat the incumbent; replacing canonical SQLCipher is unjustified. |
+| Memobase | Profile-oriented, batched conversation extraction and time-aware user events. | Borrow domain-scoped profile and batch ideas rather than add an external Postgres/Redis service as a prerequisite. |
 | JEV | PR #250 includes bounded typed Choice client and an eight-case / 24-call Phase-9 candidate-selection acceptance, **not memory tests**, and is draft. | Challenger only after dedicated privacy, consent, memory-specific blinded evaluation; no inheritance of 0.95 threshold. |
 
 Primary external sources:
@@ -67,6 +70,11 @@ Primary external sources:
 - https://arxiv.org/abs/2508.19828
 - https://arxiv.org/abs/2601.03192
 - https://github.com/mem0ai/mem0
+- https://github.com/topoteretes/cognee
+- https://github.com/MemTensor/MemOS
+- https://github.com/memodb-io/memobase
+- https://github.com/RonsenbergVI/agent-memory-benchmarks
+- https://github.com/MemTensor/OmniMemEval
 - https://www.microsoft.com/en-us/security/blog/2026/06/22/guarding-ai-memory/
 
 Vendor benchmark figures are vendor claims until independently reproduced for the
