@@ -283,3 +283,61 @@ def test_jarvis_shared_loop_recovers_after_one_failed_case() -> None:
     assert report["failed_case_ids"] == ["c02"]
     assert report["failure_types"] == {"c02": "RuntimeError"}
     assert "provider-secret-do-not-emit" not in json.dumps(report)
+
+
+def test_hindsight_seeds_all_distractors_before_querying_subset() -> None:
+    """Source IDs make retrieval quality measurable without memory text logs."""
+
+    contexts = _context_cases()
+    by_request = {case["request"]: case["id"] for case in contexts}
+
+    class RankedFake(FakeHindsight):
+        def recall(self, *, bank_id: str, query: str) -> SimpleNamespace:
+            self.queries.append(query)
+            source_id = by_request[query]
+            return SimpleNamespace(
+                results=[SimpleNamespace(document_id=f"dev_{source_id}")]
+            )
+
+    client = RankedFake()
+    report = run_local_retrieval_probe(
+        client=client,
+        case_data=contexts,
+        bank_id="jarvis-dev-only-ranked-fake",
+        max_queries=3,
+    )
+    assert report["seeded_documents_including_distractors"] == 24
+    assert report["queried"] == 3
+    assert report["positive_queries"] == 2
+    assert report["positive_top1_correct_document"] == 2
+    assert report["positive_top3_correct_document"] == 2
+    assert report["negative_queries"] == 1
+    assert report["negative_own_document_in_top3"] == 1
+    assert report["results_missing_document_id"] == 0
+    assert report["results_outside_synthetic_bank_ids"] == 0
+    assert report["not_an_answer_quality_or_safety_score"]
+    assert len(client.retained) == 24
+    assert len(client.queries) == 3
+    assert client.created == client.deleted == ["jarvis-dev-only-ranked-fake"]
+
+
+def test_hindsight_missing_provenance_cannot_count_as_retrieval_hit() -> None:
+    class UnattributedFake(FakeHindsight):
+        def recall(self, *, bank_id: str, query: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                results=[
+                    SimpleNamespace(document_id=None),
+                    SimpleNamespace(document_id="foreign-document"),
+                ]
+            )
+
+    result = run_local_retrieval_probe(
+        client=UnattributedFake(),
+        case_data=_context_cases()[:1],
+        bank_id="jarvis-dev-only-no-provenance",
+    )
+    assert result["retrieved_entries_total"] == 2
+    assert result["positive_top1_correct_document"] == 0
+    assert result["positive_top3_correct_document"] == 0
+    assert result["results_missing_document_id"] == 1
+    assert result["results_outside_synthetic_bank_ids"] == 1
