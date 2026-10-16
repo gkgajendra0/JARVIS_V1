@@ -17,6 +17,7 @@ from tools.research.step4_memory_model_comparators import (
     eligible_raw_turn,
     project_triples,
     score_raw_candidate_predictions,
+    require_pinned_synthetic_corpus,
 )
 from tools.research.step4_memory_shadow_benchmark import (
     DEFAULT_CASES,
@@ -88,6 +89,13 @@ def test_stateless_langmem_projection_is_only_review_or_conflict() -> None:
     assert project_triples([("owner", "likes", "detailed")], updated) == (
         "conflict_review"
     )
+
+
+def test_provider_experiments_reject_modified_or_non_synthetic_corpus() -> None:
+    _, digest = load_cases(DEFAULT_CASES)
+    require_pinned_synthetic_corpus(digest)
+    with pytest.raises(ValueError, match="non-pinned"):
+        require_pinned_synthetic_corpus("0" * 64)
 
 
 def test_cloud_model_cli_requires_explicit_opt_in() -> None:
