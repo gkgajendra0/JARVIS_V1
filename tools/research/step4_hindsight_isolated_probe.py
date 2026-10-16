@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 import time
@@ -52,8 +53,13 @@ def run_local_retrieval_probe(
     client: object,
     case_data: list[dict],
     bank_id: str,
+    max_queries: int | None = None,
 ) -> dict:
-    """Exercise the actual Hindsight client; always clean up our random bank."""
+    """Seed distractors, query a bounded subset, and always delete the bank.
+
+    Development-only source-document ranking statistics do not measure
+    downstream answer safety or prove an independent utility classifier.
+    """
 
     if not bank_id.startswith("jarvis-dev-only-"):
         raise ValueError("bank must be a newly created research-only bank")
@@ -62,9 +68,22 @@ def run_local_retrieval_probe(
             isinstance(case.get(k), str) for k in ("request", "memory_hint", "id")
         ):
             raise ValueError("expected synthetic context cases")
+    if len({case["id"] for case in case_data}) != len(case_data):
+        raise ValueError("duplicate synthetic case id")
+    if max_queries is not None and not 1 <= max_queries <= len(case_data):
+        raise ValueError("max_queries outside synthetic corpus size")
+    queried_cases = case_data[:max_queries] if max_queries else case_data
+    known_docs = {f"dev_{case['id']}" for case in case_data}
     created = False
     observed: list[float] = []
     results_count = 0
+    positive_queries = 0
+    positive_top1_correct_doc = 0
+    positive_top3_correct_doc = 0
+    negative_queries = 0
+    negative_self_doc_top3 = 0
+    missing_document_id = 0
+    unknown_document_id = 0
     cleanup_verified = False
     try:
         client.create_bank(bank_id=bank_id)
@@ -80,25 +99,58 @@ def run_local_retrieval_probe(
                 for case in case_data
             ],
         )
-        for case in case_data:
+        for case in queried_cases:
             start = time.monotonic()
             response = client.recall(bank_id=bank_id, query=case["request"])
             observed.append((time.monotonic() - start) * 1000.0)
-            results_count += len(getattr(response, "results", ()))
+            results = list(getattr(response, "results", ()) or ())
+            results_count += len(results)
+            document_ids = [getattr(result, "document_id", None) for result in results]
+            missing_document_id += sum(
+                not isinstance(doc, str) or not doc for doc in document_ids
+            )
+            unknown_document_id += sum(
+                isinstance(doc, str) and bool(doc) and doc not in known_docs
+                for doc in document_ids
+            )
+            own_doc = f"dev_{case['id']}"
+            if case.get("expected") in {"essential", "helpful"}:
+                positive_queries += 1
+                positive_top1_correct_doc += int(
+                    bool(document_ids) and document_ids[0] == own_doc
+                )
+                positive_top3_correct_doc += int(own_doc in document_ids[:3])
+            else:
+                # Hard negatives can retrieve a topically related document.
+                # That is exposure, NOT proof of unsafe context injection.
+                negative_queries += 1
+                negative_self_doc_top3 += int(own_doc in document_ids[:3])
     finally:
         if created:
             # Failure to delete cannot be hidden: this function raises.
             client.delete_bank(bank_id=bank_id)
             cleanup_verified = True
+    ordered = sorted(observed)
+    p95_index = max(0, math.ceil(len(ordered) * 0.95) - 1)
     return {
         "result_kind": "LOCAL_RETRIEVAL_DIAGNOSTIC_NOT_UTILITY_ACCEPTANCE",
+        "seeded_documents_including_distractors": len(case_data),
         "queried": len(observed),
         "retrieved_entries_total": results_count,
+        "positive_queries": positive_queries,
+        "positive_top1_correct_document": positive_top1_correct_doc,
+        "positive_top3_correct_document": positive_top3_correct_doc,
+        "negative_queries": negative_queries,
+        "negative_own_document_in_top3": negative_self_doc_top3,
+        "results_missing_document_id": missing_document_id,
+        "results_outside_synthetic_bank_ids": unknown_document_id,
         "query_latency_p50_ms": (
             round(statistics.median(observed), 2) if observed else None
         ),
+        "query_latency_p95_ms": round(ordered[p95_index], 2) if ordered else None,
         "synthetic_bank_cleanup_verified": cleanup_verified,
         "no_canonical_memory_access": True,
+        "not_an_answer_quality_or_safety_score": True,
     }
 
 
@@ -122,7 +174,10 @@ def main() -> None:
     client = Hindsight(base_url=url)
     try:
         report = run_local_retrieval_probe(
-            client=client, case_data=cases[: args.max_queries], bank_id=bank
+            client=client,
+            case_data=cases,
+            bank_id=bank,
+            max_queries=args.max_queries,
         )
     finally:
         client.close()
