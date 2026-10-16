@@ -111,6 +111,25 @@ can independently ground those signals and pass blind testing, a
 favorable task-compiler result would be an **oracle-dependent research
 simulation**, not automatic injection authority.
 
+## Pinned data egress lock (new)
+
+Both optional model and localhost Hindsight CLIs now require the exact SHA-256
+`68930a93390e896088b383cc39739279459f63017bed2054d746fcdc0933cf61`
+for the 42-case synthetic *development-only* corpus, and the cloud
+model-comparison CLI no longer accepts an arbitrary `--cases` argument.
+This prevents a mistaken invocation on an actual owner transcript or
+privately labelled blind acceptance file. To change the dataset, first
+review the source, data-handling boundary and update the pinned digest
+in a separate code review. The lock is an accident guard, not a sandbox:
+a developer changing source code can change the guard.
+
+The code contains **no route to submit a new blind private holdout to an
+external provider**. Independently labelled final acceptance will need a
+separate explicitly authorized, local-only verifier that locks model
+predictions before labels are unsealed. Hindsight server models can still
+have their own cloud egress: *localhost API* does not guarantee no outgoing
+network traffic from the server process.
+
 ## Evaluation gates that are still outstanding
 
 1. Real Jarvis/LangMem same-provider synthetic model outputs with
