@@ -399,7 +399,7 @@ async def test_proposal_bridge_rejects_source_laundering_and_sensitive_metadata(
 async def test_proposal_bridge_preflight_skips_untrusted_non_durable_and_bad_pairs(
     tmp_path: Path,
 ) -> None:
-    writer, reader, lifecycle, resolver = _setup(tmp_path / "bridge-denied.db")
+    writer, reader, _lifecycle, resolver = _setup(tmp_path / "bridge-denied.db")
     try:
         # Reader is deliberately unopened. Any accidental read will fail,
         # so these pre-provider/source policy cases prove early exit.
