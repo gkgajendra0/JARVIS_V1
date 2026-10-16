@@ -168,7 +168,7 @@ def run_local_retrieval_probe(
             try:
                 client.delete_bank(bank_id=bank_id)
                 cleanup_verified = True
-            except Exception:
+            except Exception:  # noqa: BLE001
                 raise ResearchBankCleanupError(bank_id) from None
     ordered = sorted(observed)
     p95_index = max(0, math.ceil(len(ordered) * 0.95) - 1)
@@ -258,24 +258,32 @@ def main() -> None:
         cleanup_failed = isinstance(exc, ResearchBankCleanupError)
         body = getattr(exc, "body", None)
         status = getattr(exc, "status", None)
-        quota = not cleanup_failed and (status == 429 or (
-            isinstance(body, str) and (
-                '"code": 429' in body
-                or "RESOURCE_EXHAUSTED" in body
-                or "quota exceeded" in body.lower()
+        quota = not cleanup_failed and (
+            status == 429
+            or (
+                isinstance(body, str)
+                and (
+                    '"code": 429' in body
+                    or "RESOURCE_EXHAUSTED" in body
+                    or "quota exceeded" in body.lower()
+                )
             )
-        ))
+        )
         print(
             json.dumps(
                 {
                     "status": "failed",
                     "reason_code": (
-                        "cleanup_failed" if cleanup_failed
-                        else "quota_exhausted" if quota else "probe_failed"
+                        "cleanup_failed"
+                        if cleanup_failed
+                        else "quota_exhausted"
+                        if quota
+                        else "probe_failed"
                     ),
                     "exception_class": type(exc).__name__,
                     "cleanup": (
-                        "FAILED" if cleanup_failed
+                        "FAILED"
+                        if cleanup_failed
                         else "attempted; verify bank list after failure"
                     ),
                     "research_bank_id": exc.bank_id if cleanup_failed else None,
