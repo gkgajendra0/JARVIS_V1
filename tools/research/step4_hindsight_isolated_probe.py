@@ -18,9 +18,9 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import sys
 import time
 import uuid
-import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
