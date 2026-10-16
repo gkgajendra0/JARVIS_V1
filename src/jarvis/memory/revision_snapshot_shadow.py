@@ -121,7 +121,9 @@ def _verify_exact_content(
     if (
         metadata.witness is None
         or metadata.witness.assertion_id != assertion_id
-        or not metadata.witness.canonical_source_ref.startswith("conversation:synthetic:")
+        or not metadata.witness.canonical_source_ref.startswith(
+            "conversation:synthetic:"
+        )
     ):
         return False
     row = connection.execute(
