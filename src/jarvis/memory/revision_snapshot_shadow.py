@@ -66,7 +66,6 @@ class CanonicalRevisionSnapshotReader:
             )
         )
 
-
     async def verify_exact_content(
         self,
         *,
@@ -132,11 +131,7 @@ def _verify_exact_content(
     ).fetchone()
     if row is None:
         return False
-    return (
-        row[0] == "text"
-        and row[1] == value_json
-        and row[2] == normalized_text
-    )
+    return row[0] == "text" and row[1] == value_json and row[2] == normalized_text
 
 
 def _resolve_metadata(
