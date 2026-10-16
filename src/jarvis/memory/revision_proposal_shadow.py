@@ -29,21 +29,31 @@ from .revision_snapshot_shadow import CanonicalRevisionSnapshotReader
 from .service import canonical_memory_predicate
 from .types import MemorySourceClass
 
-_INTENTS: dict[
-    tuple[MemoryExtractionIntent, MemoryCandidateType], RevisionIntent
-] = {
-    (MemoryExtractionIntent.HISTORICAL_CHANGE, MemoryCandidateType.FACT_CHANGE):
-        RevisionIntent.FACT_CHANGE,
-    (MemoryExtractionIntent.CORRECTION, MemoryCandidateType.FACT_CORRECTION):
-        RevisionIntent.FACT_CORRECTION,
-    (MemoryExtractionIntent.RETRACTION, MemoryCandidateType.FACT_RETRACTION):
-        RevisionIntent.FACT_RETRACTION,
-    (MemoryExtractionIntent.CANDIDATE, MemoryCandidateType.FACT):
-        RevisionIntent.NEW_CANDIDATE,
-    (MemoryExtractionIntent.CANDIDATE, MemoryCandidateType.PREFERENCE):
-        RevisionIntent.NEW_CANDIDATE,
-    (MemoryExtractionIntent.CANDIDATE, MemoryCandidateType.RULE):
-        RevisionIntent.NEW_CANDIDATE,
+_INTENTS: dict[tuple[MemoryExtractionIntent, MemoryCandidateType], RevisionIntent] = {
+    (
+        MemoryExtractionIntent.HISTORICAL_CHANGE,
+        MemoryCandidateType.FACT_CHANGE,
+    ): RevisionIntent.FACT_CHANGE,
+    (
+        MemoryExtractionIntent.CORRECTION,
+        MemoryCandidateType.FACT_CORRECTION,
+    ): RevisionIntent.FACT_CORRECTION,
+    (
+        MemoryExtractionIntent.RETRACTION,
+        MemoryCandidateType.FACT_RETRACTION,
+    ): RevisionIntent.FACT_RETRACTION,
+    (
+        MemoryExtractionIntent.CANDIDATE,
+        MemoryCandidateType.FACT,
+    ): RevisionIntent.NEW_CANDIDATE,
+    (
+        MemoryExtractionIntent.CANDIDATE,
+        MemoryCandidateType.PREFERENCE,
+    ): RevisionIntent.NEW_CANDIDATE,
+    (
+        MemoryExtractionIntent.CANDIDATE,
+        MemoryCandidateType.RULE,
+    ): RevisionIntent.NEW_CANDIDATE,
 }
 _UNSAFE_SOURCE_REASONS = frozenset(
     {
@@ -116,9 +126,7 @@ async def review_extracted_revision_shadow(
         subject_scope="personal", subject="owner", predicate=key
     )
     if resolution.reason_code in _UNSAFE_SOURCE_REASONS:
-        return RevisionProposalReview(
-            RevisionDisposition.SKIP, resolution.reason_code
-        )
+        return RevisionProposalReview(RevisionDisposition.SKIP, resolution.reason_code)
     decision = assess_revision_shadow(
         RevisionShadowInput(
             accepted_user_turn=accepted_user_turn,
