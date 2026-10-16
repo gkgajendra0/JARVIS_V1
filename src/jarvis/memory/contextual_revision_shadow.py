@@ -134,6 +134,7 @@ async def review_contextual_revision_shadow(
     if not allow_model_calls:
         return ContextualRevisionReview(RevisionDisposition.SKIP, "model_calls_disabled")
 
+    seen_keys: set[str] = set()
     if not retrieved:
         # No related canonical memory evidence: a contextual review could
         # still be meaningful, but a proposed correction stays unresolved.
@@ -144,7 +145,6 @@ async def review_contextual_revision_shadow(
                 RevisionDisposition.NEEDS_CLARIFICATION, "candidate_budget_exceeded"
             )
         valid_candidates = []
-        seen_keys: set[str] = set()
         for candidate in retrieved:
             if not isinstance(candidate, RetrievalCandidate):
                 return ContextualRevisionReview(
@@ -229,7 +229,7 @@ async def review_contextual_revision_shadow(
             return ContextualRevisionReview(
                 RevisionDisposition.NEEDS_CLARIFICATION, "model_target_invalid"
             )
-        if proposed_key not in seen_keys if retrieved else True:
+        if proposed_key not in seen_keys:
             return ContextualRevisionReview(
                 RevisionDisposition.NEEDS_CLARIFICATION, "target_not_in_verified_context"
             )
