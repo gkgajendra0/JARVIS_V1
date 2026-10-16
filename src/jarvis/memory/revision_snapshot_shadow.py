@@ -134,17 +134,31 @@ def _resolve_metadata(
             return CanonicalSnapshotResolution(None, "canonical_lineage_unverified")
         ancestor = connection.execute(
             """
-            SELECT assertion_id, supersedes_id, subject_scope, subject, predicate
-              FROM semantic_assertion WHERE assertion_id = ?
+            SELECT a.assertion_id, a.supersedes_id,
+                   a.subject_scope, a.subject, a.predicate, a.sensitivity,
+                   s.source_class, s.authority_class,
+                   s.sensitivity, s.canonical_ref
+              FROM semantic_assertion a
+              LEFT JOIN memory_source s ON s.source_id = a.source_id
+             WHERE a.assertion_id = ?
             """,
             (next_id,),
         ).fetchone()
-        if ancestor is None or ancestor[2:] != (
+        if ancestor is None or ancestor[2:5] != (
             subject_scope,
             subject,
             predicate,
         ):
             return CanonicalSnapshotResolution(None, "canonical_lineage_unverified")
+        if (
+            ancestor[5] != Sensitivity.STANDARD.value
+            or ancestor[8] != Sensitivity.STANDARD.value
+            or (ancestor[6], ancestor[7]) not in _OWNER_PROVENANCE
+            or not ancestor[9]
+        ):
+            return CanonicalSnapshotResolution(
+                None, "canonical_lineage_source_unverified"
+            )
         seen.add(ancestor[0])
         revision_count += 1
         next_id = ancestor[1]
