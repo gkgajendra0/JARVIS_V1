@@ -130,6 +130,42 @@ predictions before labels are unsealed. Hindsight server models can still
 have their own cloud egress: *localhost API* does not guarantee no outgoing
 network traffic from the server process.
 
+## Locked-label scorer and read-only Windows preflight
+
+A separate local-only acceptance scoring utility is now available:
+
+```powershell
+# Snapshot the independent model outputs *before* unsealing labels:
+Get-FileHash -Algorithm SHA256 .\\predictions.json
+
+# After independent reviewers have completed and sealed their labels,
+# provide the previously recorded prediction hash (not a newly rehashed
+# value after seeing answers):
+python tools/research/step4_memory_blind_scorer.py --predictions .\\predictions.json --predictions-sha256 "<previously-recorded-hash>" --labels .\\private-holdout-labels.json
+```
+
+The output is aggregate English/Hindi/Hinglish utility selection, negative
+influence, and candidate review metrics; it does not print case contents,
+IDs or facts. It refuses incomplete case-ID coverage and changed prediction
+bytes. **This is not proof of blinding by itself**: reviewers must manage
+label access, provenance and chronological locking independently. Even a
+passing classification metric cannot certify downstream answer effects or
+production readiness. Never commit private labels or production memories.
+
+The next owner-machine readiness command is **read-only and zero-token**:
+
+```powershell
+py -3.11 tools/research/step4_memory_owner_preflight.py --check-gpu
+```
+
+It reports OS/Python, coarse available RAM and GPU VRAM, installed isolated
+SDK/provider versions, and **Boolean** credential availability without
+revealing secrets. It never opens the memory store, runs a model, contacts a
+provider, or changes any JARVIS configuration. Once the machine readiness
+is known, explicitly approve and cap provider-backed synthetic tests
+and separately authorize starting a localhost Hindsight server; its own
+server-side LLM can still perform external network calls.
+
 ## Evaluation gates that are still outstanding
 
 1. Real Jarvis/LangMem same-provider synthetic model outputs with
