@@ -60,8 +60,12 @@ def _source(name: str, sensitivity: Sensitivity = Sensitivity.STANDARD):
     )
 
 
-def _draft(value: str, *, key: str = "reply_style",
-           sensitivity: Sensitivity = Sensitivity.STANDARD):
+def _draft(
+    value: str,
+    *,
+    key: str = "reply_style",
+    sensitivity: Sensitivity = Sensitivity.STANDARD,
+):
     return SemanticAssertionDraft(
         subject_scope="personal",
         subject="owner",
