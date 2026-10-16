@@ -31,6 +31,11 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/compare-venv"
           "$RUNNER_TEMP/compare-venv/bin/python" -m pip install --disable-pip-version-check "langmem==0.0.30" "hindsight-client==0.10.3"
+      - name: Run isolated shadow contracts and adapter tests
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/compare-venv/bin/python" -m pip install --disable-pip-version-check "pytest>=8,<10"
+          "$RUNNER_TEMP/compare-venv/bin/python" -m pytest -q tests/test_task_context_shadow.py tests/test_step4_memory_comparator_adapters.py
       - name: Verify actual entry points without API calls or stores
         shell: bash
         run: |
