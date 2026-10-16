@@ -37,9 +37,7 @@ _MAX_INPUT_LENGTH = 1200
 _MAX_RESULTS = 3
 
 _OWNER_STANDARD_ELIGIBILITY = RetrievalEligibility(
-    authorities=frozenset(
-        {AuthorityClass.OWNER_DIRECT, AuthorityClass.OWNER_EXPLICIT}
-    ),
+    authorities=frozenset({AuthorityClass.OWNER_DIRECT, AuthorityClass.OWNER_EXPLICIT}),
     sensitivities=frozenset({Sensitivity.STANDARD}),
 )
 _OWNER_SCOPE = RetrievalConstraints(subject_scope="personal", subject="owner")
