@@ -989,9 +989,11 @@ async def test_gemini_research_rejects_unlisted_alias_even_if_provider_ignores_s
     client = SimpleNamespace(aio=SimpleNamespace(interactions=fake))
     adapter = ContextualGeminiMemoryExtractor(client=client, model="gemini-fake")
     context = json.dumps(
-        {"verified_current_memory_candidates": [
-            {"predicate": "reply_style", "current_value": "Short explanations"}
-        ]}
+        {
+            "verified_current_memory_candidates": [
+                {"predicate": "reply_style", "current_value": "Short explanations"}
+            ]
+        }
     )
     with pytest.raises(
         MemoryCandidateExtractionError, match="outside the verified context"
@@ -1006,10 +1008,12 @@ async def test_gemini_research_ambiguous_predicate_candidates_remain_enum_not_au
     client = SimpleNamespace(aio=SimpleNamespace(interactions=fake))
     adapter = ContextualGeminiMemoryExtractor(client=client, model="gemini-fake")
     context = json.dumps(
-        {"verified_current_memory_candidates": [
-            {"predicate": "workshop_room", "current_value": "Hall B"},
-            {"predicate": "reply_style", "current_value": "Short explanations"},
-        ]}
+        {
+            "verified_current_memory_candidates": [
+                {"predicate": "workshop_room", "current_value": "Hall B"},
+                {"predicate": "reply_style", "current_value": "Short explanations"},
+            ]
+        }
     )
     output = await adapter.extract_contextual(
         text="What I said about the workshop was wrong.", context=context
