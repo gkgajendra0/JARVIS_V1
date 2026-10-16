@@ -20,7 +20,6 @@ from typing import Protocol
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 
 from .candidates import (
-    MemoryCandidateType,
     MemoryExtractionIntent,
     MemoryExtractionProposal,
     MemoryExtractionSensitivity,
@@ -206,7 +205,7 @@ async def review_contextual_revision_shadow(
 
     try:
         proposal = await extractor.extract_contextual(text=turn.text, context=context)
-    except Exception:
+    except Exception:  # noqa: BLE001 - third-party SDK failures fail closed
         # Research isolation: provider errors never become admission/release.
         return ContextualRevisionReview(
             RevisionDisposition.SKIP, "contextual_extractor_failed"
