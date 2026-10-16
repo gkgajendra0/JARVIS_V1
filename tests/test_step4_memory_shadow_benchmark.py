@@ -73,9 +73,7 @@ def test_challenger_labels_are_evaluated_only_if_submitted(tmp_path: Path) -> No
     )
     challenge = load_challenger(challenger_file, corpus)
     report = evaluate(corpus, challenge)
-    assert report["candidate_results"]["simulated_offline_challenger"][
-        "evaluated"
-    ] == 2
+    assert report["candidate_results"]["simulated_offline_challenger"]["evaluated"] == 2
     utility = report["context_results"]["simulated_offline_challenger"]
     assert utility["evaluated"] == 3
     assert utility["true_useful"] == 2
@@ -93,9 +91,7 @@ def test_challenger_labels_are_evaluated_only_if_submitted(tmp_path: Path) -> No
         lambda obj: obj.update(purpose="blind_acceptance"),
     ],
 )
-def test_corpus_validation_rejects_malformed_cases(
-    tmp_path: Path, mutation
-) -> None:
+def test_corpus_validation_rejects_malformed_cases(tmp_path: Path, mutation) -> None:
     corpus, _ = load_cases(DEFAULT_CASES)
     mutated = deepcopy(corpus)
     mutation(mutated)
