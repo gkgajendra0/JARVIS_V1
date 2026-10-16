@@ -56,11 +56,11 @@ _REVISION_INTENTS = frozenset(
 
 
 _EXPLICIT_RETRACTION_CUE = re.compile(
-    r"\\b(?:i\\s+(?:retract|withdraw)\\b|"
-    r"(?:i\\s+)?take\\s+(?:that|it|my\\s+(?:statement|claim))\\s+back\\b|"
-    r"w(?:a|i)pas\\s+(?:leta|leti|lete|lo|lene)\\b|"
-    r"(?:retract|withdraw)\\s+(?:my|the|that)\\s+(?:claim|statement)\\b)"
-    r"|(?:वापस\\s+ले(?:ता|ती|ते|ना|ता\\s+हूँ|ती\\s+हूँ)?)",
+    r"\b(?:i\s+(?:retract|withdraw)\b|"
+    r"(?:i\s+)?take\s+(?:that|it|my\s+(?:statement|claim))\s+back\b|"
+    r"w(?:a|i)pas\s+(?:leta|leti|lete|lo|lene)\b|"
+    r"(?:retract|withdraw)\s+(?:my|the|that)\s+(?:claim|statement)\b)"
+    r"|(?:वापस\s+ले(?:ता|ती|ते|ना|ता\s+हूँ|ती\s+हूँ)?)",
     flags=re.IGNORECASE,
 )
 
