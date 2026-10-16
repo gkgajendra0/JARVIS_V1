@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
 
 from jarvis.conversation import ConversationRole, ConversationSession
@@ -25,11 +26,15 @@ from jarvis.memory.contextual_extractors import (
     ContextualGeminiMemoryExtractor,
     ContextualOpenAIMemoryExtractor,
 )
+from jarvis.memory.contextual_retrieval_shadow import (
+    review_with_existing_retrieval_shadow,
+)
 from jarvis.memory.contextual_revision_shadow import review_contextual_revision_shadow
+from jarvis.memory.embeddings import SemanticEmbeddingStore
 from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
-from jarvis.memory.retrieval import RetrievalCandidate
+from jarvis.memory.retrieval import RetrievalCandidate, SemanticRetrievalService
 from jarvis.memory.revision_shadow import RevisionDisposition
 from jarvis.memory.revision_snapshot_shadow import CanonicalRevisionSnapshotReader
 from jarvis.memory.types import (
@@ -512,6 +517,126 @@ async def test_forged_normalized_text_and_wrong_assertion_id_are_rejected(
             assert result.disposition is RevisionDisposition.SKIP
             assert result.reason_code == "unverified_retrieval_candidate"
             assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+def _synthetic_basis(index: int = 0) -> np.ndarray:
+    result = np.zeros(256, dtype=np.float32)
+    result[index] = 1.0
+    return result
+
+
+class FakeLocalQueryEncoder:
+    def __init__(self, vector: np.ndarray | None = None) -> None:
+        self.vector = _synthetic_basis() if vector is None else vector
+        self.calls: list[str] = []
+
+    def encode_query(self, text: str) -> np.ndarray:
+        self.calls.append(text)
+        return self.vector
+
+
+@pytest.mark.asyncio
+async def test_existing_scoped_retrieval_joins_to_contextual_review_without_qwen_run(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "retrieval-joined.db")
+    conversation, turn = _session()
+    encoder = FakeLocalQueryEncoder()
+    extractor = FakeContextExtractor()
+    retrieval = SemanticRetrievalService(writer)
+    embeddings = SemanticEmbeddingStore(writer, clock=lambda: BASE)
+    try:
+        correct = await lifecycle.create(
+            _draft("Short explanations"), _source("owner-correct")
+        )
+        await embeddings.upsert(
+            correct.assertion_id,
+            normalized_text=correct.normalized_text,
+            vector=_synthetic_basis(),
+        )
+
+        # Wrong subject must not contaminate owner-personal context.
+        other = await lifecycle.create(
+            replace(_draft("Unrelated advice"), subject="other-person"),
+            _source("other-person"),
+        )
+        await embeddings.upsert(
+            other.assertion_id,
+            normalized_text=other.normalized_text,
+            vector=_synthetic_basis(),
+        )
+        result = await review_with_existing_retrieval_shadow(
+            conversation=conversation,
+            turn=turn,
+            encoder=encoder,
+            retrieval=retrieval,
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert result.disposition is RevisionDisposition.CONFLICT_REVIEW
+        assert encoder.calls == [turn.text]
+        assert len(extractor.calls) == 1
+        context = json.loads(extractor.calls[0]["context"])
+        assert context["verified_current_memory_candidates"] == [
+            {"predicate": "reply_style", "current_value": "Short explanations"}
+        ]
+        assert "other-person" not in extractor.calls[0]["context"]
+        assert "Unrelated advice" not in extractor.calls[0]["context"]
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_existing_retrieval_is_disabled_before_encoder_by_default(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "retrieval-off.db")
+    conversation, turn = _session()
+    encoder = FakeLocalQueryEncoder()
+    extractor = FakeContextExtractor()
+    try:
+        result = await review_with_existing_retrieval_shadow(
+            conversation=conversation,
+            turn=turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+        )
+        assert result.reason_code == "model_calls_disabled"
+        assert encoder.calls == []
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_bad_embedding_fails_closed_before_provider_extraction(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "retrieval-bad.db")
+    conversation, turn = _session()
+    encoder = FakeLocalQueryEncoder(np.zeros(3, dtype=np.float32))
+    extractor = FakeContextExtractor()
+    try:
+        result = await review_with_existing_retrieval_shadow(
+            conversation=conversation,
+            turn=turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert result.disposition is RevisionDisposition.SKIP
+        assert result.reason_code == "bounded_retrieval_failed"
+        assert extractor.calls == []
     finally:
         await reader.close()
         await writer.close()
