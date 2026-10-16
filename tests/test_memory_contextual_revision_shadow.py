@@ -35,6 +35,7 @@ from jarvis.memory.contextual_retrieval_shadow import (
 )
 from jarvis.memory.contextual_revision_shadow import review_contextual_revision_shadow
 from jarvis.memory.embeddings import SemanticEmbeddingStore
+from jarvis.memory.extractors import MemoryCandidateExtractionError
 from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
@@ -955,3 +956,81 @@ async def test_three_call_followup_explicit_withdrawal_only_requests_review(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_gemini_research_schema_closes_predicate_to_retrieved_key():
+    proposal = _proposal()
+    fake = FakeGeminiInteractions(proposal.model_dump_json())
+    client = SimpleNamespace(aio=SimpleNamespace(interactions=fake))
+    adapter = ContextualGeminiMemoryExtractor(client=client, model="gemini-fake")
+    context = json.dumps(
+        {
+            "recent_accepted_owner_turns": ["Previously short explanations."],
+            "verified_current_memory_candidates": [
+                {"predicate": "reply_style", "current_value": "Short explanations"}
+            ],
+        }
+    )
+    output = await adapter.extract_contextual(text="Now detailed.", context=context)
+    assert output.predicate == "reply_style"
+    enum_schema = fake.calls[0]["response_format"]["schema"]
+    assert enum_schema["properties"]["predicate"]["anyOf"] == [
+        {"type": "string", "enum": ["reply_style"]},
+        {"type": "null"},
+    ]
+    assert fake.calls[0]["store"] is False
+
+
+@pytest.mark.asyncio
+async def test_gemini_research_rejects_unlisted_alias_even_if_provider_ignores_schema():
+    wrong = _proposal().model_copy(update={"predicate": "reply_format_alias"})
+    fake = FakeGeminiInteractions(wrong.model_dump_json())
+    client = SimpleNamespace(aio=SimpleNamespace(interactions=fake))
+    adapter = ContextualGeminiMemoryExtractor(client=client, model="gemini-fake")
+    context = json.dumps(
+        {"verified_current_memory_candidates": [
+            {"predicate": "reply_style", "current_value": "Short explanations"}
+        ]}
+    )
+    with pytest.raises(
+        MemoryCandidateExtractionError, match="outside the verified context"
+    ):
+        await adapter.extract_contextual(text="Now detailed.", context=context)
+    assert len(fake.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_gemini_research_ambiguous_predicate_candidates_remain_enum_not_authority():
+    fake = FakeGeminiInteractions(_proposal().model_dump_json())
+    client = SimpleNamespace(aio=SimpleNamespace(interactions=fake))
+    adapter = ContextualGeminiMemoryExtractor(client=client, model="gemini-fake")
+    context = json.dumps(
+        {"verified_current_memory_candidates": [
+            {"predicate": "workshop_room", "current_value": "Hall B"},
+            {"predicate": "reply_style", "current_value": "Short explanations"},
+        ]}
+    )
+    output = await adapter.extract_contextual(
+        text="What I said about the workshop was wrong.", context=context
+    )
+    assert output.predicate == "reply_style"
+    assert fake.calls[0]["response_format"]["schema"]["properties"]["predicate"][
+        "anyOf"
+    ][0]["enum"] == ["reply_style", "workshop_room"]
+    # A constrained enum ensures only syntactically valid keys, not
+    # semantic correctness. The coordinator still clarifies >1 target.
+
+
+@pytest.mark.asyncio
+async def test_gemini_research_zero_candidates_cannot_invent_revised_key():
+    fake = FakeGeminiInteractions(_proposal().model_dump_json())
+    client = SimpleNamespace(aio=SimpleNamespace(interactions=fake))
+    adapter = ContextualGeminiMemoryExtractor(client=client, model="gemini-fake")
+    with pytest.raises(
+        MemoryCandidateExtractionError, match="outside the verified context"
+    ):
+        await adapter.extract_contextual(
+            text="Correct the previous detail.",
+            context='{"verified_current_memory_candidates":[]}',
+        )
