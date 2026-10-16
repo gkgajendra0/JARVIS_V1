@@ -227,9 +227,7 @@ async def test_retraction_removes_current_target_from_revision_resolver(
 ) -> None:
     writer, reader, lifecycle, resolver = _setup(tmp_path / "retracted.db")
     try:
-        original = await lifecycle.create(
-            _draft("short examples"), _source("initial")
-        )
+        original = await lifecycle.create(_draft("short examples"), _source("initial"))
         await lifecycle.retract(original.assertion_id, _source("retracted"))
         result = await resolver.resolve_exact(
             subject_scope="personal", subject="owner", predicate="reply_style"
