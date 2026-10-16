@@ -19,6 +19,7 @@ from typing import Protocol
 
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 
+from .assertions import canonical_value_json
 from .candidates import (
     MemoryExtractionIntent,
     MemoryExtractionProposal,
@@ -34,7 +35,7 @@ from .revision_proposal_shadow import review_extracted_revision_shadow
 from .revision_shadow import RevisionDisposition
 from .revision_snapshot_shadow import CanonicalRevisionSnapshotReader
 from .service import canonical_memory_predicate
-from .types import AssertionState, MemorySourceClass, Sensitivity
+from .types import AssertionState, MemorySourceClass, Sensitivity, ValueType
 
 _MAX_CONTEXT_CANDIDATES = 3
 _MAX_RECENT_OWNER_TURNS = 3
@@ -177,13 +178,18 @@ async def review_contextual_revision_shadow(
                     RevisionDisposition.NEEDS_CLARIFICATION, "ambiguous_retrieval_keys"
                 )
             seen_keys.add(key)
-            resolved = await reader.resolve_exact(
-                subject_scope="personal", subject="owner", predicate=key
+            # Compare the value AND normalized text against the canonical row
+            # within the same read-only connection invocation. A forged/stale
+            # retrieval object must never supply instructions to the extractor.
+            content_bound = await reader.verify_exact_content(
+                subject_scope="personal",
+                subject="owner",
+                predicate=key,
+                assertion_id=assertion.assertion_id,
+                value_json=canonical_value_json(ValueType.TEXT, assertion.value),
+                normalized_text=assertion.normalized_text,
             )
-            if (
-                resolved.witness is None
-                or resolved.witness.assertion_id != assertion.assertion_id
-            ):
+            if not content_bound:
                 return ContextualRevisionReview(
                     RevisionDisposition.SKIP, "unverified_retrieval_candidate"
                 )

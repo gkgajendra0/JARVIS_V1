@@ -66,6 +66,73 @@ class CanonicalRevisionSnapshotReader:
             )
         )
 
+    async def verify_exact_content(
+        self,
+        *,
+        subject_scope: str,
+        subject: str,
+        predicate: str,
+        assertion_id: str,
+        value_json: str,
+        normalized_text: str,
+    ) -> bool:
+        """Compare a retrieved text candidate to authoritative content in ONE read.
+
+        No stored value leaves the injected SQLite reader; return a boolean
+        only. Metadata/lineage and value equality are checked in the same
+        serialized connection invocation. This is NOT a write authorization
+        or a guarantee the row won't change after the read.
+        """
+
+        scope = _required_text(subject_scope, "subject_scope")
+        owner = _required_text(subject, "subject")
+        key = _required_text(predicate, "predicate")
+        record = _required_text(assertion_id, "assertion_id")
+        value = _required_text(value_json, "value_json")
+        normalized = _required_text(normalized_text, "normalized_text")
+        return await self._reader.run(
+            lambda connection: _verify_exact_content(
+                connection,
+                subject_scope=scope,
+                subject=owner,
+                predicate=key,
+                assertion_id=record,
+                value_json=value,
+                normalized_text=normalized,
+            )
+        )
+
+
+def _verify_exact_content(
+    connection: Any,
+    *,
+    subject_scope: str,
+    subject: str,
+    predicate: str,
+    assertion_id: str,
+    value_json: str,
+    normalized_text: str,
+) -> bool:
+    """Pure read-only content binding, not raw memory exposure."""
+
+    metadata = _resolve_metadata(
+        connection, subject_scope=subject_scope, subject=subject, predicate=predicate
+    )
+    if metadata.witness is None or metadata.witness.assertion_id != assertion_id:
+        return False
+    row = connection.execute(
+        """
+        SELECT value_type, value_json, normalized_text
+          FROM current_semantic_assertion
+         WHERE assertion_id = ? AND subject_scope = ?
+           AND subject = ? AND predicate = ?
+        """,
+        (assertion_id, subject_scope, subject, predicate),
+    ).fetchone()
+    if row is None:
+        return False
+    return row[0] == "text" and row[1] == value_json and row[2] == normalized_text
+
 
 def _resolve_metadata(
     connection: Any, *, subject_scope: str, subject: str, predicate: str
