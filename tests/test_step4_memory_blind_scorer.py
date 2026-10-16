@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from tools.research.step4_memory_blind_scorer import score_locked
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -138,11 +137,11 @@ def test_cli_requires_frozen_exact_predictions_bytes(tmp_path: Path) -> None:
         "--predictions-sha256",
         "0" * 64,
     ]
-    failed = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
+    failed = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, check=False)
     assert failed.returncode != 0
     assert "changed after" in failed.stderr
     successful = subprocess.run(
-        [*argv[:-1], digest], cwd=ROOT, capture_output=True, text=True
+        [*argv[:-1], digest], cwd=ROOT, capture_output=True, text=True, check=False
     )
     assert successful.returncode == 0
     report = json.loads(successful.stdout)
