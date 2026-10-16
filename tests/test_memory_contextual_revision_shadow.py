@@ -26,16 +26,15 @@ from jarvis.memory.contextual_extractors import (
     ContextualGeminiMemoryExtractor,
     ContextualOpenAIMemoryExtractor,
 )
-from jarvis.memory.contextual_revision_shadow import review_contextual_revision_shadow
 from jarvis.memory.contextual_retrieval_shadow import (
     review_with_existing_retrieval_shadow,
 )
+from jarvis.memory.contextual_revision_shadow import review_contextual_revision_shadow
 from jarvis.memory.embeddings import SemanticEmbeddingStore
-from jarvis.memory.retrieval import SemanticRetrievalService
 from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
-from jarvis.memory.retrieval import RetrievalCandidate
+from jarvis.memory.retrieval import RetrievalCandidate, SemanticRetrievalService
 from jarvis.memory.revision_shadow import RevisionDisposition
 from jarvis.memory.revision_snapshot_shadow import CanonicalRevisionSnapshotReader
 from jarvis.memory.types import (
