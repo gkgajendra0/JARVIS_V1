@@ -156,6 +156,9 @@ async def test_missing_or_ambiguous_canonical_target_is_not_guessed(
 ) -> None:
     writer, reader, lifecycle, resolver = _setup(tmp_path / "ambiguous.db")
     try:
+        # The writer initializes the disposable schema before a mode=ro reader
+        # can open it; unlike other cases there is no initial create() call.
+        await writer.start()
         missing = await resolver.resolve_exact(
             subject_scope="personal", subject="owner", predicate="reply_style"
         )
