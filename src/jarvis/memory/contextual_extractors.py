@@ -61,6 +61,49 @@ def _payload(*, text: str, context: str) -> str:
     )
 
 
+def _contextual_predicate_schema(
+    payload: str,
+) -> tuple[dict[str, object], frozenset[str] | None]:
+    """Constrain provider-proposed canonical targets to retrieved keys.
+
+    This does not establish semantic target correctness or create write
+    authority; it only prevents freely invented predicate spellings.
+    Rejection is preferable to auto-rewriting a model's unsupported key.
+    """
+
+    data = json.loads(payload)
+    context = data["review_context"]
+    candidates = context.get("verified_current_memory_candidates")
+    schema = MemoryExtractionProposal.model_json_schema()
+    if candidates is None:
+        return schema, None
+    if not isinstance(candidates, list) or len(candidates) > 3:
+        raise ValueError("invalid contextual memory candidates")
+    predicates: list[str] = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            raise TypeError("invalid contextual memory candidate")
+        key = candidate.get("predicate")
+        if not isinstance(key, str) or not key.strip() or len(key) > 160:
+            raise ValueError("invalid contextual memory predicate")
+        predicates.append(key)
+    if len(set(predicates)) != len(predicates):
+        raise ValueError("duplicate contextual memory predicate")
+    if not predicates:
+        # This adapter can also represent a newly proposed fact when
+        # no old candidate was supplied; the downstream revision
+        # reviewer will not resolve a revision against an absent key.
+        return schema, frozenset()
+    schema["properties"]["predicate"] = {
+        "anyOf": [
+            {"type": "string", "enum": sorted(predicates)},
+            {"type": "null"},
+        ],
+        "default": None,
+    }
+    return schema, frozenset(predicates)
+
+
 class ContextualGeminiMemoryExtractor(GeminiMemoryCandidateExtractor):
     """Same Gemini Interactions schema path, independent research instruction."""
 
@@ -68,6 +111,7 @@ class ContextualGeminiMemoryExtractor(GeminiMemoryCandidateExtractor):
         self, *, text: str, context: str
     ) -> MemoryExtractionProposal:
         input_json = _payload(text=text, context=context)
+        restricted_schema, verified_keys = _contextual_predicate_schema(input_json)
         response = await self._client.aio.interactions.create(
             model=self._model,
             input=input_json,
@@ -75,7 +119,7 @@ class ContextualGeminiMemoryExtractor(GeminiMemoryCandidateExtractor):
             response_format={
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": MemoryExtractionProposal.model_json_schema(),
+                "schema": restricted_schema,
             },
             store=False,
         )
@@ -85,11 +129,22 @@ class ContextualGeminiMemoryExtractor(GeminiMemoryCandidateExtractor):
                 "Gemini returned no structured memory extraction output"
             )
         try:
-            return MemoryExtractionProposal.model_validate_json(result)
+            proposal = MemoryExtractionProposal.model_validate_json(result)
         except ValidationError as exc:
             raise MemoryCandidateExtractionError(
                 "Gemini returned an invalid memory extraction proposal"
             ) from exc
+        # Do not assume the model/provider honored a dynamic JSON enum.
+        # The local validator independently rejects unsupported keys.
+        if (
+            verified_keys is not None
+            and proposal.predicate is not None
+            and proposal.predicate not in verified_keys
+        ):
+            raise MemoryCandidateExtractionError(
+                "Gemini returned a predicate outside the verified context"
+            )
+        return proposal
 
 
 class ContextualOpenAIMemoryExtractor(OpenAIMemoryCandidateExtractor):
