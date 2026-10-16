@@ -77,7 +77,10 @@ def _safe_prior_turns(
             continue
         if not seen_current or turn.role is not ConversationRole.USER:
             continue
-        if assess_contextual_memory_boundary(turn.text) is ContextualBoundaryDisposition.EXPLICIT_CONTROL:
+        if (
+            assess_contextual_memory_boundary(turn.text)
+            is ContextualBoundaryDisposition.EXPLICIT_CONTROL
+        ):
             continue
         try:
             reject_prohibited_secret(predicate="prior_user_turn", value=turn.text)
@@ -123,7 +126,10 @@ async def review_contextual_revision_shadow(
         return ContextualRevisionReview(RevisionDisposition.SKIP, "untrusted_turn")
     if not conversation.turns or conversation.turns[-1].turn_id != turn.turn_id:
         return ContextualRevisionReview(RevisionDisposition.SKIP, "not_latest_turn")
-    if assess_contextual_memory_boundary(turn.text) is ContextualBoundaryDisposition.EXPLICIT_CONTROL:
+    if (
+        assess_contextual_memory_boundary(turn.text)
+        is ContextualBoundaryDisposition.EXPLICIT_CONTROL
+    ):
         return ContextualRevisionReview(
             RevisionDisposition.SKIP, "explicit_memory_control_boundary"
         )
