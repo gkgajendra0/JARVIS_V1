@@ -775,3 +775,72 @@ async def test_equal_but_unaccepted_turn_copy_cannot_trigger_context_or_retrieva
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_research_context_never_invokes_models_on_owner_style_session_ids(
+    tmp_path: Path,
+) -> None:
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "owner-session.db")
+    session = ConversationSession(session_id="owner-real-session")
+    session.start()
+    turn = session.accept_turn(
+        ConversationRole.USER, "I prefer detailed explanations now."
+    )
+    extractor = FakeContextExtractor()
+    encoder = FakeLocalQueryEncoder()
+    try:
+        direct = await review_contextual_revision_shadow(
+            conversation=session,
+            turn=turn,
+            retrieved=(),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        scoped = await review_with_existing_retrieval_shadow(
+            conversation=session,
+            turn=turn,
+            encoder=encoder,
+            retrieval=SemanticRetrievalService(writer),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert direct.reason_code == "synthetic_session_required"
+        assert scoped.reason_code == "synthetic_session_required"
+        assert encoder.calls == []
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_non_synthetic_memory_source_is_not_exported_to_contextual_model(
+    tmp_path: Path,
+) -> None:
+    writer, reader, lifecycle, resolver = _fixture(tmp_path / "owner-source.db")
+    session, turn = _session()
+    extractor = FakeContextExtractor()
+    try:
+        owner_source = replace(
+            _source("live-looking-source"),
+            canonical_ref="conversation:real-owner-turn",
+        )
+        assertion = await lifecycle.create(
+            _draft("Short explanations"), owner_source
+        )
+        refused = await review_contextual_revision_shadow(
+            conversation=session,
+            turn=turn,
+            retrieved=(_retrieval(assertion),),
+            reader=resolver,
+            extractor=extractor,
+            allow_model_calls=True,
+        )
+        assert refused.reason_code == "unverified_retrieval_candidate"
+        assert extractor.calls == []
+    finally:
+        await reader.close()
+        await writer.close()
