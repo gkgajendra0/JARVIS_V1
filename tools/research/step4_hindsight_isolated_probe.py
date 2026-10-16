@@ -28,6 +28,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from tools.research.step4_memory_shadow_benchmark import load_cases
+from tools.research.step4_memory_model_comparators import (
+    require_pinned_synthetic_corpus,
+)
 
 CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 SAFE_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -112,7 +115,8 @@ def main() -> None:
     url = require_loopback(args.url)
     from hindsight_client import Hindsight
 
-    corpus, _digest = load_cases(CASES)
+    corpus, digest = load_cases(CASES)
+    require_pinned_synthetic_corpus(digest)
     cases = [c for c in corpus["cases"] if c["kind"] == "context"]
     bank = f"jarvis-dev-only-{uuid.uuid4().hex}"
     client = Hindsight(base_url=url)
