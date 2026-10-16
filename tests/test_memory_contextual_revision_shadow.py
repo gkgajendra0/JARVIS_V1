@@ -717,7 +717,7 @@ async def test_informal_hinglish_correction_can_reach_review_but_cannot_write(
 async def test_explicit_memory_command_remains_blocked_from_contextual_model(
     tmp_path: Path,
 ) -> None:
-    writer, reader, lifecycle, resolver = _fixture(tmp_path / "explicit.db")
+    writer, reader, _lifecycle, resolver = _fixture(tmp_path / "explicit.db")
     conversation, turn = _session(current="Correct my stored memory about reply style.")
     encoder = FakeLocalQueryEncoder()
     extractor = FakeContextExtractor()
