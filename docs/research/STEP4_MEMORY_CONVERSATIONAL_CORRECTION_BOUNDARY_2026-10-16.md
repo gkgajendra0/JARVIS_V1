@@ -56,3 +56,13 @@ Do not treat passing this script as production acceptance. A later true
 accuracy evaluation requires *new* independent English/Hindi/Hinglish cases
 and approved synthetic-only external model testing. Neither is performed by
 the script, and no request to enable automatic memory writing is implied.
+
+## Synthetic-data isolation gate
+
+The research wrapper also refuses non-`synthetic` session IDs before any
+encoder/retrieval/provider invocation, and the canonical content verifier
+requires `conversation:synthetic:` provenance for retrieved values.
+This is a development-only interlock, not a substitute for real production
+data-governance authorization. The production runtime never imports it.
+Neither a synthetically named session nor a successful schema validation is
+permission to send real personal data to an external model.
