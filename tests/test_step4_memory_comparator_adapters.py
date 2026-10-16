@@ -16,8 +16,8 @@ from tools.research.step4_hindsight_isolated_probe import (
 from tools.research.step4_memory_model_comparators import (
     eligible_raw_turn,
     project_triples,
-    score_raw_candidate_predictions,
     require_pinned_synthetic_corpus,
+    score_raw_candidate_predictions,
 )
 from tools.research.step4_memory_shadow_benchmark import (
     DEFAULT_CASES,
