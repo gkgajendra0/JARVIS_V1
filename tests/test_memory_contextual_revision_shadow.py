@@ -324,7 +324,7 @@ async def test_private_or_stale_candidate_never_reaches_model(
             extractor=extractor,
             allow_model_calls=True,
         )
-        assert stale.reason_code == "unsafe_retrieval_context"
+        assert stale.reason_code == "unverified_retrieval_candidate"
         assert extractor.calls == []
     finally:
         await reader.close()
