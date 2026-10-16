@@ -18,9 +18,12 @@ from .contextual_revision_shadow import (
     ContextualRevisionReview,
     review_contextual_revision_shadow,
 )
+from .contextual_control_shadow import (
+    ContextualBoundaryDisposition,
+    assess_contextual_memory_boundary,
+)
 from .explicit import (
     MemorySecretRejectedError,
-    is_explicit_memory_control_text,
     reject_prohibited_secret,
 )
 from .retrieval import (
@@ -77,7 +80,7 @@ async def review_with_existing_retrieval_shadow(
         return ContextualRevisionReview(RevisionDisposition.SKIP, "untrusted_turn")
     if not conversation.turns or conversation.turns[-1].turn_id != turn.turn_id:
         return ContextualRevisionReview(RevisionDisposition.SKIP, "not_latest_turn")
-    if is_explicit_memory_control_text(turn.text):
+    if assess_contextual_memory_boundary(turn.text) is ContextualBoundaryDisposition.EXPLICIT_CONTROL:
         return ContextualRevisionReview(
             RevisionDisposition.SKIP, "explicit_memory_control_boundary"
         )
