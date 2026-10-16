@@ -45,7 +45,8 @@ jobs:
           from hindsight_client import Hindsight
 
           assert callable(create_memory_manager)
-          assert Hindsight is not None
+          for method in ("create_bank", "retain_batch", "recall", "delete_bank", "close"):
+              assert callable(getattr(Hindsight, method, None)), method
           assert version("langmem") == "0.0.30"
           assert version("hindsight-client") == "0.10.3"
           print("SDK import contracts PASS; 0 model calls, 0 bank writes")
