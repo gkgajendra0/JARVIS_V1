@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from tools.research.step4_memory_shadow_benchmark import load_cases
+
 CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 SAFE_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
