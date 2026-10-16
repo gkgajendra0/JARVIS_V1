@@ -194,9 +194,7 @@ class JarvisModelAdapter:
     def __call__(self, text: str, case: dict[str, Any]) -> str:
         if self._closed:
             raise RuntimeError("closed JARVIS benchmark adapter")
-        proposal = self._loop.run_until_complete(
-            self._extractor.extract(text=text)
-        )
+        proposal = self._loop.run_until_complete(self._extractor.extract(text=text))
         return project_proposal(proposal, case)
 
     def close(self) -> None:
