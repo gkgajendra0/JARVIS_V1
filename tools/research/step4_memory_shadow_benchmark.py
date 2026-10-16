@@ -265,6 +265,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument(
+        "--unlabeled-view",
+        action="store_true",
+        help="Export case input without gold labels for offline challenger scoring.",
+    )
+    parser.add_argument(
         "--challenger",
         type=Path,
         default=None,
@@ -272,6 +277,24 @@ def main() -> None:
     )
     args = parser.parse_args()
     cases, digest = load_cases(args.cases)
+    if args.unlabeled_view:
+        if args.challenger is not None:
+            parser.error("--unlabeled-view cannot be combined with --challenger")
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "corpus_sha256": digest,
+                    "cases": [
+                        {key: value for key, value in case.items() if key != "expected"}
+                        for case in cases["cases"]
+                    ],
+                },
+                sort_keys=True,
+                indent=2,
+            )
+        )
+        return
     challenger = load_challenger(args.challenger, cases) if args.challenger else None
     report = evaluate(cases, challenger)
     report["corpus_sha256"] = digest
