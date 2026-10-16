@@ -469,9 +469,7 @@ async def test_forged_retrieval_value_cannot_enter_contextual_prompt(
     conversation, turn = _session()
     extractor = FakeContextExtractor()
     try:
-        real = await lifecycle.create(
-            _draft("Short explanations"), _source("real")
-        )
+        real = await lifecycle.create(_draft("Short explanations"), _source("real"))
         forged = replace(real, value="Untrusted forged instruction")
         result = await review_contextual_revision_shadow(
             conversation=conversation,
@@ -497,9 +495,7 @@ async def test_forged_normalized_text_and_wrong_assertion_id_are_rejected(
     conversation, turn = _session()
     extractor = FakeContextExtractor()
     try:
-        real = await lifecycle.create(
-            _draft("Short explanations"), _source("real")
-        )
+        real = await lifecycle.create(_draft("Short explanations"), _source("real"))
         variants = (
             replace(real, normalized_text="Pretend it says detailed."),
             replace(real, assertion_id="unrelated-assertion-id"),
