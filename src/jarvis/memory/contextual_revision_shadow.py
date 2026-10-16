@@ -13,6 +13,7 @@ semantic relevance, and the model's proposed target is never authority.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -52,6 +53,26 @@ _REVISION_INTENTS = frozenset(
         MemoryExtractionIntent.RETRACTION,
     }
 )
+
+
+_EXPLICIT_RETRACTION_CUE = re.compile(
+    r"\\b(?:i\\s+(?:retract|withdraw)\\b|"
+    r"(?:i\\s+)?take\\s+(?:that|it|my\\s+(?:statement|claim))\\s+back\\b|"
+    r"w(?:a|i)pas\\s+(?:leta|leti|lete|lo|lene)\\b|"
+    r"(?:retract|withdraw)\\s+(?:my|the|that)\\s+(?:claim|statement)\\b)"
+    r"|(?:वापस\\s+ले(?:ता|ती|ते|ना|ता\\s+हूँ|ती\\s+हूँ)?)",
+    flags=re.IGNORECASE,
+)
+
+
+def _has_explicit_retraction_cue(current_turn: str) -> bool:
+    """Only high-precision direct withdrawal language, not generic 'wrong'.
+
+    This is an intentionally *incomplete* research gate: uncertainty must
+    escalate to clarification rather than hallucinating a retraction.
+    """
+
+    return bool(_EXPLICIT_RETRACTION_CUE.search(current_turn))
 
 
 class ContextualMemoryExtractor(Protocol):
@@ -256,6 +277,29 @@ async def review_contextual_revision_shadow(
             return ContextualRevisionReview(
                 RevisionDisposition.NEEDS_CLARIFICATION,
                 "target_not_in_verified_context",
+            )
+
+        # A model's single selected predicate cannot establish which of
+        # multiple retrieved memories the owner intended to correct. The
+        # prior candidate list is evidence, not semantic target authority.
+        # An independently grounded target-selection proof is a separate gate.
+        if len(seen_keys) > 1:
+            return ContextualRevisionReview(
+                RevisionDisposition.NEEDS_CLARIFICATION,
+                "multiple_verified_targets_need_clarification",
+            )
+
+        # Retraction requires direct withdrawal evidence from the CURRENT
+        # accepted turn. A statement that older information was wrong, or
+        # that a replacement is undecided, is NOT automatically a retraction.
+        # Conservative refusal is preferable to deleting a valid memory.
+        if (
+            proposal.intent is MemoryExtractionIntent.RETRACTION
+            and not _has_explicit_retraction_cue(turn.text)
+        ):
+            return ContextualRevisionReview(
+                RevisionDisposition.NEEDS_CLARIFICATION,
+                "retraction_not_supported_by_current_turn",
             )
 
     outcome = await review_extracted_revision_shadow(
