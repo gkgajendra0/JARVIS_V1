@@ -9,7 +9,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from tools.research.step4_hindsight_isolated_probe import (
     require_loopback,
     run_local_retrieval_probe,
