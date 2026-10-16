@@ -43,12 +43,8 @@ from jarvis.memory.types import (  # noqa: E402
 
 DEFAULT_CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 LANGUAGES = frozenset({"en", "hi", "hinglish"})
-CANDIDATE_LABELS = frozenset(
-    {"skip", "review", "conflict_review", "duplicate"}
-)
-UTILITY_LABELS = frozenset(
-    {"essential", "helpful", "unnecessary", "steering_risk"}
-)
+CANDIDATE_LABELS = frozenset({"skip", "review", "conflict_review", "duplicate"})
+UTILITY_LABELS = frozenset({"essential", "helpful", "unnecessary", "steering_risk"})
 
 
 def load_cases(path: Path) -> tuple[dict[str, Any], str]:
