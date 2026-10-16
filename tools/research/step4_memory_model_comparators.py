@@ -55,6 +55,16 @@ from jarvis.memory.types import MemorySourceClass
 
 DEFAULT_CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 _VALID_PREDICTIONS = frozenset(x.value for x in CandidateReviewDisposition)
+# Exact, public, synthetic development fixture only. Never accept arbitrary
+# owner-memory or private holdout files for a provider-backed experiment.
+PINNED_DEVELOPMENT_SHA256 = (
+    "68930a93390e896088b383cc39739279459f63017bed2054d746fcdc0933cf61"
+)
+
+
+def require_pinned_synthetic_corpus(digest: str) -> None:
+    if digest != PINNED_DEVELOPMENT_SHA256:
+        raise ValueError("non-pinned development corpus is prohibited for model calls")
 
 
 def eligible_raw_turn(case: dict[str, Any]) -> bool:
@@ -217,7 +227,6 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument("--allow-model-calls", action="store_true")
     parser.add_argument("--max-cases", type=int, default=3)
-    parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     args = parser.parse_args()
 
     if not args.allow_model_calls:
@@ -226,7 +235,8 @@ def main() -> None:
         parser.error("--max-cases must be 1..100")
     if args.backend == "jarvis" and not args.provider:
         parser.error("--provider is required for Jarvis adapter")
-    corpus, digest = load_cases(args.cases)
+    corpus, digest = load_cases(DEFAULT_CASES)
+    require_pinned_synthetic_corpus(digest)
     selected = [c for c in corpus["cases"] if c["kind"] == "candidate"][
         : args.max_cases
     ]
