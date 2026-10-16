@@ -56,13 +56,18 @@ def test_excluded_external_source_never_reaches_model() -> None:
 def test_model_receives_raw_utterance_not_gold_or_seeded_proposal() -> None:
     case = _candidate_cases()[0]
     seen: list[str] = []
+    seen_metadata: list[dict] = []
 
     def fake_model(text: str, case: dict) -> str:
         seen.append(text)
+        seen_metadata.append(dict(case))
         return "review"
 
     result = score_raw_candidate_predictions([case], fake_model)
     assert seen == [case["utterance"]]
+    assert seen_metadata == [{"id": "c01", "current_exact_value": None}]
+    assert "expected" not in seen_metadata[0]
+    assert "proposal" not in seen_metadata[0]
     assert result["candidate_predictions"] == {"c01": "review"}
     assert result["completed_model_calls"] == 1
 
