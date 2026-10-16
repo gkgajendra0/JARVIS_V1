@@ -41,3 +41,18 @@ prove true owner intent, ASR parsing, or actual LLM correctness.
 A later release needs independent multilingual blind acceptance and
 an explicit memory authorization review. Existing production memory
 commands remain unchanged.
+
+## Owner-machine offline readiness
+
+An optional single-command offline preflight is included. It reuses the
+existing project `.venv` (no model download), clears provider credentials
+from the child process and runs only synthetic SQLite regression tests:
+
+```powershell
+powershell -NoProfile -File tools/research/step4_contextual_revision_preflight.ps1
+```
+
+Do not treat passing this script as production acceptance. A later true
+accuracy evaluation requires *new* independent English/Hindi/Hinglish cases
+and approved synthetic-only external model testing. Neither is performed by
+the script, and no request to enable automatic memory writing is implied.
