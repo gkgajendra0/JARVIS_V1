@@ -145,14 +145,10 @@ def test_nonowner_or_unaccepted_turns_cannot_authorize_revisions(
 ) -> None:
     # The first fixture is accepted; exercise the unaccepted-turn path.
     unaccepted = replace(disallowed, accepted_user_turn=False)
-    assert (
-        assess_revision_shadow(unaccepted).disposition
-        is RevisionDisposition.SKIP
-    )
+    assert assess_revision_shadow(unaccepted).disposition is RevisionDisposition.SKIP
     if disallowed.source_class is not MemorySourceClass.OWNER_DIRECT:
         assert (
-            assess_revision_shadow(disallowed).disposition
-            is RevisionDisposition.SKIP
+            assess_revision_shadow(disallowed).disposition is RevisionDisposition.SKIP
         )
 
 
