@@ -41,6 +41,14 @@ CASES = ROOT / "tools/research/step4_memory_shadow_development_cases_v1.json"
 SAFE_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
+class ResearchBankCleanupError(RuntimeError):
+    """Raised only if deletion of a disposable research bank fails."""
+
+    def __init__(self, bank_id: str) -> None:
+        super().__init__("disposable research bank cleanup failed")
+        self.bank_id = bank_id
+
+
 def require_loopback(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme != "http" or parsed.hostname not in SAFE_HOSTS:
@@ -156,9 +164,12 @@ def run_local_retrieval_probe(
                 negative_self_doc_top3 += int(own_doc in document_ids[:3])
     finally:
         if created:
-            # Failure to delete cannot be hidden: this function raises.
-            client.delete_bank(bank_id=bank_id)
-            cleanup_verified = True
+            # Fail closed, preserving only the synthetic bank ID for recovery.
+            try:
+                client.delete_bank(bank_id=bank_id)
+                cleanup_verified = True
+            except Exception:
+                raise ResearchBankCleanupError(bank_id) from None
     ordered = sorted(observed)
     p95_index = max(0, math.ceil(len(ordered) * 0.95) - 1)
     return {
@@ -244,22 +255,30 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001
         # Do not print a server/SDK response body: it may contain prompts,
         # keys or owner information. No auto-retry on 429, ever.
+        cleanup_failed = isinstance(exc, ResearchBankCleanupError)
         body = getattr(exc, "body", None)
         status = getattr(exc, "status", None)
-        quota = status == 429 or (
+        quota = not cleanup_failed and (status == 429 or (
             isinstance(body, str) and (
                 '"code": 429' in body
                 or "RESOURCE_EXHAUSTED" in body
                 or "quota exceeded" in body.lower()
             )
-        )
+        ))
         print(
             json.dumps(
                 {
                     "status": "failed",
-                    "reason_code": "quota_exhausted" if quota else "probe_failed",
+                    "reason_code": (
+                        "cleanup_failed" if cleanup_failed
+                        else "quota_exhausted" if quota else "probe_failed"
+                    ),
                     "exception_class": type(exc).__name__,
-                    "cleanup": "attempted; verify bank list after failure",
+                    "cleanup": (
+                        "FAILED" if cleanup_failed
+                        else "attempted; verify bank list after failure"
+                    ),
+                    "research_bank_id": exc.bank_id if cleanup_failed else None,
                     "no_automatic_retry": True,
                 },
                 sort_keys=True,
