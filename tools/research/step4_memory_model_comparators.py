@@ -140,7 +140,13 @@ def score_raw_candidate_predictions(
             continue
         start = time.monotonic()
         try:
-            predicted = infer(case["utterance"], case)
+            # Never pass the expected label or seeded gold proposal into
+            # a contender adapter, even though this is a development corpus.
+            blinded_case_metadata = {
+                "id": case["id"],
+                "current_exact_value": case.get("current_exact_value"),
+            }
+            predicted = infer(case["utterance"], blinded_case_metadata)
             if predicted not in _VALID_PREDICTIONS:
                 raise ValueError("adapter supplied invalid prediction")
             predictions[case["id"]] = predicted
