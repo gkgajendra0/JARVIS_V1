@@ -22,13 +22,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import json
 import statistics
 import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -132,6 +133,7 @@ def score_raw_candidate_predictions(
     predictions: dict[str, str] = {}
     timings_ms: list[float] = []
     failures: list[str] = []
+    failure_types: dict[str, str] = {}
     skipped = 0
     for case in cases:
         if not eligible_raw_turn(case):
@@ -150,10 +152,11 @@ def score_raw_candidate_predictions(
             if predicted not in _VALID_PREDICTIONS:
                 raise ValueError("adapter supplied invalid prediction")
             predictions[case["id"]] = predicted
-        except Exception:  # noqa: BLE001
-            # Intentional isolation of arbitrary provider SDK failures.
-            # No provider exception text, which can contain prompt/credentials.
+        except Exception as exc:  # noqa: BLE001
+            # No provider exception text: it can contain prompt or credentials.
+            # Exception class alone lets the owner distinguish error families.
             failures.append(case["id"])
+            failure_types[case["id"]] = type(exc).__name__
         else:
             timings_ms.append((time.monotonic() - start) * 1000.0)
     return {
@@ -162,6 +165,7 @@ def score_raw_candidate_predictions(
         "skipped_pre_provider": skipped,
         "provider_failures": len(failures),
         "failed_case_ids": failures,
+        "failure_types": failure_types,
         "model_call_latency_p50_ms": (
             round(statistics.median(timings_ms), 2) if timings_ms else None
         ),
@@ -169,18 +173,63 @@ def score_raw_candidate_predictions(
     }
 
 
-def jarvis_model_adapter(provider: str, model: str) -> Callable:
-    """Wrap already-implemented real provider extractor; never write memory."""
+class JarvisModelAdapter:
+    """One loop for the entire sequential Gemini extraction trial.
+
+    A new asyncio.run per case can strand an HTTP client's async resources
+    on a closed event loop. This research-only wrapper reuses the loop and
+    closes the provider and its transports before closing that loop.
+    """
+
+    def __init__(self, extractor: Any) -> None:
+        self._extractor = extractor
+        self._loop = asyncio.new_event_loop()
+        self._closed = False
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __call__(self, text: str, case: dict[str, Any]) -> str:
+        if self._closed:
+            raise RuntimeError("closed JARVIS benchmark adapter")
+        proposal = self._loop.run_until_complete(self._extractor.extract(text=text))
+        return project_proposal(proposal, case)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            # The Gemini SDK explicitly requires async transport cleanup.
+            # A fake extractor in contract tests has no client to close.
+            client = getattr(self._extractor, "_client", None)
+            async_client = getattr(client, "aio", None)
+            async_close = getattr(async_client, "aclose", None)
+            if callable(async_close):
+                self._loop.run_until_complete(async_close())
+            close_client = getattr(client, "close", None)
+            if callable(close_client):
+                maybe_awaitable = close_client()
+                if inspect.isawaitable(maybe_awaitable):
+                    self._loop.run_until_complete(maybe_awaitable)
+        finally:
+            try:
+                self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            finally:
+                self._loop.close()
+                self._closed = True
+
+
+def jarvis_model_adapter(provider: str, model: str) -> JarvisModelAdapter:
+    """Wrap the real extractor in a managed, shared-loop research adapter."""
 
     from jarvis.memory.extractors import build_memory_candidate_extractor
 
-    extractor = build_memory_candidate_extractor(provider=provider, model=model)
-
-    def infer(text: str, case: dict[str, Any]) -> str:
-        proposal = asyncio.run(extractor.extract(text=text))
-        return project_proposal(proposal, case)
-
-    return infer
+    return JarvisModelAdapter(
+        build_memory_candidate_extractor(provider=provider, model=model)
+    )
 
 
 def langmem_model_adapter(model: str) -> Callable:
@@ -246,12 +295,13 @@ def main() -> None:
     selected = [c for c in corpus["cases"] if c["kind"] == "candidate"][
         : args.max_cases
     ]
-    adapter = (
-        jarvis_model_adapter(args.provider, args.model)
-        if args.backend == "jarvis"
-        else langmem_model_adapter(args.model)
-    )
-    scored = score_raw_candidate_predictions(selected, adapter)
+    if args.backend == "jarvis":
+        with jarvis_model_adapter(args.provider, args.model) as adapter:
+            scored = score_raw_candidate_predictions(selected, adapter)
+    else:
+        scored = score_raw_candidate_predictions(
+            selected, langmem_model_adapter(args.model)
+        )
     output = {
         "schema_version": 1,
         "name": f"{args.backend}_model_extraction",
