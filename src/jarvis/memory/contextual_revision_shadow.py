@@ -132,7 +132,9 @@ async def review_contextual_revision_shadow(
         return ContextualRevisionReview(RevisionDisposition.SKIP, "secret_guard")
 
     if not allow_model_calls:
-        return ContextualRevisionReview(RevisionDisposition.SKIP, "model_calls_disabled")
+        return ContextualRevisionReview(
+            RevisionDisposition.SKIP, "model_calls_disabled"
+        )
 
     seen_keys: set[str] = set()
     if not retrieved:
@@ -203,9 +205,7 @@ async def review_contextual_revision_shadow(
     )
 
     try:
-        proposal = await extractor.extract_contextual(
-            text=turn.text, context=context
-        )
+        proposal = await extractor.extract_contextual(text=turn.text, context=context)
     except Exception:
         # Research isolation: provider errors never become admission/release.
         return ContextualRevisionReview(
@@ -231,7 +231,8 @@ async def review_contextual_revision_shadow(
             )
         if proposed_key not in seen_keys:
             return ContextualRevisionReview(
-                RevisionDisposition.NEEDS_CLARIFICATION, "target_not_in_verified_context"
+                RevisionDisposition.NEEDS_CLARIFICATION,
+                "target_not_in_verified_context",
             )
 
     outcome = await review_extracted_revision_shadow(
