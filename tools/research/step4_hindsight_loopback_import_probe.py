@@ -68,9 +68,52 @@ class ProbeFailure(Exception):
 
 
 class LocalHTTPError(ProbeFailure):
-    def __init__(self, status_code: int) -> None:
+    def __init__(self, status_code: int, *, stage: str = "unknown") -> None:
         self.status_code = status_code
-        super().__init__(f"local_http_{status_code}")
+        # Never include URLs, bank IDs, HTTP response bodies, or owner data.
+        if stage not in _SAFE_HTTP_STAGES:
+            stage = "unknown"
+        super().__init__(f"{stage}_http_{status_code}")
+
+
+_SAFE_HTTP_STAGES = frozenset(
+    {
+        "unknown",
+        "version_check",
+        "bank_creation",
+        "bank_config_update",
+        "bank_config_read",
+        "archive_upload",
+        "import_status",
+        "document_list",
+        "document_read",
+        "bank_cleanup",
+    }
+)
+
+
+def _http_stage(method: str, path: str) -> str:
+    """Use a fixed, data-free stage label for sanitized HTTP diagnostics."""
+
+    if method == "GET" and path == "/version":
+        return "version_check"
+    if method == "PUT" and re.fullmatch(r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path):
+        return "bank_creation"
+    if method == "PATCH" and path.endswith("/config"):
+        return "bank_config_update"
+    if method == "GET" and path.endswith("/config"):
+        return "bank_config_read"
+    if method == "POST" and "/transfer/import?" in path:
+        return "archive_upload"
+    if method == "GET" and "/operations/" in path:
+        return "import_status"
+    if method == "GET" and path.endswith("/documents?limit=100"):
+        return "document_list"
+    if method == "GET" and "/documents/" in path:
+        return "document_read"
+    if method == "DELETE" and re.fullmatch(r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path):
+        return "bank_cleanup"
+    return "unknown"
 
 
 def check_isolated_docker_inspect(data: dict[str, Any]) -> bool:
@@ -182,7 +225,7 @@ class LocalHindsightHTTP:
             with self._opener.open(req, timeout=45) as response:
                 contents = response.read(_MAX_RESPONSE_BYTES + 1)
         except HTTPError as exc:
-            raise LocalHTTPError(exc.code) from exc
+            raise LocalHTTPError(exc.code, stage=_http_stage(method, path)) from exc
         if len(contents) > _MAX_RESPONSE_BYTES:
             raise ProbeFailure("local_response_too_large")
         try:
