@@ -255,7 +255,6 @@ def run_local_import(
                     "updates": {
                         "enable_auto_consolidation": False,
                         "enable_observations": False,
-                        "retain_extraction_mode": "chunks",
                     }
                 }
             ),
