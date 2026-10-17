@@ -237,6 +237,11 @@ def inspect_synthetic_archive(archive_bytes: bytes) -> dict[str, Any]:
 
     if len(archive_bytes) > _MAX_ARCHIVE_BYTES:
         raise ValueError("oversized archive")
+    # This research seam is strictly pinned: a caller must not smuggle in
+    # extra facts, altered metadata, ZIP flags or owner payloads and have
+    # them incorrectly reported as the already-reviewed fictional corpus.
+    if archive_bytes != build_synthetic_external_fact_zip():
+        raise ValueError("pinned synthetic archive mismatch")
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
         expected = {
             "manifest.json",
