@@ -189,6 +189,7 @@ def build_synthetic_external_fact_zip(
         doc_id = f"jarvis-dev-only-{fact.assertion_id}"
         context = {
             "source_turn_id": fact.source_turn_id,
+            "canonical_source_ref": f"conversation:synthetic:{fact.source_turn_id}",
             "assertion_id": fact.assertion_id,
             "assertion_version": fact.version,
             "predicate": fact.predicate,
@@ -275,6 +276,8 @@ def inspect_synthetic_archive(archive_bytes: bytes) -> dict[str, Any]:
                 or meta["assertion_id"] != fact.assertion_id
                 or meta["assertion_version"] != fact.version
                 or meta["source_turn_id"] != fact.source_turn_id
+                or meta["canonical_source_ref"]
+                != f"conversation:synthetic:{fact.source_turn_id}"
                 or meta["supersedes_id"] != fact.supersedes_id
             ):
                 raise ValueError("synthetic archive provenance mismatch")
