@@ -81,13 +81,6 @@ class FakeTransport:
         if method == "PUT" and path == ROOT:
             self.created = True
             return {"bank_id": BANK}
-        if method == "PATCH" and path == f"{ROOT}/config":
-            assert self.created
-            assert json.loads(body or b"{}")["updates"] == {
-                "enable_auto_consolidation": False,
-                "enable_observations": False,
-            }
-            return {"success": True}
         if method == "GET" and path == f"{ROOT}/config":
             if self.deleted:
                 raise LocalHTTPError(404)
@@ -175,6 +168,7 @@ def test_approved_one_import_reads_five_and_confirms_cleanup():
     assert fake.events.index(("GET", f"{ROOT}/config")) < next(
         i for i, event in enumerate(fake.events) if event[0] == "POST"
     )
+    assert all(method != "PATCH" for method, _ in fake.events)
     assert fake.events[-1] == ("GET", f"{ROOT}/config")
 
 
@@ -183,7 +177,7 @@ def test_unsafe_bank_config_blocks_import_and_cleans_up():
     with pytest.raises(ProbeFailure, match="auto_consolidation"):
         run_local_import(fake, inspected=True, bank_id=BANK)
     assert fake.deleted
-    assert all(method != "POST" for method, _ in fake.events)
+    assert all(method not in {"PATCH", "POST"} for method, _ in fake.events)
 
 
 def test_provider_failure_stops_without_retry_and_cleans_up():
