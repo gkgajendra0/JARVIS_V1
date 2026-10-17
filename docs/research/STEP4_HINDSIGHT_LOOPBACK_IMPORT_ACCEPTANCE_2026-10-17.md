@@ -25,11 +25,13 @@ it checks a real `docker inspect` for the exact **owner-created**
 - no cloud API keys / default bank templates in Docker config.
 
 It then uses only **http://127.0.0.1:18888**, with proxies and
-redirects disabled, to create a random disposable bank, set
-`enable_observations=false`, `enable_auto_consolidation=false`,
-and **read back effective config**. When the provider is `none`, Hindsight
-selects chunks mode automatically; `retain_extraction_mode=chunks` is not
-a supported configurable extraction-mode override.
+redirects disabled, to create a random disposable bank and
+**read back effective config**. It does NOT PATCH bank configuration:
+the inspected Docker configuration already sets
+`enable_observations=false` and `enable_auto_consolidation=false`.
+If the resolved per-bank settings do not both read back as false, the
+probe deletes its temporary bank and refuses import. With LLM provider
+`none`, Hindsight automatically uses chunks mode.
 
 Only after confirming those settings does it send exactly ONE
 `/v1/default/banks/{bank}/transfer/import?mode=merge&document_conflict=skip`
@@ -203,3 +205,33 @@ enumerate IDs only for banks starting `jarvis-dev-only-` in this
 disposable instance. No user-private memory values or API keys should
 be printed. Use the output to locate the 400 source before authorizing
 a separate single local import.
+
+## Next non-production contract refinement (2026-10-18)
+
+The owner confirmed the server is healthy after restart
+(`/health/ready` HTTP 200; PostgreSQL connected) and that the
+`GET /v1/default/banks?query=jarvis-dev-only-&limit=100` response
+contains `{"banks":[],"total":0}`. This is reassuring evidence
+that no matching disposable banks are currently registered in this
+test instance. It is not a proof of which earlier request returned 400.
+
+The live server's OpenAPI `BankConfigUpdate.updates` schema is a
+free-form object, but documents say only hierarchical fields may be
+overridden per-bank. The official Hindsight docs identify both
+`enable_observations` and `enable_auto_consolidation` as hierarchical
+and valid bank overrides. Consequently the old config-PATCH call
+**cannot be blamed for the 400 without additional evidence**.
+
+We removed that unnecessary PATCH from the research-only probe,
+because the lab Docker configuration already sets both server defaults
+to false. The probe still requires a GET of the *resolved* bank
+configuration showing both values false before it will upload. This
+reduces writes and possible API compatibility faults while keeping
+the critical no-auto-consolidation gate in place. Fake-client tests
+assert **no PATCH** in both the normal path and disabled-gate failure.
+No further Hindsight server requests were made as part of this fix.
+
+The only way to identify the previous 400 operation conclusively is
+from matching server diagnostics or a new, separately approved
+single-run stage-coded test. Do not represent the earlier two failed
+runs as successful or proof of Hindsight engine incompatibility.
