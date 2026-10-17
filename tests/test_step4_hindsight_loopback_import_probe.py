@@ -119,7 +119,8 @@ class FakeTransport:
         if method == "GET" and path.startswith(f"{ROOT}/documents/"):
             doc_id = path.split("/")[-1]
             target = next(
-                fact for fact in PINNED_FACTS
+                fact
+                for fact in PINNED_FACTS
                 if f"jarvis-dev-only-{fact.assertion_id}" == doc_id
             )
             return {
