@@ -161,3 +161,45 @@ Sanitize any non-fictional values before sharing. Do not repeat the import,
 start paid providers, delete the volume or promote JARVIS memory logic
 before the failure and cleanup state are established.
 
+
+## Owner-machine follow-up: original HTTP 400 remains unresolved (2026-10-18)
+
+Owner re-ran the original live script and observed a second
+`local_http_400` (the old checkout did not yet report a request stage).
+This repeat is **not** additional evidence of successful import or cleanup.
+The container was running, but grep of recent Docker logs for `400`,
+`Bad Request`, `/v1/default/banks`, `ValidationError`,
+`ERROR`, and `Traceback` printed **no matching lines**. No request-stage
+deduction is justified from that silence.
+
+Owner then updated the isolated worktree to commit `d7ed3ff1` and
+confirmed **12/12 offline fake-service tests passed**. They did not report
+a new live import against that commit. The updated probe now emits
+`bank_creation_http_400`, `bank_config_update_http_400`,
+`archive_upload_http_400`, etc., and preserves the first error when
+cleanup also fails. It does NOT retroactively classify earlier 400s.
+
+Read-only `GET /openapi.json` evidence from that container showed:
+- `PUT /v1/default/banks/{bank_id}` accepts JSON
+  `CreateBankRequest` (no required fields in the exposed request schema).
+- `PATCH /v1/default/banks/{bank_id}/config` accepts JSON
+  `BankConfigUpdate` whose required top-level field is `updates`.
+- `POST /v1/default/banks/{bank_id}/transfer/import` accepts
+  multipart/form-data and requires a `file` field.
+- `DELETE /v1/default/banks/{bank_id}` has **no request body**.
+  The `Cannot index into a null array` exception in the PowerShell
+  schema-inspection loop resulted from dereferencing that absent body,
+  not a Hindsight DELETE failure.
+
+These checks confirm route existence and outer request shape, not
+nested validation rules, response shape or whether any request was
+accepted. Do **not** submit another import, delete the volume, or
+enable LLM consolidation on these facts alone.
+
+**Next read-only evidence to collect**: resolve
+`$api.components.schemas.BankConfigUpdate.properties.updates` and its
+nested `$ref`/`anyOf`; inspect bank creation path parameters, and
+enumerate IDs only for banks starting `jarvis-dev-only-` in this
+disposable instance. No user-private memory values or API keys should
+be printed. Use the output to locate the 400 source before authorizing
+a separate single local import.
