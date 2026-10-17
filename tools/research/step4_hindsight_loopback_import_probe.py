@@ -390,7 +390,7 @@ def run_local_import(
                             raise
                     if not cleanup_verified:
                         raise ProbeFailure("disposable_bank_still_exists")
-            except Exception as cleanup_error:  # noqa: BLE001 - fail closed
+            except Exception as cleanup_error:
                 if primary_error is not None:
                     primary_code = (
                         str(primary_error)
