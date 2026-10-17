@@ -125,7 +125,7 @@ def test_archive_tampering_cannot_be_misreported_as_valid():
     with zipfile.ZipFile(stream, "w") as archive:
         for name, payload in files.items():
             archive.writestr(name, payload)
-    with pytest.raises(ValueError, match="provenance"):
+    with pytest.raises(ValueError, match="pinned synthetic archive mismatch"):
         inspect_synthetic_archive(stream.getvalue())
 
 
