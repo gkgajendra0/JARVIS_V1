@@ -283,6 +283,7 @@ def test_cleanup_failure_preserves_primary_stage_and_cleanup_stage():
             return super().request(method, path, body, content_type)
 
     with pytest.raises(
-        ProbeFailure, match="primary_bank_creation_http_400__cleanup_bank_cleanup_http_400"
+        ProbeFailure,
+        match="primary_bank_creation_http_400__cleanup_bank_cleanup_http_400",
     ):
         run_local_import(RejectedAndUncleaned(), inspected=True, bank_id=BANK)
