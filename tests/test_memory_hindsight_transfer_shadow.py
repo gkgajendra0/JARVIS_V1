@@ -45,6 +45,9 @@ def test_pinned_archive_matches_documented_external_import_shape():
             assert fact["fact_type"] == "world"
             assert fact["chunk_index"] == 0
             assert fact["metadata"]["source_class"] == "synthetic_owner_direct"
+            assert fact["metadata"]["canonical_source_ref"].startswith(
+                "conversation:synthetic:synthetic-turn-"
+            )
             assert fact["metadata"]["admission_policy"] == "shadow_only_no_write"
             assert fact["mentioned_at"].endswith("Z")
 
