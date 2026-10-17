@@ -295,19 +295,9 @@ def run_local_import(
         transport.request("GET", "/version")
         created_or_uncertain = True
         transport.request("PUT", root, _json({}), "application/json")
-        transport.request(
-            "PATCH",
-            f"{root}/config",
-            _json(
-                {
-                    "updates": {
-                        "enable_auto_consolidation": False,
-                        "enable_observations": False,
-                    }
-                }
-            ),
-            "application/json",
-        )
+        # Inherit the already inspected container-wide safeguards.
+        # Avoid unnecessary configuration writes and fail closed unless
+        # the actual per-bank resolved configuration confirms both off.
         _require_disabled_config(transport.request("GET", f"{root}/config"))
         # Import is authorized only AFTER effective per-bank settings confirm
         # no auto consolidation. Request URL and payload are both fixed.
