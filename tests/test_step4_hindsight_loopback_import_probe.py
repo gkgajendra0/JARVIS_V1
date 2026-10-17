@@ -246,3 +246,43 @@ def test_sanitized_http_stage_exposes_no_bank_id_or_url():
     assert BANK not in str(err)
     assert "transfer" not in str(err)
     assert str(LocalHTTPError(404)) == "unknown_http_404"
+
+
+def test_rejected_bank_creation_preserves_http_400_when_cleanup_is_404():
+    class RejectedBank(FakeTransport):
+        def request(
+            self,
+            method: str,
+            path: str,
+            body: bytes | None = None,
+            content_type: str | None = None,
+        ) -> dict[str, Any]:
+            if method == "PUT" and path == ROOT:
+                raise LocalHTTPError(400, stage="bank_creation")
+            if method == "DELETE" and path == ROOT:
+                raise LocalHTTPError(404, stage="bank_cleanup")
+            return super().request(method, path, body, content_type)
+
+    with pytest.raises(LocalHTTPError, match="bank_creation_http_400"):
+        run_local_import(RejectedBank(), inspected=True, bank_id=BANK)
+
+
+def test_cleanup_failure_preserves_primary_stage_and_cleanup_stage():
+    class RejectedAndUncleaned(FakeTransport):
+        def request(
+            self,
+            method: str,
+            path: str,
+            body: bytes | None = None,
+            content_type: str | None = None,
+        ) -> dict[str, Any]:
+            if method == "PUT" and path == ROOT:
+                raise LocalHTTPError(400, stage="bank_creation")
+            if method == "DELETE" and path == ROOT:
+                raise LocalHTTPError(400, stage="bank_cleanup")
+            return super().request(method, path, body, content_type)
+
+    with pytest.raises(
+        ProbeFailure, match="primary_bank_creation_http_400__cleanup_bank_cleanup_http_400"
+    ):
+        run_local_import(RejectedAndUncleaned(), inspected=True, bank_id=BANK)
