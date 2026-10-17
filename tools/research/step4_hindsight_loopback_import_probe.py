@@ -87,6 +87,7 @@ _SAFE_HTTP_STAGES = frozenset(
         "import_status",
         "document_list",
         "document_read",
+        "memory_list",
         "bank_cleanup",
     }
 )
@@ -113,6 +114,8 @@ def _http_stage(method: str, path: str) -> str:
         return "document_list"
     if method == "GET" and "/documents/" in path:
         return "document_read"
+    if method == "GET" and "/memories/list?document_id=" in path:
+        return "memory_list"
     if method == "DELETE" and re.fullmatch(
         r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path
     ):
@@ -344,11 +347,47 @@ def run_local_import(
                 or detail.get("memory_unit_count") != 1
             ):
                 raise ProbeFailure("document_readback_mismatch")
+            # Document readback alone cannot establish preservation of
+            # JARVIS's source assertion lineage inside imported facts.
+            memories = transport.request(
+                "GET", f"{root}/memories/list?document_id={doc_id}&limit=2"
+            )
+            items = memories.get("items")
+            if (
+                memories.get("total") != 1
+                or not isinstance(items, list)
+                or len(items) != 1
+                or not isinstance(items[0], dict)
+                or items[0].get("document_id") != doc_id
+                or items[0].get("text") != fact.text
+                or items[0].get("fact_type") != "world"
+            ):
+                raise ProbeFailure("imported_fact_readback_mismatch")
+            meta = items[0].get("metadata")
+            expected_meta = {
+                "assertion_id": fact.assertion_id,
+                "assertion_version": fact.version,
+                "source_turn_id": fact.source_turn_id,
+                "canonical_source_ref": (
+                    f"conversation:synthetic:{fact.source_turn_id}"
+                ),
+                "predicate": fact.predicate,
+                "revision_kind": fact.revision_kind,
+                "supersedes_id": fact.supersedes_id,
+                "source_class": "synthetic_owner_direct",
+                "admission_policy": "shadow_only_no_write",
+            }
+            if not isinstance(meta, dict) or any(
+                meta.get(key) != value for key, value in expected_meta.items()
+            ):
+                raise ProbeFailure("imported_fact_provenance_mismatch")
         result = {
             "kind": "LOCAL_HINDSIGHT_IMPORT_COMPATIBILITY_ONLY",
             "archive_sha256": evidence["sha256"],
             "import_completed": True,
             "documents_read_back": len(PINNED_FACTS),
+            "facts_read_back": len(PINNED_FACTS),
+            "fact_provenance_verified": True,
             "no_provider_calls_configured": True,
             "no_consolidation_triggered": True,
             "no_production_memory": True,
