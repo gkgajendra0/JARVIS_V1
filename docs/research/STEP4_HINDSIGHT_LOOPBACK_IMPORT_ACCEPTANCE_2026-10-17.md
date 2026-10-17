@@ -38,13 +38,19 @@ Only after confirming those settings does it send exactly ONE
 ZIP built and verified directly from the pinned five fictional facts.
 It polls the returned operation ID (does not mistake a 202 accepted
 submission for success), verifies exactly five documents/one fact per
-document and matching fictional original text, deletes its temporary
-bank, and confirms a 404 on the deleted bank's config endpoint.
+document and matching fictional original text, then independently reads
+each fact using the documented /memories/list?document_id=... endpoint.
+It requires the exact fictional text, source document, fact type, source
+turn, canonical reference, assertion version, predicate and supersession
+lineage in fact metadata. Any missing or changed value fails the
+acceptance probe. It then deletes its temporary bank and confirms a 404
+on the deleted bank's config endpoint.
 
 **Limitations:** no proof of Hindsight's semantic correction behavior,
 no test of idempotent re-imports, no independent verification of
-fact-level source metadata after import. External-fact import may
-re-embed facts even when no LLM is used. Local Docker can make network
+fact-level source metadata after import **until a real import passes
+this new readback gate**. External-fact import may re-embed facts even
+when no LLM is used. Local Docker can make network
 connections to fetch model assets: configure container/network firewall
 separately to guarantee no outbound traffic. This runner does not
 guarantee that by itself. The absence of keys plus `provider=none`
@@ -122,6 +128,8 @@ Successful fake-client tests must establish:
 - effective bank overrides verified before upload;
 - operation status polled to completed;
 - exactly five source documents/one imported memory each;
+- one readback per imported fact, checking full synthetic source/version
+  metadata independently of the document text;
 - cleanup verified with 404 on the temporary bank;
 - failed import, unclear target, and altered documents fail closed;
 - default CLI issues zero Docker inspection, network, or provider calls.
@@ -235,3 +243,22 @@ The only way to identify the previous 400 operation conclusively is
 from matching server diagnostics or a new, separately approved
 single-run stage-coded test. Do not represent the earlier two failed
 runs as successful or proof of Hindsight engine incompatibility.
+
+## GitHub-only follow-up (2026-10-18): provenance-gated readback
+
+GitHub CI at `4ffff153` completed with all six jobs passing, including
+Windows DPAPI, Windows full pytest and promotion-policy. The two previous
+HTTP 400 live attempts are **still unclassified**, and no additional real
+Hindsight import was performed.
+
+The official Hindsight 1.0.0 API documents
+`GET /v1/default/banks/{bank_id}/memories/list` with a
+`document_id` query filter and result fields `items`, `total`,
+`text`, `fact_type`, `document_id`, and `metadata`.
+The research probe now checks fact-level assertion lineage on this endpoint;
+fake-service tests cover exact provenance and a simulated missing-source
+failure with cleanup. These tests do **not** imply a successful real import.
+
+Before a new owner-approved single import, fetch the latest tested research
+head and rerun the offline fake-service tests. Preserve the existing isolated
+volume and do not auto-repeat any failed import.
