@@ -97,7 +97,9 @@ def _http_stage(method: str, path: str) -> str:
 
     if method == "GET" and path == "/version":
         return "version_check"
-    if method == "PUT" and re.fullmatch(r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path):
+    if method == "PUT" and re.fullmatch(
+        r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path
+    ):
         return "bank_creation"
     if method == "PATCH" and path.endswith("/config"):
         return "bank_config_update"
@@ -111,7 +113,9 @@ def _http_stage(method: str, path: str) -> str:
         return "document_list"
     if method == "GET" and "/documents/" in path:
         return "document_read"
-    if method == "DELETE" and re.fullmatch(r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path):
+    if method == "DELETE" and re.fullmatch(
+        r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path
+    ):
         return "bank_cleanup"
     return "unknown"
 
