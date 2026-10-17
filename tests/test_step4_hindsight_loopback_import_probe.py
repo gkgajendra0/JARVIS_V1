@@ -123,9 +123,7 @@ class FakeTransport:
                 "original_text": "BAD" if self.missing_document else target.text,
                 "memory_unit_count": 1,
             }
-        if method == "GET" and path.startswith(
-            f"{ROOT}/memories/list?document_id="
-        ):
+        if method == "GET" and path.startswith(f"{ROOT}/memories/list?document_id="):
             doc_id = path.split("document_id=", 1)[1].split("&", 1)[0]
             target = next(
                 fact
@@ -280,9 +278,10 @@ def test_sanitized_http_stage_exposes_no_bank_id_or_url():
     assert _http_stage("POST", path) == "archive_upload"
     assert _http_stage("PATCH", f"{ROOT}/config") == "bank_config_update"
     assert _http_stage("GET", f"{ROOT}/config") == "bank_config_read"
-    assert _http_stage(
-        "GET", f"{ROOT}/memories/list?document_id=synthetic-doc&limit=2"
-    ) == "memory_list"
+    assert (
+        _http_stage("GET", f"{ROOT}/memories/list?document_id=synthetic-doc&limit=2")
+        == "memory_list"
+    )
     assert _http_stage("DELETE", ROOT) == "bank_cleanup"
     assert _http_stage("PUT", ROOT) == "bank_creation"
     err = LocalHTTPError(400, stage=_http_stage("POST", path))
