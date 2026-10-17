@@ -105,7 +105,9 @@ def test_bad_timestamp_secret_and_future_timestamp_fail():
 
 def test_ambiguous_unresolved_correction_is_not_imported():
     with _open_archive() as z:
-        docs = [json.loads(z.read(f)) for f in z.namelist() if f.startswith("documents/")]
+        docs = [
+            json.loads(z.read(f)) for f in z.namelist() if f.startswith("documents/")
+        ]
     assert all("not final" not in doc["original_text"].casefold() for doc in docs)
     assert all("ambiguous" not in doc["facts"][0]["metadata"] for doc in docs)
     assert len(docs) == len(PINNED_FACTS)
