@@ -150,7 +150,10 @@ def _validate(facts: tuple[SyntheticFact, ...]) -> None:
             previous = seen.get(fact.supersedes_id)
             if previous is None:
                 raise ValueError("synthetic predecessor missing or out of order")
-            if previous.predicate != fact.predicate or fact.version != previous.version + 1:
+            if (
+                previous.predicate != fact.predicate
+                or fact.version != previous.version + 1
+            ):
                 raise ValueError("synthetic version lineage mismatch")
             if fact.revision_kind not in {"correction", "historical_change"}:
                 raise ValueError("unexpected supersession label")
@@ -242,7 +245,9 @@ def inspect_synthetic_archive(archive_bytes: bytes) -> dict[str, Any]:
                 for fact in PINNED_FACTS
             },
         }
-        if set(archive.namelist()) != expected or len(archive.namelist()) != len(expected):
+        if set(archive.namelist()) != expected or len(archive.namelist()) != len(
+            expected
+        ):
             raise ValueError("unexpected files or duplicate ZIP paths")
         manifest = json.loads(archive.read("manifest.json"))
         if manifest != {
