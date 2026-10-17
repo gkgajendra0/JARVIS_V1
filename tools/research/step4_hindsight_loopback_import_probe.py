@@ -97,7 +97,10 @@ def check_isolated_docker_inspect(data: dict[str, Any]) -> bool:
         env[key] = value
     if any(env.get(name, "").strip() for name in _CLOUD_KEY_MARKERS):
         raise ProbeFailure("container_has_cloud_credentials")
-    if any(env.get(key, "").casefold() != required for key, required in _REQUIRED_ENV.items()):
+    if any(
+        env.get(key, "").casefold() != required
+        for key, required in _REQUIRED_ENV.items()
+    ):
         raise ProbeFailure("local_no_llm_safety_flags_missing")
     if env.get("HINDSIGHT_API_DEFAULT_BANK_TEMPLATE", "").strip():
         raise ProbeFailure("bank_template_must_be_disabled")
@@ -112,10 +115,9 @@ def check_isolated_docker_inspect(data: dict[str, Any]) -> bool:
     mounts = item.get("Mounts", [])
     if len(mounts) != 1 or mounts[0].get("Type") != "volume":
         raise ProbeFailure("only_one_disposable_named_volume_allowed")
-    if (
-        mounts[0].get("Destination") != "/home/hindsight/.pg0"
-        or not str(mounts[0].get("Name", "")).startswith("jarvis-hindsight-lab-")
-    ):
+    if mounts[0].get("Destination") != "/home/hindsight/.pg0" or not str(
+        mounts[0].get("Name", "")
+    ).startswith("jarvis-hindsight-lab-"):
         raise ProbeFailure("unexpected_database_mount")
     return True
 
@@ -140,7 +142,9 @@ def verify_local_container() -> bool:
 
 
 class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, url: str) -> None:
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, url: str
+    ) -> None:
         raise ProbeFailure("redirect_refused")
 
 
@@ -197,10 +201,14 @@ def _json(obj: object) -> bytes:
 def _multipart(archive: bytes) -> tuple[bytes, str]:
     boundary = "jarvis-hindsight-synthetic-boundary"
     data = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="file"; filename="synthetic.zip"\r\n'
-        "Content-Type: application/zip\r\n\r\n"
-    ).encode() + archive + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="synthetic.zip"\r\n'
+            "Content-Type: application/zip\r\n\r\n"
+        ).encode()
+        + archive
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     return data, f"multipart/form-data; boundary={boundary}"
 
 
@@ -264,13 +272,13 @@ def run_local_import(
             content_type,
         )
         op_id = response.get("operation_id")
-        if not isinstance(op_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{4,100}", op_id):
+        if not isinstance(op_id, str) or not re.fullmatch(
+            r"[a-zA-Z0-9_-]{4,100}", op_id
+        ):
             raise ProbeFailure("invalid_operation_reference")
         last = "unknown"
         for i in range(_POLL_COUNT):
-            status_response = transport.request(
-                "GET", f"{root}/operations/{op_id}"
-            )
+            status_response = transport.request("GET", f"{root}/operations/{op_id}")
             last = status_response.get("status")
             if last in {"failed", "cancelled", "not_found"}:
                 raise ProbeFailure("import_operation_not_completed")
@@ -281,9 +289,7 @@ def run_local_import(
         if last != "completed":
             raise ProbeFailure("import_operation_timeout")
         listed = transport.request("GET", f"{root}/documents?limit=100")
-        expected = {
-            f"jarvis-dev-only-{fact.assertion_id}" for fact in PINNED_FACTS
-        }
+        expected = {f"jarvis-dev-only-{fact.assertion_id}" for fact in PINNED_FACTS}
         docs = listed.get("items")
         if (
             listed.get("total") != len(PINNED_FACTS)
@@ -361,8 +367,13 @@ def main(argv: list[str] | None = None) -> None:
         # Never echo provider exceptions, machine paths, credentials or facts.
         print(
             json.dumps(
-                {"status": "fail_closed", "error_type": type(exc).__name__,
-                 "reason_code": str(exc) if isinstance(exc, ProbeFailure) else "local_probe_failed"},
+                {
+                    "status": "fail_closed",
+                    "error_type": type(exc).__name__,
+                    "reason_code": str(exc)
+                    if isinstance(exc, ProbeFailure)
+                    else "local_probe_failed",
+                },
                 sort_keys=True,
                 indent=2,
             )
