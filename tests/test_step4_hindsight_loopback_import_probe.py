@@ -11,6 +11,7 @@ from tools.research.step4_hindsight_loopback_import_probe import (
     IMAGE,
     LocalHTTPError,
     ProbeFailure,
+    _http_stage,
     _multipart,
     check_isolated_docker_inspect,
     main,
@@ -231,3 +232,17 @@ def test_default_cli_does_not_inspect_docker_or_contact_localhost(
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "dry_run_zero_network_calls"
     assert report["expected_documents"] == 5
+
+
+def test_sanitized_http_stage_exposes_no_bank_id_or_url():
+    path = f"{ROOT}/transfer/import?mode=merge&document_conflict=skip"
+    assert _http_stage("POST", path) == "archive_upload"
+    assert _http_stage("PATCH", f"{ROOT}/config") == "bank_config_update"
+    assert _http_stage("GET", f"{ROOT}/config") == "bank_config_read"
+    assert _http_stage("DELETE", ROOT) == "bank_cleanup"
+    assert _http_stage("PUT", ROOT) == "bank_creation"
+    err = LocalHTTPError(400, stage=_http_stage("POST", path))
+    assert str(err) == "archive_upload_http_400"
+    assert BANK not in str(err)
+    assert "transfer" not in str(err)
+    assert str(LocalHTTPError(404)) == "unknown_http_404"
