@@ -133,3 +133,31 @@ https://hindsight.vectorize.io/developer/installation
 a reviewed local LLM and test whether it independently resolves
 English/Hindi/Hinglish source references and temporal corrections.
 Do not call that a capability solved from an import-only pass.
+
+## Owner-machine first live run (2026-10-17): HTTP 400, not accepted
+
+Owner confirmed the clean separate image and localhost Hindsight 1.0.0
+server with health/ready=200, document_import_api=true, observations=false.
+At pinned research head `784b3eee`, the sole explicitly approved
+`--allow-one-local-import` invocation returned
+`{"error_type":"LocalHTTPError","reason_code":"local_http_400","status":"fail_closed"}`,
+exit code 1. **No import success, no 5-document readback or verified cleanup
+was observed. No repeat is authorized by that invocation.**
+
+The original script intentionally suppressed HTTP response bodies but also
+suppressed the stage of the failing request; the 400 can have occurred during
+bank create, config, upload or cleanup. Do not infer which, or assume cleanup
+succeeded. A later change in this draft reports the exact operation stage
+from a fixed sanitized allowlist, never the bank ID or provider text; that
+is for **future separately approved runs only**.
+
+Investigate the existing **read-only local Docker logs** first:
+```powershell
+docker logs --since 60m jarvis-hindsight-lab 2>&1 |
+  Select-String -Pattern '400 Bad Request|/v1/default/banks/|ValidationError|ERROR|failed' |
+  Select-Object -Last 45
+```
+Sanitize any non-fictional values before sharing. Do not repeat the import,
+start paid providers, delete the volume or promote JARVIS memory logic
+before the failure and cleanup state are established.
+
