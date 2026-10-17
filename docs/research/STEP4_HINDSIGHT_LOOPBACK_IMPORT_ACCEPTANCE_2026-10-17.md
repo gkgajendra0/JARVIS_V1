@@ -27,7 +27,9 @@ it checks a real `docker inspect` for the exact **owner-created**
 It then uses only **http://127.0.0.1:18888**, with proxies and
 redirects disabled, to create a random disposable bank, set
 `enable_observations=false`, `enable_auto_consolidation=false`,
-`retain_extraction_mode=chunks`, and **read back effective config**.
+and **read back effective config**. When the provider is `none`, Hindsight
+selects chunks mode automatically; `retain_extraction_mode=chunks` is not
+a supported configurable extraction-mode override.
 
 Only after confirming those settings does it send exactly ONE
 `/v1/default/banks/{bank}/transfer/import?mode=merge&document_conflict=skip`
