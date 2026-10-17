@@ -85,7 +85,6 @@ class FakeTransport:
             assert json.loads(body or b"{}")["updates"] == {
                 "enable_auto_consolidation": False,
                 "enable_observations": False,
-                "retain_extraction_mode": "chunks",
             }
             return {"success": True}
         if method == "GET" and path == f"{ROOT}/config":
