@@ -60,10 +60,12 @@ class FakeTransport:
         auto: bool = False,
         operation: str = "completed",
         missing_document: bool = False,
+        missing_fact_metadata: bool = False,
     ) -> None:
         self.auto = auto
         self.operation = operation
         self.missing_document = missing_document
+        self.missing_fact_metadata = missing_fact_metadata
         self.created = False
         self.deleted = False
         self.events: list[tuple[str, str]] = []
@@ -121,6 +123,41 @@ class FakeTransport:
                 "original_text": "BAD" if self.missing_document else target.text,
                 "memory_unit_count": 1,
             }
+        if method == "GET" and path.startswith(
+            f"{ROOT}/memories/list?document_id="
+        ):
+            doc_id = path.split("document_id=", 1)[1].split("&", 1)[0]
+            target = next(
+                fact
+                for fact in PINNED_FACTS
+                if f"jarvis-dev-only-{fact.assertion_id}" == doc_id
+            )
+            metadata = {
+                "assertion_id": target.assertion_id,
+                "assertion_version": target.version,
+                "source_turn_id": target.source_turn_id,
+                "canonical_source_ref": (
+                    f"conversation:synthetic:{target.source_turn_id}"
+                ),
+                "predicate": target.predicate,
+                "revision_kind": target.revision_kind,
+                "supersedes_id": target.supersedes_id,
+                "source_class": "synthetic_owner_direct",
+                "admission_policy": "shadow_only_no_write",
+            }
+            if self.missing_fact_metadata:
+                metadata.pop("canonical_source_ref")
+            return {
+                "total": 1,
+                "items": [
+                    {
+                        "document_id": doc_id,
+                        "text": target.text,
+                        "fact_type": "world",
+                        "metadata": metadata,
+                    }
+                ],
+            }
         if method == "DELETE" and path == ROOT:
             self.deleted = True
             return {"success": True}
@@ -162,6 +199,8 @@ def test_approved_one_import_reads_five_and_confirms_cleanup():
     )
     assert result["import_completed"] is True
     assert result["documents_read_back"] == 5
+    assert result["facts_read_back"] == 5
+    assert result["fact_provenance_verified"] is True
     assert result["disposable_bank_cleanup_verified"] is True
     assert fake.deleted
     assert [method for method, _ in fake.events].count("POST") == 1
@@ -193,6 +232,14 @@ def test_missing_fictional_document_detected_and_cleaned_up():
     with pytest.raises(ProbeFailure, match="readback_mismatch"):
         run_local_import(fake, inspected=True, bank_id=BANK)
     assert fake.deleted
+
+
+def test_missing_fact_provenance_detected_and_cleaned_up():
+    fake = FakeTransport(missing_fact_metadata=True)
+    with pytest.raises(ProbeFailure, match="imported_fact_provenance_mismatch"):
+        run_local_import(fake, inspected=True, bank_id=BANK)
+    assert fake.deleted
+    assert [method for method, _ in fake.events].count("POST") == 1
 
 
 def test_no_docker_proof_or_bad_bank_id_means_no_requests():
@@ -233,6 +280,9 @@ def test_sanitized_http_stage_exposes_no_bank_id_or_url():
     assert _http_stage("POST", path) == "archive_upload"
     assert _http_stage("PATCH", f"{ROOT}/config") == "bank_config_update"
     assert _http_stage("GET", f"{ROOT}/config") == "bank_config_read"
+    assert _http_stage(
+        "GET", f"{ROOT}/memories/list?document_id=synthetic-doc&limit=2"
+    ) == "memory_list"
     assert _http_stage("DELETE", ROOT) == "bank_cleanup"
     assert _http_stage("PUT", ROOT) == "bank_creation"
     err = LocalHTTPError(400, stage=_http_stage("POST", path))
