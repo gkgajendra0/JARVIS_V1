@@ -7,7 +7,6 @@ from typing import Any
 
 import pytest
 
-from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 from tools.research.step4_hindsight_loopback_import_probe import (
     DOCKER_CONTAINER,
     IMAGE,
@@ -18,6 +17,8 @@ from tools.research.step4_hindsight_loopback_import_probe import (
     main,
     run_local_import,
 )
+
+from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
 BANK = "jarvis-dev-only-0123456789abcdef0123456789abcdef"
 ROOT = f"/v1/default/banks/{BANK}"
