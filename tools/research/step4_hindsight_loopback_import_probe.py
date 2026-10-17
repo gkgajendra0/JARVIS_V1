@@ -287,6 +287,7 @@ def run_local_import(
     root = f"/v1/default/banks/{bank_id}"
     created_or_uncertain = False
     cleanup_verified = False
+    primary_error: Exception | None = None
     result: dict[str, Any] = {}
     try:
         # The local server is intentionally not reached before its own
@@ -363,20 +364,50 @@ def run_local_import(
             "no_production_memory": True,
             "not_semantic_accuracy_acceptance": True,
         }
+    except Exception as exc:  # noqa: BLE001 - cleanup must still run
+        primary_error = exc
     finally:
         if created_or_uncertain:
-            deletion = transport.request("DELETE", root)
-            if deletion.get("success") is not True:
-                raise ProbeFailure("disposable_bank_cleanup_failed")
             try:
-                transport.request("GET", f"{root}/config")
-            except LocalHTTPError as exc:
-                if exc.status_code == 404:
-                    cleanup_verified = True
+                try:
+                    deletion = transport.request("DELETE", root)
+                except LocalHTTPError as exc:
+                    if exc.status_code == 404:
+                        # If bank creation failed before persistence,
+                        # a 404 confirms there is no bank left to delete.
+                        cleanup_verified = True
+                    else:
+                        raise
                 else:
-                    raise
-            if not cleanup_verified:
-                raise ProbeFailure("disposable_bank_still_exists")
+                    if deletion.get("success") is not True:
+                        raise ProbeFailure("disposable_bank_cleanup_failed")
+                    try:
+                        transport.request("GET", f"{root}/config")
+                    except LocalHTTPError as exc:
+                        if exc.status_code == 404:
+                            cleanup_verified = True
+                        else:
+                            raise
+                    if not cleanup_verified:
+                        raise ProbeFailure("disposable_bank_still_exists")
+            except Exception as cleanup_error:  # noqa: BLE001 - fail closed
+                if primary_error is not None:
+                    primary_code = (
+                        str(primary_error)
+                        if isinstance(primary_error, ProbeFailure)
+                        else "unexpected_failure"
+                    )
+                    cleanup_code = (
+                        str(cleanup_error)
+                        if isinstance(cleanup_error, ProbeFailure)
+                        else "unexpected_failure"
+                    )
+                    raise ProbeFailure(
+                        f"primary_{primary_code}__cleanup_{cleanup_code}"
+                    ) from None
+                raise
+    if primary_error is not None:
+        raise primary_error
     if not cleanup_verified:
         raise ProbeFailure("disposable_bank_cleanup_unverified")
     return {**result, "disposable_bank_cleanup_verified": True}
