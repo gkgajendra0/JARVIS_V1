@@ -104,7 +104,7 @@ def _iso_utc(value: str) -> str:
     if not isinstance(value, str) or not value.endswith("Z"):
         raise ValueError("synthetic timestamps require explicit UTC Z suffix")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError as exc:
         raise ValueError("invalid synthetic UTC timestamp") from exc
     if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
