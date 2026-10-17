@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 import pytest
-
 from tools.research.step4_hindsight_loopback_import_probe import (
     DOCKER_CONTAINER,
     IMAGE,
