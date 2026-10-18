@@ -55,7 +55,10 @@ def test_fused_candidates_pack_complete_history_and_sources():
         "saturday",
         "sunday",
     ]
-    assert all(s["source_ref"].startswith("conversation:synthetic:") for s in payload[0]["states"])
+    assert all(
+        s["source_ref"].startswith("conversation:synthetic:")
+        for s in payload[0]["states"]
+    )
     assert packet.chars_used == len(packet.payload_json)
     assert packet.chars_used <= 2048
 
@@ -97,9 +100,15 @@ def test_unknown_question_does_not_expose_other_memory():
 def test_scoped_subject_does_not_leak_nile():
     packet = assemble_context(
         frozen_assertions(),
-        (EvidenceStream("hindsight", (
-            "synthetic-report-day-v1", "synthetic-report-day-v2",
-        )),),
+        (
+            EvidenceStream(
+                "hindsight",
+                (
+                    "synthetic-report-day-v1",
+                    "synthetic-report-day-v2",
+                ),
+            ),
+        ),
         _request(),
     )
     assert packet.status == "abstain"
@@ -118,9 +127,7 @@ def test_independent_predicate_can_be_included_without_day_lineage():
 
 
 def test_budget_does_not_truncate_source_lineage():
-    packet = assemble_context(
-        frozen_assertions(), _streams(), _request(max_chars=256)
-    )
+    packet = assemble_context(frozen_assertions(), _streams(), _request(max_chars=256))
     assert packet.status == "abstain"
     assert packet.reason_code == "context_budget_exceeded"
     assert packet.payload_json == "[]"
