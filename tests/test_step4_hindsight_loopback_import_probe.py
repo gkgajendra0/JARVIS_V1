@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -510,3 +513,21 @@ def test_new_probe_default_never_contacts_docker_or_localhost(
     assert result["status"] == "dry_run_zero_network_calls"
     assert result["queries_planned"] == 9
     assert result["live_retrieval_not_yet_measured"] is True
+
+
+def test_isolated_recall_cli_bootstraps_checkout_path():
+    """The new user-facing command must launch under Python -I."""
+    root = Path(__file__).resolve().parents[1]
+    script = root / "tools" / "research" / "step4_hindsight_local_recall_probe.py"
+    output = subprocess.run(
+        [sys.executable, "-I", str(script)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert output.returncode == 0, output.stderr
+    preview = json.loads(output.stdout)
+    assert preview["status"] == "dry_run_zero_network_calls"
+    assert preview["queries_planned"] == 9
