@@ -197,9 +197,7 @@ def score_challenge_rankings(
         by_category: dict[str, dict[str, int]] = {}
 
         for case in CHALLENGE_CASES:
-            category = by_category.setdefault(
-                case.category, {"cases": 0, "correct": 0}
-            )
+            category = by_category.setdefault(case.category, {"cases": 0, "correct": 0})
             category["cases"] += 1
             ranked = cases[case.case_id][:TOP_K]
             if case.subject is None:
@@ -214,12 +212,9 @@ def score_challenge_rankings(
                 gold_group = tuple(
                     fact
                     for fact in by_id.values()
-                    if fact.subject == case.subject
-                    and fact.predicate == case.predicate
+                    if fact.subject == case.subject and fact.predicate == case.predicate
                 )
-                full_lineage = all(
-                    fact.assertion_id in ranked for fact in gold_group
-                )
+                full_lineage = all(fact.assertion_id in ranked for fact in gold_group)
                 retrieved = all(
                     assertion_id in ranked for assertion_id in case.required_ids
                 )
@@ -227,9 +222,7 @@ def score_challenge_rankings(
                     supported_retrieval += 1
                 decision = MemoryDecisionIndex(
                     tuple(by_id[ident] for ident in ranked)
-                ).decide(
-                    MemoryQuestion(case.subject, case.predicate, case.intent)
-                )
+                ).decide(MemoryQuestion(case.subject, case.predicate, case.intent))
                 if case.expected_answer is None:
                     decision_ok = decision.status == "abstain"
                     abstained_unknown += int(decision_ok)
@@ -268,9 +261,7 @@ def score_challenge_rankings(
         "hybrid_retrieval_delta": (
             hybrid["supported_retrieval"] - h["supported_retrieval"]
         ),
-        "hybrid_decision_delta": (
-            hybrid["decisions_correct"] - h["decisions_correct"]
-        ),
+        "hybrid_decision_delta": (hybrid["decisions_correct"] - h["decisions_correct"]),
         "hybrid_noninferior_on_challenge": (
             hybrid["supported_retrieval"] >= h["supported_retrieval"]
             and hybrid["decisions_correct"] >= h["decisions_correct"]
