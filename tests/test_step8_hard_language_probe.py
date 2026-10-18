@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,7 @@ from jarvis.memory.research_challenge_suite import (
 from jarvis.memory.research_compare_fixture import (
     BY_ID,
     ComparisonFailure,
+    build_archive,
     metadata,
 )
 
@@ -125,6 +128,13 @@ def test_reuses_exact_owner_verified_step7_60_fact_archive():
         == "a177886be60d7fe8a5b7a16e721c20b3977079ced6bc1360c95f8f2b37058df2"
     )
     assert evidence["documents"] == 60
+
+
+def test_archive_zip_header_is_cross_platform_stable():
+    # ZIP's creator-OS byte otherwise differs on Linux and Windows.
+    with zipfile.ZipFile(io.BytesIO(build_archive())) as archive:
+        assert len(archive.infolist()) == 61
+        assert all(item.create_system == 0 for item in archive.infolist())
 
 
 def test_offline_lexical_works_without_remote_server():
