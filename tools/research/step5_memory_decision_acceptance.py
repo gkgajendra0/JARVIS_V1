@@ -31,35 +31,50 @@ from tools.research.step4_hindsight_semantic_eval import CASES
 _ALLOWED_FIXTURE = {
     "synthetic-workshop-day-v1": (
         "The fictional Atlas workshop was described as Saturday.",
-        "synthetic-atlas", "saturday",
+        "synthetic-atlas",
+        "saturday",
     ),
     "synthetic-workshop-day-v2": (
         "Correction: the fictional Atlas workshop is on Sunday, not Saturday.",
-        "synthetic-atlas", "sunday",
+        "synthetic-atlas",
+        "sunday",
     ),
     "synthetic-report-day-v1": (
         "The fictional Nile project report was sent on Monday.",
-        "synthetic-nile", "monday",
+        "synthetic-nile",
+        "monday",
     ),
     "synthetic-report-day-v2": (
         "The fictional Nile project report is now sent on Thursday.",
-        "synthetic-nile", "thursday",
+        "synthetic-nile",
+        "thursday",
     ),
     "synthetic-workshop-venue-v1": (
         "The fictional Atlas workshop venue is Hall B.",
-        "synthetic-atlas", "hall_b",
+        "synthetic-atlas",
+        "hall_b",
     ),
 }
 
 _CASE_QUESTIONS = {
     "atlas_current_day": MemoryQuestion("synthetic-atlas", "workshop_day", "current"),
     "atlas_original_day": MemoryQuestion("synthetic-atlas", "workshop_day", "original"),
-    "atlas_correction_trace": MemoryQuestion("synthetic-atlas", "workshop_day", "history"),
-    "nile_current_report_day": MemoryQuestion("synthetic-nile", "report_day", "current"),
-    "nile_previous_report_day": MemoryQuestion("synthetic-nile", "report_day", "original"),
+    "atlas_correction_trace": MemoryQuestion(
+        "synthetic-atlas", "workshop_day", "history"
+    ),
+    "nile_current_report_day": MemoryQuestion(
+        "synthetic-nile", "report_day", "current"
+    ),
+    "nile_previous_report_day": MemoryQuestion(
+        "synthetic-nile", "report_day", "original"
+    ),
     "nile_historical_change": MemoryQuestion("synthetic-nile", "report_day", "history"),
-    "atlas_unrelated_venue": MemoryQuestion("synthetic-atlas", "workshop_venue", "current"),
-    "unknown_start_time": MemoryQuestion("synthetic-atlas", "workshop_start", "current"),
+    "atlas_unrelated_venue": MemoryQuestion(
+        "synthetic-atlas", "workshop_venue", "current"
+    ),
+    "unknown_start_time": MemoryQuestion(
+        "synthetic-atlas", "workshop_start", "current"
+    ),
     "unresolved_ambiguous_statement": MemoryQuestion(
         "synthetic-nile", "unresolved_decision", "current"
     ),
@@ -94,10 +109,7 @@ def case_decisions() -> dict[str, MemoryDecision]:
     if set(_CASE_QUESTIONS) != {case.case_id for case in CASES}:
         raise ValueError("changed_question_suite")
     index = MemoryDecisionIndex(frozen_assertions())
-    return {
-        case.case_id: index.decide(_CASE_QUESTIONS[case.case_id])
-        for case in CASES
-    }
+    return {case.case_id: index.decide(_CASE_QUESTIONS[case.case_id]) for case in CASES}
 
 
 def verify_nine_cases() -> dict[str, object]:
@@ -176,7 +188,8 @@ def verify_large_synthetic() -> dict[str, object]:
                 (
                     "history",
                     "alpha_corrected_to_bravo_corrected_to_charlie"
-                    if kind == "schedule" else "alpha_then_bravo_then_charlie",
+                    if kind == "schedule"
+                    else "alpha_then_bravo_then_charlie",
                 ),
             ):
                 result = index.decide(MemoryQuestion(subject, kind, intent))
@@ -216,13 +229,14 @@ def verify_large_synthetic() -> dict[str, object]:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--large-synthetic", action="store_true",
+        "--large-synthetic",
+        action="store_true",
         help="Offline CPU-only 3,600-fact deterministic fixture benchmark.",
     )
     args = parser.parse_args(argv)
     result = verify_large_synthetic() if args.large_synthetic else verify_nine_cases()
     print(json.dumps(result, indent=2, sort_keys=True))
-    if (result.get("passed") is False or result.get("status") == "fail"):
+    if result.get("passed") is False or result.get("status") == "fail":
         raise SystemExit(1)
 
 
