@@ -49,3 +49,22 @@ Passing 9/9 is proof that **this deterministic structured-data rule engine** han
 - Add independent regression/security reviews, restore/rollback protocol, gated policy review, CI and owner-machine acceptance before any staged promotion. SQLCipher remains canonical; no automatic mirroring, writing, merging or deployments.
 
 **Do not merge or enable this work in production merely because unit tests pass.** Keep the branch draft and layered on earlier research until reviewed.
+
+## Bridging actual recall evidence without cheating
+
+The new `decide_from_pinned_recall(case_id, recall_response)` adapter is still
+fictional-only, but unlike the baseline nine-case reference, it *never*
+borrows missing facts from the global pinned corpus. It verifies every returned
+Hindsight-style fact against exact text, source ID and metadata, constructs a
+separate evidence index from only those retrieved facts and then decides.
+
+A correction retrieved without its predecessor **abstains**, even when the
+newer fact is top-ranked; this deliberately exposes a gap between Step 4's
+7/7 *retrieval coverage* and the much stricter *answer integrity* gate.
+A forged source or duplicate is rejected, not counted as another success.
+
+`compare_pinned_recall_shadow` can compare this candidate against a known
+fixture reference, without changing either. Neither function captures or
+contacts Hindsight, and neither evaluates real owner memory; the example
+responses tested here are constructed in memory by the unit tests. A real
+read-only Hindsight-to-JARVIS adapter remains a separate future milestone.
