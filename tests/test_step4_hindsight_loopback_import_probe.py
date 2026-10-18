@@ -342,7 +342,10 @@ class RecallFakeTransport(FakeTransport):
     """Nine read-only recall responses from the five pinned fictional facts."""
 
     def __init__(
-        self, *, missing_evidence: bool = False, corrupt_provenance: bool = False,
+        self,
+        *,
+        missing_evidence: bool = False,
+        corrupt_provenance: bool = False,
         crash_recall: bool = False,
     ) -> None:
         super().__init__()
@@ -370,7 +373,8 @@ class RecallFakeTransport(FakeTransport):
             case = next(case for case in CASES if case.query == query["query"])
             ordered = list(case.required_ids)
             ordered.extend(
-                fact.assertion_id for fact in PINNED_FACTS
+                fact.assertion_id
+                for fact in PINNED_FACTS
                 if fact.assertion_id not in ordered
             )
             if self.missing_evidence and case.case_id == "atlas_current_day":
@@ -392,11 +396,15 @@ class RecallFakeTransport(FakeTransport):
                 }
                 if fact.supersedes_id:
                     metadata["supersedes_id"] = fact.supersedes_id
-                out.append({
-                    "id": f"mock-{ident}", "type": "world", "text": fact.text,
-                    "document_id": f"jarvis-dev-only-{ident}",
-                    "metadata": metadata,
-                })
+                out.append(
+                    {
+                        "id": f"mock-{ident}",
+                        "type": "world",
+                        "text": fact.text,
+                        "document_id": f"jarvis-dev-only-{ident}",
+                        "metadata": metadata,
+                    }
+                )
             if self.corrupt_provenance:
                 out[0]["metadata"].pop("canonical_source_ref")
             return {"results": out}
@@ -406,8 +414,11 @@ class RecallFakeTransport(FakeTransport):
 def test_opt_in_local_recall_runs_after_readback_and_cleans_bank():
     fake = RecallFakeTransport()
     result = run_local_import(
-        fake, inspected=True, bank_id=BANK,
-        pause=lambda _seconds: None, after_readback=capture_recall,
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _seconds: None,
+        after_readback=capture_recall,
     )
     capture = result["research_recall"]
     assert capture["kind"] == "LOCAL_HINDSIGHT_RECALL_EVIDENCE_ONLY"
@@ -420,19 +431,31 @@ def test_opt_in_local_recall_runs_after_readback_and_cleans_bank():
     assert result["disposable_bank_cleanup_verified"] is True
     assert fake.deleted
     recall_events = [
-        pos for pos, item in enumerate(fake.events)
+        pos
+        for pos, item in enumerate(fake.events)
         if item == ("POST", f"{ROOT}/recall")
     ]
     assert len(recall_events) == 9
-    assert fake.events.index(("GET", f"{ROOT}/memories/list?document_id=jarvis-dev-only-synthetic-workshop-venue-v1&limit=2")) < recall_events[0]
+    assert (
+        fake.events.index(
+            (
+                "GET",
+                f"{ROOT}/memories/list?document_id=jarvis-dev-only-synthetic-workshop-venue-v1&limit=2",
+            )
+        )
+        < recall_events[0]
+    )
     assert fake.events[-1] == ("GET", f"{ROOT}/config")
 
 
 def test_low_recall_rank_is_measured_failure_not_false_pass():
     fake = RecallFakeTransport(missing_evidence=True)
     result = run_local_import(
-        fake, inspected=True, bank_id=BANK,
-        pause=lambda _seconds: None, after_readback=capture_recall,
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _seconds: None,
+        after_readback=capture_recall,
     )
     assert result["research_recall"]["retrieval_gate"] == "fail"
     assert result["research_recall"]["retrieval_pass_cases"] == 6
@@ -442,10 +465,15 @@ def test_low_recall_rank_is_measured_failure_not_false_pass():
 
 def test_corrupt_recall_provenance_fails_closed_and_still_cleans_bank():
     fake = RecallFakeTransport(corrupt_provenance=True)
-    with pytest.raises(ProbeFailure, match="semantic_recall_provenance_or_schema_failed"):
+    with pytest.raises(
+        ProbeFailure, match="semantic_recall_provenance_or_schema_failed"
+    ):
         run_local_import(
-            fake, inspected=True, bank_id=BANK,
-            pause=lambda _seconds: None, after_readback=capture_recall,
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _seconds: None,
+            after_readback=capture_recall,
         )
     assert fake.deleted
 
@@ -454,8 +482,11 @@ def test_recall_http_failure_does_not_retry_and_cleans_bank():
     fake = RecallFakeTransport(crash_recall=True)
     with pytest.raises(LocalHTTPError, match="semantic_recall_http_503"):
         run_local_import(
-            fake, inspected=True, bank_id=BANK,
-            pause=lambda _seconds: None, after_readback=capture_recall,
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _seconds: None,
+            after_readback=capture_recall,
         )
     assert fake.deleted
     assert fake.events.count(("POST", f"{ROOT}/recall")) == 1
@@ -466,7 +497,8 @@ def test_recall_http_errors_have_sanitized_stage():
 
 
 def test_new_probe_default_never_contacts_docker_or_localhost(
-    capsys: Any, monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     def fail_container() -> bool:
         raise AssertionError("default preview unexpectedly inspected Docker")
