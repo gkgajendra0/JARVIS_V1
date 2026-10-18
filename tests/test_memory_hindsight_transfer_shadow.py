@@ -49,6 +49,11 @@ def test_pinned_archive_matches_documented_external_import_shape():
                 "conversation:synthetic:synthetic-turn-"
             )
             assert fact["metadata"]["admission_policy"] == "shadow_only_no_write"
+            # Hindsight's TransferFact.metadata only accepts string values.
+            assert all(
+                isinstance(k, str) and isinstance(v, str)
+                for k, v in fact["metadata"].items()
+            )
             assert fact["mentioned_at"].endswith("Z")
 
 
@@ -65,6 +70,9 @@ def test_deterministic_bytes_and_identity_to_source_turn():
         assert metadata["synthetic-workshop-day-v2"]["supersedes_id"] == (
             "synthetic-workshop-day-v1"
         )
+        assert metadata["synthetic-workshop-day-v2"]["assertion_version"] == "2"
+        assert metadata["synthetic-workshop-day-v1"]["assertion_version"] == "1"
+        assert "supersedes_id" not in metadata["synthetic-workshop-day-v1"]
         assert metadata["synthetic-report-day-v2"]["supersedes_id"] == (
             "synthetic-report-day-v1"
         )
