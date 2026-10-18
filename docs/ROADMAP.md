@@ -1,5 +1,15 @@
 # JARVIS V1 Roadmap
 
+**Owner-directed clarification (2026-10-18):** Personal Intelligence and
+Automatic Context Use (CAP-053) is the primary *cross-cutting user-experience*
+priority. It requires safe, automatic use of authorized long-term personal
+context across everyday life; it does **not** renumber numbered steps, revoke
+previous acceptance or authorize new production behavior. The active
+research and owner gate are tracked only in [Current Plan](CURRENT_PLAN.md).
+The permanently binding requirements are in [Product](PRODUCT.md) and
+Section 17 of [Autonomous North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md).
+
+
 This roadmap owns **numbered product sequence only**. It does not select technology, define current architecture, or authorize implementation. `CURRENT_PLAN.md` owns the active slice. `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` owns the long-term cross-cutting architecture for autonomous governed engineering.
 
 | Step | Product slice | Major capabilities | Status |

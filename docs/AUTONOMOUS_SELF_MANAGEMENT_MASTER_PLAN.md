@@ -176,7 +176,7 @@ moving `latest` alias; validate the replacement against the required product sur
 migrate configuration automatically inside a bounded pre-authorized envelope; observe
 the result; and roll back or escalate to governed engineering when validation fails.
 Routine provider churn must not require the owner to discover the retirement manually.
-The detailed contract is `PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`.
+The detailed contract is `reference/PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`.
 
 ### 4.4 Self-optimize
 

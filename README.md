@@ -6,22 +6,23 @@ The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARV
 
 ## Current production status
 
-- Steps 0–3: **DONE**.
-- Step 4 memory/context: **BOUNDED**.
-- Step 5 provider resilience: **BOUNDED**.
-- Step 6 current research/truthfulness: **BOUNDED**.
-- Step 7 governed capability runtime + safe local reads: **DONE**.
-- JARVIS Hands / browser / file / device foundations: **PARTIAL** for later Steps 9/10/12.
-- Pocket 3 native OWNER tracking/recovery: **ACCEPTED** for the current defined scope.
-- Self-Awareness: **ACCEPTED FOUNDATION**.
-- Persistent Concurrent Work Orchestration: **ACCEPTED FOUNDATION**.
-- Deterministic repair framework + R2 runtime crash/hang recovery: **ACCEPTED FOUNDATION**.
-- Governed Autonomous Engineering / Self-Repair / Self-Evolution: **ACTIVE — Phases 2–4 owner-machine accepted; Phase 5 Secure Autonomous Engineering Substrate implementation active, with 5A–5F merged and 5G underway**.
-- Autonomous Self-Management Control Plane: **PLANNED — owner-approved north star; Phase 10A future integration point, not current runtime capability**.
-- Step 8 notes/tasks/reminders/scheduling remains the **next numbered product slice** when numbered roadmap work resumes.
+This section is a brief guide, not the acceptance ledger:
 
-Current accepted/deferred/superseded/rejected truth is centralized in
-`docs/PROJECT_STATE.md`.
+- Core conversation, wake/audio, vision, identity and safe capability runtime have
+  accepted bounded foundations.
+- Step 4 personal memory is **BOUNDED**: encrypted storage and explicit memory
+  operations work; automatic personal-memory admission/injection remain **disabled**.
+- Durable Work/DBOS, Hands, Self-Awareness and deterministic repair foundations
+  have accepted scopes. Autonomous engineering Phases 2–10A are accepted to their
+  documented boundaries; this does **not** mean fully autonomous production JARVIS.
+- The owner-facing personalized, naturally context-aware assistant (CAP-053)
+  is **PLANNED** and is the current design priority.
+- Step 8 remains next in the numbered product sequence.
+
+For exact accepted, deferred and production state, consult
+[Project State](docs/PROJECT_STATE.md) and
+[Current Architecture](docs/CURRENT_ARCHITECTURE.md). Research/draft PRs do not
+change production reality.
 
 ## Setup
 
@@ -113,17 +114,19 @@ Protected CI additionally covers Playwright Chromium provisioning/smoke, Windows
 
 ## Documentation
 
-Current documentation is intentionally small:
+**Start with [Documentation Index and Product Audit](docs/README.md).**
+It identifies the canonical product documents, supporting technical designs,
+current research, exact archival records, and the source of truth for each
+kind of decision.
 
-- [Product definition and capability catalogue](docs/PRODUCT.md)
-- [Autonomous self-management master plan](docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md)
-- [Governed autonomous-engineering master plan](docs/GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md)
+- [Product and personal intelligence contract](docs/PRODUCT.md)
+- [Autonomous and personal intelligence North Star](docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
-- [Current accepted architecture](docs/CURRENT_ARCHITECTURE.md)
-- [Current active plan](docs/CURRENT_PLAN.md)
-- [Canonical project-state ledger](docs/PROJECT_STATE.md)
-- [Quality gates](docs/QUALITY_GATES.md)
-- [Self-Repair and Self-Evolution master plan](docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md)
+- [Current execution plan](docs/CURRENT_PLAN.md)
+- [Accepted runtime architecture](docs/CURRENT_ARCHITECTURE.md)
+- [Accepted/deferred state and historical evidence](docs/PROJECT_STATE.md)
+- [Quality and promotion gates](docs/QUALITY_GATES.md)
 
-Detailed old experiments, superseded ADRs, benchmark notes and acceptance transcripts
-remain available through Git history rather than competing with current truth.
+Historical documents are preserved by exact Git objects under
+`docs/archive/` and navigable from the index, rather than competing with
+the current product plan.

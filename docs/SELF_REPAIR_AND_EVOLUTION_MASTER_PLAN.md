@@ -24,7 +24,7 @@ The authoritative current active phase is owned by:
 
 The detailed pre-reconciliation Self-Repair technical plan is preserved without loss at:
 
-- `SELF_REPAIR_AND_EVOLUTION_TECHNICAL_PLAN.md`
+- `archive/architecture/SELF_REPAIR_AND_EVOLUTION_TECHNICAL_PLAN.md`
 
 That technical plan remains valuable design evidence for deterministic repair, RepairKnowledge semantics, diagnostics, source repair, curriculum, verification and evolution. Its legacy Phase 2–12 numbering is **superseded wherever it conflicts** with the current cross-cutting sequence below.
 
@@ -52,7 +52,7 @@ R1 remains part of the typed risk/action vocabulary but has no owner-accepted au
 
 **DONE / OWNER-MACHINE ACCEPTED 2026-09-24**
 
-Phase 1H is accepted. Its hardening contract and owner-machine evidence are recorded in `SELF_REPAIR_PHASE1H_HARDENING.md`.
+Phase 1H is accepted. Its hardening contract and owner-machine evidence are recorded in `archive/implementation/SELF_REPAIR_PHASE1H_HARDENING.md`.
 
 Accepted hardening includes sustained rolling restart history, one target/action circuit breaker across crash/liveness failures, typed execution preconditions and verifier proof, immutable repair provenance, versioned engineering-DB migrations, Windows Job Object runtime ownership, a local-only production supervisor, and a bounded Windows outer guardian.
 
@@ -87,13 +87,13 @@ Phase 14  Governed Self-Evolution
 
 The full requirements, objects, entry/exit gates and permanent governance invariants for these phases are defined in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
 
-Phase-4 implementation details are preserved in `PHASE4_MODEL_ROUTER_RESEARCH.md`, `PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`; final owner-machine evidence is in `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. Jev remains deferred to a separate later optimization experiment.
+Phase-4 implementation details are preserved in `archive/research/PHASE4_MODEL_ROUTER_RESEARCH.md`, `archive/architecture/PHASE4_MODEL_ROUTER_ARCHITECTURE.md`, and `archive/implementation/PHASE4_MODEL_ROUTER_IMPLEMENTATION_PLAN.md`; final owner-machine evidence is in `archive/acceptance/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. Jev remains deferred to a separate later optimization experiment.
 
-Phase 6 Unknown-Incident Investigation + Source Repair is owner-machine accepted on 2026-09-27. Its canonical evidence is recorded in `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted path covers bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, protected-surface fail-closed verification, exact candidate provenance, deterministic replay and Windows acceptance. It stops before protected-main promotion/deployment.
+Phase 6 Unknown-Incident Investigation + Source Repair is owner-machine accepted on 2026-09-27. Its canonical evidence is recorded in `archive/acceptance/PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted path covers bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, protected-surface fail-closed verification, exact candidate provenance, deterministic replay and Windows acceptance. It stops before protected-main promotion/deployment.
 
-Phase 7 Governed Promotion / Production Verification / Rollback is owner-machine accepted on 2026-09-27. Canonical evidence is recorded in `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. The accepted path covers exact candidate/PR/CI identity, digest-bound owner promotion, one-shot Authority execution, exact protected-main merge, immutable Windows release staging, runtime identity verification, bounded observation and compatibility-safe rollback while preserving owner authority.
+Phase 7 Governed Promotion / Production Verification / Rollback is owner-machine accepted on 2026-09-27. Canonical evidence is recorded in `archive/acceptance/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. The accepted path covers exact candidate/PR/CI identity, digest-bound owner promotion, one-shot Authority execution, exact protected-main merge, immutable Windows release staging, runtime identity verification, bounded observation and compatibility-safe rollback while preserving owner authority.
 
-Phase 8 Capability Package + Registry Lifecycle is owner-machine accepted on 2026-09-27. Canonical evidence is recorded in `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. The accepted path covers immutable package contracts, exact release/manifest/provider compatibility, durable lifecycle registry truth, generation-aware reconciliation, transition fencing, HealthRegistry projection, Authority-bound lifecycle switching, compatible version rollback, retention, deterministic replay and Windows owner-machine acceptance.
+Phase 8 Capability Package + Registry Lifecycle is owner-machine accepted on 2026-09-27. Canonical evidence is recorded in `archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. The accepted path covers immutable package contracts, exact release/manifest/provider compatibility, durable lifecycle registry truth, generation-aware reconciliation, transition fencing, HealthRegistry projection, Authority-bound lifecycle switching, compatible version rollback, retention, deterministic replay and Windows owner-machine acceptance.
 
 ---
 
@@ -155,4 +155,4 @@ research thoroughly
 
 JARVIS may increasingly perform the research, coding, debugging, testing and candidate preparation inside that lifecycle. It does not gain permission to self-authorize, weaken protected controls, expand credentials, merge protected main or silently deploy.
 
-For detailed historical design rationale and repair-specific schemas, use `SELF_REPAIR_AND_EVOLUTION_TECHNICAL_PLAN.md`. For current status, use `CURRENT_PLAN.md`. For the integrated future architecture and phase sequence, use `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.
+For detailed historical design rationale and repair-specific schemas, use `archive/architecture/SELF_REPAIR_AND_EVOLUTION_TECHNICAL_PLAN.md`. For current status, use `CURRENT_PLAN.md`. For the integrated future architecture and phase sequence, use `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md`.

@@ -10,6 +10,14 @@ This file describes architecture that actually exists on protected `main`. Histo
 
 ---
 
+**Documentation-only reconciliation (2026-10-18):** Relocating old plans,
+research and acceptance records does not alter deployed code or feature flags.
+The proposed movie-inspired personal-intelligence experience is **future
+product intent**, not current production capability. See
+[Product](PRODUCT.md), [Current Plan](CURRENT_PLAN.md) and
+[Documentation Index](README.md). Existing Step 4 automatic memory
+injection remains disabled.
+
 ## Top-level production architecture
 
 ```text
@@ -369,7 +377,7 @@ exact, lexical and Qwen-256 paraphrase paths. Poisoning/secret gates, future-fac
 extensibility and lexical/hybrid qrel safety all passed.
 
 Canonical final record:
-`docs/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+`docs/archive/acceptance/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
 
 ## EngineeringChange production foundation
@@ -379,7 +387,7 @@ Phase 3 EngineeringChange Lifecycle / Mission Orchestration is owner-machine acc
 Current architecture includes one durable program-level `EngineeringChange` aggregate above WorkItems, immutable artifact-bound owner gates, architecture revision invalidation, owner-input waits, verified development evidence, acceptance and promotion-intent boundaries, and restart-safe PostgreSQL DBOS mission recovery. WorkItems remain the execution unit; EngineeringChange owns the multi-stage governed lifecycle.
 
 Canonical final record:
-`docs/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
+`docs/archive/acceptance/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
 
 ## Research + Diagnostic Model Router production foundation
 
@@ -404,7 +412,7 @@ Owner-machine acceptance naturally proved `Gemini -> rate_limited -> OpenAI fall
 Realtime voice routing is not part of this foundation. Interactive voice/Hands retain their existing provider behavior and priority. Local-model targets, learned routing, Jev and autonomous routing-policy mutation remain deferred.
 
 Canonical final record:
-`docs/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
+`docs/archive/acceptance/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
 ## Secure Autonomous Engineering Substrate production foundation
 
@@ -413,7 +421,7 @@ Phase 5 is owner-machine accepted on 2026-09-27.
 Current architecture includes governed dependency acquisition, opaque child-only secret handling, least-privilege development sandboxing, exact dependency provenance, hardware-in-the-loop acceptance support, and protected engineering-control surfaces. Models do not receive raw credentials or unrestricted package/shell authority.
 
 Canonical final record:
-`docs/PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`.
+`docs/archive/acceptance/PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`.
 
 ## Unknown-Incident Investigation + Source Repair production foundation
 
@@ -422,7 +430,7 @@ Phase 6 is owner-machine accepted on 2026-09-27.
 Current architecture includes bounded read-only evidence collection, typed diagnosis evidence, owner-gated repair architecture, exact source-revision-pinned isolated development, protected-surface classification, post-edit verification, exact repair-candidate provenance, deterministic replay, and Windows acceptance. The Phase-6 boundary produces a verified source candidate and deliberately stops before protected-main promotion.
 
 Canonical final record:
-`docs/PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
+`docs/archive/acceptance/PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
 
 ## Governed Promotion / Production Verification / Rollback production foundation
 
@@ -433,7 +441,7 @@ Current architecture includes exact candidate/PR/CI identity binding, immutable 
 External provider/hardware/network failures do not independently trigger code rollback. Schema, DBOS durable-workflow/persistence, runtime dependency and deployment/governance changes remain high-risk paths requiring explicit compatibility planning.
 
 Canonical final record:
-`docs/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
+`docs/archive/acceptance/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`.
 
 ## Capability Package + Registry Lifecycle production foundation
 
@@ -444,7 +452,7 @@ Current architecture includes immutable strict-SemVer capability package descrip
 Existing built-ins remain `CORE_PINNED`; package-managed capabilities use durable desired state + selected version + generation reconciled into effective runtime truth. Package metadata cannot choose arbitrary executable code, imports, commands or plaintext secrets. DBOS is not canonical registry truth. No automatic plugin import, production package installation or Python hot reload is introduced.
 
 Canonical final record:
-`docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+`docs/archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
 ## Known residuals / deliberate deferrals
 
@@ -468,7 +476,7 @@ Repository-wide accepted/deferred/superseded/rejected truth is centralized in `P
 
 ## Next architecture acceptance
 
-Phases 4–8 are **DONE / OWNER-MACHINE ACCEPTED**. Phase 8's final evidence is recorded in `docs/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+Phases 4–8 are **DONE / OWNER-MACHINE ACCEPTED**. Phase 8's final evidence is recorded in `docs/archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
 The next active cross-cutting slice is **Phase 9 — Owner-Requested Capability Acquisition**. Its work begins with repository inspection, technology research and architecture. Phase-9 implementation requires explicit owner architecture approval and must reuse the accepted EngineeringChange, secure engineering substrate, governed promotion and Phase-8 package/registry lifecycle rather than create a parallel capability-acquisition path.
 

@@ -1,5 +1,13 @@
 # JARVIS V1 Quality Gates
 
+**Documentation preservation note (2026-10-18):** A documentation cleanup
+must preserve milestone acceptance evidence and source provenance, maintain
+one canonical owner for each product fact, and verify links/CI before merging.
+The [documentation index](README.md) lists verbatim archived records. A
+reorganization never constitutes owner-machine acceptance or runtime
+authorization.
+
+
 These are universal completion rules for major product slices, owner-approved integration/stabilization interludes, and future JARVIS-generated engineering candidates. Code existing or unit tests passing is never sufficient by itself.
 
 ## 1. Scope Gate
