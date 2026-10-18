@@ -109,8 +109,12 @@ def test_harder_questions_are_bounded_and_honest_about_scope():
     assert len({c.case_id for c in CHALLENGE_CASES}) == QUERY_COUNT
     assert sum(c.expected_answer is not None for c in CHALLENGE_CASES) == 20
     assert sum(c.subject is None for c in CHALLENGE_CASES) == 2
-    assert sum(c.subject is not None and c.expected_answer is None
-               for c in CHALLENGE_CASES) == 2
+    assert (
+        sum(
+            c.subject is not None and c.expected_answer is None for c in CHALLENGE_CASES
+        )
+        == 2
+    )
 
 
 def test_offline_lexical_works_without_remote_server():
@@ -184,16 +188,22 @@ def test_actual_mock_recall_path_is_24_queries_and_one_clean_bank():
     assert result["engines"]["hindsight"]["decisions_correct"] == 24
     assert result["engines"]["hybrid"]["decisions_required"] == 24
     assert fake.deleted
-    assert sum(
-        method == "POST" and path.endswith("/memories/recall")
-        for method, path in fake.events
-    ) == 24
+    assert (
+        sum(
+            method == "POST" and path.endswith("/memories/recall")
+            for method, path in fake.events
+        )
+        == 24
+    )
 
 
 def test_missing_source_predecessor_not_counted_as_correct_answer():
     fake = HardFake(partial_history=True)
     report = run_one_local_comparison(
-        fake, inspected=True, bank_id=BANK, pause=lambda _: None,
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _: None,
         capture=capture_harder_retrieval,
     )
     result = report["comparison"]["engines"]["hindsight"]
@@ -213,8 +223,11 @@ def test_recall_failure_is_fail_closed_and_cleanup_happens(options, reason):
     fake = HardFake(**options)
     with pytest.raises(ProbeFailure, match=reason):
         run_one_local_comparison(
-            fake, inspected=True, bank_id=BANK,
-            pause=lambda _: None, capture=capture_harder_retrieval,
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _: None,
+            capture=capture_harder_retrieval,
         )
     assert fake.deleted
 
@@ -223,7 +236,10 @@ def test_cleanup_failure_always_blocks_success():
     fake = HardFake(fail_cleanup=True)
     with pytest.raises(ProbeFailure, match="scale_bank_cleanup_unverified"):
         run_one_local_comparison(
-            fake, inspected=True, bank_id=BANK, pause=lambda _: None,
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _: None,
             capture=capture_harder_retrieval,
         )
     assert not fake.deleted
@@ -233,7 +249,10 @@ def test_invalid_callback_result_triggers_bank_cleanup():
     fake = HardFake()
     with pytest.raises(ProbeFailure, match="invalid_comparison_report"):
         run_one_local_comparison(
-            fake, inspected=True, bank_id=BANK, pause=lambda _: None,
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _: None,
             capture=lambda _transport, _root: None,
         )
     assert fake.deleted
@@ -261,7 +280,11 @@ def test_isolated_cli_preview_stays_network_free():
     script = root / "tools" / "research" / "step8_local_hard_language_probe.py"
     result = subprocess.run(
         [sys.executable, "-I", str(script)],
-        cwd=root, capture_output=True, text=True, timeout=20, check=False,
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     output = json.loads(result.stdout)
