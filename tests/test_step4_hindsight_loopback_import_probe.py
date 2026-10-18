@@ -576,9 +576,7 @@ def test_local_structured_decision_detects_missing_evidence():
 
 def test_local_structured_decision_tampered_recall_fails_and_cleans():
     fake = RecallFakeTransport(corrupt_provenance=True)
-    with pytest.raises(
-        ProbeFailure, match="untrusted_or_malformed_recall_evidence"
-    ):
+    with pytest.raises(ProbeFailure, match="untrusted_or_malformed_recall_evidence"):
         run_local_import(
             fake,
             inspected=True,
