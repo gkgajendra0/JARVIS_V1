@@ -48,7 +48,11 @@ def _payload(*, answers: bool = True) -> dict[str, Any]:
     rows = []
     for case in CASES:
         targets = list(case.required_ids)
-        extras = [fact.assertion_id for fact in PINNED_FACTS if fact.assertion_id not in targets]
+        extras = [
+            fact.assertion_id
+            for fact in PINNED_FACTS
+            if fact.assertion_id not in targets
+        ]
         row: dict[str, Any] = {
             "case_id": case.case_id,
             "recall": {"results": [_result(i) for i in targets + extras]},
@@ -172,10 +176,19 @@ def test_retrieval_target_outside_top_three_fails_ranking_gate():
 @pytest.mark.parametrize(
     ("mutator", "code"),
     [
-        (lambda x: x["metadata"].pop("canonical_source_ref"), "fact_provenance_mismatch"),
-        (lambda x: x["metadata"].update(assertion_version=2), "fact_provenance_mismatch"),
+        (
+            lambda x: x["metadata"].pop("canonical_source_ref"),
+            "fact_provenance_mismatch",
+        ),
+        (
+            lambda x: x["metadata"].update(assertion_version=2),
+            "fact_provenance_mismatch",
+        ),
         (lambda x: x.update(text="Altered synthetic claim"), "fact_identity_mismatch"),
-        (lambda x: x["metadata"].update(assertion_id="owner-private"), "unrecognized_assertion"),
+        (
+            lambda x: x["metadata"].update(assertion_id="owner-private"),
+            "unrecognized_assertion",
+        ),
         (lambda x: x.update(document_id="owner-document"), "fact_identity_mismatch"),
         (lambda x: x.update(type="observation"), "fact_identity_mismatch"),
     ],
