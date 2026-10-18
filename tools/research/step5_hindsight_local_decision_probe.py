@@ -60,7 +60,7 @@ def capture_local_decisions(transport: Any, bank_root: str) -> dict[str, Any]:
         )
         try:
             decision = decide_from_pinned_recall(case.case_id, recalled)
-        except (ValueError, TypeError) as exc:
+        except (ValueError, TypeError):
             raise ProbeFailure("untrusted_or_malformed_recall_evidence") from None
         rows.append(
             {
@@ -75,7 +75,7 @@ def capture_local_decisions(transport: Any, bank_root: str) -> dict[str, Any]:
         )
     try:
         report = score_candidates({"cases": rows})
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError):
         raise ProbeFailure("invalid_recall_score") from None
 
     if (
