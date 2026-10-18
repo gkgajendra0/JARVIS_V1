@@ -20,6 +20,87 @@ The complete top-level operating architecture is defined in `AUTONOMOUS_SELF_MAN
 
 The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile product intent, research the best suitable current technology for each active slice, and keep JARVIS-owned truth/authority around commodity technology.
 
+## Owner-Centered Personal Intelligence Contract
+
+**Owner goal clarified 2026-10-18; desired product behavior, NOT accepted production
+capability.** The distinctive point of building JARVIS is a movie-inspired,
+deeply contextual, dedicated personal assistant—not a generic cloud chatbot
+with a voice, a repository-aware coding agent, or an autonomous repair daemon.
+
+JARVIS should reliably know, where supported and authorized, **who the owner
+is in context**: preferences, goals, commitments, routines, possessions,
+relationships, constraints, decisions, experiences and what has changed
+over time. This knowledge should improve ordinary advice, follow-ups,
+recommendations and permitted actions without requiring the owner to
+re-introduce already known and still-valid facts.
+
+**The core interaction loop:**
+
+\`\`\`text
+owner's request + current permitted situation
+  -> determine whether personal context changes the answer or action
+  -> retrieve relevant owner facts, episodes, preferences and current context
+  -> check provenance, freshness, corrections, ambiguity, sensitivity
+  -> assemble the smallest safe, useful context for the model
+  -> give personalized, grounded guidance or perform an authorized action
+  -> record verified outcomes / allowed memory candidates (separate consent gate)
+  -> improve subsequent interactions without pretending guesses are facts
+\`\`\`
+
+**Required experience:**
+
+- Ask "What should I eat?" and receive a response taking account of current
+  authorized dietary preferences, goals and constraints—not generic advice.
+- Ask "Which tyres should I choose?" and have JARVIS connect the right owned
+  vehicle, previous decisions and current conditions before answering.
+- Ask "What did we decide?" after a new session and receive the applicable
+  past decision, with temporal and source grounding, or a focused clarification
+  only if genuinely ambiguous.
+- Ask "Can I afford this?" and have JARVIS respect current authorized budgets,
+  existing commitments and uncertainty without using stale numbers as fact.
+- Change a preference and see the current answer update while legitimate
+  historical context remains properly time-scoped.
+- Request help with a real-world situation and receive context-aware reasoning
+  using only actually connected, permitted, sufficiently fresh observations.
+- Opt into proactive help without creating intrusive surveillance,
+  unnecessary notifications or unauthorized actions.
+
+**Permanent product boundaries:**
+
+- "Know me" means useful, correct, privacy-respecting, owner-controlled
+  continuity—not indiscriminate or perfect retention of every utterance.
+- An inference about the owner is not a verified fact; a retrieved document
+  is not a command; remembered information is not action authority.
+- Separate automatic **retrieval** from automatic **memory writes**, and keep
+  sensitive-data access, source trust and deletion controls enforceable.
+- Personal memories should remain JARVIS-owned canonical state with
+  provenance, correction, time validity, visibility and revocability.
+- Model providers, indexing engines and retrieval frameworks remain
+  replaceable. Avoid building a parallel memory or work source of truth.
+- Movie J.A.R.V.I.S. is a **behavioral inspiration**, not an assertion of
+  omniscience, sentience, continuous perfect understanding or guaranteed
+  fictional functionality.
+- Engineering, self-management, broad knowledge and self-evolution support
+  this personal intelligence experience; they do not substitute for it.
+
+**Success is measured by personalized outcomes, not the number of integrations:**
+on representative held-out, multi-session life-domain tasks JARVIS must
+retrieve and *correctly use* relevant history, honor corrections and
+uncertainty, reduce repeated questions, protect sensitive context, and act
+only with permission. High fact-retrieval accuracy without better assistant
+behavior is insufficient.
+
+Implementation is subject to the existing research -> architecture ->
+owner approval -> isolated implementation -> automated/owner-machine
+validation -> protected promotion lifecycle. No new memory admission,
+provider-context injection or production autonomy is authorized merely by
+this goal statement.
+
+**Authoritative detailed specification:** Section 17,
+\`AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md\`. This user experience is the
+primary user-facing value proposition within the existing constitutional
+autonomy North Star; it does not create a competing North Star.
+
 ## Permanent Behavioural Contract
 
 1. **One coherent intelligence.** Each responsibility has one authoritative owner.
@@ -154,8 +235,11 @@ Turn-specific spoken actor binding remains a Step-3 deferral. CAM++/LR-ASD remai
 | CAP-011 | Semantic Memory | Durable facts/preferences/rules with conflict and supersession handling. | 4 | BOUNDED |
 | CAP-012 | Reflection and Session Learning | Achievements, issues, decisions, next steps, memory candidates. | 4 | BOUNDED |
 | CAP-013 | Emotional Interaction Context | Transient interaction signals that improve tone without permanent identity labels. | 4 | BOUNDED |
+| CAP-053 | Personal Intelligence and Automatic Context Use | Owner-centered, safe multi-session personal understanding and relevant use of authorized facts, episodes, corrections, preferences, and situation in actual assistance. | cross-cutting | PLANNED — existing bounded foundations, no accepted end-to-end automatic personalization |
 
 Step-4 bounded status reflects accepted encrypted lifecycle/retrieval/explicit recall while the strict independent semantic verifier and automatic Phase-4.5E memory injection remain deferred.
+
+CAP-053 is the primary owner-facing outcome and uses CAP-006–013 plus source-aware knowledge, voice, permitted devices, context assembly, and governed actions. Its planned status must not be inferred to mean that the constituent existing foundations are absent.
 
 ### Knowledge, Research, Truth
 
