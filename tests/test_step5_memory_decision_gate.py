@@ -319,19 +319,19 @@ def _recalled(*assertion_ids: str) -> dict[str, object]:
         }
         if fact.supersedes_id is not None:
             metadata["supersedes_id"] = fact.supersedes_id
-        items.append({
-            "type": "world",
-            "text": fact.text,
-            "document_id": f"jarvis-dev-only-{fact.assertion_id}",
-            "metadata": metadata,
-        })
+        items.append(
+            {
+                "type": "world",
+                "text": fact.text,
+                "document_id": f"jarvis-dev-only-{fact.assertion_id}",
+                "metadata": metadata,
+            }
+        )
     return {"results": items}
 
 
 def test_shadow_candidate_uses_only_retrieved_correction_lineage():
-    complete = _recalled(
-        "synthetic-workshop-day-v2", "synthetic-workshop-day-v1"
-    )
+    complete = _recalled("synthetic-workshop-day-v2", "synthetic-workshop-day-v1")
     result = decide_from_pinned_recall("atlas_current_day", complete)
     assert result.status == "answer"
     assert result.answer_code == "sunday"
