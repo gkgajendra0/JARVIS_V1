@@ -125,7 +125,7 @@ def decide_from_pinned_recall(
     if case_id not in _CASE_QUESTIONS:
         raise ValueError("unrecognized_synthetic_question")
     if not isinstance(recall_response, dict):
-        raise ValueError("invalid_recall_response")
+        raise TypeError("invalid_recall_response")
     rows = recall_response.get("results")
     if not isinstance(rows, list) or len(rows) > len(PINNED_FACTS):
         raise ValueError("invalid_recall_results")
