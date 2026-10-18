@@ -187,17 +187,22 @@ def build_synthetic_external_fact_zip(
     }
     for fact in facts:
         doc_id = f"jarvis-dev-only-{fact.assertion_id}"
-        context = {
+        # Hindsight TransferFact.metadata is dict[str, str] (Pydantic v2).
+        # Non-string values reject the whole archive at the import endpoint.
+        # Keep the canonical integer version in SyntheticFact; serialize only
+        # the transfer boundary as strings and omit absent predecessors.
+        context: dict[str, str] = {
             "source_turn_id": fact.source_turn_id,
             "canonical_source_ref": f"conversation:synthetic:{fact.source_turn_id}",
             "assertion_id": fact.assertion_id,
-            "assertion_version": fact.version,
+            "assertion_version": str(fact.version),
             "predicate": fact.predicate,
             "revision_kind": fact.revision_kind,
-            "supersedes_id": fact.supersedes_id,
             "source_class": "synthetic_owner_direct",
             "admission_policy": "shadow_only_no_write",
         }
+        if fact.supersedes_id is not None:
+            context["supersedes_id"] = fact.supersedes_id
         payloads[f"documents/{doc_id}.json"] = _json_bytes(
             {
                 "id": doc_id,
@@ -274,11 +279,15 @@ def inspect_synthetic_archive(archive_bytes: bytes) -> dict[str, Any]:
                 or stored["mentioned_at"] != _iso_utc(fact.mentioned_at)
                 or stored["occurred_start"] != _iso_utc(fact.occurred_start)
                 or meta["assertion_id"] != fact.assertion_id
-                or meta["assertion_version"] != fact.version
+                or meta["assertion_version"] != str(fact.version)
                 or meta["source_turn_id"] != fact.source_turn_id
                 or meta["canonical_source_ref"]
                 != f"conversation:synthetic:{fact.source_turn_id}"
-                or meta["supersedes_id"] != fact.supersedes_id
+                or meta.get("supersedes_id") != fact.supersedes_id
+                or any(
+                    not isinstance(key, str) or not isinstance(value, str)
+                    for key, value in meta.items()
+                )
             ):
                 raise ValueError("synthetic archive provenance mismatch")
     return {
