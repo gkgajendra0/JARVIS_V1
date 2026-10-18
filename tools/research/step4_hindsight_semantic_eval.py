@@ -187,13 +187,14 @@ def _score_decision(
     if not isinstance(decision, dict):
         raise EvaluationFailure("invalid_decision")
     cited = decision.get("evidence_assertion_ids")
-    if (
-        not isinstance(cited, list)
-        or len(cited) != len(set(cited)) if isinstance(cited, list) else True
+    if not isinstance(cited, list) or any(
+        not isinstance(i, str) or i not in PINNED_IDS for i in cited
     ):
         raise EvaluationFailure("invalid_decision_evidence")
-    if any(not isinstance(i, str) or i not in PINNED_IDS for i in cited):
+    if len(cited) != len(set(cited)):
         raise EvaluationFailure("invalid_decision_evidence")
+    if set(decision) - {"status", "answer_code", "evidence_assertion_ids"}:
+        raise EvaluationFailure("invalid_decision")
     if case.answer_code is None:
         return (
             decision.get("status") == "abstain"
