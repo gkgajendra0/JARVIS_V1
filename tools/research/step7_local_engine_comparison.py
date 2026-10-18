@@ -24,8 +24,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from tools.research.step4_hindsight_loopback_import_probe import (
     DOCKER_CONTAINER,
-    LocalHTTPError,
     LocalHindsightHTTP,
+    LocalHTTPError,
     ProbeFailure,
     _multipart,
     _require_disabled_config,
@@ -33,7 +33,6 @@ from tools.research.step4_hindsight_loopback_import_probe import (
 )
 
 from jarvis.memory.research_compare_fixture import (
-    BY_ID,
     CASES,
     DOCUMENT_COUNT,
     FACTS,
@@ -248,7 +247,7 @@ def run_one_local_comparison(
                             raise
                     if not cleaned:
                         raise ProbeFailure("scale_bank_still_exists")
-            except Exception as cleanup_error:
+            except Exception as cleanup_error:  # noqa: BLE001 - cleanup must be checked
                 if primary is not None:
                     p = str(primary) if isinstance(primary, ProbeFailure) else "unknown"
                     c = (
