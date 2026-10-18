@@ -179,6 +179,7 @@ def run_one_local_comparison(
     inspected: bool,
     bank_id: str,
     pause: Callable[[float], None] = time.sleep,
+    capture: Callable[[Any, str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """One import with unconditional cleanup, including failed import/recall."""
     if inspected is not True:
@@ -222,7 +223,9 @@ def run_one_local_comparison(
         if last != "completed":
             raise ProbeFailure("scale_import_operation_timeout")
         _readback(transport, root)
-        result = _capture_comparison(transport, root)
+        result = (_capture_comparison if capture is None else capture)(transport, root)
+        if not isinstance(result, dict):
+            raise ProbeFailure("invalid_comparison_report")
     except Exception as exc:  # noqa: BLE001 - deletion must happen
         primary = exc
     finally:
