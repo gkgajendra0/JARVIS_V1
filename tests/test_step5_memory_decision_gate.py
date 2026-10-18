@@ -11,12 +11,15 @@ from pathlib import Path
 import pytest
 from tools.research.step5_memory_decision_acceptance import (
     case_decisions,
+    compare_pinned_recall_shadow,
+    decide_from_pinned_recall,
     frozen_assertions,
     large_fictional_corpus,
     verify_large_synthetic,
     verify_nine_cases,
 )
 
+from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 from jarvis.memory.research_decision_gate import (
     Assertion,
     DecisionSafetyError,
@@ -296,3 +299,80 @@ def test_abstention_does_not_claim_llm_or_server_accuracy():
     assert summary["real_llm_accuracy_measured"] is False
     assert summary["real_hindsight_decision_accuracy_measured"] is False
     assert summary["no_memory_write"] is True
+
+
+def _recalled(*assertion_ids: str) -> dict[str, object]:
+    """Fake responses use frozen facts and full metadata; never contact a server."""
+    by_id = {fact.assertion_id: fact for fact in PINNED_FACTS}
+    items = []
+    for assertion_id in assertion_ids:
+        fact = by_id[assertion_id]
+        metadata = {
+            "assertion_id": fact.assertion_id,
+            "assertion_version": str(fact.version),
+            "source_turn_id": fact.source_turn_id,
+            "canonical_source_ref": f"conversation:synthetic:{fact.source_turn_id}",
+            "predicate": fact.predicate,
+            "revision_kind": fact.revision_kind,
+            "source_class": "synthetic_owner_direct",
+            "admission_policy": "shadow_only_no_write",
+        }
+        if fact.supersedes_id is not None:
+            metadata["supersedes_id"] = fact.supersedes_id
+        items.append({
+            "type": "world",
+            "text": fact.text,
+            "document_id": f"jarvis-dev-only-{fact.assertion_id}",
+            "metadata": metadata,
+        })
+    return {"results": items}
+
+
+def test_shadow_candidate_uses_only_retrieved_correction_lineage():
+    complete = _recalled(
+        "synthetic-workshop-day-v2", "synthetic-workshop-day-v1"
+    )
+    result = decide_from_pinned_recall("atlas_current_day", complete)
+    assert result.status == "answer"
+    assert result.answer_code == "sunday"
+    assert result.evidence_assertion_ids == ("synthetic-workshop-day-v2",)
+    compare = compare_pinned_recall_shadow("atlas_current_day", complete)
+    assert compare["equal"] is True
+    assert compare["memory_write_performed"] is False
+
+
+def test_shadow_candidate_abstains_if_recall_omits_predecessor():
+    partial = _recalled("synthetic-workshop-day-v2")
+    result = decide_from_pinned_recall("atlas_current_day", partial)
+    assert result.status == "abstain"
+    assert result.answer_code is None
+    compare = compare_pinned_recall_shadow("atlas_current_day", partial)
+    assert compare["equal"] is False
+    assert compare["candidate_status"] == "abstain"
+    assert compare["production_promotion_allowed"] is False
+
+
+def test_shadow_candidate_never_borrows_global_fixture_for_history():
+    partial = _recalled("synthetic-report-day-v2")
+    result = decide_from_pinned_recall("nile_historical_change", partial)
+    assert result.status == "abstain"
+
+
+def test_shadow_candidate_rejects_fake_provenance_and_duplicates():
+    good = _recalled("synthetic-workshop-day-v1")
+    duplicate = {"results": good["results"] + good["results"]}
+    with pytest.raises(ValueError, match="duplicate_recall_result"):
+        decide_from_pinned_recall("atlas_original_day", duplicate)
+    bad = _recalled("synthetic-workshop-day-v1")
+    bad["results"][0]["metadata"]["canonical_source_ref"] = "forged-owner-ref"
+    with pytest.raises(ValueError, match="fact_provenance_mismatch"):
+        decide_from_pinned_recall("atlas_original_day", bad)
+
+
+def test_shadow_candidate_unknown_case_and_large_payload_fail_closed():
+    for case, payload in (
+        ("owner-schedule", _recalled()),
+        ("atlas_current_day", {"results": [None] * 100}),
+    ):
+        with pytest.raises(ValueError):
+            decide_from_pinned_recall(case, payload)
