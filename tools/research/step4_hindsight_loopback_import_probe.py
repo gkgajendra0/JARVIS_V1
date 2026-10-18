@@ -118,7 +118,7 @@ def _http_stage(method: str, path: str) -> str:
     if method == "GET" and "/memories/list?document_id=" in path:
         return "memory_list"
     if method == "POST" and re.fullmatch(
-        r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}/recall", path
+        r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}/memories/recall", path
     ):
         return "semantic_recall"
     if method == "DELETE" and re.fullmatch(
