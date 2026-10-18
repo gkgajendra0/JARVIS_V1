@@ -358,7 +358,7 @@ def score_rankings(rankings: dict[str, dict[str, tuple[str, ...]]]) -> dict[str,
     if set(rankings) != {"hindsight", "lexical", "hybrid"}:
         raise ComparisonFailure("invalid_comparison_engines")
     expected_cases = {case.case_id for case in CASES}
-    for name, cases_by_id in rankings.items():
+    for cases_by_id in rankings.values():
         if set(cases_by_id) != expected_cases:
             raise ComparisonFailure("incomplete_comparison_cases")
         for ordered in cases_by_id.values():
