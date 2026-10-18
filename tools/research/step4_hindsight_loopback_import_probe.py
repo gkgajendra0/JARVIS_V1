@@ -88,6 +88,7 @@ _SAFE_HTTP_STAGES = frozenset(
         "document_list",
         "document_read",
         "memory_list",
+        "semantic_recall",
         "bank_cleanup",
     }
 )
@@ -116,6 +117,10 @@ def _http_stage(method: str, path: str) -> str:
         return "document_read"
     if method == "GET" and "/memories/list?document_id=" in path:
         return "memory_list"
+    if method == "POST" and re.fullmatch(
+        r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}/recall", path
+    ):
+        return "semantic_recall"
     if method == "DELETE" and re.fullmatch(
         r"/v1/default/banks/jarvis-dev-only-[0-9a-f]{32}", path
     ):
@@ -278,8 +283,9 @@ def run_local_import(
     inspected: bool,
     bank_id: str,
     pause: Callable[[float], None] = time.sleep,
+    after_readback: Callable[[Any, str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """One import, one disposable bank and enforced cleanup (no retry)."""
+    """One import, optional read-only research hook, enforced cleanup; no retry."""
 
     if inspected is not True:
         raise ProbeFailure("docker_provenance_not_verified")
@@ -396,6 +402,14 @@ def run_local_import(
             "no_production_memory": True,
             "not_semantic_accuracy_acceptance": True,
         }
+        # Optional research callback runs only after all five facts and their
+        # exact metadata pass import readback and BEFORE disposable cleanup.
+        # The legacy CLI leaves this unset and behaves exactly as before.
+        if after_readback is not None:
+            research = after_readback(transport, root)
+            if not isinstance(research, dict):
+                raise ProbeFailure("invalid_research_callback_report")
+            result["research_recall"] = research
     except Exception as exc:  # noqa: BLE001 - cleanup must still run
         primary_error = exc
     finally:
