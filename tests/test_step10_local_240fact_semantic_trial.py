@@ -73,7 +73,10 @@ class Fake240Transport:
         content_type: str | None = None,
     ) -> dict[str, Any]:
         self.calls.append((method, path))
-        if method == "GET" and path == "/v1/default/banks?query=jarvis-dev-only-&limit=100":
+        if (
+            method == "GET"
+            and path == "/v1/default/banks?query=jarvis-dev-only-&limit=100"
+        ):
             return {"total": 1 if self.prior_bank else 0}
         if method == "GET" and path == "/version":
             return {"version": "1.0.0"}
@@ -195,9 +198,7 @@ def test_paginated_source_readback_covers_exactly_all_240_facts():
         if path.startswith(f"{ROOT}/documents?limit=")
     ]
     assert len(pages) == 3
-    assert [path.split("offset=")[1] for _, path in pages] == [
-        "0", "80", "160"
-    ]
+    assert [path.split("offset=")[1] for _, path in pages] == ["0", "80", "160"]
     assert len(fake.calls) == 3 + 240 * 2
 
 
@@ -217,7 +218,9 @@ def test_bad_pages_or_fact_sources_rejected(options, expected):
 
 def test_fake_owner_live_harness_exercises_68_queries_and_cleans_up():
     fake = Fake240Transport()
-    report = run_single_live_trial(fake, inspected=True, bank_id=BANK, pause=lambda _: None)
+    report = run_single_live_trial(
+        fake, inspected=True, bank_id=BANK, pause=lambda _: None
+    )
     assert report["status"] == "measured"
     assert report["archive_sha256"] == EXPECTED_ARCHIVE_HASH
     assert report["documents_read_back"] == 240
@@ -236,8 +239,7 @@ def test_fake_owner_live_harness_exercises_68_queries_and_cleans_up():
         for method, path in fake.calls
     )
     import_calls = sum(
-        method == "POST" and "/transfer/import?" in path
-        for method, path in fake.calls
+        method == "POST" and "/transfer/import?" in path for method, path in fake.calls
     )
     assert recall_calls == 68
     assert import_calls == 1
@@ -285,7 +287,10 @@ def test_invalid_capture_result_also_triggers_cleanup():
     fake = Fake240Transport()
     with pytest.raises(ProbeFailure, match="invalid_240_comparison_output"):
         run_single_live_trial(
-            fake, inspected=True, bank_id=BANK, pause=lambda _: None,
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _: None,
             capture=lambda _transport, _root: None,
         )
     assert fake.deleted
@@ -313,7 +318,11 @@ def test_isolated_cli_preview_not_networked():
     file_path = root / "tools" / "research" / "step10_local_240fact_semantic_trial.py"
     result = subprocess.run(
         [sys.executable, "-I", str(file_path)],
-        cwd=root, capture_output=True, text=True, check=False, timeout=30,
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
     )
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
