@@ -69,7 +69,10 @@ class FakeScaleTransport:
         content_type: str | None = None,
     ) -> dict[str, Any]:
         self.events.append((method, path))
-        if method == "GET" and path == "/v1/default/banks?query=jarvis-dev-only-&limit=100":
+        if (
+            method == "GET"
+            and path == "/v1/default/banks?query=jarvis-dev-only-&limit=100"
+        ):
             return {"total": 1 if self.existing else 0}
         if method == "GET" and path == "/version":
             return {"version": "1.0.0"}
@@ -259,10 +262,20 @@ def test_fake_live_run_measures_three_engines_and_verifies_cleanup():
     assert comparison["engines"]["lexical"]["retrieval_required"] == 16
     assert comparison["engines"]["hybrid"]["retrieval_required"] == 16
     assert fake.deleted
-    assert sum(method == "POST" and path.endswith("/memories/recall")
-               for method, path in fake.events) == 18
-    assert sum(method == "POST" and "/transfer/import?" in path
-               for method, path in fake.events) == 1
+    assert (
+        sum(
+            method == "POST" and path.endswith("/memories/recall")
+            for method, path in fake.events
+        )
+        == 18
+    )
+    assert (
+        sum(
+            method == "POST" and "/transfer/import?" in path
+            for method, path in fake.events
+        )
+        == 1
+    )
 
 
 @pytest.mark.parametrize(
@@ -312,11 +325,10 @@ def test_cannot_run_without_docker_inspection_or_valid_bank_id():
     assert fake.events == []
 
 
-def test_default_main_does_not_check_docker_or_issue_network_calls(
-    capsys, monkeypatch
-):
+def test_default_main_does_not_check_docker_or_issue_network_calls(capsys, monkeypatch):
     def forbidden():
         raise AssertionError("dry-run must never inspect Docker")
+
     monkeypatch.setattr(
         "tools.research.step7_local_engine_comparison.verify_local_container",
         forbidden,
