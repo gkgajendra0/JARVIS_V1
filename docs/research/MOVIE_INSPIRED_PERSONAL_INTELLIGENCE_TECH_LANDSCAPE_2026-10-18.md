@@ -3,9 +3,9 @@
 **Status:** INITIAL EXTERNAL TECHNOLOGY LANDSCAPE / NOT FINAL TECHNOLOGY
 SELECTION / NO IMPLEMENTATION AUTHORIZED.
 
-**Authority:** \`docs/PRODUCT.md\` and Section 17 of
-\`docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md\` define the owner experience.
-\`docs/research/PERSONAL_INTELLIGENCE_REPOSITORY_AUDIT_2026-10-18.md\` documents
+**Authority:** `docs/PRODUCT.md` and Section 17 of
+`docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md` define the owner experience.
+`docs/research/PERSONAL_INTELLIGENCE_REPOSITORY_AUDIT_2026-10-18.md` documents
 existing JARVIS wiring and deferred boundaries. External products are pattern
 sources, not permission to replace canonical components.
 
