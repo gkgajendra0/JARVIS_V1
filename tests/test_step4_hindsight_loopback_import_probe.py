@@ -617,11 +617,7 @@ def test_local_structured_decision_default_is_offline(capsys, monkeypatch):
     assert report["synthetic_queries"] == 9
 
 
-def test_local_structured_decision_cli_isolated_mode(tmp_path):
-    import subprocess
-    import sys
-    from pathlib import Path
-
+def test_local_structured_decision_cli_isolated_mode():
     root = Path(__file__).resolve().parents[1]
     script = root / "tools" / "research" / "step5_hindsight_local_decision_probe.py"
     run = subprocess.run(
