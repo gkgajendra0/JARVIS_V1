@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -239,3 +242,42 @@ def test_default_cli_prints_protocol_only(capsys: Any):
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "not_measured"
     assert output["real_hindsight_results_present"] is False
+
+
+def test_standalone_cli_with_isolated_python_imports_src():
+    """Catch the Windows direct-script failure hidden by pytest's pythonpath."""
+    repo = Path(__file__).resolve().parents[1]
+    script = repo / "tools" / "research" / "step4_hindsight_semantic_eval.py"
+    result = subprocess.run(
+        [sys.executable, "-I", str(script)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    output = json.loads(result.stdout)
+    assert output["status"] == "not_measured"
+    assert output["case_count"] == 9
+    assert output["real_hindsight_results_present"] is False
+
+
+def test_standalone_cli_score_stdin_rejects_invalid_input():
+    """Isolated entry point also fails closed in stdin scoring mode."""
+    repo = Path(__file__).resolve().parents[1]
+    script = repo / "tools" / "research" / "step4_hindsight_semantic_eval.py"
+    result = subprocess.run(
+        [sys.executable, "-I", str(script), "--score-stdin"],
+        cwd=repo,
+        input='{"cases":[]}',
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 1
+    output = json.loads(result.stdout)
+    assert output["status"] == "fail_closed"
+    assert output["reason_code"] == "invalid_case_set"
+    assert output["real_server_accuracy_verified"] is False
