@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 
-from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 from tools.research.step4_hindsight_semantic_eval import (
     CASES,
     EvaluationFailure,
@@ -17,6 +16,8 @@ from tools.research.step4_hindsight_semantic_eval import (
     recall_request,
     score_candidates,
 )
+
+from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
 _FACTS = {fact.assertion_id: fact for fact in PINNED_FACTS}
 
@@ -79,7 +80,7 @@ def test_protocol_is_nine_pinned_synthetic_cases_with_no_measured_results():
     assert p["abstention_cases"] == 2
     assert p["real_hindsight_results_present"] is False
     assert p["production_promotion_allowed"] is False
-    assert len(set(item["case_id"] for item in p["cases"])) == 9
+    assert len({item["case_id"] for item in p["cases"]}) == 9
     for case in CASES:
         request = recall_request(case)
         assert request["types"] == ["world"]
