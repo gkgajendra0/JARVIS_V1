@@ -18,7 +18,6 @@ from tools.research.step10_local_240fact_semantic_trial import (
     DOCUMENT_COUNT,
     EXPECTED_ARCHIVE_HASH,
     PAGE_SIZE,
-    capture_real_hindsight_comparison,
     main,
     run_single_live_trial,
     verified_fixture,
