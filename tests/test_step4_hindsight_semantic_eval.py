@@ -7,7 +7,6 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-
 from tools.research.step4_hindsight_semantic_eval import (
     CASES,
     EvaluationFailure,
@@ -16,6 +15,7 @@ from tools.research.step4_hindsight_semantic_eval import (
     recall_request,
     score_candidates,
 )
+
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
 _FACTS = {fact.assertion_id: fact for fact in PINNED_FACTS}
