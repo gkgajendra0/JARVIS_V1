@@ -6,10 +6,8 @@ import json
 from typing import Any
 
 import pytest
-from tools.research.step4_hindsight_local_recall_probe import (
-    capture_recall,
-    main as recall_main,
-)
+from tools.research.step4_hindsight_local_recall_probe import capture_recall
+from tools.research.step4_hindsight_local_recall_probe import main as recall_main
 from tools.research.step4_hindsight_loopback_import_probe import (
     DOCKER_CONTAINER,
     IMAGE,
