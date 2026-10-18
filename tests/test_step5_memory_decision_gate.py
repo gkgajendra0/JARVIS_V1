@@ -31,9 +31,7 @@ def _index() -> MemoryDecisionIndex:
     return MemoryDecisionIndex(frozen_assertions())
 
 
-def _at(
-    assertion_id: str, *, changed: dict[str, object] | None = None
-) -> Assertion:
+def _at(assertion_id: str, *, changed: dict[str, object] | None = None) -> Assertion:
     fact = next(f for f in frozen_assertions() if f.assertion_id == assertion_id)
     return replace(fact, **(changed or {}))
 
@@ -58,7 +56,8 @@ def test_correction_current_original_and_full_lineage():
     history = decisions["atlas_correction_trace"]
     assert history.answer_code == "saturday_corrected_to_sunday"
     assert history.evidence_assertion_ids == (
-        "synthetic-workshop-day-v1", "synthetic-workshop-day-v2"
+        "synthetic-workshop-day-v1",
+        "synthetic-workshop-day-v2",
     )
     assert history.reason_code == "grounded_correction"
 
@@ -100,9 +99,7 @@ def test_empty_corpus_always_abstains():
 def test_missing_predecessor_cannot_turn_latest_into_truth():
     current = _at("synthetic-workshop-day-v2")
     index = MemoryDecisionIndex((current,))
-    result = index.decide(
-        MemoryQuestion("synthetic-atlas", "workshop_day", "current")
-    )
+    result = index.decide(MemoryQuestion("synthetic-atlas", "workshop_day", "current"))
     assert result.status == "abstain"
     assert result.reason_code == "conflicting_roots"
 
@@ -157,9 +154,12 @@ def test_backdated_revision_abstains():
         "synthetic-workshop-day-v2",
         changed={"mentioned_at": "2025-01-01T10:00:00Z"},
     )
-    assert MemoryDecisionIndex((original, changed)).decide(
-        MemoryQuestion("synthetic-atlas", "workshop_day", "current")
-    ).status == "abstain"
+    assert (
+        MemoryDecisionIndex((original, changed))
+        .decide(MemoryQuestion("synthetic-atlas", "workshop_day", "current"))
+        .status
+        == "abstain"
+    )
 
 
 def test_mixed_correction_and_history_requires_review():
