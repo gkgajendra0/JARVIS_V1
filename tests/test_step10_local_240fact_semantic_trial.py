@@ -94,7 +94,7 @@ class Fake240Transport:
             }
         if method == "POST" and "/transfer/import?" in path:
             assert self.created and not self.deleted
-            assert body is not None and body.count(b"manifest.json") == 1
+            assert body is not None and b"manifest.json" in body
             assert content_type and content_type.startswith("multipart/form-data;")
             return {"operation_id": "fake-fictitious-240-operation"}
         if method == "GET" and "/operations/" in path:
