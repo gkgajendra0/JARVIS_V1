@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
+from tools.research.step4_hindsight_local_recall_probe import capture_recall
+from tools.research.step4_hindsight_local_recall_probe import main as recall_main
 from tools.research.step4_hindsight_loopback_import_probe import (
     DOCKER_CONTAINER,
     IMAGE,
@@ -17,6 +22,7 @@ from tools.research.step4_hindsight_loopback_import_probe import (
     main,
     run_local_import,
 )
+from tools.research.step4_hindsight_semantic_eval import CASES
 
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
@@ -331,3 +337,199 @@ def test_cleanup_failure_preserves_primary_stage_and_cleanup_stage():
         match="primary_bank_creation_http_400__cleanup_bank_cleanup_http_400",
     ):
         run_local_import(RejectedAndUncleaned(), inspected=True, bank_id=BANK)
+
+
+class RecallFakeTransport(FakeTransport):
+    """Nine read-only recall responses from the five pinned fictional facts."""
+
+    def __init__(
+        self,
+        *,
+        missing_evidence: bool = False,
+        corrupt_provenance: bool = False,
+        crash_recall: bool = False,
+    ) -> None:
+        super().__init__()
+        self.missing_evidence = missing_evidence
+        self.corrupt_provenance = corrupt_provenance
+        self.crash_recall = crash_recall
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: bytes | None = None,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
+        if method == "POST" and path == f"{ROOT}/memories/recall":
+            self.events.append((method, path))
+            if self.crash_recall:
+                raise LocalHTTPError(503, stage="semantic_recall")
+            assert body and content_type == "application/json"
+            query = json.loads(body)
+            assert query["types"] == ["world"]
+            assert query["prefer_observations"] is False
+            assert query["tags_match"] == "all_strict"
+            assert query["trace"] is False
+            case = next(case for case in CASES if case.query == query["query"])
+            ordered = list(case.required_ids)
+            ordered.extend(
+                fact.assertion_id
+                for fact in PINNED_FACTS
+                if fact.assertion_id not in ordered
+            )
+            if self.missing_evidence and case.case_id == "atlas_current_day":
+                ordered.remove("synthetic-workshop-day-v2")
+            out = []
+            for ident in ordered:
+                fact = next(f for f in PINNED_FACTS if f.assertion_id == ident)
+                metadata = {
+                    "assertion_id": fact.assertion_id,
+                    "assertion_version": str(fact.version),
+                    "source_turn_id": fact.source_turn_id,
+                    "canonical_source_ref": (
+                        f"conversation:synthetic:{fact.source_turn_id}"
+                    ),
+                    "predicate": fact.predicate,
+                    "revision_kind": fact.revision_kind,
+                    "source_class": "synthetic_owner_direct",
+                    "admission_policy": "shadow_only_no_write",
+                }
+                if fact.supersedes_id:
+                    metadata["supersedes_id"] = fact.supersedes_id
+                out.append(
+                    {
+                        "id": f"mock-{ident}",
+                        "type": "world",
+                        "text": fact.text,
+                        "document_id": f"jarvis-dev-only-{ident}",
+                        "metadata": metadata,
+                    }
+                )
+            if self.corrupt_provenance:
+                out[0]["metadata"].pop("canonical_source_ref")
+            return {"results": out}
+        return super().request(method, path, body, content_type)
+
+
+def test_opt_in_local_recall_runs_after_readback_and_cleans_bank():
+    fake = RecallFakeTransport()
+    result = run_local_import(
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _seconds: None,
+        after_readback=capture_recall,
+    )
+    capture = result["research_recall"]
+    assert capture["kind"] == "LOCAL_HINDSIGHT_RECALL_EVIDENCE_ONLY"
+    assert capture["queries_executed"] == 9
+    assert capture["retrieval_required_cases"] == 7
+    assert capture["retrieval_pass_cases"] == 7
+    assert capture["retrieval_gate"] == "pass"
+    assert capture["decision_gate"] == "not_evaluated"
+    assert capture["answer_accuracy_measured"] is False
+    assert result["disposable_bank_cleanup_verified"] is True
+    assert fake.deleted
+    recall_events = [
+        pos
+        for pos, item in enumerate(fake.events)
+        if item == ("POST", f"{ROOT}/memories/recall")
+    ]
+    assert len(recall_events) == 9
+    assert (
+        fake.events.index(
+            (
+                "GET",
+                f"{ROOT}/memories/list?document_id=jarvis-dev-only-synthetic-workshop-venue-v1&limit=2",
+            )
+        )
+        < recall_events[0]
+    )
+    assert fake.events[-1] == ("GET", f"{ROOT}/config")
+
+
+def test_low_recall_rank_is_measured_failure_not_false_pass():
+    fake = RecallFakeTransport(missing_evidence=True)
+    result = run_local_import(
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _seconds: None,
+        after_readback=capture_recall,
+    )
+    assert result["research_recall"]["retrieval_gate"] == "fail"
+    assert result["research_recall"]["retrieval_pass_cases"] == 6
+    assert fake.deleted
+    assert result["disposable_bank_cleanup_verified"] is True
+
+
+def test_corrupt_recall_provenance_fails_closed_and_still_cleans_bank():
+    fake = RecallFakeTransport(corrupt_provenance=True)
+    with pytest.raises(
+        ProbeFailure, match="semantic_recall_provenance_or_schema_failed"
+    ):
+        run_local_import(
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _seconds: None,
+            after_readback=capture_recall,
+        )
+    assert fake.deleted
+
+
+def test_recall_http_failure_does_not_retry_and_cleans_bank():
+    fake = RecallFakeTransport(crash_recall=True)
+    with pytest.raises(LocalHTTPError, match="semantic_recall_http_503"):
+        run_local_import(
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _seconds: None,
+            after_readback=capture_recall,
+        )
+    assert fake.deleted
+    assert fake.events.count(("POST", f"{ROOT}/memories/recall")) == 1
+
+
+def test_recall_http_errors_have_sanitized_stage():
+    # Regression for Hindsight 1.0 route; the old path returned HTTP 404.
+    assert _http_stage("POST", f"{ROOT}/memories/recall") == "semantic_recall"
+    assert _http_stage("POST", f"{ROOT}/recall") == "unknown"
+
+
+def test_new_probe_default_never_contacts_docker_or_localhost(
+    capsys: Any,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail_container() -> bool:
+        raise AssertionError("default preview unexpectedly inspected Docker")
+
+    monkeypatch.setattr(
+        "tools.research.step4_hindsight_local_recall_probe.verify_local_container",
+        fail_container,
+    )
+    recall_main([])
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "dry_run_zero_network_calls"
+    assert result["queries_planned"] == 9
+    assert result["live_retrieval_not_yet_measured"] is True
+
+
+def test_isolated_recall_cli_bootstraps_checkout_path():
+    """The new user-facing command must launch under Python -I."""
+    root = Path(__file__).resolve().parents[1]
+    script = root / "tools" / "research" / "step4_hindsight_local_recall_probe.py"
+    output = subprocess.run(
+        [sys.executable, "-I", str(script)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert output.returncode == 0, output.stderr
+    preview = json.loads(output.stdout)
+    assert preview["status"] == "dry_run_zero_network_calls"
+    assert preview["queries_planned"] == 9
