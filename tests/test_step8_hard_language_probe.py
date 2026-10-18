@@ -21,6 +21,7 @@ from tools.research.step8_local_hard_language_probe import (
     capture_harder_retrieval,
     lexical_offline_score,
     main,
+    verify_frozen_corpus,
 )
 
 from jarvis.memory.research_challenge_suite import (
@@ -115,6 +116,15 @@ def test_harder_questions_are_bounded_and_honest_about_scope():
         )
         == 2
     )
+
+
+def test_reuses_exact_owner_verified_step7_60_fact_archive():
+    evidence = verify_frozen_corpus()
+    assert (
+        evidence["sha256"]
+        == "a177886be60d7fe8a5b7a16e721c20b3977079ced6bc1360c95f8f2b37058df2"
+    )
+    assert evidence["documents"] == 60
 
 
 def test_offline_lexical_works_without_remote_server():
