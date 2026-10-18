@@ -40,7 +40,6 @@ from jarvis.memory.research_semantic_pressure import (
     FACTS,
     TOP_K_CHOICES,
     BM25Index,
-    PressureFailure,
     build_archive,
     fuse,
     inspect_archive,
