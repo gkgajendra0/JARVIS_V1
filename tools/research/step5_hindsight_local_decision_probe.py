@@ -147,8 +147,11 @@ def main(argv: list[str] | None = None) -> None:
         code = str(exc) if isinstance(exc, ProbeFailure) else "decision_probe_failed"
         print(
             json.dumps(
-                {"kind": "STEP5_LOCAL_STRUCTURED_DECISION_EVALUATION",
-                 "status": "fail_closed", "reason_code": code},
+                {
+                    "kind": "STEP5_LOCAL_STRUCTURED_DECISION_EVALUATION",
+                    "status": "fail_closed",
+                    "reason_code": code,
+                },
                 indent=2,
                 sort_keys=True,
             )
