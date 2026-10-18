@@ -133,7 +133,9 @@ def main(argv: list[str] | None = None) -> None:
     except Exception as exc:  # noqa: BLE001 - never leak server/owner details
         # Keep stdout sanitized; the lower-level import helper still enforces
         # cleanup in a finally block, including when a recall raises.
-        reason = str(exc) if isinstance(exc, ProbeFailure) else "local_recall_probe_failed"
+        reason = (
+            str(exc) if isinstance(exc, ProbeFailure) else "local_recall_probe_failed"
+        )
         print(
             json.dumps(
                 {
