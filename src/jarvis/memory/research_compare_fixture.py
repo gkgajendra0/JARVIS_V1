@@ -16,7 +16,11 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from jarvis.memory.research_decision_gate import Assertion, MemoryDecisionIndex, MemoryQuestion
+from jarvis.memory.research_decision_gate import (
+    Assertion,
+    MemoryDecisionIndex,
+    MemoryQuestion,
+)
 
 PROJECT_COUNT = 20
 DOCUMENT_COUNT = PROJECT_COUNT * 3
@@ -100,7 +104,11 @@ def _fact(i: int, kind: str, version: int) -> ScaleFact:
 FACTS = tuple(
     fact
     for index in range(PROJECT_COUNT)
-    for fact in (_fact(index, "schedule", 1), _fact(index, "schedule", 2), _fact(index, "venue", 1))
+    for fact in (
+        _fact(index, "schedule", 1),
+        _fact(index, "schedule", 2),
+        _fact(index, "venue", 1),
+    )
 )
 BY_ID = {item.assertion.assertion_id: item for item in FACTS}
 if len(FACTS) != DOCUMENT_COUNT or len(BY_ID) != DOCUMENT_COUNT:
@@ -261,7 +269,9 @@ def validate_archive(archive: bytes) -> dict[str, object]:
             "manifest.json",
             *(f"documents/jarvis-dev-only-{id_}.json" for id_ in BY_ID),
         }
-        if set(zip_file.namelist()) != expected or len(zip_file.namelist()) != len(expected):
+        if set(zip_file.namelist()) != expected or len(zip_file.namelist()) != len(
+            expected
+        ):
             raise ComparisonFailure("modified_archive_entries")
     return {
         "sha256": hashlib.sha256(archive).hexdigest(),
@@ -318,8 +328,11 @@ def bm25(query: str) -> tuple[str, ...]:
                 continue
             frequency = sum(1 for _, item in docs if term in item)
             weight = math.log1p((n_docs - frequency + 0.5) / (frequency + 0.5))
-            value += weight * matches * 2.2 / (
-                matches + 1.2 * (0.25 + 0.75 * length / avg_length)
+            value += (
+                weight
+                * matches
+                * 2.2
+                / (matches + 1.2 * (0.25 + 0.75 * length / avg_length))
             )
         if value > 0.0:
             scores.append((value, assertion_id))
@@ -331,7 +344,9 @@ def fuse(hindsight: tuple[str, ...], lexical: tuple[str, ...]) -> tuple[str, ...
     """RRF K=60; no provider is allowed to introduce unknown facts."""
     scores: dict[str, float] = {}
     for ranking in (hindsight, lexical):
-        if len(ranking) != len(set(ranking)) or any(item not in BY_ID for item in ranking):
+        if len(ranking) != len(set(ranking)) or any(
+            item not in BY_ID for item in ranking
+        ):
             raise ComparisonFailure("invalid_ranked_candidates")
         for pos, ident in enumerate(ranking, start=1):
             scores[ident] = scores.get(ident, 0.0) + 1.0 / (60 + pos)
@@ -361,7 +376,9 @@ def score_rankings(rankings: dict[str, dict[str, tuple[str, ...]]]) -> dict[str,
         unknown_abstentions = 0
         for case in CASES:
             selected = ranked_cases[case.case_id][:TOP_K]
-            if case.required_ids and all(required in selected for required in case.required_ids):
+            if case.required_ids and all(
+                required in selected for required in case.required_ids
+            ):
                 retrieved += 1
             # Don't silently invent missing predecessors. Require the complete
             # canonical group before allowing any structured answer to count.
@@ -376,13 +393,12 @@ def score_rankings(rankings: dict[str, dict[str, tuple[str, ...]]]) -> dict[str,
                 MemoryQuestion(case.subject, case.predicate, case.intent)
             )
             correct = (
-                (case.expected_answer_code is None and decision.status == "abstain")
-                or (
-                    case.expected_answer_code is not None
-                    and complete
-                    and decision.status == "answer"
-                    and decision.answer_code == case.expected_answer_code
-                )
+                case.expected_answer_code is None and decision.status == "abstain"
+            ) or (
+                case.expected_answer_code is not None
+                and complete
+                and decision.status == "answer"
+                and decision.answer_code == case.expected_answer_code
             )
             decision_correct += int(correct)
             unknown_abstentions += int(case.expected_answer_code is None and correct)
