@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from tools.research.step4_hindsight_semantic_eval import CASES
+from tools.research.step4_hindsight_semantic_eval import CASES, _validate_result
 
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 from jarvis.memory.research_decision_gate import (
@@ -111,6 +111,49 @@ def case_decisions() -> dict[str, MemoryDecision]:
         raise ValueError("changed_question_suite")
     index = MemoryDecisionIndex(frozen_assertions())
     return {case.case_id: index.decide(_CASE_QUESTIONS[case.case_id]) for case in CASES}
+
+
+def decide_from_pinned_recall(
+    case_id: str, recall_response: dict[str, object]
+) -> MemoryDecision:
+    """Use ONLY validated returned facts, never the complete fixture as context.
+
+    Hindsight /memories/recall does not guarantee every predecessor is among
+    its ranked matches. If a correction is returned alone, the decision gate
+    abstains rather than silently borrowing missing source evidence.
+    """
+    if case_id not in _CASE_QUESTIONS:
+        raise ValueError("unrecognized_synthetic_question")
+    if not isinstance(recall_response, dict):
+        raise ValueError("invalid_recall_response")
+    rows = recall_response.get("results")
+    if not isinstance(rows, list) or len(rows) > len(PINNED_FACTS):
+        raise ValueError("invalid_recall_results")
+    accepted: list[str] = []
+    for row in rows:
+        accepted.append(_validate_result(row))
+    if len(set(accepted)) != len(accepted):
+        raise ValueError("duplicate_recall_result")
+    by_id = {fact.assertion_id: fact for fact in frozen_assertions()}
+    index = MemoryDecisionIndex(tuple(by_id[key] for key in accepted))
+    return index.decide(_CASE_QUESTIONS[case_id])
+
+
+def compare_pinned_recall_shadow(
+    case_id: str, recall_response: dict[str, object]
+) -> dict[str, object]:
+    """Offline shadow: fixture reference vs evidence actually in recall response."""
+    candidate = decide_from_pinned_recall(case_id, recall_response)
+    canonical = case_decisions()[case_id]
+    comparison = compare_shadow(canonical, candidate)
+    return {
+        **comparison,
+        "case_id": case_id,
+        "candidate_status": candidate.status,
+        "candidate_reason": candidate.reason_code,
+        "candidate_citations_count": len(candidate.evidence_assertion_ids),
+        "real_hindsight_answer_accuracy_measured": False,
+    }
 
 
 def verify_nine_cases() -> dict[str, object]:
