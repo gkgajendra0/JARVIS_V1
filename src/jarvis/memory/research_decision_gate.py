@@ -114,10 +114,7 @@ class MemoryDecisionIndex:
     """
 
     def __init__(self, assertions: tuple[Assertion, ...]) -> None:
-        if (
-            not isinstance(assertions, tuple)
-            or len(assertions) > MAX_ASSERTIONS
-        ):
+        if not isinstance(assertions, tuple) or len(assertions) > MAX_ASSERTIONS:
             raise DecisionSafetyError("unbounded_assertion_collection")
         by_id: dict[str, Assertion] = {}
         grouped: dict[tuple[str, str], list[Assertion]] = {}
@@ -207,14 +204,13 @@ class MemoryDecisionIndex:
             # Mixed correction/history transitions need an explicit temporal
             # semantics policy; do not manufacture a single history summary.
             return _abstain("mixed_revision_semantics")
-        separator = (
-            "_corrected_to_" if transitions[0] == "correction" else "_then_"
-        )
+        separator = "_corrected_to_" if transitions[0] == "correction" else "_then_"
         return MemoryDecision(
             "answer",
             separator.join(f.value for f in ordered),
             tuple(f.assertion_id for f in ordered),
-            "grounded_correction" if transitions[0] == "correction"
+            "grounded_correction"
+            if transitions[0] == "correction"
             else "grounded_historical_change",
         )
 
