@@ -23,6 +23,12 @@ from tools.research.step4_hindsight_loopback_import_probe import (
     run_local_import,
 )
 from tools.research.step4_hindsight_semantic_eval import CASES
+from tools.research.step5_hindsight_local_decision_probe import (
+    capture_local_decisions,
+)
+from tools.research.step5_hindsight_local_decision_probe import (
+    main as structured_decision_main,
+)
 
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
@@ -533,3 +539,95 @@ def test_isolated_recall_cli_bootstraps_checkout_path():
     preview = json.loads(output.stdout)
     assert preview["status"] == "dry_run_zero_network_calls"
     assert preview["queries_planned"] == 9
+
+
+def test_local_structured_decision_probe_scores_nine_and_cleans_bank():
+    fake = RecallFakeTransport()
+    report = run_local_import(
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _seconds: None,
+        after_readback=capture_local_decisions,
+    )
+    decided = report["research_recall"]
+    assert decided["retrieval_gate"] == "pass"
+    assert decided["structured_decision_gate"] == "pass"
+    assert decided["structured_decision_pass_cases"] == 9
+    assert decided["abstention_pass_cases"] == 2
+    assert decided["is_rule_based_not_llm"] is True
+    assert decided["real_llm_accuracy_measured"] is False
+    assert report["disposable_bank_cleanup_verified"] is True
+    assert fake.deleted
+    assert fake.events.count(("POST", f"{ROOT}/memories/recall")) == 9
+
+
+def test_local_structured_decision_detects_missing_evidence():
+    fake = RecallFakeTransport(missing_evidence=True)
+    report = run_local_import(
+        fake,
+        inspected=True,
+        bank_id=BANK,
+        pause=lambda _seconds: None,
+        after_readback=capture_local_decisions,
+    )
+    assert report["research_recall"]["structured_decision_gate"] == "fail"
+    assert report["research_recall"]["retrieval_gate"] == "fail"
+    assert fake.deleted
+
+
+def test_local_structured_decision_tampered_recall_fails_and_cleans():
+    fake = RecallFakeTransport(corrupt_provenance=True)
+    with pytest.raises(ProbeFailure, match="untrusted_or_malformed_recall_evidence"):
+        run_local_import(
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _seconds: None,
+            after_readback=capture_local_decisions,
+        )
+    assert fake.deleted
+
+
+def test_local_structured_decision_http_failure_no_retries():
+    fake = RecallFakeTransport(crash_recall=True)
+    with pytest.raises(LocalHTTPError, match="semantic_recall_http_503"):
+        run_local_import(
+            fake,
+            inspected=True,
+            bank_id=BANK,
+            pause=lambda _seconds: None,
+            after_readback=capture_local_decisions,
+        )
+    assert fake.events.count(("POST", f"{ROOT}/memories/recall")) == 1
+    assert fake.deleted
+
+
+def test_local_structured_decision_default_is_offline(capsys, monkeypatch):
+    def forbidden():
+        raise AssertionError("dry-run unexpectedly inspected Docker")
+
+    monkeypatch.setattr(
+        "tools.research.step5_hindsight_local_decision_probe.verify_local_container",
+        forbidden,
+    )
+    structured_decision_main([])
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "dry_run_zero_network_calls"
+    assert report["synthetic_queries"] == 9
+
+
+def test_local_structured_decision_cli_isolated_mode():
+    root = Path(__file__).resolve().parents[1]
+    script = root / "tools" / "research" / "step5_hindsight_local_decision_probe.py"
+    run = subprocess.run(
+        [sys.executable, "-I", str(script)],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert run.returncode == 0, run.stderr
+    preview = json.loads(run.stdout)
+    assert preview["status"] == "dry_run_zero_network_calls"
