@@ -140,6 +140,11 @@ class FakeScaleTransport:
             assert payload["prefer_observations"] is False
             case = next(row for row in CASES if row.query == payload["query"])
             ranked = list(case.required_ids)
+            if case.predicate == "schedule":
+                for version in (1, 2):
+                    lineage_id = f"{case.subject}-schedule-v{version}"
+                    if lineage_id not in ranked:
+                        ranked.append(lineage_id)
             ranked.extend(
                 fact.assertion.assertion_id
                 for fact in FACTS
