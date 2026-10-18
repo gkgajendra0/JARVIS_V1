@@ -251,6 +251,11 @@ def build_archive() -> bytes:
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
         for name, payload in sorted(payloads.items()):
             entry = zipfile.ZipInfo(name, FIXED_ZIP_TIME)
+            # Pin the ZIP "version made by" host field. ZipInfo otherwise
+            # writes Windows=0 vs Unix=3, changing the full archive SHA
+            # across platforms even when all fact content is identical.
+            # The approved owner-machine Step 7 archive used Windows=0.
+            entry.create_system = 0
             entry.compress_type = zipfile.ZIP_STORED
             entry.external_attr = 0o600 << 16
             archive.writestr(entry, payload)
