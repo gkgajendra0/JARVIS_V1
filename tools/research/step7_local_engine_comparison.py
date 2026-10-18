@@ -146,9 +146,7 @@ def _capture_comparison(transport: Any, root: str) -> dict[str, Any]:
         lexical_ns += time.perf_counter_ns() - started
         rankings["hindsight"][case.case_id] = hindsight
         rankings["lexical"][case.case_id] = lexical
-        rankings["hybrid"][case.case_id] = fuse(
-            hindsight[:TOP_K], lexical[:TOP_K]
-        )
+        rankings["hybrid"][case.case_id] = fuse(hindsight[:TOP_K], lexical[:TOP_K])
     report = score_rankings(rankings)
     h = report["engines"]["hindsight"]
     hybrid = report["engines"]["hybrid"]
@@ -214,9 +212,7 @@ def run_one_local_comparison(
             raise ProbeFailure("invalid_scale_import_reference")
         last = "unknown"
         for index in range(POLL_LIMIT):
-            progress = transport.request(
-                "GET", f"{root}/operations/{operation_id}"
-            )
+            progress = transport.request("GET", f"{root}/operations/{operation_id}")
             last = progress.get("status")
             if last in ("failed", "cancelled", "not_found"):
                 raise ProbeFailure("scale_import_operation_failed")
