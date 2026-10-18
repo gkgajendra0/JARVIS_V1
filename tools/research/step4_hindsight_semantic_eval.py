@@ -254,7 +254,11 @@ def score_candidates(payload: Any) -> dict[str, Any]:
                 "case_id": case_id,
                 "retrieval_evidence_pass": retrieval_pass,
                 "first_required_rank": min(
-                    (ranked_ids.index(req) + 1 for req in case.required_ids if req in ranked_ids),
+                    (
+                        ranked_ids.index(req) + 1
+                        for req in case.required_ids
+                        if req in ranked_ids
+                    ),
                     default=None,
                 ),
                 "decision_evaluated": answer_pass is not None,
@@ -264,7 +268,9 @@ def score_candidates(payload: Any) -> dict[str, Any]:
     if seen != set(_CASE_BY_ID):
         raise EvaluationFailure("invalid_case_set")
     details.sort(key=lambda row: list(_CASE_BY_ID).index(row["case_id"]))
-    evidence_cases = [row for row in details if _CASE_BY_ID[row["case_id"]].required_ids]
+    evidence_cases = [
+        row for row in details if _CASE_BY_ID[row["case_id"]].required_ids
+    ]
     decisions = [row for row in details if row["decision_evaluated"]]
     recall_ok = all(row["retrieval_evidence_pass"] for row in evidence_cases)
     all_decisions = len(decisions) == len(CASES)
@@ -278,12 +284,12 @@ def score_candidates(payload: Any) -> dict[str, Any]:
         "verified_synthetic_recall_units": total_units,
         "provenance_gate": "pass",
         "retrieval_gate": "pass" if recall_ok else "fail",
-        "retrieval_pass_cases": sum(row["retrieval_evidence_pass"] for row in evidence_cases),
+        "retrieval_pass_cases": sum(
+            row["retrieval_evidence_pass"] for row in evidence_cases
+        ),
         "retrieval_required_cases": len(evidence_cases),
         "decision_gate": (
-            "not_evaluated" if not decisions else
-            "pass" if decision_ok else
-            "fail"
+            "not_evaluated" if not decisions else "pass" if decision_ok else "fail"
         ),
         "decision_pass_cases": sum(row["decision_pass"] is True for row in decisions),
         "decision_evaluated_cases": len(decisions),
@@ -313,10 +319,15 @@ def main(argv: list[str] | None = None) -> None:
             raise EvaluationFailure("candidate_input_too_large")
         report = score_candidates(json.loads(raw))
     except (ValueError, UnicodeError, TypeError) as exc:
-        code = str(exc) if isinstance(exc, EvaluationFailure) else "invalid_candidate_json"
-        report = {"kind": "STEP4_OFFLINE_SYNTHETIC_EVIDENCE_SCORING",
-                  "status": "fail_closed", "reason_code": code,
-                  "real_server_accuracy_verified": False}
+        code = (
+            str(exc) if isinstance(exc, EvaluationFailure) else "invalid_candidate_json"
+        )
+        report = {
+            "kind": "STEP4_OFFLINE_SYNTHETIC_EVIDENCE_SCORING",
+            "status": "fail_closed",
+            "reason_code": code,
+            "real_server_accuracy_verified": False,
+        }
         print(json.dumps(report, indent=2, sort_keys=True))
         raise SystemExit(1) from None
     print(json.dumps(report, indent=2, sort_keys=True))
