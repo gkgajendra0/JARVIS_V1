@@ -4,7 +4,7 @@ Status: **C0-C3 LIVE ACCEPTED / C4 RESEARCH COMPLETE + JEV DEFERRED / C5 FULLY C
 
 Date: 2026-09-29
 
-Related decisions: `JARVIS_COST_OPTIMIZATION_DECISIONS.md`
+Related decisions: `archive/cost/JARVIS_COST_OPTIMIZATION_DECISIONS.md`
 
 
 Research sources re-verified 2026-09-29:
@@ -52,7 +52,7 @@ Research sources re-verified 2026-09-29:
   acceptance is complete.
 
 C6 research and architecture:
-`JARVIS_C6_CONTEXT_OPTIMIZATION_RESEARCH.md`.
+`reference/JARVIS_C6_CONTEXT_OPTIMIZATION_RESEARCH.md`.
 
 ## 1. Goal
 
@@ -178,9 +178,9 @@ for owner A/B evaluation. Do not change voice identity merely to reduce spend.
 
 ## 5. Global Brain Router
 
-C3 deep research is documented in `JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
+C3 deep research is documented in `archive/research/JARVIS_C3_GLOBAL_BRAIN_ROUTER_RESEARCH.md`.
 
-C3 implementation and acceptance are documented in `JARVIS_C3_GLOBAL_BRAIN_ROUTER_IMPLEMENTATION.md`.
+C3 implementation and acceptance are documented in `archive/implementation/JARVIS_C3_GLOBAL_BRAIN_ROUTER_IMPLEMENTATION.md`.
 
 The implemented design preserves the existing Phase-4 ModelRouter as the
 model-target selector and adds only a thin global intelligence-path policy around

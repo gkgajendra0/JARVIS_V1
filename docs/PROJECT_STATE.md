@@ -20,6 +20,20 @@ Snapshot baseline verified from protected `main` at
 
 ---
 
+## Documentation reconciliation and owner priority — 2026-10-18
+
+This ledger retains **accepted/deferred product truth**, not the plan for
+future implementation. Its detailed historical entries are preserved.
+The owner has clarified that deeply personalized, automatically contextual
+assistance (CAP-053) is the primary product outcome, but the new North Star
+and documentation PRs are **not** runtime promotion. In particular, Step 4
+automatic memory admission and automatic provider-context injection remain
+disabled; the Step 10 Hindsight study is isolated research, not production
+memory integration. Phase 11 remains next in its engineering program; the
+current *owner-directed design priority* is recorded in
+[Current Plan](CURRENT_PLAN.md). Historical records have been relocated
+verbatim under [Documentation Index](README.md).
+
 ## Status vocabulary
 
 - **DONE** — accepted production capability for its defined scope.
@@ -53,27 +67,27 @@ Snapshot baseline verified from protected `main` at
 | Step 8 notes/tasks/reminders | PLANNED | still the next numbered product slice when numbered roadmap work resumes |
 | ChatGPT-plan primary reasoning | DONE | owner-machine accepted 2026-09-30: Sign in with ChatGPT OAuth, live plan-backed Responses inference, `work.chatgpt_plan.default` primary, bounded paid fallback, no local LLM in production Work pool |
 
-Step 4 core encrypted persistent memory is **OWNER-MACHINE ACCEPTED for its defined bounded scope** based on the 2026-10-15 Windows run (owner approval 2026-10-16). PR #258's pinned SQLCipher 4.17 Windows verification passed, production adapter smoke passed all 12/12 security/storage checks, an explicit voice-command memory write committed, and a deterministic production-memory service read returned the exact value after a full Jarvis process restart. **Provider-assisted conversational semantic recall remains DEFERRED** because the Google Interactions API returned HTTP 503 and 429 during the attempted voice recall; the later explicit voice inspection also encountered an owner-turn authorization rejection and an overbroad "token" refusal. Quota/service recovery and separate voice authorization tests remain necessary. Step 4 stays **BOUNDED**, with implicit admission and automatic context injection disabled. Canonical scoped evidence: `STEP4_CORE_ENCRYPTED_MEMORY_OWNER_ACCEPTANCE_2026-10-15.md`. Development Engine D7/D8 / PR #252 remain separate and unaffected.
+Step 4 core encrypted persistent memory is **OWNER-MACHINE ACCEPTED for its defined bounded scope** based on the 2026-10-15 Windows run (owner approval 2026-10-16). PR #258's pinned SQLCipher 4.17 Windows verification passed, production adapter smoke passed all 12/12 security/storage checks, an explicit voice-command memory write committed, and a deterministic production-memory service read returned the exact value after a full Jarvis process restart. **Provider-assisted conversational semantic recall remains DEFERRED** because the Google Interactions API returned HTTP 503 and 429 during the attempted voice recall; the later explicit voice inspection also encountered an owner-turn authorization rejection and an overbroad "token" refusal. Quota/service recovery and separate voice authorization tests remain necessary. Step 4 stays **BOUNDED**, with implicit admission and automatic context injection disabled. Canonical scoped evidence: `archive/acceptance/STEP4_CORE_ENCRYPTED_MEMORY_OWNER_ACCEPTANCE_2026-10-15.md`. Development Engine D7/D8 / PR #252 remain separate and unaffected.
 
 ChatGPT-plan primary reasoning is **DONE / OWNER-MACHINE ACCEPTED 2026-09-30**. The owner-machine run completed browser OAuth, granted plan usage, discovered the account-visible model catalog, selected `gpt-6-astra`, completed a live structured Responses inference, and proved `work.chatgpt_plan.default` as the durable Work primary with `work.gemini.default` as bounded paid fallback and no local LLM in the production Work pool. PR #234 squash-merged the accepted implementation to protected `main` as `566705afa1e8c2650c57d5bc26ee369c25f5aacc`. This removes provider quota as the blocking reason for the previously deferred Phase-9 external TV lifecycle validation.
 
-Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
+Phase 3 EngineeringChange is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The canonical record is `archive/acceptance/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`. The owner-machine run proved durable same-identity recovery across a full Windows shutdown/reboot and live Exa research; persistent Gemini HTTP 429 pressure was accepted as an external limitation and did not weaken governance.
 
-Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Canonical final evidence is `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The live run proved deterministic two-target eligibility, Gemini `rate_limited` -> OpenAI fallback, target-local quota cooldown, restart-safe lineage, zero duplicate routing-request IDs and unchanged Authority/security boundaries.
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. Canonical final evidence is `archive/acceptance/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`. The live run proved deterministic two-target eligibility, Gemini `rate_limited` -> OpenAI fallback, target-local quota cooldown, restart-safe lineage, zero duplicate routing-request IDs and unchanged Authority/security boundaries.
 
-Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`.
+Phase 5 Secure Autonomous Engineering Substrate is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `archive/acceptance/PHASE5_SECURE_ENGINEERING_SUBSTRATE_ACCEPTANCE_2026-09-27.md`.
 
-Phase 6 Unknown-Incident Investigation + Source Repair is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted implementation head `45643efc80ae1394022f22f778d0a67568326f94` passed 15/15 deterministic replay cases and real Windows/Docker owner-machine acceptance with evidence digest `7d4be9e5154d0e17e839b0d7bd6823e9bcec88aba564b2188c8d4e8164f75492`. PR #148 merged the accepted implementation to protected `main` as `aaa1fa52224f6582c32706b7bdb72f26169c54be`.
+Phase 6 Unknown-Incident Investigation + Source Repair is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `archive/acceptance/PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`. The accepted implementation head `45643efc80ae1394022f22f778d0a67568326f94` passed 15/15 deterministic replay cases and real Windows/Docker owner-machine acceptance with evidence digest `7d4be9e5154d0e17e839b0d7bd6823e9bcec88aba564b2188c8d4e8164f75492`. PR #148 merged the accepted implementation to protected `main` as `aaa1fa52224f6582c32706b7bdb72f26169c54be`.
 
-Phase 7 Governed Promotion / Production Verification / Rollback is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. The accepted implementation head `19beb542295fa4e3ab23407564847a82d8621258` passed 14/14 deterministic replay cases and real Windows owner-machine acceptance with evidence digest `9fb2bb940a855c1d0ab32e444e00d7e922bd66d5edd7915c31efe6dd5fa77a9b`. PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`.
+Phase 7 Governed Promotion / Production Verification / Rollback is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `archive/acceptance/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. The accepted implementation head `19beb542295fa4e3ab23407564847a82d8621258` passed 14/14 deterministic replay cases and real Windows owner-machine acceptance with evidence digest `9fb2bb940a855c1d0ab32e444e00d7e922bd66d5edd7915c31efe6dd5fa77a9b`. PR #150 was explicitly owner-approved and merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`.
 
-Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. Protected-main implementation SHA `1eda461be022ee30753b3d981e33290442f38a80` passed all 45 deterministic replay cases and the real Windows owner-machine acceptance with evidence digest `16de093d87b12bd9918e87fd160f9efa25c3787fe30fca2fbc0c630089893900` and replay digest `7e20c17d2a94567b051a92366987100b76e439afa48252f456aa738fd00c7a0c`.
+Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical final evidence is `archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`. Protected-main implementation SHA `1eda461be022ee30753b3d981e33290442f38a80` passed all 45 deterministic replay cases and the real Windows owner-machine acceptance with evidence digest `16de093d87b12bd9918e87fd160f9efa25c3787fe30fca2fbc0c630089893900` and replay digest `7e20c17d2a94567b051a92366987100b76e439afa48252f456aa738fd00c7a0c`.
 
 ---
 
-Phase 10 Closed-Loop Engineering Learning is **DONE / OWNER-MACHINE ACCEPTED 2026-09-28**. Exact owner-tested head `4c48f435ba7478ee6a076c8510d64d957ba14b58` passed the clean-process import probe, all 15 locked replay cases, Ruff, full pytest, Windows Hello, Windows DPAPI/security, Phase-6/7/8/9 regressions and promotion policy. Suite digest: `f9c66d9ecd7955db57e3d7024728c93ef93f3c35765f540c2d14051c62c533f0`. Evidence digest: `e90fb3ea53c54a6def8eca834ea8f7d6a0b132d98302dea2bf0ed997b5bcd0f6`. PR #201 squash-merged the accepted implementation to protected `main` as `0cd4bb650b3a0230d13416863432083f60b6a4e7`. Canonical record: `PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_ACCEPTANCE.md`.
+Phase 10 Closed-Loop Engineering Learning is **DONE / OWNER-MACHINE ACCEPTED 2026-09-28**. Exact owner-tested head `4c48f435ba7478ee6a076c8510d64d957ba14b58` passed the clean-process import probe, all 15 locked replay cases, Ruff, full pytest, Windows Hello, Windows DPAPI/security, Phase-6/7/8/9 regressions and promotion policy. Suite digest: `f9c66d9ecd7955db57e3d7024728c93ef93f3c35765f540c2d14051c62c533f0`. Evidence digest: `e90fb3ea53c54a6def8eca834ea8f7d6a0b132d98302dea2bf0ed997b5bcd0f6`. PR #201 squash-merged the accepted implementation to protected `main` as `0cd4bb650b3a0230d13416863432083f60b6a4e7`. Canonical record: `archive/acceptance/PHASE10_CLOSED_LOOP_ENGINEERING_LEARNING_ACCEPTANCE.md`.
 
-Phase 9 Owner-Requested Capability Acquisition is **DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28**. Target-aware routing hardening from PR #180 is on protected main at `15974c4089aeea014dc68f4a6fb385072278b379`. The live owner-machine run proved canonical owner-capability admission, durable EngineeringChange/WorkItem persistence, provider-pressure survival and bounded Gemini -> OpenAI fallback. It did **not** complete the full external TV lifecycle: Gemini was `rate_limited` and OpenAI fallback was `quota_exhausted`. By explicit owner decision, the unproven research-to-device-effect/disable-rollback lifecycle is deferred to final whole-system acceptance and must remain visible as deferred validation. Canonical record: `PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`.
+Phase 9 Owner-Requested Capability Acquisition is **DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28**. Target-aware routing hardening from PR #180 is on protected main at `15974c4089aeea014dc68f4a6fb385072278b379`. The live owner-machine run proved canonical owner-capability admission, durable EngineeringChange/WorkItem persistence, provider-pressure survival and bounded Gemini -> OpenAI fallback. It did **not** complete the full external TV lifecycle: Gemini was `rate_limited` and OpenAI fallback was `quota_exhausted`. By explicit owner decision, the unproven research-to-device-effect/disable-rollback lifecycle is deferred to final whole-system acceptance and must remain visible as deferred validation. Canonical record: `archive/acceptance/PHASE9_OWNER_REQUESTED_CAPABILITY_ACQUISITION_ACCEPTANCE_2026-09-27.md`.
 
 ## Accepted implementation history
 
@@ -201,7 +215,7 @@ Final Phase-2 owner-machine acceptance on protected-main baseline
 - hybrid Qwen-256 qrel safety passed.
 
 Canonical acceptance record:
-`PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+`archive/acceptance/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
 ### EngineeringChange Phase 3
 
@@ -210,7 +224,7 @@ Canonical acceptance record:
 Final Phase-3 owner-machine acceptance on 2026-09-25 proved same-turn idempotency, owner-input resume, successful Exa-backed research actions, same-identity PostgreSQL DBOS recovery and full Windows cold-boot survival. Persistent Gemini HTTP 429 provider pressure prevented the live run from naturally traversing the downstream architecture/Windows-Hello/development gates; the owner explicitly accepted this external limitation, with those contracts retained in the exact green automated suite and no governance bypass.
 
 Canonical acceptance record:
-`PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
+`archive/acceptance/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md`.
 
 ### Research + Diagnostic Model Router Phase 4
 
@@ -233,7 +247,7 @@ Final owner-machine acceptance on exact implementation head
 - provider exhaustion surfaced truthfully as `WAITING_RESOURCE` without policy relaxation or fabricated success.
 
 Canonical acceptance record:
-`PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
+`archive/acceptance/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md`.
 
 ---
 
@@ -347,13 +361,13 @@ Authority.
 
 Phase 1H is **DONE / OWNER-MACHINE ACCEPTED 2026-09-24** and is promoted through PR #90.
 
-Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The accepted implementation and final real-machine evidence are recorded in `PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
+Phase 2 EngineeringKnowledge is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. The accepted implementation and final real-machine evidence are recorded in `archive/acceptance/PHASE2_ENGINEERING_KNOWLEDGE_ACCEPTANCE_2026-09-25.md`.
 
-Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. PR #108 carries the accepted implementation and `PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` carries the final owner-machine evidence.
+Phase 3 EngineeringChange Lifecycle / Mission Orchestration is **DONE / OWNER-MACHINE ACCEPTED 2026-09-25**. PR #108 carries the accepted implementation and `archive/acceptance/PHASE3_ENGINEERING_CHANGE_ACCEPTANCE_2026-09-25.md` carries the final owner-machine evidence.
 
-Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. PR #118 carries the final implementation/acceptance boundary and `PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md` carries the canonical evidence.
+Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 2026-09-26**. PR #118 carries the final implementation/acceptance boundary and `archive/acceptance/PHASE4_MODEL_ROUTER_ACCEPTANCE_2026-09-26.md` carries the canonical evidence.
 
-Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical evidence is `archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
 The active cross-cutting slice is:
 

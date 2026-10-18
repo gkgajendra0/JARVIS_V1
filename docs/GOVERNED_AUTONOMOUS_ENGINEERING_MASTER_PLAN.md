@@ -161,7 +161,7 @@ Trigger: an incident or malfunction that has no accepted deterministic repair.
 Provider/model semantic regressions are first-class candidates for this loop when a
 bounded lifecycle/configuration controller cannot resolve them. Model retirement itself
 should first use the narrower provider-lifecycle controller defined in
-`PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`; only compatibility changes requiring
+`reference/PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md`; only compatibility changes requiring
 source modification become EngineeringChanges.
 
 ```text
@@ -523,7 +523,7 @@ Build the governed primitives needed before JARVIS can acquire arbitrary new cap
 
 Use EngineeringKnowledge + router + EngineeringChange + existing isolated development to investigate unknown incidents, generate repairs, test them and present owner-reviewable candidates.
 
-Accepted result: bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, post-edit verification, protected-surface fail-closed policy, exact candidate provenance, 15-case deterministic replay and real Windows/Docker acceptance. Canonical evidence is recorded in `PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
+Accepted result: bounded exact-revision diagnostics, typed diagnosis, owner-gated repair architecture, isolated source-revision-pinned development, post-edit verification, protected-surface fail-closed policy, exact candidate provenance, 15-case deterministic replay and real Windows/Docker acceptance. Canonical evidence is recorded in `archive/acceptance/PHASE6_UNKNOWN_INCIDENT_SOURCE_REPAIR_ACCEPTANCE_2026-09-27.md`.
 
 Phase 6 intentionally ends at an owner-reviewable candidate and does not grant protected-main merge or production deployment authority.
 
@@ -533,7 +533,7 @@ Phase 6 intentionally ends at an owner-reviewable candidate and does not grant p
 
 Connect accepted candidates to exact PR/CI evidence, explicit digest-bound owner promotion, one-shot Authority execution, protected-main merge verification, immutable Windows release slots, production observation and deterministic rollback.
 
-Research/architecture was owner-approved on 2026-09-27. The accepted implementation head `19beb542295fa4e3ab23407564847a82d8621258` passed exact-head CI, Windows Phase-7 regression/acceptance coverage and the real owner-machine 14-case replay, then PR #150 was explicitly owner-approved and squash-merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`. Canonical evidence is recorded in `PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. Acceptance does not delegate owner promotion authority.
+Research/architecture was owner-approved on 2026-09-27. The accepted implementation head `19beb542295fa4e3ab23407564847a82d8621258` passed exact-head CI, Windows Phase-7 regression/acceptance coverage and the real owner-machine 14-case replay, then PR #150 was explicitly owner-approved and squash-merged to protected `main` as `d2c7dc360386dab22bff6406d405b298601bff81`. Canonical evidence is recorded in `archive/acceptance/PHASE7_GOVERNED_PROMOTION_ACCEPTANCE_2026-09-27.md`. Acceptance does not delegate owner promotion authority.
 
 ### Phase 8 — capability package and registry lifecycle
 
@@ -541,7 +541,7 @@ Research/architecture was owner-approved on 2026-09-27. The accepted implementat
 
 Create normalized capability packages/manifests, compatibility and health truth, enable/disable semantics and versioned registry lifecycle.
 
-Repository inspection, foundation research, implementation-focused research and slices 8A–8F are complete. The accepted implementation reuses the Phase-5 CapabilityManifest/ArtifactStore/provenance/Authority boundaries, adds strict-SemVer package contracts and durable lifecycle truth, deterministic reconciliation, transition fencing, generation-aware fail-closed runtime projection, Authority-bound lifecycle switching, compatible rollback and Windows acceptance. Protected-main SHA `1eda461be022ee30753b3d981e33290442f38a80` passed 45/45 deterministic replay cases and real owner-machine acceptance with evidence digest `16de093d87b12bd9918e87fd160f9efa25c3787fe30fca2fbc0c630089893900`. Canonical evidence is `PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+Repository inspection, foundation research, implementation-focused research and slices 8A–8F are complete. The accepted implementation reuses the Phase-5 CapabilityManifest/ArtifactStore/provenance/Authority boundaries, adds strict-SemVer package contracts and durable lifecycle truth, deterministic reconciliation, transition fencing, generation-aware fail-closed runtime projection, Authority-bound lifecycle switching, compatible rollback and Windows acceptance. Protected-main SHA `1eda461be022ee30753b3d981e33290442f38a80` passed 45/45 deterministic replay cases and real owner-machine acceptance with evidence digest `16de093d87b12bd9918e87fd160f9efa25c3787fe30fca2fbc0c630089893900`. Canonical evidence is `archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
 ### Phase 9 — owner-requested capability acquisition
 
