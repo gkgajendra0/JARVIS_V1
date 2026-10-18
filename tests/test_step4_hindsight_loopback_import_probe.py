@@ -25,6 +25,8 @@ from tools.research.step4_hindsight_loopback_import_probe import (
 from tools.research.step4_hindsight_semantic_eval import CASES
 from tools.research.step5_hindsight_local_decision_probe import (
     capture_local_decisions,
+)
+from tools.research.step5_hindsight_local_decision_probe import (
     main as structured_decision_main,
 )
 
