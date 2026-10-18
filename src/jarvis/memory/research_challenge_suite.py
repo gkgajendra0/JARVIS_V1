@@ -182,8 +182,8 @@ def score_challenge_rankings(
             if (
                 not isinstance(ordered, tuple)
                 or len(ordered) > len(BY_ID)
-                or len(ordered) != len(set(ordered))
                 or any(not isinstance(a, str) or a not in BY_ID for a in ordered)
+                or len(ordered) != len(set(ordered))
             ):
                 raise ComparisonFailure("untrusted_challenge_candidates")
 
