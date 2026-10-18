@@ -75,9 +75,13 @@ def _safe_fact(fact: Assertion) -> None:
     if not isinstance(fact, Assertion):
         raise DecisionSafetyError("invalid_assertion")
     if (
-        not _SAFE_ID.fullmatch(fact.assertion_id)
+        not isinstance(fact.assertion_id, str)
+        or not _SAFE_ID.fullmatch(fact.assertion_id)
+        or not isinstance(fact.subject, str)
         or not _SAFE_ID.fullmatch(fact.subject)
+        or not isinstance(fact.predicate, str)
         or not _SAFE_NAME.fullmatch(fact.predicate)
+        or not isinstance(fact.value, str)
         or not _SAFE_NAME.fullmatch(fact.value)
         or not isinstance(fact.source_ref, str)
         or not re.fullmatch(
