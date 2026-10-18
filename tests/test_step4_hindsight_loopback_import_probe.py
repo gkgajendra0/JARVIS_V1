@@ -10,7 +10,6 @@ from tools.research.step4_hindsight_local_recall_probe import (
     capture_recall,
     main as recall_main,
 )
-from tools.research.step4_hindsight_semantic_eval import CASES
 from tools.research.step4_hindsight_loopback_import_probe import (
     DOCKER_CONTAINER,
     IMAGE,
@@ -22,6 +21,7 @@ from tools.research.step4_hindsight_loopback_import_probe import (
     main,
     run_local_import,
 )
+from tools.research.step4_hindsight_semantic_eval import CASES
 
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
