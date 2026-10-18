@@ -46,8 +46,10 @@ def test_fixed_corpus_is_240_entirely_fictional_source_linked_assertions():
     assert DISTRACTOR_COUNT == 208
     assert len(FACTS) == len(BY_ID) == len(EXPECTED_IDS) == DOCUMENT_COUNT == 240
     assert all(ident.startswith("synthetic-") for ident in BY_ID)
-    assert all(fact.assertion.source_ref.startswith("conversation:synthetic:")
-               for fact in FACTS)
+    assert all(
+        fact.assertion.source_ref.startswith("conversation:synthetic:")
+        for fact in FACTS
+    )
     assert not any("owner" in fact.text.casefold() for fact in FACTS)
 
 
@@ -85,8 +87,9 @@ def test_archive_deterministic_portable_and_exact_fictional_content():
     with zipfile.ZipFile(io.BytesIO(data)) as zip_file:
         assert len(zip_file.infolist()) == DOCUMENT_COUNT + 1
         assert all(item.create_system == 0 for item in zip_file.infolist())
-        assert all(item.compress_type == zipfile.ZIP_STORED
-                   for item in zip_file.infolist())
+        assert all(
+            item.compress_type == zipfile.ZIP_STORED for item in zip_file.infolist()
+        )
     with pytest.raises(PressureFailure, match="unrecognized_fictional_archive"):
         inspect_archive(data + b"appended")
 
