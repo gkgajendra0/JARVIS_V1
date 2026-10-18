@@ -43,6 +43,18 @@ from jarvis.memory.research_compare_fixture import (
 )
 
 CHALLENGE_COUNT = 24
+# SHA-256 measured during the approved Step 7 60-fact owner-machine run.
+# Pinning it prevents fixture drift from masquerading as language robustness.
+STEP7_APPROVED_ARCHIVE_SHA256 = (
+    "a177886be60d7fe8a5b7a16e721c20b3977079ced6bc1360c95f8f2b37058df2"
+)
+
+
+def verify_frozen_corpus() -> dict[str, object]:
+    archive = validate_archive(build_archive())
+    if archive["sha256"] != STEP7_APPROVED_ARCHIVE_SHA256:
+        raise ProbeFailure("step7_fictional_corpus_changed")
+    return archive
 
 
 def _json(value: Any) -> bytes:
@@ -128,7 +140,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     if not args.allow_one_local_60_fact_hard_challenge:
-        archive = validate_archive(build_archive())
+        archive = verify_frozen_corpus()
         print(
             json.dumps(
                 {
@@ -153,6 +165,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
     try:
+        verify_frozen_corpus()
         verify_local_container()
         report = run_one_local_comparison(
             LocalHindsightHTTP(),
