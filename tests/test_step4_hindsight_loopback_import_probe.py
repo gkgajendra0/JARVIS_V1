@@ -361,7 +361,7 @@ class RecallFakeTransport(FakeTransport):
         body: bytes | None = None,
         content_type: str | None = None,
     ) -> dict[str, Any]:
-        if method == "POST" and path == f"{ROOT}/recall":
+        if method == "POST" and path == f"{ROOT}/memories/recall":
             self.events.append((method, path))
             if self.crash_recall:
                 raise LocalHTTPError(503, stage="semantic_recall")
@@ -434,7 +434,7 @@ def test_opt_in_local_recall_runs_after_readback_and_cleans_bank():
     recall_events = [
         pos
         for pos, item in enumerate(fake.events)
-        if item == ("POST", f"{ROOT}/recall")
+        if item == ("POST", f"{ROOT}/memories/recall")
     ]
     assert len(recall_events) == 9
     assert (
@@ -490,11 +490,13 @@ def test_recall_http_failure_does_not_retry_and_cleans_bank():
             after_readback=capture_recall,
         )
     assert fake.deleted
-    assert fake.events.count(("POST", f"{ROOT}/recall")) == 1
+    assert fake.events.count(("POST", f"{ROOT}/memories/recall")) == 1
 
 
 def test_recall_http_errors_have_sanitized_stage():
-    assert _http_stage("POST", f"{ROOT}/recall") == "semantic_recall"
+    # Regression for Hindsight 1.0 route; the old path returned HTTP 404.
+    assert _http_stage("POST", f"{ROOT}/memories/recall") == "semantic_recall"
+    assert _http_stage("POST", f"{ROOT}/recall") == "unknown"
 
 
 def test_new_probe_default_never_contacts_docker_or_localhost(
