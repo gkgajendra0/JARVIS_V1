@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
+from tools.research.step4_hindsight_semantic_eval import CASES
+
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 from jarvis.memory.research_decision_gate import (
     Assertion,
@@ -24,7 +26,6 @@ from jarvis.memory.research_decision_gate import (
     MemoryQuestion,
     compare_shadow,
 )
-from tools.research.step4_hindsight_semantic_eval import CASES
 
 # Intentionally exact text -> structured value, with assertion-ID integrity.
 # Any unreviewed change to the five official fixture texts fails closed.
