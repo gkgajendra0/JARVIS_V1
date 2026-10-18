@@ -366,19 +366,22 @@ def run_local_import(
             meta = items[0].get("metadata")
             expected_meta = {
                 "assertion_id": fact.assertion_id,
-                "assertion_version": fact.version,
+                "assertion_version": str(fact.version),
                 "source_turn_id": fact.source_turn_id,
                 "canonical_source_ref": (
                     f"conversation:synthetic:{fact.source_turn_id}"
                 ),
                 "predicate": fact.predicate,
                 "revision_kind": fact.revision_kind,
-                "supersedes_id": fact.supersedes_id,
                 "source_class": "synthetic_owner_direct",
                 "admission_policy": "shadow_only_no_write",
             }
-            if not isinstance(meta, dict) or any(
-                meta.get(key) != value for key, value in expected_meta.items()
+            if fact.supersedes_id is not None:
+                expected_meta["supersedes_id"] = fact.supersedes_id
+            if (
+                not isinstance(meta, dict)
+                or any(not isinstance(v, str) for v in meta.values())
+                or meta != expected_meta
             ):
                 raise ProbeFailure("imported_fact_provenance_mismatch")
         result = {
