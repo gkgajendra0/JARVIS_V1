@@ -11,7 +11,13 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+# Pytest adds src via pyproject.toml, but direct script execution does not.
+# Resolve only this checked-out repository's src folder; no external I/O.
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
 
 from jarvis.memory.hindsight_transfer_shadow import PINNED_FACTS
 
