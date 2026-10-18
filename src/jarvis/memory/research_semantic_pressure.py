@@ -25,7 +25,7 @@ from jarvis.memory.research_decision_gate import (
 )
 
 TARGET_COUNT = 16
-DISTRACTOR_COUNT = 192
+DISTRACTOR_COUNT = 208
 DOCUMENT_COUNT = TARGET_COUNT * 2 + DISTRACTOR_COUNT
 TOP_K_CHOICES = (4, 8, 16)
 FIXED_ZIP_TIME = (2026, 1, 1, 0, 0, 0)
