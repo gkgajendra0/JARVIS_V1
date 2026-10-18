@@ -14,7 +14,7 @@ The new CLI is `tools/research/step4_hindsight_local_recall_probe.py`. Running i
 1. Owner must approve **one** local synthetic-only write and nine local recall searches by deliberately specifying `--allow-one-local-recall-evaluation`.
 2. Verify the existing Docker container identity, localhost-only port, no cloud credentials, `HINDSIGHT_API_LLM_PROVIDER=none`, no observations or auto-consolidation, embedded PostgreSQL and a single research named volume. No new Docker start, downloads, installs, resets, or external requests.
 3. Create **one new disposable bank**, check effective per-bank safety configuration, upload the same SHA-256-pinned synthetic ZIP, poll one import and verify all five exact fact texts + source lineage.
-4. While the bank exists, send precisely **nine** JSON `POST /v1/default/banks/{bank_id}/recall` retrieval requests (not LLM calls), from the frozen `CASES` in PR #276. Do not derive or customize queries based on the results.
+4. While the bank exists, send precisely **nine** JSON `POST /v1/default/banks/{bank_id}/memories/recall` retrieval requests (not LLM calls), from the frozen `CASES` in PR #276. Do not derive or customize queries based on the results.
 5. Validate every returned fact against the pinned synthetic corpus and metadata. Measure whether each of the 7 evidence-bearing cases has all required assertions within its predeclared top-3/top-5 ranking.
 6. Delete the bank inside the original import runner's `finally` and verify it is gone, even if recall or provenance fails. **Do not retry**, and do not run on production memory.
 7. Report *only* sanitized metrics, case IDs, ranks, archive hash and cleanup flags. Never persist raw recall text, internal bank ID, API error body or personal facts.
@@ -62,3 +62,31 @@ Write-Host "Probe exit code: $exitCode; research banks remaining: $($banks.total
 A successful readback is not evidence of correct answer synthesis or self-learning. PR stays draft, unmerged, and isolated.
 
 See `docs/research/STEP4_HINDSIGHT_SEMANTIC_RETRIEVAL_GATE_2026-10-18.md` for the frozen nine queries and rank targets.
+
+## First owner-machine live recall attempt — HTTP 404 before scoring (2026-10-18)
+
+Owner tested pinned commit `e71d779e` after 41/41 Windows offline tests
+and dry-run. Hindsight health and pre-existing disposable bank count
+checks passed. The single synthetic-only probe returned sanitized
+`{"kind":"STEP4_LOCAL_RECALL_EVALUATION","reason_code":"semantic_recall_http_404","status":"fail_closed"}`
+(exit 1). A read-only bank enumeration after failure returned `total=0`.
+The probe therefore had **no scored retrieval result** and no remaining
+disposable research bank. The 404 does not demonstrate low retrieval quality.
+
+Root cause identified by comparison with Hindsight's official generated
+clients: the experiment mistakenly posted to
+`/v1/default/banks/{bank_id}/recall`. Hindsight uses
+`/v1/default/banks/{bank_id}/memories/recall`. The query request and
+synthetic fixture remain unchanged; no new evaluation target was introduced.
+Update the route in the local probe, fake transport and HTTP stage recognizer,
+and assert the old route is not classified as the valid recall endpoint.
+
+Upstream contract:
+- https://github.com/vectorize-io/hindsight/blob/main/hindsight-clients/python/hindsight_client_api/api/memory_api.py
+- https://github.com/vectorize-io/hindsight/blob/main/hindsight-clients/typescript/generated/sdk.gen.ts
+
+**Additional owner-machine read-only preflight before any further live
+write:** inspect `/openapi.json` to confirm the corrected path exposes
+`POST` in the actual installed server. Do not assume source `main` is
+identical to the local image. Finish offline tests and GitHub CI before
+another explicitly opted-in single synthetic import. Never auto-retry.
