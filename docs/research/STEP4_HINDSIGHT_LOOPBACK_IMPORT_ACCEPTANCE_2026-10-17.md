@@ -262,3 +262,48 @@ failure with cleanup. These tests do **not** imply a successful real import.
 Before a new owner-approved single import, fetch the latest tested research
 head and rerun the offline fake-service tests. Preserve the existing isolated
 volume and do not auto-repeat any failed import.
+
+## Third live attempt: upload rejected, stage isolated (2026-10-18)
+
+Owner checked Docker safety successfully and ran exactly one approved pinned
+synthetic import on `c24bfd58`. The probe returned
+`{"error_type":"LocalHTTPError","reason_code":"archive_upload_http_400","status":"fail_closed"}`
+(exit 1). A separate read-only bank list returned `total=0` for
+`jarvis-dev-only-`, indicating no matching research bank remained. Bank
+creation and resolved no-observations/no-consolidation checks had succeeded;
+the upload request itself was rejected. **No successful real import or
+fact readback is demonstrated. Do not retry the old archive.**
+
+Read-only upstream source inspection identified a concrete archive-contract
+mismatch: Hindsight's `TransferFact.metadata` is `dict[str, str]` in
+`hindsight-api-slim/hindsight_api/engine/transfer/schema.py`, and the
+importer's `iter_archive_documents` validates each document as a Pydantic
+`TransferDocument` during upload submission. Our original synthetic archive
+serialized `assertion_version` as a JSON number and `supersedes_id` as
+JSON null for initial facts. Both violate that string-only schema and are
+expected to be rejected before an async operation is accepted. This is a
+**strong code-grounded root-cause hypothesis**, not the server's captured
+400 response message; other upload validation failures have not been ruled out.
+
+This follow-up fixes the *transfer serialization* only:
+- Canonical `SyntheticFact.version` remains a validated Python integer.
+- Fact metadata carries `assertion_version` as decimal string, e.g. `"2"`.
+- `supersedes_id` is included as a string only for facts with predecessors,
+  and omitted entirely for original/independent facts.
+- Offline archive inspection enforces all metadata keys and values are
+  strings, with equality to pinned source/version lineage; fake readback
+  requires exact encoded metadata and cleans up on mismatch.
+
+The corrected deterministic archive has a **different SHA-256** from the
+previously accepted `2ed821195ea9ea2ff388f7f366c14c3f3c5363edaa088d642ac6f440c3b99ac0`;
+do not use that earlier checksum for a future import. Run the zero-network
+preflight again and record the new hash. The archive is still five fictional
+documents and five facts; no owner memory or API calls were introduced.
+
+Upstream evidence:
+- https://github.com/vectorize-io/hindsight/blob/main/hindsight-api-slim/hindsight_api/engine/transfer/schema.py
+- https://github.com/vectorize-io/hindsight/blob/main/hindsight-api-slim/hindsight_api/engine/transfer/importer.py
+
+Continue with GitHub CI followed by Windows offline archive and probe tests.
+Only after both pass and an owner gives separate approval should one new
+synthetic local-server attempt be considered. Never automatically retry.
