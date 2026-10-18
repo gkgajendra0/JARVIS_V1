@@ -36,7 +36,7 @@ re-introduce already known and still-valid facts.
 
 **The core interaction loop:**
 
-\`\`\`text
+```text
 owner's request + current permitted situation
   -> determine whether personal context changes the answer or action
   -> retrieve relevant owner facts, episodes, preferences and current context
@@ -45,7 +45,7 @@ owner's request + current permitted situation
   -> give personalized, grounded guidance or perform an authorized action
   -> record verified outcomes / allowed memory candidates (separate consent gate)
   -> improve subsequent interactions without pretending guesses are facts
-\`\`\`
+```
 
 **Required experience:**
 
@@ -97,7 +97,7 @@ provider-context injection or production autonomy is authorized merely by
 this goal statement.
 
 **Authoritative detailed specification:** Section 17,
-\`AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md\`. This user experience is the
+`AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`. This user experience is the
 primary user-facing value proposition within the existing constitutional
 autonomy North Star; it does not create a competing North Star.
 
