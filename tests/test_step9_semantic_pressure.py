@@ -43,8 +43,8 @@ def _all_empty():
 
 def test_fixed_corpus_is_240_entirely_fictional_source_linked_assertions():
     assert len(CONCEPTS) == TARGET_COUNT == 16
-    assert DISTRACTOR_COUNT == 192
-    assert len(FACTS) == len(BY_ID) == len(EXPECTED_IDS) == DOCUMENT_COUNT == 224
+    assert DISTRACTOR_COUNT == 208
+    assert len(FACTS) == len(BY_ID) == len(EXPECTED_IDS) == DOCUMENT_COUNT == 240
     assert all(ident.startswith("synthetic-") for ident in BY_ID)
     assert all(fact.assertion.source_ref.startswith("conversation:synthetic:")
                for fact in FACTS)
