@@ -50,7 +50,9 @@ from jarvis.memory.research_semantic_pressure import (
     validate_recall,
 )
 
-EXPECTED_ARCHIVE_HASH = "d5ee8f2d9587691012d276748e3c553a6c057f33ad83e357d48f258163df0246"
+EXPECTED_ARCHIVE_HASH = (
+    "d5ee8f2d9587691012d276748e3c553a6c057f33ad83e357d48f258163df0246"
+)
 CASE_COUNT = 68
 PAGE_SIZE = 80
 POLL_LIMIT = 180
@@ -80,10 +82,7 @@ def _preflight_no_existing_banks(transport: Any) -> None:
     response = transport.request(
         "GET", "/v1/default/banks?query=jarvis-dev-only-&limit=100"
     )
-    if (
-        type(response.get("total")) is not int
-        or response["total"] != 0
-    ):
+    if type(response.get("total")) is not int or response["total"] != 0:
         raise ProbeFailure("existing_or_unverifiable_research_banks")
 
 
@@ -146,9 +145,7 @@ def verify_paginated_source_readback(transport: Any, root: str) -> None:
             raise ProbeFailure("240_fact_source_provenance_mismatch")
 
 
-def capture_real_hindsight_comparison(
-    transport: Any, root: str
-) -> dict[str, Any]:
+def capture_real_hindsight_comparison(transport: Any, root: str) -> dict[str, Any]:
     """Exactly 68 calls, same raw questions for all retrieval methods."""
     if len(CASES) != CASE_COUNT:
         raise ProbeFailure("modified_pressure_questions")
@@ -191,9 +188,7 @@ def capture_real_hindsight_comparison(
         lexical_ns += time.perf_counter_ns() - start
         rankings["hindsight"][case.case_id] = hindsight
         rankings["lexical"][case.case_id] = lexical
-        rankings["hybrid"][case.case_id] = fuse(
-            hindsight[:16], lexical[:16]
-        )
+        rankings["hybrid"][case.case_id] = fuse(hindsight[:16], lexical[:16])
 
     measured_by_k: dict[str, Any] = {}
     for k in TOP_K_CHOICES:
@@ -386,8 +381,11 @@ def main(argv: list[str] | None = None) -> None:
         reason = str(exc) if isinstance(exc, ProbeFailure) else "local_trial_failed"
         print(
             json.dumps(
-                {"kind": "STEP10_OWNER_LOCAL_240_FACT_TRIAL", "status": "fail_closed",
-                 "reason_code": reason},
+                {
+                    "kind": "STEP10_OWNER_LOCAL_240_FACT_TRIAL",
+                    "status": "fail_closed",
+                    "reason_code": reason,
+                },
                 sort_keys=True,
                 indent=2,
             )
