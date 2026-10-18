@@ -356,7 +356,10 @@ def inspect_archive(data: bytes) -> dict[str, Any]:
             "manifest.json",
             *(f"documents/jarvis-dev-only-{ident}.json" for ident in BY_ID),
         }
-        if len(archive.namelist()) != len(expected) or set(archive.namelist()) != expected:
+        if (
+            len(archive.namelist()) != len(expected)
+            or set(archive.namelist()) != expected
+        ):
             raise PressureFailure("unexpected_archive_documents")
         if any(item.create_system != 0 for item in archive.infolist()):
             raise PressureFailure("nonportable_archive_header")
@@ -410,8 +413,8 @@ class BM25Index:
             (fact.assertion.assertion_id, Counter(TOKEN.findall(fact.text.casefold())))
             for fact in corpus
         )
-        self.avg_length = (
-            sum(sum(tokens.values()) for _, tokens in self.docs) / len(self.docs)
+        self.avg_length = sum(sum(tokens.values()) for _, tokens in self.docs) / len(
+            self.docs
         )
         self.df: Counter[str] = Counter()
         for _, tokens in self.docs:
@@ -432,8 +435,11 @@ class BM25Index:
                     continue
                 df = self.df[term]
                 weight = math.log1p((n_docs - df + 0.5) / (df + 0.5))
-                score += weight * matches * 2.2 / (
-                    matches + 1.2 * (0.25 + 0.75 * count / self.avg_length)
+                score += (
+                    weight
+                    * matches
+                    * 2.2
+                    / (matches + 1.2 * (0.25 + 0.75 * count / self.avg_length))
                 )
             if score > 0.0:
                 weighted.append((score, ident))
@@ -448,7 +454,9 @@ def fuse(left: tuple[str, ...], right: tuple[str, ...]) -> tuple[str, ...]:
         if (
             not isinstance(ranking, tuple)
             or len(ranking) > DOCUMENT_COUNT
-            or any(not isinstance(ident, str) or ident not in BY_ID for ident in ranking)
+            or any(
+                not isinstance(ident, str) or ident not in BY_ID for ident in ranking
+            )
             or len(ranking) != len(set(ranking))
         ):
             raise PressureFailure("invalid_ranked_results")
