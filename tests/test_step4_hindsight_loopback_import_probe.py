@@ -132,17 +132,18 @@ class FakeTransport:
             )
             metadata = {
                 "assertion_id": target.assertion_id,
-                "assertion_version": target.version,
+                "assertion_version": str(target.version),
                 "source_turn_id": target.source_turn_id,
                 "canonical_source_ref": (
                     f"conversation:synthetic:{target.source_turn_id}"
                 ),
                 "predicate": target.predicate,
                 "revision_kind": target.revision_kind,
-                "supersedes_id": target.supersedes_id,
                 "source_class": "synthetic_owner_direct",
                 "admission_policy": "shadow_only_no_write",
             }
+            if target.supersedes_id is not None:
+                metadata["supersedes_id"] = target.supersedes_id
             if self.missing_fact_metadata:
                 metadata.pop("canonical_source_ref")
             return {
