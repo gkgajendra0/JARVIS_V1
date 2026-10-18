@@ -38,7 +38,7 @@ EXPECTED_CASE_COUNT = 9
 
 
 def capture_recall(transport: Any, root: str) -> dict[str, Any]:
-    """Read-only POST /recall over an imported disposable five-fact bank.
+    """Read-only POST /memories/recall over an imported disposable five-fact bank.
 
     The supplied transport must be the already-verified local Docker transport
     during a real run. Response metadata is validated by the frozen scorer;
@@ -58,7 +58,7 @@ def capture_recall(transport: Any, root: str) -> dict[str, Any]:
             raise ProbeFailure("semantic_protocol_mutated")
         recall = transport.request(
             "POST",
-            f"{root}/recall",
+            f"{root}/memories/recall",
             json.dumps(request, separators=(",", ":"), sort_keys=True).encode("utf-8"),
             "application/json",
         )
