@@ -35,7 +35,6 @@ from jarvis.memory.research_challenge_suite import (
 )
 from jarvis.memory.research_compare_fixture import (
     TOP_K,
-    ComparisonFailure,
     bm25,
     build_archive,
     fuse,
