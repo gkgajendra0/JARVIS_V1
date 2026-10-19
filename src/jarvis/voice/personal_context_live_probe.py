@@ -112,25 +112,35 @@ def main() -> int:
     if not 5.0 <= args.timeout_seconds <= 120.0:
         parser.error("timeout-seconds must be 5 to 120")
     if not args.allow_one_real_provider_test:
-        print(json.dumps({
-            "status": "OFFLINE_PREFLIGHT_ONLY",
-            "would_run_live_provider": False,
-            "fictional_only": True,
-            "owner_memory_access": False,
-            "context_delivery_test": "NOT_RUN",
-            "next": "Explicit opt-in flag and owner-machine Gemini credentials required",
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "status": "OFFLINE_PREFLIGHT_ONLY",
+                    "would_run_live_provider": False,
+                    "fictional_only": True,
+                    "owner_memory_access": False,
+                    "context_delivery_test": "NOT_RUN",
+                    "next": "Explicit opt-in flag and owner-machine Gemini credentials required",
+                },
+                indent=2,
+            )
+        )
         return 0
     try:
         result = asyncio.run(run_live_probe(timeout_seconds=args.timeout_seconds))
-    except (RuntimeError, ValueError, OSError, TimeoutError, Exception) as exc:
+    except Exception as exc:  # noqa: BLE001 - sanitize all provider failures
         # Never print model turns or API key; preserve only exception class.
-        print(json.dumps({
-            "status": "INCONCLUSIVE_OR_FAILED",
-            "exception_type": type(exc).__name__,
-            "fictional_only": True,
-            "no_production_memory_access": True,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "status": "INCONCLUSIVE_OR_FAILED",
+                    "exception_type": type(exc).__name__,
+                    "fictional_only": True,
+                    "no_production_memory_access": True,
+                },
+                indent=2,
+            )
+        )
         return 2
     print(json.dumps(result, indent=2))
     return 0 if result["result"] == "SYNTHETIC_CANARY_OBSERVED" else 3
