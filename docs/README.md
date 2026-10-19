@@ -58,8 +58,12 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 
 - [Repository and integration audit](research/PERSONAL_INTELLIGENCE_REPOSITORY_AUDIT_2026-10-18.md)
 - [Movie-inspired assistant technology landscape, round 1](research/MOVIE_INSPIRED_PERSONAL_INTELLIGENCE_TECH_LANDSCAPE_2026-10-18.md)
+- [Comparative research and bounded architecture recommendation](research/PERSONAL_INTELLIGENCE_COMPARATIVE_DECISION_2026-10-19.md)
+- [Comparison and shadow-context design](superpowers/specs/2026-10-19-personal-intelligence-comparison-design.md)
+- [Bounded implementation plan](superpowers/plans/2026-10-19-personal-intelligence-comparison.md)
+- [Public fictional regression corpus and protocol](../benchmarks/personal_intelligence_v1.md)
 
-These research documents are part of draft PR #285 and remain pending owner review. No research evidence authorizes new memory writes or context injection.
+The October 18 audit and round-1 landscape are on main through PR #286. The October 19 recommendation, design, plan and public fixtures are a proposed research package; no comparative model trials or runtime acceptance are claimed. No research evidence authorizes new memory writes or context injection.
 
 ## Historical evidence preserved
 
