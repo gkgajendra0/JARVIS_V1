@@ -10,8 +10,26 @@ from typing import Any
 
 EXPECTED_CASE_IDS = frozenset(
     {
-        "F1", "F2", "V1", "V2", "T1", "T2", "C1", "C2", "H1", "H2",
-        "U1", "U2", "E1", "E2", "G1", "R1", "R2", "P1", "P2", "Q1",
+        "F1",
+        "F2",
+        "V1",
+        "V2",
+        "T1",
+        "T2",
+        "C1",
+        "C2",
+        "H1",
+        "H2",
+        "U1",
+        "U2",
+        "E1",
+        "E2",
+        "G1",
+        "R1",
+        "R2",
+        "P1",
+        "P2",
+        "Q1",
     }
 )
 DECISIONS = frozenset(
@@ -52,15 +70,22 @@ def load_corpus(
     if not isinstance(cases, list) or not isinstance(gold, list):
         raise PersonalEvalContractError("cases and gold must be lists")
     if len(cases) != len(EXPECTED_CASE_IDS) or len(gold) != len(cases):
-        raise PersonalEvalContractError("expected exactly 20 personal life-domain cases")
+        raise PersonalEvalContractError(
+            "expected exactly 20 personal life-domain cases"
+        )
     case_ids, gold_ids = set(), set()
     category_counts: Counter[str] = Counter()
     for case in cases:
         if not isinstance(case, dict):
             raise PersonalEvalContractError("case must be an object")
         if set(case) != {
-            "case_id", "category", "user_question", "requestor",
-            "restart", "provider_unavailable", "events",
+            "case_id",
+            "category",
+            "user_question",
+            "requestor",
+            "restart",
+            "provider_unavailable",
+            "events",
         }:
             raise PersonalEvalContractError("case has missing fields or leaked gold")
         ident = case["case_id"]
@@ -78,11 +103,16 @@ def load_corpus(
             raise PersonalEvalContractError("invalid question or execution condition")
         events = case["events"]
         if not isinstance(events, list) or not events:
-            raise PersonalEvalContractError("each case requires evidence-bearing events")
+            raise PersonalEvalContractError(
+                "each case requires evidence-bearing events"
+            )
         event_ids = set()
         for event in events:
             if not isinstance(event, dict) or set(event) != {
-                "event_id", "session_id", "speaker", "text"
+                "event_id",
+                "session_id",
+                "speaker",
+                "text",
             }:
                 raise PersonalEvalContractError("event has invalid schema")
             if (
@@ -96,12 +126,17 @@ def load_corpus(
                 raise PersonalEvalContractError("invalid or duplicate evidence event")
             event_ids.add(event["event_id"])
     if case_ids != EXPECTED_CASE_IDS or len(category_counts) < 10:
-        raise PersonalEvalContractError("missing cases or insufficient life-domain variety")
+        raise PersonalEvalContractError(
+            "missing cases or insufficient life-domain variety"
+        )
     case_by_id = {case["case_id"]: case for case in cases}
     for expectation in gold:
         if not isinstance(expectation, dict) or set(expectation) != {
-            "case_id", "category", "expected_decision",
-            "must_use_event_ids", "must_not_use_event_ids",
+            "case_id",
+            "category",
+            "expected_decision",
+            "must_use_event_ids",
+            "must_not_use_event_ids",
         }:
             raise PersonalEvalContractError("gold schema invalid")
         ident = expectation["case_id"]
@@ -127,9 +162,7 @@ def load_corpus(
     return tuple(cases), tuple(gold)
 
 
-def corpus_manifest(
-    cases_path: Path, gold_path: Path
-) -> dict[str, Any]:
+def corpus_manifest(cases_path: Path, gold_path: Path) -> dict[str, Any]:
     cases, gold = load_corpus(cases_path, gold_path)
     return {
         "suite": "pi1a.v1",
@@ -162,7 +195,11 @@ def validate_paired_annotations(
     reviewed = 0
     for entry in responses:
         if not isinstance(entry, dict) or set(entry) != {
-            "case_id", "arm", "answer", "cited_event_ids", "review",
+            "case_id",
+            "arm",
+            "answer",
+            "cited_event_ids",
+            "review",
         }:
             raise PersonalEvalContractError("invalid response annotation schema")
         case_id, arm = entry["case_id"], entry["arm"]

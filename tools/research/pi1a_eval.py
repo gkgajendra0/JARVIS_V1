@@ -18,7 +18,9 @@ _FIXTURES = _ROOT / "tests" / "fixtures" / "personal_intelligence"
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--annotations", type=Path, default=None,
+        "--annotations",
+        type=Path,
+        default=None,
         help="paired response annotations to validate, not automatic scoring",
     )
     args = parser.parse_args()
