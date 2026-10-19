@@ -1,0 +1,58 @@
+import hashlib
+import json
+from collections import Counter
+from pathlib import Path
+
+ROOT=Path.cwd();HERE=Path(__file__).resolve().parent
+raw=json.loads((HERE/'multilingual_results.json').read_text(encoding='utf-8'))
+assert raw['status']=='completed'
+cases=json.loads((ROOT/'benchmarks/personal_intelligence_multilingual_v1.json').read_text(encoding='utf-8'))['cases']
+by_id={x['id']:x for x in cases}
+issues=[];native_outcomes=[]
+blocked_fields={'evaluation_only','requirements','prohibitions','required_source_ids','forbidden_source_ids','domain','operations_by_source_id'}
+def inspect(value):
+    if isinstance(value,dict):
+        assert not (value.keys()&blocked_fields),'Evaluator metadata leaked'
+        for item in value.values():inspect(item)
+    elif isinstance(value,list):
+        for item in value:inspect(item)
+def request_check(case,payload,kind):
+    inspect(payload)
+    text=json.dumps(payload,ensure_ascii=False).casefold()
+    forbidden_fragment={'local_only':'saffron decaf','verified_forget':'regular coffee','guest':'decaf coffee'}.get(case['domain'])
+    if forbidden_fragment and forbidden_fragment in text:
+        issues.append({'case_id':case['id'],'kind':kind,'issue':'forbidden_fixture_content_in_request'})
+for call in raw['answer_calls']:
+    payload=call['input_payload'];request_check(by_id[call['case_id']],payload,'answer_request')
+    assert payload['tools']==[] and payload['query']['actions_authorized'] is False
+    assert hashlib.sha256(json.dumps(payload,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')).hexdigest()==call['input_sha256']
+for call in raw['native_calls']:
+    payload=call['request'].copy();payload['input']=json.loads(payload['input'])
+    request_check(by_id[call['case_id']],payload,'native_request')
+for result in raw['cases']:
+    case=by_id[result['case_id']];context=result['native']['context']
+    ids={item for evidence in context for item in evidence['source_ids']}
+    forbidden=set(case['evaluation_only']['forbidden_source_ids'])
+    if ids & forbidden: issues.append({'case_id':case['id'],'issue':'forbidden_native_source_id'})
+    if case['domain'] in {'guest','local_only','verified_forget','irrelevant_context'} and context:
+        issues.append({'case_id':case['id'],'issue':'unexpected_native_context'})
+    outcome={'case_id':case['id'],'language':case['language'],'domain':case['domain'],
+        'packet_status':result['native']['packet']['status'],'evidence_count':len(context),
+        'reason_codes':result['native']['coordinator_decisions']}
+    if case['domain']=='correction':
+        outcome['expected_corrected_value_released']=(len(context)==1 and json.loads(context[0]['text'])['value']=='decaf coffee'
+            and ids==set(case['evaluation_only']['required_source_ids']))
+    native_outcomes.append(outcome)
+result={'schema_version':1,'input_projection_issues':issues,'native_outcomes':native_outcomes,
+ 'cases':len(cases),'language_forms':dict(Counter(x['language'] for x in cases)),
+ 'answer_calls':len(raw['answer_calls']),'native_logical_calls':len(raw['native_calls']),
+ 'answer_failures':[{'case_id':x['case_id'],'arm':x['arm'],'error_type':x.get('error_type')} for x in raw['answer_calls'] if x['status']!='completed'],
+ 'native_noncompleted_logical_calls':[{'case_id':x['case_id'],'status_at_capture':x['status'],'error_type':x.get('error_type'),
+     'selector_reason_codes':next(r['native']['packet']['reason_codes'] for r in raw['cases'] if r['case_id']==x['case_id'])} for x in raw['native_calls'] if x['status']!='completed'],
+ 'native_deadline_cases':[x['case_id'] for x in raw['cases'] if x['native']['packet']['reason_codes']==['deadline_exceeded']],
+ 'native_coordinator_unavailable':[x for x in native_outcomes if any('unavailable' in item['reason_code'] for item in x['reason_codes'])],
+ 'max_serialized_context_utf8_bytes':max(len(json.dumps(x['input_payload']['context'],ensure_ascii=False).encode('utf-8')) for x in raw['answer_calls']),
+ 'limits':['Request/source checks do not replace semantic review for paraphrased disclosure.',
+   'Old correction quotes in the permitted history arm remain authorized historical inputs, not current canonical releases.']}
+(HERE/'multilingual_trace_audit.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+print(json.dumps({key:result[key] for key in ('cases','answer_calls','native_logical_calls','input_projection_issues','answer_failures','native_deadline_cases','native_coordinator_unavailable')}))

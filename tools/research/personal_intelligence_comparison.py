@@ -20,6 +20,9 @@ from pathlib import Path
 from typing import Protocol
 
 SCHEMA = "jarvis.personal_intelligence.eval.v1"
+SUPPORTED_LANGUAGES = frozenset(
+    {"en", "hi", "hi-Latn", "bn", "ta", "te", "mr", "gu", "ar", "es", "fr"}
+)
 DEFAULT_CORPUS = (
     Path(__file__).resolve().parents[2] / "benchmarks/personal_intelligence_v1.json"
 )
@@ -85,7 +88,7 @@ def _validate_case(case: object) -> dict:
     case = _fields(case, CASE_FIELDS, CASE_FIELDS)
     _text(case["id"])
     _text(case["domain"])
-    if _text(case["language"]) not in {"en", "hi", "hi-Latn"}:
+    if _text(case["language"]) not in SUPPORTED_LANGUAGES:
         raise ValueError("unsupported fixture language")
     query = _fields(case["query"], QUERY_FIELDS, QUERY_FIELDS)
     query_at = _timestamp(query["at"])

@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "scope": "Operator-authored synthetic canonical seed operations derived from source events, not extraction/relevance gold; never sent to answerer or interpreter",
+  "operations_by_source_id": {
+    "ML001-e1": {
+      "source_id": "ML001-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML001-e2": {
+      "source_id": "ML001-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML002-e1": {
+      "source_id": "ML002-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML002-e2": {
+      "source_id": "ML002-e2",
+      "operation": "forget",
+      "predicate": "coffee_preference",
+      "value": null,
+      "sensitivity": "local_only"
+    },
+    "ML003-e1": {
+      "source_id": "ML003-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "saffron decaf",
+      "sensitivity": "local_only"
+    },
+    "ML004-e1": {
+      "source_id": "ML004-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML005-e1": {
+      "source_id": "ML005-e1",
+      "operation": "remember",
+      "predicate": "diet_preference",
+      "value": "vegetarian",
+      "sensitivity": "standard"
+    },
+    "ML005-e2": {
+      "source_id": "ML005-e2",
+      "operation": "remember",
+      "predicate": "breakfast_constraints",
+      "value": "no mushrooms; breakfast under fifteen minutes",
+      "sensitivity": "standard"
+    },
+    "ML006-e1": {
+      "source_id": "ML006-e1",
+      "operation": "remember",
+      "predicate": "hobby",
+      "value": "gardening",
+      "sensitivity": "standard"
+    },
+    "ML007-e1": {
+      "source_id": "ML007-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML007-e2": {
+      "source_id": "ML007-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML008-e1": {
+      "source_id": "ML008-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML008-e2": {
+      "source_id": "ML008-e2",
+      "operation": "forget",
+      "predicate": "coffee_preference",
+      "value": null,
+      "sensitivity": "local_only"
+    },
+    "ML009-e1": {
+      "source_id": "ML009-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "saffron decaf",
+      "sensitivity": "local_only"
+    },
+    "ML010-e1": {
+      "source_id": "ML010-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML011-e1": {
+      "source_id": "ML011-e1",
+      "operation": "remember",
+      "predicate": "diet_preference",
+      "value": "vegetarian",
+      "sensitivity": "standard"
+    },
+    "ML011-e2": {
+      "source_id": "ML011-e2",
+      "operation": "remember",
+      "predicate": "breakfast_constraints",
+      "value": "no mushrooms; breakfast under fifteen minutes",
+      "sensitivity": "standard"
+    },
+    "ML012-e1": {
+      "source_id": "ML012-e1",
+      "operation": "remember",
+      "predicate": "hobby",
+      "value": "gardening",
+      "sensitivity": "standard"
+    },
+    "ML013-e1": {
+      "source_id": "ML013-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML013-e2": {
+      "source_id": "ML013-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML014-e1": {
+      "source_id": "ML014-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML014-e2": {
+      "source_id": "ML014-e2",
+      "operation": "forget",
+      "predicate": "coffee_preference",
+      "value": null,
+      "sensitivity": "local_only"
+    },
+    "ML015-e1": {
+      "source_id": "ML015-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "saffron decaf",
+      "sensitivity": "local_only"
+    },
+    "ML016-e1": {
+      "source_id": "ML016-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML017-e1": {
+      "source_id": "ML017-e1",
+      "operation": "remember",
+      "predicate": "diet_preference",
+      "value": "vegetarian",
+      "sensitivity": "standard"
+    },
+    "ML017-e2": {
+      "source_id": "ML017-e2",
+      "operation": "remember",
+      "predicate": "breakfast_constraints",
+      "value": "no mushrooms; breakfast under fifteen minutes",
+      "sensitivity": "standard"
+    },
+    "ML018-e1": {
+      "source_id": "ML018-e1",
+      "operation": "remember",
+      "predicate": "hobby",
+      "value": "gardening",
+      "sensitivity": "standard"
+    },
+    "ML019-e1": {
+      "source_id": "ML019-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML019-e2": {
+      "source_id": "ML019-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML020-e1": {
+      "source_id": "ML020-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML020-e2": {
+      "source_id": "ML020-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML021-e1": {
+      "source_id": "ML021-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML021-e2": {
+      "source_id": "ML021-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML022-e1": {
+      "source_id": "ML022-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML022-e2": {
+      "source_id": "ML022-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML023-e1": {
+      "source_id": "ML023-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML023-e2": {
+      "source_id": "ML023-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML024-e1": {
+      "source_id": "ML024-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML024-e2": {
+      "source_id": "ML024-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML025-e1": {
+      "source_id": "ML025-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML025-e2": {
+      "source_id": "ML025-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    },
+    "ML026-e1": {
+      "source_id": "ML026-e1",
+      "operation": "remember",
+      "predicate": "coffee_preference",
+      "value": "regular coffee",
+      "sensitivity": "standard"
+    },
+    "ML026-e2": {
+      "source_id": "ML026-e2",
+      "operation": "correct",
+      "predicate": "coffee_preference",
+      "value": "decaf coffee",
+      "sensitivity": "standard"
+    }
+  }
+}

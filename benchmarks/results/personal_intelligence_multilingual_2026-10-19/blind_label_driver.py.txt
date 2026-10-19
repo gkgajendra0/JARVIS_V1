@@ -1,0 +1,25 @@
+import hashlib
+import json
+import random
+from pathlib import Path
+
+HERE=Path(__file__).resolve().parent
+ROOT=Path.cwd()
+raw=json.loads((HERE/'multilingual_results.json').read_text(encoding='utf-8'))
+assert raw['status']=='completed','Wait for the bounded run to finish'
+cases=json.loads((ROOT/'benchmarks/personal_intelligence_multilingual_v1.json').read_text(encoding='utf-8'))['cases']
+assert len(raw['cases'])==len(cases)==26
+rng=random.Random(2026101913)
+blind=[];mapping=[]
+for result,case in zip(raw['cases'],cases,strict=True):
+    assert result['case_id']==case['id']
+    answers=result['answers'].copy();rng.shuffle(answers)
+    assert len(answers)==3
+    blind.append({'case_id':case['id'],'language':case['language'],'query':case['query']['utterance'],
+        'rubric':case['evaluation_only'],'responses':{label:{'status':answer['status'],'text':answer.get('text')} for label,answer in zip('ABC',answers,strict=True)}})
+    mapping.append({'case_id':case['id'],'labels':{label:answer['arm'] for label,answer in zip('ABC',answers,strict=True)}})
+for name,data in [('multilingual_blind_answers.json',blind),('multilingual_label_mapping.json',mapping)]:
+    path=HERE/name
+    assert not path.exists(),'Refusing to replace blinded artifacts'
+    path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+print(json.dumps({'blind_cases':len(blind),'mapping_created':True,'review_must_lock_before_mapping_reveal':True}))

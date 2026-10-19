@@ -144,3 +144,9 @@ comparison evidence and bounded design are now reviewable together. The first
 [native shadow boundary and fictional probe](PERSONAL_CONTEXT_SHADOW_2026-10-19.md)
 are implemented on the research branch. No production runtime activation or
 provider-context injection has been implemented under this PR.
+
+The owner subsequently requested general multilingual scenarios instead of
+personal examples. A separate [26-case multilingual pass](PERSONAL_INTELLIGENCE_MULTILINGUAL_RESULTS_2026-10-19.md)
+records 78 answerer replies, native component behavior and nine native deadlines,
+with a separate English route control. It does not replace the earlier frozen
+diagnostic or complete Task 2's vendor/held-out/replicated evidence.
