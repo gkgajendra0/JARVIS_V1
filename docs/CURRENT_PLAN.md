@@ -6,6 +6,52 @@ preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_
 Historical engineering milestones and evidence remain in [Project State](PROJECT_STATE.md)
 and the [Documentation Index](README.md).
 
+## Owner direction — active personal intelligence (2026-10-19)
+
+The owner approved architecture PR #288, PI-1A #289, and PI-1B #290.
+All three passed their prescribed GitHub CI and were merged to `main`.
+The owner has also explicitly requested **real activated personal-context assistance,
+not an indefinite shadow feature**, after thorough testing. There are no
+known existing personal memories in the owner's current deployment.
+
+**Goal:** in a reliably authenticated OWNER conversation, JARVIS automatically
+retrieves relevant permitted canonical facts and correctly *uses* them in
+personalized advice, without an explicit memory search instruction. Empty
+memory must yield an honest "I don't have that information yet", not fabricated
+personal understanding. This is a permanent active product requirement.
+
+**Release gates before activation on the owner machine:**
+1. Confirm the actual Windows checkout/main SHA, configured memory enablement,
+   SQLCipher/DPAPI health, voice model and plugin versions. No passwords or keys
+   in reports.
+2. Verify a trusted identity/turn binding that distinguishes owner requests
+   from nearby guest speech. Existing speaker scoring is SHADOW diagnostics
+   (not accepted proof of ownership); seeing an owner candidate on camera is
+   not a verified speech attribution. Never release private owner history to
+   an unverified speaker.
+3. Validate real Gemini/LiveKit delivery with **fictional** memory facts,
+   both initial and follow-up turns, and show the answer uses the right context.
+   Test interruptions, correction, deletion, stale claims, absent memory,
+   provider outages, no mid-session instruction spoofing, and token/cost.
+4. Implement an **APPLY** path in the actual voice runtime with the existing
+   canonical owner memory and Authority controls; do not represent isolated
+   shadow-packet generation as activation. A provider tool or chat-context
+   update must be proven on the pinned SDK/model.
+5. Run full automated and owner-machine acceptance, then turn on the approved
+   active path for the authenticated owner only. Preserve a documented OFF
+   switch and fail-closed behavior on identity/provider failures.
+
+**Automatic capture is a separate capability.** No indiscriminate recording,
+implicit sensitive storage, or retention of all raw daily conversations is
+approved by activating read-only context. Start with explicitly permitted facts
+and add carefully governed natural learning after the initial active recall
+release is proven.
+
+**Status:** PRs #288–#290 MERGED; active owner memory -> live voice model
+integration **NOT IMPLEMENTED / NOT ACTIVE**. The owner-machine identity and
+provider acceptance are required; do not claim otherwise. The objective is
+active release, with isolated tests only as a means to validate it.
+
 ## Owner priority: personal intelligence, before more framework work
 
 The owner has clarified that JARVIS's defining product must be an intelligent,
