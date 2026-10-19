@@ -122,6 +122,9 @@ The earlier Step 7/8 records reported small lexical-fixture evidence scores of
 8/16 and 15/20 for Hindsight versus 16/16 and 20/20 for BM25. Their structured
 decision counts were 3/18 and 19/24 versus 18/18 and 24/24. These fixtures supplied
 scope/intent and used deterministic scoring, not natural personalized answers.
+They imported prepared facts into a restricted local no-LLM configuration with
+observations/consolidation disabled; they did not measure Hindsight's normal
+model-backed extraction and reflection pipeline.
 
 The Step 9 synonym-pressure fixture reported BM25 top-8 evidence 17/64 and
 structured decisions 21/68. Step 10's larger semantic comparison was documented
