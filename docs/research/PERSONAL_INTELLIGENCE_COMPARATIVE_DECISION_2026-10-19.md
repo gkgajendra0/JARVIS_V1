@@ -176,14 +176,26 @@ independent evaluation remains necessary. Relevant research includes
 [DyadMem](https://arxiv.org/abs/2610.03020). Recent preprints are research evidence,
 not product certification.
 
-**Execution status:** local execution fails before a command starts while the
-launcher enumerates BitLocker-locked volumes, even with workspace and executables
-on C:. The contents of D:/I: are not required. Root cause is unproven. No new
-JARVIS/model/engine benchmark was executed in this session. Source inspection and
-structural fixture checks must not be reported as empirical performance results.
+**Execution status, updated 19 October:** normal sandbox execution failed before
+commands started while its launcher enumerated locked volumes. A reviewed
+execution mode successfully reached the owner's existing Desktop `jarvis_v1`
+checkout; the contents of D:/I: were never needed. The existing repository test
+baseline passed locally. The initial offline comparison contracts are implemented
+with focused regression coverage; they are not a completed model/engine benchmark.
+Source inspection, fixture checks and unit tests must not be reported as empirical
+personal-assistant performance results.
+
+One [fictional transport smoke check](../../benchmarks/personal_intelligence_transport_probe_2026-10-19.json)
+subsequently completed through the existing configured `gpt-5.6-sol` account route:
+250 input / 58 output tokens, 10,234 ms whole-call time. Its input and response are
+recorded for inspection. This is no retrieval, persistence, realtime voice or
+comparative quality result. OpenAI's documentation also explicitly cautions that
+structured outputs can contain mistakes; schema conformance is not a truth test.
+[Structured output guidance](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses),
+[existing account-route contract](https://developers.openai.com/siwc/token-sharing-open-source).
 
 **Next decision:** approve the bounded read-only comparison/shadow architecture,
-restore a working execution service, then measure existing JARVIS and the simple
+use the now-working local execution path, then measure existing JARVIS and the simple
 profile/history baseline before adding finalist adapters. Choose an external
 service only after comparable answer-quality, lifecycle, resource and latency
 evidence. Keep CAP-053 planned until the documented owner-machine gate is met.

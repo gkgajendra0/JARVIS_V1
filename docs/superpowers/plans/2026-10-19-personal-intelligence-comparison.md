@@ -28,10 +28,14 @@
 
 ## Delivery status
 
-This commit supplies the research, design, protocol and public fictional data.
-Tasks below are **not implemented or executed**. Read the spec and Current Plan
-before implementation; architecture approval and actual execution availability
-are gates, not completed checklist items.
+The initial package supplied research, design, protocol and public fictional data.
+Task 1 now has an offline contract harness and focused regression tests. Its CLI
+remains validation-only; Task 2 owns the future explicit live-run configuration.
+The first harness releases original source quotes and uses a labelled conservative
+UTF-8 byte budget. It does not measure derived profile/reflect quality or exact
+token cost. Task 2 measurements and Task 3 production integration are not complete.
+Read the spec and Current Plan before implementation; architecture approval remains
+required for the shadow runtime, not implied by unit-test success.
 
 ### Task 1: A non-oracle fictional comparison harness
 

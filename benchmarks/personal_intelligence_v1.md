@@ -2,7 +2,7 @@
 
 **Data:** [personal_intelligence_v1.json](personal_intelligence_v1.json).
 20 fictional cases, 34 events, English/Hindi/Hinglish.
-**State:** authored fixtures; no candidate/model results included.
+**State:** public fixtures, an offline contract harness and one separately labelled model transport smoke check; no comparative results.
 [Design](../docs/superpowers/specs/2026-10-19-personal-intelligence-comparison-design.md)
 and [research](../docs/research/PERSONAL_INTELLIGENCE_COMPARATIVE_DECISION_2026-10-19.md).
 
@@ -103,9 +103,33 @@ JSON is public regression data and can never be described as a blind holdout.
 
 ## Results status
 
-No run is represented by this package. Structural validation checks JSON shape,
+The initial harness is `tools/research/personal_intelligence_comparison.py`.
+Run `.venv/Scripts/python.exe -I tools/research/personal_intelligence_comparison.py`
+from the repository root to validate the corpus. Its CLI makes no model calls,
+does not load JARVIS credentials and does not start a memory service.
+
+The injectable `run_case` contract enforces requester/destination isolation,
+readiness barriers around ingestion and invalidation, bounded operations and
+cleanup. This first phase resolves returned source IDs to original quoted text;
+vendor-written profile/reflect prose is not released to its answerer. It therefore
+cannot measure the full value of derived user models. A later explicitly named
+comparison arm must test those representations and their source support.
+
+Context size is conservatively bounded by serialized UTF-8 bytes in this first
+dependency-free phase; the field is labelled `context_utf8_bytes`, not an exact
+token count. Exact tokenizer accounting and model spend belong to the live runner.
+Only public fictional fixtures are covered by the contract tests; passing them
+does not establish that a real engine's deletion or persistence works.
+
+One [recorded transport smoke check](personal_intelligence_transport_probe_2026-10-19.json)
+used the existing configured model and PI001's authorized fictional context. It
+completed in 10,234 ms with 250 input / 58 output tokens. This is whole-call latency,
+not context-selection latency or time to first speech. It tests neither retrieval
+nor cross-session persistence, has no comparison arm and supplies no quality ranking.
+
+No comparative model or memory-service benchmark is represented by this package. Structural validation checks JSON shape,
 identifiers, chronological order, source references and evaluator-input separation;
 it does not test a memory engine, JARVIS behavior, model quality or live voice.
-Model credentials, approved allowance and a functioning execution service must be
-established before empirical trials. Do not add a results table populated with
+The existing model connection and local execution now work; an explicit bounded
+run configuration remains required before comparative trials. Do not add a results table populated with
 estimated or simulated scores.
