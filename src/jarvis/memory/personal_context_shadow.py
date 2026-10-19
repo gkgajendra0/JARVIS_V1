@@ -211,7 +211,7 @@ class ShadowPersonalContextCoordinator:
                 dropped_count=dropped,
                 byte_budget=self._byte_budget,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - research shadow must fail closed
             # The isolated research coordinator has no authority to turn
             # retrieval errors into guessed memories or live responses.
             return self._empty(question, ShadowDisposition.UNAVAILABLE)
