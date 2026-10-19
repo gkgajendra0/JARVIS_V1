@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "scope": "single_fictional_configured_native_model_smoke",
+  "observed_at": "2026-10-19T10:18:25.618822+00:00",
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "logical_call_budget": 2,
+  "logical_calls": [
+    {
+      "ordinal": 1,
+      "status": "completed",
+      "reported_usage": {
+        "total_cached_tokens": 0,
+        "total_input_tokens": 623,
+        "total_output_tokens": 64,
+        "total_thought_tokens": 127,
+        "total_tokens": 814,
+        "total_tool_use_tokens": 0
+      }
+    },
+    {
+      "ordinal": 2,
+      "status": "completed",
+      "reported_usage": {
+        "total_cached_tokens": 0,
+        "total_input_tokens": 400,
+        "total_output_tokens": 23,
+        "total_thought_tokens": 67,
+        "total_tokens": 490,
+        "total_tool_use_tokens": 0
+      }
+    }
+  ],
+  "coordinator_decisions": [
+    {
+      "disposition": "release",
+      "reason_code": "provider_verified_unique_eligible_current_exact_fact"
+    }
+  ],
+  "packet": {
+    "turn_id": "16019990-f8c9-4a85-9045-12bc20d370f1",
+    "session_id": "fictional-native-model-smoke",
+    "status": "ready",
+    "evidence_count": 1,
+    "used_units": 99,
+    "budget_unit": "utf8_bytes_with_framing",
+    "reason_codes": [
+      "shadow_only"
+    ],
+    "elapsed_ms": 7000.0
+  },
+  "fictional_value_verified": true,
+  "live_memory_reads": 0,
+  "provider_context_updates": 0,
+  "production_settings_changed": false,
+  "currency_cost": "not observed",
+  "wire_retry_count": "not instrumented; configured SDK defaults retained",
+  "limits": [
+    "One saved-fact query; no natural advice, corpus comparison, service trial or live voice acceptance.",
+    "Production native planner/verifier classes and configured route; disposable synthetic SQLite schema.",
+    "Any provider failure remains a result, with no lab retry or paid alternate route."
+  ],
+  "fictional_fixture": {
+    "query": "What is my coffee preference?",
+    "subject_scope": "personal",
+    "subject": "owner",
+    "predicate": "coffee_preference",
+    "value": "decaf",
+    "source_class": "owner_explicit",
+    "authority_class": "owner_explicit",
+    "sensitivity": "standard"
+  },
+  "trace_limitations": "Logical calls and numeric provider usage were captured; raw planner/verifier outputs and HTTP retry attempts were not retained.",
+  "installed_packages": {
+    "google-genai": "2.22.0",
+    "livekit-agents": "1.8.3"
+  },
+  "implementation_sha256_lf_utf8": {
+    "src/jarvis/memory/personal_context.py": "0c5283f893a3389c4a50368db73cf8747ec4486b5b1489dd0360c1acc0387602",
+    "src/jarvis/memory/query.py": "92a899e6c46e3718eddd11e3955dfc56b081b8fdb02a59516ecc08a2b9689913",
+    "src/jarvis/memory/query_coordinator.py": "47d2fc1c496b40713c31e84f662f2069d59ac973574a2eb5af3667af757da6e4",
+    "src/jarvis/memory/query_interpreters.py": "a20cf30b0bcc5b41a784a497a9b078b57eac71ab9e252a4ee242be282c3b311d",
+    "src/jarvis/memory/provider_verified_query.py": "c129e8fefad9da92afae3f431b7ebeb009e34de90cf106600c34db8640149990",
+    "src/jarvis/memory/release_guard.py": "78f39bae20c59fd84503b1638c85eb63736388eed664a8f385303ffc5d02b0c2"
+  }
+}

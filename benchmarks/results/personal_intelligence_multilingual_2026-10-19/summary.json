@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "cases": 26,
+  "events": 43,
+  "language_forms": 11,
+  "distinct_languages_excluding_hinglish": 10,
+  "native_packet_statuses": {
+    "ready": 3,
+    "abstain": 14,
+    "unavailable": 9
+  },
+  "native_logical_invocations": 26,
+  "native_responses_observed": 17,
+  "native_reported_usage": {
+    "total_input_tokens": 9939,
+    "total_output_tokens": 928,
+    "total_thought_tokens": 4146,
+    "total_tokens": 15013
+  },
+  "native_unobserved_usage_calls": [
+    "ML009",
+    "ML019",
+    "ML020",
+    "ML021",
+    "ML022",
+    "ML023",
+    "ML024",
+    "ML025",
+    "ML026"
+  ],
+  "answer_calls": 78,
+  "answer_arms": {
+    "native_exact_shadow_diagnostic": {
+      "completed": 26,
+      "usage_observed": 26,
+      "input_tokens": 6178,
+      "output_tokens": 1223,
+      "whole_call_p50_ms": 4070.5,
+      "whole_call_p95_nearest_rank_ms": 7640
+    },
+    "no_personal_context_ablation": {
+      "completed": 26,
+      "usage_observed": 26,
+      "input_tokens": 6010,
+      "output_tokens": 1245,
+      "whole_call_p50_ms": 4281.0,
+      "whole_call_p95_nearest_rank_ms": 6953
+    },
+    "permitted_history_diagnostic": {
+      "completed": 26,
+      "usage_observed": 26,
+      "input_tokens": 7691,
+      "output_tokens": 1141,
+      "whole_call_p50_ms": 4180.0,
+      "whole_call_p95_nearest_rank_ms": 6172
+    }
+  },
+  "currency_cost": "unobserved",
+  "quality_review_independence": "limited; fixture author also reviewed blinded answers",
+  "control": {
+    "logical_calls": 1,
+    "result": "English native interpreter control timed out after35s with SDK retries configured0; HTTP status/cause not observed; Bengali follow-up not attempted"
+  },
+  "timing_scope": "Whole text answer calls/native selector; no first-spoken-output measurement"
+}

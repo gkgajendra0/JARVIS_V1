@@ -1,0 +1,210 @@
+[
+  {
+    "case_id": "ML001",
+    "labels": {
+      "A": "permitted_history_diagnostic",
+      "B": "native_exact_shadow_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML002",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML003",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML004",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "native_exact_shadow_diagnostic",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML005",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "permitted_history_diagnostic",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML006",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML007",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "native_exact_shadow_diagnostic",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML008",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML009",
+    "labels": {
+      "A": "permitted_history_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML010",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML011",
+    "labels": {
+      "A": "permitted_history_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML012",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML013",
+    "labels": {
+      "A": "permitted_history_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML014",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML015",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML016",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML017",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "native_exact_shadow_diagnostic",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML018",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "permitted_history_diagnostic",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML019",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML020",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "permitted_history_diagnostic",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML021",
+    "labels": {
+      "A": "permitted_history_diagnostic",
+      "B": "native_exact_shadow_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML022",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "permitted_history_diagnostic",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML023",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "no_personal_context_ablation",
+      "C": "permitted_history_diagnostic"
+    }
+  },
+  {
+    "case_id": "ML024",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML025",
+    "labels": {
+      "A": "native_exact_shadow_diagnostic",
+      "B": "permitted_history_diagnostic",
+      "C": "no_personal_context_ablation"
+    }
+  },
+  {
+    "case_id": "ML026",
+    "labels": {
+      "A": "no_personal_context_ablation",
+      "B": "permitted_history_diagnostic",
+      "C": "native_exact_shadow_diagnostic"
+    }
+  }
+]

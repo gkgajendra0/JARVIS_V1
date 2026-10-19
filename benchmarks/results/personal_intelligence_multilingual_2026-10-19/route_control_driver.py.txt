@@ -1,0 +1,72 @@
+"""Separate post-cohort route diagnostic. At most two logical calls; no retries."""
+import asyncio
+import hashlib
+import json
+import re
+import time
+from datetime import UTC,datetime
+from pathlib import Path
+from types import SimpleNamespace
+
+HERE=Path(__file__).resolve().parent
+queries=[('en','What is my current coffee preference?'),('bn','এখন আমার কফির পছন্দ কী?')]
+plan={'schema_version':1,'kind':'post_cohort_native_route_control','queries':queries,
+      'native_model':'gemini-3.8-flash','max_logical_calls':2,'sdk_max_retries':0,
+      'http_timeout_ms':30000,'outer_timeout_s':35,'stop_after_first_failure':True,
+      'production_config_changed':False,
+      'scope':'Existing native interpreter, one eligible canonical facet; no memory values; route-health control, not a replay of cohort results.',
+      'sdk_reference':'https://github.com/googleapis/python-genai/blob/main/google/genai/_gaos/google_genai.py'}
+
+async def main():
+    from google import genai
+    from google.genai import types
+    from jarvis.ai_provider import require_provider_api_key,resolve_ai_role_model
+    from jarvis.machine_config import load_machine_settings
+    from jarvis.memory.query_interpreters import GeminiMemoryQueryInterpreter
+    from jarvis.memory.query_plan import MemoryFacetCatalog,MemoryFacetKey
+    settings=load_machine_settings()
+    model=resolve_ai_role_model('gemini','memory_semantic_recall',configured_model=settings['JARVIS_MEMORY_SEMANTIC_RECALL_MODEL'])
+    assert settings['JARVIS_AI_PROVIDER']=='gemini' and model==plan['native_model']
+    # Installed Interactions bridge maps attempts directly to max_retries; zero is one HTTP attempt.
+    client=genai.Client(api_key=require_provider_api_key('gemini'),http_options=types.HttpOptions(
+        timeout=30000,retry_options=types.HttpRetryOptions(attempts=0)))
+    results=[]
+    class Capture:
+        async def create(self,**kwargs):
+            results[-1]['request']=kwargs
+            response=await client.aio.interactions.create(**kwargs)
+            results[-1]['raw_output']=getattr(response,'output_text',None)
+            usage=getattr(response,'usage',None)
+            raw=usage.model_dump() if callable(getattr(usage,'model_dump',None)) else {}
+            results[-1]['usage']={k:v for k,v in raw.items() if isinstance(v,int) and not isinstance(v,bool)}
+            return response
+    interpreter=GeminiMemoryQueryInterpreter(client=SimpleNamespace(aio=SimpleNamespace(interactions=Capture())),model=model)
+    try:
+        for language,query in queries:
+            record={'language':language,'query':query};results.append(record)
+            started=time.monotonic()
+            try:
+                proposal=await asyncio.wait_for(interpreter.interpret(text=query,catalog=MemoryFacetCatalog((MemoryFacetKey('personal','owner','coffee_preference'),))),timeout=35)
+                record.update(status='completed',proposal=proposal.model_dump(mode='json'))
+            except Exception as error:
+                text=str(error)
+                code=getattr(error,'code',getattr(error,'status_code',None))
+                codes=re.findall(r'\b(400|401|403|404|408|429|500|502|503|504)\b',text)
+                record.update(status='failed',error_type=type(error).__name__,http_code=code if isinstance(code,int) else int(codes[0]) if codes else None,
+                    quota_mentioned=bool(re.search(r'quota|resource.exhausted|rate.limit',text,re.I)),
+                    unavailable_mentioned=bool(re.search(r'unavailable|overload',text,re.I)))
+            record['elapsed_ms']=round((time.monotonic()-started)*1000)
+            if record['status']!='completed':break
+    finally:
+        await client.aio.aclose()
+    return {'schema_version':1,'observed_at':datetime.now(UTC).isoformat(),'plan':plan,'results':results,
+            'logical_calls':len(results),'currency_cost':'unobserved','original_cohort_unchanged':True,
+            'limits':'Two route controls at most; do not convert cohort timeouts into language-quality failures or successes.'}
+
+if __name__=='__main__':
+    prior=json.loads((HERE/'multilingual_results.json').read_text(encoding='utf-8'))
+    assert prior['status']=='completed','Run only after the frozen cohort finishes'
+    target=HERE/'multilingual_route_control.json';assert not target.exists(),'Refusing replay/overwrite'
+    (HERE/'multilingual_route_control_plan.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    result=asyncio.run(main());target.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    print(json.dumps({'logical_calls':result['logical_calls'],'results':[{k:v for k,v in row.items() if k not in {'request','raw_output','proposal'}} for row in result['results']]}))

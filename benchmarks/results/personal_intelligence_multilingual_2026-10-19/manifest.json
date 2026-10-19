@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "artifact_identity": "SHA256 of LF-normalized UTF8 files, excluding this manifest",
+  "native_code_base": "ef6fd01b07c19c729ed0c940aa1ba540c6d2a696",
+  "python": "3.11.9",
+  "installed_packages": {
+    "google-genai": "2.22.0",
+    "livekit-agents": "1.8.3"
+  },
+  "artifact_sha256": {
+    "blind_answers.json": "a728825e482b1ade25c24191924cdf36b275a7c966da08488c4c45b9964c9f15",
+    "blind_label_driver.py.txt": "6a6d62f6e671014d45584669a3dcf2d7563663ab47e02213af722a85a5e2c302",
+    "blind_review.json": "155e61cff254019cf8dd6b78f4acc76e7be491e1238897b1b6932f74212b582c",
+    "frozen_plan.json": "7d7c695de0a0beac6736737fd6ccfd26a1e6f43ced9cedc22e7119632927d25c",
+    "label_mapping.json": "33448f908fdc0ca97ed3a946cfd21aded9d14e1f8554793ae79a24555b6211af",
+    "results.json": "ca1a3c0438681fc8fceff32efe9f3f1e4b428821cf31477c0c60d4787bdaa921",
+    "revealed_review.json": "1bec830c6e4f80c4b723cd2cf2d402fb90ac248aa4045d9a0a30e629e99b9f96",
+    "route_control.json": "75e2fe4de6b7f7b8871dae36a6025fe461cd000d239e1748a346bb9781cb1e48",
+    "route_control_driver.py.txt": "45fa07c88f488952832018288fdaac7d12ec5439a66c769ff902575b588f0643",
+    "route_control_plan.json": "78058aa6d8e94973ce7619410918c8c29743799f843bf2430fbc1455db854010",
+    "run_driver.py.txt": "895878717117669c63b5db0a54ebf5a66ce34be7317944e66f16ec620e9c6d48",
+    "summary.json": "de9996612c6c404ce6672a4ee08d860d1025aacc804265a96638e62924ad0be5",
+    "trace_audit.json": "e60dc5d05ca2101a6fa0a731f4f4409dce41d2078659066be5ef46155a3ef204",
+    "trace_audit_driver.py.txt": "5f0073cdb6cd0f8d014e1d3d41260dca40e2ef16dd966b286aeb324bb50fb574"
+  },
+  "fixture_sha256_lf_utf8": {
+    "benchmarks/personal_intelligence_multilingual_v1.json": "b445b99852222ae450294a895bd0dd906df93d8eaba2766c486e0ebbf5d877c0",
+    "benchmarks/personal_intelligence_multilingual_native_seeds_v1.json": "1e057967f40bede72bc61a56450b52ab392c7468a93cfd1f29afef0a905b3f25"
+  },
+  "code_sha256_lf_utf8": {
+    "src/jarvis/memory/personal_context.py": "0c5283f893a3389c4a50368db73cf8747ec4486b5b1489dd0360c1acc0387602",
+    "src/jarvis/memory/query_coordinator.py": "47d2fc1c496b40713c31e84f662f2069d59ac973574a2eb5af3667af757da6e4",
+    "src/jarvis/memory/query_interpreters.py": "a20cf30b0bcc5b41a784a497a9b078b57eac71ab9e252a4ee242be282c3b311d",
+    "src/jarvis/memory/provider_verified_query.py": "c129e8fefad9da92afae3f431b7ebeb009e34de90cf106600c34db8640149990",
+    "src/jarvis/memory/release_guard.py": "78f39bae20c59fd84503b1638c85eb63736388eed664a8f385303ffc5d02b0c2",
+    "tools/research/personal_intelligence_comparison.py": "3dabbf278369ca374efe073dfc692e9f8ed032a078b10c8cdfc906b011495f85"
+  }
+}

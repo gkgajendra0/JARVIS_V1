@@ -58,8 +58,15 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 
 - [Repository and integration audit](research/PERSONAL_INTELLIGENCE_REPOSITORY_AUDIT_2026-10-18.md)
 - [Movie-inspired assistant technology landscape, round 1](research/MOVIE_INSPIRED_PERSONAL_INTELLIGENCE_TECH_LANDSCAPE_2026-10-18.md)
+- [Comparative research and bounded architecture recommendation](research/PERSONAL_INTELLIGENCE_COMPARATIVE_DECISION_2026-10-19.md)
+- [Comparison and shadow-context design](superpowers/specs/2026-10-19-personal-intelligence-comparison-design.md)
+- [Bounded implementation plan](superpowers/plans/2026-10-19-personal-intelligence-comparison.md)
+- [Public fictional regression corpus and protocol](../benchmarks/personal_intelligence_v1.md)
+- [Observed context diagnostic and owner-approved next step](research/PERSONAL_INTELLIGENCE_COMPARISON_RESULTS_2026-10-19.md)
+- [Approved native shadow boundary and fictional probe](research/PERSONAL_CONTEXT_SHADOW_2026-10-19.md)
+- [General multilingual context tests and observed availability limits](research/PERSONAL_INTELLIGENCE_MULTILINGUAL_RESULTS_2026-10-19.md)
 
-These research documents are part of draft PR #285 and remain pending owner review. No research evidence authorizes new memory writes or context injection.
+The October 18 audit and round-1 landscape are on main through PR #286. The October 19 package includes an isolated comparison runner, a completed exploratory context-use diagnostic and the owner-approved read-only native shadow boundary. Its fictional probes do not select a vendor or establish runtime acceptance. No production activation, new memory writes or provider context injection is included.
 
 ## Historical evidence preserved
 

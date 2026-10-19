@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "kind": "post_cohort_native_route_control",
+  "queries": [
+    [
+      "en",
+      "What is my current coffee preference?"
+    ],
+    [
+      "bn",
+      "এখন আমার কফির পছন্দ কী?"
+    ]
+  ],
+  "native_model": "gemini-3.8-flash",
+  "max_logical_calls": 2,
+  "sdk_max_retries": 0,
+  "http_timeout_ms": 30000,
+  "outer_timeout_s": 35,
+  "stop_after_first_failure": true,
+  "production_config_changed": false,
+  "scope": "Existing native interpreter, one eligible canonical facet; no memory values; route-health control, not a replay of cohort results.",
+  "sdk_reference": "https://github.com/googleapis/python-genai/blob/main/google/genai/_gaos/google_genai.py"
+}

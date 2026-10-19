@@ -1,0 +1,403 @@
+{
+  "schema_version": 1,
+  "input_projection_issues": [],
+  "native_outcomes": [
+    {
+      "case_id": "ML001",
+      "language": "en",
+      "domain": "correction",
+      "packet_status": "ready",
+      "evidence_count": 1,
+      "reason_codes": [
+        {
+          "disposition": "release",
+          "reason_code": "provider_verified_unique_eligible_current_exact_fact"
+        }
+      ],
+      "expected_corrected_value_released": true
+    },
+    {
+      "case_id": "ML002",
+      "language": "en",
+      "domain": "verified_forget",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "ambiguous_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML003",
+      "language": "en",
+      "domain": "local_only",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "ambiguous_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML004",
+      "language": "en",
+      "domain": "guest",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": []
+    },
+    {
+      "case_id": "ML005",
+      "language": "en",
+      "domain": "everyday_advice",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "unsupported_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML006",
+      "language": "en",
+      "domain": "irrelevant_context",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "unsupported_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML007",
+      "language": "hi",
+      "domain": "correction",
+      "packet_status": "ready",
+      "evidence_count": 1,
+      "reason_codes": [
+        {
+          "disposition": "release",
+          "reason_code": "provider_verified_unique_eligible_current_exact_fact"
+        }
+      ],
+      "expected_corrected_value_released": true
+    },
+    {
+      "case_id": "ML008",
+      "language": "hi",
+      "domain": "verified_forget",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "ambiguous_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML009",
+      "language": "hi",
+      "domain": "local_only",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": []
+    },
+    {
+      "case_id": "ML010",
+      "language": "hi",
+      "domain": "guest",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": []
+    },
+    {
+      "case_id": "ML011",
+      "language": "hi",
+      "domain": "everyday_advice",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "unsupported_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML012",
+      "language": "hi",
+      "domain": "irrelevant_context",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "unsupported_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML013",
+      "language": "hi-Latn",
+      "domain": "correction",
+      "packet_status": "ready",
+      "evidence_count": 1,
+      "reason_codes": [
+        {
+          "disposition": "release",
+          "reason_code": "provider_verified_unique_eligible_current_exact_fact"
+        }
+      ],
+      "expected_corrected_value_released": true
+    },
+    {
+      "case_id": "ML014",
+      "language": "hi-Latn",
+      "domain": "verified_forget",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "ambiguous_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML015",
+      "language": "hi-Latn",
+      "domain": "local_only",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "ambiguous_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML016",
+      "language": "hi-Latn",
+      "domain": "guest",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": []
+    },
+    {
+      "case_id": "ML017",
+      "language": "hi-Latn",
+      "domain": "everyday_advice",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "unsupported_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML018",
+      "language": "hi-Latn",
+      "domain": "irrelevant_context",
+      "packet_status": "abstain",
+      "evidence_count": 0,
+      "reason_codes": [
+        {
+          "disposition": "abstain",
+          "reason_code": "unsupported_query"
+        }
+      ]
+    },
+    {
+      "case_id": "ML019",
+      "language": "bn",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML020",
+      "language": "ta",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML021",
+      "language": "te",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML022",
+      "language": "mr",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML023",
+      "language": "gu",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML024",
+      "language": "ar",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML025",
+      "language": "es",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    },
+    {
+      "case_id": "ML026",
+      "language": "fr",
+      "domain": "correction",
+      "packet_status": "unavailable",
+      "evidence_count": 0,
+      "reason_codes": [],
+      "expected_corrected_value_released": false
+    }
+  ],
+  "cases": 26,
+  "language_forms": {
+    "en": 6,
+    "hi": 6,
+    "hi-Latn": 6,
+    "bn": 1,
+    "ta": 1,
+    "te": 1,
+    "mr": 1,
+    "gu": 1,
+    "ar": 1,
+    "es": 1,
+    "fr": 1
+  },
+  "answer_calls": 78,
+  "native_logical_calls": 26,
+  "answer_failures": [],
+  "native_noncompleted_logical_calls": [
+    {
+      "case_id": "ML009",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML019",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML020",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML021",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML022",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML023",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML024",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML025",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    },
+    {
+      "case_id": "ML026",
+      "status_at_capture": "started",
+      "error_type": null,
+      "selector_reason_codes": [
+        "deadline_exceeded"
+      ]
+    }
+  ],
+  "native_deadline_cases": [
+    "ML009",
+    "ML019",
+    "ML020",
+    "ML021",
+    "ML022",
+    "ML023",
+    "ML024",
+    "ML025",
+    "ML026"
+  ],
+  "native_coordinator_unavailable": [],
+  "max_serialized_context_utf8_bytes": 624,
+  "limits": [
+    "Request/source checks do not replace semantic review for paraphrased disclosure.",
+    "Old correction quotes in the permitted history arm remain authorized historical inputs, not current canonical releases."
+  ]
+}

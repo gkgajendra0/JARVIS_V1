@@ -1,0 +1,561 @@
+{
+  "diagnostic_results.json": {
+    "kind": "exploratory_context_diagnostic",
+    "plan_sha256": "a9850add2f958b77e02aa6f0da9844dc3f27062b203c25124dfcab2fd4d3450f",
+    "model": "gpt-5.6-sol",
+    "route": "existing_chatgpt_plan",
+    "model_calls_attempted": 1,
+    "runs": [
+      {
+        "case_id": "PI001",
+        "run_id": "75d3ae94a82e4f34a1238bcdc3c110e0",
+        "status": "failed",
+        "operations": [
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI001-e1"
+            ]
+          },
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI001-e2"
+            ]
+          }
+        ],
+        "context_utf8_bytes": 2,
+        "budget_unit": "utf8_bytes_upper_bound",
+        "context": [],
+        "failure_stage": "answer",
+        "error_type": "ChatGPTPlanHTTPError",
+        "cleanup": "completed",
+        "elapsed_ms": 2422.0,
+        "arm": "no_personal_context_ablation"
+      }
+    ],
+    "status": "partial",
+    "unrun_jobs": [
+      {
+        "case_id": "PI001",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI002",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI002",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI003",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI003",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI004",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI004",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI005",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI005",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI006",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI006",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI007",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI007",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI008",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI008",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI009",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI009",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI010",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI010",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI011",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI011",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI012",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI012",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI013",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI013",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI014",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI014",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI015",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI015",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI016",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI016",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI017",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI017",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI018",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI018",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI019",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI019",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI020",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI020",
+        "arm": "permitted_history_diagnostic"
+      }
+    ],
+    "quality_scored": false
+  },
+  "failed_request_diagnostic.json": {
+    "kind": "one_failed_request_diagnostic",
+    "max_calls": 1,
+    "calls_attempted": 1,
+    "original_case_id": "PI001",
+    "input_sha256": "020950b479acd713c50f63e73e556400f97218fa0cdde4dbb00628dfd0a71918",
+    "model": "gpt-5.6-sol",
+    "paid_api_fallback": false,
+    "status": "completed",
+    "answer": {
+      "text": "Tomorrow, try Greek yogurt topped with berries, oats, and a handful of nuts, plus whole-grain toast and coffee or tea. It’s quick, balanced, and filling. If you prefer a hot breakfast, swap the yogurt for scrambled eggs with spinach."
+    },
+    "usage": {
+      "input_tokens": 188,
+      "output_tokens": 117,
+      "total_tokens": 305
+    },
+    "usage_observed": true,
+    "elapsed_ms": 10141
+  },
+  "diagnostic_resumed_results.json": {
+    "kind": "exploratory_context_diagnostic",
+    "plan_sha256": "a9850add2f958b77e02aa6f0da9844dc3f27062b203c25124dfcab2fd4d3450f",
+    "model": "gpt-5.6-sol",
+    "route": "existing_chatgpt_plan",
+    "model_calls_attempted": 4,
+    "runs": [
+      {
+        "case_id": "PI001",
+        "run_id": "0e8709964a054dfdbe479955282ecb20",
+        "status": "answered",
+        "operations": [
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI001-e1"
+            ]
+          },
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI001-e2"
+            ]
+          }
+        ],
+        "context_utf8_bytes": 324,
+        "budget_unit": "utf8_bytes_upper_bound",
+        "context": [
+          {
+            "source_ids": [
+              "PI001-e1"
+            ],
+            "text": "For this fictional trial, you may remember that I eat vegetarian food.",
+            "actor": "owner",
+            "at": "2026-10-01T09:00:00Z"
+          },
+          {
+            "source_ids": [
+              "PI001-e2"
+            ],
+            "text": "I dislike mushrooms and prefer breakfast that takes under fifteen minutes.",
+            "actor": "owner",
+            "at": "2026-10-02T09:00:00Z"
+          }
+        ],
+        "answer": {
+          "text": "Tomorrow, try avocado toast with sliced tomato and a quick yogurt-and-berry bowl. It’s vegetarian, mushroom-free, and should take about 10 minutes to prepare.",
+          "usage": {
+            "input_tokens": 279,
+            "output_tokens": 89,
+            "total_tokens": 368
+          },
+          "usage_observed": true,
+          "model_elapsed_ms": 9547
+        },
+        "cleanup": "completed",
+        "elapsed_ms": 9547.0,
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI002",
+        "run_id": "0be7ebfedffa4cf0badc605e45bf111b",
+        "status": "answered",
+        "operations": [
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI002-e1"
+            ]
+          },
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI002-e2"
+            ]
+          }
+        ],
+        "context_utf8_bytes": 332,
+        "budget_unit": "utf8_bytes_upper_bound",
+        "context": [
+          {
+            "source_ids": [
+              "PI002-e1"
+            ],
+            "text": "Please remember that I usually drink regular coffee in the morning.",
+            "actor": "owner",
+            "at": "2026-10-01T09:00:00Z"
+          },
+          {
+            "source_ids": [
+              "PI002-e2"
+            ],
+            "text": "My preference has changed: from now on I want decaf coffee instead of regular coffee.",
+            "actor": "owner",
+            "at": "2026-10-02T09:00:00Z"
+          }
+        ],
+        "answer": {
+          "text": "You should order decaf coffee, based on your latest preference.",
+          "usage": {
+            "input_tokens": 283,
+            "output_tokens": 30,
+            "total_tokens": 313
+          },
+          "usage_observed": true,
+          "model_elapsed_ms": 12218
+        },
+        "cleanup": "completed",
+        "elapsed_ms": 12218.0,
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI002",
+        "run_id": "775b40bd796549819b0a7a6c86fcb8f2",
+        "status": "answered",
+        "operations": [
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI002-e1"
+            ]
+          },
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI002-e2"
+            ]
+          }
+        ],
+        "context_utf8_bytes": 2,
+        "budget_unit": "utf8_bytes_upper_bound",
+        "context": [],
+        "answer": {
+          "text": "If you want an easy crowd-pleaser, order a flat white: smooth, espresso-forward, and less milky than a latte. For something sweeter, try a vanilla latte; for bold and simple, an Americano; for refreshing, a cold brew. If you tell me your preferred sweetness, milk, temperature, and caffeine level, I can narrow it down.",
+          "usage": {
+            "input_tokens": 188,
+            "output_tokens": 123,
+            "total_tokens": 311
+          },
+          "usage_observed": true,
+          "model_elapsed_ms": 10954
+        },
+        "cleanup": "completed",
+        "elapsed_ms": 10954.0,
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI003",
+        "run_id": "96b3153de6f645e4b603f522be211c8b",
+        "status": "failed",
+        "operations": [
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI003-e1"
+            ]
+          },
+          {
+            "kind": "ingest",
+            "source_ids": [
+              "PI003-e2"
+            ]
+          }
+        ],
+        "context_utf8_bytes": 311,
+        "budget_unit": "utf8_bytes_upper_bound",
+        "context": [
+          {
+            "source_ids": [
+              "PI003-e1"
+            ],
+            "text": "Please remember that I normally want short answers.",
+            "actor": "owner",
+            "at": "2026-10-01T09:00:00Z"
+          },
+          {
+            "source_ids": [
+              "PI003-e2"
+            ],
+            "text": "For this discussion only, give me a detailed explanation of the camera settings.",
+            "actor": "owner",
+            "at": "2026-10-02T09:00:00Z"
+          }
+        ],
+        "failure_stage": "answer",
+        "error_type": "ChatGPTPlanHTTPError",
+        "cleanup": "completed",
+        "elapsed_ms": 2859.0,
+        "arm": "permitted_history_diagnostic"
+      }
+    ],
+    "status": "partial",
+    "unrun_jobs": [
+      {
+        "case_id": "PI003",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI004",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI004",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI005",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI005",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI006",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI006",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI007",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI007",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI008",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI008",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI009",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI009",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI010",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI010",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI011",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI011",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI012",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI012",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI013",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI013",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI014",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI014",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI015",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI015",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI016",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI016",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI017",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI017",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI018",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI018",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI019",
+        "arm": "permitted_history_diagnostic"
+      },
+      {
+        "case_id": "PI019",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI020",
+        "arm": "no_personal_context_ablation"
+      },
+      {
+        "case_id": "PI020",
+        "arm": "permitted_history_diagnostic"
+      }
+    ],
+    "quality_scored": false,
+    "start_index": 1,
+    "max_additional_calls": 39,
+    "provider_error": {
+      "error_type": "ChatGPTPlanHTTPError",
+      "http_status": null,
+      "error_code": "server_is_overloaded"
+    }
+  }
+}

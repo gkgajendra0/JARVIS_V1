@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-10-19T10:14:16.462083+00:00",
+  "scope": "offline_native_shadow_contracts",
+  "data": "disposable fictional SQLite store with production schema and lifecycle",
+  "planner": "controlled exact-facet proposals; no model inference or semantic quality measurement",
+  "source": "native MemoryQueryCoordinator + canonical readers + shadow selector",
+  "model_calls": 0,
+  "network_calls": 0,
+  "production_config_reads": 0,
+  "live_memory_reads": 0,
+  "provider_context_updates": 0,
+  "first_spoken_output_ms": null,
+  "live_voice_timing_measured": false,
+  "results": [
+    {
+      "scenario": "off_by_default",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "f8651484-d240-4b94-8af9-583c24016d29",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "disabled"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "exact_saved_owner_fact",
+      "expected_status": "ready",
+      "passed": true,
+      "turn_id": "83e19765-6795-4341-a192-2ce3718e6d76",
+      "session_id": "fictional-shadow-probe",
+      "status": "ready",
+      "evidence_count": 1,
+      "used_units": 99,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "shadow_only"
+      ],
+      "elapsed_ms": 14.999999999417923
+    },
+    {
+      "scenario": "duplicate_event",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "83e19765-6795-4341-a192-2ce3718e6d76",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "duplicate_turn"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "corrected_fact",
+      "expected_status": "ready",
+      "passed": true,
+      "turn_id": "a3fa9969-1839-487b-8097-3684b776bc0f",
+      "session_id": "fictional-shadow-probe",
+      "status": "ready",
+      "evidence_count": 1,
+      "used_units": 97,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "shadow_only"
+      ],
+      "elapsed_ms": 15.99999999962165,
+      "canonical_value_checked": true
+    },
+    {
+      "scenario": "forgotten_fact",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "94cac95e-73c0-46c7-937d-763dd75a3038",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "native_abstained"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "local_only_to_cloud",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "378f01eb-21a5-438c-ae2a-652a79e2ac9b",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "native_abstained"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "local_only_to_local",
+      "expected_status": "ready",
+      "passed": true,
+      "turn_id": "b91aa1eb-239b-4e3d-b692-938384ee5cca",
+      "session_id": "fictional-shadow-probe",
+      "status": "ready",
+      "evidence_count": 1,
+      "used_units": 99,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "shadow_only"
+      ],
+      "elapsed_ms": 14.999999999417923
+    },
+    {
+      "scenario": "guest_cannot_claim_owner",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "3621ad99-b928-4c51-a55c-0b0a715b111d",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "owner_required"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "advice_not_supported_by_exact_recall",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "dd65815a-ec42-49fe-ba55-892b59e25608",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "native_abstained"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "insufficient_budget",
+      "expected_status": "abstain",
+      "passed": true,
+      "turn_id": "ed0a930a-9cdf-4472-9d51-9b395d044ea7",
+      "session_id": "fictional-shadow-probe",
+      "status": "abstain",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "budget_exceeded"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "late_context_deadline",
+      "expected_status": "unavailable",
+      "passed": true,
+      "turn_id": "36727c41-a48c-44de-95a3-d4b070da416d",
+      "session_id": "fictional-shadow-probe",
+      "status": "unavailable",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "deadline_exceeded"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "reconnect_discards_pending",
+      "expected_status": "stale_turn",
+      "passed": true,
+      "turn_id": "9eeb6142-9a74-49ee-833a-437794f6db05",
+      "session_id": "fictional-shadow-probe",
+      "status": "stale_turn",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "session_invalidated"
+      ],
+      "elapsed_ms": 0.0
+    },
+    {
+      "scenario": "closed_session",
+      "expected_status": "stale_turn",
+      "passed": true,
+      "turn_id": "closed",
+      "session_id": "fictional-shadow-probe",
+      "status": "stale_turn",
+      "evidence_count": 0,
+      "used_units": 0,
+      "budget_unit": "utf8_bytes_with_framing",
+      "reason_codes": [
+        "session_changed"
+      ],
+      "elapsed_ms": 0.0
+    }
+  ],
+  "passed": true,
+  "limits": [
+    "Not the accepted-JARVIS model/answer baseline or a vendor trial.",
+    "No live voice, audio hardware, provider-verifier or persistence/restart acceptance.",
+    "Ready means shadow evidence only; it grants no future provider release or action permission."
+  ]
+}
