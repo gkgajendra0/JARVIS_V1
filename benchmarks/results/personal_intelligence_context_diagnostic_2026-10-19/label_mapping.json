@@ -1,0 +1,82 @@
+{
+  "PI001": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI002": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI003": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI004": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI005": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI006": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI007": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI008": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI009": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI010": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI011": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI012": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI013": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI014": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI015": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI016": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI017": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI018": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  },
+  "PI019": {
+    "A": "no_personal_context_ablation",
+    "B": "permitted_history_diagnostic"
+  },
+  "PI020": {
+    "A": "permitted_history_diagnostic",
+    "B": "no_personal_context_ablation"
+  }
+}

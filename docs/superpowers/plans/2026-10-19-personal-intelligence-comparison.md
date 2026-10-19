@@ -37,6 +37,12 @@ token cost. Task 2 measurements and Task 3 production integration are not comple
 Read the spec and Current Plan before implementation; architecture approval remains
 required for the shadow runtime, not implied by unit-test success.
 
+An [exploratory diagnostic](../../research/PERSONAL_INTELLIGENCE_COMPARISON_RESULTS_2026-10-19.md)
+now supplies single-pass text evidence. Task 2 remains incomplete: the native baseline,
+vendor trials, repeats and independent holdout are still open. Its proposal to build
+the bounded native shadow path first is an owner-reviewable sequence adjustment;
+do not silently treat it as approval or as completed Task 2 evidence.
+
 ### Task 1: A non-oracle fictional comparison harness
 
 **Create:** `tools/research/personal_intelligence_comparison.py`.

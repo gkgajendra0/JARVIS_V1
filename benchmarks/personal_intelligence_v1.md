@@ -2,7 +2,7 @@
 
 **Data:** [personal_intelligence_v1.json](personal_intelligence_v1.json).
 20 fictional cases, 34 events, English/Hindi/Hinglish.
-**State:** public fixtures, an offline contract harness and one separately labelled model transport smoke check; no comparative results.
+**State:** public fixtures, an offline contract harness, a transport smoke check and a separately labelled exploratory context-use diagnostic; no native-runtime or vendor comparison.
 [Design](../docs/superpowers/specs/2026-10-19-personal-intelligence-comparison-design.md)
 and [research](../docs/research/PERSONAL_INTELLIGENCE_COMPARATIVE_DECISION_2026-10-19.md).
 
@@ -103,6 +103,10 @@ JSON is public regression data and can never be described as a blind holdout.
 
 ## Results status
 
+The [observed exploratory diagnostic](../docs/research/PERSONAL_INTELLIGENCE_COMPARISON_RESULTS_2026-10-19.md)
+contains a single-pass no-context/history comparison and its limitations. It does
+not meet this protocol's repeated/held-out native/service selection requirements.
+
 The initial harness is `tools/research/personal_intelligence_comparison.py`.
 Run `.venv/Scripts/python.exe -I tools/research/personal_intelligence_comparison.py`
 from the repository root to validate the corpus. Its CLI makes no model calls,
@@ -127,9 +131,10 @@ completed in 10,234 ms with 250 input / 58 output tokens. This is whole-call lat
 not context-selection latency or time to first speech. It tests neither retrieval
 nor cross-session persistence, has no comparison arm and supplies no quality ranking.
 
-No comparative model or memory-service benchmark is represented by this package. Structural validation checks JSON shape,
+No accepted native-runtime or memory-service selection benchmark is represented by this package. Structural validation checks JSON shape,
 identifiers, chronological order, source references and evaluator-input separation;
 it does not test a memory engine, JARVIS behavior, model quality or live voice.
-The existing model connection and local execution now work; an explicit bounded
-run configuration remains required before comparative trials. Do not add a results table populated with
+The existing model connection and local execution now work. The diagnostic has a
+frozen bounded input plan; final native/service comparisons still require their
+own approved run configuration. Do not add a results table populated with
 estimated or simulated scores.

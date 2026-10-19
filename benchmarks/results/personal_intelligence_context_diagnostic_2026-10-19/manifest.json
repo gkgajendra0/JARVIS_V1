@@ -1,0 +1,92 @@
+{
+  "kind": "exploratory_public_context_diagnostic",
+  "recorded_at_utc": "2026-10-19T06:54:21.090504+00:00",
+  "source_commit": "89e87c369db59352a45ba30dcbbd5220cc6a27ae",
+  "corpus_sha256": "397eab37bc7954f8885994b142d9cf9ebff374ce31b62c3f1d425836236791c9",
+  "route": "existing_chatgpt_plan",
+  "production_configured_model": "gpt-5.6-sol",
+  "cohort_model": "gpt-6.1-sol",
+  "production_settings_changed": false,
+  "paid_api_fallback": false,
+  "native_jarvis_baseline": false,
+  "vendor_comparison": false,
+  "repetitions": 1,
+  "independent_holdout": false,
+  "grader": "agent-authored blinded paired qualitative review; not human acceptance",
+  "preference_counts": {
+    "permitted_history_diagnostic": 14,
+    "tie": 5,
+    "no_personal_context_ablation": 1
+  },
+  "cohort_metrics": {
+    "no_personal_context_ablation": {
+      "answers": 20,
+      "whole_call_p50_ms": 5586.0,
+      "whole_call_p95_ms_nearest_rank": 8968.0,
+      "input_tokens": 3814,
+      "output_tokens": 1323
+    },
+    "permitted_history_diagnostic": {
+      "answers": 20,
+      "whole_call_p50_ms": 5562.0,
+      "whole_call_p95_ms_nearest_rank": 8328.0,
+      "input_tokens": 5236,
+      "output_tokens": 1280
+    }
+  },
+  "all_session_inference_attempts": 47,
+  "all_session_completed_responses": 45,
+  "all_session_failed_provider_attempts": 2,
+  "failed_request_usage": "unobserved",
+  "currency_cost": "unobserved; no API pricing inferred from plan token counts",
+  "hosted_model_revision": "not exposed by current client",
+  "sampling": "server defaults; temperature/seed not configured",
+  "trace_checks": {
+    "planned_released_context_match": true,
+    "guest_and_local_only_and_forget_context_empty": true,
+    "tools_empty": true,
+    "cleanup_completed": true
+  },
+  "known_issue": "permitted-history arm includes irrelevant gardening context for PI019 even though neither answer discloses it",
+  "fixture_ambiguities": [
+    "PI001 vegetarian egg policy is unspecified",
+    "PI016 current Work freshness is not fully specified by dated snapshot"
+  ],
+  "artifacts": {
+    "answers.json": {
+      "sha256": "0cf00683bacc6756e5c379c3072e3c444a3fd5653a1c3136eb2d7d8253284372",
+      "utf8_lf_bytes": 47356
+    },
+    "blind_pairs.json": {
+      "sha256": "a2aef07eebd7b86dca03c421388adff5dc48eea82ed8e151b5101c9dc4786386",
+      "utf8_lf_bytes": 16545
+    },
+    "blind_review.json": {
+      "sha256": "3a7f88d8652ddf78fa4b67851ebfeea3818e29cc666d60b2083adbfc41876540",
+      "utf8_lf_bytes": 9876
+    },
+    "earlier_model_attempts.json": {
+      "sha256": "0744320de02eb97aa978954cd35c7a3e518ac843605ebe97ca0e59524f7d51a6",
+      "utf8_lf_bytes": 14600
+    },
+    "input_plan.json": {
+      "sha256": "1ed008e34ef950288016acf5c6ad01ed26db3bf07ce13916f841869a81dcd805",
+      "utf8_lf_bytes": 28875
+    },
+    "label_mapping.json": {
+      "sha256": "3876f6d958fe9dc285089e5dd1e058bdcb7585e37f886b20f91949f7dd8aeef1",
+      "utf8_lf_bytes": 1983
+    },
+    "revealed_review.json": {
+      "sha256": "127f318741b1d5fc84d71f370ffdd1d3aed8bfb77839c0b130ec50c9e5d94430",
+      "utf8_lf_bytes": 10851
+    },
+    "trace_audit.json": {
+      "sha256": "17193473917b661a3715eae9bb1cff8658ee361d6a0c8ce20eaf5cbb3a2a5159",
+      "utf8_lf_bytes": 1685
+    }
+  },
+  "corpus_digest_basis": "corpus_sha256 identifies raw bytes used on the owner Windows checkout; LF-normalized digest also supplied",
+  "corpus_sha256_normalized_lf": "75eda159b2d08108bd298660129c71c5e4e4babb39a3e727a5ad16c643039f5f",
+  "artifact_digest_basis": "SHA-256 of UTF-8 archive bytes after CRLF-to-LF normalization; compare canonical LF bytes on every platform"
+}

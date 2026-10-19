@@ -2,6 +2,8 @@
 
 **Observed:** 18–19 October 2026. **Status:** source-backed recommendation;
 empirical technology selection pending. No production acceptance or activation.
+An [exploratory context-use diagnostic](PERSONAL_INTELLIGENCE_COMPARISON_RESULTS_2026-10-19.md)
+has since completed; it does not select a memory service or complete the native baseline.
 **Repository baseline:** main `a7ef430d614cf60bd11298ab352a342216594736`.
 This supports [Product](../PRODUCT.md), Section 17 of the existing North Star,
 and [Current Plan](../CURRENT_PLAN.md); it creates no competing product vision.
@@ -194,8 +196,9 @@ structured outputs can contain mistakes; schema conformance is not a truth test.
 [Structured output guidance](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses),
 [existing account-route contract](https://developers.openai.com/siwc/token-sharing-open-source).
 
-**Next decision:** approve the bounded read-only comparison/shadow architecture,
-use the now-working local execution path, then measure existing JARVIS and the simple
-profile/history baseline before adding finalist adapters. Choose an external
+**Next decision:** review the diagnostic's explicit proposal to prioritize a
+bounded native read-only shadow path for incumbent measurements, while leaving
+service-adapter selection open. This is a proposed sequence adjustment requiring
+owner approval, not a claim that the original full comparison is complete. Choose an external
 service only after comparable answer-quality, lifecycle, resource and latency
 evidence. Keep CAP-053 planned until the documented owner-machine gate is met.
