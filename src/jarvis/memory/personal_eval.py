@@ -163,7 +163,7 @@ def load_corpus(
 
 
 def corpus_manifest(cases_path: Path, gold_path: Path) -> dict[str, Any]:
-    cases, gold = load_corpus(cases_path, gold_path)
+    cases, _ = load_corpus(cases_path, gold_path)
     return {
         "suite": "pi1a.v1",
         "cases": len(cases),
