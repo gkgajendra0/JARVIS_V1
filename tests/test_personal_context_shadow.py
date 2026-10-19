@@ -140,6 +140,16 @@ async def test_shadow_current_fact_correction_budget_guest_and_safe_release(
         )
         assert dropped.disposition is ShadowDisposition.NO_MATCH
         assert dropped.dropped_count == 1
+
+        await service.forget_exact(
+            predicate="diet preference",
+            source=_source("forget", Sensitivity.STANDARD),
+        )
+        forgotten = await coordinator.select_context(
+            "What could I eat?", authenticated_owner=True
+        )
+        assert forgotten.disposition is ShadowDisposition.NO_MATCH
+        assert forgotten.facts == ()
     finally:
         await reader.close()
         await writer.close()
