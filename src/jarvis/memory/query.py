@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from .assertions import SemanticAssertionRecord
+from .provenance import MemorySource
 from .storage_rows import (
     SEMANTIC_ASSERTION_COLUMNS_SQL,
     semantic_assertion_record_from_row,
 )
+from .types import AuthorityClass, MemorySourceClass, Sensitivity
 from .worker import SerialConnectionWorker
 
 
@@ -22,6 +26,36 @@ class CanonicalMemoryReader:
 
     def __init__(self, reader: SerialConnectionWorker) -> None:
         self._reader = reader
+
+    async def get_source(self, source_id: str) -> MemorySource | None:
+        """Read immutable canonical provenance; this grants no release permission."""
+        target = _text(source_id, name="source_id")
+
+        def query(connection: object) -> MemorySource | None:
+            row = connection.execute(  # type: ignore[attr-defined]
+                "SELECT source_class, canonical_ref, observed_at, authority_class, "
+                "sensitivity, created_at, source_created_at, evidence_hash, external_ref "
+                "FROM memory_source WHERE source_id = ?",
+                (target,),
+            ).fetchone()
+            if row is None:
+                return None
+            return MemorySource(
+                source_id=target,
+                source_class=MemorySourceClass(row[0]),
+                canonical_ref=str(row[1]),
+                observed_at=datetime.fromisoformat(str(row[2])),
+                authority_class=AuthorityClass(row[3]),
+                sensitivity=Sensitivity(row[4]),
+                created_at=datetime.fromisoformat(str(row[5])),
+                source_created_at=None
+                if row[6] is None
+                else datetime.fromisoformat(str(row[6])),
+                evidence_hash=row[7],
+                external_ref=row[8],
+            )
+
+        return await self._reader.run(query)
 
     async def get_current(
         self,

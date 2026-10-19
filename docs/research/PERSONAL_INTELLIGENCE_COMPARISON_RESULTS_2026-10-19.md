@@ -121,7 +121,7 @@ retention could pass validation. Both are covered, along with readiness after an
 empty-history reset. Adapter-generated prose is not retained in the first runner;
 only resolved original context is recorded. That evidence limitation is deferred.
 
-## Proposed next step requiring the owner's architecture decision
+## Owner-approved next step
 
 Keep JARVIS's existing canonical stores and add the
 [proposed read-only personal-context selector](../superpowers/specs/2026-10-19-personal-intelligence-comparison-design.md)
@@ -130,14 +130,17 @@ verified memory operations from assistant claims, and compose permitted personal
 session and fresh Work/observation context. Shadow records selection outcomes;
 provider apply, natural durable admission and production promotion remain later gates.
 
-**Proposed sequence adjustment:** use that bounded native shadow path to measure
+**Approved sequence adjustment (2026-10-19):** use that bounded native shadow path to measure
 the incumbent workflow before investing in additional memory-service adapters.
 Keep external engines replaceable and unselected. Native baseline measurements,
 repeated/held-out evaluation and real service lifecycle tests remain open; this
 diagnostic does not complete implementation-plan Task 2 or waive its later gates.
 
-This changes the earlier plan's order and requires an explicit owner decision.
+The owner explicitly replied **"Approve read-only test mode"**, approving this
+sequence change and the bounded shadow design.
 The [Current Plan](../CURRENT_PLAN.md) says: “After a separate architecture owner
 approval, implement a read-only shadow personal-context path.” The complete
-comparison evidence and bounded design are now reviewable together. No production
-integration has been implemented under this research PR.
+comparison evidence and bounded design are now reviewable together. The first
+[native shadow boundary and fictional probe](PERSONAL_CONTEXT_SHADOW_2026-10-19.md)
+are implemented on the research branch. No production runtime activation or
+provider-context injection has been implemented under this PR.

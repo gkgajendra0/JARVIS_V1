@@ -114,8 +114,11 @@ Adapter model/provider configuration is an explicit run input, never embedded se
 
 ### Task 3: Approved read-only shadow selector and provider bridge probe
 
-**Gate:** bounded architecture approval plus Task 2 evidence; inspect actual
-provider code on the then-current main before finalizing changes.
+**Gate:** owner explicitly approved read-only test mode and native-before-vendor
+delivery on 2026-10-19. Task 2's initial context diagnostic is available; complete
+native model/answer baselines and service comparisons remain open. This authorized
+sequence adjustment does not waive those later evidence requirements. Inspect
+actual provider code before finalizing changes.
 
 **Create:** `src/jarvis/memory/personal_context.py`.
 **Test:** `tests/test_personal_context.py`.
@@ -129,6 +132,12 @@ a broad change to all these files.
 async `PersonalContextSelector.select`. Existing memory/read/release interfaces
 remain authoritative. Task 2 adapters propose candidates; local source validation
 determines eligibility.
+
+**First slice ruling:** preserve exact native recall with one explicit personal
+owner fact; measure broader advice relevance later. Use `budget_units/used_units`
+with the existing UTF-8 byte estimator, not fictional token counts. Add a disposable
+fictional probe; no production runtime activation. Local accepted-event simulation
+is distinct from real voice timing/owner-machine acceptance.
 
 - [ ] Write/run failing tests for accepted-turn binding, correction/forget racing
   release, expired observations, guest/local-only exclusion, token limits,

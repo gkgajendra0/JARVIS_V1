@@ -63,8 +63,9 @@ class ProviderVerifiedMemoryQueryCoordinator:
 
         try:
             core = await self._coordinator.resolve(query_text, eligibility=policy)
-        except Exception:
-            LOGGER.exception("Memory query core failed; semantic recall is abstaining")
+        except Exception:  # noqa: BLE001 -- Fail closed without private exception text.
+            # Provider exceptions can contain private prompts or memory values.
+            LOGGER.error("Memory query core failed; semantic recall is abstaining")
             return self._abstain("memory_query_core_unavailable")
 
         if not isinstance(core, MemoryEvidenceDecision):
@@ -81,8 +82,8 @@ class ProviderVerifiedMemoryQueryCoordinator:
                 text=query_text,
                 evidence=core.evidence.assertion,
             )
-        except Exception:
-            LOGGER.exception("Provider memory-release verifier failed; abstaining")
+        except Exception:  # noqa: BLE001 -- Fail closed without private exception text.
+            LOGGER.error("Provider memory-release verifier failed; abstaining")
             return self._abstain("provider_memory_release_guard_unavailable")
 
         if not isinstance(judgement, MemoryReleaseJudgement):

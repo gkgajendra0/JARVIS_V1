@@ -1,6 +1,7 @@
 # Personal intelligence comparison and shadow-context design
 
-**Status:** proposed bounded architecture; no runtime activation.
+**Status:** owner-approved read-only test mode; first native shadow boundary
+implemented on the research branch, with no production runtime activation.
 **Baseline:** main `a7ef430d614cf60bd11298ab352a342216594736`.
 **Authority:** [Current Plan](../../CURRENT_PLAN.md), [Quality Gates](../../QUALITY_GATES.md)
 and Section 17 of the existing North Star.
@@ -37,22 +38,46 @@ External inferences without inspectable supporting sources cannot be elevated
 to canonical facts. Conflicting sources may be presented as uncertainty; timestamps
 alone do not make a third-party claim supersede an owner correction.
 
-## Proposed selector interface
+## Approved first selector interface
 
-These are new interfaces, not claims about existing constructors:
+The owner explicitly approved "Approve read-only test mode" on 2026-10-19,
+including measuring native JARVIS before adding memory-service adapters. This
+changes delivery order; it does not mark the remaining comparison work complete.
+
+The first implemented interfaces are:
 
 - `PersonalContextRequest`: accepted `turn_id`, `session_id`, `requester`,
-  `utterance`, `as_of` (timezone-aware), `destination`, `token_budget`,
+  `utterance`, `as_of` (timezone-aware), `destination`, `budget_units`,
   `deadline_ms`.
-- `PersonalContextEvidence`: `source_ids`, `text`, `subject`,
+- `PersonalContextEvidence`: `assertion_id`, `source_ids`, `text`, `subject`,
   `observed_at`, `valid_until` (optional), `sensitivity`,
   `authority_class`, `source_version`. These fields come from canonical
   wrappers, not from an external model declaring its own authority.
 - `PersonalContextPacket`: `turn_id`, `session_id`, `status`
-  (ready/abstain/unavailable/stale_turn), `evidence`, `token_count`,
-  `reason_codes`, `elapsed_ms`.
+  (ready/abstain/unavailable/stale_turn), `evidence`, `used_units`,
+  `budget_unit`, `reason_codes`, `elapsed_ms`.
 - `PersonalContextSelector.select(request) -> PersonalContextPacket`, asynchronous,
   with cancellation. Reads only; no writer, conversation-provider or executor handle.
+
+Budget units reuse `Utf8ByteBudgetEstimator`: UTF-8 bytes plus per-item framing,
+not provider tokens. The native source wraps the existing bounded query coordinator
+and revalidates one exact, admitted personal owner fact through canonical retrieval.
+It additionally requires explicit owner source provenance, rejects open-ended
+time-sensitive observations and renders the structured canonical value. It does
+not add broad advice relevance, Work/session search, a derived profile or a new
+model route. Existing provider verifier configuration remains caller-owned; the
+offline probe uses a controlled planner and makes no model-quality claim.
+
+The selector defaults OFF; an explicit test caller can enable SHADOW. Its trusted
+identity observer must report owner independently of the request. Reconnect/OFF
+advance an epoch and cancel pending reads; packets and private content are not
+cached or logged. `operational_summary()` omits source content and utterances.
+The executable fictional probe is described in the
+[shadow implementation report](../../research/PERSONAL_CONTEXT_SHADOW_2026-10-19.md).
+
+`ready` describes a checked shadow snapshot, not a lasting authorization to use
+that packet later. No production observer/flag or provider-facing bridge is wired
+in this slice. A future consumer must revalidate at its own release boundary.
 
 Reject a packet whose turn/session changed, source was revoked/superseded,
 destination is not permitted, or deadline expired. Empty/failed retrieval cannot
