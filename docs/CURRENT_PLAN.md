@@ -47,10 +47,16 @@ approved by activating read-only context. Start with explicitly permitted facts
 and add carefully governed natural learning after the initial active recall
 release is proven.
 
-**Status:** PRs #288–#291 MERGED; active owner memory -> live voice model
-integration **NOT IMPLEMENTED / NOT ACTIVE**. The owner-machine identity and
-provider acceptance are required; do not claim otherwise. The objective is
-active release, with isolated tests only as a means to validate it.
+**Status:** PRs #288–#291 MERGED. The unmerged
+`feat/personal-intelligence-runtime-20261020` candidate implements the first
+opt-in active owner-memory path in normal `jarvis-voice`, with fresh Windows Hello
+consent for each exact canonical request, current reads and private audio guarding.
+It retires the provider session after one personal answer; subsequent requests
+require a fresh wake. This exact-consent fallback does not claim qualified
+biometric speaker attribution. Protected main remains unchanged; owner acceptance
+is to run the whole local app after software checks, not another isolated demo.
+Automatic learning is still separate. See the
+[runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
 
 The two chats pursued the same native-extension direction. PR #289 supplies
 an offline evaluation contract, #290 a policy-tested read-only foundation,
@@ -84,43 +90,23 @@ self-repair are *supporting* functions, not the primary end-user test.
 
 Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 [Autonomous Self-Management North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md).
-CAP-053 (Personal Intelligence and Automatic Context Use) is **PLANNED**.
+CAP-053 remains **PLANNED for accepted production**; its first active read slice
+is implemented in the unmerged runtime candidate.
 
-### Immediate next work — qualify the approved native architecture
+### Immediate next work — finish normal-app acceptance and promotion
 
-1. Qualify and promote the reviewed repairs to the reproduced runtime,
-   privacy, storage and provider-probe defects recorded in the audit. Local
-   regressions and independent fix review passed; exact-head CI and applicable
-   owner-machine acceptance remain promotion gates. Preserve canonical truth
-   and normal Authority throughout.
-2. Continue from the measured pinned-SDK fictional delivery evidence above.
-   Initial history and tool-result answer use were observed; ordinary user-turn
-   mid-session history updates failed and must not be assumed safe. The current
-   comparison awaits complete SDK runs, including separate automatic tool replies.
-3. Qualify question-to-facet relevance at the existing canonical reader boundary.
-   The new structured selector's offline tests are not live semantic acceptance;
-   restore/verify the configured provider HTTP path before relying on it. The
-   isolated native realtime tool path selected relevant fixture facets in the
-   small advice experiment; it still needs production turn binding and broader
-   quality/negative tests. The PI-1B fixture selector is not a natural-language router.
-   Revalidate corrections, deletion, freshness, source policy and turn binding
-   at consumption; preserve unavailable versus absent memory distinctions.
-   Reuse relevant #287 contract evidence for accepted-turn identity, cancellation,
-   duplicate/reconnect invalidation and bounded outstanding reads without adding
-   a competing coordinator or claiming its text diagnostics prove live voice.
-4. Establish trusted owner/turn attribution before private release. Speaker
-   scores and camera presence remain diagnostics, not authority. Qualify guest,
-   interruption, reconnect and identity-loss behavior on the actual runtime.
-5. Run matched baseline/context answers and independent qualitative review on
-   fixed and held-out everyday scenarios, then restart/outage tests. Include
-   Hindi, Hinglish and English as priority forms plus explicitly reported
-   broader-language coverage. Record actual useful application, errors,
-   whole-turn and first-response latency, token usage and cost; do not infer
-   end-to-end success from corpus validation or retrieved facts.
-6. Implement and qualify the actual APPLY bridge and reversible OFF switch,
-   complete owner-machine acceptance, and enable the approved path only for
-   the authenticated owner. Automatic learning/admission remains a separate
-   later capability; optional local-model training remains deferred.
+1. Complete final automated checks and independent review for the normal-runtime
+   candidate; preserve exact-head evidence and publish the implementation report.
+2. Owner runs the complete local app with --personal-context apply and asks
+   everyday English/Hindi/Hinglish questions, including explicit remember,
+   correction/deletion and restart. No further isolated microphone demo is needed.
+3. Record actual spoken usefulness, semantic relevance/negative cases, language,
+   latency and provider failures honestly. Automated synthetic proposals prove
+   wiring and release policy, not live model quality or billed cost.
+4. Promote reviewed stacked candidates only through protected-main gates and
+   explicit owner approval. Automatic learning and seamless verified-speaker
+   follow-ups remain later work. Do not restart vendor comparisons as a substitute
+   for completing this active native slice.
 
 The native architecture is already owner-approved. Do not ask for that same
 decision again or restart a vendor benchmark as a substitute for integration.

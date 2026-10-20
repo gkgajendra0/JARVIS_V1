@@ -39,8 +39,14 @@ verbatim under [Documentation Index](README.md).
 For the October 20 cross-chat reconciliation, see the
 [audit](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md).
 PRs #288–#291 are merged nonproduction personal-intelligence foundations.
-Actual automatic owner-memory use remains unimplemented/inactive; their merge
-does not promote CAP-053 to DONE. Draft PR #287's separate diagnostic evidence
+Automatic owner-memory use is not accepted/active on protected main; their merge
+does not promote CAP-053 to DONE. The unmerged
+`feat/personal-intelligence-runtime-20261020` candidate now implements opt-in
+automatic context in normal `jarvis-voice`, exact-request Windows Hello consent,
+current canonical reads, private audio guarding and one-answer session retirement.
+See the [runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
+Owner local-app acceptance and protected promotion remain open. Automatic learning
+and seamless verified-speaker follow-ups remain deferred. Draft PR #287's separate diagnostic evidence
 is not part of this main baseline. [Current Plan](CURRENT_PLAN.md) owns the
 active personal-intelligence work; historical engineering next-actions below
 do not supersede it.

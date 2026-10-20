@@ -22,6 +22,13 @@ The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile 
 
 ## Owner-Centered Personal Intelligence Contract
 
+Implementation update (20 October 2026): the unmerged normal-runtime candidate
+implements a first opt-in active read slice with fresh exact-request Windows Hello
+consent and provider-session retirement after each personal answer. This is a
+bounded delivery toward the contract below, not completion of CAP-053 or automatic
+learning. See the [runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
+for behavior, limits and the owner local-app acceptance boundary.
+
 **Owner goal clarified 2026-10-18; desired product behavior, NOT accepted production
 capability.** The distinctive point of building JARVIS is a movie-inspired,
 deeply contextual, dedicated personal assistant—not a generic cloud chatbot

@@ -26,6 +26,34 @@ For exact accepted, deferred and production state, consult
 [Current Architecture](docs/CURRENT_ARCHITECTURE.md). Research/draft PRs do not
 change production reality.
 
+### Personal-context integration candidate (20 October 2026)
+
+Branch `feat/personal-intelligence-runtime-20261020` implements the first active
+personal-context path **inside the normal voice app**. It is an unmerged candidate,
+not a claim that all personal intelligence is complete. See the
+[implementation and acceptance report](docs/research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
+
+From that branch, using the existing configured Windows installation:
+
+```powershell
+.\.venv\Scripts\jarvis-voice.exe --personal-context apply
+```
+
+Ordinary personal questions can use current eligible saved facts without saying
+"search memory". Each personal request requires fresh Windows Hello consent.
+After one personal answer or explicit memory change, JARVIS returns to wake mode;
+wake it again for the next request. This release does not promote speaker-shadow
+scores into identity authority. Remember/correct/forget remain explicit commands.
+Empty memory produces no invented personal profile. English, Hindi and Hinglish
+are priority forms; real spoken usefulness remains owner acceptance.
+
+Use `--personal-context off` to disable this new automatic path. Default is OFF.
+APPLY enables canonical memory and suppresses transcript logging/SDK recording for
+that process without editing the saved machine profile. It reuses the configured
+realtime provider and encrypted canonical database; no extra HTTP selector model
+or new dependency is needed. Existing explicit memory behavior remains available
+under its existing configuration when automatic context is OFF.
+
 ## Setup
 
 Python 3.11 or newer is required. In Windows PowerShell:
