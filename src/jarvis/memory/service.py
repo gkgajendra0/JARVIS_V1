@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from number_parser import parse as parse_number_words
 
 from .assertions import SemanticAssertionDraft, SemanticAssertionRecord
-from .lifecycle import MemoryLifecycleService
+from .lifecycle import MemoryCurrentFacetExistsError, MemoryLifecycleService
 from .provenance import MemorySource
 from .query import CanonicalMemoryReader
 from .types import (
@@ -125,25 +125,22 @@ class MemoryService:
         key = canonical_memory_predicate(predicate)
         text = _text_value(value)
         self._validate_write_policy(source, sensitivity, freshness_class)
-        existing = await self._reader.find_current_exact(
-            subject_scope=_PERSONAL_SCOPE,
-            subject=_OWNER_SUBJECT,
-            predicate=key,
-        )
-        if existing:
+        try:
+            record = await self._lifecycle.create(
+                self._draft(
+                    predicate=key,
+                    value=text,
+                    sensitivity=sensitivity,
+                    freshness_class=freshness_class,
+                ),
+                source,
+                reason_code="explicit_owner_remember",
+                require_absent_current=True,
+            )
+        except MemoryCurrentFacetExistsError as exc:
             raise MemoryAlreadyExistsError(
                 f"current memory already exists for predicate {key!r}; use correction"
-            )
-        record = await self._lifecycle.create(
-            self._draft(
-                predicate=key,
-                value=text,
-                sensitivity=sensitivity,
-                freshness_class=freshness_class,
-            ),
-            source,
-            reason_code="explicit_owner_remember",
-        )
+            ) from exc
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def correct_text(

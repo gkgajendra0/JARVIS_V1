@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import itertools
 import sqlite3
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
 from jarvis.memory.query import CanonicalMemoryReader
 from jarvis.memory.service import (
+    ExplicitMemoryResult,
     MemoryAlreadyExistsError,
     MemoryAmbiguousError,
     MemoryNotFoundError,
@@ -114,6 +116,93 @@ async def test_explicit_remember_inspect_correct_forget_round_trip(
         with pytest.raises(MemoryNotFoundError):
             await service.inspect_exact(predicate="jimny tyre size")
     finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("separate_writers", [False, True])
+async def test_concurrent_remember_keeps_one_current_value_across_facades(
+    tmp_path: Path, separate_writers: bool
+) -> None:
+    path = tmp_path / "concurrent-memory.db"
+    writer, reader = _workers(path)
+    second_writer, unused_reader = _workers(path)
+    barrier = asyncio.Barrier(2)
+
+    class RacingReader(CanonicalMemoryReader):
+        calls = 0
+
+        async def find_current_exact(self, **kwargs):
+            result = await super().find_current_exact(**kwargs)
+            self.calls += 1
+            # Force both legacy pre-checks to finish before either can create.
+            # A transactional implementation need not make those pre-checks.
+            if self.calls <= 2 and not result:
+                await barrier.wait()
+            return result
+
+    canonical_reader = RacingReader(reader)
+    first_lifecycle, _ = _services(writer, reader)
+    second_lifecycle = MemoryLifecycleService(
+        second_writer if separate_writers else writer,
+        clock=lambda: BASE,
+        assertion_id_factory=_ids("second-assertion"),
+        operation_id_factory=_ids("second-operation"),
+    )
+    services = (
+        MemoryService(first_lifecycle, canonical_reader),
+        MemoryService(second_lifecycle, canonical_reader),
+    )
+    try:
+        # Database migration is startup work, not part of concurrent admission.
+        await writer.start()
+        await reader.start()
+        await second_writer.start()
+        results = await asyncio.wait_for(
+            asyncio.gather(
+                *(
+                    service.remember_text(
+                        predicate="home city",
+                        value=value,
+                        source=_source(f"concurrent-{index}"),
+                    )
+                    for index, (service, value) in enumerate(
+                        zip(services, ("Sagar", "Indore"), strict=True)
+                    )
+                ),
+                return_exceptions=True,
+            ),
+            timeout=10,
+        )
+        assert sum(isinstance(item, ExplicitMemoryResult) for item in results) == 1
+        assert (
+            sum(isinstance(item, MemoryAlreadyExistsError) for item in results) == 1
+        ), results
+        inspected = await services[0].inspect_exact(predicate="home city")
+        assert inspected.record.value in {"Sagar", "Indore"}
+        counts = await writer.run(
+            lambda connection: (
+                connection.execute(
+                    "SELECT count(*) FROM semantic_assertion"
+                ).fetchone()[0],
+                connection.execute("SELECT count(*) FROM memory_source").fetchone()[0],
+            )
+        )
+        assert counts == (1, 1)
+        corrected = await services[1].correct_text(
+            predicate="home city", value="Bhopal", source=_source("after-race-correct")
+        )
+        assert corrected.record.value == "Bhopal"
+        assert (
+            await services[0].forget_exact(
+                predicate="home city", source=_source("after-race-forget")
+            )
+            == "home_city"
+        )
+    finally:
+        await unused_reader.close()
+        await second_writer.close()
         await reader.close()
         await writer.close()
 
