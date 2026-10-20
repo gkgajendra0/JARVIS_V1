@@ -40,6 +40,11 @@ class WindowsSessionUnavailable(RuntimeError):
     pass
 
 
+class WindowsSessionContinuity(Protocol):
+    def generation(self) -> int: ...
+    def close(self) -> None: ...
+
+
 class _WtsInfoExLevel1(ctypes.Structure):
     _fields_ = [
         ("session_id", ctypes.c_ulong),
@@ -77,23 +82,39 @@ class WindowsWtsSessionProvider:
     _WTS_ACTIVE = 0
     _WTS_SESSIONSTATE_UNLOCK = 1
 
-    def __init__(self, *, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        event_monitor: WindowsSessionContinuity | None = None,
+    ) -> None:
         self._clock = clock
+        self._event_monitor = event_monitor
 
     def current_session(self) -> AuthoritySession:
         if sys.platform != "win32":
             raise WindowsSessionUnavailable(
                 "Windows WTS is unavailable on this platform"
             )
+        generation = self._event_monitor.generation() if self._event_monitor else 0
         session_id, active_unlocked = self._read_state()
+        if (
+            self._event_monitor is not None
+            and self._event_monitor.generation() != generation
+        ):
+            raise WindowsSessionUnavailable("Windows session changed during state read")
         return AuthoritySession(
             session_id=f"wts:{session_id}",
             windows_session_id=session_id,
             windows_user_sid_hash=None,
             active_unlocked=active_unlocked,
-            generation=0,
+            generation=generation,
             created_at_monotonic=self._clock(),
         )
+
+    def close(self) -> None:
+        if self._event_monitor is not None:
+            self._event_monitor.close()
 
     @classmethod
     def _read_state(cls) -> tuple[int, bool]:

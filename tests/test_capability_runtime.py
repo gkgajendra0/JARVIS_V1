@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from jarvis.authority.session import AuthoritySession
 from jarvis.authority.types import (
     ActionAttributes,
     AuthorityEffect,
@@ -164,7 +165,18 @@ def test_private_read_authority_bridge_escalates_to_strong_owner() -> None:
     )
     canonical = FakeCanonicalAuthority()
     strong = FakeStrongApproval()
-    broker = CapabilityAuthorityBroker()
+    broker = CapabilityAuthorityBroker(
+        session_provider=types.SimpleNamespace(
+            current_session=lambda: AuthoritySession(
+                session_id="wts:1",
+                windows_session_id=1,
+                windows_user_sid_hash=None,
+                active_unlocked=True,
+                generation=0,
+                created_at_monotonic=100.0,
+            ),
+        )
+    )
     broker._authority = canonical
     broker._strong = strong
 

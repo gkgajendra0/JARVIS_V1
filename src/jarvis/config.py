@@ -136,7 +136,7 @@ class JarvisConfig:
     github_workflow_file: str = "code-quality.yml"
     github_expected_ci_app_id: int | None = 15368
     visual_computer_use_enabled: bool = False
-    show_transcript: bool = True
+    show_transcript: bool = False
     startup_greeting_enabled: bool = True
     wake_model_path: str | None = None
     wake_threshold: float = 0.68
@@ -498,7 +498,7 @@ class JarvisConfig:
             visual_computer_use_enabled=_configured_bool(
                 "JARVIS_VISUAL_COMPUTER_USE_ENABLED", False, machine
             ),
-            show_transcript=_configured_bool("JARVIS_SHOW_TRANSCRIPT", True, machine),
+            show_transcript=_configured_bool("JARVIS_SHOW_TRANSCRIPT", False, machine),
             startup_greeting_enabled=_configured_bool(
                 "JARVIS_STARTUP_GREETING", True, machine
             ),

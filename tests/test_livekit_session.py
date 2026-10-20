@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -16,6 +17,7 @@ from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.logging_config import configure_logging
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import INSTRUCTIONS
 from jarvis.voice.livekit_session import (
@@ -94,6 +96,144 @@ def test_committed_items_write_once_and_preserve_repeated_text() -> None:
     assert all(turn.turn_id != turn.external_item_id for turn in turns)
     assert turns[0].turn_id != turns[1].turn_id
     assert bridge.live_context.recent_turns == turns
+
+
+@pytest.mark.parametrize("advance_activity", [True, False])
+def test_identical_transcript_first_utterances_keep_distinct_item_identities(
+    advance_activity,
+):
+    livekit, bridge = active_bridge()
+    observed = []
+    bridge.add_accepted_turn_observer(observed.append)
+    for item_id in ("one", "two"):
+        if advance_activity:
+            bridge.conversation.begin_user_activity()
+        transcript = UserInputTranscribedEvent(
+            transcript="Open calculator",
+            is_final=True,
+            item_id=item_id,
+        )
+        committed = ConversationItemAddedEvent(
+            item=message(item_id, "user", "Open calculator")
+        )
+        for event, value in (
+            ("user_input_transcribed", transcript),
+            ("user_input_transcribed", transcript),
+            ("conversation_item_added", committed),
+            ("conversation_item_added", committed),
+        ):
+            livekit.emit(event, value)
+
+    assert [turn.external_item_id for turn in bridge.conversation.turns] == [
+        "one",
+        "two",
+    ]
+    assert [turn.user_utterance_generation for turn in observed] == [1, 2]
+    assert bridge.live_context.recent_turns == bridge.conversation.turns
+
+
+def test_identical_transcripts_without_item_ids_keep_distinct_activity_epochs():
+    livekit, bridge = active_bridge()
+    for index, item_id in enumerate(("one", "two"), start=1):
+        bridge.conversation.begin_user_activity()
+        transcript = UserInputTranscribedEvent(
+            transcript="Open calculator", is_final=True
+        )
+        livekit.emit("user_input_transcribed", transcript)
+        livekit.emit("user_input_transcribed", transcript)
+        assert bridge.conversation.user_utterance_generation == index
+        livekit.emit(
+            "conversation_item_added",
+            ConversationItemAddedEvent(
+                item=message(item_id, "user", "Open calculator")
+            ),
+        )
+    assert [turn.user_activity_epoch for turn in bridge.conversation.turns] == [1, 2]
+
+
+def test_unrelated_committed_item_cannot_consume_same_text_pending_transcript():
+    livekit, bridge = active_bridge()
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(transcript="repeat", is_final=True, item_id="one"),
+    )
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("two", "user", "repeat")),
+    )
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("one", "user", "repeat")),
+    )
+    assert [turn.external_item_id for turn in bridge.conversation.turns] == [
+        "one",
+        "two",
+    ]
+
+
+def test_old_unidentified_transcript_cannot_consume_new_activity_committed_turn():
+    livekit, bridge = active_bridge()
+    bridge.conversation.begin_user_activity()
+    livekit.emit(
+        "user_input_transcribed",
+        UserInputTranscribedEvent(transcript="repeat", is_final=True),
+    )
+    bridge.conversation.begin_user_activity()
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(item=message("new-utterance", "user", "repeat")),
+    )
+    assert [turn.user_activity_epoch for turn in bridge.conversation.turns] == [1, 2]
+
+
+@pytest.mark.parametrize("configuration", ["constructor", "environment"])
+def test_default_voice_logs_keep_operations_without_retaining_transcripts(
+    tmp_path, monkeypatch, configuration
+):
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(tmp_path / "missing-machine.json"))
+    monkeypatch.delenv("JARVIS_SHOW_TRANSCRIPT", raising=False)
+    config = (
+        JarvisConfig()
+        if configuration == "constructor"
+        else JarvisConfig.from_environment()
+    )
+    root = logging.getLogger()
+    previous_handlers = list(root.handlers)
+    previous_level = root.level
+    target = tmp_path / "synthetic.jsonl"
+    try:
+        configure_logging("INFO", jsonl_path=target)
+        livekit, bridge = active_bridge()
+        bridge._show_transcript = config.show_transcript
+        livekit.emit(
+            "conversation_item_added",
+            ConversationItemAddedEvent(
+                item=message(
+                    "one", "user", "Fictional private favorite food is plum waffles"
+                )
+            ),
+        )
+        livekit.emit(
+            "conversation_item_added",
+            ConversationItemAddedEvent(
+                item=message(
+                    "reply", "assistant", "Fictional assistant private response"
+                )
+            ),
+        )
+        logging.getLogger("jarvis.test").info("operational health is available")
+        for handler in root.handlers:
+            handler.flush()
+        content = target.read_text(encoding="utf-8")
+        assert "operational health is available" in content
+        assert "plum waffles" not in content
+        assert "assistant private response" not in content
+        assert len(bridge.conversation.turns) == 2
+    finally:
+        for handler in root.handlers:
+            handler.close()
+        root.handlers = previous_handlers
+        root.setLevel(previous_level)
 
 
 def test_final_empty_transcript_does_not_create_canonical_user_turn() -> None:

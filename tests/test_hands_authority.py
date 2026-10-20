@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 import types
+from dataclasses import replace
+
+import pytest
 
 from jarvis.authority.approval import ApprovalService
+from jarvis.authority.audit import InMemoryAuditEventStore
+from jarvis.authority.permit import PermitRegistry, PermitStatus
+from jarvis.authority.policy import PolicyDecision, hard_floor_for
+from jarvis.authority.risk import RiskClassifier
+from jarvis.authority.service import AuthorityService
+from jarvis.authority.session import AuthoritySession, WindowsSessionUnavailable
 from jarvis.authority.types import (
     ActionAttributes,
     ActionOrigin,
@@ -11,7 +20,10 @@ from jarvis.authority.types import (
     AuthorityEffect,
     TrustTier,
 )
-from jarvis.capabilities.authority_bridge import CapabilityAuthorityBroker
+from jarvis.capabilities.authority_bridge import (
+    CapabilityAuthorityBroker,
+    CapabilityAuthorizationError,
+)
 from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import CapabilityRequest
 
@@ -20,6 +32,10 @@ class FakeCanonicalAuthority:
     def __init__(self) -> None:
         self.evaluations: list[tuple[object, object, str | None]] = []
         self.consumed: list[tuple[str, object, object]] = []
+        self.invalidated: list[str] = []
+
+    def invalidate_session(self, session_id):
+        self.invalidated.append(session_id)
 
     def evaluate(self, *, proposal, context, approval_id=None):
         self.evaluations.append((proposal, context, approval_id))
@@ -45,6 +61,36 @@ class FakeStrongApproval:
             approval=types.SimpleNamespace(approval_id="hands-approval"),
             verification=types.SimpleNamespace(reason_codes=()),
         )
+
+
+class MutableWindowsSessionProvider:
+    def __init__(self) -> None:
+        self.session = AuthoritySession(
+            session_id="wts:1",
+            windows_session_id=1,
+            windows_user_sid_hash="owner-sid",
+            active_unlocked=True,
+            generation=0,
+            created_at_monotonic=100.0,
+        )
+        self.unavailable = False
+
+    def current_session(self):
+        if self.unavailable:
+            raise WindowsSessionUnavailable("controlled WTS failure")
+        return self.session
+
+    def transition(self, change):
+        if change == "lock":
+            self.session = replace(self.session, active_unlocked=False)
+        elif change == "switch":
+            self.session = replace(
+                self.session, windows_session_id=2, session_id="wts:2"
+            )
+        elif change == "user_change":
+            self.session = replace(self.session, windows_user_sid_hash="different-sid")
+        else:
+            self.unavailable = True
 
 
 def prepared(
@@ -86,6 +132,7 @@ def configured_broker(
     broker = CapabilityAuthorityBroker(
         trusted_session_ttl_seconds=ttl_seconds,
         clock=clock,
+        session_provider=MutableWindowsSessionProvider(),
     )
     broker._authority = canonical
     broker._strong = strong
@@ -244,3 +291,129 @@ def test_close_clears_trusted_session() -> None:
 
     assert len(strong.calls) == 2
     assert canonical.evaluations[0][1].trust_tier is TrustTier.VERIFIED_OWNER
+
+
+@pytest.mark.parametrize("change", ["lock", "switch", "user_change", "unavailable"])
+def test_windows_security_transition_denies_cached_trust_and_requires_new_hello(change):
+    broker, canonical, strong, _ = configured_broker()
+    broker.authorize(prepared(ActionAttributes(reversible_local_change=True)))
+    provider = broker._session_provider
+    provider.transition(change)
+
+    with pytest.raises(CapabilityAuthorizationError, match="Windows session"):
+        broker.authorize(prepared(ActionAttributes(private_read=True)))
+
+    assert canonical.invalidated == ["hands-session"]
+    provider.session = replace(provider.session, active_unlocked=True)
+    provider.unavailable = False
+    broker.authorize(prepared(ActionAttributes(private_read=True)))
+    assert len(strong.calls) == 2
+
+
+@pytest.mark.parametrize("change", ["lock", "switch", "unavailable"])
+def test_windows_transition_after_authorization_blocks_consumption_permanently(change):
+    broker, canonical, _, _ = configured_broker()
+    authorized = broker.authorize(
+        prepared(ActionAttributes(reversible_local_change=True))
+    )
+    provider = broker._session_provider
+    original = provider.session
+    provider.transition(change)
+
+    with pytest.raises(CapabilityAuthorizationError, match="Windows session"):
+        broker.consume(authorized)
+    assert canonical.consumed == []
+
+    provider.session = original
+    provider.unavailable = False
+    with pytest.raises(CapabilityAuthorizationError):
+        broker.consume(authorized)
+    assert canonical.consumed == []
+
+
+@pytest.mark.parametrize("change", ["lock", "switch", "unavailable"])
+def test_windows_transition_during_hello_cannot_create_authorization(change):
+    broker, canonical, strong, _ = configured_broker()
+    verify = strong.verify_and_resolve
+
+    def transition_during_verification(**kwargs):
+        outcome = verify(**kwargs)
+        broker._session_provider.transition(change)
+        return outcome
+
+    strong.verify_and_resolve = transition_during_verification
+    with pytest.raises(CapabilityAuthorizationError, match="Windows session"):
+        broker.authorize(prepared(ActionAttributes(reversible_local_change=True)))
+    assert canonical.evaluations == []
+
+
+def test_initial_unavailable_windows_session_denies_even_routine_action():
+    broker, canonical, strong, _ = configured_broker()
+    broker._session_provider.unavailable = True
+    with pytest.raises(CapabilityAuthorizationError, match="Windows session"):
+        broker.authorize(prepared(ActionAttributes()))
+    assert canonical.evaluations == []
+    assert strong.calls == []
+
+
+@pytest.mark.parametrize("change", ["lock", "switch", "unavailable"])
+def test_windows_transition_invalidates_real_pending_permits_across_voice_sessions(
+    change,
+):
+    broker, _, _, approvals = configured_broker()
+    permits = PermitRegistry()
+    policy = types.SimpleNamespace(
+        evaluate=lambda request: PolicyDecision(
+            effect=AuthorityEffect.ALLOW,
+            requirements=hard_floor_for(request.risk_class),
+            reason_codes=(),
+            policy_version="offline-test",
+        )
+    )
+    broker._authority = AuthorityService(
+        risk_classifier=RiskClassifier(),
+        policy_engine=policy,
+        approvals=approvals,
+        audit_store=InMemoryAuditEventStore(),
+        permits=permits,
+    )
+    first = broker.authorize(prepared(ActionAttributes(), session_id="first-voice"))
+    second = broker.authorize(prepared(ActionAttributes(), session_id="second-voice"))
+    broker._session_provider.transition(change)
+    with pytest.raises(CapabilityAuthorizationError):
+        broker.consume(first)
+    with permits.lock:
+        assert permits.get_locked(first.permit_id).status is PermitStatus.INVALIDATED
+        assert permits.get_locked(second.permit_id).status is PermitStatus.INVALIDATED
+
+
+def test_trusted_session_expiring_after_approval_cannot_be_consumed():
+    now = [100.0]
+    broker, canonical, _, _ = configured_broker(ttl_seconds=30.0, clock=lambda: now[0])
+    broker.authorize(prepared(ActionAttributes(reversible_local_change=True)))
+    now[0] = 129.0
+    authorized = broker.authorize(prepared(ActionAttributes(private_read=True)))
+    now[0] = 131.0
+    with pytest.raises(CapabilityAuthorizationError, match="trust expired"):
+        broker.consume(authorized)
+    assert canonical.consumed == []
+
+
+def test_lock_unlock_between_authorizations_invalidates_cached_trust_and_old_permit():
+    broker, canonical, strong, _ = configured_broker()
+    original_permit = broker.authorize(
+        prepared(ActionAttributes(reversible_local_change=True))
+    )
+    provider = broker._session_provider
+    # The native event listener preserves these two transitions even though
+    # both boundary snapshots see the same unlocked Windows session.
+    provider.session = replace(
+        provider.session, generation=provider.session.generation + 2
+    )
+    with pytest.raises(CapabilityAuthorizationError, match="Windows session changed"):
+        broker.authorize(prepared(ActionAttributes(private_read=True)))
+    broker.authorize(prepared(ActionAttributes(private_read=True)))
+    assert len(strong.calls) == 2
+    with pytest.raises(CapabilityAuthorizationError, match="invalidated"):
+        broker.consume(original_permit)
+    assert canonical.consumed == []
