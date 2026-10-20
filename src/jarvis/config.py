@@ -154,6 +154,7 @@ class JarvisConfig:
     max_utterance_seconds: float = 15.0
     live_context_recent_turns: int = 24
     memory_enabled: bool = False
+    personal_context_mode: str = "off"
     memory_candidate_extraction_enabled: bool = False
     memory_candidate_extraction_model: str | None = None
     memory_semantic_recall_model: str | None = None
@@ -173,6 +174,11 @@ class JarvisConfig:
     pocket3_resend_cooldown_seconds: float = 1.0
 
     def __post_init__(self) -> None:
+        if self.personal_context_mode not in {"off", "apply"}:
+            raise ValueError("personal_context_mode must be off or apply")
+        if self.personal_context_mode == "apply":
+            object.__setattr__(self, "memory_enabled", True)
+            object.__setattr__(self, "show_transcript", False)
         normalized = str(self.log_level).strip().upper()
         if normalized not in VALID_LOG_LEVELS:
             raise ValueError(f"Unsupported JARVIS_LOG_LEVEL: {self.log_level!r}")
@@ -540,6 +546,9 @@ class JarvisConfig:
                 "JARVIS_LIVE_CONTEXT_RECENT_TURNS", 24, machine
             ),
             memory_enabled=_configured_bool("JARVIS_MEMORY_ENABLED", False, machine),
+            personal_context_mode=_configured_required_text(
+                "JARVIS_PERSONAL_CONTEXT_MODE", "off", machine
+            ),
             memory_candidate_extraction_enabled=_configured_bool(
                 "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", False, machine
             ),

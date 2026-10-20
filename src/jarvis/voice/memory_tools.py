@@ -90,6 +90,7 @@ class MemoryAgentTools:
         *,
         semantic_query_coordinator: ProviderVerifiedMemoryQueryCoordinator
         | None = None,
+        personal_context=None,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
@@ -104,6 +105,7 @@ class MemoryAgentTools:
         self._service = service
         self._conversation = conversation
         self._semantic_query_coordinator = semantic_query_coordinator
+        self._personal_context = personal_context
 
     @property
     def tools(self) -> list:
@@ -111,9 +113,13 @@ class MemoryAgentTools:
             self.remember_memory,
             self.correct_memory,
             self.forget_memory,
-            self.inspect_memory,
         ]
-        if self._semantic_query_coordinator is not None:
+        if self._personal_context is None:
+            tools.append(self.inspect_memory)
+        if (
+            self._semantic_query_coordinator is not None
+            and self._personal_context is None
+        ):
             tools.append(self.recall_memory)
         return tools
 
@@ -132,6 +138,10 @@ class MemoryAgentTools:
         _require_grounded_value(turn, value)
         resolved_sensitivity = parse_memory_sensitivity(sensitivity)
         reject_prohibited_secret(predicate=predicate, value=value)
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation(
+                "remember", predicate, value
+            )
         source = build_owner_explicit_source(
             conversation=self._conversation,
             turn=turn,
@@ -142,7 +152,10 @@ class MemoryAgentTools:
             value=value,
             source=source,
             sensitivity=resolved_sensitivity,
+            **self._commit_guard(),
         )
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
         LOGGER.info(
             "Explicit memory remember committed | predicate=%s | memory_id=%s | "
             "sensitivity=%s",
@@ -171,6 +184,8 @@ class MemoryAgentTools:
         _require_grounded_target(turn, predicate)
         _require_grounded_value(turn, value)
         reject_prohibited_secret(predicate=predicate, value=value)
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation("correct", predicate, value)
         current = await self._service.inspect_exact(predicate=predicate)
         source = build_owner_explicit_source(
             conversation=self._conversation,
@@ -181,7 +196,10 @@ class MemoryAgentTools:
             predicate=predicate,
             value=value,
             source=source,
+            **self._commit_guard(),
         )
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
         LOGGER.info(
             "Explicit memory correction committed | predicate=%s | memory_id=%s | "
             "sensitivity=%s",
@@ -203,6 +221,8 @@ class MemoryAgentTools:
             ExplicitMemoryAction.FORGET,
         )
         _require_grounded_target(turn, predicate)
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation("forget", predicate)
         current = await self._service.inspect_exact(predicate=predicate)
         source = build_owner_explicit_source(
             conversation=self._conversation,
@@ -212,7 +232,10 @@ class MemoryAgentTools:
         forgotten_predicate = await self._service.forget_exact(
             predicate=predicate,
             source=source,
+            **self._commit_guard(),
         )
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
         LOGGER.info(
             "Explicit memory forget committed | predicate=%s",
             forgotten_predicate,
@@ -222,6 +245,13 @@ class MemoryAgentTools:
             "operation": "forget",
             "predicate": forgotten_predicate,
         }
+
+    def _commit_guard(self):
+        return (
+            {"commit_guard": self._personal_context.validate_mutation_commit}
+            if self._personal_context is not None
+            else {}
+        )
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -239,6 +269,10 @@ class MemoryAgentTools:
         return turn
 
     async def semantic_recall(self) -> dict[str, object]:
+        if self._personal_context is not None:
+            raise MemoryToolGroundingError(
+                "Use the consent-bound personal context tools"
+            )
         coordinator = self._semantic_query_coordinator
         if coordinator is None:
             raise MemoryToolGroundingError(
@@ -282,6 +316,10 @@ class MemoryAgentTools:
         }
 
     async def inspect(self, *, predicate: str) -> dict[str, object]:
+        if self._personal_context is not None:
+            raise MemoryToolGroundingError(
+                "Use the consent-bound personal context tools"
+            )
         turn = authorize_explicit_memory_action(
             self._conversation,
             ExplicitMemoryAction.INSPECT,

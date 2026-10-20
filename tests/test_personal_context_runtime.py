@@ -270,3 +270,55 @@ async def test_private_history_retires_after_completed_audio(personal):
     assert retired
     assert not await session.allow_audio()
     output.detach()
+
+
+@pytest.mark.asyncio
+async def test_output_detach_does_not_leak_shared_device_listeners(personal):
+    session, *_ = personal
+    sink = Sink()
+    before = {name: len(callbacks) for name, callbacks in sink._events.items()}
+    output = PersonalContextAudioOutput(sink, session)
+    output.detach()
+    assert {
+        name: len(callbacks) for name, callbacks in sink._events.items() if callbacks
+    } == before
+
+
+@pytest.mark.asyncio
+async def test_external_correction_stops_already_released_audio(personal):
+    session, service, _, _, retired = personal
+    catalog = await session.catalog()
+    await session.read(catalog["catalog_id"], [0])
+    await service.correct_text(
+        predicate="diet preference", value="vegan", source=source("change")
+    )
+    assert not await session.allow_audio()
+    assert retired
+
+
+@pytest.mark.asyncio
+async def test_catalog_and_total_fact_budgets(personal):
+    session, service, _, _, _ = personal
+    for index in range(130):
+        await service.remember_text(
+            predicate=f"facet {index:03}",
+            value="fictional",
+            source=source(f"facet-{index}"),
+        )
+    catalog = await session.catalog()
+    assert len(catalog["facets"]) == 128 and catalog["truncated"] is True
+    first = await session.read(catalog["catalog_id"], [0, 1, 2, 3])
+    assert first["status"] == "selected" and len(first["facts"]) == 4
+    assert (await session.read(catalog["catalog_id"], [4]))[
+        "status"
+    ] == "invalid_selection"
+
+
+@pytest.mark.asyncio
+async def test_consent_timeout_retires_before_late_result(personal):
+    session, _, _, authority, retired = personal
+    authority.wait.clear()
+    session._consent_timeout = 0.01
+    assert (await session.catalog())["status"] == "denied"
+    authority.wait.set()
+    assert retired and not await session.allow_audio()

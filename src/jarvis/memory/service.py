@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from number_parser import parse as parse_number_words
@@ -121,6 +122,7 @@ class MemoryService:
         source: MemorySource,
         sensitivity: Sensitivity = Sensitivity.STANDARD,
         freshness_class: FreshnessClass = FreshnessClass.CHANGEABLE,
+        commit_guard: Callable[[], None] | None = None,
     ) -> ExplicitMemoryResult:
         key = canonical_memory_predicate(predicate)
         text = _text_value(value)
@@ -136,6 +138,7 @@ class MemoryService:
                 source,
                 reason_code="explicit_owner_remember",
                 require_absent_current=True,
+                commit_guard=commit_guard,
             )
         except MemoryCurrentFacetExistsError as exc:
             raise MemoryAlreadyExistsError(
@@ -151,6 +154,7 @@ class MemoryService:
         source: MemorySource,
         sensitivity: Sensitivity | None = None,
         freshness_class: FreshnessClass | None = None,
+        commit_guard: Callable[[], None] | None = None,
     ) -> ExplicitMemoryResult:
         key = canonical_memory_predicate(predicate)
         text = _text_value(value)
@@ -168,6 +172,7 @@ class MemoryService:
             ),
             source,
             reason_code="explicit_owner_correction",
+            commit_guard=commit_guard,
         )
         return ExplicitMemoryResult(predicate=key, record=record)
 
@@ -176,6 +181,7 @@ class MemoryService:
         *,
         predicate: str,
         source: MemorySource,
+        commit_guard: Callable[[], None] | None = None,
     ) -> str:
         key = canonical_memory_predicate(predicate)
         current = await self._require_one_current(key)
@@ -184,6 +190,7 @@ class MemoryService:
             current.assertion_id,
             source,
             reason_code="explicit_owner_request",
+            commit_guard=commit_guard,
         )
         if not forgotten:
             raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")

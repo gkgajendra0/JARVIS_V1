@@ -59,6 +59,7 @@ class PersonalContextSession:
         self._released = {}
         self._closed = False
         self._busy = False
+        self._consent_timeout = 65
         self._protected = False
         self._audio_started = False
         self._played = False
@@ -134,7 +135,7 @@ class PersonalContextSession:
                     question=turn.text,
                     operation=operation,
                 ),
-                timeout=65,
+                timeout=self._consent_timeout,
             )
             if not self._same(binding):
                 return False
@@ -148,6 +149,9 @@ class PersonalContextSession:
         except asyncio.CancelledError:
             self.close()
             raise
+        except TimeoutError:
+            self.close()
+            return False
         except Exception:  # noqa: BLE001 - no private diagnostic in provider results
             return False
         finally:
@@ -299,6 +303,18 @@ class PersonalContextSession:
         self._released.clear()
         self._catalog_id = None
         self._protect()
+
+    def validate_mutation_commit(self):
+        """Called in the serial writer transaction, including immediately before commit."""
+        if (
+            not self._same(self._binding)
+            or self._permit is None
+            or self._operation == "read"
+        ):
+            raise PermissionError("The approved memory request is no longer current")
+        self._authority.validate_personal_context(self._permit)
+        if not self._same(self._binding):
+            raise PermissionError("The approved memory request is no longer current")
 
     def observe_turn(self, turn):
         if turn.role is ConversationRole.USER:
