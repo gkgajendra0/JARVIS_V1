@@ -189,6 +189,14 @@ grounded request
 
 Provider/model/UI output cannot self-authorize or lower deterministic risk.
 
+The Windows capability broker binds authorization and permit consumption to
+current OS session evidence and a healthy hidden WTS event monitor. The monitor
+retains a security epoch across lock/unlock and session transitions between
+application checks; loss of continuity invalidates cached trust and pending
+approvals/permits. Passive listener startup/snapshot/close and synthetic events
+are component evidence; physical transition and Hello/T2 experience still need
+the owner-machine qualification described in the reconciliation audit.
+
 Power/session actions have an additional fail-closed semantic boundary:
 
 - exact evidence must come from the latest accepted canonical USER turn;
@@ -207,6 +215,18 @@ Owner-machine acceptance proved that an explicit `Restart my computer` request r
 Step 4 keeps separate owners for canonical conversation, live context and durable memory. SQLCipher/SQLite is canonical storage; FTS5 and Qwen-derived retrieval are rebuildable indexes over eligible records. Provider-assisted `recall_memory` is explicit and fail-closed.
 
 The strict independent 4.5D verifier remains deferred. Phase 4.5E.1 shadow context retrieval had a functional owner-machine pass but was **not** fully production-accepted because its resource-profile gate was deferred. Phase 4.5E.2 rejected the Qwen utility/steering influence gate. Automatic 4.5E provider-context memory injection remains disabled.
+
+The native personal-intelligence direction was approved through PR #288.
+PR #289 adds twenty fictional evaluation cases, separate reviewer gold and
+annotation validation; actual model-answer evaluation remains `NOT_RUN`.
+PR #290 adds an isolated canonical-reader policy boundary with an injected
+fixture selector, not a production natural-language relevance router.
+PR #291 adds an explicit-opt-in fictional LiveKit/Gemini delivery probe.
+These are nonproduction foundations on `main`, not an activated owner-memory
+path. No production voice entrypoint invokes the shadow coordinator. Trusted
+owner-turn attribution, measured useful answer generation, delivery qualification
+and APPLY wiring remain outstanding. See the [reconciliation audit](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md)
+and [Current Plan](CURRENT_PLAN.md).
 
 Step 5 classifies terminal provider failures in deterministic JARVIS code and can speak a local truthful status before closing the failed session. Full local/offline conversation and automatic provider failover are not claimed.
 
@@ -330,10 +350,11 @@ Owner-machine acceptance covers crash/hang recovery, launcher-only death, interp
 
 Automatic Windows logon startup was observed. When Windows had not yet enumerated the configured Pocket 3 microphone, preflight failed closed rather than selecting another input. Once the configured device was available, the same production path passed preflight, initialized audio/vision and reached native owner-tracking lock.
 
-This architecture is deliberately bounded. EngineeringKnowledge and the Phase-4
-Research + Diagnostic Model Router are accepted production foundations, but
-AI-assisted unknown-incident source repair, autonomous dependency/secret acquisition,
-governed promotion, capability acquisition and self-evolution are later phases.
+This deterministic repair foundation remains bounded. Later accepted Phases
+5–10A add governed substrate, source candidates, promotion, package/acquisition
+and learning/control-plane foundations; their acceptance does not turn every
+callable component into an automatically active production loop. Broad
+self-evolution and automatic authority/policy expansion are not accepted.
 
 The complete forward program is defined in
 `docs/SELF_REPAIR_AND_EVOLUTION_MASTER_PLAN.md`.
@@ -468,17 +489,29 @@ Not currently claimed as solved:
 - full offline conversation or automatic provider failover;
 - full future Steps 9, 10 and 12 beyond accepted Hands foundations;
 - calendar/email communication, proactive/event-driven automation, plugin lifecycle and world-awareness/HUD end state;
-- AI-assisted diagnostics, automatic promotion from EngineeringKnowledge into executable RepairPolicy, sandboxed source repair, Engineering Curriculum and governed self-improvement beyond the accepted deterministic Self-Repair + EngineeringKnowledge foundations.
+- automatic promotion from EngineeringKnowledge into executable RepairPolicy,
+  Engineering Curriculum and broad governed self-improvement. Phase-6 bounded
+  sandboxed source-candidate repair is accepted; unrestricted automatic source
+  repair/promotion is not.
 
 Repository-wide accepted/deferred/superseded/rejected truth is centralized in `PROJECT_STATE.md`.
 
 ---
 
-## Next architecture acceptance
+## Active architecture and qualification
 
-Phases 4–8 are **DONE / OWNER-MACHINE ACCEPTED**. Phase 8's final evidence is recorded in `docs/archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
+Engineering Phases 2–10A have accepted scopes in [Project State](PROJECT_STATE.md).
+Phase 9 is bounded: its full external-device lifecycle remains unproven.
+Phase 10 supplies callable outcome/learning reconciliation, without a production
+scheduler demonstrated by this audit. Phase 10A's acceptance explicitly excludes
+automatic production activation. Phase 11 remains next in that supporting
+engineering program; it is not the current owner-directed implementation task.
 
-The next active cross-cutting slice is **Phase 9 — Owner-Requested Capability Acquisition**. Its work begins with repository inspection, technology research and architecture. Phase-9 implementation requires explicit owner architecture approval and must reuse the accepted EngineeringChange, secure engineering substrate, governed promotion and Phase-8 package/registry lifecycle rather than create a parallel capability-acquisition path.
+The active priority is the approved native personal-intelligence integration.
+Complete the safety repairs, real relevance selection, trusted owner-turn
+binding and fictional provider-delivery qualification before controlled APPLY
+and owner-machine acceptance. [Current Plan](CURRENT_PLAN.md) owns that sequence;
+do not restart an already accepted Phase-9 architecture approval.
 
 **Step 8 — Notes, Tasks, Reminders, and Scheduling (CAP-027/CAP-028)** remains
 the next numbered product slice and must still reuse the accepted durable

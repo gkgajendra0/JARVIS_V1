@@ -1,7 +1,10 @@
 # JARVIS Personal Intelligence — Architecture Candidate and Evaluation Contract
 
 **Date:** 2026-10-19
-**Status:** ARCHITECTURE CANDIDATE FOR OWNER REVIEW; NOT APPROVED TO IMPLEMENT.
+**Status:** Native-extension direction approved through PR #288; evaluation and
+read-only foundations merged through #289–#290; provider probe merged through
+#291. The original proposal below is retained as design evidence. This is not
+production APPLY acceptance; [Current Plan](../CURRENT_PLAN.md) owns execution.
 **Reference baseline:** protected `main` a7ef430d614cf60bd11298ab352a342216594736.
 **Primary requirement:** `docs/PRODUCT.md` owner-centered Personal Intelligence Contract,
 CAP-053, and Section 17 of `docs/AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md`.
@@ -355,19 +358,19 @@ ignores context in actual personalized answers, latency or monthly spend
 exceeds agreed limits, or a different evaluated design yields material
 end-to-end improvement justifying safe migration.
 
-## 10. Owner review gate
+## 10. Owner decision and remaining release gates
 
-**Proposed decision:** adopt architecture Option A (reuse JARVIS canonical
+**Approved direction (PR #288):** adopt architecture Option A (reuse JARVIS canonical
 memory and existing runtime, add read-only PersonalContextCoordinator and
 typed packet, test real model-context delivery); retain Hindsight as an
 optional *evaluated* retrieval adapter, not as replacement core.
 
-**Decision remains proposed until owner approval.** This research document
-does NOT authorize a new server, schema, cloud API spend, automatic personal
+The owner approved this direction and the bounded PI-1A/PI-1B foundations.
+That approval does NOT authorize a new server, cloud API spend, automatic personal
 recording/admission, real owner-data migration, package upgrade, production
 configuration changes, or permission expansion.
 
-When accepted, promote the decision into the existing current execution
-plan and implement the PI-1A slice under the normal isolated-development
-and acceptance process. The first real achievement will be demonstrated
+The decision is recorded in [Current Plan](../CURRENT_PLAN.md). Continue
+provider/identity qualification and actual answer-use evaluation through the
+normal isolated-development and acceptance process. The product achievement is
 **personalized assistance**, not another 68-question search score.

@@ -16,7 +16,9 @@ This section is a brief guide, not the acceptance ledger:
   have accepted scopes. Autonomous engineering Phases 2–10A are accepted to their
   documented boundaries; this does **not** mean fully autonomous production JARVIS.
 - The owner-facing personalized, naturally context-aware assistant (CAP-053)
-  is **PLANNED** and is the current design priority.
+  remains **PLANNED for production**; its approved native implementation and
+  qualification are the current priority. Evaluation/shadow/probe foundations
+  are on `main`, while automatic owner-memory use in live voice is not active.
 - Step 8 remains next in the numbered product sequence.
 
 For exact accepted, deferred and production state, consult

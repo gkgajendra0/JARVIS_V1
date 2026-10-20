@@ -54,12 +54,20 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 - [JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md](reference/JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md) — approved, candidate, or shadow supporting specification; read its status before implementation
 - [PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md](reference/PROVIDER_MODEL_LIFECYCLE_SELF_EVOLUTION.md) — approved, candidate, or shadow supporting specification; read its status before implementation
 
-## Current personal intelligence research (not selected architecture)
+## Personal intelligence design and qualification
 
 - [Repository and integration audit](research/PERSONAL_INTELLIGENCE_REPOSITORY_AUDIT_2026-10-18.md)
 - [Movie-inspired assistant technology landscape, round 1](research/MOVIE_INSPIRED_PERSONAL_INTELLIGENCE_TECH_LANDSCAPE_2026-10-18.md)
+- [Approved native architecture and evaluation contract](research/PERSONAL_INTELLIGENCE_ARCHITECTURE_CANDIDATE_2026-10-19.md)
+- [Cross-chat reconciliation audit and remaining gates](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md)
 
-These research documents are part of draft PR #285 and remain pending owner review. No research evidence authorizes new memory writes or context injection.
+PRs #285–#286 established the product/documentation hierarchy; #288 approved
+the native direction and #289–#291 added evaluation, shadow and fictional
+provider-probe foundations. Active personalized voice is still unimplemented.
+The earlier draft PR #287 retains separate research/test evidence; it is not
+merged runtime truth. No research result authorizes implicit writes or private
+context release. Use Current Plan for execution, rather than repeating the
+approved architecture decision.
 
 ## Historical evidence preserved
 
