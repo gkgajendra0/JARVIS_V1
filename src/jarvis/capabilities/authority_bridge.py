@@ -53,6 +53,7 @@ class AuthorizedCapability:
     permit_id: str
     windows_session: AuthoritySession
     security_epoch: int
+    session_epoch: int = 0
 
 
 def _default_audit_path() -> pathlib.Path:
@@ -98,6 +99,7 @@ class CapabilityAuthorityBroker:
         self._windows_session: AuthoritySession | None = None
         self._security_epoch = 0
         self._bound_session_ids: set[str] = set()
+        self._session_epochs: dict[str, int] = {}
 
     @staticmethod
     def _same_windows_session(left: AuthoritySession, right: AuthoritySession) -> bool:
@@ -225,7 +227,16 @@ class CapabilityAuthorityBroker:
         with self._lock:
             return self._authorize(prepared)
 
-    def _authorize(self, prepared: PreparedCapability) -> AuthorizedCapability:
+    def authorize_fresh_owner(
+        self, prepared: PreparedCapability
+    ) -> AuthorizedCapability:
+        """Exact-request consent, with no cached T2 or new cross-purpose T2 grant."""
+        with self._lock:
+            return self._authorize(prepared, require_fresh_strong=True)
+
+    def _authorize(
+        self, prepared: PreparedCapability, *, require_fresh_strong: bool = False
+    ) -> AuthorizedCapability:
         windows_session = self._current_windows_session()
         try:
             self._ensure_started()
@@ -256,14 +267,15 @@ class CapabilityAuthorityBroker:
         self._bound_session_ids.add(session_id)
         direct_user = prepared.request.origin is ActionOrigin.DIRECT_USER
         can_reuse_owner_trust = (
-            direct_user
+            not require_fresh_strong
+            and direct_user
             and RiskClass.ROUTINE < assessment.risk_class < RiskClass.CRITICAL
             and self._trusted_session_available(session_id)
         )
 
         approval_id: str | None = None
         used_strong_verification = False
-        if assessment.risk_class is RiskClass.ROUTINE:
+        if assessment.risk_class is RiskClass.ROUTINE and not require_fresh_strong:
             context = InteractionContext(
                 session_id=session_id,
                 trust_tier=TrustTier.UNVERIFIED,
@@ -317,7 +329,7 @@ class CapabilityAuthorityBroker:
                 f"authority denied capability: {reasons}"
             )
 
-        if used_strong_verification and direct_user:
+        if used_strong_verification and direct_user and not require_fresh_strong:
             self._remember_trusted_session(session_id)
 
         return AuthorizedCapability(
@@ -326,7 +338,34 @@ class CapabilityAuthorityBroker:
             permit_id=decision.execution_permit.permit_id,
             windows_session=windows_session,
             security_epoch=self._security_epoch,
+            session_epoch=self._session_epochs.get(session_id, 0),
         )
+
+    def validate_binding(self, authorized: AuthorizedCapability) -> None:
+        """Recheck an already-consumed read's turn lease without minting a permit."""
+        with self._lock:
+            current = self._current_windows_session()
+            if (
+                authorized.security_epoch != self._security_epoch
+                or authorized.session_epoch
+                != self._session_epochs.get(authorized.context.session_id, 0)
+                or not self._same_windows_session(authorized.windows_session, current)
+                or self._clock() >= authorized.proposal.expires_at_monotonic
+                or not authorized.proposal.has_valid_fingerprint()
+            ):
+                raise CapabilityAuthorizationError(
+                    "personal context authorization expired or invalidated"
+                )
+
+    def invalidate_session(self, session_id: str) -> None:
+        with self._lock:
+            self._session_epochs[session_id] = (
+                self._session_epochs.get(session_id, 0) + 1
+            )
+            self._trusted_sessions.pop(session_id, None)
+            self._bound_session_ids.discard(session_id)
+            if self._authority is not None:
+                self._authority.invalidate_session(session_id)
 
     def consume(self, authorized: AuthorizedCapability) -> None:
         with self._lock:
@@ -336,6 +375,8 @@ class CapabilityAuthorityBroker:
         current = self._current_windows_session()
         if (
             authorized.security_epoch != self._security_epoch
+            or authorized.session_epoch
+            != self._session_epochs.get(authorized.context.session_id, 0)
             or not self._same_windows_session(authorized.windows_session, current)
         ):
             raise CapabilityAuthorizationError(
@@ -391,6 +432,7 @@ class CapabilityAuthorityBroker:
         with self._lock:
             self._invalidate_windows_authority()
             self._windows_session = None
+            self._session_epochs.clear()
             if self._opa is not None:
                 self._opa.close()
             if self._audit is not None:

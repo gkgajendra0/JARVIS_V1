@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from collections.abc import Callable
 from typing import Protocol
 
 from jarvis.ai_provider import configured_ai_provider
 from jarvis.authority.audit import AuditError
-from jarvis.authority.types import ActionOrigin
+from jarvis.authority.types import ActionAttributes, ActionOrigin
 from jarvis.capabilities.authority_bridge import (
     AuthorizedCapability,
     CapabilityAuthorityBroker,
@@ -21,7 +23,7 @@ from jarvis.capabilities.development_git import (
 )
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.document_edits import DocumentEditExecutor
-from jarvis.capabilities.execution import CapabilityExecutor
+from jarvis.capabilities.execution import CapabilityExecutor, PreparedCapability
 from jarvis.capabilities.local_reads import LocalProjectReadExecutor
 from jarvis.capabilities.local_writes import (
     ApprovedWriteRootPolicy,
@@ -120,6 +122,70 @@ class CapabilityRuntime:
         if any(not callable(callback) for callback in self._close_callbacks):
             raise TypeError("close_callbacks must contain callable values")
         self._catalog: CapabilityCatalog | None = None
+
+    def authorize_personal_context(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        question: str,
+        operation: str = "read",
+    ) -> AuthorizedCapability:
+        """Fixed canonical personal-memory scope; never model-supplied authority."""
+        if operation not in {"read", "remember", "correct", "forget"}:
+            raise ValueError("unsupported personal context operation")
+        if (
+            not isinstance(question, str)
+            or not question.strip()
+            or len(question.encode("utf-8")) > 8000
+        ):
+            raise ValueError("personal context requires a bounded accepted question")
+        if not isinstance(turn_id, str) or not turn_id.strip():
+            raise ValueError("personal context requires a canonical turn id")
+        authorize = getattr(self._authority, "authorize_fresh_owner", None)
+        if not callable(authorize):
+            raise CapabilityAuthorizationError("exact owner consent is unavailable")
+        parameters = {
+            "turn_id": turn_id,
+            "question_sha256": hashlib.sha256(question.encode("utf-8")).hexdigest(),
+            "max_facts": 4,
+        }
+        request = CapabilityRequest(
+            session_id=session_id,
+            capability_key="memory:personal_context",
+            operation=operation,
+            parameters=parameters,
+            origin=ActionOrigin.DIRECT_USER,
+        )
+        prepared = PreparedCapability(
+            request=request,
+            target={"subject_scope": "personal", "subject": "owner"},
+            parameters=parameters,
+            material_summary=f"{operation.title()} owner memory for this request: {json.dumps(question, ensure_ascii=False)[:500]}",
+            attributes=ActionAttributes(
+                private_read=True,
+                persistent_write=operation != "read",
+                destructive=operation == "forget",
+            ),
+            execution_payload={},
+        )
+        return authorize(prepared)
+
+    def consume_personal_context(self, authorized: AuthorizedCapability) -> None:
+        self._authority.consume(authorized)
+
+    def validate_personal_context(self, authorized: AuthorizedCapability) -> None:
+        validate = getattr(self._authority, "validate_binding", None)
+        if not callable(validate):
+            raise CapabilityAuthorizationError(
+                "personal context continuity is unavailable"
+            )
+        validate(authorized)
+
+    def invalidate_personal_context(self, session_id: str) -> None:
+        invalidate = getattr(self._authority, "invalidate_session", None)
+        if callable(invalidate):
+            invalidate(session_id)
 
     def _routing_allowed(self, capability_key: str) -> bool:
         if self._catalog_projection is None:
