@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,18 @@ from jarvis.engineering_learning.models import (
     EngineeringOutcomeAttribution,
     EngineeringOutcomeResult,
 )
+from jarvis.engineering_learning.reconciliation import (
+    EngineeringLearningReconciler,
+    LearningReconciliationStatus,
+)
+from jarvis.engineering_learning.sources import (
+    CapabilityAcquisitionOutcomeSource,
+    PromotionOutcomeSource,
+    RepairOutcomeSource,
+)
+from jarvis.incidents import IncidentService, SqliteIncidentStore
 from jarvis.promotion.models import PromotionAttempt, PromotionAttemptState
+from jarvis.promotion.store import PromotionStore
 from jarvis.self_model import HealthState
 from jarvis.self_repair import (
     RepairAction,
@@ -220,6 +232,149 @@ def test_failed_promotion_preserves_external_provider_attribution(
     assert outcome.result is EngineeringOutcomeResult.FAILURE
     assert outcome.attribution is EngineeringOutcomeAttribution.EXTERNAL_PROVIDER
     assert outcome.attribution is not EngineeringOutcomeAttribution.CANDIDATE
+
+
+def _three_repair_outcomes(tmp_path):
+    store = SqliteIncidentStore(tmp_path / "engineering.sqlite")
+    incident = IncidentService(store).create_manual(
+        symptom="synthetic runtime failure", now_epoch=80
+    )
+    for ordinal in range(3):
+        IncidentService(store).record_repair_attempt(
+            replace(
+                _repair_attempt(RepairVerificationStatus.PASS),
+                incident_id=incident.incident_id,
+                attempt_id=f"repair-{ordinal}",
+                finished_at_epoch=100.0,
+            )
+        )
+    return store
+
+
+def test_bounded_repair_scans_reach_later_outcomes_and_retry_index_failure(
+    tmp_path, monkeypatch
+):
+    store = _three_repair_outcomes(tmp_path)
+    source = RepairOutcomeSource(store)
+    reconciler = EngineeringLearningReconciler(store)
+    refresh = reconciler._refresh_index
+    failed = False
+
+    def fail_once(revision_id, *, now_epoch):
+        nonlocal failed
+        if not failed:
+            failed = True
+            return "synthetic_index_unavailable"
+        return refresh(revision_id, now_epoch=now_epoch)
+
+    monkeypatch.setattr(reconciler, "_refresh_index", fail_once)
+    try:
+        reports = [
+            reconciler.reconcile_source(source, limit=1, now_epoch=110 + n)
+            for n in range(4)
+        ]
+        assert len({r.items[0].outcome_id for r in reports[:3]}) == 3
+        assert (
+            reports[0].items[0].status
+            is LearningReconciliationStatus.INDEX_RETRY_REQUIRED
+        )
+        assert reports[3].items[0].outcome_id == reports[0].items[0].outcome_id
+        assert reports[3].items[0].status in {
+            LearningReconciliationStatus.REPLAYED,
+            LearningReconciliationStatus.RESUMED,
+        }
+        assert all(r.processed_count <= 1 for r in reports)
+    finally:
+        reconciler.close()
+        store.close()
+
+
+def test_bounded_repair_scans_retry_bad_normalization_after_reaching_later_records(
+    tmp_path, monkeypatch
+):
+    store = _three_repair_outcomes(tmp_path)
+    source = RepairOutcomeSource(store)
+    normalize = source._adapter.normalize
+
+    def fail_first(attempt):
+        if attempt.attempt_id == "repair-0":
+            raise EngineeringOutcomeAdapterError("synthetic missing evidence")
+        return normalize(attempt)
+
+    monkeypatch.setattr(source._adapter, "normalize", fail_first)
+    try:
+        first = source.scan(limit=2, observed_at_epoch=110)
+        second = source.scan(limit=2, observed_at_epoch=111)
+        monkeypatch.setattr(source._adapter, "normalize", normalize)
+        retry = source.scan(limit=2, observed_at_epoch=112)
+        assert first.errors
+        assert [o.source_identity for o in second.outcomes] == ["repair-2"]
+        assert "repair-0" in [o.source_identity for o in retry.outcomes]
+        restarted = RepairOutcomeSource(store)
+        assert len(restarted.scan(limit=2, observed_at_epoch=113).outcomes) == 2
+        assert [
+            o.source_identity
+            for o in restarted.scan(limit=2, observed_at_epoch=114).outcomes
+        ] == ["repair-2"]
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("kind", ["promotion", "capability_acquisition"])
+def test_bounded_work_outcome_scans_reach_all_records_then_wrap(tmp_path, kind):
+    changes = ChangeStore(
+        SQLiteWorkStore(tmp_path / "work.sqlite"),
+        processes=(OWNER_CAPABILITY_ACQUISITION_PROCESS,),
+    )
+    promotions = PromotionStore(changes)
+    expected = set()
+    for ordinal in range(3):
+        change = changes.create(
+            request="synthetic candidate",
+            process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+            process_version=1,
+            source_session_id="test",
+            source_turn_id=str(ordinal),
+        )
+        candidate = changes.add_artifact(
+            change.change_id,
+            kind="capability_candidate",
+            payload={
+                "candidate_id": f"candidate-{ordinal}",
+                "package_id": "test.capability",
+                "package_version": "1.0.0",
+                "package_digest": PACKAGE_DIGEST,
+            },
+        )
+        if kind == "promotion":
+            attempt = promotions.create_or_get(
+                change_id=change.change_id,
+                candidate_artifact_id=candidate.artifact_id,
+                candidate_artifact_digest=candidate.digest,
+                candidate_id=f"candidate-{ordinal}",
+                candidate_digest=CANDIDATE_DIGEST,
+                base_sha=BASE,
+                head_sha=HEAD,
+            )
+            with changes.work._connect() as db:
+                db.execute(
+                    "UPDATE promotion_attempts SET state='failed' WHERE attempt_id=?",
+                    (attempt.attempt_id,),
+                )
+            expected.add(attempt.attempt_id)
+        else:
+            _set_change_state(changes, change.change_id, ChangeState.FAILED)
+            expected.add(change.change_id)
+    source = (
+        PromotionOutcomeSource(promotions)
+        if kind == "promotion"
+        else CapabilityAcquisitionOutcomeSource(changes)
+    )
+    scans = [source.scan(limit=2, observed_at_epoch=110 + n) for n in range(3)]
+    assert all(not scan.errors for scan in scans)
+    assert {o.source_identity for scan in scans[:2] for o in scan.outcomes} == expected
+    assert len(scans[1].outcomes) == 1
+    assert scans[2].outcomes == scans[0].outcomes
 
 
 def _repair_attempt(status: RepairVerificationStatus) -> RepairAttempt:

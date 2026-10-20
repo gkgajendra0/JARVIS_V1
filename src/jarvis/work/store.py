@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pathlib
@@ -23,7 +24,13 @@ from jarvis.work.models import (
     WorkStepState,
     WorkType,
 )
-from jarvis.work.privacy import PlaintextWorkPayloadCodec, WorkPayloadCodec
+from jarvis.work.privacy import (
+    PlaintextWorkPayloadCodec,
+    WorkPayloadCodec,
+    WorkPayloadProtectionError,
+)
+
+PROTECTED_OWNER_INPUT_PREFIX = "protected-owner-input:v1:"
 
 
 class WorkStoreError(RuntimeError):
@@ -916,6 +923,187 @@ class SQLiteWorkStore:
             ).fetchall()
         return tuple(self._step_from_row(row) for row in rows)
 
+    def owner_input_transport(self, work: WorkItem, response: str) -> str:
+        """Protect sensitive input before it can enter DBOS messages/history."""
+
+        normalized = response.strip()
+        if not normalized:
+            raise ValueError("owner response must not be empty")
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM work_items WHERE work_id=?", (work.work_id,)
+            ).fetchone()
+            if row is None:
+                raise WorkStoreError("unknown owner input work")
+            current = self._item_from_row(row)
+            if (
+                current.state is not WorkState.WAITING_FOR_OWNER
+                or current.version != work.version
+                or current.current_step_id != work.current_step_id
+            ):
+                raise WorkStoreError("stale owner input waiting state")
+            waiting_row = connection.execute(
+                "SELECT * FROM work_steps WHERE work_id=? AND step_id=?",
+                (work.work_id, current.current_step_id),
+            ).fetchone()
+            if current.current_step_id is not None and waiting_row is None:
+                raise WorkStoreError("invalid owner input waiting step")
+            waiting_step = (
+                None if waiting_row is None else self._step_from_row(waiting_row)
+            )
+        if (
+            waiting_step is None
+            or waiting_step.state is not WorkStepState.COMPLETED
+            or waiting_step.observation.get("needs_owner") is not True
+            or waiting_step.observation.get("sensitive") is not True
+        ):
+            return normalized
+        if not self.payload_protected:
+            raise WorkStoreError("sensitive owner input requires payload protection")
+        input_key = (
+            str(waiting_step.observation.get("input_key") or "").strip().casefold()
+        )
+        if not input_key:
+            raise WorkStoreError("sensitive owner input request has no key")
+        payload = self._encode_json(
+            {
+                "work_id": work.work_id,
+                "work_version": work.version,
+                "waiting_step_id": waiting_step.step_id,
+                "input_key": input_key,
+                "response": normalized,
+            }
+        )
+        if not self._payload_codec.is_protected(payload):
+            raise WorkStoreError("sensitive owner input protection failed")
+        return PROTECTED_OWNER_INPUT_PREFIX + payload
+
+    def apply_protected_owner_input(self, work_id: str, message: str) -> WorkItem:
+        """Atomically bind decrypted input, redacted evidence and the resumed work.
+
+        Only ciphertext traverses DBOS. A digest acknowledges the exact message
+        on retry; replay never rematerializes an already-consumed sensitive value.
+        """
+
+        encoded = message.removeprefix(PROTECTED_OWNER_INPUT_PREFIX)
+        if not self.payload_protected or not self._payload_codec.is_protected(encoded):
+            raise WorkStoreError("protected owner input requires payload protection")
+        try:
+            payload = self._decode_json(encoded)
+        except (WorkPayloadProtectionError, ValueError, TypeError) as exc:
+            raise WorkStoreError("invalid protected owner input") from exc
+        if (
+            not isinstance(payload, dict)
+            or payload.get("work_id") != work_id
+            or type(payload.get("work_version")) is not int
+            or not isinstance(payload.get("response"), str)
+            or not payload["response"].strip()
+        ):
+            raise WorkStoreError("invalid protected owner input binding")
+        digest = hashlib.sha256(message.encode("utf-8")).hexdigest()
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM work_items WHERE work_id=?", (work_id,)
+            ).fetchone()
+            if row is None:
+                raise WorkStoreError("unknown protected owner input work")
+            work = self._item_from_row(row)
+            if work.state is not WorkState.WAITING_FOR_OWNER:
+                prior = connection.execute(
+                    "SELECT * FROM work_steps WHERE work_id=? AND kind='owner_input'",
+                    (work_id,),
+                ).fetchall()
+                if any(
+                    self._step_from_row(item).observation.get(
+                        "response_transport_digest"
+                    )
+                    == digest
+                    for item in prior
+                ):
+                    return work
+                raise WorkStoreError("work is not waiting for protected owner input")
+            if work.version != payload["work_version"]:
+                raise WorkStoreError("stale protected owner input")
+            waiting_row = connection.execute(
+                "SELECT * FROM work_steps WHERE work_id=? AND step_id=?",
+                (work_id, payload.get("waiting_step_id")),
+            ).fetchone()
+            if waiting_row is None:
+                raise WorkStoreError("invalid protected owner input waiting step")
+            waiting = self._step_from_row(waiting_row)
+            if (
+                waiting.state is not WorkStepState.COMPLETED
+                or waiting.observation.get("needs_owner") is not True
+                or waiting.observation.get("sensitive") is not True
+                or str(waiting.observation.get("input_key") or "").strip().casefold()
+                != payload.get("input_key")
+                or work.current_step_id != waiting.step_id
+            ):
+                raise WorkStoreError("invalid protected owner input waiting binding")
+            step = (
+                WorkStep(
+                    work_id=work_id,
+                    kind="owner_input",
+                    summary="Owner supplied requested input",
+                )
+                .start()
+                .complete(
+                    {
+                        "sensitive": True,
+                        "input_key": payload["input_key"],
+                        "response_redacted": True,
+                        "response_transport_digest": digest,
+                    }
+                )
+            )
+            resumed = work.transition(
+                WorkState.RUNNING, status_detail="owner input received"
+            )
+            connection.execute(
+                """INSERT INTO work_sensitive_inputs (work_id, input_key, protected_value, created_at)
+                VALUES (?, ?, ?, ?) ON CONFLICT(work_id, input_key) DO UPDATE SET
+                protected_value=excluded.protected_value, created_at=excluded.created_at""",
+                (
+                    work_id,
+                    payload["input_key"],
+                    self._encode_text(payload["response"]),
+                    _dt(step.created_at),
+                ),
+            )
+            connection.execute(
+                """INSERT INTO work_steps (step_id, work_id, kind, summary, state, input_json,
+                observation_json, error, created_at, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    step.step_id,
+                    work_id,
+                    step.kind,
+                    self._encode_text(step.summary),
+                    step.state.value,
+                    self._encode_json(step.input_data),
+                    self._encode_json(step.observation),
+                    None,
+                    _dt(step.created_at),
+                    _dt(step.started_at),
+                    _dt(step.completed_at),
+                ),
+            )
+            connection.execute(
+                """UPDATE work_items SET state=?, current_step_id=?, status_detail=?, updated_at=?, version=?
+                WHERE work_id=? AND version=?""",
+                (
+                    resumed.state.value,
+                    resumed.current_step_id,
+                    self._encode_optional_text(resumed.status_detail),
+                    _dt(resumed.updated_at),
+                    resumed.version,
+                    work_id,
+                    work.version,
+                ),
+            )
+        return resumed
+
     def put_sensitive_input(
         self,
         work_id: str,
@@ -967,6 +1155,7 @@ class SQLiteWorkStore:
         if not normalized_work or not normalized_key:
             raise ValueError("sensitive input lookup requires work_id and key")
         with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 """SELECT protected_value FROM work_sensitive_inputs
                 WHERE work_id=? AND input_key=?""",
@@ -975,12 +1164,11 @@ class SQLiteWorkStore:
             if row is None:
                 return None
             value = self._decode_text(row["protected_value"])
-            with connection:
-                connection.execute(
-                    """DELETE FROM work_sensitive_inputs
-                    WHERE work_id=? AND input_key=?""",
-                    (normalized_work, normalized_key),
-                )
+            connection.execute(
+                """DELETE FROM work_sensitive_inputs
+                WHERE work_id=? AND input_key=?""",
+                (normalized_work, normalized_key),
+            )
         return value
 
     def clear_sensitive_inputs(self, work_id: str) -> None:

@@ -374,19 +374,25 @@ class SqliteIncidentStore:
         self,
         *,
         limit: int = 100,
+        after: tuple[float, str] | None = None,
     ) -> tuple[RepairAttempt, ...]:
         if type(limit) is not int or limit <= 0:
             raise ValueError("repair attempt list limit must be positive")
+        continuation = (
+            " AND (finished_at_epoch, attempt_id) > (?, ?)" if after is not None else ""
+        )
+        parameters = (*after, limit) if after is not None else (limit,)
         with self._lock:
             cursor = self._connection.execute(
-                """
+                f"""
                 SELECT * FROM engineering_repair_attempt
                 WHERE finished_at_epoch IS NOT NULL
                   AND verdict IS NOT NULL
+                  {continuation}
                 ORDER BY finished_at_epoch, attempt_id
                 LIMIT ?
                 """,
-                (limit,),
+                parameters,
             )
             columns = [item[0] for item in cursor.description or ()]
             rows = cursor.fetchall()

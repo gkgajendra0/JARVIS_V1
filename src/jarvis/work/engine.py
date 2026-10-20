@@ -1195,6 +1195,10 @@ class WorkEngine:
         return saved
 
     def apply_owner_input(self, work_id: str, response: str) -> WorkItem:
+        from jarvis.work.store import PROTECTED_OWNER_INPUT_PREFIX
+
+        if response.startswith(PROTECTED_OWNER_INPUT_PREFIX):
+            return self._store.apply_protected_owner_input(work_id, response)
         normalized = response.strip()
         if not normalized:
             raise ValueError("owner response must not be empty")
@@ -1217,7 +1221,8 @@ class WorkEngine:
             (
                 step
                 for step in reversed(self._store.list_steps(work_id))
-                if step.state.value == "completed"
+                if step.step_id == work.current_step_id
+                and step.state.value == "completed"
                 and step.observation.get("needs_owner") is True
             ),
             None,
@@ -1233,18 +1238,10 @@ class WorkEngine:
             or None
         )
         if sensitive:
-            if input_key is None:
-                raise ValueError("sensitive owner input request has no key")
-            self._store.put_sensitive_input(work_id, input_key, normalized)
-            owner_observation = {
-                "sensitive": True,
-                "input_key": input_key,
-                "response_redacted": True,
-            }
-        else:
-            owner_observation = {"response": normalized}
-            if input_key is not None:
-                owner_observation["input_key"] = input_key
+            raise ValueError("sensitive owner input requires protected transport")
+        owner_observation = {"response": normalized}
+        if input_key is not None:
+            owner_observation["input_key"] = input_key
 
         step = WorkStep(
             work_id=work.work_id,

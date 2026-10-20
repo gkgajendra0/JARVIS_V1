@@ -335,6 +335,7 @@ class ChangeStore:
         process_key: str | None = None,
         process_version: int | None = None,
         limit: int = 20,
+        after: tuple[str, str] | None = None,
     ) -> tuple[EngineeringChange, ...]:
         if not states or any(not isinstance(state, ChangeState) for state in states):
             raise ValueError("change state filter must be non-empty and typed")
@@ -359,6 +360,9 @@ class ChangeStore:
         if process_version is not None:
             query += " AND process_version=?"
             parameters.append(process_version)
+        if after is not None:
+            query += " AND (created_at, change_id) > (?, ?)"
+            parameters.extend(after)
         query += " ORDER BY created_at, change_id LIMIT ?"
         parameters.append(limit)
 
