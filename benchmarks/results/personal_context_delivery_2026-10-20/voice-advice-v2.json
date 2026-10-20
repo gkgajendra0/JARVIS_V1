@@ -1,0 +1,213 @@
+{
+  "recorded_at_utc": "2026-10-20T08:56:47.489063+00:00",
+  "fictional_only": true,
+  "production_activation": false,
+  "owner_memory_access": false,
+  "microphone_or_camera": false,
+  "provider": "gemini",
+  "model": "gemini-3.8-live",
+  "max_sessions": 5,
+  "instruction_variant": "automatic_personal_context_use",
+  "sessions": [
+    {
+      "stage": "context",
+      "language": "english",
+      "question": "What should I have for dinner? Give one suitable suggestion in English.",
+      "status": "COMPLETED",
+      "answers": [
+        "Consider a rich paneer butter masala served with warm garlic naan."
+      ],
+      "tool_reads": [
+        {
+          "selected_predicates": [
+            "diet_preference",
+            "food_restriction"
+          ],
+          "fictional_facts": [
+            "diet preference: Fictional Rhea prefers vegetarian meals.",
+            "food restriction: Fictional Rhea avoids peanuts."
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": -1.0,
+          "input_tokens": 5478,
+          "output_tokens": 20,
+          "total_tokens": 5498
+        },
+        {
+          "ttft": 0.0025289058685302734,
+          "input_tokens": 5561,
+          "output_tokens": 122,
+          "total_tokens": 5683
+        }
+      ],
+      "seconds": 9.063,
+      "tool_calls": 1
+    },
+    {
+      "stage": "context",
+      "language": "hindi",
+      "question": "आज रात खाने में क्या खाऊँ? एक सुझाव दो, हिंदी में।",
+      "status": "COMPLETED",
+      "answers": [
+        "आज रात के खाने में आप पनीर बटर मसाला और गार्लिक नान ट्राई कर सकती हैं, यह एक बेहतरीन वेजिटेरियन विकल्प है।"
+      ],
+      "tool_reads": [
+        {
+          "selected_predicates": [
+            "diet_preference",
+            "food_restriction"
+          ],
+          "fictional_facts": [
+            "diet preference: Fictional Rhea prefers vegetarian meals.",
+            "food restriction: Fictional Rhea avoids peanuts."
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": -1.0,
+          "input_tokens": 5480,
+          "output_tokens": 20,
+          "total_tokens": 5500
+        },
+        {
+          "ttft": 0.001506805419921875,
+          "input_tokens": 5563,
+          "output_tokens": 176,
+          "total_tokens": 5739
+        }
+      ],
+      "seconds": 11.938,
+      "tool_calls": 1
+    },
+    {
+      "stage": "context",
+      "language": "hinglish",
+      "question": "Dinner mein kya khaun? Ek suggestion do, Hinglish mein.",
+      "status": "COMPLETED",
+      "answers": [
+        "Aaj aap paneer tikka masala aur garlic naan try kar sakte hain. Vegetarian aur peanuts se free, ek perfect option hai."
+      ],
+      "tool_reads": [
+        {
+          "selected_predicates": [
+            "diet_preference",
+            "food_restriction"
+          ],
+          "fictional_facts": [
+            "diet preference: Fictional Rhea prefers vegetarian meals.",
+            "food restriction: Fictional Rhea avoids peanuts."
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": -1.0,
+          "input_tokens": 5478,
+          "output_tokens": 20,
+          "total_tokens": 5498
+        },
+        {
+          "ttft": 0.0010025501251220703,
+          "input_tokens": 5561,
+          "output_tokens": 186,
+          "total_tokens": 5747
+        }
+      ],
+      "seconds": 11.468,
+      "tool_calls": 1
+    },
+    {
+      "stage": "corrected",
+      "language": "hinglish",
+      "question": "Dinner mein kya khaun? Meri current preference dhyan mein rakho, Hinglish mein.",
+      "status": "COMPLETED",
+      "answers": [
+        "Aap aaj rat ke khane mein ek flavourful vegetable tofu stir-fry try kar sakti hain, jo completely vegan hai aur ismein peanuts ka bilkul istemal nahi hua hai."
+      ],
+      "tool_reads": [
+        {
+          "selected_predicates": [
+            "diet_preference",
+            "food_restriction"
+          ],
+          "fictional_facts": [
+            "diet preference: Fictional Rhea now prefers vegan meals; this replaces her vegetarian preference.",
+            "food restriction: Fictional Rhea avoids peanuts."
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": -1.0,
+          "input_tokens": 5484,
+          "output_tokens": 20,
+          "total_tokens": 5504
+        },
+        {
+          "ttft": 0.001001119613647461,
+          "input_tokens": 5574,
+          "output_tokens": 216,
+          "total_tokens": 5790
+        }
+      ],
+      "seconds": 13.125,
+      "tool_calls": 1
+    },
+    {
+      "stage": "deleted_fresh_session",
+      "language": "hinglish",
+      "question": "Meri saved diet preference kya hai? Available nahi hai toh honestly bolo ki nahi pata.",
+      "status": "COMPLETED",
+      "answers": [
+        "I do not know your saved diet preference."
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5449,
+          "output_tokens": 66,
+          "total_tokens": 5515
+        }
+      ],
+      "seconds": 6.25,
+      "tool_calls": 0
+    }
+  ],
+  "billed_cost": null,
+  "qualification": "DIAGNOSTIC_NOT_RELEASE_ACCEPTANCE"
+}

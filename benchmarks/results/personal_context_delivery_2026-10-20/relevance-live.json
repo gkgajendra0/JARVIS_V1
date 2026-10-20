@@ -1,0 +1,116 @@
+{
+  "recorded_at_utc": "2026-10-20T08:42:00.455355+00:00",
+  "fictional_only": true,
+  "owner_memory_access": false,
+  "provider": "gemini",
+  "model": "gemini-3.8-flash",
+  "selector_source_sha256": "729857b27c908c1014808af829a60666616ea5cd1cfefa27970595149e358249",
+  "cases": [
+    {
+      "id": "english",
+      "question": "What should I have for dinner?",
+      "expected_predicates": [
+        "diet_preference",
+        "food_restriction"
+      ],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": false
+    },
+    {
+      "id": "hindi",
+      "question": "आज रात खाने में क्या खाऊँ?",
+      "expected_predicates": [
+        "diet_preference",
+        "food_restriction"
+      ],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": false
+    },
+    {
+      "id": "hinglish",
+      "question": "Dinner mein kya khaun?",
+      "expected_predicates": [
+        "diet_preference",
+        "food_restriction"
+      ],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": false
+    },
+    {
+      "id": "general",
+      "question": "Why is the sky blue?",
+      "expected_predicates": [],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": true
+    },
+    {
+      "id": "third_party",
+      "question": "What should my friend eat? I know nothing about their diet.",
+      "expected_predicates": [],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": true
+    },
+    {
+      "id": "historical",
+      "question": "What was my old diet before I changed it?",
+      "expected_predicates": [],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": true
+    },
+    {
+      "id": "heldout_purchase",
+      "question": "Mere liye headphones suggest karo, budget mein hone chahiye.",
+      "expected_predicates": [
+        "headphone_budget"
+      ],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": false
+    },
+    {
+      "id": "ambiguous",
+      "question": "Kaunsa choose karun?",
+      "expected_predicates": [],
+      "selected_predicates": [],
+      "disposition": "unavailable",
+      "exact_match": true
+    }
+  ],
+  "calls": [],
+  "fixtures": {
+    "english": {
+      "question": "What should I have for dinner?",
+      "facts": []
+    },
+    "hindi": {
+      "question": "आज रात खाने में क्या खाऊँ?",
+      "facts": []
+    },
+    "hinglish": {
+      "question": "Dinner mein kya khaun?",
+      "facts": []
+    },
+    "corrected": {
+      "question": "Dinner mein kya khaun?",
+      "facts": []
+    },
+    "deleted": {
+      "question": "Meri saved diet preference kya hai?",
+      "facts": []
+    }
+  },
+  "state_checks": {
+    "guest_denied_without_provider_call": true,
+    "correction_current_only": false,
+    "forgotten_not_selected": false,
+    "restart_respects_forgetting": false
+  },
+  "billed_cost": null,
+  "status": "NOT_QUALIFIED"
+}

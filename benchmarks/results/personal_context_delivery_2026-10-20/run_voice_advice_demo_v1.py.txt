@@ -1,0 +1,161 @@
+"""Throwaway fictional canonical-read demo; not a production memory bridge."""
+
+import asyncio
+import itertools
+import json
+import logging
+import sqlite3
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from livekit.agents import function_tool
+from livekit.agents.llm import ChatContext, ChatMessage
+
+from jarvis.config import JarvisConfig
+from jarvis.memory.lifecycle import MemoryLifecycleService
+from jarvis.memory.migration_runner import MemoryMigrationRunner
+from jarvis.memory.provenance import MemorySource
+from jarvis.memory.query import CanonicalMemoryReader
+from jarvis.memory.retrieval import RetrievalEligibility, SemanticRetrievalService
+from jarvis.memory.service import MemoryService
+from jarvis.memory.types import AuthorityClass, MemorySourceClass, Sensitivity
+from jarvis.memory.worker import SerialConnectionWorker
+from jarvis.voice.agent import JarvisVoiceAgent
+from jarvis.voice.livekit_session import create_voice_session
+
+BASE = datetime(2026, 10, 20, tzinfo=timezone.utc)
+QUESTIONS = (
+    ("english", "What should I have for dinner? Give one suitable suggestion in English."),
+    ("hindi", "आज रात खाने में क्या खाऊँ? एक सुझाव दो, हिंदी में।"),
+    ("hinglish", "Dinner mein kya khaun? Ek suggestion do, Hinglish mein."),
+)
+
+
+async def main():
+    logging.disable(logging.CRITICAL)
+    configured = JarvisConfig.from_environment()
+    assert configured.ai_provider == "gemini"
+    config = JarvisConfig(ai_provider="gemini", gemini_realtime_model=configured.gemini_realtime_model, gemini_realtime_voice=configured.gemini_realtime_voice, show_transcript=False)
+    result = {"recorded_at_utc": datetime.now(timezone.utc).isoformat(), "fictional_only": True, "production_activation": False, "owner_memory_access": False, "microphone_or_camera": False, "provider": "gemini", "model": config.gemini_realtime_model, "max_sessions": 8, "sessions": [], "billed_cost": None, "qualification": "DIAGNOSTIC_NOT_RELEASE_ACCEPTANCE"}
+    scratch = Path(__file__).parent
+    counter = itertools.count(1)
+    ids = lambda prefix: lambda: f"fictional-{prefix}-{next(counter)}"
+    allowed_records = {}
+
+    def source():
+        sid = f"fictional-source-{next(counter)}"
+        return MemorySource(source_id=sid, source_class=MemorySourceClass.OWNER_EXPLICIT, canonical_ref=f"synthetic:turn:{sid}", observed_at=BASE, authority_class=AuthorityClass.OWNER_EXPLICIT, sensitivity=Sensitivity.STANDARD, created_at=BASE)
+
+    with tempfile.TemporaryDirectory(prefix="fictional-advice-", dir=scratch) as directory:
+        db = Path(directory) / "fictional.db"
+        conn = sqlite3.connect(db)
+        MemoryMigrationRunner(clock=lambda: BASE).apply(conn)
+        conn.close()
+
+        def factory():
+            connection = sqlite3.connect(db)
+            connection.execute("PRAGMA foreign_keys = ON")
+            return connection
+
+        writer = SerialConnectionWorker(factory, thread_name="fictional-advice-writer")
+        reader = SerialConnectionWorker(factory, thread_name="fictional-advice-reader")
+        service = MemoryService(MemoryLifecycleService(writer, clock=lambda: BASE, assertion_id_factory=ids("assertion"), operation_id_factory=ids("operation")), CanonicalMemoryReader(reader))
+        retrieval = SemanticRetrievalService(reader)
+        policy = RetrievalEligibility(authorities=frozenset({AuthorityClass.OWNER_EXPLICIT}), sensitivities=frozenset({Sensitivity.STANDARD}))
+
+        async def seed(predicate, value, correct=False):
+            method = service.correct_text if correct else service.remember_text
+            saved = await method(predicate=predicate, value=value, source=source())
+            allowed_records[saved.record.assertion_id] = saved.record.normalized_text
+
+        async def run_one(stage, language, question, with_context):
+            row = {"stage": stage, "language": language, "question": question, "status": "INCONCLUSIVE", "answers": [], "tool_reads": [], "metrics": []}
+            catalog = await retrieval.eligible_facet_catalog(eligibility=policy)
+            tool_calls = 0
+
+            @function_tool(description="Read fictional Rhea's current saved personal facts before giving personal advice. Select at most four relevant facet_indices from this catalog, using only facts useful for this question: " + json.dumps([{"facet_index": i, "predicate": f.predicate} for i, f in enumerate(catalog.facets)]) + ". No facts are supplied in the catalog. This lookup has no authority or action effects.")
+            async def read_fictional_personal_context(facet_indices: list[int]) -> dict:
+                nonlocal tool_calls
+                tool_calls += 1
+                if tool_calls > 2 or len(facet_indices) > 4 or len(facet_indices) != len(set(facet_indices)) or any(type(i) is not int or not 0 <= i < len(catalog.facets) for i in facet_indices):
+                    return {"status": "unavailable"}
+                facts = []
+                selected = []
+                for i in facet_indices:
+                    facet = catalog.facets[i]
+                    records = await retrieval.retrieve_exact_current_facet(facet, eligibility=policy)
+                    if len(records) != 1:
+                        continue
+                    record = records[0]
+                    # Separate fictional allowlist: this harness cannot release arbitrary
+                    # canonical records, and never exports a PI-1B shadow packet.
+                    if allowed_records.get(record.assertion_id) != record.normalized_text:
+                        return {"status": "unavailable"}
+                    facts.append(record.normalized_text)
+                    selected.append(facet.predicate)
+                row["tool_reads"].append({"selected_predicates": selected, "fictional_facts": facts})
+                return {"status": "available" if facts else "absent", "fictional_only": True, "facts": facts}
+
+            session, bridge = create_voice_session(config)
+
+            def record(event):
+                item = event.item
+                if isinstance(item, ChatMessage) and item.role == "assistant" and not item.interrupted and item.text_content.strip():
+                    row["answers"].append(item.text_content.strip())
+
+            def metrics(event):
+                if getattr(event.metrics, "type", None) == "realtime_model_metrics":
+                    row["metrics"].append({name: getattr(event.metrics, name, None) for name in ("ttft", "input_tokens", "output_tokens", "total_tokens")})
+
+            session.on("conversation_item_added", record)
+            session.on("metrics_collected", metrics)
+            started = time.monotonic()
+            try:
+                async with asyncio.timeout(60):
+                    bridge.conversation.start()
+                    session.input.set_audio_enabled(False)
+                    agent = JarvisVoiceAgent(tools=[read_fictional_personal_context] if with_context else [])
+                    ctx = ChatContext()
+                    ctx.add_message(role="user", content="This conversation is entirely fictional. I am playing Rhea. Saved facts, if provided by the fictional profile tool, describe Rhea only. If a saved personal fact is unavailable, say you do not know it; do not invent one.")
+                    await agent.update_chat_ctx(ctx)
+                    await session.start(agent=agent)
+                    await session.run(user_input=question, input_modality="text")
+                    row["status"] = "COMPLETED" if row["answers"] else "NO_ANSWER"
+            except Exception as exc:
+                row["exception_type"] = type(exc).__name__
+            finally:
+                try:
+                    await asyncio.wait_for(session.aclose(), 5)
+                except Exception as exc:
+                    row["close_exception_type"] = type(exc).__name__
+                    row["status"] = "INCONCLUSIVE"
+            row["seconds"] = round(time.monotonic() - started, 3)
+            row["tool_calls"] = tool_calls
+            result["sessions"].append(row)
+            (scratch / "voice-advice-live.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(json.dumps({"stage": stage, "language": language, "status": row["status"], "tool_calls": tool_calls}), flush=True)
+            return row["status"] == "COMPLETED"
+
+        try:
+            await seed("diet preference", "Fictional Rhea prefers vegetarian meals.")
+            await seed("food restriction", "Fictional Rhea avoids peanuts.")
+            await seed("headphone budget", "Fictional Rhea's headphone budget is 3000 INR.")
+            for context in (False, True):
+                for language, question in QUESTIONS:
+                    if not await run_one("context" if context else "baseline", language, question, context):
+                        return
+            await seed("diet preference", "Fictional Rhea now prefers vegan meals; this replaces her vegetarian preference.", correct=True)
+            if not await run_one("corrected", "hinglish", "Dinner mein kya khaun? Meri current preference dhyan mein rakho, Hinglish mein.", True):
+                return
+            for predicate in ("diet preference", "food restriction"):
+                await service.forget_exact(predicate=predicate, source=source())
+            await run_one("deleted_fresh_session", "hinglish", "Meri saved diet preference kya hai? Available nahi hai toh honestly bolo ki nahi pata.", True)
+        finally:
+            await reader.close()
+            await writer.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

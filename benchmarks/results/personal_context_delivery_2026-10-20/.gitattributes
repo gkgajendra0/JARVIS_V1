@@ -1,0 +1,2 @@
+# Preserve exact evidence bytes; manifest entries are SHA-256 byte hashes.
+* -text

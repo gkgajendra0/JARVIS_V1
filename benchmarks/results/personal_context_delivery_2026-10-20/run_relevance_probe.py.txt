@@ -1,0 +1,126 @@
+"""Throwaway fictional qualification; never opens the owner memory database."""
+
+import asyncio
+import hashlib
+import itertools
+import json
+import logging
+import sqlite3
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
+from jarvis.config import JarvisConfig
+from jarvis.memory.lifecycle import MemoryLifecycleService
+from jarvis.memory.migration_runner import MemoryMigrationRunner
+from jarvis.memory.personal_context_relevance import GeminiPersonalFacetSelector
+from jarvis.memory.personal_context_shadow import ShadowPersonalContextCoordinator
+from jarvis.memory.provenance import MemorySource
+from jarvis.memory.query import CanonicalMemoryReader
+from jarvis.memory.query_interpreters import build_structured_provider_client
+from jarvis.memory.retrieval import SemanticRetrievalService
+from jarvis.memory.service import MemoryService
+from jarvis.memory.types import AuthorityClass, MemorySourceClass, Sensitivity
+from jarvis.memory.worker import SerialConnectionWorker
+
+BASE = datetime(2026, 10, 20, tzinfo=timezone.utc)
+CASES = (
+    ("english", "What should I have for dinner?", {"diet_preference", "food_restriction"}),
+    ("hindi", "आज रात खाने में क्या खाऊँ?", {"diet_preference", "food_restriction"}),
+    ("hinglish", "Dinner mein kya khaun?", {"diet_preference", "food_restriction"}),
+    ("general", "Why is the sky blue?", set()),
+    ("third_party", "What should my friend eat? I know nothing about their diet.", set()),
+    ("historical", "What was my old diet before I changed it?", set()),
+    ("heldout_purchase", "Mere liye headphones suggest karo, budget mein hone chahiye.", {"headphone_budget"}),
+    ("ambiguous", "Kaunsa choose karun?", set()),
+)
+
+
+async def main():
+    logging.disable(logging.CRITICAL)
+    config = JarvisConfig.from_environment()
+    assert config.ai_provider == "gemini"
+    _, client = build_structured_provider_client(provider="gemini", purpose="fictional personal relevance qualification")
+    calls = []
+
+    async def create(**kwargs):
+        started = time.monotonic()
+        response = await client.aio.interactions.create(**kwargs)
+        usage = getattr(response, "usage", None)
+        calls.append({"seconds": round(time.monotonic() - started, 4), "usage": {name: getattr(usage, name, None) for name in ("total_input_tokens", "total_output_tokens", "total_tokens")}})
+        return response
+
+    proxy = SimpleNamespace(aio=SimpleNamespace(interactions=SimpleNamespace(create=create)))
+    model = config.memory_semantic_recall_model or "gemini-3.8-flash"
+    selector = GeminiPersonalFacetSelector(client=proxy, model=model, timeout_seconds=20)
+    counter = itertools.count(1)
+    ids = lambda prefix: lambda: f"fictional-{prefix}-{next(counter)}"
+
+    def source(sensitivity=Sensitivity.STANDARD):
+        sid = f"fictional-source-{next(counter)}"
+        return MemorySource(source_id=sid, source_class=MemorySourceClass.OWNER_EXPLICIT, canonical_ref=f"synthetic:turn:{sid}", observed_at=BASE, authority_class=AuthorityClass.OWNER_EXPLICIT, sensitivity=sensitivity, created_at=BASE)
+
+    result = {"recorded_at_utc": datetime.now(timezone.utc).isoformat(), "fictional_only": True, "owner_memory_access": False, "provider": "gemini", "model": model, "selector_source_sha256": hashlib.sha256(Path("src/jarvis/memory/personal_context_relevance.py").read_bytes()).hexdigest(), "cases": [], "calls": calls, "fixtures": {}, "state_checks": {}, "billed_cost": None}
+    with tempfile.TemporaryDirectory(prefix="fictional-pi-", dir=Path(__file__).parent) as directory:
+        db = Path(directory) / "fictional.db"
+        connection = sqlite3.connect(db)
+        MemoryMigrationRunner(clock=lambda: BASE).apply(connection)
+        connection.close()
+
+        def factory():
+            connection = sqlite3.connect(db)
+            connection.execute("PRAGMA foreign_keys = ON")
+            return connection
+
+        def workers():
+            writer = SerialConnectionWorker(factory, thread_name="fictional-pi-writer")
+            reader = SerialConnectionWorker(factory, thread_name="fictional-pi-reader")
+            lifecycle = MemoryLifecycleService(writer, clock=lambda: BASE, assertion_id_factory=ids("assertion"), operation_id_factory=ids("operation"))
+            return writer, reader, MemoryService(lifecycle, CanonicalMemoryReader(reader)), ShadowPersonalContextCoordinator(retrieval=SemanticRetrievalService(reader), selector=selector)
+
+        writer, reader, service, coordinator = workers()
+        try:
+            for predicate, value in [("diet preference", "Fictional owner prefers vegetarian meals."), ("food restriction", "Fictional owner avoids peanuts."), ("headphone budget", "Fictional owner has a headphone budget of 3000 INR."), ("travel preference", "Fictional owner prefers trains for short trips."), ("birth city", "Fictional owner's birth city is Nagpur.")]:
+                await service.remember_text(predicate=predicate, value=value, source=source())
+            for predicate, sensitivity in [("private canary", Sensitivity.PRIVATE), ("local canary", Sensitivity.LOCAL_ONLY)]:
+                await service.remember_text(predicate=predicate, value="FICTIONAL-RESTRICTED-CANARY", source=source(sensitivity), sensitivity=sensitivity)
+            for name, question, expected in CASES:
+                packet = await coordinator.select_context(question, authenticated_owner=True)
+                actual = {fact.predicate for fact in packet.facts}
+                result["cases"].append({"id": name, "question": question, "expected_predicates": sorted(expected), "selected_predicates": sorted(actual), "disposition": packet.disposition.value, "exact_match": actual == expected})
+                if name in {"english", "hindi", "hinglish"}:
+                    result["fixtures"][name] = {"question": question, "facts": [fact.compact_text for fact in packet.facts]}
+            before = len(calls)
+            guest = await coordinator.select_context("What should the owner eat?", authenticated_owner=False)
+            result["state_checks"]["guest_denied_without_provider_call"] = guest.disposition.value == "denied" and len(calls) == before
+            await service.correct_text(predicate="diet preference", value="Fictional owner now prefers vegan meals.", source=source())
+            corrected = await coordinator.select_context("Dinner mein kya khaun?", authenticated_owner=True)
+            texts = [fact.compact_text for fact in corrected.facts]
+            result["state_checks"]["correction_current_only"] = any("vegan" in value for value in texts) and not any("vegetarian" in value for value in texts)
+            result["fixtures"]["corrected"] = {"question": "Dinner mein kya khaun?", "facts": texts}
+            for predicate in ("diet preference", "food restriction"):
+                await service.forget_exact(predicate=predicate, source=source())
+            deleted = await coordinator.select_context("Dinner mein kya khaun?", authenticated_owner=True)
+            result["state_checks"]["forgotten_not_selected"] = deleted.disposition.value == "no_match" and not deleted.facts
+            result["fixtures"]["deleted"] = {"question": "Meri saved diet preference kya hai?", "facts": []}
+        finally:
+            await reader.close()
+            await writer.close()
+        writer, reader, _, coordinator = workers()
+        try:
+            restarted = await coordinator.select_context("Dinner mein kya khaun?", authenticated_owner=True)
+            result["state_checks"]["restart_respects_forgetting"] = restarted.disposition.value == "no_match" and not restarted.facts
+        finally:
+            await reader.close()
+            await writer.close()
+    await client.aio.aclose()
+    result["status"] = "PASS" if all(row["exact_match"] for row in result["cases"]) and all(result["state_checks"].values()) else "NOT_QUALIFIED"
+    path = Path(__file__).parent / "relevance-live.json"
+    path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"status": result["status"], "cases": result["cases"], "state_checks": result["state_checks"], "provider_calls": len(calls)}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

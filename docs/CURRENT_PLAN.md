@@ -64,6 +64,15 @@ individual contracts before reuse.
 The [October 20 reconciliation audit](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md)
 records the handover, verified scope, defects and remaining qualification.
 
+The subsequent [fictional provider/usefulness qualification](research/PERSONAL_CONTEXT_DELIVERY_QUALIFICATION_2026-10-20.md)
+demonstrated initial-history delivery and automatic realtime tool selection for
+three ordinary dinner questions after an explicit context-use instruction to the
+isolated test agent. Tool availability alone failed. Mid-session history updates
+remain unqualified. A names-only structured relevance adapter now has offline
+contracts, but actual semantic selections were unavailable due provider HTTP
+timeouts/503. None of these experiments activates production memory or proves
+trusted spoken-owner attribution, populated-session forgetting or held-out quality.
+
 ## Owner priority: personal intelligence, before more framework work
 
 The owner has clarified that JARVIS's defining product must be an intelligent,
@@ -84,12 +93,16 @@ CAP-053 (Personal Intelligence and Automatic Context Use) is **PLANNED**.
    regressions and independent fix review passed; exact-head CI and applicable
    owner-machine acceptance remain promotion gates. Preserve canonical truth
    and normal Authority throughout.
-2. Use the pinned-SDK fictional probe to qualify actual provider delivery.
-   Its original session/agent API mismatch must be repaired before a paid
-   live test; offline preflight alone is not delivery evidence. Compare
-   initial-history, accepted-turn update and tool-result paths as PI-1C requires.
-3. Add a measured question-to-facet relevance selector to the existing canonical
-   reader boundary. The PI-1B fixture selector is not a natural-language router.
+2. Continue from the measured pinned-SDK fictional delivery evidence above.
+   Initial history and tool-result answer use were observed; ordinary user-turn
+   mid-session history updates failed and must not be assumed safe. The current
+   comparison awaits complete SDK runs, including separate automatic tool replies.
+3. Qualify question-to-facet relevance at the existing canonical reader boundary.
+   The new structured selector's offline tests are not live semantic acceptance;
+   restore/verify the configured provider HTTP path before relying on it. The
+   isolated native realtime tool path selected relevant fixture facets in the
+   small advice experiment; it still needs production turn binding and broader
+   quality/negative tests. The PI-1B fixture selector is not a natural-language router.
    Revalidate corrections, deletion, freshness, source policy and turn binding
    at consumption; preserve unavailable versus absent memory distinctions.
    Reuse relevant #287 contract evidence for accepted-turn identity, cancellation,

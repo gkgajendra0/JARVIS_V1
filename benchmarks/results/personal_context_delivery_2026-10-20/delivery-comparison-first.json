@@ -1,0 +1,254 @@
+{
+  "status": "INCONCLUSIVE",
+  "provider": "gemini",
+  "model": "gemini-3.8-live",
+  "paths": [
+    {
+      "path": "baseline",
+      "status": "COMPLETED",
+      "turns": [
+        {
+          "language": "english",
+          "question": "For fictional Rhea, what exact holiday codeword was previously provided? Say unknown if it is unavailable. Reply in English.",
+          "answer": "The exact holiday codeword for fictional Rhea is unknown.",
+          "canary_observed": false,
+          "tool_calls": 0,
+          "whole_turn_seconds": 6.047,
+          "metrics": [
+            {
+              "ttft": -1,
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            {
+              "ttft": 0.0,
+              "input_tokens": 5178,
+              "output_tokens": 103,
+              "total_tokens": 5281
+            }
+          ]
+        },
+        {
+          "language": "hindi",
+          "question": "काल्पनिक रिया की पहले बताई गई recipe का exact label क्या है? जानकारी नहीं है तो अज्ञात कहो। हिंदी में उत्तर दो।",
+          "answer": "अज्ञात।",
+          "canary_observed": false,
+          "tool_calls": 0,
+          "whole_turn_seconds": 1.797,
+          "metrics": [
+            {
+              "ttft": 0.0010061264038085938,
+              "input_tokens": 5334,
+              "output_tokens": 29,
+              "total_tokens": 5363
+            }
+          ]
+        },
+        {
+          "language": "hinglish",
+          "question": "Fictional Rhea ka pehle bataya reading stamp kya tha? Available nahi hai toh unknown bolo. Hinglish mein jawab do.",
+          "answer": "Yeh jaankari available nahi hai, so it is unknown.",
+          "canary_observed": false,
+          "tool_calls": 0,
+          "whole_turn_seconds": 3.797,
+          "metrics": [
+            {
+              "ttft": 0.0,
+              "input_tokens": 5405,
+              "output_tokens": 84,
+              "total_tokens": 5489
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "initial_history",
+      "status": "COMPLETED",
+      "turns": [
+        {
+          "language": "english",
+          "question": "For fictional Rhea, what exact holiday codeword was previously provided? Say unknown if it is unavailable. Reply in English.",
+          "answer": "The holiday codeword provided for Rhea is brackenfold.",
+          "canary_observed": true,
+          "tool_calls": 0,
+          "whole_turn_seconds": 5.734,
+          "metrics": [
+            {
+              "ttft": -1,
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            {
+              "ttft": 0.0,
+              "input_tokens": 5225,
+              "output_tokens": 88,
+              "total_tokens": 5313
+            }
+          ]
+        },
+        {
+          "language": "hindi",
+          "question": "काल्पनिक रिया की पहले बताई गई recipe का exact label क्या है? जानकारी नहीं है तो अज्ञात कहो। हिंदी में उत्तर दो।",
+          "answer": "रिया का पहले बताया गया recipe label amberwhistle है।",
+          "canary_observed": true,
+          "tool_calls": 0,
+          "whole_turn_seconds": 4.829,
+          "metrics": [
+            {
+              "ttft": 0.0010001659393310547,
+              "input_tokens": 5367,
+              "output_tokens": 94,
+              "total_tokens": 5461
+            }
+          ]
+        },
+        {
+          "language": "hinglish",
+          "question": "Fictional Rhea ka pehle bataya reading stamp kya tha? Available nahi hai toh unknown bolo. Hinglish mein jawab do.",
+          "answer": "Rhea ka pehle bataya reading stamp cedarloop tha.",
+          "canary_observed": true,
+          "tool_calls": 0,
+          "whole_turn_seconds": 3.734,
+          "metrics": [
+            {
+              "ttft": 0.0,
+              "input_tokens": 5518,
+              "output_tokens": 80,
+              "total_tokens": 5598
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "mid_session_update",
+      "status": "COMPLETED",
+      "turns": [
+        {
+          "language": "english",
+          "question": "For fictional Rhea, what exact holiday codeword was previously provided? Say unknown if it is unavailable. Reply in English.",
+          "answer": "Unknown.",
+          "canary_observed": false,
+          "tool_calls": 0,
+          "whole_turn_seconds": 3.578,
+          "metrics": [
+            {
+              "ttft": -1,
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            {
+              "ttft": 0.0,
+              "input_tokens": 5194,
+              "output_tokens": 26,
+              "total_tokens": 5220
+            }
+          ]
+        },
+        {
+          "language": "hindi",
+          "question": "काल्पनिक रिया की पहले बताई गई recipe का exact label क्या है? जानकारी नहीं है तो अज्ञात कहो। हिंदी में उत्तर दो।",
+          "answer": "अज्ञात।",
+          "canary_observed": false,
+          "tool_calls": 0,
+          "whole_turn_seconds": 2.313,
+          "metrics": [
+            {
+              "ttft": 0.0,
+              "input_tokens": 5277,
+              "output_tokens": 30,
+              "total_tokens": 5307
+            }
+          ]
+        },
+        {
+          "language": "hinglish",
+          "question": "Fictional Rhea ka pehle bataya reading stamp kya tha? Available nahi hai toh unknown bolo. Hinglish mein jawab do.",
+          "answer": "Unknown.",
+          "canary_observed": false,
+          "tool_calls": 0,
+          "whole_turn_seconds": 1.64,
+          "metrics": [
+            {
+              "ttft": 0.0,
+              "input_tokens": 5364,
+              "output_tokens": 28,
+              "total_tokens": 5392
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "tool_result",
+      "status": "COMPLETED",
+      "turns": [
+        {
+          "language": "english",
+          "question": "For fictional Rhea, what exact holiday codeword was previously provided? Say unknown if it is unavailable. Reply in English.",
+          "answer": "",
+          "canary_observed": false,
+          "tool_calls": 1,
+          "whole_turn_seconds": 1.547,
+          "metrics": [
+            {
+              "ttft": -1,
+              "input_tokens": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            {
+              "ttft": -1.0,
+              "input_tokens": 5208,
+              "output_tokens": 10,
+              "total_tokens": 5218
+            }
+          ]
+        },
+        {
+          "language": "hindi",
+          "question": "काल्पनिक रिया की पहले बताई गई recipe का exact label क्या है? जानकारी नहीं है तो अज्ञात कहो। हिंदी में उत्तर दो।",
+          "answer": "",
+          "canary_observed": false,
+          "tool_calls": 1,
+          "whole_turn_seconds": 1.406,
+          "metrics": [
+            {
+              "ttft": -1.0,
+              "input_tokens": 5310,
+              "output_tokens": 10,
+              "total_tokens": 5320
+            }
+          ]
+        },
+        {
+          "language": "hinglish",
+          "question": "Fictional Rhea ka pehle bataya reading stamp kya tha? Available nahi hai toh unknown bolo. Hinglish mein jawab do.",
+          "answer": "",
+          "canary_observed": false,
+          "tool_calls": 1,
+          "whole_turn_seconds": 0.891,
+          "metrics": [
+            {
+              "ttft": -1.0,
+              "input_tokens": 5412,
+              "output_tokens": 10,
+              "total_tokens": 5422
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "fictional_only": true,
+  "owner_memory_access": false,
+  "production_runtime_modified": false,
+  "microphone_or_camera": false,
+  "billed_cost": null,
+  "personalization_quality": "NOT_MEASURED",
+  "deletion_revocation": "NOT_PROVEN_BY_CONTEXT_REMOVAL"
+}
