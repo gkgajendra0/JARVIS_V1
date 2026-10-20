@@ -168,6 +168,28 @@ def authorize_explicit_memory_action(
     return turn
 
 
+def reject_negated_memory_change(text: str) -> None:
+    """A conservative veto; semantic proposals still require concrete owner consent.
+
+    This is not the affirmative intent parser. The realtime model interprets
+    natural correction/forget requests and the owner approves the exact change.
+    """
+    normalized = _normalized(text)
+    if any(pattern.search(normalized) for pattern in _NEGATION_PATTERNS) or any(
+        re.search(pattern, normalized)
+        for pattern in (
+            r"\b(?:do not|don't|dont|never)\b.{0,32}\b(?:correct|update|change|store)\b",
+            r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:badal|badalna|update|correct|change|karna|karo)\b",
+            r"\b(?:badal|badalna|update|correct|change)\b.{0,24}\bmat\b",
+            r"(?:मत|नहीं).{0,24}(?:बदल|अपडेट|करना|करो|सुधार)",
+            r"(?:बदल|अपडेट|सुधार).{0,24}मत",
+        )
+    ):
+        raise ExplicitMemoryAuthorizationError(
+            "The current request negates a memory change"
+        )
+
+
 def reject_prohibited_secret(*, predicate: str, value: str) -> None:
     combined = f"{predicate}\n{value}"
     normalized = _normalized(combined)

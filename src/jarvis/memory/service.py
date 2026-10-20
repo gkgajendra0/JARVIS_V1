@@ -40,6 +40,10 @@ class MemoryAmbiguousError(MemoryServiceError):
     pass
 
 
+class MemoryStaleTargetError(MemoryServiceError):
+    pass
+
+
 def normalize_memory_surface(value: str) -> str:
     """Normalize user-facing memory text without introducing fuzzy semantics.
 
@@ -155,10 +159,18 @@ class MemoryService:
         sensitivity: Sensitivity | None = None,
         freshness_class: FreshnessClass | None = None,
         commit_guard: Callable[[], None] | None = None,
+        expected_assertion_id: str | None = None,
     ) -> ExplicitMemoryResult:
         key = canonical_memory_predicate(predicate)
         text = _text_value(value)
         current = await self._require_one_current(key)
+        if (
+            expected_assertion_id is not None
+            and current.assertion_id != expected_assertion_id
+        ):
+            raise MemoryStaleTargetError(
+                "The selected memory changed; resolve it again before correction"
+            )
         resolved_sensitivity = sensitivity or current.sensitivity
         resolved_freshness = freshness_class or current.freshness_class
         self._validate_write_policy(source, resolved_sensitivity, resolved_freshness)
@@ -182,15 +194,24 @@ class MemoryService:
         predicate: str,
         source: MemorySource,
         commit_guard: Callable[[], None] | None = None,
+        expected_assertion_id: str | None = None,
     ) -> str:
         key = canonical_memory_predicate(predicate)
         current = await self._require_one_current(key)
+        if (
+            expected_assertion_id is not None
+            and current.assertion_id != expected_assertion_id
+        ):
+            raise MemoryStaleTargetError(
+                "The selected memory changed; resolve it again before deletion"
+            )
         self._validate_owner_explicit_source(source, current.sensitivity)
         forgotten = await self._lifecycle.forget(
             current.assertion_id,
             source,
             reason_code="explicit_owner_request",
             commit_guard=commit_guard,
+            require_current=True,
         )
         if not forgotten:
             raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")

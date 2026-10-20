@@ -223,6 +223,7 @@ class MemoryLifecycleService:
         *,
         reason_code: str | None = "explicit_owner_request",
         commit_guard: Callable[[], None] | None = None,
+        require_current: bool = False,
     ) -> bool:
         target = self._assertion_id(assertion_id)
         reason = _reason_code(reason_code)
@@ -233,6 +234,7 @@ class MemoryLifecycleService:
                 source,
                 reason,
                 commit_guard,
+                require_current,
             )
         )
 
@@ -502,11 +504,14 @@ class MemoryLifecycleService:
         source: MemorySource,
         reason_code: str | None,
         commit_guard: Callable[[], None] | None = None,
+        require_current: bool = False,
     ) -> bool:
         def mutation() -> bool:
             target = self._get_sync(connection, assertion_id)
             if target is None:
                 return False
+            if require_current:
+                self._require_current(connection, assertion_id)
             if source.source_id == target.source_id:
                 raise MemorySourceConflictError(
                     "forget command provenance must be distinct from target provenance"

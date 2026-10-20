@@ -130,6 +130,7 @@ class CapabilityRuntime:
         turn_id: str,
         question: str,
         operation: str = "read",
+        mutation: dict[str, object] | None = None,
     ) -> AuthorizedCapability:
         """Fixed canonical personal-memory scope; never model-supplied authority."""
         if operation not in {"read", "remember", "correct", "forget"}:
@@ -150,6 +151,57 @@ class CapabilityRuntime:
             "question_sha256": hashlib.sha256(question.encode("utf-8")).hexdigest(),
             "max_facts": 4,
         }
+        summary = f"{operation.title()} owner memory for this request: {json.dumps(question, ensure_ascii=False)[:500]}"
+        if mutation is not None:
+            if operation == "read" or set(mutation) != {
+                "predicate",
+                "assertion_id",
+                "value",
+                "sensitivity",
+            }:
+                raise ValueError("invalid concrete memory change")
+            predicate, target_id, value = (
+                mutation["predicate"],
+                mutation["assertion_id"],
+                mutation["value"],
+            )
+            if (
+                not isinstance(predicate, str)
+                or not predicate.strip()
+                or len(predicate) > 96
+                or mutation["sensitivity"] not in {"standard", "private", "local_only"}
+                or (
+                    operation != "remember"
+                    and (
+                        not isinstance(target_id, str)
+                        or not target_id
+                        or len(target_id) > 128
+                    )
+                )
+                or (operation == "remember" and target_id is not None)
+                or (operation == "forget" and value is not None)
+                or (
+                    operation != "forget"
+                    and (
+                        not isinstance(value, str)
+                        or not value.strip()
+                        or len(value.encode("utf-8")) > 1800
+                    )
+                )
+            ):
+                raise ValueError("invalid concrete memory change")
+            encoded = json.dumps(
+                mutation, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            parameters["mutation_sha256"] = hashlib.sha256(
+                encoded.encode("utf-8")
+            ).hexdigest()
+            # The owner reviews the actual resolved target and value; audit gets
+            # the digest only. A model-proposed intent is never a write permit.
+            summary = f"{operation.title()} memory {json.dumps(predicate, ensure_ascii=False)}"
+            if operation != "forget":
+                summary += f" to {json.dumps(value, ensure_ascii=False)}"
+            summary += f". Request: {json.dumps(question, ensure_ascii=False)[:500]}"
         request = CapabilityRequest(
             session_id=session_id,
             capability_key="memory:personal_context",
@@ -161,7 +213,7 @@ class CapabilityRuntime:
             request=request,
             target={"subject_scope": "personal", "subject": "owner"},
             parameters=parameters,
-            material_summary=f"{operation.title()} owner memory for this request: {json.dumps(question, ensure_ascii=False)[:500]}",
+            material_summary=summary,
             attributes=ActionAttributes(
                 private_read=True,
                 persistent_write=operation != "read",

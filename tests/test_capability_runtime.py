@@ -69,6 +69,42 @@ def test_runtime_personal_context_rejects_model_invented_operation():
         )
 
 
+def test_personal_mutation_consent_binds_concrete_target_version_and_value():
+    runtime, authority = build_runtime()
+    seen = []
+    authority.authorize_fresh_owner = lambda prepared: seen.append(prepared)
+    mutation = {
+        "predicate": "diet_preferences",
+        "assertion_id": "current-id",
+        "value": "vegan",
+        "sensitivity": "standard",
+    }
+    runtime.authorize_personal_context(
+        session_id="session",
+        turn_id="turn",
+        question="Meri preference badal do",
+        operation="correct",
+        mutation=mutation,
+    )
+    prepared = seen[-1]
+    assert "mutation_sha256" in prepared.parameters
+    assert "vegan" not in str(prepared.parameters)
+    assert (
+        "diet_preferences" in prepared.material_summary
+        and "vegan" in prepared.material_summary
+    )
+    first = prepared.parameters["mutation_sha256"]
+    mutation["value"] = "vegetarian"
+    runtime.authorize_personal_context(
+        session_id="session",
+        turn_id="turn",
+        question="Meri preference badal do",
+        operation="correct",
+        mutation=mutation,
+    )
+    assert seen[-1].parameters["mutation_sha256"] != first
+
+
 class FakeAuthority:
     def __init__(self) -> None:
         self.events: list[str] = []

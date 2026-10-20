@@ -7,12 +7,14 @@ remain the authorities for facts and release. No speaker-shadow score is used.
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 from collections.abc import Callable
 
 from livekit.agents import function_tool
 
 from jarvis.conversation import ConversationRole, ConversationStatus
+from jarvis.memory.explicit import ExplicitMemoryAuthorizationError
 from jarvis.memory.retrieval import RetrievalEligibility
 from jarvis.memory.types import (
     AssertionState,
@@ -32,6 +34,7 @@ ELIGIBILITY = RetrievalEligibility(
     ),
     sensitivities=frozenset({Sensitivity.STANDARD}),
 )
+LOGGER = logging.getLogger(__name__)
 
 
 class PersonalContextSession:
@@ -54,6 +57,11 @@ class PersonalContextSession:
         self._binding = None
         self._permit = None
         self._operation = None
+        self._mutation = None
+        self._mutation_attempted = False
+        self._mutation_inflight = False
+        self._reserved_mutation = None
+        self._reservation_binding = None
         self._catalog_id = None
         self._facets = ()
         self._released = {}
@@ -78,10 +86,8 @@ class PersonalContextSession:
     def bind_audio_clear(self, callback):
         self._clear_audio = callback
 
-    def _current(self):
-        if self._closed or self._conversation.status is not ConversationStatus.ACTIVE:
-            return None
-        turn = next(
+    def _latest_turn(self):
+        return next(
             (
                 t
                 for t in reversed(self._conversation.turns)
@@ -89,6 +95,11 @@ class PersonalContextSession:
             ),
             None,
         )
+
+    def _current(self):
+        if self._closed or self._conversation.status is not ConversationStatus.ACTIVE:
+            return None
+        turn = self._latest_turn()
         if turn is None or len(turn.text.encode("utf-8")) > 8000:
             return None
         return (
@@ -112,18 +123,22 @@ class PersonalContextSession:
             return False
         return self._same(self._binding)
 
-    async def _authorize(self, operation="read"):
+    async def _authorize(self, operation="read", mutation=None):
         binding = self._current()
         if binding is None or self._busy:
             return False
         if self._permit is not None:
-            return operation == self._operation == "read" and await self._validate()
+            if operation == self._operation == "read":
+                return await self._validate()
+            if (
+                self._operation != "read"
+                or mutation is None
+                or self._mutation is not None
+                or not await self._validate()
+            ):
+                return False
         self._binding = binding
-        turn = next(
-            t
-            for t in reversed(self._conversation.turns)
-            if t.role is ConversationRole.USER
-        )
+        turn = self._latest_turn()
         self._busy = True
         self._busy_changed(True)
         try:
@@ -134,6 +149,7 @@ class PersonalContextSession:
                     turn_id=binding[1],
                     question=turn.text,
                     operation=operation,
+                    **({"mutation": mutation} if mutation is not None else {}),
                 ),
                 timeout=self._consent_timeout,
             )
@@ -144,6 +160,8 @@ class PersonalContextSession:
                 return False
             self._permit = permit
             self._operation = operation
+            if self._watchdog is not None:
+                self._watchdog.cancel()
             self._watchdog = asyncio.create_task(self._watch())
             return True
         except asyncio.CancelledError:
@@ -161,7 +179,9 @@ class PersonalContextSession:
     async def _watch(self):
         while not self._closed:
             await asyncio.sleep(0.1)
-            if not await self._validate() or not await self._facts_current():
+            if not await self._validate() or (
+                not self._mutation_inflight and not await self._facts_current()
+            ):
                 self.close()
 
     def _protect(self):
@@ -171,6 +191,7 @@ class PersonalContextSession:
 
     async def catalog(self):
         if not await self._authorize():
+            LOGGER.info("Personal context catalog | status=denied")
             return {"status": "denied"}
         try:
             catalog = await self._retrieval.eligible_facet_catalog(
@@ -192,14 +213,24 @@ class PersonalContextSession:
             self._facets = facets
             self._catalog_id = secrets.token_urlsafe(24)
             self._protect()
+            LOGGER.info(
+                "Personal context catalog | status=available | facets=%s | turn_id=%s",
+                len(facets),
+                self._binding[1],
+            )
             return {
                 "status": "available",
                 "catalog_id": self._catalog_id,
                 "facets": [f.predicate for f in facets],
+                "request": {
+                    "turn_id": self._binding[1],
+                    "text": self._latest_turn().text,
+                },
                 "truncated": truncated,
                 "scope": "eligible standard owner facts only; absence is not a complete profile",
             }
         except Exception:  # noqa: BLE001
+            LOGGER.info("Personal context catalog | status=unavailable")
             return {"status": "unavailable"}
 
     @staticmethod
@@ -281,6 +312,12 @@ class PersonalContextSession:
                 self.close()
                 return {"status": "denied"}
             self._protect()
+            LOGGER.info(
+                "Personal context read | status=%s | facts=%s | turn_id=%s",
+                "selected" if facts else "no_match",
+                len(facts),
+                self._binding[1],
+            )
             return {
                 "status": "selected" if facts else "no_match",
                 "facts": facts,
@@ -289,20 +326,86 @@ class PersonalContextSession:
         except Exception:  # noqa: BLE001
             return {"status": "unavailable"}
 
-    async def authorize_mutation(self, operation, predicate, value=None):
-        del predicate, value  # caller grounds exact operands in canonical utterance
-        if not await self._authorize(operation):
+    def reserve_mutation(self, operation):
+        binding = self._current()
+        if binding is None:
+            raise ExplicitMemoryAuthorizationError("No current accepted memory request")
+        if self._reservation_binding != binding:
+            self._reservation_binding = binding
+            self._reserved_mutation = None
+        if self._reserved_mutation not in {None, operation}:
+            raise ExplicitMemoryAuthorizationError(
+                "Do not replace a failed memory change with a different operation"
+            )
+        self._reserved_mutation = operation
+
+    async def resolve_mutation_target(self, catalog_id, facet_index):
+        if (
+            catalog_id != self._catalog_id
+            or self._catalog_id is None
+            or type(facet_index) is not int
+            or not 0 <= facet_index < len(self._facets)
+            or self._operation != "read"
+            or not await self._validate()
+        ):
+            return None
+        records = await self._retrieval.retrieve_exact_current_facet(
+            self._facets[facet_index], eligibility=ELIGIBILITY
+        )
+        if (
+            len(records) != 1
+            or not self._eligible(records[0])
+            or not await self._validate()
+            or catalog_id != self._catalog_id
+        ):
+            return None
+        return records[0]
+
+    async def authorize_mutation(
+        self,
+        operation,
+        predicate,
+        value=None,
+        *,
+        assertion_id=None,
+        sensitivity="standard",
+    ):
+        self.reserve_mutation(operation)
+        if self._mutation_attempted:
+            raise PermissionError(
+                "A concrete memory change was already requested; start a fresh request"
+            )
+        self._mutation_attempted = True
+        mutation = {
+            "predicate": predicate,
+            "assertion_id": assertion_id,
+            "value": value,
+            "sensitivity": sensitivity,
+        }
+        if not await self._authorize(operation, mutation=mutation):
             raise PermissionError(
                 "Fresh owner consent was not granted for this request"
             )
         if not await self._validate():
             raise PermissionError("The approved request is no longer current")
+        self._mutation = mutation.copy()
+        self._mutation_inflight = True
         self._protect()
+        LOGGER.info(
+            "Memory change consent | operation=%s | status=granted | turn_id=%s",
+            operation,
+            self._binding[1],
+        )
 
     def mutation_committed(self):
+        self._mutation_inflight = False
         self._released.clear()
         self._catalog_id = None
         self._protect()
+
+    def mutation_failed(self):
+        self._mutation_inflight = False
+        self.close()
 
     def validate_mutation_commit(self):
         """Called in the serial writer transaction, including immediately before commit."""
@@ -326,6 +429,8 @@ class PersonalContextSession:
 
     async def allow_audio(self):
         if self._closed:
+            return False
+        if self._mutation_inflight:
             return False
         if not self._protected:
             return True
@@ -384,6 +489,9 @@ class PersonalContextAgentTools:
 
         Uses fresh owner consent. Call for personalized advice even if the user
         did not say search memory. Never use for third-party or general questions.
+        Also use to resolve the actual existing target of an explicit correction
+        or deletion before correct_memory/forget_memory. request.text supplies the
+        exact accepted user text for grounding the value in its original script.
         Names are proposals only; call read_personal_context for relevant values.
         """
         return await self._session.catalog()
