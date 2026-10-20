@@ -4,20 +4,21 @@
   "fictional_only": true,
   "production_activation": false,
   "artifacts": {
-    "delivery-comparison-first.json": "47f157e6384618b2af21b88058500b7b4310443ea677c6fc1246f567f0c21553",
-    "tool-result-followup.json": "b4fec22ba13611cd48e196966a3ce485e46b5c47bc964742820d70b1301b99a2",
-    "voice-advice-v1.json": "96f93e1cf2bab8dcaf2a6f07902d3b0c9a092d3bc455c79a45374df97bc6f793",
-    "voice-advice-v2.json": "6144625c7f9e0bae7e285d96a73cf264134932b924534983f22d80ecdee1d44b",
-    "relevance-live.json": "e2f9b8ce8e22d12caaf2ab9da31da9b30dc5c1d8ff199b3858d0d84de44bdab4",
-    "run_voice_advice_demo_v1.py.txt": "f7b2175399211ca9760b856f2f7060e55dc9d62b0ed01bda66c77c4123ee5e4d",
-    "run_voice_advice_demo_v2.py.txt": "a197dc5bd3ab5ba99145f6a0b99e78bedcfe4ce7c7308a5c89fbdeedfb0e301d",
+    "delivery-comparison-first.json": "9c7f6593ecc751ca8d2a67a30b0bd5b8c9084b3be0a22063dc6352958d5b0153",
+    "tool-result-followup.json": "cdc9650d91af2f8140dd277f5b2a98f01797e4984177b77a3e789d71a738bb09",
+    "voice-advice-v1.json": "0c9ef77769bd78bd4158cf1e62c334948e89a6328f6340e62a33b9c7965da14e",
+    "voice-advice-v2.json": "364ae1445a19b7688fe596bc002af62e5cae5ab8c26d3d29f4e78d92e895987d",
+    "relevance-live.json": "132be78807aaeb60947c398f4225926998d511304c0d64ab133a5805bbcd26cc",
+    "run_voice_advice_demo_v1.py.txt": "83c8ab68a008d45b3bd624cd99fa0de5d5b6cbe27d35adc6931cc28db435e6ee",
+    "run_voice_advice_demo_v2.py.txt": "2790a535c0cb0041186fbc74ad323a06eaf16594fa0f436d75c849cde4b99754",
     "run_relevance_probe.py.txt": "67c5dbeb2ae06695a5b181960dbcbbe62d17ef977d9e26a391c7e3110c5016d7"
   },
   "notes": [
     "Historical raw results preserved, including failed/inconclusive experiments.",
     "relevance-live exact_match only compares sets; unavailable dispositions are NOT correct abstention and none count as successful qualification.",
     "Hindi tool canary transliteration is visible in raw answer; original literal-only flag remains unchanged.",
-    "Final evaluator uses AgentSession.run and retains partial usage after two independently reproduced review findings."
+    "Final evaluator uses AgentSession.run and retains partial usage after two independently reproduced review findings.",
+    "Review snapshots are normalized to UTF-8/LF; original capture byte hashes are preserved separately. Experiment data are unchanged."
   ],
   "context_probe_result": {
     "recorded_at_utc": "2026-10-20T08:29:11.096989+00:00",
@@ -49,5 +50,15 @@
     "sdk_interactions": "TimeoutError",
     "sdk_generate_content": "HTTP_400",
     "keys_or_raw_errors_recorded": false
+  },
+  "original_capture_sha256": {
+    "delivery-comparison-first.json": "47f157e6384618b2af21b88058500b7b4310443ea677c6fc1246f567f0c21553",
+    "tool-result-followup.json": "b4fec22ba13611cd48e196966a3ce485e46b5c47bc964742820d70b1301b99a2",
+    "voice-advice-v1.json": "96f93e1cf2bab8dcaf2a6f07902d3b0c9a092d3bc455c79a45374df97bc6f793",
+    "voice-advice-v2.json": "6144625c7f9e0bae7e285d96a73cf264134932b924534983f22d80ecdee1d44b",
+    "relevance-live.json": "e2f9b8ce8e22d12caaf2ab9da31da9b30dc5c1d8ff199b3858d0d84de44bdab4",
+    "run_voice_advice_demo_v1.py.txt": "f7b2175399211ca9760b856f2f7060e55dc9d62b0ed01bda66c77c4123ee5e4d",
+    "run_voice_advice_demo_v2.py.txt": "a197dc5bd3ab5ba99145f6a0b99e78bedcfe4ce7c7308a5c89fbdeedfb0e301d",
+    "run_relevance_probe.py.txt": "67c5dbeb2ae06695a5b181960dbcbbe62d17ef977d9e26a391c7e3110c5016d7"
   }
 }

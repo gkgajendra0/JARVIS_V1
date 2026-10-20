@@ -1,2 +1,2 @@
-# Preserve exact evidence bytes; manifest entries are SHA-256 byte hashes.
-* -text
+# Evidence snapshots use canonical UTF-8/LF bytes for portable manifest hashes.
+* text eol=lf
