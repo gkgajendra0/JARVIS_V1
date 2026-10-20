@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
+from livekit.agents.llm import FunctionCall
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.config import JarvisConfig
@@ -184,8 +185,6 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 if self._live_session is not session:
                     return
                 self._agent_state = event.new_state
-                if personal is not None and event.new_state == "listening":
-                    personal.response_finished()
                 sync_interactive_brain_gate()
                 LOGGER.info(
                     "Voice agent state changed: %s -> %s",
@@ -248,9 +247,31 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     if work_runtime is not None:
                         work_runtime.set_interactive_brain_active(False)
 
+            def track_speech(event):
+                if personal is None:
+                    return
+
+                def finished(handle):
+                    if self._live_session is not session:
+                        return
+                    # Gemini's automatic tool follow-up has a SEPARATE handle.
+                    # The completed tool/preamble handle is not the final answer.
+                    if config.ai_provider == "gemini" and any(
+                        isinstance(item, FunctionCall) for item in handle.chat_items
+                    ):
+                        return
+                    if handle.interrupted:
+                        if personal.protected:
+                            personal.close()
+                        return
+                    personal.response_finished()
+
+                event.speech_handle.add_done_callback(finished)
+
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
             session.on("close", clear_live_session)
+            session.on("speech_created", track_speech)
             return session, bridge
 
         super().__init__(*args, session_factory=capture_session, **kwargs)

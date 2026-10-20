@@ -152,7 +152,8 @@ async def test_normal_voice_session_runs_real_context_tools_and_guard(
     personal, question
 ):
     from livekit import rtc
-    from livekit.agents.llm import ChatMessage
+    from livekit.agents.llm import ChatMessage, FunctionCall
+    from livekit.agents.voice.speech_handle import SpeechHandle
 
     prototype, service, _, authority, _ = personal
     session, bridge = _session_pair()
@@ -173,7 +174,7 @@ async def test_normal_voice_session_runs_real_context_tools_and_guard(
         "invalidate_personal_context",
     ):
         setattr(capabilities, name, getattr(authority, name))
-    config = JarvisConfig(personal_context_mode="apply")
+    config = JarvisConfig(personal_context_mode="apply", ai_provider="gemini")
     runtime = CanonicalActiveSpeakerRuntimeController(
         config,
         audio,
@@ -195,10 +196,40 @@ async def test_normal_voice_session_runs_real_context_tools_and_guard(
             SimpleNamespace(old_state="listening", new_state="thinking"),
         )
         tools = {tool.id: tool for tool in agent.tools}
+        catalog_handle = SpeechHandle.create()
+        session.emit("speech_created", SimpleNamespace(speech_handle=catalog_handle))
+        catalog_handle._item_added(
+            [
+                FunctionCall(
+                    name="personal_context_catalog", call_id="catalog", arguments="{}"
+                )
+            ]
+        )
         catalog = await tools["personal_context_catalog"]()
+        session.emit(
+            "agent_state_changed",
+            SimpleNamespace(old_state="thinking", new_state="listening"),
+        )
+        assert not runtime._active_end.is_set()
+        catalog_handle._mark_done()
+        await asyncio.sleep(0)
+        read_handle = SpeechHandle.create()
+        session.emit("speech_created", SimpleNamespace(speech_handle=read_handle))
+        read_handle._item_added(
+            [FunctionCall(name="read_personal_context", call_id="read", arguments="{}")]
+        )
         packet = await tools["read_personal_context"](
             catalog["catalog_id"], [catalog["facets"].index("diet_preference")]
         )
+        session.emit(
+            "agent_state_changed",
+            SimpleNamespace(old_state="thinking", new_state="listening"),
+        )
+        assert not runtime._active_end.is_set()
+        read_handle._mark_done()
+        await asyncio.sleep(0)
+        final_handle = SpeechHandle.create()
+        session.emit("speech_created", SimpleNamespace(speech_handle=final_handle))
         seen["packet"] = packet
         session.emit(
             "agent_state_changed",
@@ -211,6 +242,12 @@ async def test_normal_voice_session_runs_real_context_tools_and_guard(
             "agent_state_changed",
             SimpleNamespace(old_state="speaking", new_state="listening"),
         )
+        assert not runtime._active_end.is_set()
+        final_handle._item_added(
+            [ChatMessage(role="assistant", content=["A vegetarian meal."])]
+        )
+        final_handle._mark_done()
+        await asyncio.sleep(0)
 
     async def close():
         session.emit("close", SimpleNamespace(error=None, reason=None))
@@ -255,3 +292,33 @@ async def test_queued_write_rechecks_request_before_transaction(personal):
 
     with pytest.raises(MemoryNotFoundError):
         await service.inspect_exact(predicate="home city")
+
+
+@pytest.mark.asyncio
+async def test_apply_uses_explicit_local_vad_for_provider_activity_separation(
+    monkeypatch,
+):
+    from livekit.agents import inference
+    from livekit.agents.llm import InputSpeechStartedEvent
+    from livekit.agents.voice.agent_activity import AgentActivity
+
+    from jarvis.voice.livekit_session import create_voice_session
+
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session._create_realtime_model", lambda config: None
+    )
+    monkeypatch.setattr(inference, "VAD", lambda **kwargs: object())
+    session, _ = create_voice_session(JarvisConfig(personal_context_mode="apply"))
+    assert session._using_default_vad is False
+    events = []
+    session.on("user_state_changed", lambda event: events.append(event.new_state))
+    activity = object.__new__(AgentActivity)
+    activity._session = session
+    activity._agent = JarvisVoiceAgent()
+    activity._rt_session = None
+    activity._rt_overlapping_speech_enabled = False
+    activity.interrupt = lambda **kwargs: None
+    activity._on_input_speech_started(InputSpeechStartedEvent())
+    assert events == []
+    session._update_user_state("speaking")
+    assert events == ["speaking"]

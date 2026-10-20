@@ -322,3 +322,37 @@ async def test_consent_timeout_retires_before_late_result(personal):
     assert (await session.catalog())["status"] == "denied"
     authority.wait.set()
     assert retired and not await session.allow_audio()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("release", ["audio", "read"])
+async def test_no_release_after_last_storage_await_is_interrupted(
+    personal, monkeypatch, release
+):
+    session, _, conversation, _, _ = personal
+    catalog = await session.catalog()
+    await session.read(catalog["catalog_id"], [0])
+    entered = asyncio.Event()
+    resume = asyncio.Event()
+    calls = 0
+
+    async def paused_current():
+        nonlocal calls
+        calls += 1
+        if release == "audio" or calls == 2:
+            entered.set()
+            await resume.wait()
+        return True
+
+    monkeypatch.setattr(session, "_facts_current", paused_current)
+    task = asyncio.create_task(
+        session.allow_audio()
+        if release == "audio"
+        else session.read(catalog["catalog_id"], [0])
+    )
+    await asyncio.wait_for(entered.wait(), timeout=1)
+    conversation.begin_user_activity()
+    session.observe_activity()
+    resume.set()
+    result = await task
+    assert result is False if release == "audio" else result["status"] == "denied"

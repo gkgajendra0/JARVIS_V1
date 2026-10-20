@@ -277,7 +277,7 @@ class PersonalContextSession:
             if self._released and snapshots != self._released:
                 return {"status": "invalid_selection"}
             self._released = snapshots
-            if not await self._facts_current():
+            if not await self._facts_current() or not self._same(self._binding):
                 self.close()
                 return {"status": "denied"}
             self._protect()
@@ -329,7 +329,11 @@ class PersonalContextSession:
             return False
         if not self._protected:
             return True
-        if not await self._validate() or not await self._facts_current():
+        if (
+            not await self._validate()
+            or not await self._facts_current()
+            or not self._same(self._binding)
+        ):
             self.close()
             return False
         self._audio_started = True
