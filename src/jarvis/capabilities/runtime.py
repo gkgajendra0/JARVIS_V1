@@ -476,6 +476,9 @@ class CapabilityRuntime:
 
     def close(self) -> None:
         try:
+            issuer = getattr(self, "_personal_learning_authority", None)
+            if issuer is not None:
+                issuer.close()
             for callback in self._close_callbacks:
                 try:
                     callback()
