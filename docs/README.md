@@ -63,6 +63,7 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 - [Normal-app personal-context candidate](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
 - [Natural memory-intent and canonical-target repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md)
 - [Bounded normal-app owner acceptance and release](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md)
+- [Automatic conversational learning: proposed design for owner review](superpowers/specs/2026-10-21-personal-auto-learning-design.md)
 
 PRs #285–#286 established the product/documentation hierarchy; #288 approved
 the native direction and #289–#291 added evaluation, shadow and fictional

@@ -6,6 +6,34 @@ preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_
 Historical engineering milestones and evidence remain in [Project State](PROJECT_STATE.md)
 and the [Documentation Index](README.md).
 
+## Active owner request — automatic conversational learning (21 October 2026)
+
+The owner requested implementation after reviewing the earlier research and
+experiment inventory. Desired behavior: important eligible everyday information
+is learned and used automatically, without a per-fact save question. This
+supersedes the subsequently discussed proposal/confirmation product experience;
+it does not claim automatic admission is already implemented or active.
+
+PRs #292, #293 and #294 have been promoted; the reviewed implementation is on
+`main` at `7de92b3d0507ca52cfa3b653ddd976e3356a7102`. The earlier promotion
+action below is completed. Existing bounded owner acceptance remains valid.
+
+Current work is the
+[written automatic-learning design](superpowers/specs/2026-10-21-personal-auto-learning-design.md),
+on `feat/personal-auto-learning-20261021`. **Status: prepared for owner review;
+no automatic-learning product code or production settings changed.** It reuses
+native extraction, canonical memory and context delivery, and preserves prior
+external-framework/classifier failures rather than repeating those trials.
+The concrete new permission proposal is a private, explicitly delegated owner
+session; it does not claim qualified biometric attribution of each later turn.
+
+Next: review that written design, then create/review the executable task plan
+and implement the accepted automatic-admission/runtime path. The owner's
+instruction to research broadly and narrow on evidence is a continuing constraint;
+new targeted research is appropriate for a concrete unsolved interface or quality
+gap, not as a substitute for delivery. Do not ask again for the already approved
+native architecture or require owner-authored examples/isolated microphone demos.
+
 ## Owner direction — active personal intelligence (2026-10-19)
 
 The owner approved architecture PR #288, PI-1A #289, and PI-1B #290.
@@ -94,7 +122,7 @@ Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 CAP-053 is **PARTIAL**: the opt-in saved-preference flow has bounded owner
 acceptance; the broader personal-intelligence contract is not complete.
 
-### Immediate next work — promote the accepted flow, then qualify useful advice
+### Earlier PI-1 release sequence — promotion complete; qualification retained
 
 The owner-log correction failure is repaired in the same candidate: natural
 correction/deletion proposals resolve the actual canonical target, then require
@@ -103,8 +131,8 @@ The owner confirmed correct spoken results for the prescribed saved-diet
 sequence. Promotion was explicitly authorized conditional on checks; this does
 not accept broader advice quality, automatic learning or seamless attribution.
 
-1. Complete the authorized #292 → #293 → #294 promotion with applicable exact-head
-   checks and verify protected main. Preserve owner acceptance and CI evidence.
+1. **Completed:** authorized #292 → #293 → #294 promotion. Preserve owner acceptance
+   and exact-head/protected-main verification evidence.
 2. Qualify personally useful everyday advice with general fictional scenarios in
    English/Hindi/Hinglish, including relevant/irrelevant context and honest absence.
    Saved-preference recall acceptance alone does not prove this broader behavior.
@@ -183,8 +211,9 @@ approves and all required checks pass.**
 
 ## Next action
 
-Complete owner-machine qualification and protected promotion of the reviewed
-repair slice, then qualify synthetic provider delivery and the trusted
-owner-turn boundary. Continue
-through the implementation/qualification sequence above until a real owner
-observation, exact promotion approval or unavailable resource is needed.
+Review the October 21 automatic-learning written design, then prepare the
+executable task plan and implement that slice through the established lifecycle.
+Retain the broader advice, owner-input/session and normal-app acceptance gates;
+do not restart completed PI-1 promotion or old vendor experiments. Continue
+until a concrete required owner review, observation or unavailable resource is
+needed, and identify that dependency explicitly.
