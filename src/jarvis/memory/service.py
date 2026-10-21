@@ -117,6 +117,69 @@ class MemoryService:
     ) -> None:
         self._lifecycle = lifecycle
         self._reader = reader
+        self._learning_authority = None
+
+    @property
+    def canonical_reader(self):
+        return self._reader
+
+    def bind_learning_authority(self, authority):
+        from jarvis.authority.personal_learning import PersonalLearningAuthority
+
+        if self._learning_authority is not None or not isinstance(
+            authority, PersonalLearningAuthority
+        ):
+            raise PermissionError("learning authority already bound or invalid")
+        self._learning_authority = authority
+
+    async def admit_learning(self, plan, permit):
+        from .learning_reconciliation import LearningPlan
+
+        authority = self._learning_authority
+        if authority is None or not isinstance(plan, LearningPlan):
+            raise PermissionError("learning admission unavailable")
+        if (
+            authority.child_binding(permit) != plan.binding()
+            or authority.source_for(permit) is not plan.source
+        ):
+            raise PermissionError("learning plan/source binding mismatch")
+        # Revalidate every code-owned policy field at the sole write boundary.
+        seen = set()
+        for m in plan.mutations:
+            if (
+                m.ordinal in seen
+                or m.action not in {"create", "correct", "change", "retract"}
+                or m.category
+                not in {
+                    "owned_item",
+                    "food_preference",
+                    "response_preference",
+                    "routine",
+                    "goal",
+                }
+                or m.source.source_class is not MemorySourceClass.OWNER_DIRECT
+                or m.source.authority_class is not AuthorityClass.OWNER_DIRECT
+                or m.source.sensitivity is not Sensitivity.STANDARD
+                or m.source.evidence_text is not None
+                or m.source.canonical_ref
+                != f"conversation:{plan.source.session_id}:turn:{plan.source.turn_id}"
+            ):
+                raise PermissionError("learning policy mismatch")
+            seen.add(m.ordinal)
+            if m.draft is not None:
+                from .types import VerificationState
+
+                d = m.draft
+                if (
+                    d.subject_scope != "personal"
+                    or d.subject != "owner"
+                    or d.predicate != m.predicate
+                    or d.sensitivity is not Sensitivity.STANDARD
+                    or d.verification_state is not VerificationState.UNVERIFIED
+                    or d.freshness_class is not FreshnessClass.CHANGEABLE
+                ):
+                    raise PermissionError("learning draft scope mismatch")
+        return await self._lifecycle.apply_learning_batch(plan, permit, authority)
 
     async def remember_text(
         self,

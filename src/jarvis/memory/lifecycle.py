@@ -250,6 +250,120 @@ class MemoryLifecycleService:
             lambda connection: self._get_current_sync(connection, target)
         )
 
+    async def apply_learning_batch(self, plan, permit, authority):
+        return await self._writer.run(
+            lambda connection: self._apply_learning_sync(
+                connection, plan, permit, authority
+            )
+        )
+
+    def _apply_learning_sync(self, connection, plan, permit, authority):
+        from jarvis.authority.personal_learning import POLICY_VERSION
+
+        from .learning_contracts import LearningAdmissionResult
+
+        def guard():
+            authority.validate_write(permit)
+            if (
+                authority.child_binding(permit) != plan.binding()
+                or authority.source_for(permit) is not plan.source
+            ):
+                raise PermissionError("learning payload changed")
+
+        def mutation():
+            replayed = []
+            for m in plan.mutations:
+                row = connection.execute(
+                    "SELECT payload_digest,target_id FROM personal_learning_receipt WHERE source_turn_id=? AND candidate_ordinal=? AND policy_version=?",
+                    (plan.source.turn_id, m.ordinal, POLICY_VERSION),
+                ).fetchone()
+                if row and row[0] != plan.digest:
+                    raise PermissionError("changed replay payload")
+                replayed.append(row)
+            if replayed and all(replayed):
+                return LearningAdmissionResult(
+                    "noop", tuple(row[1] for row in replayed)
+                )
+            if any(replayed):
+                raise PermissionError("partial replay batch")
+            for m in plan.mutations:
+                row = connection.execute(
+                    "SELECT epoch,suppressed FROM personal_learning_suppression WHERE category=?",
+                    (m.category_key,),
+                ).fetchone()
+                epoch, suppressed = row if row else (0, 0)
+                if suppressed or epoch != dict(plan.suppression_epochs).get(
+                    m.category_key, 0
+                ):
+                    raise PermissionError("learning category epoch changed")
+                current = connection.execute(
+                    "SELECT assertion_id FROM current_semantic_assertion WHERE subject_scope='personal' AND subject='owner' AND predicate=?",
+                    (m.predicate,),
+                ).fetchall()
+                if [r[0] for r in current] != (
+                    [m.expected_assertion_id] if m.expected_assertion_id else []
+                ):
+                    return LearningAdmissionResult("stale")
+            ids = []
+            for m in plan.mutations:
+                if m.action == "create":
+                    record = self._create_sync(
+                        connection,
+                        m.draft,
+                        m.source,
+                        "automatic_learning",
+                        True,
+                        join_existing=True,
+                    )
+                elif m.action == "correct":
+                    record = self._correct_sync(
+                        connection,
+                        m.expected_assertion_id,
+                        m.draft,
+                        m.source,
+                        "automatic_learning",
+                        join_existing=True,
+                    )
+                elif m.action == "change":
+                    record = self._historical_change_sync(
+                        connection,
+                        m.expected_assertion_id,
+                        m.draft,
+                        m.source,
+                        m.source.observed_at,
+                        "automatic_learning",
+                        join_existing=True,
+                    )
+                else:
+                    record = self._close_without_replacement_sync(
+                        connection,
+                        m.expected_assertion_id,
+                        m.source,
+                        operation_type=MemoryOperationType.RETRACT,
+                        state=AssertionState.RETRACTED,
+                        effective_at=None,
+                        reason_code="automatic_learning",
+                        join_existing=True,
+                    )
+                ids.append(record.assertion_id)
+                connection.execute(
+                    "INSERT INTO personal_learning_receipt VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        plan.source.runtime_id,
+                        plan.source.turn_id,
+                        m.ordinal,
+                        POLICY_VERSION,
+                        m.category_key,
+                        plan.digest,
+                        m.source.source_id,
+                        record.assertion_id,
+                    ),
+                )
+            return LearningAdmissionResult("committed" if ids else "noop", tuple(ids))
+
+        with authority.commit_scope(permit):
+            return self._transaction(connection, mutation, guard)
+
     def _create_sync(
         self,
         connection: Any,
@@ -258,6 +372,7 @@ class MemoryLifecycleService:
         reason_code: str | None,
         require_absent_current: bool,
         commit_guard: Callable[[], None] | None = None,
+        join_existing: bool = False,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
             if require_absent_current:
@@ -294,7 +409,9 @@ class MemoryLifecycleService:
             )
             return self._require_record(connection, assertion_id)
 
-        return self._transaction(connection, mutation, commit_guard)
+        return self._transaction(
+            connection, mutation, commit_guard, join_existing=join_existing
+        )
 
     def _historical_change_sync(
         self,
@@ -304,6 +421,7 @@ class MemoryLifecycleService:
         source: MemorySource,
         effective_at: datetime,
         reason_code: str | None,
+        join_existing: bool = False,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
             now = self._clock_utc()
@@ -351,7 +469,7 @@ class MemoryLifecycleService:
             )
             return self._require_record(connection, replacement_id)
 
-        return self._transaction(connection, mutation)
+        return self._transaction(connection, mutation, join_existing=join_existing)
 
     def _correct_sync(
         self,
@@ -361,6 +479,7 @@ class MemoryLifecycleService:
         source: MemorySource,
         reason_code: str | None,
         commit_guard: Callable[[], None] | None = None,
+        join_existing: bool = False,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
             now = self._clock_utc()
@@ -402,7 +521,9 @@ class MemoryLifecycleService:
             )
             return self._require_record(connection, replacement_id)
 
-        return self._transaction(connection, mutation, commit_guard)
+        return self._transaction(
+            connection, mutation, commit_guard, join_existing=join_existing
+        )
 
     def _close_without_replacement_sync(
         self,
@@ -414,6 +535,7 @@ class MemoryLifecycleService:
         state: AssertionState,
         effective_at: datetime | None,
         reason_code: str | None,
+        join_existing: bool = False,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
             now = self._clock_utc()
@@ -456,7 +578,7 @@ class MemoryLifecycleService:
             )
             return self._require_record(connection, assertion_id)
 
-        return self._transaction(connection, mutation)
+        return self._transaction(connection, mutation, join_existing=join_existing)
 
     def _verify_sync(
         self,
@@ -795,7 +917,13 @@ class MemoryLifecycleService:
         connection: Any,
         mutation: Callable[[], T],
         commit_guard: Callable[[], None] | None = None,
+        *,
+        join_existing: bool = False,
     ) -> T:
+        if join_existing:
+            if not connection.in_transaction:
+                raise MemoryLifecycleError("missing outer transaction")
+            return mutation()
         connection.execute("BEGIN IMMEDIATE")
         try:
             if commit_guard is not None:

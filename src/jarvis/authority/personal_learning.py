@@ -77,6 +77,7 @@ class _Grant:
     revoked: str = ""
     seen: set[str] = field(default_factory=set)
     sources: dict[str, float] = field(default_factory=dict)
+    source_objects: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -181,14 +182,51 @@ class PersonalLearningAuthority:
                 record.seen.add(turn_id)
                 record.last_input = self._broker._clock()
 
-    def register_source(self, grant, receipt_id):
+    def register_source(self, grant, receipt_id, *, source=None):
         with self._broker._lock:
             record = self._require(grant)
             now = self._broker._clock()
             record.sources = {k: v for k, v in record.sources.items() if now < v}
+            record.source_objects = {
+                k: v for k, v in record.source_objects.items() if k in record.sources
+            }
             if not receipt_id or len(record.sources) >= 128:
                 raise PermissionError("source receipt unavailable")
+            if source is not None:
+                from jarvis.memory.learning_contracts import AcceptedLearningSource
+
+                if (
+                    not isinstance(source, AcceptedLearningSource)
+                    or source.receipt_id != receipt_id
+                ):
+                    raise PermissionError("invalid canonical source")
+                if (
+                    receipt_id in record.source_objects
+                    and record.source_objects[receipt_id] is not source
+                ):
+                    raise PermissionError("source identity changed")
+                record.source_objects[receipt_id] = source
             record.sources.setdefault(receipt_id, now + 30)
+
+    def release_source(self, grant, receipt_id):
+        with self._broker._lock:
+            record = self._grants.get(grant)
+            if record:
+                record.sources.pop(receipt_id, None)
+                record.source_objects.pop(receipt_id, None)
+
+    def source_for(self, permit):
+        with self._broker._lock:
+            child = self._child(permit)
+            return self._grants[child.grant].source_objects.get(
+                child.binding.source_receipt_id
+            )
+
+    def validate_write(self, permit):
+        with self._broker._lock:
+            child = self._child(permit)
+            if child.binding.operation != "admit" or not child.consumed:
+                raise PermissionError("unconsumed write child")
 
     def revoke(self, grant, reason="manual_clear"):
         with self._broker._lock:
@@ -196,6 +234,7 @@ class PersonalLearningAuthority:
             if record is not None:
                 record.revoked = reason
                 record.sources.clear()
+                record.source_objects.clear()
                 self._broker._approvals.revoke_delegation(grant)
 
     def _proof(self, grant, proposal):

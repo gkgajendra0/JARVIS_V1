@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from uuid import uuid4
 
 from jarvis.authority.personal_learning import POLICY_VERSION, LearningActionBinding
@@ -55,6 +55,14 @@ class LearningPlan:
             draft = m.draft
             rows.append(
                 {
+                    "material": json.loads(
+                        json.dumps(
+                            asdict(m),
+                            default=lambda v: (
+                                v.isoformat() if hasattr(v, "isoformat") else v.value
+                            ),
+                        )
+                    ),
                     "ordinal": m.ordinal,
                     "action": m.action,
                     "category": m.category_key,

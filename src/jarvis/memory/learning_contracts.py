@@ -137,3 +137,9 @@ class LearningResolutionBatch(BaseModel):
 class LearningEligibility:
     status: str
     reason: str = ""
+
+
+@dataclass(frozen=True)
+class LearningAdmissionResult:
+    status: str
+    assertion_ids: tuple[str, ...] = ()
