@@ -224,6 +224,7 @@ class MemoryLifecycleService:
         reason_code: str | None = "explicit_owner_request",
         commit_guard: Callable[[], None] | None = None,
         require_current: bool = False,
+        purge_lineage: bool = False,
     ) -> bool:
         target = self._assertion_id(assertion_id)
         reason = _reason_code(reason_code)
@@ -235,6 +236,7 @@ class MemoryLifecycleService:
                 reason,
                 commit_guard,
                 require_current,
+                purge_lineage,
             )
         )
 
@@ -277,7 +279,7 @@ class MemoryLifecycleService:
                     "SELECT payload_digest,target_id FROM personal_learning_receipt WHERE source_turn_id=? AND candidate_ordinal=? AND policy_version=?",
                     (plan.source.turn_id, m.ordinal, POLICY_VERSION),
                 ).fetchone()
-                if row and row[0] != plan.digest:
+                if row and row[0] != plan.mutation_digest(m):
                     raise PermissionError("changed replay payload")
                 replayed.append(row)
             if replayed and all(replayed):
@@ -354,7 +356,7 @@ class MemoryLifecycleService:
                         m.ordinal,
                         POLICY_VERSION,
                         m.category_key,
-                        plan.digest,
+                        plan.mutation_digest(m),
                         m.source.source_id,
                         record.assertion_id,
                     ),
@@ -627,6 +629,7 @@ class MemoryLifecycleService:
         reason_code: str | None,
         commit_guard: Callable[[], None] | None = None,
         require_current: bool = False,
+        purge_lineage: bool = False,
     ) -> bool:
         def mutation() -> bool:
             target = self._get_sync(connection, assertion_id)
@@ -640,6 +643,8 @@ class MemoryLifecycleService:
                 )
             now = self._clock_utc()
             self._ensure_source(connection, source)
+            if purge_lineage:
+                return self._purge_learning_lineage(connection, target, source, now)
             target_source_id = target.source_id
 
             connection.execute(
@@ -685,6 +690,84 @@ class MemoryLifecycleService:
             return True
 
         return self._transaction(connection, mutation, commit_guard)
+
+    async def reenable_learning_category(self, category, source, commit_guard):
+        def apply(connection):
+            def mutation():
+                self._ensure_source(connection, source)
+                connection.execute(
+                    "INSERT INTO personal_learning_suppression VALUES (?,1,0,?) ON CONFLICT(category) DO UPDATE SET epoch=epoch+1,suppressed=0,updated_at=excluded.updated_at",
+                    (category, _db_time(self._clock_utc())),
+                )
+
+            return self._transaction(connection, mutation, commit_guard)
+
+        return await self._writer.run(apply)
+
+    def _purge_learning_lineage(self, connection, target, source, now):
+        import json
+
+        from .learning_policy import SCALAR_FACETS
+
+        rows = connection.execute(
+            "SELECT assertion_id,source_id,value_json FROM semantic_assertion WHERE subject_scope=? AND subject=? AND predicate=?",
+            (target.subject_scope, target.subject, target.predicate),
+        ).fetchall()
+        ids = tuple(r[0] for r in rows)
+        marks = ",".join("?" for _ in ids)
+        categories = {
+            r[0]
+            for r in connection.execute(
+                f"SELECT DISTINCT category FROM personal_learning_receipt WHERE target_id IN ({marks})",
+                ids,
+            )
+        }
+        for _, _, value in rows:
+            parsed = json.loads(value)
+            if (
+                isinstance(parsed, dict)
+                and parsed.get("schema") == "personal-learning-v1"
+            ):
+                cat = parsed.get("category")
+                categories.add(
+                    f"owned_item.{parsed.get('kind', 'other')}"
+                    if cat == "owned_item"
+                    else cat
+                )
+        for cat, facets in SCALAR_FACETS.items():
+            if target.predicate in facets:
+                categories.add(cat)
+        from .learning_policy import SUPPRESSION_KEYS
+
+        for category in categories & SUPPRESSION_KEYS:
+            connection.execute(
+                "INSERT INTO personal_learning_suppression VALUES (?,1,1,?) ON CONFLICT(category) DO UPDATE SET epoch=epoch+1,suppressed=1,updated_at=excluded.updated_at",
+                (category, _db_time(now)),
+            )
+        connection.execute(
+            f"DELETE FROM personal_learning_receipt WHERE target_id IN ({marks})", ids
+        )
+        connection.execute(
+            f"DELETE FROM memory_operation WHERE target_id IN ({marks})", ids
+        )
+        connection.execute(
+            f"DELETE FROM semantic_assertion WHERE assertion_id IN ({marks})", ids
+        )
+        for source_id in {r[1] for r in rows}:
+            connection.execute(
+                "DELETE FROM memory_source WHERE source_id=? AND NOT EXISTS(SELECT 1 FROM semantic_assertion WHERE source_id=?) AND NOT EXISTS(SELECT 1 FROM memory_operation WHERE source_id=?)",
+                (source_id, source_id, source_id),
+            )
+        self._insert_operation(
+            connection,
+            operation_type=MemoryOperationType.FORGET,
+            target_id=target.assertion_id,
+            source_id=source.source_id,
+            occurred_at=now,
+            reason_code="explicit_owner_request",
+            result_state="forgotten",
+        )
+        return True
 
     def _ensure_source(self, connection: Any, source: MemorySource) -> None:
         if source.evidence_text is not None:

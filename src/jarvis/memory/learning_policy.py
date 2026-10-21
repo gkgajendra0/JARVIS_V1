@@ -73,3 +73,16 @@ class LearningPolicy:
         except MemorySecretRejectedError:
             return LearningEligibility("drop", "secret")
         return LearningEligibility("eligible")
+
+
+SUPPRESSION_KEYS = frozenset(
+    {
+        "owned_item.vehicle",
+        "owned_item.device",
+        "owned_item.other",
+        "food_preference",
+        "response_preference",
+        "routine",
+        "goal",
+    }
+)

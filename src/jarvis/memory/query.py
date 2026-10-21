@@ -23,6 +23,18 @@ class CanonicalMemoryReader:
     def __init__(self, reader: SerialConnectionWorker) -> None:
         self._reader = reader
 
+    async def learning_suppression(self):
+        from .learning_contracts import LearningSuppressionSnapshot
+
+        rows = await self._reader.run(
+            lambda c: c.execute(
+                "SELECT category,epoch,suppressed FROM personal_learning_suppression"
+            ).fetchall()
+        )
+        return LearningSuppressionSnapshot(
+            {r[0]: r[1] for r in rows}, frozenset(r[0] for r in rows if r[2])
+        )
+
     async def learning_current(self):
         """Bounded standard owner snapshot; caller must hold learning read authority."""
 

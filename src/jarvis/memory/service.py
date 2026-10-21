@@ -181,6 +181,22 @@ class MemoryService:
                     raise PermissionError("learning draft scope mismatch")
         return await self._lifecycle.apply_learning_batch(plan, permit, authority)
 
+    async def learning_suppression(self):
+        return await self._reader.learning_suppression()
+
+    async def reenable_learning_category(self, category, explicit_source, commit_guard):
+        from .learning_policy import SUPPRESSION_KEYS
+
+        if category not in SUPPRESSION_KEYS or not callable(commit_guard):
+            raise PermissionError("exact explicit category approval required")
+        try:
+            self._validate_owner_explicit_source(explicit_source, Sensitivity.STANDARD)
+        except MemoryServiceError as exc:
+            raise PermissionError("explicit owner source required") from exc
+        await self._lifecycle.reenable_learning_category(
+            category, explicit_source, commit_guard
+        )
+
     async def remember_text(
         self,
         *,
@@ -275,6 +291,7 @@ class MemoryService:
             reason_code="explicit_owner_request",
             commit_guard=commit_guard,
             require_current=True,
+            purge_lineage=True,
         )
         if not forgotten:
             raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")

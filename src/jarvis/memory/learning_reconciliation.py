@@ -88,6 +88,23 @@ class LearningPlan:
             ).encode()
         ).hexdigest()
 
+    def mutation_digest(self, mutation):
+        material = json.loads(
+            json.dumps(
+                asdict(mutation),
+                default=lambda v: v.isoformat() if hasattr(v, "isoformat") else v.value,
+            )
+        )
+        return hashlib.sha256(
+            canonical_json(
+                {
+                    "turn": self.source.turn_id,
+                    "policy": POLICY_VERSION,
+                    "mutation": material,
+                }
+            ).encode()
+        ).hexdigest()
+
     def binding(self):
         return LearningActionBinding(
             "admit",

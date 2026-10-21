@@ -143,3 +143,9 @@ class LearningEligibility:
 class LearningAdmissionResult:
     status: str
     assertion_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class LearningSuppressionSnapshot:
+    epochs: dict[str, int]
+    suppressed: frozenset[str]
