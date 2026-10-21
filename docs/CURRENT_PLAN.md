@@ -1,6 +1,6 @@
 # JARVIS — Current Execution Plan
 
-**Updated for owner-directed priority, 18 October 2026.** This file contains *current
+**Reconciled with both development chats, 20 October 2026.** This file contains *current
 priority and next actionable work*, not a complete chronology. The previous plan is
 preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_SNAPSHOT_2026-10-18.md).
 Historical engineering milestones and evidence remain in [Project State](PROJECT_STATE.md)
@@ -47,10 +47,22 @@ approved by activating read-only context. Start with explicitly permitted facts
 and add carefully governed natural learning after the initial active recall
 release is proven.
 
-**Status:** PRs #288–#290 MERGED; active owner memory -> live voice model
+**Status:** PRs #288–#291 MERGED; active owner memory -> live voice model
 integration **NOT IMPLEMENTED / NOT ACTIVE**. The owner-machine identity and
 provider acceptance are required; do not claim otherwise. The objective is
 active release, with isolated tests only as a means to validate it.
+
+The two chats pursued the same native-extension direction. PR #289 supplies
+an offline evaluation contract, #290 a policy-tested read-only foundation,
+and #291 an opt-in fictional provider-delivery probe. None proves automatic
+personalization. The previous chat's [draft PR #287](https://github.com/gkgajendra0/JARVIS_V1/pull/287)
+contains separate native-shadow and multilingual diagnostic evidence; it is
+unmerged and must not be counted as code or acceptance on `main`, or merged
+wholesale over the newer implementation. Preserve useful evidence and compare
+individual contracts before reuse.
+
+The [October 20 reconciliation audit](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md)
+records the handover, verified scope, defects and remaining qualification.
 
 ## Owner priority: personal intelligence, before more framework work
 
@@ -65,24 +77,42 @@ Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 [Autonomous Self-Management North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md).
 CAP-053 (Personal Intelligence and Automatic Context Use) is **PLANNED**.
 
-### Immediate next work — documentation and bounded architecture research
+### Immediate next work — qualify the approved native architecture
 
-1. Reconcile product documents into a small authoritative set and preserve
-   previous technical/acceptance evidence without losing information.
-2. Finish a requirements-first, **end-to-end personal-assistant architecture**
-   comparison using existing JARVIS modules and credible external options.
-   Use official sources, independent benchmarks and explicit unknowns, not a
-   string of unrelated framework experiments.
-3. Freeze owner-facing acceptance tasks and baseline measurements: changing
-   preferences, food, purchases, travel, finances, relationship references,
-   multi-session corrections, missing information, model use and privacy.
-4. Produce a single architecture decision identifying exactly what to **reuse,
-   modify, or add**; interfaces, cost, latency, security and revert gates.
-5. After a separate architecture owner approval, implement a **read-only shadow
-   personal-context path**. Do not turn on implicit durable memory writes or
-   automatic provider-context injection as part of this documentation work.
-6. Validate safe recall and *actual personalized answer improvement* before
-   considering a bounded owner-machine production rollout.
+1. Qualify and promote the reviewed repairs to the reproduced runtime,
+   privacy, storage and provider-probe defects recorded in the audit. Local
+   regressions and independent fix review passed; exact-head CI and applicable
+   owner-machine acceptance remain promotion gates. Preserve canonical truth
+   and normal Authority throughout.
+2. Use the pinned-SDK fictional probe to qualify actual provider delivery.
+   Its original session/agent API mismatch must be repaired before a paid
+   live test; offline preflight alone is not delivery evidence. Compare
+   initial-history, accepted-turn update and tool-result paths as PI-1C requires.
+3. Add a measured question-to-facet relevance selector to the existing canonical
+   reader boundary. The PI-1B fixture selector is not a natural-language router.
+   Revalidate corrections, deletion, freshness, source policy and turn binding
+   at consumption; preserve unavailable versus absent memory distinctions.
+   Reuse relevant #287 contract evidence for accepted-turn identity, cancellation,
+   duplicate/reconnect invalidation and bounded outstanding reads without adding
+   a competing coordinator or claiming its text diagnostics prove live voice.
+4. Establish trusted owner/turn attribution before private release. Speaker
+   scores and camera presence remain diagnostics, not authority. Qualify guest,
+   interruption, reconnect and identity-loss behavior on the actual runtime.
+5. Run matched baseline/context answers and independent qualitative review on
+   fixed and held-out everyday scenarios, then restart/outage tests. Include
+   Hindi, Hinglish and English as priority forms plus explicitly reported
+   broader-language coverage. Record actual useful application, errors,
+   whole-turn and first-response latency, token usage and cost; do not infer
+   end-to-end success from corpus validation or retrieved facts.
+6. Implement and qualify the actual APPLY bridge and reversible OFF switch,
+   complete owner-machine acceptance, and enable the approved path only for
+   the authenticated owner. Automatic learning/admission remains a separate
+   later capability; optional local-model training remains deferred.
+
+The native architecture is already owner-approved. Do not ask for that same
+decision again or restart a vendor benchmark as a substitute for integration.
+The owner requested general fictional tests instead of supplying personal
+examples; no owner-authored examples are a prerequisite to continued development.
 
 **First behavioral acceptance:** after several sessions and a restart, JARVIS
 responds meaningfully to personally relevant everyday questions using
@@ -115,9 +145,8 @@ See [Current Architecture](CURRENT_ARCHITECTURE.md) and
 
 ## Previous work and parallel obligations — not cancelled
 
-- PR #243 provider-model lifecycle / Gemini voice behavior was previously
-  designated for real owner-machine acceptance. Recheck the PR's **actual
-  current GitHub status** before treating it as pending, merged or actionable.
+- PR #243 provider-model lifecycle is merged. That status alone does not prove
+  the new personal-context delivery path or spoken owner attribution.
 - The previously requested bounded Cost Optimization program is recorded in
   [Cost Optimization Master Plan](JARVIS_COST_OPTIMIZATION_MASTER_PLAN.md)
   and its original [implementation plan](reference/JARVIS_COST_OPTIMIZATION_IMPLEMENTATION_PLAN.md).
@@ -140,16 +169,17 @@ Use the established sequence: research -> architecture -> explicit owner
 approval -> isolated PR -> automated tests -> applicable owner-machine
 acceptance -> documentation reconciliation -> protected promotion.
 
-No work in this documentation branch authorizes code modification, new
-retention of personal data, cloud release of local-only data, production
-injection, a different canonical memory/work store, spending, or bypass of
-Authority/OPA. **Protected main remains unchanged until the owner approves
-and all required checks pass.**
+The owner authorized audit reconciliation and repairs to reproduced contract
+violations. This does not authorize new personal-data retention, cloud release
+of local-only data, a different canonical store, paid fallback purchases or
+bypass of Authority/OPA. The approved active product goal still requires the
+release gates above. **Protected main remains unchanged until the owner
+approves and all required checks pass.**
 
 ## Next action
 
-Complete this documentation reconciliation, compare personal intelligence
-architecture options against the fixed owner requirements and acceptance
-scenarios, then ask for the **single bounded architecture decision** before
-implementation. Do not start another retrieval-engine experiment simply
-because a different tool is fashionable.
+Complete owner-machine qualification and protected promotion of the reviewed
+repair slice, then qualify synthetic provider delivery and the trusted
+owner-turn boundary. Continue
+through the implementation/qualification sequence above until a real owner
+observation, exact promotion approval or unavailable resource is needed.

@@ -36,6 +36,15 @@ verbatim under [Documentation Index](README.md).
 
 ## Status vocabulary
 
+For the October 20 cross-chat reconciliation, see the
+[audit](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md).
+PRs #288–#291 are merged nonproduction personal-intelligence foundations.
+Actual automatic owner-memory use remains unimplemented/inactive; their merge
+does not promote CAP-053 to DONE. Draft PR #287's separate diagnostic evidence
+is not part of this main baseline. [Current Plan](CURRENT_PLAN.md) owns the
+active personal-intelligence work; historical engineering next-actions below
+do not supersede it.
+
 - **DONE** — accepted production capability for its defined scope.
 - **BOUNDED** — accepted useful subset with an explicit deferred remainder.
 - **PARTIAL** — accepted foundation exists but the later formal product slice is not complete.
@@ -268,7 +277,7 @@ These are intentionally not represented as completed.
 | full local/offline conversation | DEFERRED | current provider resilience is truthful survival, not a second full local conversation stack |
 | proactive/event-driven monitoring | PLANNED | later Step 15 |
 | full Steps 9/10/12 | PLANNED with partial foundations | Hands supplies foundations only |
-| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–10 are accepted; Phase 9 final external lifecycle validation is deferred to final whole-system acceptance; Phase 10A research/architecture is next; later phases remain planned in `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` |
+| Later autonomous-engineering phases | ACTIVE / PLANNED | Phases 2–10A have accepted scopes; Phase 9 final external lifecycle validation is deferred; Phase 11 is next in the supporting engineering program, while personal intelligence is the current owner priority |
 
 ---
 
@@ -369,11 +378,13 @@ Phase 4 Research + Diagnostic Model Router is **DONE / OWNER-MACHINE ACCEPTED 20
 
 Phase 8 Capability Package + Registry Lifecycle is **DONE / OWNER-MACHINE ACCEPTED 2026-09-27**. Canonical evidence is `archive/acceptance/PHASE8_CAPABILITY_PACKAGE_REGISTRY_ACCEPTANCE_2026-09-27.md`.
 
-The active cross-cutting slice is:
+The current owner-directed cross-cutting slice is **native personal intelligence
+integration and qualification**, as specified in [Current Plan](CURRENT_PLAN.md).
+**Phase 11 — Autonomous capability-gap / weakness detection** remains the next
+research/architecture milestone within the supporting engineering program;
+its implementation is not yet authorized and does not displace that priority.
 
-**Phase 11 — Autonomous capability-gap / weakness detection — RESEARCH / ARCHITECTURE NEXT; IMPLEMENTATION NOT YET AUTHORIZED**
-
-Phase 10A is DONE / OWNER-MACHINE ACCEPTED 2026-09-28. Exact owner-tested implementation head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` passed the locked 30-case acceptance corpus with replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`; PR #219 squash-merged to protected `main` as `3d9289aafd371484fe22023bf57279d6101d6b16`. The next action is Phase 11 repository inspection and thorough research, followed by architecture for explicit owner approval. Phase 9 remains DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; its complete real external capability lifecycle remains deferred to final whole-system acceptance because Gemini was rate-limited and OpenAI fallback was quota-exhausted during the live run.
+Phase 10A is DONE / OWNER-MACHINE ACCEPTED 2026-09-28. Exact owner-tested implementation head `4d1cb077cf3b0c5d9271edf05b47a5012ca14695` passed the locked 30-case acceptance corpus with replay digest `2a8205a1a84165effd813aee088d298c5c25ba290585d20753f17e750be77258` and evidence digest `fa85ee31a0d63609167be4556f8cab587c980d20311de88396bbf70e16b9bae3`; PR #219 squash-merged to protected `main` as `3d9289aafd371484fe22023bf57279d6101d6b16`. Within that engineering program, Phase 11 repository inspection/research and owner-approved architecture remain next; they do not supersede the active personal-intelligence priority. Phase 9 remains DONE (BOUNDED) / OWNER ACCEPTED 2026-09-28; its complete real external capability lifecycle remains deferred to final whole-system acceptance because Gemini was rate-limited and OpenAI fallback was quota-exhausted during the live run.
 
 The Phase-9 bounded acceptance does not broaden runtime authority, waive any protected gate, or claim that the deferred physical/external lifecycle has already been proven.
 

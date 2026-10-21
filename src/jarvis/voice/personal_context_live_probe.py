@@ -67,14 +67,13 @@ async def run_live_probe(*, timeout_seconds: float = 60.0) -> dict[str, Any]:
     bridge.conversation.start()
     try:
         session.input.set_audio_enabled(False)
-        await asyncio.wait_for(
-            session.start(agent=JarvisVoiceAgent(tools=[])), timeout_seconds
-        )
+        agent = JarvisVoiceAgent(tools=[])
+        await asyncio.wait_for(session.start(agent=agent), timeout_seconds)
         # The synthetic data are sent as ordinary previous user context, not
         # as system instructions. Tool calls and real personal memories are absent.
         ctx = ChatContext()
         ctx.add_message(role="user", content=_SYNTHETIC_FACT)
-        await asyncio.wait_for(session.update_chat_ctx(ctx), timeout_seconds)
+        await asyncio.wait_for(agent.update_chat_ctx(ctx), timeout_seconds)
         handle = session.generate_reply(
             instructions=_QUESTION,
             allow_interruptions=True,

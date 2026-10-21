@@ -4,6 +4,8 @@ import json
 import subprocess
 from dataclasses import replace
 
+import pytest
+
 from jarvis.authority import (
     ActionAttributes,
     ActionOrigin,
@@ -13,6 +15,10 @@ from jarvis.authority import (
     StrongVerificationStatus,
     WindowsHelloVerifier,
     WindowsSessionGuard,
+)
+from jarvis.authority.session import (
+    WindowsSessionUnavailable,
+    WindowsWtsSessionProvider,
 )
 
 
@@ -116,3 +122,50 @@ def test_windows_session_guard_invalidates_on_user_switch() -> None:
     guard.poll()
     guard.poll()
     assert events == [("wts:1", SessionSecurityEvent.USER_SWITCH)]
+
+
+class FakeSessionContinuity:
+    def __init__(self):
+        self.epoch = 1
+        self.available = True
+
+    def generation(self):
+        if not self.available:
+            raise WindowsSessionUnavailable("listener failed")
+        return self.epoch
+
+
+def test_wts_snapshot_retains_lock_unlock_epoch_between_boundary_reads(monkeypatch):
+    monkeypatch.setattr("jarvis.authority.session.sys.platform", "win32")
+    provider = WindowsWtsSessionProvider()
+    provider._event_monitor = FakeSessionContinuity()
+    monkeypatch.setattr(provider, "_read_state", lambda: (1, True))
+    first = provider.current_session()
+    provider._event_monitor.epoch += 2  # lock followed by unlock, both between reads
+    second = provider.current_session()
+    assert first.active_unlocked and second.active_unlocked
+    assert second.generation > first.generation
+
+
+def test_wts_snapshot_requires_healthy_continuity_listener(monkeypatch):
+    monkeypatch.setattr("jarvis.authority.session.sys.platform", "win32")
+    provider = WindowsWtsSessionProvider()
+    provider._event_monitor = FakeSessionContinuity()
+    provider._event_monitor.available = False
+    monkeypatch.setattr(provider, "_read_state", lambda: (1, True))
+    with pytest.raises(WindowsSessionUnavailable):
+        provider.current_session()
+
+
+def test_wts_snapshot_rejects_security_event_during_state_read(monkeypatch):
+    monkeypatch.setattr("jarvis.authority.session.sys.platform", "win32")
+    provider = WindowsWtsSessionProvider()
+    provider._event_monitor = FakeSessionContinuity()
+
+    def state_read():
+        provider._event_monitor.epoch += 1
+        return 1, True
+
+    monkeypatch.setattr(provider, "_read_state", state_read)
+    with pytest.raises(WindowsSessionUnavailable):
+        provider.current_session()

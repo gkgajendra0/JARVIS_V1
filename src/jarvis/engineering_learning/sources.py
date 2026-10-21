@@ -1,4 +1,10 @@
-"""Bounded read-only Phase-10 outcome sources over existing canonical stores."""
+"""Bounded read-only Phase-10 outcome sources over existing canonical stores.
+
+Each long-lived source keeps an advisory keyset position and wraps at exhaustion.
+Pages advance over source records, including normalization failures; later passes
+retry those failures and downstream indexing failures rather than excluding them.
+Restart may repeat earlier pages but cannot discard outcomes or change identities.
+"""
 
 from __future__ import annotations
 
@@ -56,6 +62,7 @@ class PromotionOutcomeSource:
             raise TypeError("store must be PromotionStore")
         self._store = store
         self._adapter = PromotionOutcomeAdapter(store.changes)
+        self._after: tuple[str, str] | None = None
 
     def scan(
         self,
@@ -64,15 +71,21 @@ class PromotionOutcomeSource:
         observed_at_epoch: float,
     ) -> EngineeringOutcomeSourceScan:
         del observed_at_epoch
-        attempts = self._store.list_by_states(
-            (
-                PromotionAttemptState.COMPLETED,
-                PromotionAttemptState.ROLLED_BACK,
-                PromotionAttemptState.FAILED,
-                PromotionAttemptState.BLOCKED,
-                PromotionAttemptState.STALE,
-            ),
-            limit=_limit(limit),
+        states = (
+            PromotionAttemptState.COMPLETED,
+            PromotionAttemptState.ROLLED_BACK,
+            PromotionAttemptState.FAILED,
+            PromotionAttemptState.BLOCKED,
+            PromotionAttemptState.STALE,
+        )
+        bounded = _limit(limit)
+        attempts = self._store.list_by_states(states, limit=bounded, after=self._after)
+        if not attempts and self._after is not None:
+            attempts = self._store.list_by_states(states, limit=bounded)
+        self._after = (
+            (attempts[-1].created_at, attempts[-1].attempt_id)
+            if len(attempts) == bounded
+            else None
         )
         outcomes: list[EngineeringOutcomeV1] = []
         errors: list[str] = []
@@ -96,6 +109,7 @@ class RepairOutcomeSource:
             raise TypeError("store must be SqliteIncidentStore")
         self._store = store
         self._adapter = RepairOutcomeAdapter()
+        self._after: tuple[float, str] | None = None
 
     def scan(
         self,
@@ -104,7 +118,17 @@ class RepairOutcomeSource:
         observed_at_epoch: float,
     ) -> EngineeringOutcomeSourceScan:
         del observed_at_epoch
-        attempts = self._store.list_terminal_repair_attempts(limit=_limit(limit))
+        bounded = _limit(limit)
+        attempts = self._store.list_terminal_repair_attempts(
+            limit=bounded, after=self._after
+        )
+        if not attempts and self._after is not None:
+            attempts = self._store.list_terminal_repair_attempts(limit=bounded)
+        self._after = (
+            (attempts[-1].finished_at_epoch, attempts[-1].attempt_id)
+            if len(attempts) == bounded
+            else None
+        )
         outcomes: list[EngineeringOutcomeV1] = []
         errors: list[str] = []
         for attempt in attempts:
@@ -127,6 +151,7 @@ class CapabilityAcquisitionOutcomeSource:
             raise TypeError("store must be ChangeStore")
         self._store = store
         self._adapter = CapabilityAcquisitionOutcomeAdapter(store)
+        self._after: tuple[str, str] | None = None
 
     def scan(
         self,
@@ -135,17 +160,32 @@ class CapabilityAcquisitionOutcomeSource:
         observed_at_epoch: float,
     ) -> EngineeringOutcomeSourceScan:
         del observed_at_epoch
+        states = (
+            ChangeState.CLOSED,
+            ChangeState.ROLLED_BACK,
+            ChangeState.FAILED,
+            ChangeState.BLOCKED_EXTERNAL,
+            ChangeState.REJECTED,
+        )
+        bounded = _limit(limit)
         changes = self._store.list_by_states(
-            (
-                ChangeState.CLOSED,
-                ChangeState.ROLLED_BACK,
-                ChangeState.FAILED,
-                ChangeState.BLOCKED_EXTERNAL,
-                ChangeState.REJECTED,
-            ),
+            states,
             process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
             process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
-            limit=_limit(limit),
+            limit=bounded,
+            after=self._after,
+        )
+        if not changes and self._after is not None:
+            changes = self._store.list_by_states(
+                states,
+                process_key=OWNER_CAPABILITY_ACQUISITION_PROCESS.key,
+                process_version=OWNER_CAPABILITY_ACQUISITION_PROCESS.version,
+                limit=bounded,
+            )
+        self._after = (
+            (changes[-1].created_at, changes[-1].change_id)
+            if len(changes) == bounded
+            else None
         )
         outcomes: list[EngineeringOutcomeV1] = []
         errors: list[str] = []
@@ -176,6 +216,7 @@ class CapabilityCompatibilityOutcomeSource:
         self._store = store
         self._evaluator = evaluator
         self._adapter = CapabilityCompatibilityOutcomeAdapter()
+        self._after: str | None = None
 
     def scan(
         self,
@@ -186,9 +227,17 @@ class CapabilityCompatibilityOutcomeSource:
         bounded = _limit(limit)
         outcomes: list[EngineeringOutcomeV1] = []
         errors: list[str] = []
-        selected = tuple(
+        available = tuple(
             state for state in self._store.list_registry() if state.has_selection
+        )
+        selected = tuple(
+            state
+            for state in available
+            if self._after is None or state.capability_id > self._after
         )[:bounded]
+        if not selected and self._after is not None:
+            selected = available[:bounded]
+        self._after = selected[-1].capability_id if len(selected) == bounded else None
         for state in selected:
             package = self._store.get_package(
                 state.selected_package_id or "",

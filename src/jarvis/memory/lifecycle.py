@@ -35,6 +35,10 @@ class MemorySourceConflictError(MemoryLifecycleError):
     pass
 
 
+class MemoryCurrentFacetExistsError(MemoryLifecycleError):
+    pass
+
+
 def _new_id() -> str:
     return str(uuid.uuid4())
 
@@ -90,10 +94,15 @@ class MemoryLifecycleService:
         source: MemorySource,
         *,
         reason_code: str | None = None,
+        require_absent_current: bool = False,
     ) -> SemanticAssertionRecord:
+        if type(require_absent_current) is not bool:
+            raise TypeError("require_absent_current must be a bool")
         reason = _reason_code(reason_code)
         return await self._writer.run(
-            lambda connection: self._create_sync(connection, draft, source, reason)
+            lambda connection: self._create_sync(
+                connection, draft, source, reason, require_absent_current
+            )
         )
 
     async def historical_change(
@@ -240,8 +249,19 @@ class MemoryLifecycleService:
         draft: SemanticAssertionDraft,
         source: MemorySource,
         reason_code: str | None,
+        require_absent_current: bool,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
+            if require_absent_current:
+                existing = connection.execute(
+                    "SELECT 1 FROM current_semantic_assertion "
+                    "WHERE subject_scope = ? AND subject = ? AND predicate = ? LIMIT 1",
+                    (draft.subject_scope, draft.subject, draft.predicate),
+                ).fetchone()
+                if existing is not None:
+                    raise MemoryCurrentFacetExistsError(
+                        "current memory already exists for the requested facet"
+                    )
             now = self._clock_utc()
             self._ensure_source(connection, source)
             assertion_id = self._fresh_assertion_id()

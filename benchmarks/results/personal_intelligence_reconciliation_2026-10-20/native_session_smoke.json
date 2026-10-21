@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "scope": "passive native Windows WTS listener startup, synchronized epoch/session snapshot and close; no physical lock, Hello or owner-data release acceptance",
+  "observed_result": {
+    "close": true,
+    "epoch": 1,
+    "snapshot": true,
+    "startup": true
+  },
+  "python": "3.11.9",
+  "platform": "win32",
+  "archived_code_sha256_lf_utf8": {
+    "src/jarvis/authority/windows_session_events.py": "bd4cfcd2c5220a39ddd78d1e759493017e7a598fc0eedbe4d8db8438273ab996",
+    "src/jarvis/authority/session.py": "41aa03e7a4d883f6182d56afa60cdcf404f979c8a6f5837c2fa54f3ae43e49e4"
+  }
+}

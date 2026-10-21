@@ -210,7 +210,9 @@ class LiveKitConversationBridge:
         self._notify_accepted_turn(turn)
         return turn
 
-    def _current_generation_user_turn(self, text: str) -> ConversationTurn | None:
+    def _current_generation_user_turn(
+        self, text: str, item_id: str | None
+    ) -> ConversationTurn | None:
         generation = self.conversation.user_utterance_generation
         if generation <= 0:
             return None
@@ -221,15 +223,35 @@ class LiveKitConversationBridge:
                 if turn.role is ConversationRole.USER
                 and turn.user_utterance_generation == generation
                 and turn.text == text
+                and (
+                    turn.external_item_id == item_id
+                    if turn.external_item_id is not None and item_id is not None
+                    else turn.user_activity_epoch
+                    == (self.conversation.user_activity_epoch or None)
+                )
             ),
             None,
         )
 
-    def _consume_transcript_committed_turn(self, text: str) -> bool:
+    def _consume_transcript_committed_turn(
+        self, text: str, item_id: str | None
+    ) -> bool:
         for turn in reversed(self.conversation.turns):
             if turn.turn_id not in self._transcript_committed_user_turn_ids:
                 continue
             if turn.text != text:
+                continue
+            if (
+                turn.external_item_id is not None
+                and item_id is not None
+                and turn.external_item_id != item_id
+            ):
+                continue
+            if (
+                turn.external_item_id is None or item_id is None
+            ) and turn.user_activity_epoch != (
+                self.conversation.user_activity_epoch or None
+            ):
                 continue
             self._transcript_committed_user_turn_ids.remove(turn.turn_id)
             return True
@@ -253,7 +275,7 @@ class LiveKitConversationBridge:
         item_id = self._normalized_item_id(getattr(event, "item_id", None))
         if item_id is not None and item_id in self._seen_item_ids:
             return
-        if self._current_generation_user_turn(text) is not None:
+        if self._current_generation_user_turn(text, item_id) is not None:
             if item_id is not None:
                 self._seen_item_ids.add(item_id)
             return
@@ -289,7 +311,7 @@ class LiveKitConversationBridge:
             return
 
         if role is ConversationRole.USER and self._consume_transcript_committed_turn(
-            text
+            text, item_id
         ):
             if item_id is not None:
                 self._seen_item_ids.add(item_id)

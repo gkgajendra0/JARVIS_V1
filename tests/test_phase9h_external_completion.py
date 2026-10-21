@@ -110,7 +110,9 @@ def test_sensitive_owner_input_is_redacted_and_consumed_once(tmp_path) -> None:
         actions=WorkActionRegistry(()),
     )
     secret = "PAIRING_SECRET_8VJ2Q9"
-    resumed = engine.apply_owner_input(waiting.work_id, secret)
+    resumed = engine.apply_owner_input(
+        waiting.work_id, store.owner_input_transport(waiting, secret)
+    )
 
     assert resumed.state is WorkState.RUNNING
     owner_step = store.list_steps(item.work_id)[-1]

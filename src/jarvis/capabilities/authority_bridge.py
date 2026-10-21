@@ -17,6 +17,11 @@ from jarvis.authority.policy import OpaPolicyEngine
 from jarvis.authority.proposal import ActionProposal
 from jarvis.authority.risk import RiskClassifier
 from jarvis.authority.service import AuthorityError, AuthorityService
+from jarvis.authority.session import (
+    AuthoritySession,
+    WindowsSessionProvider,
+    WindowsWtsSessionProvider,
+)
 from jarvis.authority.strong_approval import StrongApprovalService
 from jarvis.authority.types import (
     ActionOrigin,
@@ -29,6 +34,7 @@ from jarvis.authority.types import (
     TrustTier,
 )
 from jarvis.authority.verifier import WindowsHelloVerifier
+from jarvis.authority.windows_session_events import WindowsSessionEventMonitor
 from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import CapabilityResult
 
@@ -45,6 +51,8 @@ class AuthorizedCapability:
     proposal: ActionProposal
     context: InteractionContext
     permit_id: str
+    windows_session: AuthoritySession
+    security_epoch: int
 
 
 def _default_audit_path() -> pathlib.Path:
@@ -69,6 +77,7 @@ class CapabilityAuthorityBroker:
         *,
         trusted_session_ttl_seconds: float = _TRUSTED_OWNER_TTL_SECONDS,
         clock: Callable[[], float] = time.monotonic,
+        session_provider: WindowsSessionProvider | None = None,
     ) -> None:
         if trusted_session_ttl_seconds <= 0:
             raise ValueError("trusted session ttl must be positive")
@@ -82,6 +91,54 @@ class CapabilityAuthorityBroker:
         self._trusted_session_ttl_seconds = float(trusted_session_ttl_seconds)
         self._clock = clock
         self._trusted_sessions: dict[str, float] = {}
+        self._owns_session_provider = session_provider is None
+        self._session_provider = session_provider or WindowsWtsSessionProvider(
+            event_monitor=WindowsSessionEventMonitor()
+        )
+        self._windows_session: AuthoritySession | None = None
+        self._security_epoch = 0
+        self._bound_session_ids: set[str] = set()
+
+    @staticmethod
+    def _same_windows_session(left: AuthoritySession, right: AuthoritySession) -> bool:
+        return (
+            left.session_id == right.session_id
+            and left.windows_session_id == right.windows_session_id
+            and left.windows_user_sid_hash == right.windows_user_sid_hash
+            and left.generation == right.generation
+        )
+
+    def _invalidate_windows_authority(self) -> None:
+        self._security_epoch += 1
+        self._trusted_sessions.clear()
+        if self._authority is not None:
+            for session_id in self._bound_session_ids:
+                self._authority.invalidate_session(session_id)
+        self._bound_session_ids.clear()
+
+    def _current_windows_session(self) -> AuthoritySession:
+        try:
+            current = self._session_provider.current_session()
+        except Exception as exc:
+            self._invalidate_windows_authority()
+            self._windows_session = None
+            raise CapabilityAuthorizationError(
+                "Windows session evidence is unavailable"
+            ) from exc
+        if not isinstance(current, AuthoritySession) or not current.active_unlocked:
+            self._invalidate_windows_authority()
+            self._windows_session = None
+            raise CapabilityAuthorizationError(
+                "Windows session is not active and unlocked"
+            )
+        previous = self._windows_session
+        self._windows_session = current
+        if previous is not None and not self._same_windows_session(previous, current):
+            self._invalidate_windows_authority()
+            raise CapabilityAuthorizationError(
+                "Windows session changed; fresh authorization is required"
+            )
+        return current
 
     def _ensure_started(self) -> None:
         with self._lock:
@@ -165,6 +222,11 @@ class CapabilityAuthorityBroker:
         return granted.approval_id
 
     def authorize(self, prepared: PreparedCapability) -> AuthorizedCapability:
+        with self._lock:
+            return self._authorize(prepared)
+
+    def _authorize(self, prepared: PreparedCapability) -> AuthorizedCapability:
+        windows_session = self._current_windows_session()
         try:
             self._ensure_started()
         except LocalOpaError as exc:
@@ -191,6 +253,7 @@ class CapabilityAuthorityBroker:
         )
         assessment = self._risk_classifier.classify(prepared.attributes)
         session_id = prepared.request.session_id
+        self._bound_session_ids.add(session_id)
         direct_user = prepared.request.origin is ActionOrigin.DIRECT_USER
         can_reuse_owner_trust = (
             direct_user
@@ -238,6 +301,8 @@ class CapabilityAuthorityBroker:
                 windows_session_valid=True,
             )
 
+        # Hello can be open long enough for a Windows security transition.
+        self._current_windows_session()
         decision = authority.evaluate(
             proposal=proposal,
             context=context,
@@ -259,9 +324,29 @@ class CapabilityAuthorityBroker:
             proposal=proposal,
             context=context,
             permit_id=decision.execution_permit.permit_id,
+            windows_session=windows_session,
+            security_epoch=self._security_epoch,
         )
 
     def consume(self, authorized: AuthorizedCapability) -> None:
+        with self._lock:
+            self._consume(authorized)
+
+    def _consume(self, authorized: AuthorizedCapability) -> None:
+        current = self._current_windows_session()
+        if (
+            authorized.security_epoch != self._security_epoch
+            or not self._same_windows_session(authorized.windows_session, current)
+        ):
+            raise CapabilityAuthorizationError(
+                "Windows session authorization was invalidated"
+            )
+        if (
+            authorized.context.trust_tier is TrustTier.CORROBORATED_OWNER
+            and not self._trusted_session_available(authorized.context.session_id)
+        ):
+            self._invalidate_windows_authority()
+            raise CapabilityAuthorizationError("Windows session owner trust expired")
         authority = self._authority
         if authority is None:
             raise CapabilityAuthorizationError("authority runtime is unavailable")
@@ -304,7 +389,8 @@ class CapabilityAuthorityBroker:
 
     def close(self) -> None:
         with self._lock:
-            self._trusted_sessions.clear()
+            self._invalidate_windows_authority()
+            self._windows_session = None
             if self._opa is not None:
                 self._opa.close()
             if self._audit is not None:
@@ -314,3 +400,5 @@ class CapabilityAuthorityBroker:
             self._authority = None
             self._approvals = None
             self._strong = None
+            if self._owns_session_provider:
+                self._session_provider.close()
