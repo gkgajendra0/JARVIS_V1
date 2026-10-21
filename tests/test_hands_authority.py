@@ -28,6 +28,53 @@ from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import CapabilityRequest
 
 
+def test_personal_context_cannot_reuse_cached_t2_consent():
+    broker, canonical, strong, _ = configured_broker()
+    action = prepared(ActionAttributes(private_read=True))
+    broker.authorize(action)
+    first = broker.authorize_fresh_owner(action)
+    second = broker.authorize_fresh_owner(action)
+    assert len(strong.calls) == 3
+    assert first.context.trust_tier is TrustTier.VERIFIED_OWNER
+    assert second.context.trust_tier is TrustTier.VERIFIED_OWNER
+    assert len(canonical.evaluations) == 3
+
+
+def test_personal_context_binding_invalidated_for_only_its_session():
+    broker, canonical, _, _ = configured_broker()
+    first = broker.authorize_fresh_owner(
+        prepared(ActionAttributes(private_read=True), session_id="personal-1")
+    )
+    other = broker.authorize_fresh_owner(
+        prepared(ActionAttributes(private_read=True), session_id="personal-2")
+    )
+    broker.consume(first)
+    broker.validate_binding(first)
+    broker.invalidate_session("personal-1")
+    with pytest.raises(CapabilityAuthorizationError):
+        broker.validate_binding(first)
+    broker.validate_binding(other)
+    assert "personal-1" in canonical.invalidated
+
+
+def test_personal_context_binding_checks_windows_and_expiry_after_consumption():
+    clock = [100.0]
+    broker, _, _, _ = configured_broker(clock=lambda: clock[0])
+    authorized = broker.authorize_fresh_owner(
+        prepared(ActionAttributes(private_read=True))
+    )
+    broker.consume(authorized)
+    expired = replace(
+        authorized,
+        proposal=replace(authorized.proposal, expires_at_monotonic=clock[0] - 1),
+    )
+    with pytest.raises(CapabilityAuthorizationError):
+        broker.validate_binding(expired)
+    broker._session_provider.transition("lock")
+    with pytest.raises(CapabilityAuthorizationError):
+        broker.validate_binding(authorized)
+
+
 class FakeCanonicalAuthority:
     def __init__(self) -> None:
         self.evaluations: list[tuple[object, object, str | None]] = []

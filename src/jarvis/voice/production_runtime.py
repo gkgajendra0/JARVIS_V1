@@ -8,9 +8,11 @@ conversation or grants authority.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from jarvis.ai_provider import require_provider_api_key
@@ -311,7 +313,11 @@ def build_production_voice_runtime(
     memory_runtime = build_default_memory_runtime() if config.memory_enabled else None
 
     memory_query_coordinator = None
-    if memory_runtime is not None and config.memory_semantic_recall_enabled:
+    if (
+        memory_runtime is not None
+        and config.memory_semantic_recall_enabled
+        and config.personal_context_mode == "off"
+    ):
         assert config.memory_semantic_recall_model is not None
         query_model = config.memory_semantic_recall_model
         interpreter = build_memory_query_interpreter(
@@ -721,10 +727,19 @@ async def _run_provider_model_lifecycle_watch(
         return
 
 
-async def _run_from_configuration() -> None:
+def _load_voice_config(personal_context_mode: str | None = None) -> JarvisConfig:
+    config = JarvisConfig.from_environment()
+    return (
+        replace(config, personal_context_mode=personal_context_mode)
+        if personal_context_mode is not None
+        else config
+    )
+
+
+async def _run_from_configuration(personal_context_mode: str | None = None) -> None:
     migration_needs_preflight_validation = False
     while True:
-        config = JarvisConfig.from_environment()
+        config = _load_voice_config(personal_context_mode)
         configure_logging(config.log_level)
         if has_pending_gemini_live_migration(config.gemini_realtime_model):
             migration_needs_preflight_validation = True
@@ -742,7 +757,7 @@ async def _run_from_configuration() -> None:
                 startup_lifecycle.current_model,
                 startup_lifecycle.replacement_model,
             )
-            config = JarvisConfig.from_environment()
+            config = _load_voice_config(personal_context_mode)
 
         self_awareness: SelfAwarenessRuntime | None = None
         try:
@@ -826,9 +841,19 @@ async def _run_from_configuration() -> None:
         return
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run the normal local JARVIS voice assistant"
+    )
+    parser.add_argument(
+        "--personal-context",
+        choices=("off", "apply"),
+        default=None,
+        help="Use current canonical owner memory with fresh per-request consent",
+    )
+    args = parser.parse_args(argv)
     try:
-        asyncio.run(_run_from_configuration())
+        asyncio.run(_run_from_configuration(args.personal_context))
         return 0
     except StartupPreflightError as exc:
         print(f"\n{exc}", file=sys.stderr)

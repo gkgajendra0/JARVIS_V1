@@ -11,20 +11,50 @@ This section is a brief guide, not the acceptance ledger:
 - Core conversation, wake/audio, vision, identity and safe capability runtime have
   accepted bounded foundations.
 - Step 4 personal memory is **BOUNDED**: encrypted storage and explicit memory
-  operations work; automatic personal-memory admission/injection remain **disabled**.
+  operations work; automatic durable admission remains **disabled**. The normal
+  voice app now provides an opt-in, owner-consented context path.
 - Durable Work/DBOS, Hands, Self-Awareness and deterministic repair foundations
   have accepted scopes. Autonomous engineering Phases 2–10A are accepted to their
   documented boundaries; this does **not** mean fully autonomous production JARVIS.
 - The owner-facing personalized, naturally context-aware assistant (CAP-053)
-  remains **PLANNED for production**; its approved native implementation and
-  qualification are the current priority. Evaluation/shadow/probe foundations
-  are on `main`, while automatic owner-memory use in live voice is not active.
+  is **PARTIAL**: saved-preference recall, natural correction and restart
+  persistence have bounded owner acceptance. Broader advice quality, natural
+  learning and seamless owner-speaking follow-ups remain open.
 - Step 8 remains next in the numbered product sequence.
 
 For exact accepted, deferred and production state, consult
 [Project State](docs/PROJECT_STATE.md) and
 [Current Architecture](docs/CURRENT_ARCHITECTURE.md). Research/draft PRs do not
 change production reality.
+
+### Opt-in personal context (owner acceptance, 21 October 2026)
+
+PR #294 supplies the first active personal-context path **inside the normal voice
+app**. The owner confirmed recall, correction, restart and restoration in the
+[bounded acceptance record](docs/acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+This is a partial personal-intelligence release. See the
+[implementation and acceptance report](docs/research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
+
+Using the existing configured Windows installation:
+
+```powershell
+.\.venv\Scripts\jarvis-voice.exe --personal-context apply
+```
+
+Ordinary personal questions can use current eligible saved facts without saying
+"search memory". Each personal request requires fresh Windows Hello consent.
+After one personal answer or explicit memory change, JARVIS returns to wake mode;
+wake it again for the next request. This release does not promote speaker-shadow
+scores into identity authority. Remember/correct/forget remain explicit commands.
+Empty memory produces no invented personal profile. English, Hindi and Hinglish
+are priority forms; broader spoken usefulness still needs qualification.
+
+Use `--personal-context off` to disable this new automatic path. Default is OFF.
+APPLY enables canonical memory and suppresses transcript logging/SDK recording for
+that process without editing the saved machine profile. It reuses the configured
+realtime provider and encrypted canonical database; no extra HTTP selector model
+or new dependency is needed. Existing explicit memory behavior remains available
+under its existing configuration when automatic context is OFF.
 
 ## Setup
 

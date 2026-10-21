@@ -17,6 +17,7 @@ from livekit.agents import (
     ErrorEvent,
     TurnHandlingOptions,
     UserInputTranscribedEvent,
+    inference,
 )
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import google, openai
@@ -354,6 +355,14 @@ def create_voice_session(
     # provider-native server-side turn detection.
     livekit_session = AgentSession(
         llm=_create_realtime_model(config),
+        # An explicit instance of the SAME bundled local VAD makes user-state
+        # events physical activity. The default-VAD SDK path also maps Gemini's
+        # synthetic input_speech_started on automatic tool replies to user speech.
+        **(
+            {"vad": inference.VAD(model="silero")}
+            if config.personal_context_mode == "apply"
+            else {}
+        ),
         turn_handling=TurnHandlingOptions(
             turn_detection=None,
             interruption={"enabled": True},

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from collections.abc import Callable
 from typing import Protocol
 
 from jarvis.ai_provider import configured_ai_provider
 from jarvis.authority.audit import AuditError
-from jarvis.authority.types import ActionOrigin
+from jarvis.authority.types import ActionAttributes, ActionOrigin
 from jarvis.capabilities.authority_bridge import (
     AuthorizedCapability,
     CapabilityAuthorityBroker,
@@ -21,7 +23,7 @@ from jarvis.capabilities.development_git import (
 )
 from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.document_edits import DocumentEditExecutor
-from jarvis.capabilities.execution import CapabilityExecutor
+from jarvis.capabilities.execution import CapabilityExecutor, PreparedCapability
 from jarvis.capabilities.local_reads import LocalProjectReadExecutor
 from jarvis.capabilities.local_writes import (
     ApprovedWriteRootPolicy,
@@ -120,6 +122,124 @@ class CapabilityRuntime:
         if any(not callable(callback) for callback in self._close_callbacks):
             raise TypeError("close_callbacks must contain callable values")
         self._catalog: CapabilityCatalog | None = None
+
+    def authorize_personal_context(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        question: str,
+        operation: str = "read",
+        mutation: dict[str, object] | None = None,
+    ) -> AuthorizedCapability:
+        """Fixed canonical personal-memory scope; never model-supplied authority."""
+        if operation not in {"read", "remember", "correct", "forget"}:
+            raise ValueError("unsupported personal context operation")
+        if operation != "read" and mutation is None:
+            raise ValueError("a concrete memory change is required")
+        if (
+            not isinstance(question, str)
+            or not question.strip()
+            or len(question.encode("utf-8")) > 8000
+        ):
+            raise ValueError("personal context requires a bounded accepted question")
+        if not isinstance(turn_id, str) or not turn_id.strip():
+            raise ValueError("personal context requires a canonical turn id")
+        authorize = getattr(self._authority, "authorize_fresh_owner", None)
+        if not callable(authorize):
+            raise CapabilityAuthorizationError("exact owner consent is unavailable")
+        parameters = {
+            "turn_id": turn_id,
+            "question_sha256": hashlib.sha256(question.encode("utf-8")).hexdigest(),
+            "max_facts": 4,
+        }
+        summary = f"{operation.title()} owner memory for this request: {json.dumps(question, ensure_ascii=False)[:500]}"
+        if mutation is not None:
+            if operation == "read" or set(mutation) != {
+                "predicate",
+                "assertion_id",
+                "value",
+                "sensitivity",
+            }:
+                raise ValueError("invalid concrete memory change")
+            predicate, target_id, value = (
+                mutation["predicate"],
+                mutation["assertion_id"],
+                mutation["value"],
+            )
+            if (
+                not isinstance(predicate, str)
+                or not predicate.strip()
+                or len(predicate) > 96
+                or mutation["sensitivity"] not in {"standard", "private", "local_only"}
+                or (
+                    operation != "remember"
+                    and (
+                        not isinstance(target_id, str)
+                        or not target_id
+                        or len(target_id) > 128
+                    )
+                )
+                or (operation == "remember" and target_id is not None)
+                or (operation == "forget" and value is not None)
+                or (
+                    operation != "forget"
+                    and (
+                        not isinstance(value, str)
+                        or not value.strip()
+                        or len(value.encode("utf-8")) > 1800
+                    )
+                )
+            ):
+                raise ValueError("invalid concrete memory change")
+            encoded = json.dumps(
+                mutation, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            parameters["mutation_sha256"] = hashlib.sha256(
+                encoded.encode("utf-8")
+            ).hexdigest()
+            # The owner reviews the actual resolved target and value; audit gets
+            # the digest only. A model-proposed intent is never a write permit.
+            summary = f"{operation.title()} memory {json.dumps(predicate, ensure_ascii=False)}"
+            if operation != "forget":
+                summary += f" to {json.dumps(value, ensure_ascii=False)}"
+            summary += f". Request: {json.dumps(question, ensure_ascii=False)[:500]}"
+        request = CapabilityRequest(
+            session_id=session_id,
+            capability_key="memory:personal_context",
+            operation=operation,
+            parameters=parameters,
+            origin=ActionOrigin.DIRECT_USER,
+        )
+        prepared = PreparedCapability(
+            request=request,
+            target={"subject_scope": "personal", "subject": "owner"},
+            parameters=parameters,
+            material_summary=summary,
+            attributes=ActionAttributes(
+                private_read=True,
+                persistent_write=operation != "read",
+                destructive=operation == "forget",
+            ),
+            execution_payload={},
+        )
+        return authorize(prepared)
+
+    def consume_personal_context(self, authorized: AuthorizedCapability) -> None:
+        self._authority.consume(authorized)
+
+    def validate_personal_context(self, authorized: AuthorizedCapability) -> None:
+        validate = getattr(self._authority, "validate_binding", None)
+        if not callable(validate):
+            raise CapabilityAuthorizationError(
+                "personal context continuity is unavailable"
+            )
+        validate(authorized)
+
+    def invalidate_personal_context(self, session_id: str) -> None:
+        invalidate = getattr(self._authority, "invalidate_session", None)
+        if callable(invalidate):
+            invalidate(session_id)
 
     def _routing_allowed(self, capability_key: str) -> bool:
         if self._catalog_projection is None:

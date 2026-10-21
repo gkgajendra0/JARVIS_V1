@@ -29,6 +29,97 @@ from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.capabilities.system_reads import SystemReadExecutor
 
 
+def test_runtime_personal_context_uses_fixed_private_scope_and_fresh_owner():
+    runtime, authority = build_runtime()
+    seen = []
+    token = object()
+    authority.authorize_fresh_owner = lambda prepared: (seen.append(prepared), token)[1]
+    authorized = runtime.authorize_personal_context(
+        session_id="session-1", turn_id="turn-1", question="Dinner mein kya khaun?"
+    )
+    assert authorized is token
+    action = seen[0]
+    assert action.request.capability_key == "memory:personal_context"
+    assert action.request.operation == "read"
+    assert action.attributes.private_read
+    assert action.parameters["turn_id"] == "turn-1"
+    assert "question_sha256" in action.parameters
+    assert "Dinner mein kya khaun?" in action.material_summary
+    assert "Dinner" not in str(action.parameters)
+    runtime.consume_personal_context(authorized)
+    assert authority.events == ["consume"]
+
+
+def test_runtime_personal_context_has_no_unverified_authority_fallback():
+    runtime, _ = build_runtime()
+    with pytest.raises(RuntimeError):
+        runtime.authorize_personal_context(
+            session_id="session-1", turn_id="turn-1", question="Dinner?"
+        )
+
+
+def test_runtime_personal_context_rejects_model_invented_operation():
+    runtime, _ = build_runtime()
+    with pytest.raises(ValueError):
+        runtime.authorize_personal_context(
+            session_id="session-1",
+            turn_id="turn-1",
+            question="Dinner?",
+            operation="run_shell",
+        )
+
+
+def test_personal_mutation_consent_binds_concrete_target_version_and_value():
+    runtime, authority = build_runtime()
+    seen = []
+    authority.authorize_fresh_owner = lambda prepared: seen.append(prepared)
+    mutation = {
+        "predicate": "diet_preferences",
+        "assertion_id": "current-id",
+        "value": "vegan",
+        "sensitivity": "standard",
+    }
+    runtime.authorize_personal_context(
+        session_id="session",
+        turn_id="turn",
+        question="Meri preference badal do",
+        operation="correct",
+        mutation=mutation,
+    )
+    prepared = seen[-1]
+    assert "mutation_sha256" in prepared.parameters
+    assert "vegan" not in str(prepared.parameters)
+    assert (
+        "diet_preferences" in prepared.material_summary
+        and "vegan" in prepared.material_summary
+    )
+    first = prepared.parameters["mutation_sha256"]
+    mutation["value"] = "vegetarian"
+    runtime.authorize_personal_context(
+        session_id="session",
+        turn_id="turn",
+        question="Meri preference badal do",
+        operation="correct",
+        mutation=mutation,
+    )
+    assert seen[-1].parameters["mutation_sha256"] != first
+
+
+@pytest.mark.parametrize("operation", ["remember", "correct", "forget"])
+def test_personal_write_cannot_request_approval_without_concrete_change(operation):
+    runtime, authority = build_runtime()
+    seen = []
+    authority.authorize_fresh_owner = lambda prepared: seen.append(prepared)
+    with pytest.raises(ValueError, match="concrete"):
+        runtime.authorize_personal_context(
+            session_id="session",
+            turn_id="turn",
+            question="Change my preference",
+            operation=operation,
+        )
+    assert seen == []
+
+
 class FakeAuthority:
     def __init__(self) -> None:
         self.events: list[str] = []

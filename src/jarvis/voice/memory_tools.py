@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import unicodedata
 
 from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
 
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+    ConversationTurn,
+)
 from jarvis.memory.evidence_gate import MemoryEvidenceDisposition
 from jarvis.memory.explicit import (
     ExplicitMemoryAction,
@@ -17,6 +23,7 @@ from jarvis.memory.explicit import (
     authorize_explicit_memory_action,
     build_owner_explicit_source,
     parse_memory_sensitivity,
+    reject_negated_memory_change,
     reject_prohibited_secret,
 )
 from jarvis.memory.provider_verified_query import ProviderVerifiedMemoryQueryCoordinator
@@ -27,6 +34,7 @@ from jarvis.memory.service import (
     MemoryNotFoundError,
     MemoryService,
     MemoryServiceError,
+    canonical_memory_predicate,
     normalize_memory_surface,
 )
 from jarvis.memory.types import Sensitivity
@@ -48,6 +56,7 @@ _EXPECTED_MEMORY_ERRORS = (
     MemoryServiceError,
     TypeError,
     ValueError,
+    PermissionError,
 )
 
 
@@ -90,6 +99,7 @@ class MemoryAgentTools:
         *,
         semantic_query_coordinator: ProviderVerifiedMemoryQueryCoordinator
         | None = None,
+        personal_context=None,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
@@ -104,6 +114,7 @@ class MemoryAgentTools:
         self._service = service
         self._conversation = conversation
         self._semantic_query_coordinator = semantic_query_coordinator
+        self._personal_context = personal_context
 
     @property
     def tools(self) -> list:
@@ -111,9 +122,13 @@ class MemoryAgentTools:
             self.remember_memory,
             self.correct_memory,
             self.forget_memory,
-            self.inspect_memory,
         ]
-        if self._semantic_query_coordinator is not None:
+        if self._personal_context is None:
+            tools.append(self.inspect_memory)
+        if (
+            self._semantic_query_coordinator is not None
+            and self._personal_context is None
+        ):
             tools.append(self.recall_memory)
         return tools
 
@@ -128,27 +143,45 @@ class MemoryAgentTools:
             self._conversation,
             ExplicitMemoryAction.REMEMBER,
         )
+        if self._personal_context is not None:
+            self._personal_context.reserve_mutation("remember")
         _require_grounded_target(turn, predicate)
         _require_grounded_value(turn, value)
         resolved_sensitivity = parse_memory_sensitivity(sensitivity)
         reject_prohibited_secret(predicate=predicate, value=value)
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation(
+                "remember",
+                canonical_memory_predicate(predicate),
+                value,
+                sensitivity=resolved_sensitivity.value,
+            )
         source = build_owner_explicit_source(
             conversation=self._conversation,
             turn=turn,
             sensitivity=resolved_sensitivity,
         )
-        result = await self._service.remember_text(
-            predicate=predicate,
-            value=value,
-            source=source,
-            sensitivity=resolved_sensitivity,
-        )
+        try:
+            result = await self._service.remember_text(
+                predicate=predicate,
+                value=value,
+                source=source,
+                sensitivity=resolved_sensitivity,
+                **self._commit_guard(),
+            )
+        except (Exception, asyncio.CancelledError):
+            if self._personal_context is not None:
+                self._personal_context.mutation_failed()
+            LOGGER.info(
+                "Memory change | operation=remember | status=failed | turn_id=%s",
+                turn.turn_id,
+            )
+            raise
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
         LOGGER.info(
-            "Explicit memory remember committed | predicate=%s | memory_id=%s | "
-            "sensitivity=%s",
-            result.predicate,
-            result.record.assertion_id,
-            result.record.sensitivity.value,
+            "Memory change | operation=remember | status=committed | turn_id=%s",
+            turn.turn_id,
         )
         return {
             "ok": True,
@@ -163,31 +196,55 @@ class MemoryAgentTools:
         *,
         predicate: str,
         value: str,
+        catalog_id: str | None = None,
+        facet_index: int | None = None,
     ) -> dict[str, object]:
-        turn = authorize_explicit_memory_action(
-            self._conversation,
-            ExplicitMemoryAction.CORRECT,
-        )
-        _require_grounded_target(turn, predicate)
+        turn = self._change_turn(ExplicitMemoryAction.CORRECT)
         _require_grounded_value(turn, value)
         reject_prohibited_secret(predicate=predicate, value=value)
-        current = await self._service.inspect_exact(predicate=predicate)
+        current = await self._change_target(turn, predicate, catalog_id, facet_index)
+        if current is None:
+            return self._resolution_needed("correct", catalog_id is not None)
+        predicate = current.predicate
+        reject_prohibited_secret(predicate=predicate, value=value)
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation(
+                "correct",
+                predicate,
+                value,
+                assertion_id=current.assertion_id,
+                sensitivity=current.sensitivity.value,
+            )
         source = build_owner_explicit_source(
             conversation=self._conversation,
             turn=turn,
-            sensitivity=current.record.sensitivity,
+            sensitivity=current.sensitivity,
         )
-        result = await self._service.correct_text(
-            predicate=predicate,
-            value=value,
-            source=source,
-        )
+        try:
+            result = await self._service.correct_text(
+                predicate=predicate,
+                value=value,
+                source=source,
+                **self._commit_guard(),
+                **(
+                    {"expected_assertion_id": current.assertion_id}
+                    if self._personal_context is not None
+                    else {}
+                ),
+            )
+        except (Exception, asyncio.CancelledError):
+            if self._personal_context is not None:
+                self._personal_context.mutation_failed()
+            LOGGER.info(
+                "Memory change | operation=correct | status=failed | turn_id=%s",
+                turn.turn_id,
+            )
+            raise
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
         LOGGER.info(
-            "Explicit memory correction committed | predicate=%s | memory_id=%s | "
-            "sensitivity=%s",
-            result.predicate,
-            result.record.assertion_id,
-            result.record.sensitivity.value,
+            "Memory change | operation=correct | status=committed | turn_id=%s",
+            turn.turn_id,
         )
         return {
             "ok": True,
@@ -197,31 +254,120 @@ class MemoryAgentTools:
             "sensitivity": result.record.sensitivity.value,
         }
 
-    async def forget(self, *, predicate: str) -> dict[str, object]:
-        turn = authorize_explicit_memory_action(
-            self._conversation,
-            ExplicitMemoryAction.FORGET,
-        )
-        _require_grounded_target(turn, predicate)
-        current = await self._service.inspect_exact(predicate=predicate)
+    async def forget(
+        self,
+        *,
+        predicate: str,
+        catalog_id: str | None = None,
+        facet_index: int | None = None,
+    ) -> dict[str, object]:
+        turn = self._change_turn(ExplicitMemoryAction.FORGET)
+        current = await self._change_target(turn, predicate, catalog_id, facet_index)
+        if current is None:
+            return self._resolution_needed("forget", catalog_id is not None)
+        predicate = current.predicate
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation(
+                "forget",
+                predicate,
+                assertion_id=current.assertion_id,
+                sensitivity=current.sensitivity.value,
+            )
         source = build_owner_explicit_source(
             conversation=self._conversation,
             turn=turn,
-            sensitivity=current.record.sensitivity,
+            sensitivity=current.sensitivity,
         )
-        forgotten_predicate = await self._service.forget_exact(
-            predicate=predicate,
-            source=source,
-        )
+        try:
+            forgotten_predicate = await self._service.forget_exact(
+                predicate=predicate,
+                source=source,
+                **self._commit_guard(),
+                **(
+                    {"expected_assertion_id": current.assertion_id}
+                    if self._personal_context is not None
+                    else {}
+                ),
+            )
+        except (Exception, asyncio.CancelledError):
+            if self._personal_context is not None:
+                self._personal_context.mutation_failed()
+            LOGGER.info(
+                "Memory change | operation=forget | status=failed | turn_id=%s",
+                turn.turn_id,
+            )
+            raise
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
         LOGGER.info(
-            "Explicit memory forget committed | predicate=%s",
-            forgotten_predicate,
+            "Memory change | operation=forget | status=committed | turn_id=%s",
+            turn.turn_id,
         )
         return {
             "ok": True,
             "operation": "forget",
             "predicate": forgotten_predicate,
         }
+
+    def _change_turn(self, action):
+        if self._personal_context is None:
+            return authorize_explicit_memory_action(self._conversation, action)
+        turn = self._latest_user_turn()
+        reject_negated_memory_change(turn.text)
+        self._personal_context.reserve_mutation(action.value)
+        return turn
+
+    async def _change_target(self, turn, predicate, catalog_id, facet_index):
+        activity_epoch = self._conversation.user_activity_epoch
+        try:
+            if self._personal_context is not None and (
+                catalog_id is not None or facet_index is not None
+            ):
+                return await self._personal_context.resolve_mutation_target(
+                    catalog_id, facet_index
+                )
+            try:
+                _require_grounded_target(turn, predicate)
+                if self._personal_context is not None:
+                    await self._personal_context.prepare_target_resolution()
+                return (await self._service.inspect_exact(predicate=predicate)).record
+            except (MemoryNotFoundError, MemoryToolGroundingError):
+                if self._personal_context is None:
+                    raise
+                return None
+        finally:
+            if self._personal_context is not None and (
+                self._conversation.status is not ConversationStatus.ACTIVE
+                or self._latest_user_turn().turn_id != turn.turn_id
+                or self._conversation.user_activity_epoch != activity_epoch
+            ):
+                raise ExplicitMemoryAuthorizationError(
+                    "The memory request changed during target resolution"
+                )
+
+    def _resolution_needed(self, operation, invalid_selection):
+        status = "invalid_selection" if invalid_selection else "resolution_required"
+        LOGGER.info(
+            "Memory change | operation=%s | status=%s | turn_id=%s",
+            operation,
+            status,
+            self._latest_user_turn().turn_id,
+        )
+        return {
+            "ok": False,
+            "operation": operation,
+            "status": status,
+            "reason": "No canonical target selected. Use personal_context_catalog and select its actual facet index. "
+            "If multiple targets are plausible, ask a natural clarification. "
+            "Do not invent a key, claim absence, or fall back to remember_memory.",
+        }
+
+    def _commit_guard(self):
+        return (
+            {"commit_guard": self._personal_context.validate_mutation_commit}
+            if self._personal_context is not None
+            else {}
+        )
 
     def _latest_user_turn(self) -> ConversationTurn:
         turn = next(
@@ -239,6 +385,10 @@ class MemoryAgentTools:
         return turn
 
     async def semantic_recall(self) -> dict[str, object]:
+        if self._personal_context is not None:
+            raise MemoryToolGroundingError(
+                "Use the consent-bound personal context tools"
+            )
         coordinator = self._semantic_query_coordinator
         if coordinator is None:
             raise MemoryToolGroundingError(
@@ -282,6 +432,10 @@ class MemoryAgentTools:
         }
 
     async def inspect(self, *, predicate: str) -> dict[str, object]:
+        if self._personal_context is not None:
+            raise MemoryToolGroundingError(
+                "Use the consent-bound personal context tools"
+            )
         turn = authorize_explicit_memory_action(
             self._conversation,
             ExplicitMemoryAction.INSPECT,
@@ -361,30 +515,52 @@ class MemoryAgentTools:
         context: RunContext,
         predicate: str,
         value: str,
+        catalog_id: str | None = None,
+        facet_index: int | None = None,
     ) -> dict[str, object]:
         """Correct one exact current personal memory after an explicit correction.
 
-        Use only when the latest user utterance explicitly says the stored memory is
-        wrong or asks JARVIS to correct/update it. The exact predicate and corrected
-        value must both be directly present in that utterance. Never guess the target.
+        Interpret the user's natural request to change an existing saved fact.
+        In personal-context APPLY, resolve names using personal_context_catalog,
+        then pass its catalog_id and zero-based facet_index. Copy the new value
+        from catalog.request.text in its original script; do not translate it.
+        The selected canonical target need not be said as an internal key by the user.
+        Ambiguity requires clarification; negation/hypotheticals/third-party facts
+        are not change commands. Concrete target/value require fresh owner approval.
+        Without personal context, the legacy exact-command rules still apply.
         """
         context.disallow_interruptions()
-        return await self._call_tool(self.correct(predicate=predicate, value=value))
+        return await self._call_tool(
+            self.correct(
+                predicate=predicate,
+                value=value,
+                catalog_id=catalog_id,
+                facet_index=facet_index,
+            )
+        )
 
     @function_tool()
     async def forget_memory(
         self,
         context: RunContext,
         predicate: str,
+        catalog_id: str | None = None,
+        facet_index: int | None = None,
     ) -> dict[str, object]:
         """Physically forget one exact current personal memory.
 
-        Use only when the latest user utterance explicitly asks JARVIS to forget,
-        remove, or delete that memory. The exact predicate must be directly named in
-        that utterance. Never guess an ambiguous or implied target.
+        Use only for a clear natural request to delete an existing saved fact.
+        In personal-context APPLY, select its actual catalog_id/facet_index from
+        personal_context_catalog; never invent the stored key or guess an unclear
+        referent. The exact deletion requires fresh owner approval. Without
+        personal context, legacy exact-command rules still apply.
         """
         context.disallow_interruptions()
-        return await self._call_tool(self.forget(predicate=predicate))
+        return await self._call_tool(
+            self.forget(
+                predicate=predicate, catalog_id=catalog_id, facet_index=facet_index
+            )
+        )
 
     @function_tool()
     async def recall_memory(

@@ -878,6 +878,9 @@ class VoiceRuntimeController:
                 completion_label=completion_label,
             )
 
+    def _session_audio_output(self, bridge, output):
+        return output
+
     async def _run_one_session_owned(
         self,
         *,
@@ -930,7 +933,8 @@ class VoiceRuntimeController:
             else SessionAudioInput()
         )
         session.input.audio = session_input
-        session.output.audio = output
+        session_output = self._session_audio_output(bridge, output)
+        session.output.audio = session_output
         has_user_turn = False
 
         def submit_shadow_turn() -> None:
@@ -1179,7 +1183,12 @@ class VoiceRuntimeController:
                     agent=JarvisVoiceAgent(
                         tools=tools,
                         default_media_target=self.config.default_media_target,
-                    )
+                    ),
+                    **(
+                        {"record": False}
+                        if self.config.personal_context_mode == "apply"
+                        else {}
+                    ),
                 )
             except Exception:
                 bridge.conversation.fail()
@@ -1243,6 +1252,8 @@ class VoiceRuntimeController:
             output.off("playback_finished", on_playback_finished)
             self.audio.deactivate_session()
             await session.aclose()
+            if session_output is not output:
+                session_output.detach()
             if shadow_tasks:
                 await asyncio.gather(*tuple(shadow_tasks), return_exceptions=True)
             if turn_capture is not None:

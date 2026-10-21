@@ -11,8 +11,8 @@ and the [Documentation Index](README.md).
 The owner approved architecture PR #288, PI-1A #289, and PI-1B #290.
 All three passed their prescribed GitHub CI and were merged to `main`.
 The owner has also explicitly requested **real activated personal-context assistance,
-not an indefinite shadow feature**, after thorough testing. There are no
-known existing personal memories in the owner's current deployment.
+not an indefinite shadow feature**, after thorough testing. The owner subsequently
+tested an existing saved preference in the configured Windows deployment.
 
 **Goal:** in a reliably authenticated OWNER conversation, JARVIS automatically
 retrieves relevant permitted canonical facts and correctly *uses* them in
@@ -47,10 +47,17 @@ approved by activating read-only context. Start with explicitly permitted facts
 and add carefully governed natural learning after the initial active recall
 release is proven.
 
-**Status:** PRs #288–#291 MERGED; active owner memory -> live voice model
-integration **NOT IMPLEMENTED / NOT ACTIVE**. The owner-machine identity and
-provider acceptance are required; do not claim otherwise. The objective is
-active release, with isolated tests only as a means to validate it.
+**Status:** PRs #288–#291 MERGED. PR #294 and its dependencies #292/#293 supply the first
+opt-in active owner-memory path in normal `jarvis-voice`, with fresh Windows Hello
+consent for each exact canonical request, current reads and private audio guarding.
+It retires the provider session after one personal answer; subsequent requests
+require a fresh wake. This exact-consent fallback does not claim qualified
+biometric speaker attribution. On October 21 the owner confirmed the normal-app
+saved-preference recall/correction/restart/restore sequence and authorized checked
+stack promotion. See the [bounded acceptance record](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md);
+the PRs record actual merge status. Broader everyday advice quality remains open.
+Automatic learning is still separate. See the
+[runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
 
 The two chats pursued the same native-extension direction. PR #289 supplies
 an offline evaluation contract, #290 a policy-tested read-only foundation,
@@ -84,43 +91,28 @@ self-repair are *supporting* functions, not the primary end-user test.
 
 Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 [Autonomous Self-Management North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md).
-CAP-053 (Personal Intelligence and Automatic Context Use) is **PLANNED**.
+CAP-053 is **PARTIAL**: the opt-in saved-preference flow has bounded owner
+acceptance; the broader personal-intelligence contract is not complete.
 
-### Immediate next work — qualify the approved native architecture
+### Immediate next work — promote the accepted flow, then qualify useful advice
 
-1. Qualify and promote the reviewed repairs to the reproduced runtime,
-   privacy, storage and provider-probe defects recorded in the audit. Local
-   regressions and independent fix review passed; exact-head CI and applicable
-   owner-machine acceptance remain promotion gates. Preserve canonical truth
-   and normal Authority throughout.
-2. Continue from the measured pinned-SDK fictional delivery evidence above.
-   Initial history and tool-result answer use were observed; ordinary user-turn
-   mid-session history updates failed and must not be assumed safe. The current
-   comparison awaits complete SDK runs, including separate automatic tool replies.
-3. Qualify question-to-facet relevance at the existing canonical reader boundary.
-   The new structured selector's offline tests are not live semantic acceptance;
-   restore/verify the configured provider HTTP path before relying on it. The
-   isolated native realtime tool path selected relevant fixture facets in the
-   small advice experiment; it still needs production turn binding and broader
-   quality/negative tests. The PI-1B fixture selector is not a natural-language router.
-   Revalidate corrections, deletion, freshness, source policy and turn binding
-   at consumption; preserve unavailable versus absent memory distinctions.
-   Reuse relevant #287 contract evidence for accepted-turn identity, cancellation,
-   duplicate/reconnect invalidation and bounded outstanding reads without adding
-   a competing coordinator or claiming its text diagnostics prove live voice.
-4. Establish trusted owner/turn attribution before private release. Speaker
-   scores and camera presence remain diagnostics, not authority. Qualify guest,
-   interruption, reconnect and identity-loss behavior on the actual runtime.
-5. Run matched baseline/context answers and independent qualitative review on
-   fixed and held-out everyday scenarios, then restart/outage tests. Include
-   Hindi, Hinglish and English as priority forms plus explicitly reported
-   broader-language coverage. Record actual useful application, errors,
-   whole-turn and first-response latency, token usage and cost; do not infer
-   end-to-end success from corpus validation or retrieved facts.
-6. Implement and qualify the actual APPLY bridge and reversible OFF switch,
-   complete owner-machine acceptance, and enable the approved path only for
-   the authenticated owner. Automatic learning/admission remains a separate
-   later capability; optional local-model training remains deferred.
+The owner-log correction failure is repaired in the same candidate: natural
+correction/deletion proposals resolve the actual canonical target, then require
+fresh concrete owner approval. See the [October 21 repair report](research/MEMORY_INTENT_REPAIR_2026-10-21.md).
+The owner confirmed correct spoken results for the prescribed saved-diet
+sequence. Promotion was explicitly authorized conditional on checks; this does
+not accept broader advice quality, automatic learning or seamless attribution.
+
+1. Complete the authorized #292 → #293 → #294 promotion with applicable exact-head
+   checks and verify protected main. Preserve owner acceptance and CI evidence.
+2. Qualify personally useful everyday advice with general fictional scenarios in
+   English/Hindi/Hinglish, including relevant/irrelevant context and honest absence.
+   Saved-preference recall acceptance alone does not prove this broader behavior.
+3. Record language, latency, provider failures and cost honestly. Prepare the
+   bounded natural-learning design through existing memory/authority contracts;
+   new automatic durable capture requires its own architecture approval.
+4. Seamless verified-speaker follow-ups remain later work. Do not restart vendor
+   comparisons as a substitute for completing this native personal-assistant path.
 
 The native architecture is already owner-approved. Do not ask for that same
 decision again or restart a vendor benchmark as a substitute for integration.
@@ -139,9 +131,9 @@ retrieval benchmark score.
 - Steps 0–3: conversation, wake/voice, vision foundation, identity/trust and
   observability accepted to their documented scope.
 - Step 4: **BOUNDED**. Encrypted SQLCipher persistent memory and explicit
-  operations accepted; automatic candidate admission and automatic
-  provider-context memory injection **disabled**. Natural-language live
-  semantic recall has a deferred owner-machine acceptance gate.
+  operations accepted; automatic candidate admission remains **disabled**.
+  Opt-in exact-consented context and natural correction now have bounded
+  owner recall/correction/restart acceptance; broader semantic quality remains open.
 - Steps 5–6: provider resilience/research **BOUNDED**.
 - Step 7: generic capability runtime and safe reads **DONE**.
 - WorkStore/DBOS durable work, Self-Awareness, Hands foundations and bounded

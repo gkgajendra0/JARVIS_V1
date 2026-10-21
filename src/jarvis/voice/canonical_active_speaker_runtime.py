@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
+from livekit.agents.llm import FunctionCall
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.config import JarvisConfig
@@ -31,6 +32,11 @@ from jarvis.memory.runtime import MemoryRuntime
 from jarvis.voice.capability_tools import LocalReadAgentTools
 from jarvis.voice.livekit_session import create_voice_session
 from jarvis.voice.memory_tools import MemoryAgentTools
+from jarvis.voice.personal_context import (
+    PersonalContextAgentTools,
+    PersonalContextSession,
+)
+from jarvis.voice.personal_context_audio import PersonalContextAudioOutput
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
 from jarvis.voice.work_tools import WorkAgentTools
@@ -54,6 +60,8 @@ class _SessionToolBundle:
         research_service: CurrentResearchService | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
+        personal_context_getter: Callable[[], PersonalContextSession | None]
+        | None = None,
     ) -> None:
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -62,6 +70,7 @@ class _SessionToolBundle:
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._personal_context_getter = personal_context_getter or (lambda: None)
 
     @property
     def tools(self) -> list:
@@ -70,13 +79,17 @@ class _SessionToolBundle:
         if conversation is None:
             return tools
         if self._memory_runtime is not None:
+            personal = self._personal_context_getter()
             tools.extend(
                 MemoryAgentTools(
                     self._memory_runtime.service,
                     conversation,
                     semantic_query_coordinator=self._memory_query_coordinator,
+                    personal_context=personal,
                 ).tools
             )
+            if personal is not None:
+                tools.extend(PersonalContextAgentTools(personal).tools)
         if self._research_service is not None:
             tools.extend(ResearchAgentTools(self._research_service, conversation).tools)
         if self._capability_runtime is not None:
@@ -108,6 +121,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._session_ready_for_inactivity = False
         self._agent_state = "unavailable"
         self._live_session: Any | None = None
+        self._personal_context: PersonalContextSession | None = None
+        if (
+            args
+            and args[0].personal_context_mode == "apply"
+            and (memory_runtime is None or capability_runtime is None)
+        ):
+            raise ValueError(
+                "Personal context APPLY requires canonical memory and capability authority"
+            )
 
         def capture_session(config: JarvisConfig):
             session, bridge = original_session_factory(config)
@@ -116,6 +138,37 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
             self._agent_state = "unavailable"
+            if config.personal_context_mode == "apply":
+                if memory_runtime is None or capability_runtime is None:
+                    raise ValueError(
+                        "Personal context APPLY requires canonical memory and capability authority"
+                    )
+
+                def retire_personal():
+                    if self._live_session is session and self._active_end is not None:
+                        self._active_end.set()
+
+                def personal_busy(busy):
+                    if self._live_session is not session:
+                        return
+                    if busy:
+                        self._cancel_timeout()
+                    else:
+                        self._arm_timeout(config.follow_up_timeout_seconds)
+
+                personal = PersonalContextSession(
+                    conversation=bridge.conversation,
+                    retrieval=memory_runtime.retrieval,
+                    authority=capability_runtime,
+                    retire=retire_personal,
+                    busy_changed=personal_busy,
+                )
+                self._personal_context = personal
+                bridge.add_accepted_turn_observer(personal.observe_turn)
+                bridge.add_close_observer(personal.close)
+            else:
+                personal = None
+                self._personal_context = None
             if work_runtime is not None:
                 work_runtime.set_interactive_brain_active(False)
 
@@ -129,6 +182,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 work_runtime.set_interactive_brain_active(interactive)
 
             def track_agent_state(event: AgentStateChangedEvent) -> None:
+                if self._live_session is not session:
+                    return
                 self._agent_state = event.new_state
                 sync_interactive_brain_gate()
                 LOGGER.info(
@@ -156,6 +211,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 if event.new_state == "speaking":
                     if bridge.conversation.status is ConversationStatus.ACTIVE:
                         bridge.conversation.begin_user_activity()
+                        if personal is not None:
+                            personal.observe_activity()
                     self._user_is_speaking = True
                     sync_interactive_brain_gate()
                     self._cancel_timeout()
@@ -181,15 +238,40 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             def clear_live_session(event) -> None:
                 del event
                 if self._live_session is session:
+                    if personal is not None:
+                        personal.close()
+                    self._personal_context = None
                     self._live_session = None
                     self._agent_state = "unavailable"
                     self._user_is_speaking = False
                     if work_runtime is not None:
                         work_runtime.set_interactive_brain_active(False)
 
+            def track_speech(event):
+                if personal is None:
+                    return
+
+                def finished(handle):
+                    if self._live_session is not session:
+                        return
+                    # Gemini's automatic tool follow-up has a SEPARATE handle.
+                    # The completed tool/preamble handle is not the final answer.
+                    if config.ai_provider == "gemini" and any(
+                        isinstance(item, FunctionCall) for item in handle.chat_items
+                    ):
+                        return
+                    if handle.interrupted:
+                        if personal.protected:
+                            personal.close()
+                        return
+                    personal.response_finished()
+
+                event.speech_handle.add_done_callback(finished)
+
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
             session.on("close", clear_live_session)
+            session.on("speech_created", track_speech)
             return session, bridge
 
         super().__init__(*args, session_factory=capture_session, **kwargs)
@@ -217,7 +299,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 research_service=research_service,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
+                personal_context_getter=lambda: self._personal_context,
             )
+
+    def _session_audio_output(self, bridge, output):
+        personal = self._personal_context
+        if personal is not None and bridge.conversation is self._session_conversation:
+            return PersonalContextAudioOutput(output, personal)
+        return output
 
     @staticmethod
     def _work_delivery_text(kind: WorkDeliveryKind, message: str) -> str:
@@ -547,7 +636,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
 
-        if not self._session_ready_for_inactivity or self._user_is_speaking:
+        if (
+            not self._session_ready_for_inactivity
+            or self._user_is_speaking
+            or (self._personal_context is not None and self._personal_context.busy)
+        ):
             self._cancel_timeout()
             return
 

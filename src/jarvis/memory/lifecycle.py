@@ -95,13 +95,14 @@ class MemoryLifecycleService:
         *,
         reason_code: str | None = None,
         require_absent_current: bool = False,
+        commit_guard: Callable[[], None] | None = None,
     ) -> SemanticAssertionRecord:
         if type(require_absent_current) is not bool:
             raise TypeError("require_absent_current must be a bool")
         reason = _reason_code(reason_code)
         return await self._writer.run(
             lambda connection: self._create_sync(
-                connection, draft, source, reason, require_absent_current
+                connection, draft, source, reason, require_absent_current, commit_guard
             )
         )
 
@@ -135,6 +136,7 @@ class MemoryLifecycleService:
         source: MemorySource,
         *,
         reason_code: str | None = None,
+        commit_guard: Callable[[], None] | None = None,
     ) -> SemanticAssertionRecord:
         target = self._assertion_id(assertion_id)
         reason = _reason_code(reason_code)
@@ -145,6 +147,7 @@ class MemoryLifecycleService:
                 replacement,
                 source,
                 reason,
+                commit_guard,
             )
         )
 
@@ -219,6 +222,8 @@ class MemoryLifecycleService:
         source: MemorySource,
         *,
         reason_code: str | None = "explicit_owner_request",
+        commit_guard: Callable[[], None] | None = None,
+        require_current: bool = False,
     ) -> bool:
         target = self._assertion_id(assertion_id)
         reason = _reason_code(reason_code)
@@ -228,6 +233,8 @@ class MemoryLifecycleService:
                 target,
                 source,
                 reason,
+                commit_guard,
+                require_current,
             )
         )
 
@@ -250,6 +257,7 @@ class MemoryLifecycleService:
         source: MemorySource,
         reason_code: str | None,
         require_absent_current: bool,
+        commit_guard: Callable[[], None] | None = None,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
             if require_absent_current:
@@ -286,7 +294,7 @@ class MemoryLifecycleService:
             )
             return self._require_record(connection, assertion_id)
 
-        return self._transaction(connection, mutation)
+        return self._transaction(connection, mutation, commit_guard)
 
     def _historical_change_sync(
         self,
@@ -352,6 +360,7 @@ class MemoryLifecycleService:
         replacement: SemanticAssertionDraft,
         source: MemorySource,
         reason_code: str | None,
+        commit_guard: Callable[[], None] | None = None,
     ) -> SemanticAssertionRecord:
         def mutation() -> SemanticAssertionRecord:
             now = self._clock_utc()
@@ -393,7 +402,7 @@ class MemoryLifecycleService:
             )
             return self._require_record(connection, replacement_id)
 
-        return self._transaction(connection, mutation)
+        return self._transaction(connection, mutation, commit_guard)
 
     def _close_without_replacement_sync(
         self,
@@ -494,11 +503,15 @@ class MemoryLifecycleService:
         assertion_id: str,
         source: MemorySource,
         reason_code: str | None,
+        commit_guard: Callable[[], None] | None = None,
+        require_current: bool = False,
     ) -> bool:
         def mutation() -> bool:
             target = self._get_sync(connection, assertion_id)
             if target is None:
                 return False
+            if require_current:
+                self._require_current(connection, assertion_id)
             if source.source_id == target.source_id:
                 raise MemorySourceConflictError(
                     "forget command provenance must be distinct from target provenance"
@@ -549,7 +562,7 @@ class MemoryLifecycleService:
                 raise MemoryLifecycleError("forget failed to purge canonical assertion")
             return True
 
-        return self._transaction(connection, mutation)
+        return self._transaction(connection, mutation, commit_guard)
 
     def _ensure_source(self, connection: Any, source: MemorySource) -> None:
         if source.evidence_text is not None:
@@ -778,10 +791,18 @@ class MemoryLifecycleService:
         return _utc(self._clock(), name="clock")
 
     @staticmethod
-    def _transaction(connection: Any, mutation: Callable[[], T]) -> T:
+    def _transaction(
+        connection: Any,
+        mutation: Callable[[], T],
+        commit_guard: Callable[[], None] | None = None,
+    ) -> T:
         connection.execute("BEGIN IMMEDIATE")
         try:
+            if commit_guard is not None:
+                commit_guard()
             result = mutation()
+            if commit_guard is not None:
+                commit_guard()
             connection.commit()
             return result
         except Exception:
