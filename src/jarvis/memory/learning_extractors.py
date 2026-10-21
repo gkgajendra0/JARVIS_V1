@@ -92,12 +92,26 @@ def _input(source):
     }
 
 
+def _strict_output_schema(node):
+    """All object properties required; optional semantic values remain nullable."""
+    if isinstance(node, list):
+        return [_strict_output_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    result = {k: _strict_output_schema(v) for k, v in node.items() if k != "default"}
+    if result.get("type") == "object" and isinstance(result.get("properties"), dict):
+        result["required"] = list(result["properties"])
+        result["additionalProperties"] = False
+    return result
+
+
 class LearningProviderAdapter:
     def __init__(self, provider, client, model):
         self.provider = normalize_ai_provider(provider)
         self.client = client
         self.model_name = model
         self.attempts = 0
+        self.last_failure = None
         self.usage: list[dict[str, int]] = []
 
     async def _request(self, prompt, payload, schema):
@@ -126,7 +140,7 @@ class LearningProviderAdapter:
                         "format": {
                             "type": "json_schema",
                             "name": "learning_proposal",
-                            "schema": schema,
+                            "schema": _strict_output_schema(schema),
                             "strict": True,
                         }
                     },
@@ -141,7 +155,12 @@ class LearningProviderAdapter:
                     metrics[key] = value
             self.usage.append(metrics)
             return json.loads(text)
-        except Exception:  # noqa: BLE001 - never propagate provider bodies/payloads
+        except Exception as exc:  # noqa: BLE001 - never propagate provider bodies/payloads
+            status = getattr(exc, "status_code", None)
+            self.last_failure = {
+                "kind": type(exc).__name__,
+                "status": status if type(status) is int else None,
+            }
             raise RuntimeError("learning_provider_unavailable") from None
 
     async def extract(self, source):

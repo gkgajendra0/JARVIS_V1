@@ -109,3 +109,28 @@ async def test_empty_authorized_catalog_needs_no_second_model_call():
     result = await adapter.resolve(s, batch, LearningCatalog())
     assert result.resolutions[0].decision == "new"
     assert call.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_openai_schema_requires_every_field_and_closes_nested_objects():
+    call = AsyncMock(return_value=SimpleNamespace(output_text='{"candidates":[]}'))
+    adapter = LearningProviderAdapter(
+        "openai",
+        SimpleNamespace(responses=SimpleNamespace(create=call)),
+        "gpt-5.6-terra",
+    )
+    await adapter.extract(source("I own a camera"))
+    schema = call.call_args.kwargs["text"]["format"]["schema"]
+
+    def check(node):
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                assert node["additionalProperties"] is False
+                assert set(node["required"]) == set(node["properties"])
+            for value in node.values():
+                check(value)
+        elif isinstance(node, list):
+            for value in node:
+                check(value)
+
+    check(schema)

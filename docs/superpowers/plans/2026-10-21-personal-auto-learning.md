@@ -114,9 +114,14 @@ Also test idle expiry at 300 seconds, absolute expiry at 900 seconds, denied Hel
 
 ```python
 def test_invented_value_cannot_be_admitted(source, candidate, policy):
-    assert policy.evaluate(source("Mere paas City hai"),
-                           candidate(value="Creta", span=(10, 14)),
-                           frozenset()).status == "drop"
+    assert (
+        policy.evaluate(
+            source("Mere paas City hai"),
+            candidate(value="Creta", span=(10, 14)),
+            frozenset(),
+        ).status
+        == "drop"
+    )
 ```
 
 Pin exact multilingual spans, ninth-candidate rejection, aggregate 8,001-byte input rejection, private/secret/out-of-scope categories, quoted/uncertain/transient claims, per-turn “do not remember” veto and confidence=1.0 without evidence. Previous turns alone cannot create a new write; at least one current accepted-turn span must establish the asserted relation/change.
@@ -169,10 +174,8 @@ Pin exact multilingual spans, ninth-candidate rejection, aggregate 8,001-byte in
 
 ```python
 async def test_replay_has_one_canonical_effect(learning):
-    first = await learning.service.admit_learning(
-        learning.plan, learning.new_permit())
-    second = await learning.service.admit_learning(
-        learning.plan, learning.new_permit())
+    first = await learning.service.admit_learning(learning.plan, learning.new_permit())
+    second = await learning.service.admit_learning(learning.plan, learning.new_permit())
     assert first.status == "committed"
     assert second.status == "noop"
     assert await learning.canonical_effect_count() == 1

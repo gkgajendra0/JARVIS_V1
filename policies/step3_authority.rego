@@ -109,7 +109,7 @@ decision := {
     "require_actor_unambiguous": false,
     "audit_required": true,
     "reason_codes": ["registered_personal_learning_delegation"],
-    "policy_version": "step3-personal-learning-v1",
+    "policy_version": "step3-v1",
 } if {
     personal_learning_child
     input.risk_class in {"PRIVATE_READ", "PERSISTENT_OR_EXTERNAL"}

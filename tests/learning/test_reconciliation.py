@@ -133,3 +133,39 @@ def test_semantic_duplicate_is_not_a_lowercase_update():
         resolutions(("duplicate", "car")),
     )
     assert not plan.mutations
+
+
+def test_routine_schedule_change_replaces_supported_value_and_preserves_identity():
+    s, b = inputs("My evening walk is now at 6 pm", ["evening walk"], "change")
+    candidate = b.candidates[0].model_copy(
+        update={
+            "category": "routine",
+            "kind": "other",
+            "value": "6 pm",
+            "state": "active",
+        }
+    )
+    prior = LearningCatalogEntry(
+        assertion_id="routine",
+        predicate="routine_stable",
+        category="routine",
+        text="evening walk at 5 pm",
+        value=json.dumps(
+            {
+                "schema": "personal-learning-v1",
+                "category": "routine",
+                "label": "evening walk",
+                "value": "5 pm",
+                "state": "active",
+                "kind": "other",
+            }
+        ),
+    )
+    plan = LearningReconciler(None, None).plan(
+        s,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(entries=[prior]),
+        resolutions(("match", "routine")),
+    )
+    assert plan.mutations[0].draft.value["value"] == "6 pm"
+    assert "6 pm" in plan.mutations[0].draft.normalized_text

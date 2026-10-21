@@ -262,6 +262,8 @@ class LearningReconciler:
                     except (TypeError, ValueError):
                         continue
                     value = {**old, "state": candidate.state}
+                    if candidate.category != "owned_item":
+                        value["value"] = candidate.value
                 else:
                     value = {
                         "schema": POLICY_VERSION,
@@ -274,7 +276,7 @@ class LearningReconciler:
                 value_type = ValueType.JSON
             normalized = f"{candidate.category}: {candidate.value}"
             if isinstance(value, dict):
-                normalized = f"{candidate.category}.{candidate.kind}: {value['label']}; state={value['state']}"
+                normalized = f"{candidate.category}.{candidate.kind}: {value['label']}; value={value['value']}; state={value['state']}"
             draft = (
                 None
                 if action == "retract"
