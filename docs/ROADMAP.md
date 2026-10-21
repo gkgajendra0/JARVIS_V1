@@ -9,6 +9,12 @@ research and owner gate are tracked only in [Current Plan](CURRENT_PLAN.md).
 The permanently binding requirements are in [Product](PRODUCT.md) and
 Section 17 of [Autonomous North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md).
 
+October 21 bounded release: PR #294 supplies opt-in exact-consented personal context
+and natural existing-memory changes, with owner-confirmed saved-preference
+recall/correction/restart/restoration. CAP-053 is PARTIAL. Automatic durable
+admission and seamless verified-speaker follow-ups remain deferred; numbered
+steps are unchanged. See [owner acceptance](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+
 
 This roadmap owns **numbered product sequence only**. It does not select technology, define current architecture, or authorize implementation. `CURRENT_PLAN.md` owns the active slice. `GOVERNED_AUTONOMOUS_ENGINEERING_MASTER_PLAN.md` owns the long-term cross-cutting architecture for autonomous governed engineering.
 

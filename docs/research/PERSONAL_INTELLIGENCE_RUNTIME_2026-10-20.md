@@ -1,5 +1,10 @@
 # Normal JARVIS personal-context integration — 20 October 2026
 
+**October 21 owner acceptance:** saved-preference recall, natural correction,
+restart persistence and restoration were owner-confirmed; checked promotion was
+authorized. See the [release record](../acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+The original implementation-time status and measurements below are historical.
+
 **Subsequent repair:** the same candidate now resolves natural correction/deletion
 intent through canonical catalog targets and concrete owner consent. See the
 [October 21 repair report](MEMORY_INTENT_REPAIR_2026-10-21.md) for current behavior,

@@ -1,5 +1,10 @@
 # Memory intention and canonical-target repair — 21 October 2026
 
+**Subsequent owner acceptance:** the owner confirmed correct spoken results for
+saved-preference recall/correction/restart/restoration and authorized checked
+stack promotion. See the [release acceptance record](../acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+Earlier verification/acceptance wording below records implementation-time evidence.
+
 Implemented on `feat/personal-intelligence-runtime-20261020`, in draft PR #294.
 This is a bounded repair of the existing normal-app personal-memory path. The
 owner approved implementation followed by their own full local-app testing.

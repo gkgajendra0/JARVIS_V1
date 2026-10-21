@@ -27,8 +27,8 @@ future implementation. Its detailed historical entries are preserved.
 The owner has clarified that deeply personalized, automatically contextual
 assistance (CAP-053) is the primary product outcome, but the new North Star
 and documentation PRs are **not** runtime promotion. In particular, Step 4
-automatic memory admission and automatic provider-context injection remain
-disabled; the Step 10 Hindsight study is isolated research, not production
+automatic memory admission remains disabled; opt-in context has the later
+October 21 bounded acceptance below. The Step 10 Hindsight study is isolated research, not production
 memory integration. Phase 11 remains next in its engineering program; the
 current *owner-directed design priority* is recorded in
 [Current Plan](CURRENT_PLAN.md). Historical records have been relocated
@@ -39,16 +39,16 @@ verbatim under [Documentation Index](README.md).
 For the October 20 cross-chat reconciliation, see the
 [audit](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md).
 PRs #288–#291 are merged nonproduction personal-intelligence foundations.
-Automatic owner-memory use is not accepted/active on protected main; their merge
-does not promote CAP-053 to DONE. The unmerged
-`feat/personal-intelligence-runtime-20261020` candidate now implements opt-in
+Their merge alone does not promote CAP-053 to DONE. PR #294 supplies opt-in
 automatic context in normal `jarvis-voice`, exact-request Windows Hello consent,
 current canonical reads, private audio guarding and one-answer session retirement.
 See the [runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
-The same unmerged candidate also contains the [October 21 memory-intent repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md),
+The same release also contains the [October 21 memory-intent repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md),
 including canonical target resolution and concrete-change consent. Three fictional
-native-model correction examples succeeded; this is not owner spoken acceptance.
-Owner local-app acceptance and protected promotion remain open. Automatic learning
+native-model correction examples succeeded. Separately, the owner confirmed
+correct spoken recall/correction/restart/restoration and authorized checked stack
+promotion on October 21. See the [bounded owner acceptance](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+PR #294 records actual merge status. CAP-053 is PARTIAL; broader advice quality remains open. Automatic learning
 and seamless verified-speaker follow-ups remain deferred. Draft PR #287's separate diagnostic evidence
 is not part of this main baseline. [Current Plan](CURRENT_PLAN.md) owns the
 active personal-intelligence work; historical engineering next-actions below

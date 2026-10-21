@@ -32,7 +32,7 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 | Voice, wake, conversation, identity | Accepted foundations; realtime model/provider and owner voice limitations still subject to actual acceptance |
 | Camera, device and computer control | Bounded Vision/Hands foundations; full movie-style environmental control not achieved |
 | Canonical personal memory | Encrypted SQLCipher, explicit remember/correct/forget and bounded recall accepted |
-| Automatic remembering and everyday personalization | **Not accepted**: automatic durable admission and proactive provider-context injection disabled; CAP-053 planned |
+| Automatic remembering and everyday personalization | **PARTIAL**: opt-in context with bounded saved-preference owner acceptance; automatic durable admission and broader advice quality remain open |
 | Background Work, recovery and knowledge | Durable WorkItem/DBOS and EngineeringKnowledge accepted to documented bounded scope; distinct from knowing the owner |
 | Reliability/self-management | Deterministic recovery and engineering Phases 2–10A accepted to stated scope; production autonomy does not imply unrestricted self-operation |
 | Personal intelligence across life domains | **Primary owner-facing requirement**: use authorized stable/evolving preferences, context and episodes to improve actual advice/actions |
@@ -62,12 +62,14 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 - [Cross-chat reconciliation audit and remaining gates](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md)
 - [Normal-app personal-context candidate](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
 - [Natural memory-intent and canonical-target repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md)
+- [Bounded normal-app owner acceptance and release](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md)
 
 PRs #285–#286 established the product/documentation hierarchy; #288 approved
 the native direction and #289–#291 added evaluation, shadow and fictional
-provider-probe foundations. The unmerged PR #294 candidate implements opt-in
-personalized voice and natural existing-memory correction/deletion; owner local-app
-acceptance and protected promotion remain open.
+provider-probe foundations. PR #294 supplies opt-in context and natural existing-memory
+correction/deletion. The owner confirmed the saved-preference spoken test and
+authorized checked promotion; PR status records the actual merge. Broader advice
+quality and natural learning remain open.
 The earlier draft PR #287 retains separate research/test evidence; it is not
 merged runtime truth. No research result authorizes implicit writes or private
 context release. Use Current Plan for execution, rather than repeating the

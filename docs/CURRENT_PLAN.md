@@ -11,8 +11,8 @@ and the [Documentation Index](README.md).
 The owner approved architecture PR #288, PI-1A #289, and PI-1B #290.
 All three passed their prescribed GitHub CI and were merged to `main`.
 The owner has also explicitly requested **real activated personal-context assistance,
-not an indefinite shadow feature**, after thorough testing. There are no
-known existing personal memories in the owner's current deployment.
+not an indefinite shadow feature**, after thorough testing. The owner subsequently
+tested an existing saved preference in the configured Windows deployment.
 
 **Goal:** in a reliably authenticated OWNER conversation, JARVIS automatically
 retrieves relevant permitted canonical facts and correctly *uses* them in
@@ -47,14 +47,15 @@ approved by activating read-only context. Start with explicitly permitted facts
 and add carefully governed natural learning after the initial active recall
 release is proven.
 
-**Status:** PRs #288–#291 MERGED. The unmerged
-`feat/personal-intelligence-runtime-20261020` candidate implements the first
+**Status:** PRs #288–#291 MERGED. PR #294 and its dependencies #292/#293 supply the first
 opt-in active owner-memory path in normal `jarvis-voice`, with fresh Windows Hello
 consent for each exact canonical request, current reads and private audio guarding.
 It retires the provider session after one personal answer; subsequent requests
 require a fresh wake. This exact-consent fallback does not claim qualified
-biometric speaker attribution. Protected main remains unchanged; owner acceptance
-is to run the whole local app after software checks, not another isolated demo.
+biometric speaker attribution. On October 21 the owner confirmed the normal-app
+saved-preference recall/correction/restart/restore sequence and authorized checked
+stack promotion. See the [bounded acceptance record](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md);
+the PRs record actual merge status. Broader everyday advice quality remains open.
 Automatic learning is still separate. See the
 [runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
 
@@ -90,29 +91,28 @@ self-repair are *supporting* functions, not the primary end-user test.
 
 Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 [Autonomous Self-Management North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md).
-CAP-053 remains **PLANNED for accepted production**; its first active read slice
-is implemented in the unmerged runtime candidate.
+CAP-053 is **PARTIAL**: the opt-in saved-preference flow has bounded owner
+acceptance; the broader personal-intelligence contract is not complete.
 
-### Immediate next work — finish normal-app acceptance and promotion
+### Immediate next work — promote the accepted flow, then qualify useful advice
 
 The owner-log correction failure is repaired in the same candidate: natural
 correction/deletion proposals resolve the actual canonical target, then require
 fresh concrete owner approval. See the [October 21 repair report](research/MEMORY_INTENT_REPAIR_2026-10-21.md).
-This supplies the requested implementation for normal local-app testing; it does
-not mark spoken acceptance or protected promotion complete.
+The owner confirmed correct spoken results for the prescribed saved-diet
+sequence. Promotion was explicitly authorized conditional on checks; this does
+not accept broader advice quality, automatic learning or seamless attribution.
 
-1. Complete final automated checks and independent review for the normal-runtime
-   candidate; preserve exact-head evidence and publish the implementation report.
-2. Owner runs the complete local app with --personal-context apply and asks
-   everyday English/Hindi/Hinglish questions, including explicit remember,
-   correction/deletion and restart. No further isolated microphone demo is needed.
-3. Record actual spoken usefulness, semantic relevance/negative cases, language,
-   latency and provider failures honestly. Automated synthetic proposals prove
-   wiring and release policy, not live model quality or billed cost.
-4. Promote reviewed stacked candidates only through protected-main gates and
-   explicit owner approval. Automatic learning and seamless verified-speaker
-   follow-ups remain later work. Do not restart vendor comparisons as a substitute
-   for completing this active native slice.
+1. Complete the authorized #292 → #293 → #294 promotion with applicable exact-head
+   checks and verify protected main. Preserve owner acceptance and CI evidence.
+2. Qualify personally useful everyday advice with general fictional scenarios in
+   English/Hindi/Hinglish, including relevant/irrelevant context and honest absence.
+   Saved-preference recall acceptance alone does not prove this broader behavior.
+3. Record language, latency, provider failures and cost honestly. Prepare the
+   bounded natural-learning design through existing memory/authority contracts;
+   new automatic durable capture requires its own architecture approval.
+4. Seamless verified-speaker follow-ups remain later work. Do not restart vendor
+   comparisons as a substitute for completing this native personal-assistant path.
 
 The native architecture is already owner-approved. Do not ask for that same
 decision again or restart a vendor benchmark as a substitute for integration.
@@ -131,9 +131,9 @@ retrieval benchmark score.
 - Steps 0–3: conversation, wake/voice, vision foundation, identity/trust and
   observability accepted to their documented scope.
 - Step 4: **BOUNDED**. Encrypted SQLCipher persistent memory and explicit
-  operations accepted; automatic candidate admission and automatic
-  provider-context memory injection **disabled**. Natural-language live
-  semantic recall has a deferred owner-machine acceptance gate.
+  operations accepted; automatic candidate admission remains **disabled**.
+  Opt-in exact-consented context and natural correction now have bounded
+  owner recall/correction/restart acceptance; broader semantic quality remains open.
 - Steps 5–6: provider resilience/research **BOUNDED**.
 - Step 7: generic capability runtime and safe reads **DONE**.
 - WorkStore/DBOS durable work, Self-Awareness, Hands foundations and bounded

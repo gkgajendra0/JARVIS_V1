@@ -15,8 +15,23 @@ research and acceptance records does not alter deployed code or feature flags.
 The proposed movie-inspired personal-intelligence experience is **future
 product intent**, not current production capability. See
 [Product](PRODUCT.md), [Current Plan](CURRENT_PLAN.md) and
-[Documentation Index](README.md). Existing Step 4 automatic memory
-injection remains disabled.
+[Documentation Index](README.md). Existing Step 4 implicit memory admission
+remains disabled. The later opt-in context release below supplies a bounded read path.
+
+## Opt-in personal context — bounded October 21 release
+
+PR #294 adds per-conversation PersonalContextSession and native model tools to
+normal voice sessions. Exact-request Hello grants read access to eligible standard
+canonical facet names and up to four current facts. Concrete changes need separate
+write approval and transaction currentness checks. Canonical USER turns bind both
+reads and writes. Audio output checks authority/currentness; private provider
+history retires after one personal answer. OFF is default. Speaker/active-speaker
+scores remain SHADOW, and automatic durable admission remains disabled.
+
+The owner confirmed saved-preference recall/correction/restart/restoration and
+authorized checked promotion. This paragraph describes the PR release on main
+after merge, not a complete personal-intelligence architecture. See the
+[acceptance record](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
 
 ## Top-level production architecture
 

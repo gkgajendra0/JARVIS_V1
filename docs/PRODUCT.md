@@ -22,12 +22,12 @@ The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile 
 
 ## Owner-Centered Personal Intelligence Contract
 
-Implementation update (20 October 2026): the unmerged normal-runtime candidate
-implements a first opt-in active read slice with fresh exact-request Windows Hello
-consent and provider-session retirement after each personal answer. This is a
-bounded delivery toward the contract below, not completion of CAP-053 or automatic
-learning. See the [runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
-for behavior, limits and the owner local-app acceptance boundary.
+Implementation update (21 October 2026): PR #294 supplies the first opt-in active
+read slice with fresh exact-request Hello, natural existing-memory changes and
+provider-session retirement after each personal answer. The owner confirmed
+saved-preference recall/correction/restart/restoration and authorized checked
+promotion. See the [bounded acceptance](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+CAP-053 is PARTIAL; broader advice quality and automatic learning remain open.
 
 **Owner goal clarified 2026-10-18; desired product behavior, NOT accepted production
 capability.** The distinctive point of building JARVIS is a movie-inspired,
@@ -242,11 +242,11 @@ Turn-specific spoken actor binding remains a Step-3 deferral. CAM++/LR-ASD remai
 | CAP-011 | Semantic Memory | Durable facts/preferences/rules with conflict and supersession handling. | 4 | BOUNDED |
 | CAP-012 | Reflection and Session Learning | Achievements, issues, decisions, next steps, memory candidates. | 4 | BOUNDED |
 | CAP-013 | Emotional Interaction Context | Transient interaction signals that improve tone without permanent identity labels. | 4 | BOUNDED |
-| CAP-053 | Personal Intelligence and Automatic Context Use | Owner-centered, safe multi-session personal understanding and relevant use of authorized facts, episodes, corrections, preferences, and situation in actual assistance. | cross-cutting | PLANNED — existing bounded foundations, no accepted end-to-end automatic personalization |
+| CAP-053 | Personal Intelligence and Automatic Context Use | Owner-centered, safe multi-session personal understanding and relevant use of authorized facts, episodes, corrections, preferences, and situation in actual assistance. | cross-cutting | PARTIAL — opt-in saved-preference recall/correction/restart owner-confirmed; broader advice, natural learning and seamless speaker follow-ups open |
 
 Step-4 bounded status reflects accepted encrypted lifecycle/retrieval/explicit recall while the strict independent semantic verifier and automatic Phase-4.5E memory injection remain deferred.
 
-CAP-053 is the primary owner-facing outcome and uses CAP-006–013 plus source-aware knowledge, voice, permitted devices, context assembly, and governed actions. Its planned status must not be inferred to mean that the constituent existing foundations are absent.
+CAP-053 is the primary owner-facing outcome and uses CAP-006–013 plus source-aware knowledge, voice, permitted devices, context assembly, and governed actions. Its partial status distinguishes the accepted bounded flow from the broader intended assistant.
 
 ### Knowledge, Research, Truth
 
