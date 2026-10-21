@@ -1,10 +1,11 @@
 # Automatic conversational learning for JARVIS
 
-**Date:** 21 October 2026. **Status:** proposed written design for owner review.
+**Date:** 21 October 2026. **Status:** owner-approved written design; implementation not started.
 **Baseline:** main `7de92b3d0507ca52cfa3b653ddd976e3356a7102`.
 **Branch:** `feat/personal-auto-learning-20261021`.
-This document does not enable capture, change installed settings, or approve a
-new production permission. CAP-053 remains partial until implementation and
+Owner response to the written-design review: **“Approve written design.”**
+The approved design permits the next executable-plan stage. It does not enable
+capture or change installed settings. CAP-053 remains partial until implementation and
 normal-app acceptance prove the behaviors below.
 
 ## Owner-readable decision
@@ -19,7 +20,7 @@ automatic admission and reconciliation; do not add another primary memory
 service or train an AI model from scratch. Do not repeat the previous broad
 vendor benchmark. A newly observed failure can justify a targeted adapter study.
 
-**Material proposal requiring review:** the first release uses an explicitly
+**Approved initial permission design:** the first release uses an explicitly
 opened, private owner session. One Windows Hello challenge opens a 15-minute
 memory session; five minutes without accepted user input ends it sooner. The
 owner is delegating the active conversation input channel for standard personal
@@ -414,10 +415,10 @@ Targeted primary-source check, 21 October:
 - [Google structured output and application value validation](https://ai.google.dev/gemini-api/docs/structured-output).
 - [Microsoft UserConsentVerifier](https://learn.microsoft.com/en-us/uwp/api/windows.security.credentials.ui.userconsentverifier).
 
-Owner review must cover the private-session delegation trade-off, initial
+The owner approved the private-session delegation trade-off, initial
 categories, resource/session limits, conservative facet suppression after forget
-and retained fresh-wake boundary. This written design does not claim owner
-approval of those concrete details merely because the feature goal was approved.
-After review, write the executable task plan and proceed with the selected
-implementation workflow. No product code or installed configuration changes are
-part of this design-only commit.
+and retained fresh-wake boundary through the written-design question. This is
+approval of the actual written design, not inference from the earlier feature
+goal. The [executable task plan](../plans/2026-10-21-personal-auto-learning.md)
+is the next review stage. No product code or installed configuration changes
+are part of these design/planning-only commits.

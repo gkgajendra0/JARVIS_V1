@@ -20,15 +20,16 @@ action below is completed. Existing bounded owner acceptance remains valid.
 
 Current work is the
 [written automatic-learning design](superpowers/specs/2026-10-21-personal-auto-learning-design.md),
-on `feat/personal-auto-learning-20261021`. **Status: prepared for owner review;
-no automatic-learning product code or production settings changed.** It reuses
+on `feat/personal-auto-learning-20261021`. **Status: written design approved by
+the owner; executable task plan prepared for review. No automatic-learning
+product code or production settings changed.** It reuses
 native extraction, canonical memory and context delivery, and preserves prior
 external-framework/classifier failures rather than repeating those trials.
 The concrete new permission proposal is a private, explicitly delegated owner
 session; it does not claim qualified biometric attribution of each later turn.
 
-Next: review that written design, then create/review the executable task plan
-and implement the accepted automatic-admission/runtime path. The owner's
+Next: review the [executable task plan](superpowers/plans/2026-10-21-personal-auto-learning.md),
+select execution method and implement the accepted automatic-admission/runtime path. The owner's
 instruction to research broadly and narrow on evidence is a continuing constraint;
 new targeted research is appropriate for a concrete unsolved interface or quality
 gap, not as a substitute for delivery. Do not ask again for the already approved
@@ -211,8 +212,9 @@ approves and all required checks pass.**
 
 ## Next action
 
-Review the October 21 automatic-learning written design, then prepare the
-executable task plan and implement that slice through the established lifecycle.
+The owner approved the October 21 automatic-learning written design. Review its
+executable task plan, select execution method and implement the slice through
+the established lifecycle.
 Retain the broader advice, owner-input/session and normal-app acceptance gates;
 do not restart completed PI-1 promotion or old vendor experiments. Continue
 until a concrete required owner review, observation or unavailable resource is
