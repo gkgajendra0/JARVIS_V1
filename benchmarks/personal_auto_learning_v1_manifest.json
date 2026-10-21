@@ -2,8 +2,8 @@
   "schema": "personal-auto-learning-manifest-v1",
   "frozen_before_provider": true,
   "files": {
-    "personal_auto_learning_v1.json": "36e2dd112afcadc290268eb2354eb9971850ccc75894091a1fcadb98ca9c47c7",
-    "personal_auto_learning_v1_gold.json": "5cb0aff5c09f3fb83330cb4bafab3ac05d279c6c23aa7cd731e95e8158f360b2"
+    "personal_auto_learning_v1.json": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "personal_auto_learning_v1_gold.json": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010"
   },
   "episodes": 90,
   "answer_pairs": 30,
