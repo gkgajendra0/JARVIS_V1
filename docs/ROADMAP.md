@@ -43,6 +43,9 @@ This roadmap owns **numbered product sequence only**. It does not select technol
 | 19 | Governed Self-Diagnostics and Repair | CAP-046 | PARTIAL — deterministic R1/R2 + Phases 1H–10A accepted; Phase 9 bounded final external validation deferred; Phase 11 research/architecture next |
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
+
+Automatic learning candidate (22 October 2026): core implementation now exists on the dedicated feature branch, but it is unpromoted and OFF by default. Provider quality and normal-app acceptance remain pending; CAP-053 remains PARTIAL and Step 8 numbering is unchanged. See [qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
+
 ## Accepted interludes that do not renumber the roadmap
 
 ### Step 2.5 visual interlude

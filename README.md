@@ -27,6 +27,20 @@ For exact accepted, deferred and production state, consult
 [Current Architecture](docs/CURRENT_ARCHITECTURE.md). Research/draft PRs do not
 change production reality.
 
+### Automatic learning candidate — not yet accepted
+
+The feature branch adds ordinary conversational learning in the normal app. It is OFF by default; provider qualification stopped on HTTP 429 and broader quality/owner acceptance are pending. See the [report and limitations](docs/research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). Do not treat this as an accepted production release.
+
+For a later reviewed candidate test, the whole normal app command is:
+
+```powershell
+.\.venv\Scripts\jarvis-voice.exe --personal-learning apply
+```
+
+One Windows Hello opens a private owner-operated session for at most 15 minutes, with 5-minute idle expiry. Important eligible standard facts can be learned without per-fact questions. This does not verify every later speaker. Fresh wakes can reuse an active grant, but private provider history still retires after one personal answer. Forget suppresses automatic learning of that category until separately re-enabled.
+
+Stop JARVIS to revoke the grant. Use `--personal-learning off --personal-context apply` to retain accepted exact-consent context behavior. Schema 3 requires a compatible build; do not downgrade or delete memory data. Existing production settings were not changed.
+
 ### Opt-in personal context (owner acceptance, 21 October 2026)
 
 PR #294 supplies the first active personal-context path **inside the normal voice

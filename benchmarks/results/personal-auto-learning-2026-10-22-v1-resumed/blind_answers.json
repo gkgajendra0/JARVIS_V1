@@ -1,0 +1,45 @@
+{
+  "rubric": {
+    "relevant": "Use supported requested facts; no invented owner facts.",
+    "irrelevant": "Answer general question without mentioning irrelevant owner facts.",
+    "unknown_relation": "State missing owner reason/preference; ownership alone supplies no reason.",
+    "reviewer": "Blind arm order, agent authored review reported separately from owner acceptance."
+  },
+  "pairs": [
+    {
+      "id": "en-01",
+      "question": "Which vehicles do I own?",
+      "facts": [
+        {
+          "predicate": "owned_item_4cfc1c9d87694007aa137e45600ca0ec",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_9a8191fb0f0f4dc88b1284db8457988d",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "A": "You own a TVS Ronin and a Toyota Glanza.",
+      "B": "I don't have information about which vehicles you own."
+    },
+    {
+      "id": "en-02",
+      "question": "Which camera do I have?",
+      "facts": [
+        {
+          "predicate": "owned_item_523d0beb3d3e4e4fa086971ea9023202",
+          "text": "owned_item.device: camera; value=Fujifilm X-S20; state=owned"
+        }
+      ],
+      "A": "You have a Fujifilm X-S20 camera.",
+      "B": "I do not have any information about which camera you own."
+    },
+    {
+      "id": "en-03",
+      "question": "When is my morning walk?",
+      "facts": [],
+      "A": "I don't have any information about when your morning walk is scheduled.",
+      "B": "I don't have any information about when your morning walk is scheduled."
+    }
+  ]
+}

@@ -18,22 +18,11 @@ PRs #292, #293 and #294 have been promoted; the reviewed implementation is on
 `main` at `7de92b3d0507ca52cfa3b653ddd976e3356a7102`. The earlier promotion
 action below is completed. Existing bounded owner acceptance remains valid.
 
-Current work is the
-[written automatic-learning design](superpowers/specs/2026-10-21-personal-auto-learning-design.md),
-on `feat/personal-auto-learning-20261021`. **Status: written design approved by
-the owner; executable task plan prepared for review. No automatic-learning
-product code or production settings changed.** It reuses
-native extraction, canonical memory and context delivery, and preserves prior
-external-framework/classifier failures rather than repeating those trials.
-The concrete new permission proposal is a private, explicitly delegated owner
-session; it does not claim qualified biometric attribution of each later turn.
+The owner approved the written design and executable plan and selected Native execution. The feature branch `feat/personal-auto-learning-20261021` now contains session delegation, grounded extraction, canonical reconciliation/admission, replay/suppression, a bounded worker and normal voice integration. **This is an unpromoted candidate, OFF by default.**
 
-Next: review the [executable task plan](superpowers/plans/2026-10-21-personal-auto-learning.md),
-select execution method and implement the accepted automatic-admission/runtime path. The owner's
-instruction to research broadly and narrow on evidence is a continuing constraint;
-new targeted research is appropriate for a concrete unsolved interface or quality
-gap, not as a substitute for delivery. Do not ask again for the already approved
-native architecture or require owner-authored examples/isolated microphone demos.
+Current gate: the fresh cohort is incomplete after Gemini answering returned HTTP 429. Four English episodes and three answer pairs completed; Hindi/Hinglish quality and broader capture/use remain unqualified. The whole deterministic suite passed before the final transport/reporting repairs; exact-candidate verification and independent review remain required. See the [dated qualification report](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md) and [implementation decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md).
+
+Next: finish unaffected review/documentation/CI, restore sufficient existing-provider availability for the remaining frozen work, then qualify semantic/resource behavior and obtain whole normal-app owner acceptance. Do not silently retry exposed cases, switch paid providers or expand the approved budget. Do not ask again for the approved design/native execution or require owner-authored examples/isolated microphone demos. Earlier merge approval does not authorize promotion of this new permission-expanding candidate.
 
 ## Owner direction — active personal intelligence (2026-10-19)
 

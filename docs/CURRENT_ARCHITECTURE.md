@@ -20,6 +20,8 @@ remains disabled. The later opt-in context release below supplies a bounded read
 
 ## Opt-in personal context — bounded October 21 release
 
+The separate automatic-learning branch is an unaccepted candidate and is not part of the protected-main architecture described here. Its source/Authority/storage/worker composition and private-session limitation are recorded in the [subordinate implementation decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md); qualification and activation remain pending.
+
 PR #294 adds per-conversation PersonalContextSession and native model tools to
 normal voice sessions. Exact-request Hello grants read access to eligible standard
 canonical facet names and up to four current facts. Concrete changes need separate

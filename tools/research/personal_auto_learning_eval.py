@@ -159,6 +159,9 @@ def score_rows(rows, gold):
         "recall_wilson": wilson(tp, tp + fn),
         "languages": languages,
         "quality_floor_pass": bool(quality),
+        "answer_unavailable": sum(
+            r.get("answer_status") == "unavailable" for r in rows
+        ),
         "advice_review": "pending blind review; never inferred from retrieval or fake providers",
     }
 
@@ -525,6 +528,9 @@ async def _provider_cohort(inputs, output_dir, budget):
                         encoding="utf-8",
                     )
                 except (Exception, asyncio.CancelledError):  # noqa: BLE001 - persist incomplete results, never retry
+                    if rows and rows[-1]["id"] == episode["id"]:
+                        rows[-1]["answer_status"] = "unavailable"
+                        rows[-1]["answer_failure"] = "provider_or_budget_unavailable"
                     if not rows or rows[-1]["id"] != episode["id"]:
                         rows.append(
                             {

@@ -148,3 +148,71 @@ def test_opa_policy_uses_one_adapter_protocol_version():
         )
     )
     assert versions == {"step3-v1"}
+
+
+@pytest.mark.asyncio
+async def test_answer_outage_is_retained_as_unavailable_not_silent_partial(
+    monkeypatch, tmp_path
+):
+    from types import SimpleNamespace
+
+    import jarvis.authority.local_opa as opa
+    import jarvis.memory.learning_extractors as adapters
+    from jarvis.config import JarvisConfig
+
+    class Server:
+        endpoint = "fictional-policy"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    class Adapter:
+        provider = "gemini"
+        model_name = "fake"
+        attempts = 0
+        usage = ()
+        last_failure = None
+
+        async def _request(self, *args):
+            self.attempts += 1
+            self.last_failure = {"kind": "RateLimitError", "status": 429}
+            raise RuntimeError("fictional quota failure")
+
+        async def close(self):
+            pass
+
+    async def episode(*args):
+        return {"id": "en-01", "status": "completed", "predictions": [], "facts": []}
+
+    monkeypatch.setattr(opa, "ManagedOpaServer", Server)
+    monkeypatch.setattr(
+        adapters, "build_learning_adapters", lambda *args: (Adapter(), None)
+    )
+    monkeypatch.setattr(
+        JarvisConfig,
+        "from_environment",
+        classmethod(
+            lambda cls: SimpleNamespace(
+                ai_provider="gemini", work_orchestration_model=None
+            )
+        ),
+    )
+    monkeypatch.setattr(evaluation, "_episode", episode)
+    inputs = {
+        "episodes": [
+            {"id": "en-01", "answer_subset": True, "question": "fictional question"}
+        ]
+    }
+    rows, pairs, _, _ = await evaluation._provider_cohort(
+        inputs, tmp_path, evaluation.AttemptBudget(2)
+    )
+    assert rows[0]["answer_status"] == "unavailable" and not pairs
+    assert (
+        evaluation.score_rows(rows, json.loads(GOLD.read_text(encoding="utf-8")))[
+            "answer_unavailable"
+        ]
+        == 1
+    )

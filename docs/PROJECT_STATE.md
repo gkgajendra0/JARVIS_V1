@@ -20,6 +20,10 @@ Snapshot baseline verified from protected `main` at
 
 ---
 
+## Automatic conversational learning candidate — 22 October 2026
+
+Design and Native plan approved; core implementation and normal voice integration exist on `feat/personal-auto-learning-20261021`. **UNPROMOTED / OFF by default / acceptance incomplete**. Initial actual-provider qualification completed four English episodes and three paired answers before HTTP 429; no Hindi/Hinglish semantic acceptance or broad quality claim. Independent review, final CI/provider/resource checks, normal-app owner acceptance and protected promotion remain gates. [Evidence and limitations](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
+
 ## Documentation reconciliation and owner priority — 2026-10-18
 
 This ledger retains **accepted/deferred product truth**, not the plan for

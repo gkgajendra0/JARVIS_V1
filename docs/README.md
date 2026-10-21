@@ -4,6 +4,8 @@
 
 This is the navigation and reconciliation record, not another North Star, second product plan or a claim of completed runtime features.
 
+Automatic-learning candidate: [implementation decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md) and [qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). Core branch code exists, while provider/owner acceptance and promotion remain pending; it is OFF by default.
+
 ## Read these documents first
 
 **One product, one hierarchy:**
