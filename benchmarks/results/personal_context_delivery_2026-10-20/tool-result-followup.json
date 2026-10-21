@@ -1,0 +1,78 @@
+{
+  "path": "tool_result",
+  "status": "COMPLETED",
+  "turns": [
+    {
+      "language": "english",
+      "question": "For fictional Rhea, what exact holiday codeword was previously provided? Say unknown if it is unavailable. Reply in English.",
+      "answer": "The fictional holiday codeword is brackenfold.",
+      "canary_observed": true,
+      "tool_calls": 1,
+      "whole_turn_seconds": 5.765,
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": -1.0,
+          "input_tokens": 5208,
+          "output_tokens": 10,
+          "total_tokens": 5218
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5273,
+          "output_tokens": 83,
+          "total_tokens": 5356
+        }
+      ]
+    },
+    {
+      "language": "hindi",
+      "question": "काल्पनिक रिया की पहले बताई गई recipe का exact label क्या है? जानकारी नहीं है तो अज्ञात कहो। हिंदी में उत्तर दो।",
+      "answer": "रिया की रेसिपी का सटीक लेबल एम्बरव्हिसल है।",
+      "canary_observed": false,
+      "tool_calls": 1,
+      "whole_turn_seconds": 5.656,
+      "metrics": [
+        {
+          "ttft": -1.0,
+          "input_tokens": 5408,
+          "output_tokens": 10,
+          "total_tokens": 5418
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5473,
+          "output_tokens": 83,
+          "total_tokens": 5556
+        }
+      ]
+    },
+    {
+      "language": "hinglish",
+      "question": "Fictional Rhea ka pehle bataya reading stamp kya tha? Available nahi hai toh unknown bolo. Hinglish mein jawab do.",
+      "answer": "Rhea ka reading stamp cedarloop hai.",
+      "canary_observed": true,
+      "tool_calls": 1,
+      "whole_turn_seconds": 3.75,
+      "metrics": [
+        {
+          "ttft": -1.0,
+          "input_tokens": 5614,
+          "output_tokens": 10,
+          "total_tokens": 5624
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5678,
+          "output_tokens": 65,
+          "total_tokens": 5743
+        }
+      ]
+    }
+  ]
+}

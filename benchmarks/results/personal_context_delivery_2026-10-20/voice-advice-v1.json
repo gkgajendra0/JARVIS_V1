@@ -1,0 +1,239 @@
+{
+  "recorded_at_utc": "2026-10-20T08:54:28.448388+00:00",
+  "fictional_only": true,
+  "production_activation": false,
+  "owner_memory_access": false,
+  "microphone_or_camera": false,
+  "provider": "gemini",
+  "model": "gemini-3.8-live",
+  "max_sessions": 8,
+  "sessions": [
+    {
+      "stage": "baseline",
+      "language": "english",
+      "question": "What should I have for dinner? Give one suitable suggestion in English.",
+      "status": "COMPLETED",
+      "answers": [
+        "Consider pan-seared salmon with a side of roasted asparagus and quinoa."
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5215,
+          "output_tokens": 118,
+          "total_tokens": 5333
+        }
+      ],
+      "seconds": 8.594,
+      "tool_calls": 0
+    },
+    {
+      "stage": "baseline",
+      "language": "hindi",
+      "question": "आज रात खाने में क्या खाऊँ? एक सुझाव दो, हिंदी में।",
+      "status": "COMPLETED",
+      "answers": [
+        "आप आज रात पनीर बटर मसाला और गार्लिक नान का आनंद ले सकती हैं, या हल्का विकल्प चाहिए तो मिक्स वेजिटेबल सूप और खिचड़ी उत्तम रहेगा।"
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5217,
+          "output_tokens": 200,
+          "total_tokens": 5417
+        }
+      ],
+      "seconds": 13.047,
+      "tool_calls": 0
+    },
+    {
+      "stage": "baseline",
+      "language": "hinglish",
+      "question": "Dinner mein kya khaun? Ek suggestion do, Hinglish mein.",
+      "status": "COMPLETED",
+      "answers": [
+        "Aap chicken tikka masala with garlic naan try kar sakte hain, ya phir ek light vegetable stir-fry with rice bhi accha option rahega."
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5215,
+          "output_tokens": 177,
+          "total_tokens": 5392
+        }
+      ],
+      "seconds": 10.578,
+      "tool_calls": 0
+    },
+    {
+      "stage": "context",
+      "language": "english",
+      "question": "What should I have for dinner? Give one suitable suggestion in English.",
+      "status": "COMPLETED",
+      "answers": [
+        "Consider a classic roasted lemon herb chicken with a side of seasonal roasted vegetables."
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5371,
+          "output_tokens": 128,
+          "total_tokens": 5499
+        }
+      ],
+      "seconds": 8.532,
+      "tool_calls": 0
+    },
+    {
+      "stage": "context",
+      "language": "hindi",
+      "question": "आज रात खाने में क्या खाऊँ? एक सुझाव दो, हिंदी में।",
+      "status": "COMPLETED",
+      "answers": [
+        "आप आज रात हल्के और स्वादिष्ट डिनर में मिक्स वेजिटेबल स्टर-फ्राई और स्टीम्ड राइस ट्राई कर सकती हैं।"
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5373,
+          "output_tokens": 147,
+          "total_tokens": 5520
+        }
+      ],
+      "seconds": 10.656,
+      "tool_calls": 0
+    },
+    {
+      "stage": "context",
+      "language": "hinglish",
+      "question": "Dinner mein kya khaun? Ek suggestion do, Hinglish mein.",
+      "status": "COMPLETED",
+      "answers": [
+        "Aap paneer stir-fry aur garam roti try kar sakte hain. Yeh kaafi light aur easy hai banane mein."
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5371,
+          "output_tokens": 145,
+          "total_tokens": 5516
+        }
+      ],
+      "seconds": 9.437,
+      "tool_calls": 0
+    },
+    {
+      "stage": "corrected",
+      "language": "hinglish",
+      "question": "Dinner mein kya khaun? Meri current preference dhyan mein rakho, Hinglish mein.",
+      "status": "COMPLETED",
+      "answers": [
+        "Aap tofu aur veggies ka stir-fry try kar sakte hain, ya phir ek hearty vegan chickpea curry with rice. Dono hi options delicious hain aur aapke preference ke hisaab se peanut-free hain."
+      ],
+      "tool_reads": [
+        {
+          "selected_predicates": [
+            "diet_preference",
+            "food_restriction"
+          ],
+          "fictional_facts": [
+            "diet preference: Fictional Rhea now prefers vegan meals; this replaces her vegetarian preference.",
+            "food restriction: Fictional Rhea avoids peanuts."
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": -1.0,
+          "input_tokens": 5377,
+          "output_tokens": 20,
+          "total_tokens": 5397
+        },
+        {
+          "ttft": 0.0009999275207519531,
+          "input_tokens": 5467,
+          "output_tokens": 245,
+          "total_tokens": 5712
+        }
+      ],
+      "seconds": 15.344,
+      "tool_calls": 1
+    },
+    {
+      "stage": "deleted_fresh_session",
+      "language": "hinglish",
+      "question": "Meri saved diet preference kya hai? Available nahi hai toh honestly bolo ki nahi pata.",
+      "status": "COMPLETED",
+      "answers": [
+        "Mujhe apki saved diet preference nahi pata."
+      ],
+      "tool_reads": [],
+      "metrics": [
+        {
+          "ttft": -1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0
+        },
+        {
+          "ttft": 0.0,
+          "input_tokens": 5342,
+          "output_tokens": 73,
+          "total_tokens": 5415
+        }
+      ],
+      "seconds": 8.328,
+      "tool_calls": 0
+    }
+  ],
+  "billed_cost": null,
+  "qualification": "DIAGNOSTIC_NOT_RELEASE_ACCEPTANCE"
+}

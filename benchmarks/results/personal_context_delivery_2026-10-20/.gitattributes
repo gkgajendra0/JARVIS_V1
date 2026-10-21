@@ -1,0 +1,2 @@
+# Evidence snapshots use canonical UTF-8/LF bytes for portable manifest hashes.
+* text eol=lf
