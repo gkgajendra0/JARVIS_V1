@@ -45,6 +45,9 @@ does not promote CAP-053 to DONE. The unmerged
 automatic context in normal `jarvis-voice`, exact-request Windows Hello consent,
 current canonical reads, private audio guarding and one-answer session retirement.
 See the [runtime report](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md).
+The same unmerged candidate also contains the [October 21 memory-intent repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md),
+including canonical target resolution and concrete-change consent. Three fictional
+native-model correction examples succeeded; this is not owner spoken acceptance.
 Owner local-app acceptance and protected promotion remain open. Automatic learning
 and seamless verified-speaker follow-ups remain deferred. Draft PR #287's separate diagnostic evidence
 is not part of this main baseline. [Current Plan](CURRENT_PLAN.md) owns the

@@ -161,21 +161,27 @@ class MemoryAgentTools:
             turn=turn,
             sensitivity=resolved_sensitivity,
         )
-        result = await self._service.remember_text(
-            predicate=predicate,
-            value=value,
-            source=source,
-            sensitivity=resolved_sensitivity,
-            **self._commit_guard(),
-        )
+        try:
+            result = await self._service.remember_text(
+                predicate=predicate,
+                value=value,
+                source=source,
+                sensitivity=resolved_sensitivity,
+                **self._commit_guard(),
+            )
+        except (Exception, asyncio.CancelledError):
+            if self._personal_context is not None:
+                self._personal_context.mutation_failed()
+            LOGGER.info(
+                "Memory change | operation=remember | status=failed | turn_id=%s",
+                turn.turn_id,
+            )
+            raise
         if self._personal_context is not None:
             self._personal_context.mutation_committed()
         LOGGER.info(
-            "Explicit memory remember committed | predicate=%s | memory_id=%s | "
-            "sensitivity=%s",
-            result.predicate,
-            result.record.assertion_id,
-            result.record.sensitivity.value,
+            "Memory change | operation=remember | status=committed | turn_id=%s",
+            turn.turn_id,
         )
         return {
             "ok": True,
@@ -237,11 +243,8 @@ class MemoryAgentTools:
         if self._personal_context is not None:
             self._personal_context.mutation_committed()
         LOGGER.info(
-            "Explicit memory correction committed | predicate=%s | memory_id=%s | "
-            "sensitivity=%s",
-            result.predicate,
-            result.record.assertion_id,
-            result.record.sensitivity.value,
+            "Memory change | operation=correct | status=committed | turn_id=%s",
+            turn.turn_id,
         )
         return {
             "ok": True,
@@ -297,8 +300,8 @@ class MemoryAgentTools:
         if self._personal_context is not None:
             self._personal_context.mutation_committed()
         LOGGER.info(
-            "Explicit memory forget committed | predicate=%s",
-            forgotten_predicate,
+            "Memory change | operation=forget | status=committed | turn_id=%s",
+            turn.turn_id,
         )
         return {
             "ok": True,
@@ -325,6 +328,8 @@ class MemoryAgentTools:
                 )
             try:
                 _require_grounded_target(turn, predicate)
+                if self._personal_context is not None:
+                    await self._personal_context.prepare_target_resolution()
                 return (await self._service.inspect_exact(predicate=predicate)).record
             except (MemoryNotFoundError, MemoryToolGroundingError):
                 if self._personal_context is None:

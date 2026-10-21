@@ -135,6 +135,8 @@ class CapabilityRuntime:
         """Fixed canonical personal-memory scope; never model-supplied authority."""
         if operation not in {"read", "remember", "correct", "forget"}:
             raise ValueError("unsupported personal context operation")
+        if operation != "read" and mutation is None:
+            raise ValueError("a concrete memory change is required")
         if (
             not isinstance(question, str)
             or not question.strip()

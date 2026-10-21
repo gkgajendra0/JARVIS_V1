@@ -95,6 +95,12 @@ is implemented in the unmerged runtime candidate.
 
 ### Immediate next work — finish normal-app acceptance and promotion
 
+The owner-log correction failure is repaired in the same candidate: natural
+correction/deletion proposals resolve the actual canonical target, then require
+fresh concrete owner approval. See the [October 21 repair report](research/MEMORY_INTENT_REPAIR_2026-10-21.md).
+This supplies the requested implementation for normal local-app testing; it does
+not mark spoken acceptance or protected promotion complete.
+
 1. Complete final automated checks and independent review for the normal-runtime
    candidate; preserve exact-head evidence and publish the implementation report.
 2. Owner runs the complete local app with --personal-context apply and asks

@@ -1,5 +1,11 @@
 # Normal JARVIS personal-context integration — 20 October 2026
 
+**Subsequent repair:** the same candidate now resolves natural correction/deletion
+intent through canonical catalog targets and concrete owner consent. See the
+[October 21 repair report](MEMORY_INTENT_REPAIR_2026-10-21.md) for current behavior,
+review findings, actual fictional model evidence and remaining acceptance.
+The verification counts below describe the original integration, before that repair.
+
 The first active read slice is implemented in
 `feat/personal-intelligence-runtime-20261020`, based on delivery candidate
 `4abe0ec974a96fdcc792cde2251ace9fe19d2b18` / draft PR #293, stacked on repair

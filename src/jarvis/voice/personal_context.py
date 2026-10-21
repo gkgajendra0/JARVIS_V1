@@ -339,6 +339,13 @@ class PersonalContextSession:
             )
         self._reserved_mutation = operation
 
+    async def prepare_target_resolution(self):
+        if not await self._authorize("read"):
+            raise PermissionError(
+                "Owner consent was not granted for memory target resolution"
+            )
+        self._protect()
+
     async def resolve_mutation_target(self, catalog_id, facet_index):
         if (
             catalog_id != self._catalog_id

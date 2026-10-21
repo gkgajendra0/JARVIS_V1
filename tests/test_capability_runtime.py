@@ -105,6 +105,21 @@ def test_personal_mutation_consent_binds_concrete_target_version_and_value():
     assert seen[-1].parameters["mutation_sha256"] != first
 
 
+@pytest.mark.parametrize("operation", ["remember", "correct", "forget"])
+def test_personal_write_cannot_request_approval_without_concrete_change(operation):
+    runtime, authority = build_runtime()
+    seen = []
+    authority.authorize_fresh_owner = lambda prepared: seen.append(prepared)
+    with pytest.raises(ValueError, match="concrete"):
+        runtime.authorize_personal_context(
+            session_id="session",
+            turn_id="turn",
+            question="Change my preference",
+            operation=operation,
+        )
+    assert seen == []
+
+
 class FakeAuthority:
     def __init__(self) -> None:
         self.events: list[str] = []

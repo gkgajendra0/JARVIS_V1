@@ -5,11 +5,86 @@ import test_personal_context_runtime as fixtures
 
 from jarvis.conversation import ConversationRole
 from jarvis.memory.explicit import ExplicitMemoryAuthorizationError
-from jarvis.memory.service import MemoryNotFoundError, MemoryServiceError
+from jarvis.memory.service import (
+    MemoryAlreadyExistsError,
+    MemoryNotFoundError,
+    MemoryServiceError,
+)
 from jarvis.voice.memory_tools import MemoryAgentTools
 
 personal = fixtures.personal
 source = fixtures.source
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_failed_remember_clears_inflight_and_retires_history(personal, cancelled):
+    import asyncio
+
+    session, service, conversation, _, retired = personal
+    conversation.accept_turn(
+        ConversationRole.USER, "Remember my diet preference is vegan."
+    )
+    if cancelled:
+
+        async def cancel(**kwargs):
+            raise asyncio.CancelledError()
+
+        service.remember_text = cancel
+    tools = MemoryAgentTools(service, conversation, personal_context=session)
+    with pytest.raises(
+        asyncio.CancelledError if cancelled else MemoryAlreadyExistsError
+    ):
+        await tools.remember(predicate="diet preference", value="vegan")
+    assert not session._mutation_inflight
+    assert session._closed and retired
+    assert (
+        await service.inspect_exact(predicate="diet preference")
+    ).record.value == "vegetarian"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Meri diet preference mat hatao.",
+        "मेरी खाने की पसंद मत हटाओ।",
+        "Do not remove my diet preference.",
+    ],
+)
+async def test_negated_deletion_never_reaches_owner_approval(personal, question):
+    session, service, conversation, authority, _ = personal
+    conversation.accept_turn(ConversationRole.USER, question)
+    with pytest.raises(ExplicitMemoryAuthorizationError):
+        await MemoryAgentTools(service, conversation, personal_context=session).forget(
+            predicate="diet preference"
+        )
+    assert authority.calls == []
+    assert (
+        await service.inspect_exact(predicate="diet preference")
+    ).record.value == "vegetarian"
+
+
+@pytest.mark.asyncio
+async def test_direct_resolution_cannot_read_before_owner_consent(personal):
+    session, service, conversation, authority, _ = personal
+    authority.denied = True
+    conversation.accept_turn(
+        ConversationRole.USER, "Update my diet preference to vegan."
+    )
+    reads = []
+    original = service.inspect_exact
+
+    async def spy(**kwargs):
+        reads.append(True)
+        return await original(**kwargs)
+
+    service.inspect_exact = spy
+    with pytest.raises(PermissionError):
+        await MemoryAgentTools(service, conversation, personal_context=session).correct(
+            predicate="diet preference", value="vegan"
+        )
+    assert reads == []
 
 
 @pytest.mark.asyncio
@@ -39,7 +114,7 @@ async def test_new_turn_during_direct_resolution_cannot_rebind_old_proposal(pers
     resume.set()
     with pytest.raises(ExplicitMemoryAuthorizationError):
         await task
-    assert authority.calls == []
+    assert [call["operation"] for call in authority.calls] == ["read"]
 
 
 @pytest.mark.asyncio
@@ -96,7 +171,7 @@ async def test_wrong_key_requests_resolution_and_cannot_fall_back_to_remember(pe
     tools = MemoryAgentTools(service, conversation, personal_context=session)
     result = await tools.correct(predicate="diet preferences", value="vegan")
     assert result["status"] == "resolution_required"
-    assert authority.calls == []
+    assert [call["operation"] for call in authority.calls] == ["read"]
     with pytest.raises(ExplicitMemoryAuthorizationError):
         await tools.remember(predicate="diet preferences", value="vegan")
     assert (
@@ -270,3 +345,4 @@ async def test_private_diagnostics_log_status_without_request_or_values(
         "PRIVATE-NEW-VALUE" not in caplog.text
         and "Update my diet preference" not in caplog.text
     )
+    assert "diet_preference" not in caplog.text

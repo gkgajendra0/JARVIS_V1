@@ -179,10 +179,10 @@ def reject_negated_memory_change(text: str) -> None:
         re.search(pattern, normalized)
         for pattern in (
             r"\b(?:do not|don't|dont|never)\b.{0,32}\b(?:correct|update|change|store)\b",
-            r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:badal|badalna|update|correct|change|karna|karo)\b",
-            r"\b(?:badal|badalna|update|correct|change)\b.{0,24}\bmat\b",
-            r"(?:मत|नहीं).{0,24}(?:बदल|अपडेट|करना|करो|सुधार)",
-            r"(?:बदल|अपडेट|सुधार).{0,24}मत",
+            r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:badal|badalna|update|correct|change|karna|karo|hatao|hatana|remove|delete)\b",
+            r"\b(?:badal|badalna|update|correct|change|hatao|hatana|remove|delete)\b.{0,24}\bmat\b",
+            r"(?:मत|नहीं).{0,24}(?:बदल|अपडेट|करना|करो|सुधार|हटा|मिटा)",
+            r"(?:बदल|अपडेट|सुधार|हटा|मिटा).{0,24}मत",
         )
     ):
         raise ExplicitMemoryAuthorizationError(

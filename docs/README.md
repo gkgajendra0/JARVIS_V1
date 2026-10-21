@@ -60,10 +60,14 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 - [Movie-inspired assistant technology landscape, round 1](research/MOVIE_INSPIRED_PERSONAL_INTELLIGENCE_TECH_LANDSCAPE_2026-10-18.md)
 - [Approved native architecture and evaluation contract](research/PERSONAL_INTELLIGENCE_ARCHITECTURE_CANDIDATE_2026-10-19.md)
 - [Cross-chat reconciliation audit and remaining gates](research/PERSONAL_INTELLIGENCE_RECONCILIATION_AUDIT_2026-10-20.md)
+- [Normal-app personal-context candidate](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
+- [Natural memory-intent and canonical-target repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md)
 
 PRs #285–#286 established the product/documentation hierarchy; #288 approved
 the native direction and #289–#291 added evaluation, shadow and fictional
-provider-probe foundations. Active personalized voice is still unimplemented.
+provider-probe foundations. The unmerged PR #294 candidate implements opt-in
+personalized voice and natural existing-memory correction/deletion; owner local-app
+acceptance and protected promotion remain open.
 The earlier draft PR #287 retains separate research/test evidence; it is not
 merged runtime truth. No research result authorizes implicit writes or private
 context release. Use Current Plan for execution, rather than repeating the
