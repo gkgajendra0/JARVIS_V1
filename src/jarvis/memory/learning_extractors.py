@@ -105,6 +105,21 @@ def _strict_output_schema(node):
     return result
 
 
+def _gemini_output_schema(node):
+    # Gemini rejects branching bounded-array/numeric grammars. Parsing below
+    # still enforces every original Pydantic bound before any proposal can write.
+    if isinstance(node, list):
+        return [_gemini_output_schema(v) for v in node]
+    if not isinstance(node, dict):
+        return node
+    return {
+        k: _gemini_output_schema(v)
+        for k, v in node.items()
+        if k
+        not in {"minimum", "maximum", "minItems", "maxItems", "minLength", "maxLength"}
+    }
+
+
 class LearningProviderAdapter:
     def __init__(self, provider, client, model):
         self.provider = normalize_ai_provider(provider)
@@ -126,9 +141,10 @@ class LearningProviderAdapter:
                     response_format={
                         "type": "text",
                         "mime_type": "application/json",
-                        "schema": schema,
+                        "schema": _gemini_output_schema(_strict_output_schema(schema)),
                     },
                     store=False,
+                    generation_config={"max_output_tokens": 4096},
                 )
                 text = response.output_text
             else:
@@ -145,12 +161,15 @@ class LearningProviderAdapter:
                         }
                     },
                     store=False,
+                    max_output_tokens=4096,
                 )
                 text = response.output_text
             usage = getattr(response, "usage", None)
             metrics = {}
             for key in ("input_tokens", "output_tokens", "total_tokens"):
                 value = getattr(usage, key, None)
+                if value is None and key in {"input_tokens", "output_tokens"}:
+                    value = getattr(usage, "total_" + key, None)
                 if type(value) is int and value >= 0:
                     metrics[key] = value
             self.usage.append(metrics)

@@ -134,3 +134,38 @@ async def test_openai_schema_requires_every_field_and_closes_nested_objects():
                 check(value)
 
     check(schema)
+
+
+@pytest.mark.asyncio
+async def test_gemini_wire_avoids_rejected_grammar_bounds_but_keeps_local_limits():
+    s = source("I own a City")
+    fake, call = client({"candidates": []})
+    adapter = LearningProviderAdapter("gemini", fake, "model")
+    await adapter.extract(s)
+    wire = call.call_args.kwargs["response_format"]["schema"]
+
+    def check(node):
+        if isinstance(node, dict):
+            assert not ({"maxItems", "minItems", "minimum", "maximum"} & set(node))
+            if node.get("type") == "object":
+                assert set(node["required"]) == set(node["properties"])
+            for item in node.values():
+                check(item)
+        elif isinstance(node, list):
+            for item in node:
+                check(item)
+
+    check(wire)
+    proposal = {
+        "category": "owned_item",
+        "kind": "vehicle",
+        "intent": "new",
+        "label": "City",
+        "value": "City",
+        "evidence": [{"turn_id": s.turn_id, "quote": s.text}],
+    }
+    call.return_value = SimpleNamespace(
+        output_text=json.dumps({"candidates": [proposal] * 9})
+    )
+    with pytest.raises(RuntimeError, match="invalid_schema"):
+        await adapter.extract(s)
