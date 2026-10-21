@@ -23,6 +23,29 @@ class CanonicalMemoryReader:
     def __init__(self, reader: SerialConnectionWorker) -> None:
         self._reader = reader
 
+    async def learning_current(self):
+        """Bounded standard owner snapshot; caller must hold learning read authority."""
+
+        def query(connection):
+            rows = connection.execute(
+                "SELECT "
+                + ", ".join(
+                    "a." + c.strip() for c in SEMANTIC_ASSERTION_COLUMNS_SQL.split(",")
+                )
+                + " FROM current_semantic_assertion a JOIN memory_source s ON s.source_id=a.source_id"
+                " WHERE a.subject_scope='personal' AND a.subject='owner'"
+                " AND a.sensitivity='standard' AND s.sensitivity='standard'"
+                " AND s.authority_class IN ('owner_explicit','owner_direct','verified')"
+                " AND s.source_class IN ('owner_explicit','owner_direct')"
+                " AND a.freshness_class != 'time_sensitive'"
+                " ORDER BY a.predicate, a.assertion_id LIMIT 33"
+            ).fetchall()
+            if len(rows) > 32:
+                raise ValueError("learning_catalog_overflow")
+            return tuple(semantic_assertion_record_from_row(r) for r in rows)
+
+        return await self._reader.run(query)
+
     async def get_current(
         self,
         assertion_id: str,
