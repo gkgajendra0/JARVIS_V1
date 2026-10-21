@@ -118,6 +118,16 @@ class MemoryService:
         self._lifecycle = lifecycle
         self._reader = reader
         self._learning_authority = None
+        self._learning_invalidator = None
+
+    def bind_learning_invalidator(self, callback):
+        if self._learning_invalidator is not None or not callable(callback):
+            raise RuntimeError("learning invalidator already bound or invalid")
+        self._learning_invalidator = callback
+
+    def _invalidate_learning(self):
+        if self._learning_invalidator:
+            self._learning_invalidator()
 
     @property
     def canonical_reader(self):
@@ -227,6 +237,7 @@ class MemoryService:
             raise MemoryAlreadyExistsError(
                 f"current memory already exists for predicate {key!r}; use correction"
             ) from exc
+        self._invalidate_learning()
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def correct_text(
@@ -265,6 +276,7 @@ class MemoryService:
             reason_code="explicit_owner_correction",
             commit_guard=commit_guard,
         )
+        self._invalidate_learning()
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def forget_exact(
@@ -295,6 +307,7 @@ class MemoryService:
         )
         if not forgotten:
             raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")
+        self._invalidate_learning()
         after = await self._reader.find_current_exact(
             subject_scope=_PERSONAL_SCOPE,
             subject=_OWNER_SUBJECT,

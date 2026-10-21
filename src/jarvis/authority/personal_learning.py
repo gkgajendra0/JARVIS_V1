@@ -182,6 +182,10 @@ class PersonalLearningAuthority:
                 record.seen.add(turn_id)
                 record.last_input = self._broker._clock()
 
+    def runtime_id_for(self, grant):
+        with self._broker._lock:
+            return self._require(grant).parent.context.session_id
+
     def register_source(self, grant, receipt_id, *, source=None):
         with self._broker._lock:
             record = self._require(grant)
@@ -198,6 +202,7 @@ class PersonalLearningAuthority:
                 if (
                     not isinstance(source, AcceptedLearningSource)
                     or source.receipt_id != receipt_id
+                    or source.runtime_id != record.parent.context.session_id
                 ):
                     raise PermissionError("invalid canonical source")
                 if (
