@@ -35,6 +35,7 @@ decision := {
     "policy_version": "step3-v1",
 } if {
     input.risk_class == "PRIVATE_READ"
+    not personal_learning_child
     input.proposal.origin == "direct_user"
 }
 
@@ -49,6 +50,7 @@ decision := {
     "policy_version": "step3-v1",
 } if {
     input.risk_class == "PRIVATE_READ"
+    not personal_learning_child
     input.proposal.origin != "direct_user"
 }
 
@@ -89,7 +91,32 @@ decision := {
     "audit_required": true,
     "reason_codes": [],
     "policy_version": "step3-v1",
-} if input.risk_class == "PERSISTENT_OR_EXTERNAL"
+} if {
+    input.risk_class == "PERSISTENT_OR_EXTERNAL"
+    not personal_learning_child
+}
+
+personal_learning_child if {
+    input.proposal.capability == "memory:personal_learning"
+    input.proposal.operation in {"read", "admit"}
+}
+
+decision := {
+    "allow": true,
+    "required_trust": 2,
+    "approval_requirement": "explicit",
+    "require_owner_attentive": false,
+    "require_actor_unambiguous": false,
+    "audit_required": true,
+    "reason_codes": ["registered_personal_learning_delegation"],
+    "policy_version": "step3-personal-learning-v1",
+} if {
+    personal_learning_child
+    input.risk_class in {"PRIVATE_READ", "PERSISTENT_OR_EXTERNAL"}
+    input.proposal.origin == "system"
+    input.approval.method == "delegated_policy"
+    input.approval.parent_delegation_id != null
+}
 
 decision := {
     "allow": true,
