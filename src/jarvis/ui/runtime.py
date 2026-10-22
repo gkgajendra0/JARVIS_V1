@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from http.server import ThreadingHTTPServer
 from typing import TYPE_CHECKING
 
-from jarvis.ui.hub import UIEventHub, VOICE_STATES
+from jarvis.ui.hub import VOICE_STATES, UIEventHub
 from jarvis.ui.server import create_ui_server
 
 if TYPE_CHECKING:
