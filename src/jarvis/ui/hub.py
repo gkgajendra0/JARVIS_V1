@@ -199,7 +199,7 @@ class UIEventHub:
                     ]
             except (KeyError, TypeError, ValueError):
                 work = []
-            except Exception:
+            except Exception:  # noqa: BLE001 - UI must not break live Work
                 # UI telemetry must not be able to bring down the voice runtime.
                 work = []
         return {
