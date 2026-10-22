@@ -159,3 +159,83 @@ async def test_private_response_and_mutation_cleanup_clear_query_evidence(learni
         s.mutation_committed()
         assert s._query_projection is None and s._release_path is None
         assert (await s.query_for_question(QUERY))["status"] == "denied"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "change", ["expiry", "lock", "mutation", "permit", "operation"]
+)
+async def test_revocation_during_snapshot_cannot_forward_a_frame(
+    learning, authority_parts, clock, monkeypatch, change
+):
+    from jarvis.authority.personal_learning import CATEGORIES, LearningActionBinding
+
+    await seed_item(learning)
+    async with context_session(learning, "My City?") as (s, _, retired):
+        assert (await s.query_for_question(QUERY))["status"] == "selected"
+        s._watchdog.cancel()
+        await asyncio.gather(s._watchdog, return_exceptions=True)
+        original = s._retrieval.learning_context_snapshot
+
+        async def changed_during_read():
+            snapshot = await original()
+            if change == "expiry":
+                clock.advance(901)
+            elif change == "lock":
+                authority_parts.windows.lock_unlock()
+            elif change == "mutation":
+                s._mutation_inflight = True
+            elif change == "operation":
+                s._operation = "correct"
+            else:
+                source = s._learning_source
+                permit = learning.authority.issue_child(
+                    learning.grant,
+                    LearningActionBinding(
+                        "read",
+                        source.receipt_id,
+                        source.digest,
+                        tuple(sorted(CATEGORIES)),
+                    ),
+                )
+                learning.authority.consume_read(permit)
+                s._permit = permit
+            return snapshot
+
+        monkeypatch.setattr(
+            s._retrieval, "learning_context_snapshot", changed_during_read
+        )
+        sink = Sink()
+        output = PersonalContextAudioOutput(sink, s)
+        try:
+            await output.capture_frame(rtc.AudioFrame.create(16000, 1, 160))
+            assert not sink.frames and sink.clears and retired
+        finally:
+            output.detach()
+
+
+@pytest.mark.asyncio
+async def test_legacy_release_rechecks_authority_after_final_storage_await(
+    learning, clock, monkeypatch
+):
+    await seed_item(learning)
+    async with context_session(learning) as (s, _, retired):
+        catalog = await s.catalog()
+        s._watchdog.cancel()
+        await asyncio.gather(s._watchdog, return_exceptions=True)
+        original = s._retrieval.retrieve_exact_current_facet
+        calls = 0
+
+        async def revoke_after_final_read(*args, **kwargs):
+            nonlocal calls
+            rows = await original(*args, **kwargs)
+            calls += 1
+            if calls == 2:
+                clock.advance(901)
+            return rows
+
+        monkeypatch.setattr(
+            s._retrieval, "retrieve_exact_current_facet", revoke_after_final_read
+        )
+        result = await s.read(catalog["catalog_id"], [0])
+        assert result["status"] == "denied" and retired

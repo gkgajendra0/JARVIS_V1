@@ -12,7 +12,11 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from jarvis.personal_learning_scope import POLICY_VERSION, SUPPRESSION_KEYS
+from jarvis.personal_learning_scope import (
+    LEGACY_FACETS,
+    POLICY_VERSION,
+    SUPPRESSION_KEYS,
+)
 
 from .assertions import SemanticAssertionRecord
 from .types import AssertionState, FreshnessClass, Sensitivity, ValueType
@@ -210,10 +214,16 @@ def project_personal_context(
                 or not r.normalized_text
             ):
                 return result("unavailable", "storage_unavailable")
+            text = r.normalized_text
+            if r.value_type is ValueType.TEXT and r.predicate not in LEGACY_FACETS:
+                if not isinstance(r.value, str) or not r.value:
+                    return result("unavailable", "storage_unavailable")
+                # Registered corrections retain scope, not the opaque display prefix.
+                text = f"{scope}: {r.value}"
             fact = {
                 "evidence_ref": ordinal,
                 "scope_key": scope,
-                "text": r.normalized_text,
+                "text": text,
                 "recorded_at": _json_default(r.system_from),
                 "freshness": "last_known",
             }

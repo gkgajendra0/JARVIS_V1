@@ -32,10 +32,16 @@ from jarvis.voice.personal_context import PersonalContextSession
 
 
 @asynccontextmanager
-async def context_session(h, question="What vehicles do I own?", *, delegated=True):
+async def context_session(
+    h,
+    question="What vehicles do I own?",
+    *,
+    delegated=True,
+    history="PREVIOUS-PRIVATE-TURN",
+):
     c = ConversationSession()
     c.start()
-    c.accept_turn(ConversationRole.USER, "PREVIOUS-PRIVATE-TURN")
+    c.accept_turn(ConversationRole.USER, history)
     c.accept_turn(ConversationRole.USER, question)
     retired = []
     s = PersonalContextSession(

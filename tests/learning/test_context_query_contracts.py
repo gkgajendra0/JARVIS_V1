@@ -103,3 +103,19 @@ def test_structured_scope_values_are_invalid_not_parser_exceptions(scope):
         parse_context_requests(
             [{"scope_key": scope, "target_quote": "City"}], question="City?"
         )
+
+
+def test_learning_source_default_keeps_four_turn_window_and_original_byte_bound():
+    from jarvis.conversation import ConversationRole, ConversationSession
+    from jarvis.memory.learning_contracts import AcceptedLearningSource
+
+    conversation = ConversationSession()
+    conversation.start()
+    for text in ("one", "two", "three", "four", "five"):
+        latest = conversation.accept_turn(ConversationRole.USER, text)
+    source = AcceptedLearningSource.from_turn("runtime", conversation, latest, now=100)
+    assert [t.text for t in source.turns] == ["two", "three", "four", "five"]
+    conversation.accept_turn(ConversationRole.USER, "x" * 8000)
+    latest = conversation.accept_turn(ConversationRole.USER, "new")
+    with pytest.raises(ValueError, match="8000"):
+        AcceptedLearningSource.from_turn("runtime", conversation, latest, now=100)

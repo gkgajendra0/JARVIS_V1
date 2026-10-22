@@ -181,11 +181,8 @@ class PersonalContextSession:
                     self._conversation,
                     turn,
                     now=monotonic(),
+                    current_only=True,
                 )
-                # The question-bound read needs only the current question, not prior private history.
-                from dataclasses import replace
-
-                source = replace(source, turns=(turn,))
 
                 def issue_read():
                     issuer.register_source(
@@ -392,6 +389,10 @@ class PersonalContextSession:
         if not await self._validate() or not await self._facts_current():
             self.close()
             return {"status": "denied"}
+        permit, binding = self._permit, self._binding
+        if self._operation != "read" or self._mutation_inflight:
+            self.close()
+            return {"status": "denied"}
         facts = []
         snapshots = {}
         used = 0
@@ -421,7 +422,11 @@ class PersonalContextSession:
             if self._released and snapshots != self._released:
                 return {"status": "invalid_selection"}
             self._released = snapshots
-            if not await self._facts_current() or not self._same(self._binding):
+            if (
+                not await self._facts_current()
+                or not await self._validate()
+                or not self._same_authorization(permit, binding, "read")
+            ):
                 self.close()
                 return {"status": "denied"}
             self._protect()
@@ -630,6 +635,15 @@ class PersonalContextSession:
         if self._binding is not None and not self._same(self._binding):
             self.close()
 
+    def _same_authorization(self, permit, binding, operation):
+        return (
+            self._permit is permit
+            and self._binding == binding
+            and self._operation == operation
+            and not self._mutation_inflight
+            and self._same(binding)
+        )
+
     async def allow_audio(self):
         if self._closed:
             return False
@@ -637,10 +651,12 @@ class PersonalContextSession:
             return False
         if not self._protected:
             return True
+        permit, binding, operation = self._permit, self._binding, self._operation
         if (
             not await self._validate()
             or not await self._facts_current()
-            or not self._same(self._binding)
+            or not await self._validate()
+            or not self._same_authorization(permit, binding, operation)
         ):
             self.close()
             return False

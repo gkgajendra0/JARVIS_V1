@@ -140,3 +140,15 @@ async def test_normal_controller_routes_registered_query_and_guarded_audio(
     finally:
         output.detach()
         controller._cancel_timeout()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", ['["fictional"]', "42", "]"])
+async def test_nonobject_or_unparseable_sdk_transport_never_evaluates_query(
+    learning, payload
+):
+    async with context_session(learning) as (s, _, _):
+        tool = {t.id: t for t in PersonalContextAgentTools(s).tools}[TOOL]
+        with pytest.raises(llm.ToolError):
+            prepare_function_arguments(fnc=tool, json_arguments=payload)
+        assert s._query_attempts == 0 and s._learning_source is None

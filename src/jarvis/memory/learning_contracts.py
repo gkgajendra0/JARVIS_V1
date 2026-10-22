@@ -32,7 +32,7 @@ class AcceptedLearningSource:
     digest: str
 
     @classmethod
-    def from_turn(cls, runtime_id, conversation, turn, *, now):
+    def from_turn(cls, runtime_id, conversation, turn, *, now, current_only=False):
         if (
             not isinstance(conversation, ConversationSession)
             or conversation.status is not ConversationStatus.ACTIVE
@@ -43,7 +43,7 @@ class AcceptedLearningSource:
         users = tuple(t for t in conversation.turns if t.role is ConversationRole.USER)
         if not users or users[-1] is not turn or not runtime_id:
             raise ValueError("latest canonical user source required")
-        window = users[-4:]
+        window = users[-1:] if current_only else users[-4:]
         if sum(len(t.text.encode("utf-8")) for t in window) > 8000:
             raise ValueError("learning source exceeds 8000 bytes")
         encoded = json.dumps([(t.turn_id, t.text) for t in window], ensure_ascii=False)
