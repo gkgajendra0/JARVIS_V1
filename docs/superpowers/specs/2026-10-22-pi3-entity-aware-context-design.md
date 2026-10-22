@@ -1,9 +1,9 @@
 # PI-3A: question-bound personal context for ordinary advice
 
-Date: 22 October 2026. Status: **OWNER-APPROVED written design, 22 October 2026.** Owner response: “Approve written PI-3A design.” Approval permits the executable-plan stage; implementation still awaits written-plan review.
+Date: 22 October 2026. Status: **OWNER-APPROVED written design, 22 October 2026.** Owner response: “Approve written PI-3A design.” The owner also approved the executable plan for Native implementation on 22 October 2026.
 Baseline: `6f52b8ea5d76fa358f1a626b74b727ed6313d053`, including unmerged PI-2 work from draft PR #295.
 Design branch: `design/pi3-entity-aware-context-20261022`, in the owner's existing Desktop checkout.
-No PI-3 product implementation, provider experiment, deployment or merge is claimed by this document.
+The approved design is implemented on the candidate branch; implementation/verification evidence is separate below. No provider experiment, owner activation or merge is implied by design approval.
 
 ## 1. Owner outcome and boundary
 
@@ -129,7 +129,7 @@ Depend on the actual unmerged PI-2 candidate baseline above; do not claim this d
 
 Rollback the new tool/instruction registration together to restore the existing catalog/read behavior. No stored facts are migrated or deleted by rollback. Existing process flags can disable learning/context as documented; disabling is not forgetting. A runtime failure must report unavailable/clarify, never silently switch models, invent personal facts or open a larger read scope.
 
-The owner approved this written design on 22 October 2026. Next decision is review of the [written executable plan](../plans/2026-10-22-pi3-entity-aware-context.md) under the architectural workflow. The owner's previously selected Native execution preference persists; do not ask the same execution-method question again. No implementation-plan approval, implementation completion, provider budget, local activation or merge decision is inferred from this proposed artifact.
+The owner approved this written design on 22 October 2026. The owner also approved the [written executable plan](../plans/2026-10-22-pi3-entity-aware-context.md) and Native implementation; software verification and review are recorded in the [implementation report](../../research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md). The owner's previously selected Native execution preference persists; do not ask the same execution-method question again. No implementation-plan approval, implementation completion, provider budget, local activation or merge decision is inferred from this proposed artifact.
 
 ## 10. Spec self-review record
 

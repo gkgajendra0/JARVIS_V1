@@ -1,5 +1,7 @@
 # JARVIS V1
 
+**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,843 tests / 8 skips); independent review is in progress; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](docs/research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
+
 JARVIS V1 is a personal, voice-first intelligent assistant built research-first around explicit JARVIS-owned truth, authority, memory, and execution boundaries, with an owner-approved north star of becoming a governed autonomous self-managing personal intelligence runtime.
 
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS V1 does not import it or depend on it at runtime.

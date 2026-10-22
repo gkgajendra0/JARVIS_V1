@@ -1,5 +1,7 @@
 # JARVIS V1 Roadmap
 
+**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,843 tests / 8 skips); independent review is in progress; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
+
 **Owner-directed clarification (2026-10-18):** Personal Intelligence and
 Automatic Context Use (CAP-053) is the primary *cross-cutting user-experience*
 priority. It requires safe, automatic use of authorized long-term personal
