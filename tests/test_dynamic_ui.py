@@ -87,9 +87,7 @@ def test_untrusted_panel_inputs_are_rejected(field: str, replacement: object) ->
 def test_topic_detection_never_returns_raw_user_transcript() -> None:
     hub = UIEventHub()
     private_phrase = "my totally secret document"
-    hub.observe_accepted_user_text(
-        "Jarvis, show my repository and " + private_phrase
-    )
+    hub.observe_accepted_user_text("Jarvis, show my repository and " + private_phrase)
     snapshot = hub.snapshot()
     assert len(snapshot["panels"]) == 1
     assert snapshot["panels"][0]["type"] == "document"
