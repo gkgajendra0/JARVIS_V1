@@ -184,7 +184,7 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
     with sync_playwright() as playwright:
         try:
             browser = playwright.chromium.launch(headless=True)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - optional Chromium install
             pytest.skip(f"Chromium unavailable on this machine: {type(exc).__name__}")
         try:
             page = browser.new_page(viewport={"width": 3440, "height": 1440})
