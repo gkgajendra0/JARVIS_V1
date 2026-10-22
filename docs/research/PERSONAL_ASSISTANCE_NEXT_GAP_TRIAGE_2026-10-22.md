@@ -21,3 +21,8 @@ Relevant Work/Hands decisions belong to PI-3after ordinary contextual assistance
 The earlier task/reminder recommendation in this file is SUPERSEDED as the immediate personal-intelligence priority. Source inspection still stands: WorkRuntime is optional; WorkType.REMINDERis only a type name; CAP-027notes/CAP-028tasks/reminders are PLANNED in Step8. These facts do not make reminders the next North Star milestone. They may be useful later within an explicitly chosen scope. Preserve the numbered roadmap; do not silently redirect current work to it.
 
 Next deliverable: an existing-path gap map and a concrete research/design decision for the smallest PI-3behavior still missing. Technology research follows the actual gap and compares credible approaches broadly before narrowing. No product code is changed by this note.
+
+
+## First concrete PI-3inspection
+
+The [contextual-assistance gap map](PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md) records the current opaque-item catalog limitation, separates forced-index research reads from actual model selection, compares native bounded tools/standing profiles/external engines and proposes a narrowly scoped PI-3Aselection-and-grounded-use slice. This is inspected information flow and proposed design scope, not reproduced normal-model failure, approved architecture or new implementation. No provider call was sent.

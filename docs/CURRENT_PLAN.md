@@ -207,3 +207,5 @@ new generic reasoning engine, use Step8tasks/reminders as a substitute, restart
 the deferred provider benchmark, or claim that PI-2acceptance is complete.
 Relevant Work/Hands context integration belongs after the ordinary-assistance
 path is understood. Preserve normal-app acceptance and promotion boundaries.
+
+Initial PI-3read-only inspection is recorded in the [gap map](research/PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md): learned nonscalar catalog IDs are opaque; actual model selection among multiple entities is not proven by forced-index answer fixtures. Proposed first slice is bounded entity-aware selection plus grounded use through existing realtime tools. The descriptor/query contract and privacy budgets still need architectural design review before code or live execution.
