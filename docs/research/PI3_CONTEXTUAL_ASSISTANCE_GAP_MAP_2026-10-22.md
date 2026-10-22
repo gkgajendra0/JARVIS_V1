@@ -43,3 +43,8 @@ First verification case for the eventual implementation: more than4fictional lea
 Expected first user-visible result: an ordinary question about a specific possession or preference reliably finds the intended current facts and uses them with another relevant fact without a manual memory-search instruction. Seamless follow-ups/durable decision episodes and situated/proactive actions are later slices with their own constraints, not silently included here.
 
 Next design stage: present this PI-3Abehavior/scope and the alternative-selection trade-off, then write the architectural spec for owner review. The selected tool interface affects release/privacy/version semantics; it is not a prompt-only patch. Written spec and implementation plan precede product changes. No skill/process gate is marked complete by this research record.
+
+
+## Comparative research follow-up
+
+The [PI-3Atechnology review](PI3_TECHNOLOGY_REVIEW_2026-10-22.md) now records the bounded current-source/prior-evidence comparison, including current LettaMemFS, Mem0OSS/Platform distinctions and LangMem's storage-independent primitives. Desk research supports native entity-aware tools as the first design direction; exact descriptor-vs-query/privacy-budget choice and offline/live validation remain incomplete. Initial older-memory-block summaries above are not a complete current Letta capability assessment. No new model test or product change occurred.

@@ -209,3 +209,5 @@ Relevant Work/Hands context integration belongs after the ordinary-assistance
 path is understood. Preserve normal-app acceptance and promotion boundaries.
 
 Initial PI-3read-only inspection is recorded in the [gap map](research/PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md): learned nonscalar catalog IDs are opaque; actual model selection among multiple entities is not proven by forced-index answer fixtures. Proposed first slice is bounded entity-aware selection plus grounded use through existing realtime tools. The descriptor/query contract and privacy budgets still need architectural design review before code or live execution.
+
+[PI-3technology review](research/PI3_TECHNOLOGY_REVIEW_2026-10-22.md) completes the bounded desk comparison/prior-experiment reconciliation for the first-slice shortlist. Native entity-aware tools are recommended; semantic descriptors versus structured query projection, privacy budgets and offline contract comparison remain design/validation work. No new framework/model adoption or product code is approved.
