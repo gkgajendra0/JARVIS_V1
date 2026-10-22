@@ -22,11 +22,13 @@ The screenshot confirms Free tier for the displayed owner project, answering5RPM
 
 See [Personal intelligence: enablement and validation](../PERSONAL_INTELLIGENCE_ENABLEMENT.md). DefaultOFFdoes not prevent an explicitly enabled whole-app test. `--personal-learning apply` enables learning and context for that process; later dependent milestone integration must be exercised in that enabled setup. An earlier context-only feature was already owner-tested opt-in and merged without changing the default or saved machine settings. Its acceptance does not accept the new learning feature. Normal-app validation/new-milestone acceptance remain separately recorded; the broad benchmark is deferred. No default or saved setting has been changed here.
 
-## Forward work
+## Forward work — North Star PI-3
 
-Follow the existing personal-intelligence priority: inspect how current canonical facts reach personally useful advice and existing WorkItem-based task execution, identify a reproduced/observable remaining gap, and prepare its smallest research/design decision. Memory already has an implementation; do not restart generic memory/vendor selection or substitute framework work for useful assistance. A new feature's material implementation/promotion requires its own concrete decision; this handoff does not invent a new approved capability.
+The owner's clarification selects the personal-intelligence sequence in North Star17.9: dependable memory use → governed natural learning → contextual assistance across life domains → situated/proactive intelligence → continual adaptation. The immediate forward priority is PI-3, not a jump to numbered Step8tasks/reminders. PI-2remains implemented/software-verified with deferred quality/owner gates; do not call it fully accepted.
 
-See the [initial next-gap inspection](PERSONAL_ASSISTANCE_NEXT_GAP_TRIAGE_2026-10-22.md); its reminder example is a research/design candidate, not implemented scheduling.
+Basic relevance selection, canonical reads and model instructions already exist. Inspect and complete the actual missing ordinary-assistance behaviors: useful combination of relevant current facts, truthful unknowns/corrections and supported conversational references within the existing session/privacy boundaries. Reuse current memory/conversation/Authority; do not invent a separate reasoning/memory engine. Relevant Work/Hands decisions follow when justified. No broader retention, seamless speaker authority, new model, proactive action or new-feature implementation is approved by this correction.
+
+See the [corrected next-gap inspection](PERSONAL_ASSISTANCE_NEXT_GAP_TRIAGE_2026-10-22.md) and [North Star17.9](../AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md#179-prioritized-capability-delivery-and-gono-go-tests). The earlier reminder candidate is superseded as immediate priority; its roadmap status is preserved.
 
 ## Evidence and rollback
 

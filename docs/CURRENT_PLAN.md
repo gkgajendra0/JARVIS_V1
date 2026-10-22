@@ -16,7 +16,7 @@ Deferred evidence stays visible: v4has15complete/one unavailable/74unrun semanti
 
 The owner supplied the quota evidence: displayed Free tier, answering5RPM/20RPD and learning15RPM/500RPD; the screenshots show28-day peaks rather than current headroom. The three approved recovery opportunities are exhausted. Budget upper304/532,228remain, but no additional inference, automatic schedule, purchase, model/account/key change or local activation is authorized by moving development priority. The proposed next-reset batch and suggested paid/model-comparison alternatives are not adopted or running. Do not keep requesting screenshots or budget approvals to resume the deferred benchmark.
 
-Next development focus within the existing personal-intelligence north star: inspect the current grounded-advice and task-follow-through path against actual memory/context/work ownership, then define the smallest remaining user-visible gap. Reuse canonical facts and existing WorkItem/Authority boundaries. Research/design may advance while the current candidate is retained; new behavior still needs its concrete architecture/implementation decision. Do not jump to a new framework/vendor benchmark or call the whole personal assistant complete. See the [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
+Next development priority is **PI-3: contextual assistance across life domains**, following the explicit sequence in [North Star Section17.9](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md#179-prioritized-capability-delivery-and-gono-go-tests). PI-1has bounded owner acceptance; PI-2natural learning is implemented/software-verified with broader qualification deferred, not fully accepted. PI-3already has basic context-selection/read/prompt wiring. Inspect its actual missing behaviors and complete useful, multi-fact, current/source-backed ordinary advice without inventing a new memory store or personal brain. Conversation reference/continuity must respect the current provider-history and speaker/session boundaries. Relevant Work/Hands decisions follow within PI-3when justified; standalone tasks/reminders are not the immediate priority selected from the numbered roadmap. PI-4situated/proactive awareness and PI-5continual adaptation remain later. See the [corrected next-gap inspection](research/PERSONAL_ASSISTANCE_NEXT_GAP_TRIAGE_2026-10-22.md) and [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md). No new feature design, model switch, retention scope or implementation is approved by this alignment.
 
 ## Recorded activation and dependent-test workflow —22October2026
 
@@ -199,9 +199,11 @@ approves and all required checks pass.**
 
 ## Next action
 
-The owner has chosen to advance after implementation/software verification.
-Retain the automatic-learning candidate and honest deferred qualification;
-do not restart the exhausted provider recovery or proposed multi-day batch.
-Next inspect grounded personal advice and task follow-through for the smallest
-remaining gap under the existing personal-intelligence goal. Preserve accepted
-PI-1 behavior and the normal-app acceptance/protected-promotion boundaries.
+Advance the North Star's PI-3contextual-assistance slice: inspect existing
+normal-voice context selection/use and identify the smallest observed gap in
+personally useful advice and supported follow-up references. Reuse canonical
+memory/conversation/Authority; then research/design only the gap. Do not start a
+new generic reasoning engine, use Step8tasks/reminders as a substitute, restart
+the deferred provider benchmark, or claim that PI-2acceptance is complete.
+Relevant Work/Hands context integration belongs after the ordinary-assistance
+path is understood. Preserve normal-app acceptance and promotion boundaries.
