@@ -16,3 +16,7 @@ Approved rules:
 Rationale: answering availability is intermittent, not a proved free-tier quota/billing problem. A successful one-off probe does not guarantee the full cohort remains available. This bounded protocol reduces repeated manual continuation while preventing uncontrolled retries or score replacement. Cost if wrong: up to3health calls and some permitted cohort calls on an unhealthy service; all consume the same finite239-request envelope and all failures remain evidence.
 
 Implementation verification before live execution:5finite-control regressions PASS; full software2,759PASS/8SKIP exit0 (172.59s), Ruff check/format984files PASS. Research orchestration only, no product retry/model/deadline/authority changes.
+
+## Execution result — all3opportunities exhausted
+
+The approved protocol finished on22October2026; it is no longer active and cannot automatically reset. All3health requests returned; continued fresh cases encountered503, an outer learning timeout, then429. Five new semantic episodes were attempted (four complete/one unavailable); no new complete answer pairs. Combined15complete/one unavailable/74unrun,18/18conditional correct effects,6complete/4failed answer pairs.11single sends consumed; upper304/532,228remain. Quality and owner acceptance remain incomplete. See the [final chronological qualification](PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md#approved-bounded-recovery--exhausted-no-live-work-running). No fourth recovery, model switch or activation is authorized by this protocol.

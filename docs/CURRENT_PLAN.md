@@ -20,9 +20,11 @@ action below is completed. Existing bounded owner acceptance remains valid.
 
 The owner approved the written design and executable plan and selected Native execution. The feature branch `feat/personal-auto-learning-20261021` now contains session delegation, grounded extraction, canonical reconciliation/admission, replay/suppression, a bounded worker and normal voice integration. **This is an unpromoted candidate, OFF by default.**
 
-Current gate: original v1 attempts are complete (89 completed/one semantic timeout across revisions), with 33/47 expected facts captured (70.2% recall), below the approved floor. Answering HTTP429 left only 8/30 complete pairs. One independent review and six TDD repairs are complete; later SDK single-send and corrected-fact recall regressions are also repaired. Latest local suite: 2,743 passed/8 skipped. The separately frozen45-case capture-only subset on ede43720 attempted all cases:40complete,5unavailable;29/30 conditional correct effects, with one partial Hindi replacement correction. It cannot replace the full90/answer/owner gates. Owner approved270additional requests (ceiling532). Two new Hindi diagnostics used4, upper266, leaving266. Natural category-veto forms received a verified deterministic repair (2,754PASS/8SKIP). Separately frozen v4 stopped after its first semantic case when answering returned actual503;0answer pairs/89unrun. New-stage6/270 used, cumulative upper268/532,264 remain. Quality and whole-app acceptance remain incomplete. See the [dated qualification report](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md) and [implementation decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md).
+Current gate: implementation/native voice integration and one completed independent review with six verified repairs exist, but qualification remains incomplete. Latest local software:2,759passed/8skipped on5bb72ec0, full exit0; product code remains fd7c7025. Original v1 recall33/47(70.2%) failed the floor; fresh v2 had40complete/5unavailable and one partial Hindi replacement. These results remain unchanged. V4 now has15complete/one unavailable/74unrun semantic episodes,18/18conditional correct effects, six complete/four failed answer pairs. The small completed subset is not a full quality pass. Cold callback p95=20.99ms(n16) does not qualify10ms. See the [qualification record](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
 
-Next: finish exact-candidate CI/reporting while live validation is stopped on provider503; sufficient existing-provider availability is required before further authorized work. Preserve exposed outcomes, do not rescore the failed answer as a fresh success, and do not request another budget increase while264 approved sends remain. Full quality/answer/resource qualification precedes whole normal-app owner acceptance. Do not silently retry exposed cases, switch paid providers or expand the approved budget. Do not ask again for the approved design/native execution or require owner-authored examples/isolated microphone demos. Earlier merge approval does not authorize promotion of this new permission-expanding candidate.
+The owner-approved bounded recovery protocol used all3opportunities (60/120/240seconds): each health check returned but continuation encountered503, a timeout and429. No live process remains.11new single sends; new-stage42/270used; conservative upper304/532,228remain. No fourth recovery is authorized. Actual affected quota/reset/billing tier are unknown. Next: finish exact-head CI/evidence and obtain the current project's actual Gemini model-specific limits/error from AI Studio before preparing a further finite continuation decision. No new budget is needed. See [provider diagnosis/research](research/PERSONAL_AUTO_LEARNING_PROVIDER_AVAILABILITY_2026-10-22.md).
+
+Preserve every exposed outcome; no failed-case replay/rescoring, automatic recovery reset, model/account/key change, paid fallback or purchase. Full semantic/answer/resource qualification precedes whole normal-app owner acceptance and protected promotion. Do not ask again for the approved design/Native execution or require owner-authored examples/isolated microphone demos. Earlier merge approval does not authorize this new candidate's promotion.
 
 ## Owner direction — active personal intelligence (2026-10-19)
 
@@ -201,9 +203,11 @@ approves and all required checks pass.**
 
 ## Next action
 
-The owner approved the October 21 automatic-learning written design. Review its
-executable task plan, select execution method and implement the slice through
-the established lifecycle.
+The owner approved the October21design and plan and selected Native execution.
+Core implementation and normal voice integration are present in draft PR#295.
+Finish the still-open qualification/resource/owner gates; the3approved provider
+recovery opportunities are exhausted and actual Gemini quota details are needed
+before a further finite live protocol can be proposed.
 Retain the broader advice, owner-input/session and normal-app acceptance gates;
 do not restart completed PI-1 promotion or old vendor experiments. Continue
 until a concrete required owner review, observation or unavailable resource is
