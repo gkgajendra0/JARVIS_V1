@@ -27,6 +27,8 @@ For exact accepted, deferred and production state, consult
 [Current Architecture](docs/CURRENT_ARCHITECTURE.md). Research/draft PRs do not
 change production reality.
 
+[Personal-intelligence enablement and validation guide](docs/PERSONAL_INTELLIGENCE_ENABLEMENT.md) records defaults, the earlier accepted opt-in test, normal-app launch modes and the required enabled testing for dependent milestones.
+
 ### Automatic learning candidate — not yet accepted
 
 Ordinary conversational learning is implemented in the normal app on draft PR#295 and software-verified (all7checks on c03666b7 passed). The owner directed development to move forward and extended quota-bound provider qualification is deferred. Learning remains OFF by default and unpromoted; full quality/resource and normal-app owner acceptance are still open. See the [implementation handoff](docs/research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md) and [preserved results](docs/research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).

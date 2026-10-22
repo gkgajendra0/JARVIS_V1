@@ -6,6 +6,8 @@ This is the navigation and reconciliation record, not another North Star, second
 
 Automatic learning: [implemented/software-verified handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md), [decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md) and [preserved qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). The owner chose to advance development; broader provider testing is deferred. DefaultOFF/unpromoted; owner acceptance and protected promotion are not implied.
 
+[Enablement and validation record](PERSONAL_INTELLIGENCE_ENABLEMENT.md) — which personal features are defaultOFF, which opt-in tests passed, how to enable normal-app testing, and how future dependent milestones must be checked.
+
 ## Read these documents first
 
 **One product, one hierarchy:**

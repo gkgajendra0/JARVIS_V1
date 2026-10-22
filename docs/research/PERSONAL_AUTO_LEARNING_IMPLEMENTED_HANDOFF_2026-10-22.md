@@ -18,6 +18,10 @@ V4:15complete/one unavailable/74unrun,18/18conditional expected effects; six com
 
 The screenshot confirms Free tier for the displayed owner project, answering5RPM/20RPD, learning15RPM/500RPD and historical exceedances. It does not prove current headroom or the exact last429subtype. Three recovery opportunities are exhausted; upper304/532,228remain. No fourth probe, new schedule, paid run, model/account/key change or quota purchase is approved. The next-reset batch proposal is not adopted. Full native plan Tasks9/10retain their incomplete gates and the execution ledger is preserved.
 
+## Permanent enablement and dependent-testing record
+
+See [Personal intelligence: enablement and validation](../PERSONAL_INTELLIGENCE_ENABLEMENT.md). DefaultOFFdoes not prevent an explicitly enabled whole-app test. `--personal-learning apply` enables learning and context for that process; later dependent milestone integration must be exercised in that enabled setup. An earlier context-only feature was already owner-tested opt-in and merged without changing the default or saved machine settings. Its acceptance does not accept the new learning feature. Normal-app validation/new-milestone acceptance remain separately recorded; the broad benchmark is deferred. No default or saved setting has been changed here.
+
 ## Forward work
 
 Follow the existing personal-intelligence priority: inspect how current canonical facts reach personally useful advice and existing WorkItem-based task execution, identify a reproduced/observable remaining gap, and prepare its smallest research/design decision. Memory already has an implementation; do not restart generic memory/vendor selection or substitute framework work for useful assistance. A new feature's material implementation/promotion requires its own concrete decision; this handoff does not invent a new approved capability.

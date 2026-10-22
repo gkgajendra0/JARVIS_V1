@@ -18,6 +18,10 @@ The owner supplied the quota evidence: displayed Free tier, answering5RPM/20RPD 
 
 Next development focus within the existing personal-intelligence north star: inspect the current grounded-advice and task-follow-through path against actual memory/context/work ownership, then define the smallest remaining user-visible gap. Reuse canonical facts and existing WorkItem/Authority boundaries. Research/design may advance while the current candidate is retained; new behavior still needs its concrete architecture/implementation decision. Do not jump to a new framework/vendor benchmark or call the whole personal assistant complete. See the [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
 
+## Recorded activation and dependent-test workflow —22October2026
+
+Maintain the [personal-intelligence enablement record](PERSONAL_INTELLIGENCE_ENABLEMENT.md) across future milestones. Earlier PR294was owner-tested in the whole app with personal-context APPLY and merged, while OFF remained default and saved settings were unchanged. Automatic learning in PR295is separately implemented/software-verified, defaultOFF, with whole-app acceptance pending. After integration, normal-app validation and any milestone depending on learning/context must launch with `--personal-learning apply`; APPLY enables both for that process, without making the default/persistent machine setting ON. Repeat the intended mode after restart. OFF-only tests do not prove the dependent enabled experience. Keep implementation, merge, actual mode, normal-owner acceptance and default/persistent activation distinct in reports. No merge or owner-app activation was performed by this documentation update.
+
 ## Owner direction — active personal intelligence (2026-10-19)
 
 The owner approved architecture PR #288, PI-1A #289, and PI-1B #290.
