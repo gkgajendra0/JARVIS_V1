@@ -1,0 +1,29 @@
+# Automatic personal learning — implementation handoff,22October2026
+
+Owner direction: advance with the implemented/software-passing system and defer multi-day quota-bound testing. Status: IMPLEMENTED / SOFTWARE-VERIFIED; BROADER QUALIFICATION DEFERRED. All7CI checks passed on c03666b7; latest full local suite2,759PASS/8SKIP. This handoff changes priority/status only, not runtime code/configuration, authority, default enablement or accepted architecture.
+
+## Delivered
+
+- Normal local voice integration, ordinary fact learning without per-fact save prompts, grant-backed current canonical context across fresh wakes.
+- One private owner-operated session opened by Hello,15minute absolute/5minute idle; later speakers are not individually biometrically verified.
+- Source/version/epoch-bound canonical admission, atomic lifecycle/replay guards, physical forgetting and category suppression/re-enable controls.
+- Bounded worker, strict source grounding, sensitive/third-party exclusions and explicit private/destructive approval boundaries.
+- One independent code review, six verified repairs, later qualification regressions repaired with RED/GREEN evidence and full software checks.
+
+Implementation is already present, not a future coding task. PR#295 remains a retained draft; mode defaults OFF. No local owner database/microphone/camera/real Hello activation was performed by this development run.
+
+## Deferred and retained
+
+V4:15complete/one unavailable/74unrun,18/18conditional expected effects; six complete/four failed pairs. Conditional success is not full quality. Original v1recall33/47(70.2%) and v2partial Hindi replacement stay in the record. Cold callback p95=20.99ms(n16) does not qualify the10ms target. Whole normal-app owner acceptance, broader semantic/answer/resource qualification and protected promotion remain open. No gate is silently relabeled passed; CAP-053remains PARTIAL.
+
+The screenshot confirms Free tier for the displayed owner project, answering5RPM/20RPD, learning15RPM/500RPD and historical exceedances. It does not prove current headroom or the exact last429subtype. Three recovery opportunities are exhausted; upper304/532,228remain. No fourth probe, new schedule, paid run, model/account/key change or quota purchase is approved. The next-reset batch proposal is not adopted. Full native plan Tasks9/10retain their incomplete gates and the execution ledger is preserved.
+
+## Forward work
+
+Follow the existing personal-intelligence priority: inspect how current canonical facts reach personally useful advice and existing WorkItem-based task execution, identify a reproduced/observable remaining gap, and prepare its smallest research/design decision. Memory already has an implementation; do not restart generic memory/vendor selection or substitute framework work for useful assistance. A new feature's material implementation/promotion requires its own concrete decision; this handoff does not invent a new approved capability.
+
+See the [initial next-gap inspection](PERSONAL_ASSISTANCE_NEXT_GAP_TRIAGE_2026-10-22.md); its reminder example is a research/design candidate, not implemented scheduling.
+
+## Evidence and rollback
+
+[PR295](https://github.com/gkgajendra0/JARVIS_V1/pull/295), [qualification](PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md), [design](../superpowers/specs/2026-10-21-personal-auto-learning-design.md), [plan](../superpowers/plans/2026-10-21-personal-auto-learning.md). Runtime source remains fd7c7025; research control5bb72ec0; c03666b7adds evidence only. Subsequent docs-only changes require their own CI status without borrowing an exact-head label. OFF remains the disable path; preserve schema3compatibility and do not downgrade/delete owner storage. All historical raw artifacts stay unchanged.

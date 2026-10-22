@@ -6,25 +6,17 @@ preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_
 Historical engineering milestones and evidence remain in [Project State](PROJECT_STATE.md)
 and the [Documentation Index](README.md).
 
-## Active owner request — automatic conversational learning (21 October 2026)
+## Active owner decision — advance after software verification (22 October 2026)
 
-The owner requested implementation after reviewing the earlier research and
-experiment inventory. Desired behavior: important eligible everyday information
-is learned and used automatically, without a per-fact save question. This
-supersedes the subsequently discussed proposal/confirmation product experience;
-implementation is now present on the feature branch, but is unaccepted and inactive by default.
+The owner directed that, given the implementation and passing software checks, work should move forward rather than spend multiple days on quota-limited provider testing. Record this as **IMPLEMENTED / SOFTWARE-VERIFIED; BROADER QUALIFICATION DEFERRED**. It does not assert that unrun semantic cases passed, that whole-app owner acceptance occurred, or that protected promotion/automatic activation was authorized.
 
-PRs #292, #293 and #294 have been promoted; the reviewed implementation is on
-`main` at `7de92b3d0507ca52cfa3b653ddd976e3356a7102`. The earlier promotion
-action below is completed. Existing bounded owner acceptance remains valid.
+Draft PR#295 (`feat/personal-auto-learning-20261021`) contains the normal voice integration: session delegation, extraction, canonical reconciliation/admission, replay/suppression, bounded worker and current-context use. Product codefd7c7025 and research control5bb72ec0 are unchanged in evidence headc03666b7. All7exact-head CI checks on c03666b7 passed; latest full local software2,759passed/8skipped. Automatic learning is OFF by default. Earlier accepted main/explicit-memory behavior remains separate.
 
-The owner approved the written design and executable plan and selected Native execution. The feature branch `feat/personal-auto-learning-20261021` now contains session delegation, grounded extraction, canonical reconciliation/admission, replay/suppression, a bounded worker and normal voice integration. **This is an unpromoted candidate, OFF by default.**
+Deferred evidence stays visible: v4has15complete/one unavailable/74unrun semantic cases,18/18conditional expected effects, six complete/four failed answer pairs; no full quality pass. The old v1recall33/47(70.2%) and v2partial Hindi replacement remain recorded. Cold callback p95=20.99ms(n16) does not meet the proposed10ms qualification target. Normal-app owner acceptance and protected-promotion decisions are open, not completed by this deferral. CAP-053 remains PARTIAL.
 
-Current gate: implementation/native voice integration and one completed independent review with six verified repairs exist, but qualification remains incomplete. Latest local software:2,759passed/8skipped on5bb72ec0, full exit0; product code remains fd7c7025. Original v1 recall33/47(70.2%) failed the floor; fresh v2 had40complete/5unavailable and one partial Hindi replacement. These results remain unchanged. V4 now has15complete/one unavailable/74unrun semantic episodes,18/18conditional correct effects, six complete/four failed answer pairs. The small completed subset is not a full quality pass. Cold callback p95=20.99ms(n16) does not qualify10ms. See the [qualification record](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
+The owner supplied the quota evidence: displayed Free tier, answering5RPM/20RPD and learning15RPM/500RPD; the screenshots show28-day peaks rather than current headroom. The three approved recovery opportunities are exhausted. Budget upper304/532,228remain, but no additional inference, automatic schedule, purchase, model/account/key change or local activation is authorized by moving development priority. The proposed next-reset batch and suggested paid/model-comparison alternatives are not adopted or running. Do not keep requesting screenshots or budget approvals to resume the deferred benchmark.
 
-The owner-approved bounded recovery protocol used all3opportunities (60/120/240seconds): each health check returned but continuation encountered503, a timeout and429. No live process remains.11new single sends; new-stage42/270used; conservative upper304/532,228remain. No fourth recovery is authorized. Actual affected quota/reset/billing tier are unknown. Next: finish exact-head CI/evidence and obtain the current project's actual Gemini model-specific limits/error from AI Studio before preparing a further finite continuation decision. No new budget is needed. See [provider diagnosis/research](research/PERSONAL_AUTO_LEARNING_PROVIDER_AVAILABILITY_2026-10-22.md).
-
-Preserve every exposed outcome; no failed-case replay/rescoring, automatic recovery reset, model/account/key change, paid fallback or purchase. Full semantic/answer/resource qualification precedes whole normal-app owner acceptance and protected promotion. Do not ask again for the approved design/Native execution or require owner-authored examples/isolated microphone demos. Earlier merge approval does not authorize this new candidate's promotion.
+Next development focus within the existing personal-intelligence north star: inspect the current grounded-advice and task-follow-through path against actual memory/context/work ownership, then define the smallest remaining user-visible gap. Reuse canonical facts and existing WorkItem/Authority boundaries. Research/design may advance while the current candidate is retained; new behavior still needs its concrete architecture/implementation decision. Do not jump to a new framework/vendor benchmark or call the whole personal assistant complete. See the [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
 
 ## Owner direction — active personal intelligence (2026-10-19)
 
@@ -203,12 +195,9 @@ approves and all required checks pass.**
 
 ## Next action
 
-The owner approved the October21design and plan and selected Native execution.
-Core implementation and normal voice integration are present in draft PR#295.
-Finish the still-open qualification/resource/owner gates; the3approved provider
-recovery opportunities are exhausted and actual Gemini quota details are needed
-before a further finite live protocol can be proposed.
-Retain the broader advice, owner-input/session and normal-app acceptance gates;
-do not restart completed PI-1 promotion or old vendor experiments. Continue
-until a concrete required owner review, observation or unavailable resource is
-needed, and identify that dependency explicitly.
+The owner has chosen to advance after implementation/software verification.
+Retain the automatic-learning candidate and honest deferred qualification;
+do not restart the exhausted provider recovery or proposed multi-day batch.
+Next inspect grounded personal advice and task follow-through for the smallest
+remaining gap under the existing personal-intelligence goal. Preserve accepted
+PI-1 behavior and the normal-app acceptance/protected-promotion boundaries.

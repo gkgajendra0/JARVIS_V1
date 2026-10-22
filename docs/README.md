@@ -4,7 +4,7 @@
 
 This is the navigation and reconciliation record, not another North Star, second product plan or a claim of completed runtime features.
 
-Automatic-learning candidate: [implementation decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md) and [qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). Core branch code exists, while provider/owner acceptance and promotion remain pending; it is OFF by default.
+Automatic learning: [implemented/software-verified handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md), [decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md) and [preserved qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). The owner chose to advance development; broader provider testing is deferred. DefaultOFF/unpromoted; owner acceptance and protected promotion are not implied.
 
 ## Read these documents first
 

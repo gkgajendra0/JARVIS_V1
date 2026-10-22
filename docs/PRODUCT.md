@@ -22,7 +22,7 @@ The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile 
 
 ## Owner-Centered Personal Intelligence Contract
 
-Candidate update (22 October 2026): automatic conversational learning is implemented on its dedicated feature branch, with session-scoped owner delegation and no per-fact save question. It is OFF by default and unpromoted; multilingual/provider usefulness and normal-app owner acceptance remain open after quota-limited qualification. CAP-053 stays PARTIAL. See the [qualification report](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
+Candidate update (22 October 2026): automatic conversational learning is implemented and software-verified on its dedicated branch/draft PR#295 (all7CI on c03666b7 passed). The owner chose to advance development and defer extended quota-bound provider qualification. Learning remains OFF by default and unpromoted; multilingual quality/resource and normal-app acceptance are still open, not passed by this decision. CAP-053stays PARTIAL. See the [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md) and [immutable qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
 
 Implementation update (21 October 2026): PR #294 supplies the first opt-in active
 read slice with fresh exact-request Hello, natural existing-memory changes and

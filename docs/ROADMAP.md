@@ -44,7 +44,7 @@ This roadmap owns **numbered product sequence only**. It does not select technol
 | 20 | Governed Self-Improvement and Advanced Autonomy | CAP-047 | PLANNED |
 
 
-Automatic learning candidate (22 October 2026): core implementation now exists on the dedicated feature branch, but it is unpromoted and OFF by default. Provider quality and normal-app acceptance remain pending; CAP-053 remains PARTIAL and Step 8 numbering is unchanged. See [qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
+Automatic learning (22 October 2026): core code and normal voice integration are implemented/software-verified on draft PR#295. The owner directed moving development forward and deferred extended quota-bound provider qualification. DefaultOFF/unpromoted; full quality/resource/normal-app acceptance remain open, CAP-053is PARTIAL and Step8numbering is unchanged. See the [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
 
 ## Accepted interludes that do not renumber the roadmap
 

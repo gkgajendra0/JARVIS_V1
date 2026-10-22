@@ -1,6 +1,6 @@
 # Personal automatic learning qualification — 22 October 2026
 
-**Current checkpoint:** candidate fd7c7025; full software2,754PASS/8SKIP. Owner approved270 additional requests;6 used, conservative upper268/532,264 remain. V4 stopped after first English semantic case (2/2 facts) when answering returned HTTP503;0/30 answer pairs,89 unrun. No further inference. Feature remains unaccepted/default-OFF. Earlier sections are historical checkpoints.
+**Current checkpoint22October2026:** owner chose to advance development after implementation/software verification and defer extended quota-limited provider qualification. Evidence headc03666b7 passed all7CI checks; latest full software2,759PASS/8SKIP. V4remains15complete/one unavailable/74unrun,18/18conditional correct effects, six complete/four failed answer pairs. Conservative upper304/532,228remain; all3recovery opportunities exhausted. No further inference, purchase, activation or merge. This is IMPLEMENTED / SOFTWARE-VERIFIED, not full quality or whole-app owner acceptance. Earlier sections below are historical. See the [owner-directed handoff](PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
 
 Status: implementation candidate; **not production accepted, not ready to merge or activate**. Native execution and the written design/plan were owner approved. Main remains the separately accepted explicit/context release. Automatic learning remains OFF by default.
 
@@ -174,3 +174,8 @@ Recovery request latency p50/p95=2.29/9.99s (n11, including the timeout); combin
 [Recovery summary](../../benchmarks/results/personal-auto-learning-2026-10-22-v4-recovery/summary.json), [offline integrity review](../../benchmarks/results/personal-auto-learning-2026-10-22-v4-recovery/offline_integrity_review.json), the pre-send journal, three health results and per-segment traces preserve the outcomes. Offline checks verified frozen input/gold/prior-summary/source hashes, unique frozen-order IDs, budget arithmetic and the zero-new-pair count. Raw run files are unchanged.
 
 Next external dependency: read the current project's actual model-specific limits/error in AI Studio before designing any further live run. Do not infer a daily quota/reset or free-tier cause from429 alone, ask for another budget while228remain, or silently switch the configured model. All three recovery opportunities are exhausted; any further execution protocol requires an explicit owner decision. Finish unrelated CI/evidence only meanwhile. See [provider availability research](PERSONAL_AUTO_LEARNING_PROVIDER_AVAILABILITY_2026-10-22.md).
+
+
+## Owner-directed deferral and advance
+
+The owner requested moving forward with the implemented/software-passing system instead of multi-day testing. Extended provider qualification is deferred; all original outcomes remain immutable and unperformed gates are not passed. No live continuation, paid validation/model experiment, merge or activation is inferred. This closes the current implementation handoff, not Task9full quality or whole-product acceptance. Next work stays focused on grounded personal assistance and task follow-through. See the [handoff](PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).

@@ -1,0 +1,11 @@
+# Next personal-assistant gap inspection —22October2026
+
+Scope: repo inspection only after owner-directed deferral of extended automatic-learning qualification. This is not approval of a new feature or a claim that the assistant is complete.
+
+Observed: automatic learning/current-fact context are already implemented in the candidate, so rebuilding storage/extraction is not the next coding task. `src/jarvis/voice/agent.py` has grant-mode instructions to select relevant canonical facts, avoid inferred purchase motives/restrictions and omit unrelated context. That is implemented prompting/tool wiring, not proof of all-language usefulness.
+
+`src/jarvis/voice/production_runtime.py` builds the existing Work runtime when its optional configuration is enabled; source defaults are not evidence of the owner's deployed setting. `src/jarvis/work/engine.py` provides a registered-action/step execution boundary; `work/models.py` declares a REMINDER type. A type name does not prove a scheduled owner reminder works. The canonical Product catalogue still marks CAP-027notes and CAP-028tasks/reminders/scheduling PLANNED, Step8. Existing durable work and engineering operations are accepted only at their bounded scopes.
+
+Recommended next research/architecture candidate: personally useful task follow-through, using current authorized context and the existing Work/Authority infrastructure. A general fictional example is 'kal subah8baje meri walk yaad dila dena', then inspect/change/cancel/restart with truthful status. This is an explicit commitment, distinct from silently converting remembered routines into scheduled actions. Start with lifecycle/ownership inventory and a wide current-tech review of scheduling/durability/timezone/delivery approaches, narrow only to a concrete gap. No new memory store, parallel work engine, autonomous action permission or reminder implementation is approved by this note.
+
+Before a new implementation: establish whether user tasks/reminders already have reusable executors, persistence, due-time/timezone handling, cancellation and delivery receipts; define one bounded user-facing slice and its concrete design. Preserve explicit authority for external/consequential actions. Retain the deferred personal-memory quality/normal-app gates rather than claiming the new slice closes them.
