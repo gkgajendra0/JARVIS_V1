@@ -17,6 +17,7 @@ from livekit.agents import function_tool
 from jarvis.conversation import ConversationRole, ConversationStatus
 from jarvis.memory.explicit import ExplicitMemoryAuthorizationError
 from jarvis.memory.personal_context_projection import (
+    context_scope_signature,
     parse_context_requests,
     project_personal_context,
 )
@@ -333,6 +334,24 @@ class PersonalContextSession:
 
     async def _facts_current(self):
         try:
+            projection = self._query_projection
+            if projection is not None:
+                snapshot = await self._retrieval.learning_context_snapshot()
+                if (
+                    context_scope_signature(snapshot, projection.scope_keys)
+                    != projection.signature
+                ):
+                    return False
+                current = {}
+                for record, _ in snapshot.entries:
+                    key = MemoryFacetKey(
+                        record.subject_scope, record.subject, record.predicate
+                    )
+                    current.setdefault(key, []).append(record.assertion_id)
+                return all(
+                    current.get(facet) == [expected]
+                    for facet, expected in self._released.items()
+                )
             for facet, expected in tuple(self._released.items()):
                 records = await self._retrieval.retrieve_exact_current_facet(
                     facet, eligibility=ELIGIBILITY
@@ -577,6 +596,10 @@ class PersonalContextSession:
         )
 
     def mutation_committed(self):
+        self._query_projection = None
+        self._query_requests = None
+        self._release_path = None
+        self._query_attempts = 0
         self._mutation_inflight = False
         self._released.clear()
         self._catalog_id = None
@@ -640,6 +663,8 @@ class PersonalContextSession:
         if self._closed:
             return
         self._closed = True
+        self._query_projection = None
+        self._query_requests = None
         self._clear_audio()
         if self._watchdog is not None:
             self._watchdog.cancel()
