@@ -38,6 +38,7 @@ dependencies = [
 ]
 
 [project.scripts]
+jarvis-ui = "jarvis.ui.__main__:main"
 jarvis-setup = "jarvis.setup:main"
 jarvis-provider = "jarvis.provider_cli:main"
 jarvis-chatgpt-plan = "jarvis.chatgpt_plan_cli:main"
@@ -157,6 +158,9 @@ dev = ["pytest>=8,<10", "pytest-asyncio>=0.23,<2", "ruff==0.16.5"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+"jarvis.ui" = ["assets/*.html", "assets/*.css", "assets/*.js"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
