@@ -282,6 +282,10 @@ class ModelTargetRegistry:
                     ),
                 }
             )
+            if cost_profile is not None and cost_profile.usage_rates_usd_per_million:
+                payload[-1]["cost_profile"]["usage_rates_usd_per_million"] = list(
+                    cost_profile.usage_rates_usd_per_million
+                )
         return payload
 
     def digest(self) -> str:

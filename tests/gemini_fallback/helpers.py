@@ -84,3 +84,56 @@ def scoped_request(**changes):
     }
     values.update(changes)
     return ScopedRoutingRequest(**values)
+
+
+def budget_fixture(path, *, ceiling=35000):
+    from decimal import Decimal
+
+    from jarvis.model_routing.budget import PaidBudgetGovernor
+    from jarvis.model_routing.models import CostProfile
+    from jarvis.model_routing.pricing import PricingSnapshot
+
+    config = GeminiFallbackConfig(enabled=True, ceiling_inr_minor=ceiling)
+    store = ModelRoutingStore(SQLiteWorkStore(path))
+    profile = CostProfile(
+        profile_id="synthetic-test-price",
+        version=1,
+        effective_from_epoch=0,
+        effective_to_epoch=1000,
+        input_usd_per_million_tokens=200,
+        output_usd_per_million_tokens=200,
+    )
+    pricing = PricingSnapshot(
+        profile=profile,
+        model_id="gemini-budget-test",
+        service_key="structured",
+        source="synthetic:test-only",
+        inr_per_usd=Decimal(100),
+        fx_source="synthetic:test-only",
+        fx_version="test-fx-v1",
+        fx_effective_from_epoch=0,
+        fx_effective_to_epoch=1000,
+    )
+    target = build_gemini_role_targets(
+        role="memory.extraction",
+        model="gemini-budget-test",
+        adapter_id="gemini",
+        config=config,
+        cost_profile=profile,
+    )[1]
+    return (
+        PaidBudgetGovernor(store, config=config, clock=lambda: 100),
+        store,
+        target,
+        pricing,
+    )
+
+
+def exposure(input_tokens=5000, output_tokens=5000, *, scope_id="source-budget"):
+    from jarvis.model_routing.pricing import PaidExposure
+
+    return PaidExposure(
+        usage_bounds={"input_tokens": input_tokens, "output_tokens": output_tokens},
+        scope_kind="memory",
+        scope_id=scope_id,
+    )

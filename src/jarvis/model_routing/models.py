@@ -170,6 +170,7 @@ class CostProfile:
     input_usd_per_million_tokens: float | None = None
     output_usd_per_million_tokens: float | None = None
     effective_to_epoch: float | None = None
+    usage_rates_usd_per_million: tuple[tuple[str, float | None], ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -204,6 +205,18 @@ class CostProfile:
                 field="output_usd_per_million_tokens",
             ),
         )
+
+        rates = []
+        seen = set()
+        for entry in self.usage_rates_usd_per_million:
+            if not isinstance(entry, (tuple, list)) or len(entry) != 2:
+                raise ValueError("Invalid modality usage rate")
+            key, rate = entry
+            if not isinstance(key, str) or not key.strip() or key in seen:
+                raise ValueError("Invalid or duplicate modality rate key")
+            seen.add(key)
+            rates.append((key, _non_negative_float(rate, field="usage_rate")))
+        object.__setattr__(self, "usage_rates_usd_per_million", tuple(rates))
 
 
 @dataclass(frozen=True, slots=True)

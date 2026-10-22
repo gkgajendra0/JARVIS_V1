@@ -68,11 +68,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** `PricingSnapshot` pins model/service/modality, profile ID/version/effective times and FX source/version/effective times/margin. `load_pricing_snapshot(path: Path, *, now_epoch: float) -> PricingSnapshot`. `PaidExposure` describes bounded context/input/output/thinking/modalities/duration. `PaidBudgetGovernor(store: ModelRoutingStore, *, config, clock)` provides `reserve(*, invocation_id, target, exposure, pricing) -> PaidReservation`, `mark_dispatched(reservation_id)`, `settle(*, reservation_id, usage, usage_complete, event_id)`, `cancel_unsent(reservation_id)`, `status(budget_id)`. Extend existing cost readers to lane/target/known/reserved/unknown/version facts; old unknown cost stays None. PaidReservation contains reservation_id, budget_id, invocation_id, target_id, price_profile_id/version, reserved_inr_minor and dispatch/settlement state; status reports ceiling/spent/reserved/unknown separately. Store integer-paise ledgers in the same database without private payloads.
 
-- [ ] **Step1 — Failing tests:** default35000/restart; exact boundary; multi-connection/process races; duplicate invocation/event idempotence; dispatched timeout/cancel/crash retains exposure; only proved-unsent refunds; missing/stale/negative/NaN/partial rate/FX rejects Paid; unknown usage never zero. Fixtures use synthetic prices, not production claims.
-- [ ] **Step2 — RED:** run price/budget suites; require missing enforcement.
-- [ ] **Step3 — Implement Decimal/conservative rounding and transactional reservations.** Pin effective profiles, retain uncertainty after restart/lease expiry, record overrun/block further admission rather than clip actual cost. Add modality prices without altering legacy absent-field serialization/digests.
-- [ ] **Step4 — GREEN:** new tests, `tests/test_cost_telemetry.py` and model-routing model/store regressions; real SQLite multiprocess races, not just asyncio locks.
-- [ ] **Step5 — Commit:** `feat(cost): enforce restart-safe paid fallback reservations`.
+- [x] **Step1 — Failing tests:** default35000/restart; exact boundary; multi-connection/process races; duplicate invocation/event idempotence; dispatched timeout/cancel/crash retains exposure; only proved-unsent refunds; missing/stale/negative/NaN/partial rate/FX rejects Paid; unknown usage never zero. Fixtures use synthetic prices, not production claims.
+- [x] **Step2 — RED:** run price/budget suites; require missing enforcement.
+- [x] **Step3 — Implement Decimal/conservative rounding and transactional reservations.** Pin effective profiles, retain uncertainty after restart/lease expiry, record overrun/block further admission rather than clip actual cost. Add modality prices without altering legacy absent-field serialization/digests.
+- [x] **Step4 — GREEN:** new tests, `tests/test_cost_telemetry.py` and model-routing model/store regressions; real SQLite multiprocess races, not just asyncio locks.
+- [x] **Step5 — Commit:** `feat(cost): enforce restart-safe paid fallback reservations`.
 
 ### Task 4: Quota-only edge, credential failures and demand recovery
 
