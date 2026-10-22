@@ -1,0 +1,15 @@
+{
+  "historical_outer_calls": 33,
+  "reserved_historical_send_upper_bound": 87,
+  "total_send_cap": 270,
+  "new_probe_cap": 2,
+  "retry": false,
+  "fictional_only": true,
+  "holdout_replay": false,
+  "adapter_sha256": "cf0a94adae9802539a689c235ffb2f181484aa15a1600f3b451f2c7c3505d9ba",
+  "cases": [
+    "new cycling routine extraction",
+    "new Hindi unsweetened-tea preference answer"
+  ],
+  "note": "Installed SDK no-retry verified offline; concurrent deterministic suite may affect latency. This is diagnosis, not frozen acceptance."
+}

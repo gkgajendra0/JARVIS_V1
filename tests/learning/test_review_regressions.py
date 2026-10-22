@@ -253,3 +253,86 @@ async def test_unrelated_records_do_not_exhaust_delegated_catalog_cap(learning):
     )
     records = await learning.service.canonical_reader.learning_current()
     assert [r.predicate for r in records] == ["diet_preference"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_correction_of_learned_item_remains_in_delegated_scope(learning):
+    await learning.service.admit_learning(learning.plan, learning.new_permit())
+    predicate = learning.plan.mutations[0].predicate
+    await learning.service.correct_text(
+        predicate=predicate, value="Creta", source=explicit_source(learning)
+    )
+    records = await learning.service.canonical_reader.learning_current()
+    assert len(records) == 1 and records[0].value == "Creta"
+    catalog = await LearningReconciler(
+        learning.service.canonical_reader, learning.authority
+    ).catalog(
+        learning.source, LearningBatch(candidates=[learning.candidate]), learning.grant
+    )
+    assert len(catalog.entries) == 1 and catalog.entries[0].category == "legacy"
+    c = ConversationSession()
+    c.start()
+    c.accept_turn(ConversationRole.USER, "Which vehicle do I have?")
+    session = PersonalContextSession(
+        conversation=c,
+        retrieval=SemanticRetrievalService(learning.reader),
+        authority=None,
+        retire=lambda: None,
+        learning_authority=learning.authority,
+        learning_grant=learning.grant,
+    )
+    try:
+        names = await session.catalog()
+        assert predicate in names["facets"]
+        packet = await session.read(
+            names["catalog_id"], [names["facets"].index(predicate)]
+        )
+        assert "Creta" in str(packet)
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_registered_scope_cannot_be_guessed_or_reused_after_forget(learning):
+    await learning.service.remember_text(
+        predicate="owned_item_forged",
+        value="unrelated marker",
+        source=explicit_source(learning),
+    )
+    assert not await learning.service.canonical_reader.learning_current()
+    await learning.service.admit_learning(learning.plan, learning.new_permit())
+    predicate = learning.plan.mutations[0].predicate
+    await learning.service.correct_text(
+        predicate=predicate, value="Creta", source=explicit_source(learning)
+    )
+    c = ConversationSession()
+    c.start()
+    c.accept_turn(ConversationRole.USER, "Which vehicle do I have?")
+    session = PersonalContextSession(
+        conversation=c,
+        retrieval=SemanticRetrievalService(learning.reader),
+        authority=None,
+        retire=lambda: None,
+        learning_authority=learning.authority,
+        learning_grant=learning.grant,
+    )
+    try:
+        names = await session.catalog()
+        assert predicate in names["facets"]
+        assert "owned_item_forged" not in names["facets"]
+        await learning.service.forget_exact(
+            predicate=predicate, source=explicit_source(learning)
+        )
+        await learning.service.remember_text(
+            predicate=predicate,
+            value="unrelated replacement",
+            source=explicit_source(learning),
+        )
+        assert not await learning.service.canonical_reader.learning_current()
+        packet = await session.read(
+            names["catalog_id"], [names["facets"].index(predicate)]
+        )
+        assert "unrelated replacement" not in str(packet)
+        assert not packet.get("facts")
+    finally:
+        session.close()

@@ -1,0 +1,34 @@
+{
+  "rubric": {
+    "relevant": "Use supported requested facts; no invented owner facts.",
+    "irrelevant": "Answer general question without mentioning irrelevant owner facts.",
+    "unknown_relation": "State missing owner reason/preference; ownership alone supplies no reason.",
+    "reviewer": "Blind arm order, agent authored review reported separately from owner acceptance."
+  },
+  "pairs": [
+    {
+      "id": "hinglish-02",
+      "question": "Mere paas kaunsa camera hai?",
+      "facts": [
+        {
+          "predicate": "owned_item_e9ad513aed774a05912c56385a1105bd",
+          "text": "owned_item.device: Fujifilm X-S20; value=camera; state=owned"
+        }
+      ],
+      "A": "Mere paas iski koi jaankari nahi hai ki aapke paas kaunsa camera hai.",
+      "B": "Aapke paas Fujifilm X-S20 camera hai."
+    },
+    {
+      "id": "hi-03",
+      "question": "मेरी सुबह की सैर कब होती है?",
+      "facts": [
+        {
+          "predicate": "routine_62415b26c8ad472590c7f224a1acae56",
+          "text": "routine.other: सुबह की सैर; value=रोज़ सुबह 7 बजे; state=active"
+        }
+      ],
+      "A": "आपकी सुबह की सैर रोज़ सुबह 7 बजे होती है।",
+      "B": "मुझे आपकी सुबह की सैर के समय के बारे में कोई जानकारी नहीं है।"
+    }
+  ]
+}

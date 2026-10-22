@@ -1,1 +1,3 @@
 benchmarks/personal_auto_learning_v1*.json text eol=lf
+
+benchmarks/personal_auto_learning_capture_v2*.json text eol=lf

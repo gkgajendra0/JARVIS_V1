@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -41,6 +41,15 @@ preferences set scalar_facet to diet_preference, response_language or
 response_style. For owned items set state owned/not_owned; for routines/goals
 active/completed. Real changes, correction of a false statement and withdrawal
 are distinct intents. A retraction without a unique referent remains uncertain.
+Field meaning examples (illustrations only, never input facts):
+- "My goal is to finish a garden bench." -> category goal, label/value
+  "finish a garden bench", state active, intent new. The value is the objective,
+  never the status word "active".
+- "My evening swim is now at 9 pm instead of 8 pm." -> category routine,
+  label "evening swim", value "9 pm", state active, intent change. A new time
+  for an existing activity is a change, not a new entity. Copy the new time
+  without adding frequency/words that are absent from its quoted substring.
+Do not insert conjunctions or normalize spelling/case inside a copied value.
 You do not save, approve, authenticate, assign canonical IDs or verify truth.
 """
 
@@ -64,6 +73,21 @@ class _Quote(BaseModel):
 
 
 class _ProviderCandidate(LearningCandidate):
+    intent: Literal[
+        "new", "change", "correction", "retraction", "transient", "none"
+    ] = Field(
+        description="new means a first fact/entity, not merely a newly spoken sentence. A routine reschedule, ownership ending or other real-world update is change. Earlier false information is correction; withdrawal is retraction."
+    )
+    label: str = Field(
+        min_length=1,
+        max_length=240,
+        description="Copy the entity/activity/goal identity exactly from the cited user text, preserving case and script. Do not invent a generic title. Scalar preference labels are descriptive only.",
+    )
+    value: str = Field(
+        min_length=1,
+        max_length=1200,
+        description="Copy one exact continuous source substring containing the fact content. For goals use the objective phrase (it may equal label); for routines use the new schedule/time; for owned items use the name/model. Put active/completed/owned/not_owned in state, never use a status as the goal value. Do not add words or reformat a copied phrase.",
+    )
     evidence: list[_Quote] = Field(min_length=1, max_length=8)
 
 

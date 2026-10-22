@@ -342,6 +342,16 @@ class SemanticRetrievalService:
             )
         )
 
+    async def learning_record_in_scope(self, assertion_id: str) -> bool:
+        from .query import CanonicalMemoryReader
+
+        return any(
+            record.assertion_id == assertion_id
+            for record, _ in await CanonicalMemoryReader(
+                self._worker
+            ).learning_current_scoped()
+        )
+
     async def eligible_facet_catalog(
         self,
         *,

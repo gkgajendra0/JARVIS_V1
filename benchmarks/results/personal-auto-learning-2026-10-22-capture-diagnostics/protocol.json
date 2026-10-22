@@ -1,0 +1,72 @@
+{
+  "purpose": "development diagnosis, not acceptance; new cases only",
+  "reserved_prior_send_upper_bound": 199,
+  "new_single_send_cap": 8,
+  "total_send_cap": 270,
+  "answer_model_calls": 0,
+  "cases": [
+    {
+      "id": "dev-style",
+      "language": "en",
+      "turns": [
+        "Please keep your replies brief, direct, and friendly."
+      ],
+      "seed": [],
+      "question": "What reply style do I prefer?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "dev-goal",
+      "language": "en",
+      "turns": [
+        "My current goal is to complete a pottery certificate."
+      ],
+      "seed": [],
+      "question": "What goal am I working on?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "dev-sale",
+      "language": "en",
+      "turns": [
+        "My Ford Figo was sold last week; I no longer own that car."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Ford Figo",
+          "value": "Ford Figo",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Which car do I still own?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "dev-routine",
+      "language": "hi",
+      "turns": [
+        "मेरी शाम की सैर अब रोज़ 5 बजे की जगह 6 बजे होती है।"
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "शाम की सैर",
+          "value": "रोज़ 5 बजे",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "मेरी शाम की सैर कब होती है?",
+      "answer_subset": false,
+      "control": "none"
+    }
+  ],
+  "adapter_sha256": "cf0a94adae9802539a689c235ffb2f181484aa15a1600f3b451f2c7c3505d9ba"
+}

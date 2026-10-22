@@ -1,0 +1,326 @@
+{
+  "continuation_plan": {
+    "candidate": "842a5cba5c536119a06fa08df1d7ec307ee0238a",
+    "input_sha256": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "gold_sha256": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010",
+    "prior_summary_sha256": "61b17421dfa9c557fc22b789843545e05aada3f19000c68642ede77c15490f7f",
+    "reserved_start_send_upper_bound": 89,
+    "historical_outer_calls": 33,
+    "historical_send_reserve": 87,
+    "diagnostic_single_sends": 2,
+    "remaining_cap": 181,
+    "minimum_episode_spacing_seconds": 5,
+    "minimum_after_answer_episode_seconds": 45,
+    "order": [
+      "hinglish-02",
+      "hi-03",
+      "hinglish-03",
+      "en-08",
+      "hi-04",
+      "hinglish-04",
+      "en-09",
+      "hi-05",
+      "hinglish-05",
+      "en-10",
+      "hi-06",
+      "hinglish-06",
+      "en-11",
+      "hi-07",
+      "hinglish-07",
+      "en-12",
+      "hi-08",
+      "hinglish-08",
+      "en-13",
+      "hi-09",
+      "hinglish-09",
+      "en-14",
+      "hi-10",
+      "hinglish-10",
+      "en-15",
+      "hi-11",
+      "hinglish-11",
+      "en-16",
+      "hi-12",
+      "hinglish-12",
+      "en-17",
+      "hi-13",
+      "hinglish-13",
+      "en-18",
+      "hi-14",
+      "hinglish-14",
+      "en-19",
+      "hi-15",
+      "hinglish-15",
+      "en-20",
+      "hi-16",
+      "hinglish-16",
+      "en-21",
+      "hi-17",
+      "hinglish-17",
+      "en-22",
+      "hi-18",
+      "hinglish-18",
+      "en-23",
+      "hi-19",
+      "hinglish-19",
+      "en-24",
+      "hi-20",
+      "hinglish-20",
+      "en-25",
+      "hi-21",
+      "hinglish-21",
+      "en-26",
+      "hi-22",
+      "hinglish-22",
+      "en-27",
+      "hi-23",
+      "hinglish-23",
+      "en-28",
+      "hi-24",
+      "hinglish-24",
+      "en-29",
+      "hi-25",
+      "hinglish-25",
+      "en-30",
+      "hi-26",
+      "hinglish-26",
+      "hi-27",
+      "hinglish-27",
+      "hi-28",
+      "hinglish-28",
+      "hi-29",
+      "hinglish-29",
+      "hi-30",
+      "hinglish-30"
+    ],
+    "retry": false,
+    "notes": "Round robin language order fixed before calls. Owner approved remaining validation. Installed SDK retry disabled and mock-transport verified. Conservative reserve89 at start includes uncertain historical sends plus2 diagnostic sends. No failed/exposed episode replay, no paid fallback/account change. Advance only to new cases after timeout; stop on any recorded HTTP/transport error or non-timeout semantic/authority failure. Preserve unavailable outcomes; acceptance false."
+  },
+  "summary": {
+    "status": "incomplete",
+    "completed": 3,
+    "unavailable": 0,
+    "unrun": 77,
+    "provider_attempts": 9,
+    "cumulative_send_upper_bound": 98,
+    "accepted": false
+  },
+  "scores": {
+    "completed": 3,
+    "unavailable": 0,
+    "true_positive": 3,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "precision_wilson": [
+      0.43849391955098227,
+      1.0
+    ],
+    "recall_wilson": [
+      0.43849391955098227,
+      1.0
+    ],
+    "languages": {
+      "hinglish": {
+        "completed": 2,
+        "captured": 2,
+        "expected": 2
+      },
+      "hi": {
+        "completed": 1,
+        "captured": 1,
+        "expected": 1
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 1,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers"
+  },
+  "usage": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 191,
+          "total_tokens": 577
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 84,
+          "output_tokens": 30,
+          "total_tokens": 340
+        },
+        {
+          "input_tokens": 107,
+          "output_tokens": 23,
+          "total_tokens": 251
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 388,
+          "output_tokens": 193,
+          "total_tokens": 581
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 85,
+          "output_tokens": 25,
+          "total_tokens": 337
+        },
+        {
+          "input_tokens": 109,
+          "output_tokens": 23,
+          "total_tokens": 276
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 382,
+          "output_tokens": 191,
+          "total_tokens": 573
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 83,
+          "output_tokens": 29,
+          "total_tokens": 376
+        }
+      ],
+      "last_failure": {
+        "kind": "RateLimitError",
+        "status": 429
+      }
+    }
+  ],
+  "request_latency_ms": {
+    "n": 9,
+    "p50": 2595.4821999985143,
+    "p95": 5701.734200003557
+  },
+  "rows": [
+    {
+      "id": "hinglish-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: Fujifilm X-S20; value=camera; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_e9ad513aed774a05912c56385a1105bd",
+          "text": "owned_item.device: Fujifilm X-S20; value=camera; state=owned"
+        }
+      ],
+      "callback_ms": [
+        17.79559999704361
+      ],
+      "baseline_ms": [
+        0.027599999157246202
+      ],
+      "background_ms": 2357.335399996373
+    },
+    {
+      "id": "hi-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: सुबह की सैर; value=रोज़ सुबह 7 बजे; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_62415b26c8ad472590c7f224a1acae56",
+          "text": "routine.other: सुबह की सैर; value=रोज़ सुबह 7 बजे; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5423000038717873
+      ],
+      "baseline_ms": [
+        0.02680000034160912
+      ],
+      "background_ms": 1514.2854000005173
+    },
+    {
+      "id": "hinglish-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: morning walk; value=roz subah 7 baje hoti hai; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_2af7da5c5b414218a8a08610f4754f87",
+          "text": "routine.other: morning walk; value=roz subah 7 baje hoti hai; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.48889999743551016
+      ],
+      "baseline_ms": [
+        0.02649999805726111
+      ],
+      "background_ms": 1437.3813000056543,
+      "answer_status": "unavailable",
+      "answer_failure": "provider_or_budget_unavailable"
+    }
+  ]
+}

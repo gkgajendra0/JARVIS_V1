@@ -36,16 +36,39 @@ class CanonicalMemoryReader:
         )
 
     async def learning_current(self):
+        return tuple(record for record, _ in await self.learning_current_scoped())
+
+    async def learning_current_scoped(self):
         """Bounded standard owner snapshot; caller must hold learning read authority."""
 
         from jarvis.personal_learning_scope import (
             LEGACY_FACETS,
             POLICY_VERSION,
+            SUPPRESSION_KEYS,
             record_scope,
         )
 
         def query(connection):
             marks = ",".join("?" for _ in LEGACY_FACETS)
+            scope_marks = ",".join("?" for _ in SUPPRESSION_KEYS)
+            # An explicit text correction keeps the registered facet identity.
+            # Its classification comes only from canonical typed admission history,
+            # never from a guessed predicate prefix or the replacement text.
+            registration = (
+                "h.subject_scope=a.subject_scope AND h.subject=a.subject AND h.predicate=a.predicate"
+                " AND h.sensitivity='standard' AND h.value_type='json'"
+                " AND r.policy_version=? AND r.category IN (" + scope_marks + ")"
+                " AND json_extract(h.value_json,'$.schema')=?"
+                " AND json_extract(h.value_json,'$.category') IN ('owned_item','routine','goal')"
+                " AND r.category=CASE json_extract(h.value_json,'$.category')"
+                " WHEN 'owned_item' THEN 'owned_item.'||json_extract(h.value_json,'$.kind')"
+                " ELSE json_extract(h.value_json,'$.category') END"
+            )
+            registration_values = (POLICY_VERSION, *SUPPRESSION_KEYS, POLICY_VERSION)
+            registered_exists = (
+                "SELECT 1 FROM personal_learning_receipt r JOIN semantic_assertion h ON h.assertion_id=r.target_id WHERE "
+                + registration
+            )
             rows = connection.execute(
                 "SELECT "
                 + ", ".join(
@@ -61,18 +84,30 @@ class CanonicalMemoryReader:
                 " json_extract(a.value_json,'$.schema')=? AND ("
                 " (json_extract(a.value_json,'$.category')='owned_item' AND substr(a.predicate,1,11)='owned_item_' AND json_extract(a.value_json,'$.kind') IN ('vehicle','device','other')) OR"
                 " (json_extract(a.value_json,'$.category')='routine' AND substr(a.predicate,1,8)='routine_') OR"
-                " (json_extract(a.value_json,'$.category')='goal' AND substr(a.predicate,1,5)='goal_'))))"
+                " (json_extract(a.value_json,'$.category')='goal' AND substr(a.predicate,1,5)='goal_')))"
+                " OR (a.value_type='text' AND EXISTS (" + registered_exists + ")))"
                 " ORDER BY a.predicate, a.assertion_id LIMIT 33",
-                (*LEGACY_FACETS, POLICY_VERSION),
+                (*LEGACY_FACETS, POLICY_VERSION, *registration_values),
             ).fetchall()
             if len(rows) > 32:
                 raise ValueError("learning_catalog_overflow")
-            return tuple(
-                record
-                for r in rows
-                if record_scope(record := semantic_assertion_record_from_row(r))
-                is not None
-            )
+            scoped = []
+            for row in rows:
+                record = semantic_assertion_record_from_row(row)
+                scope = record_scope(record)
+                if scope is None and record.value_type.value == "text":
+                    registered = connection.execute(
+                        "SELECT DISTINCT r.category FROM personal_learning_receipt r"
+                        " JOIN semantic_assertion h ON h.assertion_id=r.target_id"
+                        " JOIN current_semantic_assertion a ON a.assertion_id=? WHERE "
+                        + registration,
+                        (record.assertion_id, *registration_values),
+                    ).fetchall()
+                    if len(registered) == 1:
+                        scope = registered[0][0]
+                if scope is not None:
+                    scoped.append((record, scope))
+            return tuple(scoped)
 
         return await self._reader.run(query)
 

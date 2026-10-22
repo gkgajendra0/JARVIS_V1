@@ -293,12 +293,13 @@ class PersonalContextSession:
             LOGGER.info("Personal context catalog | status=unavailable")
             return {"status": "unavailable"}
 
-    def _eligible(self, record):
-        from jarvis.personal_learning_scope import record_scope
-
+    async def _eligible(self, record):
+        if self._learning_read and not await self._retrieval.learning_record_in_scope(
+            record.assertion_id
+        ):
+            return False
         return (
-            (not self._learning_read or record_scope(record) is not None)
-            and record.subject_scope == "personal"
+            record.subject_scope == "personal"
             and record.subject == "owner"
             and record.state is AssertionState.ACTIVE
             and record.valid_to is None
@@ -318,7 +319,7 @@ class PersonalContextSession:
                 if (
                     len(records) != 1
                     or records[0].assertion_id != expected
-                    or not self._eligible(records[0])
+                    or not await self._eligible(records[0])
                 ):
                     return False
             return True
@@ -350,7 +351,7 @@ class PersonalContextSession:
                 records = await self._retrieval.retrieve_exact_current_facet(
                     facet, eligibility=ELIGIBILITY
                 )
-                if len(records) != 1 or not self._eligible(records[0]):
+                if len(records) != 1 or not await self._eligible(records[0]):
                     continue
                 record = records[0]
                 value = record.normalized_text
@@ -423,7 +424,7 @@ class PersonalContextSession:
         )
         if (
             len(records) != 1
-            or not self._eligible(records[0])
+            or not await self._eligible(records[0])
             or not await self._validate()
             or catalog_id != self._catalog_id
         ):

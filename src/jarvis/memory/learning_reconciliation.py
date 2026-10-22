@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from jarvis.authority.personal_learning import POLICY_VERSION, LearningActionBinding
 from jarvis.authority.proposal import canonical_json
-from jarvis.personal_learning_scope import CATEGORIES, LEGACY_FACETS, record_scope
+from jarvis.personal_learning_scope import CATEGORIES
 
 from .assertions import SemanticAssertionDraft
 from .learning_contracts import (
@@ -157,15 +157,12 @@ class LearningReconciler:
             ),
         )
         self.authority.consume_read(permit)
-        records = await self.reader.learning_current()
+        records = await self.reader.learning_current_scoped()
         entries = []
-        for record in records:
-            scope = record_scope(record)
-            if scope is None:
-                continue
+        for record, scope in records:
             category, _, kind = scope.partition(".")
             kind = kind or "other"
-            if record.predicate in LEGACY_FACETS and category == "owned_item":
+            if category not in SCALAR_FACETS and not isinstance(record.value, dict):
                 category = "legacy"  # Never split/mutate a plural legacy entity.
             text_value = (
                 json.dumps(record.value, ensure_ascii=False)
