@@ -11,7 +11,7 @@ Scope: standard owned items, food/response preferences, routines and ongoing goa
 ## Software evidence
 
 - Baseline before implementation: 2,636 passed, 8 skipped; dependency check clean.
-- Whole suite after the independent review repair pass: **2,734 passed, 8 skipped**, exit 0, 167 seconds. This includes the Gemini wire-format and evaluation-report repairs plus all six review fixes.
+- Whole suite after the independent review repair pass: **2,734 passed, 8 skipped**, exit 0, 173.91 seconds after all new files were tracked. This includes the Gemini wire-format and evaluation-report repairs plus all six review fixes.
 - Entire-repo Ruff lint and format checks passed (977 formatted files); dependency check clean. Final exact-head CI is recorded with the draft PR.
 - Actual installed OPA parsed the policy, then a fictional full save/read check committed two entities and released their context. A policy protocol-version mismatch found by the real engine was fixed and regression-pinned. Fake policy tests alone had missed it.
 - Windows SQLCipher 4.17.0 / SQLite 3.53.3 / DPAPI production-adapter smoke passed all checks on a new fictional DB, including schema 3, ledger, reopen, FTS, protected key, plaintext denial and no marker leakage. No owner DB was opened or migrated.
@@ -29,7 +29,7 @@ A completed independent review of `7de92b3d..f658c6e7` found six Important issue
 5. Reject scalar updates whose selected canonical predicate differs from the candidate's registered relation (language versus response style).
 6. Expose governed local recovery: `jarvis-voice --personal-learning apply --reenable-learning-category owned_item.vehicle`. A separate exact-category fresh Windows Hello approval is consumed once at the writer transaction; stale/wrong-category/fabricated approval fails. Old accepted sources remain invalid. This command is for later owner testing, not an activation performed by this audit.
 
-Each issue has an observed RED regression before its fix. The real installed OPA also passed delegated suppression and exact-category re-enable with a fictional canonical database and fake OS/Hello. The whole suite passed: 2,734 tests, 8 skipped. These checks do not establish provider semantic quality or owner spoken acceptance.
+Each issue has an observed RED regression before its fix. The real installed OPA also passed delegated suppression and exact-category re-enable with a fictional canonical database and fake OS/Hello. The whole suite passed again with all new files tracked: 2,734 tests, 8 skipped. Initial CI exposed the missing self-model registration for the shared registry; the existing coverage regression was observed failing locally, the durable-memory descriptor was corrected, and the entire suite reran. These checks do not establish provider semantic quality or owner spoken acceptance.
 
 ## Frozen provider cohort
 
@@ -49,13 +49,27 @@ Observed evidence:
 
 - Semantic episodes completed: **4/90**, all English. Hindi/Hinglish: **0/30 each**; 86 episodes unrun.
 - Learning requests: 4. Paired-answer requests: 7, of which 6 returned and one hit 429. Complete pairs: **3/30**. No full advice-success claim.
-- Total inference attempts across initial cohort, transport diagnostics and resumed cohort: **18/270**. Provider metadata lookup is not inference. No additional provider execution has been performed after the 429.
+- Total inference attempts across initial cohort, transport diagnostics and resumed cohort: **18/270**. Provider metadata lookup is not inference. Later non-retry continuations are reported below; the 18-attempt figure describes this historical stage.
 - First four episodes expected five facts; three were committed correctly (two vehicles and a camera). Routine and goal capture were missed. Observed admission precision 3/3, capture recall 3/5, with a tiny exposed English-only denominator. These are **not release-floor evidence** and do not establish all-language quality. Do not tune and rescore these exposed cases as a fresh holdout.
 - Resumed run reported 4,208 total tokens for returned responses. One minimal preflight did not retain usage; failed/cancelled request billing is unknown, so no complete monetary/cost claim is made. The successful bounds preflight separately reported 34 tokens.
 - Resumed request latency: n=11, p50 approximately 2.46 s, p95 approximately 3.92 s. This includes the failure; it is not time to first voice speech.
 - Callback measurements are from four fictional OS/Hello cases only. They do not qualify the <=10 ms p95 target, voice interruption UX, owner hardware, GPU/RAM impact or normal audio latency.
 
 The raw immutable artifacts are [initial request](../../benchmarks/results/personal-auto-learning-2026-10-22-v1/summary.json) and [resumed partial cohort](../../benchmarks/results/personal-auto-learning-2026-10-22-v1-resumed/summary.json), with shuffled answer arms saved beside them. The old runner retained the completed semantic row but omitted a dedicated answer-unavailable field when the later answer failed; usage/status and incomplete pairs expose that failure. A regression now preserves this field for subsequent runs. Historical artifacts are not rewritten to manufacture a pass.
+
+## Non-retry continuation on reviewed candidate
+
+After the six review repairs, only previously unexecuted cases ran on `5af652a6`. The fixed order alternated language groups, and the first segment waited 45 seconds between episodes. Its [predeclared protocol and journal](../../benchmarks/results/personal-auto-learning-2026-10-22-v1-continued/continuation_plan.json) bind the candidate, hashes, prior artifact and remaining 252-attempt allowance.
+
+Four additional semantic episodes completed: two English, one Hindi and one Hinglish. All six expected facts in those cases were admitted correctly. Three additional answer pairs completed; the later English language-preference answer was unavailable at approximately the 10-second deadline, with no returned response or provider error detail. A separate [remaining-only segment](../../benchmarks/results/personal-auto-learning-2026-10-22-v1-continued-2/summary.json), paced 45 seconds after answer episodes and 10 seconds otherwise, then stopped on a new semantic case's recorded timeout. Neither failed/exposed case was retried. Returned-response token usage across both later segments was 4,749; failed/cancelled billing remains unknown.
+
+At this checkpoint: **30/270 total inference attempts**, 8/90 unique semantic episodes completed, 1 additional semantic episode unavailable, 81 unrun; 6/30 complete answer pairs. New candidate-only evidence is four completed episodes/six expected facts, with very small denominators; do not combine different candidate revisions into a current-head release pass. A read-only model metadata request succeeded in 0.32 seconds after the timeouts: credentials/metadata access are available, but that does not prove inference availability or identify the timeout cause. No paid fallback, account/key change or quota purchase was performed.
+
+The three new complete pairs were judged by the author agent before opening their arm key: each supported arm used the requested fact, and each empty-context arm truthfully lacked it, with no observed invented owner fact in those three pairs. This is a small author review, not independent human acceptance or all-language advice qualification. Historical rows, unavailable answers and failed requests are preserved unchanged. The current mode remains an unaccepted candidate.
+
+A later automatic approval review stopped the proposed next live request, interpreting the earlier stop statement as a request boundary. The owner then explicitly authorized **one new Hindi case, at most three requests** on the same account. That [bounded check](../../benchmarks/results/personal-auto-learning-2026-10-22-v1-continued-3/summary.json) saved and retrieved the fictional camera correctly. One answer arm returned; the other was unavailable at the 10-second boundary, so no complete pair was scored. No further inference was sent after that approved case.
+
+Latest checkpoint: **33/270 total inference attempts**, **9/90 unique semantic episodes completed**, one additional semantic episode unavailable, **80 unrun**, **6/30 complete answer pairs**. On the reviewed implementation alone, five semantic episodes completed (EN2, HI2, Hinglish1) with all seven expected facts captured correctly; this is still far short of the frozen all-language qualification. No total cash-cost estimate, all-language quality pass, hardware/voice latency pass, normal-app owner acceptance or feature-complete claim follows from it.
 
 ## Remaining release gates
 

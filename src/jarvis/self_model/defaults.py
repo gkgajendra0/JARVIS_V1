@@ -468,6 +468,7 @@ def build_default_self_model() -> SelfModelRegistry:
             (
                 "src/jarvis/memory/database.py",
                 "src/jarvis/memory/service.py",
+                "src/jarvis/personal_learning_scope.py",
                 "src/jarvis/memory/migration_runner.py",
                 "src/jarvis/memory/migrations",
             ),
