@@ -1,5 +1,7 @@
 # Personal automatic learning qualification — 22 October 2026
 
+**Current checkpoint:** code ede43720; fresh45 attempted,40complete/5unavailable; conditional29/30 correct effects with one partial Hindi correction. Conservative request upper262/270,8 remain. No release acceptance. Earlier sections below are dated historical checkpoints; the final section contains current totals.
+
 Status: implementation candidate; **not production accepted, not ready to merge or activate**. Native execution and the written design/plan were owner approved. Main remains the separately accepted explicit/context release. Automatic learning remains OFF by default.
 
 ## Request-accounting correction
@@ -106,3 +108,18 @@ Conservative historical reserve87 plus verified later single sends gives an uppe
 A separate observed failing regression showed that explicit text correction of an automatically learned typed facet lost delegated recall. Classification now follows matching canonical typed admission history, with current scope rechecked before release; forged names and forget/recreate cannot inherit registration. Actual installed OPA plus SQLCipher/DPAPI on fictional data passed admission, correction, scoped read and forget/recreate. Fake OS/Hello only; no owner data/device access.
 
 Latest full local suite: 2,743 passed, 8 skipped, exit0 (174.52s). Repository Ruff lint/format979 files, dependency consistency and whitespace checks pass. Exact-head CI remains required after committing these changes; earlier842a5cba passed all seven checks. Feature remains default-OFF, draft, unaccepted and unmerged.
+
+
+## Final bounded validation checkpoint — capture v2 on ede43720
+
+All45 new capture-only cases were attempted once: **40 completed, five unavailable, zero unrun**. A remaining-only continuation excluded every attempted ID and preserved the first unavailable result. No failed case was deliberately replayed. Availability was40/45 (88.9%); three language groups completed13/15,13/15,14/15 respectively. Complete-corpus and release flags remain false.
+
+Conditional on completed cases, the frozen scorer found29 correct effects, one unmatched effect and one missing expected fact: precision29/30 (96.7%), recall29/30 (96.7%), approximate95% Wilson intervals83.3%–99.4% for each. English10/10, Hindi9/10, Hinglish10/10 expected facts. Shared scenario families limit independence; unavailable cases are not clean abstentions. This smaller, different corpus cannot establish a statistically comparable improvement over v1 or satisfy the approved90-case gate.
+
+The unmatched Hindi effect is specifically partial correction: old Sony camera became not_owned, but the requested Nikon replacement was not retained. This is a gold mismatch and missing replacement, not proof that the old retirement itself was false. Do not relax the gold to hide it. V2 did not retain intermediate model proposals, so the exact failing stage is unknown. An offline counterfactual confirmed that a correctly structured single replacement correction is preserved by the reconciler; that is code-path evidence only. One NEW fictional Hindi headphones development case attempted to observe the intermediate output, but timed out before any raw response. It consumed one single-send request and did not resolve the cause. No further inference followed.
+
+The two capture segments used56 verified single-send requests and reported36,178 returned-response tokens. Failed/cancelled billing is unknown. First segment request p50/p95:2.40/7.33s (n44); continuation:9.54/10.01s (n12). Accepted-turn callback p50/p95:0.493/0.875ms versus baseline0.023/0.036ms (n48, controlled fictional harness). These do not establish voice latency, hardware profile or owner UX. The separate development timeout had a17.5ms callback outlier and is not included in the frozen cohort metric.
+
+Final conservative cumulative upper bound: **262/270**, leaving8 sends. Historical actual send/billing counts remain unknown; the reserve methodology is unchanged. No paid fallback/account change/quota purchase, no work-role answer request after429, and no owner-device activation. The eight remaining sends cannot complete a genuinely fresh full90/30-pair qualification. Further live investigation/qualification requires a concrete new bounded budget and existing-provider availability; until then retain the draft/unaccepted/default-OFF state.
+
+Reproducible combined evidence: [aggregate](../../benchmarks/results/personal-auto-learning-2026-10-22-capture-v2-aggregate.json), [first segment](../../benchmarks/results/personal-auto-learning-2026-10-22-capture-v2/summary.json), [remaining-only segment](../../benchmarks/results/personal-auto-learning-2026-10-22-capture-v2-remaining/summary.json), [new development probe](../../benchmarks/results/personal-auto-learning-2026-10-22-new-correction-diagnosis/summary.json). Existing v1 artifacts remain immutable.

@@ -29,7 +29,7 @@ change production reality.
 
 ### Automatic learning candidate — not yet accepted
 
-The feature branch adds ordinary conversational learning in the normal app. It is OFF by default; provider qualification stopped on HTTP 429 and broader quality/owner acceptance are pending. See the [report and limitations](docs/research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). Do not treat this as an accepted production release.
+The feature branch adds ordinary conversational learning in the normal app. It is OFF by default; original qualification missed the recall target and answering encountered HTTP429; the fresh capture subset has partial-correction/timeouts and broader quality/owner acceptance remain pending. See the [report and limitations](docs/research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). Do not treat this as an accepted production release.
 
 For a later reviewed candidate test, the whole normal app command is:
 

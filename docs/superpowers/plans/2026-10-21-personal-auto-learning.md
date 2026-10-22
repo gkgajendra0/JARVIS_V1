@@ -10,7 +10,7 @@
 
 **Spec:** [Approved design](../specs/2026-10-21-personal-auto-learning-design.md), owner reply **“Approve written design”**, 21 October 2026. Approved initial spec commit: `03f29dcb`.
 
-**Status:** executable plan prepared for owner review; implementation has not started. Execution method remains to be selected. Keep work in the owner's existing Desktop checkout, branch `feat/personal-auto-learning-20261021`, honoring the earlier request to use that checkout. Never overwrite unrelated local changes; if parallel edits appear, isolate/reconcile before mutation.
+**Status (22 October 2026):** owner approved design/plan and Native execution; Tasks1–8 are implemented. Task9 quality/owner gates remain incomplete, and Task10 review/docs are underway. One final independent review and six TDD repairs are complete; no promotion or activation. See the dated qualification report for current evidence. Keep work in the owner's existing Desktop checkout, branch `feat/personal-auto-learning-20261021`, honoring the earlier request to use that checkout. Never overwrite unrelated local changes; if parallel edits appear, isolate/reconcile before mutation.
 
 ## Global Constraints
 
