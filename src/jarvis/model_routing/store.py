@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from jarvis.model_routing.eligibility import TargetHealthEligibility
 from jarvis.model_routing.health import TargetHealthRecord
@@ -17,6 +19,8 @@ from jarvis.model_routing.models import (
     RoutingDecision,
     RoutingOutcome,
     RoutingRequest,
+    ScopedRoutingAttempt,
+    ScopedRoutingRequest,
     TargetExclusion,
 )
 from jarvis.work.store import SQLiteWorkStore
@@ -277,6 +281,24 @@ class PersistedRoutingDecision:
     stage_key: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class PersistedScopedRoutingDecision:
+    scope_kind: str
+    scope_id: str
+    request_digest: str
+    registry_digest: str
+    eligibility: EligibilitySnapshot
+    decision: RoutingDecision
+
+
+def scoped_request_digest(request: ScopedRoutingRequest) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            asdict(request), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode()
+    ).hexdigest()
+
+
 class ModelRoutingStore:
     """Append-only routing lineage plus CAS target health in WorkStore SQLite."""
 
@@ -353,6 +375,32 @@ class ModelRoutingStore:
                     FOREIGN KEY(work_id) REFERENCES work_items(work_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS model_routing_registry_snapshots (
+                    registry_digest TEXT PRIMARY KEY,
+                    snapshot_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_scoped_routing_decisions (
+                    decision_id TEXT PRIMARY KEY,
+                    routing_request_id TEXT NOT NULL UNIQUE,
+                    scope_kind TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    request_digest TEXT NOT NULL,
+                    registry_digest TEXT NOT NULL,
+                    decision_json TEXT NOT NULL,
+                    eligibility_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_scoped_routing_attempts (
+                    attempt_id TEXT PRIMARY KEY,
+                    decision_id TEXT NOT NULL,
+                    scope_kind TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    attempt_ordinal INTEGER NOT NULL,
+                    attempt_json TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_scoped_routing_decisions(decision_id),
+                    UNIQUE(decision_id,attempt_ordinal)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_model_routing_decisions_work
                     ON model_routing_decisions(work_id, created_at_epoch);
                 CREATE INDEX IF NOT EXISTS idx_model_routing_attempts_decision
@@ -383,7 +431,7 @@ class ModelRoutingStore:
         decision: RoutingDecision,
         registry_digest: str,
     ) -> str:
-        if not isinstance(request, RoutingRequest):
+        if not isinstance(request, (RoutingRequest, ScopedRoutingRequest)):
             raise TypeError("request must be a RoutingRequest")
         if not isinstance(eligibility, EligibilitySnapshot):
             raise TypeError("eligibility must be an EligibilitySnapshot")
@@ -857,3 +905,199 @@ class ModelRoutingStore:
                     f"{record.target_id} expected v{expected_version}"
                 )
         return record
+
+    def save_registry_snapshot(self, snapshot: dict) -> None:
+        if not isinstance(snapshot, dict) or set(snapshot) != {
+            "schema_version",
+            "registry_digest",
+            "targets",
+        }:
+            raise ValueError("Invalid registry snapshot")
+        if (
+            type(snapshot["schema_version"]) is not int
+            or snapshot["schema_version"] != 1
+        ):
+            raise ValueError("Invalid registry snapshot version")
+        if (
+            not isinstance(snapshot["targets"], list)
+            or not 0 < len(snapshot["targets"]) <= 128
+        ):
+            raise ValueError("Invalid registry snapshot targets")
+        digest = _sha256(snapshot["registry_digest"], field="registry_digest")
+        actual = hashlib.sha256(
+            json.dumps(
+                snapshot["targets"],
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        if actual != digest:
+            raise ValueError("Registry snapshot digest mismatch")
+        encoded = self._work_store.encode_extension_json(snapshot)
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT snapshot_json FROM model_routing_registry_snapshots WHERE registry_digest=?",
+                (digest,),
+            ).fetchone()
+            if row is not None:
+                if (
+                    self._work_store.decode_extension_json(row["snapshot_json"])
+                    != snapshot
+                ):
+                    raise ValueError("Registry snapshot is immutable")
+                return
+            connection.execute(
+                "INSERT INTO model_routing_registry_snapshots VALUES (?,?)",
+                (digest, encoded),
+            )
+
+    def get_registry_snapshot(self, digest: str) -> dict | None:
+        digest = _sha256(digest, field="registry_digest")
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT snapshot_json FROM model_routing_registry_snapshots WHERE registry_digest=?",
+                (digest,),
+            ).fetchone()
+        return (
+            None
+            if row is None
+            else self._work_store.decode_extension_json(row["snapshot_json"])
+        )
+
+    def record_scoped_decision(
+        self,
+        *,
+        request: ScopedRoutingRequest,
+        eligibility: EligibilitySnapshot,
+        decision: RoutingDecision,
+        registry_digest: str,
+    ) -> PersistedScopedRoutingDecision:
+        if not isinstance(request, ScopedRoutingRequest):
+            raise TypeError("ScopedRoutingRequest required")
+        digest = self._validate_decision_inputs(
+            request, eligibility, decision, registry_digest
+        )
+        request_digest = scoped_request_digest(request)
+        try:
+            with self._work_store.extension_transaction() as connection:
+                connection.execute(
+                    "INSERT INTO model_scoped_routing_decisions VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        decision.decision_id,
+                        request.routing_request_id,
+                        request.scope_kind,
+                        request.scope_id,
+                        request_digest,
+                        digest,
+                        self._work_store.encode_extension_json(
+                            _decision_payload(decision)
+                        ),
+                        self._work_store.encode_extension_json(
+                            _snapshot_payload(eligibility)
+                        ),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise RoutingStoreError("Scoped decision identity already exists") from exc
+        return PersistedScopedRoutingDecision(
+            request.scope_kind,
+            request.scope_id,
+            request_digest,
+            digest,
+            eligibility,
+            decision,
+        )
+
+    def find_scoped_decision_by_request(
+        self, request_id: str
+    ) -> PersistedScopedRoutingDecision | None:
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_scoped_routing_decisions WHERE routing_request_id=?",
+                (request_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return PersistedScopedRoutingDecision(
+            scope_kind=row["scope_kind"],
+            scope_id=row["scope_id"],
+            request_digest=row["request_digest"],
+            registry_digest=row["registry_digest"],
+            eligibility=_snapshot_from_payload(
+                self._work_store.decode_extension_json(row["eligibility_json"])
+            ),
+            decision=_decision_from_payload(
+                self._work_store.decode_extension_json(row["decision_json"])
+            ),
+        )
+
+    def record_scoped_attempt(
+        self, attempt: ScopedRoutingAttempt
+    ) -> ScopedRoutingAttempt:
+        if not isinstance(attempt, ScopedRoutingAttempt):
+            raise TypeError("ScopedRoutingAttempt required")
+        data = asdict(attempt)
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_scoped_routing_decisions WHERE decision_id=?",
+                (attempt.decision_id,),
+            ).fetchone()
+            if row is None or (row["scope_kind"], row["scope_id"]) != (
+                attempt.scope_kind,
+                attempt.scope_id,
+            ):
+                raise RoutingStoreError("Scoped attempt does not match decision scope")
+            decision = _decision_from_payload(
+                self._work_store.decode_extension_json(row["decision_json"])
+            )
+            if attempt.target_id not in decision.ordered_target_ids:
+                raise RoutingStoreError("Scoped attempt target outside decision")
+            existing = connection.execute(
+                "SELECT attempt_json FROM model_scoped_routing_attempts WHERE attempt_id=?",
+                (attempt.attempt_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    self._work_store.decode_extension_json(existing["attempt_json"])
+                    != data
+                ):
+                    raise RoutingStoreError("Scoped attempt identity collision")
+                return attempt
+            last = connection.execute(
+                "SELECT MAX(attempt_ordinal) FROM model_scoped_routing_attempts WHERE decision_id=?",
+                (attempt.decision_id,),
+            ).fetchone()[0]
+            if attempt.attempt_ordinal != (last or 0) + 1:
+                raise RoutingStoreError("Scoped attempt order is not contiguous")
+            connection.execute(
+                "INSERT INTO model_scoped_routing_attempts VALUES (?,?,?,?,?,?,?)",
+                (
+                    attempt.attempt_id,
+                    attempt.decision_id,
+                    attempt.scope_kind,
+                    attempt.scope_id,
+                    attempt.target_id,
+                    attempt.attempt_ordinal,
+                    self._work_store.encode_extension_json(data),
+                ),
+            )
+        return attempt
+
+    def list_scoped_attempts(
+        self, decision_id: str
+    ) -> tuple[ScopedRoutingAttempt, ...]:
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                "SELECT attempt_json FROM model_scoped_routing_attempts WHERE decision_id=? ORDER BY attempt_ordinal",
+                (decision_id,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            data = self._work_store.decode_extension_json(row["attempt_json"])
+            data["kind"] = RoutingAttemptKind(data["kind"])
+            data["response_contract_result"] = ResponseContractResult(
+                data["response_contract_result"]
+            )
+            result.append(ScopedRoutingAttempt(**data))
+        return tuple(result)

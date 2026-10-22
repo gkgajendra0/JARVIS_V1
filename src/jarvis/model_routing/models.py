@@ -354,107 +354,9 @@ class RoutingRequest:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self,
-            "routing_request_id",
-            _required_text(
-                self.routing_request_id,
-                field="routing_request_id",
-            ),
+            self, "work_id", _required_text(self.work_id, field="work_id")
         )
-        object.__setattr__(
-            self,
-            "work_id",
-            _required_text(self.work_id, field="work_id"),
-        )
-        object.__setattr__(
-            self,
-            "task_kind",
-            _token(self.task_kind, field="task_kind"),
-        )
-        object.__setattr__(
-            self,
-            "strategy_key",
-            _token(self.strategy_key, field="strategy_key"),
-        )
-        object.__setattr__(
-            self,
-            "strategy_version",
-            _positive_int(
-                self.strategy_version,
-                field="strategy_version",
-            ),
-        )
-        object.__setattr__(
-            self,
-            "required_capabilities",
-            _tokens(
-                self.required_capabilities,
-                field="required_capability",
-            ),
-        )
-        if not isinstance(self.privacy_class, PrivacyClass):
-            raise TypeError("privacy_class must be a PrivacyClass")
-        if not isinstance(self.locality_requirement, LocalityRequirement):
-            raise TypeError("locality_requirement must be a LocalityRequirement")
-        object.__setattr__(
-            self,
-            "estimated_context_tokens",
-            _non_negative_int(
-                self.estimated_context_tokens,
-                field="estimated_context_tokens",
-            ),
-        )
-        if not isinstance(self.evidence_size_class, EvidenceSizeClass):
-            raise TypeError("evidence_size_class must be an EvidenceSizeClass")
-        object.__setattr__(
-            self,
-            "recent_progress_signals",
-            _tokens(
-                self.recent_progress_signals,
-                field="recent_progress_signal",
-            ),
-        )
-        object.__setattr__(
-            self,
-            "recent_failure_signals",
-            _tokens(
-                self.recent_failure_signals,
-                field="recent_failure_signal",
-            ),
-        )
-        object.__setattr__(
-            self,
-            "latency_preference",
-            _token(
-                self.latency_preference,
-                field="latency_preference",
-            ),
-        )
-        object.__setattr__(
-            self,
-            "cost_preference",
-            _token(self.cost_preference, field="cost_preference"),
-        )
-        object.__setattr__(
-            self,
-            "change_id",
-            _optional_text(self.change_id),
-        )
-        object.__setattr__(
-            self,
-            "stage_key",
-            _optional_text(self.stage_key),
-        )
-        object.__setattr__(
-            self,
-            "affinity_key",
-            _optional_text(self.affinity_key),
-        )
-        object.__setattr__(
-            self,
-            "routing_features",
-            _feature_map(self.routing_features),
-        )
+        _validate_routing_facts(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -790,132 +692,9 @@ class RoutingAttempt:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self,
-            "attempt_id",
-            _required_text(self.attempt_id, field="attempt_id"),
+            self, "work_id", _required_text(self.work_id, field="work_id")
         )
-        object.__setattr__(
-            self,
-            "decision_id",
-            _required_text(self.decision_id, field="decision_id"),
-        )
-        object.__setattr__(
-            self,
-            "work_id",
-            _required_text(self.work_id, field="work_id"),
-        )
-        object.__setattr__(
-            self,
-            "target_id",
-            _token(self.target_id, field="target_id"),
-        )
-        object.__setattr__(
-            self,
-            "attempt_ordinal",
-            _positive_int(
-                self.attempt_ordinal,
-                field="attempt_ordinal",
-            ),
-        )
-        started = _epoch(
-            self.started_at_epoch,
-            field="started_at_epoch",
-        )
-        ended = _optional_epoch(
-            self.ended_at_epoch,
-            field="ended_at_epoch",
-        )
-        if ended is not None and ended < started:
-            raise ValueError("ended_at_epoch cannot precede started_at_epoch")
-        object.__setattr__(
-            self,
-            "started_at_epoch",
-            started,
-        )
-        object.__setattr__(
-            self,
-            "ended_at_epoch",
-            ended,
-        )
-        object.__setattr__(
-            self,
-            "latency_ms",
-            _non_negative_float(
-                self.latency_ms,
-                field="latency_ms",
-            ),
-        )
-        object.__setattr__(
-            self,
-            "failure_class",
-            _optional_text(self.failure_class),
-        )
-        provider_id = _optional_text(self.provider_id)
-        object.__setattr__(
-            self,
-            "provider_id",
-            None if provider_id is None else provider_id.casefold(),
-        )
-        object.__setattr__(
-            self,
-            "model_id",
-            _optional_text(self.model_id),
-        )
-        stage_key = _optional_text(self.stage_key)
-        object.__setattr__(
-            self,
-            "stage_key",
-            None if stage_key is None else stage_key.casefold(),
-        )
-        normalized_usage: dict[str, int | float] = {}
-        for key, value in self.usage.items():
-            normalized_key = _token(
-                key,
-                field="usage key",
-            )
-            normalized_value = _non_negative_float(
-                value,
-                field=f"usage[{normalized_key}]",
-            )
-            assert normalized_value is not None
-            normalized_usage[normalized_key] = normalized_value
-        object.__setattr__(
-            self,
-            "usage",
-            normalized_usage,
-        )
-        usage_observed = self.usage_observed
-        if usage_observed is None:
-            usage_observed = bool(normalized_usage)
-        if not isinstance(usage_observed, bool):
-            raise TypeError("usage_observed must be a bool or None")
-        if normalized_usage and not usage_observed:
-            raise ValueError("non-empty usage requires usage_observed=True")
-        object.__setattr__(
-            self,
-            "usage_observed",
-            usage_observed,
-        )
-        object.__setattr__(
-            self,
-            "estimated_cost_usd",
-            _non_negative_float(
-                self.estimated_cost_usd,
-                field="estimated_cost_usd",
-            ),
-        )
-        if not isinstance(self.kind, RoutingAttemptKind):
-            raise TypeError("kind must be a RoutingAttemptKind")
-        if not isinstance(
-            self.response_contract_result,
-            ResponseContractResult,
-        ):
-            raise TypeError("response_contract_result must be a ResponseContractResult")
-        object.__setattr__(
-            self,
-            "correlation_key",
-            _optional_text(self.correlation_key),
-        )
+        _validate_attempt_facts(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1045,3 +824,290 @@ class RoutingOutcome:
             "outcome_evidence_reference",
             _optional_text(self.outcome_evidence_reference),
         )
+
+
+def _validate_inference_scope(self) -> None:
+    if self.scope_kind not in {"voice", "hands", "memory"}:
+        raise ValueError("Unsupported inference scope")
+    if not isinstance(self.scope_id, str) or not self.scope_id.strip():
+        raise ValueError("Inference scope_id required")
+    object.__setattr__(self, "scope_id", self.scope_id.strip())
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedRoutingRequest:
+    scope_kind: str
+    scope_id: str
+    routing_request_id: str
+    task_kind: str
+    strategy_key: str
+    strategy_version: int
+    required_capabilities: tuple[str, ...]
+    privacy_class: PrivacyClass
+    locality_requirement: LocalityRequirement
+    estimated_context_tokens: int
+    evidence_size_class: EvidenceSizeClass
+    recent_progress_signals: tuple[str, ...]
+    recent_failure_signals: tuple[str, ...]
+    latency_preference: str
+    cost_preference: str
+    change_id: str | None = None
+    stage_key: str | None = None
+    affinity_key: str | None = None
+    routing_features: dict[str, RoutingFeatureValue] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _validate_inference_scope(self)
+        _validate_routing_facts(self)
+
+
+def _validate_routing_facts(self) -> None:
+    object.__setattr__(
+        self,
+        "routing_request_id",
+        _required_text(
+            self.routing_request_id,
+            field="routing_request_id",
+        ),
+    )
+    object.__setattr__(
+        self,
+        "task_kind",
+        _token(self.task_kind, field="task_kind"),
+    )
+    object.__setattr__(
+        self,
+        "strategy_key",
+        _token(self.strategy_key, field="strategy_key"),
+    )
+    object.__setattr__(
+        self,
+        "strategy_version",
+        _positive_int(
+            self.strategy_version,
+            field="strategy_version",
+        ),
+    )
+    object.__setattr__(
+        self,
+        "required_capabilities",
+        _tokens(
+            self.required_capabilities,
+            field="required_capability",
+        ),
+    )
+    if not isinstance(self.privacy_class, PrivacyClass):
+        raise TypeError("privacy_class must be a PrivacyClass")
+    if not isinstance(self.locality_requirement, LocalityRequirement):
+        raise TypeError("locality_requirement must be a LocalityRequirement")
+    object.__setattr__(
+        self,
+        "estimated_context_tokens",
+        _non_negative_int(
+            self.estimated_context_tokens,
+            field="estimated_context_tokens",
+        ),
+    )
+    if not isinstance(self.evidence_size_class, EvidenceSizeClass):
+        raise TypeError("evidence_size_class must be an EvidenceSizeClass")
+    object.__setattr__(
+        self,
+        "recent_progress_signals",
+        _tokens(
+            self.recent_progress_signals,
+            field="recent_progress_signal",
+        ),
+    )
+    object.__setattr__(
+        self,
+        "recent_failure_signals",
+        _tokens(
+            self.recent_failure_signals,
+            field="recent_failure_signal",
+        ),
+    )
+    object.__setattr__(
+        self,
+        "latency_preference",
+        _token(
+            self.latency_preference,
+            field="latency_preference",
+        ),
+    )
+    object.__setattr__(
+        self,
+        "cost_preference",
+        _token(self.cost_preference, field="cost_preference"),
+    )
+    object.__setattr__(
+        self,
+        "change_id",
+        _optional_text(self.change_id),
+    )
+    object.__setattr__(
+        self,
+        "stage_key",
+        _optional_text(self.stage_key),
+    )
+    object.__setattr__(
+        self,
+        "affinity_key",
+        _optional_text(self.affinity_key),
+    )
+    object.__setattr__(
+        self,
+        "routing_features",
+        _feature_map(self.routing_features),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedRoutingAttempt:
+    scope_kind: str
+    scope_id: str
+    attempt_id: str
+    decision_id: str
+    target_id: str
+    attempt_ordinal: int
+    started_at_epoch: float
+    kind: RoutingAttemptKind
+    ended_at_epoch: float | None = None
+    latency_ms: float | None = None
+    failure_class: str | None = None
+    provider_id: str | None = None
+    model_id: str | None = None
+    stage_key: str | None = None
+    usage: dict[str, int | float] = field(default_factory=dict)
+    usage_observed: bool | None = None
+    estimated_cost_usd: float | None = None
+    response_contract_result: ResponseContractResult = ResponseContractResult.UNKNOWN
+    correlation_key: str | None = None
+
+    def __post_init__(self) -> None:
+        _validate_inference_scope(self)
+        _validate_attempt_facts(self)
+
+
+def _validate_attempt_facts(self) -> None:
+    object.__setattr__(
+        self,
+        "attempt_id",
+        _required_text(self.attempt_id, field="attempt_id"),
+    )
+    object.__setattr__(
+        self,
+        "decision_id",
+        _required_text(self.decision_id, field="decision_id"),
+    )
+    object.__setattr__(
+        self,
+        "target_id",
+        _token(self.target_id, field="target_id"),
+    )
+    object.__setattr__(
+        self,
+        "attempt_ordinal",
+        _positive_int(
+            self.attempt_ordinal,
+            field="attempt_ordinal",
+        ),
+    )
+    started = _epoch(
+        self.started_at_epoch,
+        field="started_at_epoch",
+    )
+    ended = _optional_epoch(
+        self.ended_at_epoch,
+        field="ended_at_epoch",
+    )
+    if ended is not None and ended < started:
+        raise ValueError("ended_at_epoch cannot precede started_at_epoch")
+    object.__setattr__(
+        self,
+        "started_at_epoch",
+        started,
+    )
+    object.__setattr__(
+        self,
+        "ended_at_epoch",
+        ended,
+    )
+    object.__setattr__(
+        self,
+        "latency_ms",
+        _non_negative_float(
+            self.latency_ms,
+            field="latency_ms",
+        ),
+    )
+    object.__setattr__(
+        self,
+        "failure_class",
+        _optional_text(self.failure_class),
+    )
+    provider_id = _optional_text(self.provider_id)
+    object.__setattr__(
+        self,
+        "provider_id",
+        None if provider_id is None else provider_id.casefold(),
+    )
+    object.__setattr__(
+        self,
+        "model_id",
+        _optional_text(self.model_id),
+    )
+    stage_key = _optional_text(self.stage_key)
+    object.__setattr__(
+        self,
+        "stage_key",
+        None if stage_key is None else stage_key.casefold(),
+    )
+    normalized_usage: dict[str, int | float] = {}
+    for key, value in self.usage.items():
+        normalized_key = _token(
+            key,
+            field="usage key",
+        )
+        normalized_value = _non_negative_float(
+            value,
+            field=f"usage[{normalized_key}]",
+        )
+        assert normalized_value is not None
+        normalized_usage[normalized_key] = normalized_value
+    object.__setattr__(
+        self,
+        "usage",
+        normalized_usage,
+    )
+    usage_observed = self.usage_observed
+    if usage_observed is None:
+        usage_observed = bool(normalized_usage)
+    if not isinstance(usage_observed, bool):
+        raise TypeError("usage_observed must be a bool or None")
+    if normalized_usage and not usage_observed:
+        raise ValueError("non-empty usage requires usage_observed=True")
+    object.__setattr__(
+        self,
+        "usage_observed",
+        usage_observed,
+    )
+    object.__setattr__(
+        self,
+        "estimated_cost_usd",
+        _non_negative_float(
+            self.estimated_cost_usd,
+            field="estimated_cost_usd",
+        ),
+    )
+    if not isinstance(self.kind, RoutingAttemptKind):
+        raise TypeError("kind must be a RoutingAttemptKind")
+    if not isinstance(
+        self.response_contract_result,
+        ResponseContractResult,
+    ):
+        raise TypeError("response_contract_result must be a ResponseContractResult")
+    object.__setattr__(
+        self,
+        "correlation_key",
+        _optional_text(self.correlation_key),
+    )

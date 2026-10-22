@@ -13,6 +13,7 @@ from jarvis.ai_provider import (
     normalize_ai_provider,
     provider_api_key,
     resolve_ai_role_model,
+    resolve_target_api_key,
 )
 from jarvis.chatgpt_plan import (
     CHATGPT_PLAN_PROVIDER_ID,
@@ -35,6 +36,7 @@ from jarvis.model_routing.models import (
     PrivacyClass,
     RoutingDecision,
     RoutingRequest,
+    ScopedRoutingRequest,
 )
 from jarvis.model_routing.registry import (
     ModelAdapterRegistry,
@@ -44,7 +46,9 @@ from jarvis.model_routing.registry import (
 from jarvis.model_routing.store import (
     ModelRoutingStore,
     PersistedRoutingDecision,
+    PersistedScopedRoutingDecision,
     RoutingStoreError,
+    scoped_request_digest,
 )
 from jarvis.model_routing.strategy import derive_work_step_signals
 from jarvis.work.brain import BrainRequest
@@ -354,11 +358,12 @@ class RoutingResourceBlocked(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class RoutedSelection:
-    request: RoutingRequest
+    request: RoutingRequest | ScopedRoutingRequest
     decision: RoutingDecision
     target: ModelTarget
     eligibility: EligibilitySnapshot
     reused_decision: bool = False
+    registry: ModelTargetRegistry | None = None
 
 
 CredentialAvailability = Callable[[ModelTarget], bool]
@@ -368,8 +373,10 @@ def _default_credential_availability(target: ModelTarget) -> bool:
     if target.credential_ref is None:
         return True
     try:
+        if target.credential_ref == "JARVIS_GEMINI_PAID_API_KEY":
+            return bool(resolve_target_api_key(target))
         return provider_api_key(target.provider_id) is not None
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, RuntimeError):
         return False
 
 
@@ -387,6 +394,7 @@ class ModelRouter:
         credential_available: CredentialAvailability = _default_credential_availability,
         clock: Callable[[], float] = time.time,
         fallback_budget: int = 1,
+        historical_registries: dict[str, ModelTargetRegistry] | None = None,
     ) -> None:
         if fallback_budget < 0:
             raise ValueError("fallback_budget must not be negative")
@@ -398,6 +406,12 @@ class ModelRouter:
         self._credential_available = credential_available
         self._clock = clock
         self._fallback_budget = fallback_budget
+        self._historical_registries = dict(historical_registries or {})
+        if any(
+            key != registry.digest()
+            for key, registry in self._historical_registries.items()
+        ):
+            raise ValueError("Historical registry digest mismatch")
 
     def _runtime_state(self, *, now_epoch: float) -> EligibilityRuntimeState:
         credentials: dict[str, bool] = {}
@@ -434,37 +448,70 @@ class ModelRouter:
 
     def _reused_selection(
         self,
-        request: RoutingRequest,
-        persisted: PersistedRoutingDecision,
+        request: RoutingRequest | ScopedRoutingRequest,
+        persisted: PersistedRoutingDecision | PersistedScopedRoutingDecision,
     ) -> RoutedSelection:
-        registry_digest = self.target_registry.digest()
-        if persisted.registry_digest != registry_digest:
-            raise RoutingProvenanceError(
-                "persisted routing decision registry digest does not match"
-            )
+        if isinstance(request, ScopedRoutingRequest) and (
+            not isinstance(persisted, PersistedScopedRoutingDecision)
+            or persisted.request_digest != scoped_request_digest(request)
+        ):
+            raise RoutingProvenanceError("Scoped request identity/metadata mismatch")
+        registry = self.target_registry
+        if persisted.registry_digest != registry.digest():
+            registry = self._historical_registries.get(persisted.registry_digest)
+            if registry is None:
+                snapshot = self.routing_store.get_registry_snapshot(
+                    persisted.registry_digest
+                )
+                if snapshot is not None:
+                    try:
+                        registry = ModelTargetRegistry.from_snapshot(
+                            snapshot, adapter_registry=self.adapter_registry
+                        )
+                    except (ValueError, TypeError, KeyError) as exc:
+                        raise RoutingProvenanceError(
+                            "Historical routing registry is invalid"
+                        ) from exc
+            if registry is None:
+                raise RoutingProvenanceError(
+                    "persisted routing decision registry digest does not match"
+                )
         if persisted.eligibility.policy_digest != self.eligibility_policy.policy_digest:
             raise RoutingProvenanceError(
                 "persisted routing decision policy digest does not match"
             )
-        target = self.target_registry.require(persisted.decision.selected_target_id)
         return RoutedSelection(
             request=request,
             decision=persisted.decision,
-            target=target,
+            target=registry.require(persisted.decision.selected_target_id),
             eligibility=persisted.eligibility,
             reused_decision=True,
+            registry=registry,
         )
 
-    def route(self, request: RoutingRequest) -> RoutedSelection:
-        if not isinstance(request, RoutingRequest):
+    def route(self, request: RoutingRequest | ScopedRoutingRequest) -> RoutedSelection:
+        if not isinstance(request, (RoutingRequest, ScopedRoutingRequest)):
             raise TypeError("request must be a RoutingRequest")
 
-        persisted = self.routing_store.find_decision_by_request(
-            request.routing_request_id
+        scoped = isinstance(request, ScopedRoutingRequest)
+        lookup = (
+            self.routing_store.find_scoped_decision_by_request
+            if scoped
+            else self.routing_store.find_decision_by_request
         )
+        record = (
+            self.routing_store.record_scoped_decision
+            if scoped
+            else self.routing_store.record_decision
+        )
+        persisted = lookup(request.routing_request_id)
         if persisted is not None:
             return self._reused_selection(request, persisted)
 
+        if scoped or any(t.registry_version >= 2 for t in self.target_registry.all()):
+            self.routing_store.save_registry_snapshot(
+                self.target_registry.to_snapshot()
+            )
         now = float(self._clock())
         eligibility = self.eligibility_policy.evaluate(
             request=request,
@@ -519,16 +566,14 @@ class ModelRouter:
             created_at_epoch=now,
         )
         try:
-            persisted = self.routing_store.record_decision(
+            persisted = record(
                 request=request,
                 eligibility=eligibility.snapshot,
                 decision=decision,
                 registry_digest=self.target_registry.digest(),
             )
         except RoutingStoreError:
-            persisted = self.routing_store.find_decision_by_request(
-                request.routing_request_id
-            )
+            persisted = lookup(request.routing_request_id)
             if persisted is None:
                 raise
             return self._reused_selection(request, persisted)
@@ -539,4 +584,5 @@ class ModelRouter:
             target=self.target_registry.require(persisted.decision.selected_target_id),
             eligibility=persisted.eligibility,
             reused_decision=False,
+            registry=self.target_registry,
         )

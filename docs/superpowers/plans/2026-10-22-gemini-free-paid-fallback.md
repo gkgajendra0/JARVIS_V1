@@ -56,11 +56,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** `ScopedRoutingRequest` has routing_request_id, scope_kind(voice/hands/memory), scope_id and existing non-Work eligibility/strategy facts: task_kind, strategy_key/version, required_capabilities, privacy_class, locality_requirement, estimated_context_tokens, evidence_size_class, recent_progress/failure_signals, latency_preference, cost_preference, routing_features. No work_id/fake WorkItem. Extend `ModelRouter.route(request: RoutingRequest|ScopedRoutingRequest) -> RoutedSelection` and EligibilityPolicy through the same selection algorithm. Store adds `record_scoped_decision`, `find_scoped_decision_by_request`, `record_scoped_attempt` plus immutable registry snapshots; old Work methods/tables remain intact. `ModelTargetRegistry.to_snapshot()`/source-allowlisted `from_snapshot(...)` and replay resolve recorded digest/policy, not current config. RoutedSelection.request accepts the union.
 
-- [ ] **Step1 — Failing tests:** scope decisions/health/eligibility create no WorkItem; old payload golden fixtures/digest remain exact; v2 reloads original targets after config changes; tampered/unrecoverable snapshot fails closed; v1 replay remains valid while new requests enable fallback.
-- [ ] **Step2 — RED:** run scoped/replay tests; require unsupported request/persistence failures.
-- [ ] **Step3 — Implement additive scope/registry tables** with extension_transaction/encoded payloads; preserve old digest shape when additions absent. Validate scope/request/decision identity transactionally; factor shared selection/persistence dispatch, no second policy class.
-- [ ] **Step4 — GREEN:** new tests plus `test_model_routing_store.py`, `test_model_routing_eligibility.py`, `test_model_routing_status.py`, `test_global_brain_router.py`.
-- [ ] **Step5 — Commit:** `feat(routing): persist scoped inference with legacy replay compatibility`.
+- [x] **Step1 — Failing tests:** scope decisions/health/eligibility create no WorkItem; old payload golden fixtures/digest remain exact; v2 reloads original targets after config changes; tampered/unrecoverable snapshot fails closed; v1 replay remains valid while new requests enable fallback.
+- [x] **Step2 — RED:** run scoped/replay tests; require unsupported request/persistence failures.
+- [x] **Step3 — Implement additive scope/registry tables** with extension_transaction/encoded payloads; preserve old digest shape when additions absent. Validate scope/request/decision identity transactionally; factor shared selection/persistence dispatch, no second policy class.
+- [x] **Step4 — GREEN:** new tests plus `test_model_routing_store.py`, `test_model_routing_eligibility.py`, `test_model_routing_status.py`, `test_global_brain_router.py`.
+- [x] **Step5 — Commit:** `feat(routing): persist scoped inference with legacy replay compatibility`.
 
 ### Task 3: Versioned prices, shared atomic reservations and unknown costs
 
