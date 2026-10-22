@@ -1,0 +1,123 @@
+{
+  "rows": [
+    {
+      "id": "en-fresh-v4-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: morning journaling sessions; value=8:35 am; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_efc624930a794e4aa4207e688dc61987",
+          "text": "routine.other: morning journaling sessions; value=8:35 am; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5511999988812022
+      ],
+      "baseline_ms": [
+        0.03319999996165279
+      ],
+      "background_ms": 1753.9366000000882,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                "text": "My morning journaling sessions happen every weekday at 8:35 am."
+              }
+            ],
+            "current_turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "routine",
+                "kind": "other",
+                "intent": "new",
+                "label": "morning journaling sessions",
+                "value": "8:35 am",
+                "evidence": [
+                  {
+                    "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                    "quote": "My morning journaling sessions happen every weekday at 8:35 am."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "ongoing",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "morning journaling sessions",
+            "value": "8:35 am",
+            "evidence": [
+              {
+                "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                "start": 0,
+                "end": 63
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "morning journaling sessions",
+            "value": "8:35 am",
+            "evidence": [
+              {
+                "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                "start": 0,
+                "end": 63
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    }
+  ],
+  "single_send_calls": 11,
+  "conservative_cumulative_send_upper_bound": 304
+}

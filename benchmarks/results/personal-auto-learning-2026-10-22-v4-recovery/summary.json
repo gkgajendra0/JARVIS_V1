@@ -1,0 +1,2361 @@
+{
+  "summary": {
+    "status": "incomplete",
+    "stop_reason": "opportunities_exhausted",
+    "completed": 15,
+    "unavailable": 1,
+    "unrun": 74,
+    "new_complete_pairs": 0,
+    "total_complete_pairs": 6,
+    "answer_unavailable": 4,
+    "recovery_opportunities_used": 3,
+    "recovery_single_send_calls": 11,
+    "conservative_cumulative_send_upper_bound": 304,
+    "remaining_under_532": 228,
+    "accepted": false
+  },
+  "protocol": {
+    "candidate": "5bb72ec01f9d9c794d031734724b6742993d10d1",
+    "product_candidate": "fd7c7025",
+    "prior_summary_sha256": "ad176968387c58e3c3764cba9d95e0e16e78e6f84038769fb9a04a97204ee83b",
+    "input_sha256": "5f23aaafe33d22aec625e7ae5422764060887c7a3e3af2b76fab498033ab9f19",
+    "gold_sha256": "44b16dc01370aae55c69adab771d2351beb3733d8caaabf15a535591220c3617",
+    "approved_maximum_recovery_opportunities": 3,
+    "wait_seconds": [
+      60,
+      120,
+      240
+    ],
+    "prior_cumulative_send_upper_bound": 293,
+    "new_single_send_cap": 239,
+    "cumulative_ceiling": 532,
+    "segment_spacing_seconds": 15,
+    "per_inference_deadline_seconds": 10,
+    "retry_failed_cases": false,
+    "no_model_account_purchase_or_activation_change": true,
+    "accepted": false,
+    "orchestrator_sha256": "46f80017d3f56ce00f37174278285e307ed04ca90cea2b39b371295e5e9f6a28",
+    "initial_unattempted_ids": [
+      "hinglish-fresh-v4-04",
+      "en-fresh-v4-05",
+      "hi-fresh-v4-05",
+      "hinglish-fresh-v4-05",
+      "en-fresh-v4-06",
+      "hi-fresh-v4-06",
+      "hinglish-fresh-v4-06",
+      "en-fresh-v4-07",
+      "hi-fresh-v4-07",
+      "hinglish-fresh-v4-07",
+      "en-fresh-v4-08",
+      "hi-fresh-v4-08",
+      "hinglish-fresh-v4-08",
+      "en-fresh-v4-09",
+      "hi-fresh-v4-09",
+      "hinglish-fresh-v4-09",
+      "en-fresh-v4-10",
+      "hi-fresh-v4-10",
+      "hinglish-fresh-v4-10",
+      "en-fresh-v4-11",
+      "hi-fresh-v4-11",
+      "hinglish-fresh-v4-11",
+      "en-fresh-v4-12",
+      "hi-fresh-v4-12",
+      "hinglish-fresh-v4-12",
+      "en-fresh-v4-13",
+      "hi-fresh-v4-13",
+      "hinglish-fresh-v4-13",
+      "en-fresh-v4-14",
+      "hi-fresh-v4-14",
+      "hinglish-fresh-v4-14",
+      "en-fresh-v4-15",
+      "hi-fresh-v4-15",
+      "hinglish-fresh-v4-15",
+      "en-fresh-v4-16",
+      "hi-fresh-v4-16",
+      "hinglish-fresh-v4-16",
+      "en-fresh-v4-17",
+      "hi-fresh-v4-17",
+      "hinglish-fresh-v4-17",
+      "en-fresh-v4-18",
+      "hi-fresh-v4-18",
+      "hinglish-fresh-v4-18",
+      "en-fresh-v4-19",
+      "hi-fresh-v4-19",
+      "hinglish-fresh-v4-19",
+      "en-fresh-v4-20",
+      "hi-fresh-v4-20",
+      "hinglish-fresh-v4-20",
+      "en-fresh-v4-21",
+      "hi-fresh-v4-21",
+      "hinglish-fresh-v4-21",
+      "en-fresh-v4-22",
+      "hi-fresh-v4-22",
+      "hinglish-fresh-v4-22",
+      "en-fresh-v4-23",
+      "hi-fresh-v4-23",
+      "hinglish-fresh-v4-23",
+      "en-fresh-v4-24",
+      "hi-fresh-v4-24",
+      "hinglish-fresh-v4-24",
+      "en-fresh-v4-25",
+      "hi-fresh-v4-25",
+      "hinglish-fresh-v4-25",
+      "en-fresh-v4-26",
+      "hi-fresh-v4-26",
+      "hinglish-fresh-v4-26",
+      "en-fresh-v4-27",
+      "hi-fresh-v4-27",
+      "hinglish-fresh-v4-27",
+      "en-fresh-v4-28",
+      "hi-fresh-v4-28",
+      "hinglish-fresh-v4-28",
+      "en-fresh-v4-29",
+      "hi-fresh-v4-29",
+      "hinglish-fresh-v4-29",
+      "en-fresh-v4-30",
+      "hi-fresh-v4-30",
+      "hinglish-fresh-v4-30"
+    ]
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "declared_wait_seconds": 60,
+      "healthy": true,
+      "new_attempted_ids": [
+        "hinglish-fresh-v4-04"
+      ]
+    },
+    {
+      "cycle": 2,
+      "declared_wait_seconds": 120,
+      "healthy": true,
+      "new_attempted_ids": [
+        "en-fresh-v4-05",
+        "hi-fresh-v4-05",
+        "hinglish-fresh-v4-05"
+      ]
+    },
+    {
+      "cycle": 3,
+      "declared_wait_seconds": 240,
+      "healthy": true,
+      "new_attempted_ids": [
+        "en-fresh-v4-06"
+      ]
+    }
+  ],
+  "scores": {
+    "completed": 15,
+    "unavailable": 1,
+    "true_positive": 18,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "precision_wilson": [
+      0.8241154494176252,
+      1.0
+    ],
+    "recall_wilson": [
+      0.8241154494176252,
+      1.0
+    ],
+    "languages": {
+      "en": {
+        "completed": 6,
+        "captured": 7,
+        "expected": 7
+      },
+      "hi": {
+        "completed": 5,
+        "captured": 6,
+        "expected": 6
+      },
+      "hinglish": {
+        "completed": 4,
+        "captured": 5,
+        "expected": 5
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 4,
+    "advice_review": "pending blind author review for new pairs; original failures preserved; no owner acceptance",
+    "capture_floor_pass": false,
+    "context_mismatches": []
+  },
+  "rows": [
+    {
+      "id": "en-fresh-v4-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_0c53dfa14042443cb8aaaadc6c52d11d",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        },
+        {
+          "predicate": "owned_item_eabb86ceeb4040cdbdd2ec305a600217",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned"
+        }
+      ],
+      "callback_ms": [
+        20.948299999872688
+      ],
+      "baseline_ms": [
+        0.025499999537714757
+      ],
+      "background_ms": 6632.236000001285,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "text": "My two vehicles are a Toyota Glanza and a Suzuki Gixxer 250."
+              }
+            ],
+            "current_turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Toyota Glanza",
+                "value": "Toyota Glanza",
+                "evidence": [
+                  {
+                    "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                    "quote": "My two vehicles are a Toyota Glanza and a Suzuki Gixxer 250."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              },
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Suzuki Gixxer 250",
+                "value": "Suzuki Gixxer 250",
+                "evidence": [
+                  {
+                    "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                    "quote": "My two vehicles are a Toyota Glanza and a Suzuki Gixxer 250."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hi-fresh-v4-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_824ddb0879264e8ab0b17c8bc9f4ee8c",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned"
+        },
+        {
+          "predicate": "owned_item_afc8926fcc5748cda38d23a163972007",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        20.994300000893418
+      ],
+      "baseline_ms": [
+        0.024900000425986946
+      ],
+      "background_ms": 2608.2332999994833,
+      "answer_status": "paired",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                "text": "मेरे दो वाहन Toyota Glanza और Suzuki Gixxer 250 हैं।"
+              }
+            ],
+            "current_turn_id": "ade9721f-680d-451a-a06b-c576b046a364"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Toyota Glanza",
+                "value": "Toyota Glanza",
+                "evidence": [
+                  {
+                    "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                    "quote": "मेरे दो वाहन Toyota Glanza और Suzuki Gixxer 250 हैं।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              },
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Suzuki Gixxer 250",
+                "value": "Suzuki Gixxer 250",
+                "evidence": [
+                  {
+                    "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                    "quote": "मेरे दो वाहन Toyota Glanza और Suzuki Gixxer 250 हैं।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                "start": 0,
+                "end": 52
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                "start": 0,
+                "end": 52
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                "start": 0,
+                "end": 52
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "ade9721f-680d-451a-a06b-c576b046a364",
+                "start": 0,
+                "end": 52
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hinglish-fresh-v4-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_48c9403b626e42b89bc5704699fb3dbb",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        },
+        {
+          "predicate": "owned_item_70fbcaf7e2874899aa74eb9218768d3d",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5487999987963121
+      ],
+      "baseline_ms": [
+        0.028399999791872688
+      ],
+      "background_ms": 1829.3957999994745,
+      "answer_status": "paired",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                "text": "Mere do vehicles Toyota Glanza aur Suzuki Gixxer 250 hain."
+              }
+            ],
+            "current_turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Toyota Glanza",
+                "value": "Toyota Glanza",
+                "evidence": [
+                  {
+                    "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                    "quote": "Mere do vehicles Toyota Glanza aur Suzuki Gixxer 250 hain."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              },
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Suzuki Gixxer 250",
+                "value": "Suzuki Gixxer 250",
+                "evidence": [
+                  {
+                    "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                    "quote": "Mere do vehicles Toyota Glanza aur Suzuki Gixxer 250 hain."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                "start": 0,
+                "end": 58
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                "start": 0,
+                "end": 58
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                "start": 0,
+                "end": 58
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "1c18d295-a91f-42e9-afbc-27dc96661a1f",
+                "start": 0,
+                "end": 58
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "en-fresh-v4-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: Keychron K8 Pro keyboard; value=Keychron K8 Pro keyboard; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_c0b9c5a8bb514e03a0ff1976d42d0138",
+          "text": "owned_item.device: Keychron K8 Pro keyboard; value=Keychron K8 Pro keyboard; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5163999994692858
+      ],
+      "baseline_ms": [
+        0.02769999991869554
+      ],
+      "background_ms": 2434.941699999399,
+      "answer_status": "paired",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "abf65118-0b5d-49ce-811a-cc7f988e2a45",
+                "text": "I use my own Keychron K8 Pro keyboard every day."
+              }
+            ],
+            "current_turn_id": "abf65118-0b5d-49ce-811a-cc7f988e2a45"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "device",
+                "intent": "new",
+                "label": "Keychron K8 Pro keyboard",
+                "value": "Keychron K8 Pro keyboard",
+                "evidence": [
+                  {
+                    "turn_id": "abf65118-0b5d-49ce-811a-cc7f988e2a45",
+                    "quote": "I use my own Keychron K8 Pro keyboard every day."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "new",
+            "label": "Keychron K8 Pro keyboard",
+            "value": "Keychron K8 Pro keyboard",
+            "evidence": [
+              {
+                "turn_id": "abf65118-0b5d-49ce-811a-cc7f988e2a45",
+                "start": 0,
+                "end": 48
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "new",
+            "label": "Keychron K8 Pro keyboard",
+            "value": "Keychron K8 Pro keyboard",
+            "evidence": [
+              {
+                "turn_id": "abf65118-0b5d-49ce-811a-cc7f988e2a45",
+                "start": 0,
+                "end": 48
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hi-fresh-v4-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: Keychron K8 Pro कीबोर्ड; value=Keychron K8 Pro कीबोर्ड; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_ea40ec5b4e914b67b761fe0d23223f24",
+          "text": "owned_item.device: Keychron K8 Pro कीबोर्ड; value=Keychron K8 Pro कीबोर्ड; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5608000010397518
+      ],
+      "baseline_ms": [
+        0.023800001144991256
+      ],
+      "background_ms": 1984.3161999997392,
+      "answer_status": "paired",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "26fddcee-a0a0-4a39-92d5-7c9506cb1d71",
+                "text": "मैं रोज़ अपना Keychron K8 Pro कीबोर्ड इस्तेमाल करता हूँ।"
+              }
+            ],
+            "current_turn_id": "26fddcee-a0a0-4a39-92d5-7c9506cb1d71"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "device",
+                "intent": "new",
+                "label": "Keychron K8 Pro कीबोर्ड",
+                "value": "Keychron K8 Pro कीबोर्ड",
+                "evidence": [
+                  {
+                    "turn_id": "26fddcee-a0a0-4a39-92d5-7c9506cb1d71",
+                    "quote": "मैं रोज़ अपना Keychron K8 Pro कीबोर्ड इस्तेमाल करता हूँ।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "new",
+            "label": "Keychron K8 Pro कीबोर्ड",
+            "value": "Keychron K8 Pro कीबोर्ड",
+            "evidence": [
+              {
+                "turn_id": "26fddcee-a0a0-4a39-92d5-7c9506cb1d71",
+                "start": 0,
+                "end": 56
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "new",
+            "label": "Keychron K8 Pro कीबोर्ड",
+            "value": "Keychron K8 Pro कीबोर्ड",
+            "evidence": [
+              {
+                "turn_id": "26fddcee-a0a0-4a39-92d5-7c9506cb1d71",
+                "start": 0,
+                "end": 56
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hinglish-fresh-v4-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: Keychron K8 Pro keyboard; value=Keychron K8 Pro keyboard; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_137cc05f11104e2ba5b9e5dbee074087",
+          "text": "owned_item.device: Keychron K8 Pro keyboard; value=Keychron K8 Pro keyboard; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5029999992984813
+      ],
+      "baseline_ms": [
+        0.02119999953720253
+      ],
+      "background_ms": 1711.3782000014908,
+      "answer_status": "paired",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "9f5a0010-c28a-457a-b8a0-ae7f7e7075d0",
+                "text": "Main roz apna Keychron K8 Pro keyboard use karta hoon."
+              }
+            ],
+            "current_turn_id": "9f5a0010-c28a-457a-b8a0-ae7f7e7075d0"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "device",
+                "intent": "new",
+                "label": "Keychron K8 Pro keyboard",
+                "value": "Keychron K8 Pro keyboard",
+                "evidence": [
+                  {
+                    "turn_id": "9f5a0010-c28a-457a-b8a0-ae7f7e7075d0",
+                    "quote": "Main roz apna Keychron K8 Pro keyboard use karta hoon."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "new",
+            "label": "Keychron K8 Pro keyboard",
+            "value": "Keychron K8 Pro keyboard",
+            "evidence": [
+              {
+                "turn_id": "9f5a0010-c28a-457a-b8a0-ae7f7e7075d0",
+                "start": 0,
+                "end": 54
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "new",
+            "label": "Keychron K8 Pro keyboard",
+            "value": "Keychron K8 Pro keyboard",
+            "evidence": [
+              {
+                "turn_id": "9f5a0010-c28a-457a-b8a0-ae7f7e7075d0",
+                "start": 0,
+                "end": 54
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "en-fresh-v4-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: lacto-vegetarian",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: lacto-vegetarian"
+        }
+      ],
+      "callback_ms": [
+        0.5132999995112186
+      ],
+      "baseline_ms": [
+        0.02010000025620684
+      ],
+      "background_ms": 1750.46409999959,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "98bba10a-0a30-4003-acdf-6177dfedf822",
+                "text": "I follow a lacto-vegetarian diet as my regular food preference."
+              }
+            ],
+            "current_turn_id": "98bba10a-0a30-4003-acdf-6177dfedf822"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "food_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "lacto-vegetarian",
+                "value": "lacto-vegetarian",
+                "evidence": [
+                  {
+                    "turn_id": "98bba10a-0a30-4003-acdf-6177dfedf822",
+                    "quote": "I follow a lacto-vegetarian diet as my regular food preference."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "diet_preference",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "food_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "lacto-vegetarian",
+            "value": "lacto-vegetarian",
+            "evidence": [
+              {
+                "turn_id": "98bba10a-0a30-4003-acdf-6177dfedf822",
+                "start": 0,
+                "end": 63
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "diet_preference",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "food_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "lacto-vegetarian",
+            "value": "lacto-vegetarian",
+            "evidence": [
+              {
+                "turn_id": "98bba10a-0a30-4003-acdf-6177dfedf822",
+                "start": 0,
+                "end": 63
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "diet_preference",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hi-fresh-v4-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: लैक्टो-शाकाहारी",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: लैक्टो-शाकाहारी"
+        }
+      ],
+      "callback_ms": [
+        0.5301999990479089
+      ],
+      "baseline_ms": [
+        0.021600000764010474
+      ],
+      "background_ms": 1694.7245999999723,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "f7d9661a-884d-4542-b6da-e169a9643e22",
+                "text": "मेरी नियमित भोजन पसंद लैक्टो-शाकाहारी खाना है।"
+              }
+            ],
+            "current_turn_id": "f7d9661a-884d-4542-b6da-e169a9643e22"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "food_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "भोजन पसंद",
+                "value": "लैक्टो-शाकाहारी",
+                "evidence": [
+                  {
+                    "turn_id": "f7d9661a-884d-4542-b6da-e169a9643e22",
+                    "quote": "मेरी नियमित भोजन पसंद लैक्टो-शाकाहारी खाना है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "diet_preference",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "food_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "भोजन पसंद",
+            "value": "लैक्टो-शाकाहारी",
+            "evidence": [
+              {
+                "turn_id": "f7d9661a-884d-4542-b6da-e169a9643e22",
+                "start": 0,
+                "end": 46
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "diet_preference",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "food_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "भोजन पसंद",
+            "value": "लैक्टो-शाकाहारी",
+            "evidence": [
+              {
+                "turn_id": "f7d9661a-884d-4542-b6da-e169a9643e22",
+                "start": 0,
+                "end": 46
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "diet_preference",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hinglish-fresh-v4-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: lacto-vegetarian",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: lacto-vegetarian"
+        }
+      ],
+      "callback_ms": [
+        0.5203999990044395
+      ],
+      "baseline_ms": [
+        0.02409999979136046
+      ],
+      "background_ms": 2335.628499999075,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "002d0f23-df96-4291-8037-0fc251e5b097",
+                "text": "Meri regular food preference lacto-vegetarian hai."
+              }
+            ],
+            "current_turn_id": "002d0f23-df96-4291-8037-0fc251e5b097"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "food_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "food preference",
+                "value": "lacto-vegetarian",
+                "evidence": [
+                  {
+                    "turn_id": "002d0f23-df96-4291-8037-0fc251e5b097",
+                    "quote": "Meri regular food preference lacto-vegetarian hai."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "diet_preference",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "food_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "food preference",
+            "value": "lacto-vegetarian",
+            "evidence": [
+              {
+                "turn_id": "002d0f23-df96-4291-8037-0fc251e5b097",
+                "start": 0,
+                "end": 50
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "diet_preference",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "food_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "food preference",
+            "value": "lacto-vegetarian",
+            "evidence": [
+              {
+                "turn_id": "002d0f23-df96-4291-8037-0fc251e5b097",
+                "start": 0,
+                "end": 50
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "diet_preference",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "en-fresh-v4-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: brief and encouraging style",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: brief and encouraging style"
+        }
+      ],
+      "callback_ms": [
+        0.512100001287763
+      ],
+      "baseline_ms": [
+        0.022500000341096893
+      ],
+      "background_ms": 1519.9487000008958,
+      "answer_status": "paired",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "5d81ea3a-ffdf-444a-9f58-d77122fd254f",
+                "text": "For your replies, I prefer a brief and encouraging style."
+              }
+            ],
+            "current_turn_id": "5d81ea3a-ffdf-444a-9f58-d77122fd254f"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "brief and encouraging style",
+                "value": "brief and encouraging style",
+                "evidence": [
+                  {
+                    "turn_id": "5d81ea3a-ffdf-444a-9f58-d77122fd254f",
+                    "quote": "For your replies, I prefer a brief and encouraging style."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_style",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "brief and encouraging style",
+            "value": "brief and encouraging style",
+            "evidence": [
+              {
+                "turn_id": "5d81ea3a-ffdf-444a-9f58-d77122fd254f",
+                "start": 0,
+                "end": 57
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "brief and encouraging style",
+            "value": "brief and encouraging style",
+            "evidence": [
+              {
+                "turn_id": "5d81ea3a-ffdf-444a-9f58-d77122fd254f",
+                "start": 0,
+                "end": 57
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hi-fresh-v4-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: संक्षिप्त और उत्साहवर्धक",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: संक्षिप्त और उत्साहवर्धक"
+        }
+      ],
+      "callback_ms": [
+        0.5831000016769394
+      ],
+      "baseline_ms": [
+        0.023799999326001853
+      ],
+      "background_ms": 1484.5283000013296,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "ad2fce24-fbf5-45a1-af85-9d88dd1e20e9",
+                "text": "आपके जवाबों में मुझे संक्षिप्त और उत्साहवर्धक शैली पसंद है।"
+              }
+            ],
+            "current_turn_id": "ad2fce24-fbf5-45a1-af85-9d88dd1e20e9"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "response style",
+                "value": "संक्षिप्त और उत्साहवर्धक",
+                "evidence": [
+                  {
+                    "turn_id": "ad2fce24-fbf5-45a1-af85-9d88dd1e20e9",
+                    "quote": "आपके जवाबों में मुझे संक्षिप्त और उत्साहवर्धक शैली पसंद है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_style",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "response style",
+            "value": "संक्षिप्त और उत्साहवर्धक",
+            "evidence": [
+              {
+                "turn_id": "ad2fce24-fbf5-45a1-af85-9d88dd1e20e9",
+                "start": 0,
+                "end": 59
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "response style",
+            "value": "संक्षिप्त और उत्साहवर्धक",
+            "evidence": [
+              {
+                "turn_id": "ad2fce24-fbf5-45a1-af85-9d88dd1e20e9",
+                "start": 0,
+                "end": 59
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hinglish-fresh-v4-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: short aur encouraging",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: short aur encouraging"
+        }
+      ],
+      "callback_ms": [
+        20.41359999930137
+      ],
+      "baseline_ms": [
+        0.024400000256719068
+      ],
+      "background_ms": 1500.9898000007524,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                "text": "Tumhare replies mein mujhe short aur encouraging style pasand hai."
+              }
+            ],
+            "current_turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "reply style",
+                "value": "short aur encouraging",
+                "evidence": [
+                  {
+                    "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                    "quote": "Tumhare replies mein mujhe short aur encouraging style pasand hai."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_style",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply style",
+            "value": "short aur encouraging",
+            "evidence": [
+              {
+                "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                "start": 0,
+                "end": 66
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply style",
+            "value": "short aur encouraging",
+            "evidence": [
+              {
+                "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                "start": 0,
+                "end": 66
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "en-fresh-v4-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: Gujarati",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: Gujarati"
+        }
+      ],
+      "callback_ms": [
+        0.4822999999305466
+      ],
+      "baseline_ms": [
+        0.026899999284069054
+      ],
+      "background_ms": 1736.3064000001032,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                "text": "My preferred reply language is Gujarati."
+              }
+            ],
+            "current_turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "reply language",
+                "value": "Gujarati",
+                "evidence": [
+                  {
+                    "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                    "quote": "My preferred reply language is Gujarati."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_language",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply language",
+            "value": "Gujarati",
+            "evidence": [
+              {
+                "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                "start": 0,
+                "end": 40
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply language",
+            "value": "Gujarati",
+            "evidence": [
+              {
+                "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                "start": 0,
+                "end": 40
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hi-fresh-v4-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: गुजराती",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: गुजराती"
+        }
+      ],
+      "callback_ms": [
+        0.5417000011220807
+      ],
+      "baseline_ms": [
+        0.025200000891345553
+      ],
+      "background_ms": 1697.174000000814,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                "text": "जवाबों के लिए मेरी पसंदीदा भाषा गुजराती है।"
+              }
+            ],
+            "current_turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "पसंद की भाषा",
+                "value": "गुजराती",
+                "evidence": [
+                  {
+                    "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                    "quote": "जवाबों के लिए मेरी पसंदीदा भाषा गुजराती है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_language",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "पसंद की भाषा",
+            "value": "गुजराती",
+            "evidence": [
+              {
+                "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                "start": 0,
+                "end": 43
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "पसंद की भाषा",
+            "value": "गुजराती",
+            "evidence": [
+              {
+                "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                "start": 0,
+                "end": 43
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hinglish-fresh-v4-05",
+      "status": "unavailable",
+      "reason": "timeout",
+      "predictions": [],
+      "callback_ms": [
+        0.4895000001852168
+      ],
+      "baseline_ms": [
+        0.02469999890308827
+      ],
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "f095a9f5-3ac6-44f8-9a5e-e800132c95f7",
+                "text": "Replies ke liye meri preferred language Gujarati hai."
+              }
+            ],
+            "current_turn_id": "f095a9f5-3ac6-44f8-9a5e-e800132c95f7"
+          },
+          "unavailable": "CancelledError"
+        }
+      ]
+    },
+    {
+      "id": "en-fresh-v4-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: morning journaling sessions; value=8:35 am; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_efc624930a794e4aa4207e688dc61987",
+          "text": "routine.other: morning journaling sessions; value=8:35 am; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5511999988812022
+      ],
+      "baseline_ms": [
+        0.03319999996165279
+      ],
+      "background_ms": 1753.9366000000882,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                "text": "My morning journaling sessions happen every weekday at 8:35 am."
+              }
+            ],
+            "current_turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "routine",
+                "kind": "other",
+                "intent": "new",
+                "label": "morning journaling sessions",
+                "value": "8:35 am",
+                "evidence": [
+                  {
+                    "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                    "quote": "My morning journaling sessions happen every weekday at 8:35 am."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "ongoing",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "morning journaling sessions",
+            "value": "8:35 am",
+            "evidence": [
+              {
+                "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                "start": 0,
+                "end": 63
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "morning journaling sessions",
+            "value": "8:35 am",
+            "evidence": [
+              {
+                "turn_id": "470aeae0-9c4f-48fd-889b-56b131f414d9",
+                "start": 0,
+                "end": 63
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    }
+  ],
+  "health_results": [
+    {
+      "cycle": 1,
+      "status": "returned",
+      "question": "How should you begin my replies?",
+      "fictional_context": [
+        {
+          "text": "response_style: start with a short summary"
+        }
+      ],
+      "fictional_response": {
+        "answer": "I should begin your replies with a short summary."
+      },
+      "latency_ms": 2593.430499999158,
+      "usage": [
+        {
+          "input_tokens": 95,
+          "output_tokens": 19,
+          "total_tokens": 302
+        }
+      ],
+      "requested_model": "gemini-3.5-flash",
+      "conservative_cumulative_send_upper_bound": 294,
+      "accepted": false
+    },
+    {
+      "cycle": 2,
+      "status": "returned",
+      "question": "मेरे जवाबों में उदाहरण कैसे होने चाहिए?",
+      "fictional_context": [
+        {
+          "text": "response_style: simple everyday examples"
+        }
+      ],
+      "fictional_response": {
+        "answer": "आपके जवाबों में उदाहरण सरल और रोज़मर्रा के जीवन से जुड़े होने चाहिए।"
+      },
+      "latency_ms": 3113.5007000011683,
+      "usage": [
+        {
+          "input_tokens": 95,
+          "output_tokens": 25,
+          "total_tokens": 358
+        }
+      ],
+      "requested_model": "gemini-3.5-flash",
+      "conservative_cumulative_send_upper_bound": 297,
+      "accepted": false
+    },
+    {
+      "cycle": 3,
+      "status": "returned",
+      "question": "Mere reply ka tone kaisa hona chahiye?",
+      "fictional_context": [
+        {
+          "text": "response_style: calm and respectful"
+        }
+      ],
+      "fictional_response": {
+        "answer": "Aapke reply ka tone calm aur respectful (शांत और आदरपूर्ण) hona chahiye."
+      },
+      "latency_ms": 3044.2810999993526,
+      "usage": [
+        {
+          "input_tokens": 95,
+          "output_tokens": 28,
+          "total_tokens": 417
+        }
+      ],
+      "requested_model": "gemini-3.5-flash",
+      "conservative_cumulative_send_upper_bound": 301,
+      "accepted": false
+    }
+  ],
+  "segment_usage": [
+    [
+      {
+        "provider": "gemini",
+        "requested_model": "gemini-3.5-flash-lite",
+        "usage": [
+          {
+            "input_tokens": 545,
+            "output_tokens": 196,
+            "total_tokens": 741
+          }
+        ],
+        "attempts": 1,
+        "last_failure": null
+      },
+      {
+        "provider": "gemini",
+        "requested_model": "gemini-3.5-flash",
+        "usage": [],
+        "attempts": 1,
+        "last_failure": {
+          "kind": "InternalServerError",
+          "status": 503
+        }
+      }
+    ],
+    [
+      {
+        "provider": "gemini",
+        "requested_model": "gemini-3.5-flash-lite",
+        "usage": [
+          {
+            "input_tokens": 533,
+            "output_tokens": 186,
+            "total_tokens": 719
+          },
+          {
+            "input_tokens": 537,
+            "output_tokens": 191,
+            "total_tokens": 728
+          }
+        ],
+        "attempts": 3,
+        "last_failure": null
+      },
+      {
+        "provider": "gemini",
+        "requested_model": "gemini-3.5-flash",
+        "usage": [],
+        "attempts": 0,
+        "last_failure": null
+      }
+    ],
+    [
+      {
+        "provider": "gemini",
+        "requested_model": "gemini-3.5-flash-lite",
+        "usage": [
+          {
+            "input_tokens": 541,
+            "output_tokens": 192,
+            "total_tokens": 733
+          }
+        ],
+        "attempts": 1,
+        "last_failure": null
+      },
+      {
+        "provider": "gemini",
+        "requested_model": "gemini-3.5-flash",
+        "usage": [
+          {
+            "input_tokens": 83,
+            "output_tokens": 24,
+            "total_tokens": 334
+          }
+        ],
+        "attempts": 2,
+        "last_failure": {
+          "kind": "RateLimitError",
+          "status": 429
+        }
+      }
+    ]
+  ],
+  "request_latency_ms": {
+    "n": 11,
+    "p50": 2288.546200001292,
+    "p95": 9986.72119999901
+  },
+  "accepted_turn_callback_ms": {
+    "n": 16,
+    "p50": 0.5359500000849948,
+    "p95": 20.994300000893418
+  }
+}

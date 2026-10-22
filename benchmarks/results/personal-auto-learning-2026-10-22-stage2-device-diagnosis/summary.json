@@ -1,0 +1,171 @@
+{
+  "protocol": {
+    "purpose": "development diagnosis, not acceptance; new cases only",
+    "reserved_prior_send_upper_bound": 264,
+    "new_single_send_cap": 2,
+    "total_send_cap": 532,
+    "answer_model_calls": 0,
+    "cases": [
+      {
+        "id": "dev-stage2-hindi-device-correction",
+        "language": "hi",
+        "turns": [
+          "पहले मैंने Lenovo IdeaPad 3 कहा था; मेरा असली लैपटॉप ASUS Vivobook 16 है।"
+        ],
+        "seed": [
+          {
+            "category": "owned_item",
+            "label": "Lenovo IdeaPad 3",
+            "value": "Lenovo IdeaPad 3",
+            "kind": "device",
+            "state": "owned",
+            "facet": null
+          }
+        ],
+        "question": "मेरा असली लैपटॉप कौन सा है?",
+        "answer_subset": false,
+        "control": "none"
+      }
+    ],
+    "adapter_sha256": "0506f86d609b1e2e9661480726d76898b9c08b54f9e5430faac4a8d5694a9004"
+  },
+  "rows": [
+    {
+      "id": "dev-stage2-hindi-device-correction",
+      "result": {
+        "id": "dev-stage2-hindi-device-correction",
+        "status": "completed",
+        "predictions": [
+          {
+            "category": "owned_item",
+            "action": "correct",
+            "text": "owned_item.device: ASUS Vivobook 16; value=ASUS Vivobook 16; state=owned",
+            "state": "owned"
+          }
+        ],
+        "committed_count": 1,
+        "canonical_current_count": 1,
+        "context_status": "selected",
+        "facts": [
+          {
+            "predicate": "owned_item_f9a4f725e7a9486fb7413f211502e7b3",
+            "text": "owned_item.device: ASUS Vivobook 16; value=ASUS Vivobook 16; state=owned"
+          }
+        ],
+        "callback_ms": [
+          17.992700006288942
+        ],
+        "baseline_ms": [
+          0.024000000848900527
+        ],
+        "background_ms": 10549.98920000071
+      },
+      "policy_events": [
+        {
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "correction",
+            "label": "ASUS Vivobook 16",
+            "value": "ASUS Vivobook 16",
+            "evidence": [
+              {
+                "turn_id": "eff37649-4e11-4aa1-a4bb-0a38be9205ab",
+                "start": 0,
+                "end": 73
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "candidate": {
+            "category": "owned_item",
+            "kind": "device",
+            "intent": "correction",
+            "label": "ASUS Vivobook 16",
+            "value": "ASUS Vivobook 16",
+            "evidence": [
+              {
+                "turn_id": "eff37649-4e11-4aa1-a4bb-0a38be9205ab",
+                "start": 0,
+                "end": 73
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ],
+      "fictional_provider_outputs": [
+        {
+          "stage": "extract",
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "device",
+                "intent": "correction",
+                "label": "ASUS Vivobook 16",
+                "value": "ASUS Vivobook 16",
+                "evidence": [
+                  {
+                    "turn_id": "eff37649-4e11-4aa1-a4bb-0a38be9205ab",
+                    "quote": "पहले मैंने Lenovo IdeaPad 3 कहा था; मेरा असली लैपटॉप ASUS Vivobook 16 है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "resolve",
+          "output": {
+            "resolutions": [
+              {
+                "candidate_index": 0,
+                "decision": "match",
+                "target_id": "3bef5e82-86a0-4933-91dd-91a3f00e23cd"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "new_single_send_calls": 2,
+  "conservative_cumulative_send_upper_bound": 266,
+  "usage": [
+    {
+      "input_tokens": 542,
+      "output_tokens": 206,
+      "total_tokens": 748
+    },
+    {
+      "input_tokens": 549,
+      "output_tokens": 78,
+      "total_tokens": 627
+    }
+  ],
+  "last_failure": null,
+  "accepted": false
+}

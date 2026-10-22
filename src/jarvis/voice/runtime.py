@@ -1183,6 +1183,7 @@ class VoiceRuntimeController:
                     agent=JarvisVoiceAgent(
                         tools=tools,
                         default_media_target=self.config.default_media_target,
+                        personal_learning_mode=self.config.personal_learning_mode,
                     ),
                     **(
                         {"record": False}

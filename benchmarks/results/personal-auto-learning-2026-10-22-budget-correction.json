@@ -1,0 +1,13 @@
+{
+  "status": "historical_transport_count_unknown",
+  "recorded_outer_calls": 33,
+  "regular_calls": 26,
+  "regular_max_sends_per_call": 2,
+  "early_diagnostic_calls": 7,
+  "diagnostic_conservative_max_sends_per_call": 5,
+  "reserved_historical_send_upper_bound": 87,
+  "total_live_send_cap": 270,
+  "maximum_future_single_send_calls": 183,
+  "proof": "Pinned google-genai2.22 HttpRetryOptions.attempts=1 translates to one Interactions retry. Installed-SDK mock HTTP429 reproduced two sends. Explicit resource retry_config=None passed single-send429/503/timeout tests, including Retry-After headers. No real provider request in these tests.",
+  "limits": "No exact retrospective transport/billing count or proof of the last one-case three-HTTP-send limit. Prior files preserve outer-call observations unchanged. New requests must journal before transport and use the verified no-retry adapter."
+}

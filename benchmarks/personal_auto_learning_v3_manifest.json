@@ -1,0 +1,21 @@
+{
+  "schema": "personal-auto-learning-v3-manifest",
+  "episodes": 90,
+  "languages": {
+    "en": 30,
+    "hi": 30,
+    "hinglish": 30
+  },
+  "answer_pairs": 30,
+  "answer_kinds_per_language": {
+    "relevant": 6,
+    "irrelevant": 2,
+    "unknown_relation": 2
+  },
+  "input_sha256": "6eda46524023200582b135c8f4c8dde595579abf894c9f4e07b929ed8858fc16",
+  "gold_sha256": "5eb8091481cae7a9eaad0b07e81120c53e6f268e7acb18b46e8ac9bb99ec524c",
+  "reserved_prior_send_upper_bound": 266,
+  "approved_cumulative_ceiling": 532,
+  "maximum_new_single_sends": 266,
+  "notes": "Frozen before v3 provider calls. Separate gold, no previous exact turns,15positive/5duplicate/5exclusion/5control families per language. Language families are correlated; no superiority or independence claim. Prior failures unchanged. Capture plus paired-answer evidence, never owner acceptance."
+}

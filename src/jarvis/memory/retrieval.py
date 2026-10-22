@@ -327,6 +327,31 @@ class SemanticRetrievalService:
         self._fts_window = fts_window
         self._rank_constant = rank_constant
 
+    async def learning_facet_catalog(self) -> MemoryFacetCatalog:
+        from .query import CanonicalMemoryReader
+
+        records = await CanonicalMemoryReader(self._worker).learning_current()
+        return MemoryFacetCatalog(
+            tuple(
+                sorted(
+                    {
+                        MemoryFacetKey(r.subject_scope, r.subject, r.predicate)
+                        for r in records
+                    }
+                )
+            )
+        )
+
+    async def learning_record_in_scope(self, assertion_id: str) -> bool:
+        from .query import CanonicalMemoryReader
+
+        return any(
+            record.assertion_id == assertion_id
+            for record, _ in await CanonicalMemoryReader(
+                self._worker
+            ).learning_current_scoped()
+        )
+
     async def eligible_facet_catalog(
         self,
         *,

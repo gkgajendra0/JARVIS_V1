@@ -1,0 +1,950 @@
+{
+  "schema": "personal-auto-learning-v4-gold",
+  "episodes": {
+    "en-fresh-v4-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Suzuki Gixxer 250"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v4-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Suzuki Gixxer 250"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v4-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Suzuki Gixxer 250"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v4-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Keychron K8 Pro"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v4-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Keychron K8 Pro"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v4-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Keychron K8 Pro"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v4-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "lacto-vegetarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "लैक्टो-शाकाहारी"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "lacto-vegetarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "brief and encouraging"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v4-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "संक्षिप्त और उत्साहवर्धक"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v4-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "short aur encouraging"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v4-05": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "Gujarati"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-05": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "गुजराती"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-05": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "Gujarati"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-06": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "8:35"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v4-06": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "8:35"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v4-06": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "8:35"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v4-07": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "learn conversational German"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-07": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "बातचीत की जर्मन सीखना"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-07": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "conversational German seekhna"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "Tribit StormBox Pro"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant",
+      "context_contains": [
+        "Tribit StormBox Pro"
+      ],
+      "context_excludes": [
+        "Marshall Emberton II"
+      ]
+    },
+    "hi-fresh-v4-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "Tribit StormBox Pro"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant",
+      "context_contains": [
+        "Tribit StormBox Pro"
+      ],
+      "context_excludes": [
+        "Marshall Emberton II"
+      ]
+    },
+    "hinglish-fresh-v4-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "Tribit StormBox Pro"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant",
+      "context_contains": [
+        "Tribit StormBox Pro"
+      ],
+      "context_excludes": [
+        "Marshall Emberton II"
+      ]
+    },
+    "en-fresh-v4-10": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "7:10"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none",
+      "context_contains": [
+        "7:10"
+      ]
+    },
+    "hi-fresh-v4-10": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "7:10"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none",
+      "context_contains": [
+        "7:10"
+      ]
+    },
+    "hinglish-fresh-v4-10": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "7:10"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none",
+      "context_contains": [
+        "7:10"
+      ]
+    },
+    "en-fresh-v4-11": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "change",
+          "contains": [
+            "finish the woodwork workshop"
+          ],
+          "state": "completed"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-11": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "change",
+          "contains": [
+            "लकड़ी की कारीगरी कार्यशाला पूरी करना"
+          ],
+          "state": "completed"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-11": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "change",
+          "contains": [
+            "woodwork workshop complete karna"
+          ],
+          "state": "completed"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "change",
+          "contains": [
+            "pescatarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v4-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "change",
+          "contains": [
+            "पेस्केटेरियन"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v4-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "change",
+          "contains": [
+            "pescatarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v4-13": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "change",
+          "contains": [
+            "detailed examples"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-13": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "change",
+          "contains": [
+            "छोटे उदाहरण"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-13": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "change",
+          "contains": [
+            "detailed examples"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-14": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Garmin Venu 3"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Godrej Interio desk"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-14": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Garmin Venu 3"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Godrej Interio desk"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-14": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Garmin Venu 3"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Godrej Interio desk"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-15": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "correct",
+          "contains": [
+            "Thursday"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-15": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "correct",
+          "contains": [
+            "गुरुवार"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-15": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "correct",
+          "contains": [
+            "Thursday"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-16": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hi-fresh-v4-16": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hinglish-fresh-v4-16": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "en-fresh-v4-17": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hi-fresh-v4-17": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hinglish-fresh-v4-17": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "en-fresh-v4-18": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hi-fresh-v4-18": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hinglish-fresh-v4-18": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "en-fresh-v4-19": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hi-fresh-v4-19": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hinglish-fresh-v4-19": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "en-fresh-v4-20": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-20": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-20": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-21": {
+      "expected": [],
+      "case_class": "hypothetical",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-21": {
+      "expected": [],
+      "case_class": "hypothetical",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-21": {
+      "expected": [],
+      "case_class": "hypothetical",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-22": {
+      "expected": [],
+      "case_class": "third_party",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-22": {
+      "expected": [],
+      "case_class": "third_party",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-22": {
+      "expected": [],
+      "case_class": "third_party",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-23": {
+      "expected": [],
+      "case_class": "medical",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-23": {
+      "expected": [],
+      "case_class": "medical",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-23": {
+      "expected": [],
+      "case_class": "medical",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-24": {
+      "expected": [],
+      "case_class": "financial",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-24": {
+      "expected": [],
+      "case_class": "financial",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-24": {
+      "expected": [],
+      "case_class": "financial",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-25": {
+      "expected": [],
+      "case_class": "secret",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-25": {
+      "expected": [],
+      "case_class": "secret",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-25": {
+      "expected": [],
+      "case_class": "secret",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-26": {
+      "expected": [],
+      "case_class": "turn_veto",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-26": {
+      "expected": [],
+      "case_class": "turn_veto",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-26": {
+      "expected": [],
+      "case_class": "turn_veto",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-27": {
+      "expected": [],
+      "case_class": "category_veto",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v4-27": {
+      "expected": [],
+      "case_class": "category_veto",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v4-27": {
+      "expected": [],
+      "case_class": "category_veto",
+      "answer_kind": "none"
+    },
+    "en-fresh-v4-28": {
+      "expected": [],
+      "case_class": "forget_suppression",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hi-fresh-v4-28": {
+      "expected": [],
+      "case_class": "forget_suppression",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hinglish-fresh-v4-28": {
+      "expected": [],
+      "case_class": "forget_suppression",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "en-fresh-v4-29": {
+      "expected": [],
+      "case_class": "restart",
+      "answer_kind": "none",
+      "context_contains": [
+        "Keychron K8 Pro"
+      ]
+    },
+    "hi-fresh-v4-29": {
+      "expected": [],
+      "case_class": "restart",
+      "answer_kind": "none",
+      "context_contains": [
+        "Keychron K8 Pro"
+      ]
+    },
+    "hinglish-fresh-v4-29": {
+      "expected": [],
+      "case_class": "restart",
+      "answer_kind": "none",
+      "context_contains": [
+        "Keychron K8 Pro"
+      ]
+    },
+    "en-fresh-v4-30": {
+      "expected": [],
+      "case_class": "unknown",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hi-fresh-v4-30": {
+      "expected": [],
+      "case_class": "unknown",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hinglish-fresh-v4-30": {
+      "expected": [],
+      "case_class": "unknown",
+      "answer_kind": "none",
+      "context_empty": true
+    }
+  }
+}

@@ -1,0 +1,688 @@
+{
+  "schema": "personal-auto-learning-capture-v2",
+  "fictional": true,
+  "qualification_scope": "fresh semantic extraction/admission/context subset only; no answering or release acceptance",
+  "episodes": [
+    {
+      "id": "en-capture-v2-01",
+      "language": "en",
+      "turns": [
+        "I own a Tata Tiago EV and a Bajaj Avenger 160."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-01",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Tata Tiago EV और Bajaj Avenger 160 हैं।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-01",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Tata Tiago EV aur Bajaj Avenger 160 hain."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-02",
+      "language": "en",
+      "turns": [
+        "My camera is a Canon PowerShot V1."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-02",
+      "language": "hi",
+      "turns": [
+        "मेरा कैमरा Canon PowerShot V1 है।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-02",
+      "language": "hinglish",
+      "turns": [
+        "Mera camera Canon PowerShot V1 hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-03",
+      "language": "en",
+      "turns": [
+        "My usual diet preference is pescatarian."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-03",
+      "language": "hi",
+      "turns": [
+        "मेरी नियमित खाने की पसंद पेस्केटेरियन है।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-03",
+      "language": "hinglish",
+      "turns": [
+        "Meri regular diet preference pescatarian hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-04",
+      "language": "en",
+      "turns": [
+        "I like calm and practical replies."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-04",
+      "language": "hi",
+      "turns": [
+        "मुझे शांत और व्यावहारिक जवाब पसंद हैं।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-04",
+      "language": "hinglish",
+      "turns": [
+        "Mujhe calm aur practical replies pasand hain."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-05",
+      "language": "en",
+      "turns": [
+        "My weekday drawing practice is at 4:20 pm."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-05",
+      "language": "hi",
+      "turns": [
+        "मेरा सप्ताह के दिनों वाला ड्रॉइंग अभ्यास शाम 4:20 बजे होता है।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-05",
+      "language": "hinglish",
+      "turns": [
+        "Meri weekday drawing practice shaam 4:20 baje hoti hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-06",
+      "language": "en",
+      "turns": [
+        "My learning goal is to finish a beginner astronomy course."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-06",
+      "language": "hi",
+      "turns": [
+        "मेरा सीखने का लक्ष्य शुरुआती खगोल विज्ञान कोर्स पूरा करना है।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-06",
+      "language": "hinglish",
+      "turns": [
+        "Mera learning goal beginner astronomy course poora karna hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-07",
+      "language": "en",
+      "turns": [
+        "I shifted my Saturday guitar practice from 11 am to 2 pm."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "Saturday guitar practice",
+          "value": "Saturday 11 am",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-07",
+      "language": "hi",
+      "turns": [
+        "मैंने शनिवार का गिटार अभ्यास सुबह 11 बजे से बदलकर दोपहर 2 बजे कर लिया है।"
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "शनिवार का गिटार अभ्यास",
+          "value": "शनिवार सुबह 11 बजे",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-07",
+      "language": "hinglish",
+      "turns": [
+        "Maine Saturday guitar practice 11 am se badalkar 2 pm kar li hai."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "Saturday guitar practice",
+          "value": "Saturday 11 am",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-08",
+      "language": "en",
+      "turns": [
+        "I sold my Tata Tiago EV last Friday and no longer own it."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Tata Tiago EV",
+          "value": "Tata Tiago EV",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Bajaj Avenger 160",
+          "value": "Bajaj Avenger 160",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-08",
+      "language": "hi",
+      "turns": [
+        "मैंने पिछले शुक्रवार अपनी Tata Tiago EV बेच दी; अब वह मेरी नहीं है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Tata Tiago EV",
+          "value": "Tata Tiago EV",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Bajaj Avenger 160",
+          "value": "Bajaj Avenger 160",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-08",
+      "language": "hinglish",
+      "turns": [
+        "Pichhle Friday maine Tata Tiago EV bech di; ab woh meri nahi hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Tata Tiago EV",
+          "value": "Tata Tiago EV",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Bajaj Avenger 160",
+          "value": "Bajaj Avenger 160",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-09",
+      "language": "en",
+      "turns": [
+        "Earlier I said Sony ZV-E10 II; my actual camera is Nikon Z fc."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Sony ZV-E10 II",
+          "value": "Sony ZV-E10 II",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-09",
+      "language": "hi",
+      "turns": [
+        "पहले मैंने Sony ZV-E10 II कहा था; मेरा असली कैमरा Nikon Z fc है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Sony ZV-E10 II",
+          "value": "Sony ZV-E10 II",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-09",
+      "language": "hinglish",
+      "turns": [
+        "Pehle Sony ZV-E10 II bola tha; mera actual camera Nikon Z fc hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Sony ZV-E10 II",
+          "value": "Sony ZV-E10 II",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-10",
+      "language": "en",
+      "turns": [
+        "I own a Canon PowerShot V1."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Canon PowerShot V1",
+          "value": "Canon PowerShot V1",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-10",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Canon PowerShot V1 है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Canon PowerShot V1",
+          "value": "Canon PowerShot V1",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-10",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Canon PowerShot V1 hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Canon PowerShot V1",
+          "value": "Canon PowerShot V1",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-11",
+      "language": "en",
+      "turns": [
+        "I sold my bike last week."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Jawa 42",
+          "value": "Jawa 42",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "KTM 250 Duke",
+          "value": "KTM 250 Duke",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-11",
+      "language": "hi",
+      "turns": [
+        "मैंने पिछले हफ़्ते अपनी बाइक बेच दी।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Jawa 42",
+          "value": "Jawa 42",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "KTM 250 Duke",
+          "value": "KTM 250 Duke",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-11",
+      "language": "hinglish",
+      "turns": [
+        "Pichhle hafte maine apni bike bech di."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Jawa 42",
+          "value": "Jawa 42",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "KTM 250 Duke",
+          "value": "KTM 250 Duke",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-12",
+      "language": "en",
+      "turns": [
+        "My colleague Meera owns a Maruti Fronx."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-12",
+      "language": "hi",
+      "turns": [
+        "मेरी सहकर्मी मीरा के पास Maruti Fronx है।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-12",
+      "language": "hinglish",
+      "turns": [
+        "Meri colleague Meera ke paas Maruti Fronx hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-13",
+      "language": "en",
+      "turns": [
+        "If I buy a Lenovo Yoga Slim 7 next year, I might use it for travel."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-13",
+      "language": "hi",
+      "turns": [
+        "अगर मैं अगले साल Lenovo Yoga Slim 7 खरीदूँ तो शायद यात्रा में इस्तेमाल करूँ।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-13",
+      "language": "hinglish",
+      "turns": [
+        "Agar next year Lenovo Yoga Slim 7 liya to shayad travel mein use karun."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-14",
+      "language": "en",
+      "turns": [
+        "My bank account balance is 38400 rupees."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-14",
+      "language": "hi",
+      "turns": [
+        "मेरे बैंक खाते में 38400 रुपये हैं।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-14",
+      "language": "hinglish",
+      "turns": [
+        "Mere bank account ka balance 38400 rupees hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-capture-v2-15",
+      "language": "en",
+      "turns": [
+        "Please do not store my gadgets from now on.",
+        "My e-reader is a Kobo Libra Colour."
+      ],
+      "seed": [],
+      "question": "What relevant current facts are available?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-capture-v2-15",
+      "language": "hi",
+      "turns": [
+        "मेरे डिवाइस सेव मत करना।",
+        "मेरा ई-रीडर Kobo Libra Colour है।"
+      ],
+      "seed": [],
+      "question": "कौन सी मौजूदा बातें उपलब्ध हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-capture-v2-15",
+      "language": "hinglish",
+      "turns": [
+        "Mere gadgets save mat karo.",
+        "Mera e-reader Kobo Libra Colour hai."
+      ],
+      "seed": [],
+      "question": "Kaunsi current baatein available hain?",
+      "answer_subset": false,
+      "control": "none"
+    }
+  ]
+}

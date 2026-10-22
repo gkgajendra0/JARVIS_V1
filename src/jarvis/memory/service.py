@@ -117,6 +117,116 @@ class MemoryService:
     ) -> None:
         self._lifecycle = lifecycle
         self._reader = reader
+        self._learning_authority = None
+        self._learning_invalidator = None
+
+    def bind_learning_invalidator(self, callback):
+        if self._learning_invalidator is not None or not callable(callback):
+            raise RuntimeError("learning invalidator already bound or invalid")
+        self._learning_invalidator = callback
+
+    def _invalidate_learning(self):
+        if self._learning_invalidator:
+            self._learning_invalidator()
+
+    @property
+    def canonical_reader(self):
+        return self._reader
+
+    def bind_learning_authority(self, authority):
+        from jarvis.authority.personal_learning import PersonalLearningAuthority
+
+        if self._learning_authority is not None or not isinstance(
+            authority, PersonalLearningAuthority
+        ):
+            raise PermissionError("learning authority already bound or invalid")
+        self._learning_authority = authority
+
+    async def admit_learning(self, plan, permit):
+        from .learning_reconciliation import LearningPlan
+
+        authority = self._learning_authority
+        if authority is None or not isinstance(plan, LearningPlan):
+            raise PermissionError("learning admission unavailable")
+        if (
+            authority.child_binding(permit) != plan.binding()
+            or authority.source_for(permit) is not plan.source
+        ):
+            raise PermissionError("learning plan/source binding mismatch")
+        # Revalidate every code-owned policy field at the sole write boundary.
+        seen = set()
+        for m in plan.mutations:
+            if (
+                m.ordinal in seen
+                or m.action not in {"create", "correct", "change", "retract"}
+                or m.category
+                not in {
+                    "owned_item",
+                    "food_preference",
+                    "response_preference",
+                    "routine",
+                    "goal",
+                }
+                or m.source.source_class is not MemorySourceClass.OWNER_DIRECT
+                or m.source.authority_class is not AuthorityClass.OWNER_DIRECT
+                or m.source.sensitivity is not Sensitivity.STANDARD
+                or m.source.evidence_text is not None
+                or m.source.canonical_ref
+                != f"conversation:{plan.source.session_id}:turn:{plan.source.turn_id}"
+            ):
+                raise PermissionError("learning policy mismatch")
+            seen.add(m.ordinal)
+            if m.draft is not None:
+                from .types import VerificationState
+
+                d = m.draft
+                if (
+                    d.subject_scope != "personal"
+                    or d.subject != "owner"
+                    or d.predicate != m.predicate
+                    or d.sensitivity is not Sensitivity.STANDARD
+                    or d.verification_state is not VerificationState.UNVERIFIED
+                    or d.freshness_class is not FreshnessClass.CHANGEABLE
+                ):
+                    raise PermissionError("learning draft scope mismatch")
+        return await self._lifecycle.apply_learning_batch(plan, permit, authority)
+
+    async def learning_suppression(self):
+        return await self._reader.learning_suppression()
+
+    async def suppress_learning_categories(self, source, categories, permit):
+        from .learning_controls import category_veto, suppression_binding
+
+        authority = self._learning_authority
+        if authority is None or tuple(categories) != category_veto(source.text):
+            raise PermissionError("canonical category veto required")
+        binding = suppression_binding(source, categories)
+        if (
+            authority.child_binding(permit) != binding
+            or authority.source_for(permit) is not source
+        ):
+            raise PermissionError("suppression source binding mismatch")
+        await self._lifecycle.suppress_learning_categories(
+            categories, source, permit, authority, binding
+        )
+
+    async def reenable_learning_category(self, category, explicit_source, commit_guard):
+        from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+        if (
+            self._learning_authority is None
+            or category not in SUPPRESSION_KEYS
+            or not callable(commit_guard)
+        ):
+            raise PermissionError("exact explicit category approval required")
+        try:
+            self._validate_owner_explicit_source(explicit_source, Sensitivity.STANDARD)
+        except MemoryServiceError as exc:
+            raise PermissionError("explicit owner source required") from exc
+        await self._lifecycle.reenable_learning_category(
+            category, explicit_source, commit_guard, self._learning_authority
+        )
+        self._invalidate_learning()
 
     async def remember_text(
         self,
@@ -148,6 +258,7 @@ class MemoryService:
             raise MemoryAlreadyExistsError(
                 f"current memory already exists for predicate {key!r}; use correction"
             ) from exc
+        self._invalidate_learning()
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def correct_text(
@@ -186,6 +297,7 @@ class MemoryService:
             reason_code="explicit_owner_correction",
             commit_guard=commit_guard,
         )
+        self._invalidate_learning()
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def forget_exact(
@@ -212,9 +324,11 @@ class MemoryService:
             reason_code="explicit_owner_request",
             commit_guard=commit_guard,
             require_current=True,
+            purge_lineage=True,
         )
         if not forgotten:
             raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")
+        self._invalidate_learning()
         after = await self._reader.find_current_exact(
             subject_scope=_PERSONAL_SCOPE,
             subject=_OWNER_SUBJECT,

@@ -1,0 +1,30 @@
+{
+  "purpose": "development diagnosis, not acceptance; new cases only",
+  "reserved_prior_send_upper_bound": 262,
+  "new_single_send_cap": 2,
+  "total_send_cap": 532,
+  "answer_model_calls": 0,
+  "cases": [
+    {
+      "id": "dev-stage2-hindi-bike-correction",
+      "language": "hi",
+      "turns": [
+        "मैंने पहले Yamaha FZ बताया था; मेरे पास असल में TVS Ronin है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Yamaha FZ",
+          "value": "Yamaha FZ",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मेरी असली बाइक कौन सी है?",
+      "answer_subset": false,
+      "control": "none"
+    }
+  ],
+  "adapter_sha256": "0506f86d609b1e2e9661480726d76898b9c08b54f9e5430faac4a8d5694a9004"
+}

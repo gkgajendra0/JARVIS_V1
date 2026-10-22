@@ -345,7 +345,10 @@ def build_production_voice_runtime(
         )
 
     candidate_extractor = None
-    if config.memory_candidate_extraction_enabled:
+    if (
+        config.memory_candidate_extraction_enabled
+        and config.personal_learning_mode == "off"
+    ):
         assert config.memory_candidate_extraction_model is not None
         candidate_extractor = build_memory_candidate_extractor(
             provider=config.ai_provider,
@@ -727,19 +730,33 @@ async def _run_provider_model_lifecycle_watch(
         return
 
 
-def _load_voice_config(personal_context_mode: str | None = None) -> JarvisConfig:
+def _load_voice_config(
+    personal_context_mode: str | None = None, personal_learning_mode: str | None = None
+) -> JarvisConfig:
     config = JarvisConfig.from_environment()
-    return (
-        replace(config, personal_context_mode=personal_context_mode)
-        if personal_context_mode is not None
-        else config
+    learning = (
+        config.personal_learning_mode
+        if personal_learning_mode is None
+        else personal_learning_mode
     )
+    if learning == "apply" and personal_context_mode == "off":
+        raise ValueError("personal learning apply requires personal context apply")
+    changes = {}
+    if personal_context_mode is not None:
+        changes["personal_context_mode"] = personal_context_mode
+    if personal_learning_mode is not None:
+        changes["personal_learning_mode"] = personal_learning_mode
+    return replace(config, **changes) if changes else config
 
 
-async def _run_from_configuration(personal_context_mode: str | None = None) -> None:
+async def _run_from_configuration(
+    personal_context_mode: str | None = None,
+    personal_learning_mode: str | None = None,
+    reenable_categories: tuple[str, ...] = (),
+) -> None:
     migration_needs_preflight_validation = False
     while True:
-        config = _load_voice_config(personal_context_mode)
+        config = _load_voice_config(personal_context_mode, personal_learning_mode)
         configure_logging(config.log_level)
         if has_pending_gemini_live_migration(config.gemini_realtime_model):
             migration_needs_preflight_validation = True
@@ -757,7 +774,12 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 startup_lifecycle.current_model,
                 startup_lifecycle.replacement_model,
             )
-            config = _load_voice_config(personal_context_mode)
+            config = _load_voice_config(personal_context_mode, personal_learning_mode)
+
+        if reenable_categories:
+            config = replace(
+                config, personal_learning_reenable_categories=reenable_categories
+            )
 
         self_awareness: SelfAwarenessRuntime | None = None
         try:
@@ -807,6 +829,9 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 continue
             raise
 
+        # A local recovery request is attempted only by the first built controller.
+        # Provider model recycling must not silently request it again.
+        reenable_categories = ()
         migration_needs_preflight_validation = False
         migrated = asyncio.Event()
         lifecycle_task = (
@@ -851,9 +876,41 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Use current canonical owner memory with fresh per-request consent",
     )
+    parser.add_argument(
+        "--personal-learning",
+        choices=("off", "apply"),
+        default=None,
+        help="Open an owner-operated automatic memory session at startup",
+    )
+    from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+    parser.add_argument(
+        "--reenable-learning-category",
+        choices=sorted(SUPPRESSION_KEYS),
+        action="append",
+        default=[],
+        help="Explicitly restore one suppressed category with a separate Windows Hello approval",
+    )
     args = parser.parse_args(argv)
+    if args.reenable_learning_category and args.personal_learning != "apply":
+        parser.error("--reenable-learning-category requires --personal-learning apply")
+    if args.personal_learning == "apply" and args.personal_context == "off":
+        parser.error("--personal-learning apply requires --personal-context apply")
     try:
-        asyncio.run(_run_from_configuration(args.personal_context))
+        if args.reenable_learning_category:
+            asyncio.run(
+                _run_from_configuration(
+                    args.personal_context,
+                    args.personal_learning,
+                    tuple(dict.fromkeys(args.reenable_learning_category)),
+                )
+            )
+        elif args.personal_learning is None:
+            asyncio.run(_run_from_configuration(args.personal_context))
+        else:
+            asyncio.run(
+                _run_from_configuration(args.personal_context, args.personal_learning)
+            )
         return 0
     except StartupPreflightError as exc:
         print(f"\n{exc}", file=sys.stderr)

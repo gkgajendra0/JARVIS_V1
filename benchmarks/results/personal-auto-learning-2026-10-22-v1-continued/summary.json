@@ -1,0 +1,403 @@
+{
+  "continuation_plan": {
+    "candidate": "5af652a6a4dbc86c03ea9bd4368e76736eec25da",
+    "input_sha256": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "gold_sha256": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010",
+    "prior_summary_sha256": "f105efab33e4348f647f58de33289bfbbc3b2b722e25e60de9cfa6cb17745048",
+    "prior_attempts": 18,
+    "remaining_cap": 252,
+    "minimum_episode_spacing_seconds": 45,
+    "order": [
+      "en-05",
+      "hi-01",
+      "hinglish-01",
+      "en-06",
+      "hi-02",
+      "hinglish-02",
+      "en-07",
+      "hi-03",
+      "hinglish-03",
+      "en-08",
+      "hi-04",
+      "hinglish-04",
+      "en-09",
+      "hi-05",
+      "hinglish-05",
+      "en-10",
+      "hi-06",
+      "hinglish-06",
+      "en-11",
+      "hi-07",
+      "hinglish-07",
+      "en-12",
+      "hi-08",
+      "hinglish-08",
+      "en-13",
+      "hi-09",
+      "hinglish-09",
+      "en-14",
+      "hi-10",
+      "hinglish-10",
+      "en-15",
+      "hi-11",
+      "hinglish-11",
+      "en-16",
+      "hi-12",
+      "hinglish-12",
+      "en-17",
+      "hi-13",
+      "hinglish-13",
+      "en-18",
+      "hi-14",
+      "hinglish-14",
+      "en-19",
+      "hi-15",
+      "hinglish-15",
+      "en-20",
+      "hi-16",
+      "hinglish-16",
+      "en-21",
+      "hi-17",
+      "hinglish-17",
+      "en-22",
+      "hi-18",
+      "hinglish-18",
+      "en-23",
+      "hi-19",
+      "hinglish-19",
+      "en-24",
+      "hi-20",
+      "hinglish-20",
+      "en-25",
+      "hi-21",
+      "hinglish-21",
+      "en-26",
+      "hi-22",
+      "hinglish-22",
+      "en-27",
+      "hi-23",
+      "hinglish-23",
+      "en-28",
+      "hi-24",
+      "hinglish-24",
+      "en-29",
+      "hi-25",
+      "hinglish-25",
+      "en-30",
+      "hi-26",
+      "hinglish-26",
+      "hi-27",
+      "hinglish-27",
+      "hi-28",
+      "hinglish-28",
+      "hi-29",
+      "hinglish-29",
+      "hi-30",
+      "hinglish-30"
+    ],
+    "retry": false,
+    "notes": "Round robin language order fixed before calls. No exposed case repeated. No provider/model/account switch. Mixed-head descriptive evidence only; acceptance stays false."
+  },
+  "summary": {
+    "status": "incomplete",
+    "completed": 4,
+    "unavailable": 0,
+    "unrun": 82,
+    "provider_attempts": 11,
+    "cumulative_attempts": 29,
+    "accepted": false
+  },
+  "scores": {
+    "completed": 4,
+    "unavailable": 0,
+    "true_positive": 6,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "precision_wilson": [
+      0.6096569663469354,
+      0.9999999999999999
+    ],
+    "recall_wilson": [
+      0.6096569663469354,
+      0.9999999999999999
+    ],
+    "languages": {
+      "en": {
+        "completed": 2,
+        "captured": 2,
+        "expected": 2
+      },
+      "hi": {
+        "completed": 1,
+        "captured": 2,
+        "expected": 2
+      },
+      "hinglish": {
+        "completed": 1,
+        "captured": 2,
+        "expected": 2
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 1,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers"
+  },
+  "usage": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 384,
+          "output_tokens": 186,
+          "total_tokens": 570
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 84,
+          "output_tokens": 45,
+          "total_tokens": 395
+        },
+        {
+          "input_tokens": 92,
+          "output_tokens": 51,
+          "total_tokens": 432
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 389,
+          "output_tokens": 373,
+          "total_tokens": 762
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 83,
+          "output_tokens": 22,
+          "total_tokens": 277
+        },
+        {
+          "input_tokens": 129,
+          "output_tokens": 21,
+          "total_tokens": 267
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 370,
+          "total_tokens": 756
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 84,
+          "output_tokens": 23,
+          "total_tokens": 413
+        },
+        {
+          "input_tokens": 130,
+          "output_tokens": 24,
+          "total_tokens": 318
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 182,
+          "total_tokens": 559
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 1,
+      "usage": [],
+      "last_failure": null
+    }
+  ],
+  "request_latency_ms": {
+    "n": 11,
+    "p50": 2629.2718000004243,
+    "p95": 9999.015100001998
+  },
+  "rows": [
+    {
+      "id": "en-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: vegetarian",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: vegetarian"
+        }
+      ],
+      "callback_ms": [
+        17.61350000015227
+      ],
+      "baseline_ms": [
+        0.02559999848017469
+      ],
+      "background_ms": 2780.3556000035314
+    },
+    {
+      "id": "hi-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_184477107b1147d8b3b1109749e091a3",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_62f1215440c84990a3fd4cfc14130398",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5275000003166497
+      ],
+      "baseline_ms": [
+        0.02609999864944257
+      ],
+      "background_ms": 1866.8125999975018
+    },
+    {
+      "id": "hinglish-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_4a4a37b2fd0b488ba497722aa26de144",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_d06400928aa746b4bb22b46169bbdb75",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5095000014989637
+      ],
+      "baseline_ms": [
+        0.02680000034160912
+      ],
+      "background_ms": 1854.0906999987783
+    },
+    {
+      "id": "en-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: Hindi",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: Hindi"
+        }
+      ],
+      "callback_ms": [
+        0.4229000005580019
+      ],
+      "baseline_ms": [
+        0.022700001863995567
+      ],
+      "background_ms": 1665.190600000642,
+      "answer_status": "unavailable",
+      "answer_failure": "provider_or_budget_unavailable"
+    }
+  ]
+}

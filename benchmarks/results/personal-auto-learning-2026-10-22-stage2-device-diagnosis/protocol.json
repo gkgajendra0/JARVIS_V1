@@ -1,0 +1,30 @@
+{
+  "purpose": "development diagnosis, not acceptance; new cases only",
+  "reserved_prior_send_upper_bound": 264,
+  "new_single_send_cap": 2,
+  "total_send_cap": 532,
+  "answer_model_calls": 0,
+  "cases": [
+    {
+      "id": "dev-stage2-hindi-device-correction",
+      "language": "hi",
+      "turns": [
+        "पहले मैंने Lenovo IdeaPad 3 कहा था; मेरा असली लैपटॉप ASUS Vivobook 16 है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Lenovo IdeaPad 3",
+          "value": "Lenovo IdeaPad 3",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मेरा असली लैपटॉप कौन सा है?",
+      "answer_subset": false,
+      "control": "none"
+    }
+  ],
+  "adapter_sha256": "0506f86d609b1e2e9661480726d76898b9c08b54f9e5430faac4a8d5694a9004"
+}

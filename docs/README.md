@@ -4,6 +4,10 @@
 
 This is the navigation and reconciliation record, not another North Star, second product plan or a claim of completed runtime features.
 
+Automatic learning: [implemented/software-verified handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md), [decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md) and [preserved qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). The owner chose to advance development; broader provider testing is deferred. DefaultOFF/unpromoted; owner acceptance and protected promotion are not implied.
+
+[Enablement and validation record](PERSONAL_INTELLIGENCE_ENABLEMENT.md) — which personal features are defaultOFF, which opt-in tests passed, how to enable normal-app testing, and how future dependent milestones must be checked.
+
 ## Read these documents first
 
 **One product, one hierarchy:**
@@ -63,6 +67,8 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 - [Normal-app personal-context candidate](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
 - [Natural memory-intent and canonical-target repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md)
 - [Bounded normal-app owner acceptance and release](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md)
+- [Automatic conversational learning: approved written design](superpowers/specs/2026-10-21-personal-auto-learning-design.md)
+- [Automatic conversational learning: implementation plan for review](superpowers/plans/2026-10-21-personal-auto-learning.md)
 
 PRs #285–#286 established the product/documentation hierarchy; #288 approved
 the native direction and #289–#291 added evaluation, shadow and fictional

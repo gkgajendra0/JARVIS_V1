@@ -1,0 +1,24 @@
+{
+  "status": "verified_offline",
+  "inference_requests": 0,
+  "assertions": [
+    "frozen corpus and gold byte hashes match",
+    "prior summary byte hash matches",
+    "retained orchestration source byte hash matches",
+    "all 16 attempted IDs unique; five new IDs are exact frozen prefix",
+    "three declared waits and successful health checks retained",
+    "11 new single sends; conservative upper304/532;228 remaining",
+    "15 complete / one semantic unavailable /74 unrun",
+    "18 correct expected effects; zero scored extra/missing on completed rows",
+    "six complete / four failed answer pairs; no new complete pairs to review",
+    "all recovery opportunities exhausted; acceptance remains false"
+  ],
+  "new_blind_review": "not_applicable_no_new_complete_pairs",
+  "known_limits": [
+    "Historical sends are conservatively reserved, not exactly reconstructed.",
+    "429 subtype/reset/billing tier unknown; raw detailed error body not retained.",
+    "Frozen related scenario families and small conditional sample do not prove broad recall.",
+    "Runtime cold callback p95 remains above10ms in n16 sample.",
+    "No owner-device or normal-app acceptance."
+  ]
+}

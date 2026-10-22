@@ -46,6 +46,7 @@ class PolicyInput:
                     else None
                 ),
                 "requirement": self.approval.requirement.name.lower(),
+                "parent_delegation_id": self.approval.parent_delegation_id,
             }
         return {
             "proposal": self.proposal.policy_view(),

@@ -1,0 +1,15 @@
+{
+  "purpose": "new fictional answering availability probe only, not semantic acceptance",
+  "candidate": "b3330b62cc033fb37de32c8e71d67b9397669842",
+  "prior_cumulative_send_upper_bound": 268,
+  "new_single_send_cap": 1,
+  "approved_cumulative_ceiling": 532,
+  "retry": false,
+  "failed_case_replay": false,
+  "question": "मेरे जवाबों की शैली कैसी होनी चाहिए?",
+  "fictional_context": [
+    {
+      "text": "response_style: patient and step-by-step"
+    }
+  ]
+}

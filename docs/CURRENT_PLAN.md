@@ -6,6 +6,22 @@ preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_
 Historical engineering milestones and evidence remain in [Project State](PROJECT_STATE.md)
 and the [Documentation Index](README.md).
 
+## Active owner decision — advance after software verification (22 October 2026)
+
+The owner directed that, given the implementation and passing software checks, work should move forward rather than spend multiple days on quota-limited provider testing. Record this as **IMPLEMENTED / SOFTWARE-VERIFIED; BROADER QUALIFICATION DEFERRED**. It does not assert that unrun semantic cases passed, that whole-app owner acceptance occurred, or that protected promotion/automatic activation was authorized.
+
+Draft PR#295 (`feat/personal-auto-learning-20261021`) contains the normal voice integration: session delegation, extraction, canonical reconciliation/admission, replay/suppression, bounded worker and current-context use. Product codefd7c7025 and research control5bb72ec0 are unchanged in evidence headc03666b7. All7exact-head CI checks on c03666b7 passed; latest full local software2,759passed/8skipped. Automatic learning is OFF by default. Earlier accepted main/explicit-memory behavior remains separate.
+
+Deferred evidence stays visible: v4has15complete/one unavailable/74unrun semantic cases,18/18conditional expected effects, six complete/four failed answer pairs; no full quality pass. The old v1recall33/47(70.2%) and v2partial Hindi replacement remain recorded. Cold callback p95=20.99ms(n16) does not meet the proposed10ms qualification target. Normal-app owner acceptance and protected-promotion decisions are open, not completed by this deferral. CAP-053 remains PARTIAL.
+
+The owner supplied the quota evidence: displayed Free tier, answering5RPM/20RPD and learning15RPM/500RPD; the screenshots show28-day peaks rather than current headroom. The three approved recovery opportunities are exhausted. Budget upper304/532,228remain, but no additional inference, automatic schedule, purchase, model/account/key change or local activation is authorized by moving development priority. The proposed next-reset batch and suggested paid/model-comparison alternatives are not adopted or running. Do not keep requesting screenshots or budget approvals to resume the deferred benchmark.
+
+Next development priority is **PI-3: contextual assistance across life domains**, following the explicit sequence in [North Star Section17.9](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md#179-prioritized-capability-delivery-and-gono-go-tests). PI-1has bounded owner acceptance; PI-2natural learning is implemented/software-verified with broader qualification deferred, not fully accepted. PI-3already has basic context-selection/read/prompt wiring. Inspect its actual missing behaviors and complete useful, multi-fact, current/source-backed ordinary advice without inventing a new memory store or personal brain. Conversation reference/continuity must respect the current provider-history and speaker/session boundaries. Relevant Work/Hands decisions follow within PI-3when justified; standalone tasks/reminders are not the immediate priority selected from the numbered roadmap. PI-4situated/proactive awareness and PI-5continual adaptation remain later. See the [corrected next-gap inspection](research/PERSONAL_ASSISTANCE_NEXT_GAP_TRIAGE_2026-10-22.md) and [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md). No new feature design, model switch, retention scope or implementation is approved by this alignment.
+
+## Recorded activation and dependent-test workflow —22October2026
+
+Maintain the [personal-intelligence enablement record](PERSONAL_INTELLIGENCE_ENABLEMENT.md) across future milestones. Earlier PR294was owner-tested in the whole app with personal-context APPLY and merged, while OFF remained default and saved settings were unchanged. Automatic learning in PR295is separately implemented/software-verified, defaultOFF, with whole-app acceptance pending. After integration, normal-app validation and any milestone depending on learning/context must launch with `--personal-learning apply`; APPLY enables both for that process, without making the default/persistent machine setting ON. Repeat the intended mode after restart. OFF-only tests do not prove the dependent enabled experience. Keep implementation, merge, actual mode, normal-owner acceptance and default/persistent activation distinct in reports. No merge or owner-app activation was performed by this documentation update.
+
 ## Owner direction — active personal intelligence (2026-10-19)
 
 The owner approved architecture PR #288, PI-1A #289, and PI-1B #290.
@@ -94,7 +110,7 @@ Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 CAP-053 is **PARTIAL**: the opt-in saved-preference flow has bounded owner
 acceptance; the broader personal-intelligence contract is not complete.
 
-### Immediate next work — promote the accepted flow, then qualify useful advice
+### Earlier PI-1 release sequence — promotion complete; qualification retained
 
 The owner-log correction failure is repaired in the same candidate: natural
 correction/deletion proposals resolve the actual canonical target, then require
@@ -103,8 +119,8 @@ The owner confirmed correct spoken results for the prescribed saved-diet
 sequence. Promotion was explicitly authorized conditional on checks; this does
 not accept broader advice quality, automatic learning or seamless attribution.
 
-1. Complete the authorized #292 → #293 → #294 promotion with applicable exact-head
-   checks and verify protected main. Preserve owner acceptance and CI evidence.
+1. **Completed:** authorized #292 → #293 → #294 promotion. Preserve owner acceptance
+   and exact-head/protected-main verification evidence.
 2. Qualify personally useful everyday advice with general fictional scenarios in
    English/Hindi/Hinglish, including relevant/irrelevant context and honest absence.
    Saved-preference recall acceptance alone does not prove this broader behavior.
@@ -183,8 +199,15 @@ approves and all required checks pass.**
 
 ## Next action
 
-Complete owner-machine qualification and protected promotion of the reviewed
-repair slice, then qualify synthetic provider delivery and the trusted
-owner-turn boundary. Continue
-through the implementation/qualification sequence above until a real owner
-observation, exact promotion approval or unavailable resource is needed.
+Advance the North Star's PI-3contextual-assistance slice: inspect existing
+normal-voice context selection/use and identify the smallest observed gap in
+personally useful advice and supported follow-up references. Reuse canonical
+memory/conversation/Authority; then research/design only the gap. Do not start a
+new generic reasoning engine, use Step8tasks/reminders as a substitute, restart
+the deferred provider benchmark, or claim that PI-2acceptance is complete.
+Relevant Work/Hands context integration belongs after the ordinary-assistance
+path is understood. Preserve normal-app acceptance and promotion boundaries.
+
+Initial PI-3read-only inspection is recorded in the [gap map](research/PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md): learned nonscalar catalog IDs are opaque; actual model selection among multiple entities is not proven by forced-index answer fixtures. Proposed first slice is bounded entity-aware selection plus grounded use through existing realtime tools. The descriptor/query contract and privacy budgets still need architectural design review before code or live execution.
+
+[PI-3technology review](research/PI3_TECHNOLOGY_REVIEW_2026-10-22.md) completes the bounded desk comparison/prior-experiment reconciliation for the first-slice shortlist. Native entity-aware tools are recommended; semantic descriptors versus structured query projection, privacy budgets and offline contract comparison remain design/validation work. No new framework/model adoption or product code is approved.

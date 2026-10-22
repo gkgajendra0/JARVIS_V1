@@ -339,6 +339,17 @@ class AuthorityService:
         context: InteractionContext,
         approval: ApprovalRecord,
     ) -> None:
+        if approval.method is ApprovalMethod.DELEGATED_POLICY and (
+            proposal.capability != "memory:personal_learning"
+            or proposal.operation not in {"read", "admit", "suppress"}
+            or proposal.origin is not ActionOrigin.SYSTEM
+            or not approval.parent_delegation_id
+            or proposal.attributes.destructive
+            or proposal.attributes.external_side_effect
+            or proposal.attributes.secret_or_credential_access
+            or proposal.attributes.security_or_permission_change
+        ):
+            raise AuthorityError("delegated_policy_scope_mismatch")
         if (
             approval.method is ApprovalMethod.DIRECT_INTENT
             and proposal.origin is not ActionOrigin.DIRECT_USER

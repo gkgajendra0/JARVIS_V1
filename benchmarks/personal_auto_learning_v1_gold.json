@@ -1,0 +1,908 @@
+{
+  "schema": "personal-auto-learning-gold-v1",
+  "rubric": {
+    "relevant": "Use supported requested facts; no invented owner facts.",
+    "irrelevant": "Answer general question without mentioning irrelevant owner facts.",
+    "unknown_relation": "State missing owner reason/preference; ownership alone supplies no reason.",
+    "reviewer": "Blind arm order, agent authored review reported separately from owner acceptance."
+  },
+  "episodes": {
+    "en-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "owned",
+          "action": "create"
+        },
+        {
+          "category": "owned_item",
+          "contains": [
+            "TVS Ronin"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "en-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Fujifilm X-S20"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "en-03": {
+      "expected": [
+        {
+          "category": "routine",
+          "contains": [
+            "7"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "en-04": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "Spanish course"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "en-05": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegetarian",
+            "शाकाहारी"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "en-06": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "contains": [
+            "Hindi",
+            "हिन्दी"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "en-07": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegan",
+            "वीगन"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-08": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "contains": [
+            "short",
+            "छोटे",
+            "संक्षिप्त"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Suzuki Burgman"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-10": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "10 km"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-11": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "not_owned",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegan",
+            "वीगन"
+          ],
+          "state": "active",
+          "action": "correct"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-13": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Olympus OM-5"
+          ],
+          "state": "owned",
+          "action": "correct"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-14": {
+      "expected": [
+        {
+          "category": "routine",
+          "contains": [
+            "8"
+          ],
+          "state": "active",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-15": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "Spanish course"
+          ],
+          "state": "completed",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-16": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-17": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-18": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-19": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-20": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-21": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-22": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-23": {
+      "expected": [],
+      "answer_kind": "unknown_relation",
+      "post_control_count": null
+    },
+    "en-24": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-25": {
+      "expected": [],
+      "answer_kind": "irrelevant",
+      "post_control_count": null
+    },
+    "en-26": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": 1
+    },
+    "en-27": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "en-28": {
+      "expected": [],
+      "answer_kind": "unknown_relation",
+      "post_control_count": null
+    },
+    "en-29": {
+      "expected": [],
+      "answer_kind": "irrelevant",
+      "post_control_count": null
+    },
+    "en-30": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "owned",
+          "action": "create"
+        },
+        {
+          "category": "owned_item",
+          "contains": [
+            "TVS Ronin"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hi-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Fujifilm X-S20"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hi-03": {
+      "expected": [
+        {
+          "category": "routine",
+          "contains": [
+            "7"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hi-04": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "Spanish course"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hi-05": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegetarian",
+            "शाकाहारी"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hi-06": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "contains": [
+            "Hindi",
+            "हिन्दी"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hi-07": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegan",
+            "वीगन"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-08": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "contains": [
+            "short",
+            "छोटे",
+            "संक्षिप्त"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Suzuki Burgman"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-10": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "10 km"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-11": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "not_owned",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegan",
+            "वीगन"
+          ],
+          "state": "active",
+          "action": "correct"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-13": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Olympus OM-5"
+          ],
+          "state": "owned",
+          "action": "correct"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-14": {
+      "expected": [
+        {
+          "category": "routine",
+          "contains": [
+            "8"
+          ],
+          "state": "active",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-15": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "Spanish course"
+          ],
+          "state": "completed",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-16": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-17": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-18": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-19": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-20": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-21": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-22": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-23": {
+      "expected": [],
+      "answer_kind": "unknown_relation",
+      "post_control_count": null
+    },
+    "hi-24": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-25": {
+      "expected": [],
+      "answer_kind": "irrelevant",
+      "post_control_count": null
+    },
+    "hi-26": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": 1
+    },
+    "hi-27": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hi-28": {
+      "expected": [],
+      "answer_kind": "unknown_relation",
+      "post_control_count": null
+    },
+    "hi-29": {
+      "expected": [],
+      "answer_kind": "irrelevant",
+      "post_control_count": null
+    },
+    "hi-30": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "owned",
+          "action": "create"
+        },
+        {
+          "category": "owned_item",
+          "contains": [
+            "TVS Ronin"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hinglish-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Fujifilm X-S20"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hinglish-03": {
+      "expected": [
+        {
+          "category": "routine",
+          "contains": [
+            "7"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hinglish-04": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "Spanish course"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hinglish-05": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegetarian",
+            "शाकाहारी"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hinglish-06": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "contains": [
+            "Hindi",
+            "हिन्दी"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": "relevant",
+      "post_control_count": null
+    },
+    "hinglish-07": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegan",
+            "वीगन"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-08": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "contains": [
+            "short",
+            "छोटे",
+            "संक्षिप्त"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Suzuki Burgman"
+          ],
+          "state": "owned",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-10": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "10 km"
+          ],
+          "state": "active",
+          "action": "create"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-11": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Toyota Glanza"
+          ],
+          "state": "not_owned",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "contains": [
+            "vegan",
+            "वीगन"
+          ],
+          "state": "active",
+          "action": "correct"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-13": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "contains": [
+            "Olympus OM-5"
+          ],
+          "state": "owned",
+          "action": "correct"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-14": {
+      "expected": [
+        {
+          "category": "routine",
+          "contains": [
+            "8"
+          ],
+          "state": "active",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-15": {
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "Spanish course"
+          ],
+          "state": "completed",
+          "action": "change"
+        }
+      ],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-16": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-17": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-18": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-19": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-20": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-21": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-22": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-23": {
+      "expected": [],
+      "answer_kind": "unknown_relation",
+      "post_control_count": null
+    },
+    "hinglish-24": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-25": {
+      "expected": [],
+      "answer_kind": "irrelevant",
+      "post_control_count": null
+    },
+    "hinglish-26": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": 1
+    },
+    "hinglish-27": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    },
+    "hinglish-28": {
+      "expected": [],
+      "answer_kind": "unknown_relation",
+      "post_control_count": null
+    },
+    "hinglish-29": {
+      "expected": [],
+      "answer_kind": "irrelevant",
+      "post_control_count": null
+    },
+    "hinglish-30": {
+      "expected": [],
+      "answer_kind": null,
+      "post_control_count": null
+    }
+  }
+}

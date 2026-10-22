@@ -1,0 +1,16 @@
+{
+  "schema": "personal-auto-learning-capture-v2",
+  "episode_count": 45,
+  "language_counts": {
+    "en": 15,
+    "hi": 15,
+    "hinglish": 15
+  },
+  "input_sha256": "882441e59595d46b5f817cceb4940b691063cddd47414dff4ff6ba2508c2313b",
+  "gold_sha256": "e59859a492803e582ba05339df2441adbd3dec86a722dda120f76a95a8f43488",
+  "reserved_prior_send_upper_bound": 205,
+  "max_new_single_send_calls": 65,
+  "total_cap": 270,
+  "approved_release_gate_satisfied": false,
+  "notes": "Frozen before any v2 provider call. V1 failed evidence preserved. No work-role answer calls; quota-limited. Known development replays were blocked, not executed."
+}

@@ -31,6 +31,7 @@ class ApprovalMethod(str, Enum):
     DIRECT_INTENT = "direct_intent"
     SPOKEN = "spoken"
     STRONG_VERIFIER = "strong_verifier"
+    DELEGATED_POLICY = "delegated_policy"
 
 
 class ApprovalStatus(str, Enum):

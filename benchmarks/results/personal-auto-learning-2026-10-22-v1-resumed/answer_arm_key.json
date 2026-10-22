@@ -1,0 +1,17 @@
+[
+  {
+    "id": "en-01",
+    "A": "enabled",
+    "B": "baseline"
+  },
+  {
+    "id": "en-02",
+    "A": "enabled",
+    "B": "baseline"
+  },
+  {
+    "id": "en-03",
+    "A": "baseline",
+    "B": "enabled"
+  }
+]

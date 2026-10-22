@@ -20,6 +20,10 @@ Snapshot baseline verified from protected `main` at
 
 ---
 
+## Automatic conversational learning candidate — 22 October 2026
+
+**IMPLEMENTED / SOFTWARE-VERIFIED; BROADER QUALIFICATION DEFERRED BY OWNER DIRECTION22OCTOBER2026.** Normal voice integration is on `feat/personal-auto-learning-20261021`, draft PR#295. Evidence headc03666b7 passed all7CI checks; latest full local suite2,759passed/8skipped. Product codefd7c7025 is unchanged. One completed independent review/six verified repairs; later fixes have regression evidence. Automatic learning remains OFF by default and unpromoted. The owner chose to move development forward rather than continue multi-day quota-bound testing; this is not performed owner acceptance or protected merge/activation authorization. V4evidence remains15complete/one unavailable/74unrun,18/18conditional effects, six complete/four failed pairs; old v1recall and v2Hindi partial correction remain unqualified. Provider/resource/whole normal-app owner gates stay deferred/open; CAP-053is PARTIAL. All3recovery opportunities exhausted, budget upper304/532with228remain; no new inference/purchase/model change/schedule. Next inspect grounded personal advice/task follow-through within the existing north star. [Handoff and limits](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
+
 ## Documentation reconciliation and owner priority — 2026-10-18
 
 This ledger retains **accepted/deferred product truth**, not the plan for
