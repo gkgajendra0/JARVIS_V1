@@ -1,6 +1,6 @@
 # JARVIS Documentation — Start Here
 
-**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,843 tests / 8 skips); independent review is in progress; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
+**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,858 tests / 8 skips) after all three Important review findings were repaired; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
 
 **Repository-wide product/documentation audit — 18 October 2026.**
 

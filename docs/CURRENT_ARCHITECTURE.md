@@ -39,7 +39,7 @@ after merge, not a complete personal-intelligence architecture. See the
 
 The approved question-bound context design is implemented on the candidate built atop unmerged PI-2. Canonical reader/retrieval provides one coherent current/suppression snapshot. A focused projection module resolves seven registered scopes and exact current-question entity labels; the existing PersonalContextSession owns the shared legacy/new read ledger and requested-scope/version/audio invalidation. The registered LiveKit raw tool keeps strict parsing/attempt accounting local. Learning-APPLY ordinary-advice instructions use that tool; explicit mutation and context-only paths retain their existing purposes.
 
-This is candidate architecture, not a declaration of deployment or owner acceptance. No memory migration, new provider/model, new write permission or default change occurred. Local software checks passed; independent review is in progress; live selection and spoken usefulness remain pending. See the [PI-3A record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md) for evidence, exact limits and rollback.
+This is candidate architecture, not a declaration of deployment or owner acceptance. No memory migration, new provider/model, new write permission or default change occurred. Local software checks passed (2,858 tests / 8 skips); all three Important review findings were repaired and regression-verified; live selection and spoken usefulness remain pending. See the [PI-3A record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md) for evidence, exact limits and rollback.
 
 ## Top-level production architecture
 

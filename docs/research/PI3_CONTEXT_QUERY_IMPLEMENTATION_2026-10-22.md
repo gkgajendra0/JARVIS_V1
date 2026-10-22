@@ -1,6 +1,6 @@
 # PI-3A question-bound context: implementation and acceptance record
 
-Date: 22 October 2026. Status: **IMPLEMENTED / SOFTWARE-VERIFIED CANDIDATE; independent review in progress.** Normal-app/model-quality acceptance remains pending. This is the first PI-3 slice, not completion of personal intelligence or acceptance of all PI-2 learning behavior.
+Date: 22 October 2026. Status: **IMPLEMENTED / SOFTWARE-VERIFIED CANDIDATE; all three Important review findings repaired and regression-verified.** Normal-app/model-quality acceptance remains pending. This is the first PI-3 slice, not completion of personal intelligence or acceptance of all PI-2 learning behavior.
 
 ## What changed for the owner
 
@@ -35,7 +35,7 @@ Per-task RED/GREEN evidence was observed before product implementation:
 | Task 6 normal composition | Six missing registered-tool/instruction/path RED failures; 38 production/voice/context-sync cases passed |
 | Task 7 local measurement | Three bounded measurement cases passed; results below |
 
-Full local repository suite: **2,843 passed / 8 skipped**, exit 0, 390.86 seconds, with an isolated machine-config path. Four skips concern unavailable symlink creation and four are Linux/non-Windows negative controls. Full Ruff lint and formatting checks passed; 1,002 files formatted at this checkpoint; whitespace/new-link checks passed. Independent review remains in progress. This does not substitute for exact-head GitHub CI, SQLCipher production IO, actual-model or owner-machine acceptance.
+Pre-review full local repository suite: **2,843 passed / 8 skipped**, exit 0, 390.86 seconds, with an isolated machine-config path. Four skips concern unavailable symlink creation and four are Linux/non-Windows negative controls. Full Ruff lint and formatting checks passed; 1,002 files formatted at this checkpoint; whitespace/new-link checks passed. The fresh independent review found three Important issues; their repairs and final rerun are described below. This does not substitute for exact-head GitHub CI, SQLCipher production IO, actual-model or owner-machine acceptance.
 
 These are software contracts and forced normal-controller tool/audio checks. They do not prove the live model independently chooses a tool, resolves the intended meaning or gives a useful spoken answer. No new Gemini inference batch, paid fallback, account/model change or local JARVIS activation was performed.
 
@@ -50,6 +50,18 @@ Windows 10 build 26300, Python 3.11.9; fictional temporary canonical databases. 
 | 32 | 9.06 / 11.14 / 12.04 | 7.04 / 8.59 / 8.66 | 1.85 / 1.95 |
 
 The query path had lower local p95 in this small run; heartbeat variation was about 1-2 ms. This is not a voice SLA, a general performance guarantee or the older unqualified 10 ms cold-callback target. Timing is environment-sensitive. Raw first-run results were retained in this plan's workspace while work was active; this table preserves the measured outcome after scratch cleanup. The test harness remains reproducible as `tests/learning/test_context_query_performance.py`. The full-suite invocation may execute the harness again; its incidental timing is not substituted for this first measurement.
+
+### Measurement after the review repairs
+
+The mandatory authorization changes justify a fresh bounded measurement. Both legacy and query paths include the repaired post-storage authority checks; this run is not a retry/rescore of the earlier code. Five warmups and 30 samples per path/size were retained with the same fixture method.
+
+| Current scoped records | Repaired legacy p50 / p95 / max (ms) | Repaired query p50 / p95 / max (ms) | Legacy / query max heartbeat delay (ms) |
+| --- | --- | --- | --- |
+| 1 | 9.69 / 21.59 / 23.00 | 6.93 / 14.01 / 16.28 | 5.62 / 5.10 |
+| 8 | 12.21 / 18.43 / 23.21 | 8.27 / 16.42 / 20.14 | 4.47 / 4.23 |
+| 32 | 15.75 / 21.94 / 24.22 | 12.30 / 18.20 / 18.21 | 4.36 / 4.44 |
+
+Both paths were slower than the earlier run; the data do not isolate the contribution of added validation versus host scheduling/load. The query path's p95 remained lower than legacy within this run. Use this post-repair table for the final code; do not cite the first 5.74-8.59 ms query p95 as the repaired candidate's performance. No 10 ms guarantee, end-to-end voice claim or optimization acceptance is inferred. No additional run was used to select a better score.
 
 ## Boundaries still visible
 
@@ -87,4 +99,25 @@ Remove the new tool and its matching learning instructions together to restore t
 
 Ruling: targeted verification commands group learning test paths before root paths. The interleaved command produced 18 missing-fixture setup errors; the same authority/forget tests passed separately and all 71 cases passed after regrouping. Cost if wrong: a collection interaction could hide until the required full repository suite, which is still required.
 
-Independent review and any resulting findings/repairs are not complete at this checkpoint. No deferred minor finding is claimed absent until the review finishes.
+A fresh most-capable reviewer examined `6f4f197d..9bbf3303` and reported three Important findings, zero Critical and zero separately graded Minor findings. The reviewer independently reproduced the legacy/query race in both orders without expanded release. One repair pass followed; no second reviewer or re-review was dispatched.
+
+| Finding | Verified reproduction and repair |
+| --- | --- |
+| Authority changed during a storage await before audio release | Five real audio-chain RED cases: grant expiry, Windows continuity, mutation-inflight, replacement permit and changed operation. Guard now pins authorization and revalidates after storage; 19 lifecycle cases passed. A separate RED case confirmed the analogous inherited legacy final-read data-release interval; it now also revalidates before returning facts. |
+| Prior history denied a valid current question / digest covered different turns | An 8,000-byte earlier turn plus `My City?` produced RED denial. Current-only source construction now precedes bounds/digest; default four-turn learning behavior remains tested. 38 current-question/contract cases passed. |
+| Corrected TEXT exported its UUID-bearing display prefix | Real admit -> correct-to-Nexon -> broad-query RED exported the opaque key. Projection now combines canonical TEXT value with a safe registered scope label. Typed/legacy semantic labels remain supported; 15 projection/correction cases passed. |
+
+All eight failure cases were observed before repairs. Supplemental plan coverage retains the two mixed-read race orders, successful preference+goal composition and non-object/unparseable SDK rejection without query evaluation. All learning tests passed: **222**. The final whole-repository rerun after the one repair pass passed: **2,858 passed / 8 skipped**, exit 0, 358.97 seconds. The eight skips are four unavailable Windows symlink cases and four non-Windows negative controls. Final full Ruff lint/format and whitespace checks passed. The tested source commit is `74836bbc469019313c39bd1d5ec3d4df2db14d1b`; subsequent handoff edits change documentation only. No second reviewer or re-review was dispatched. No deferred minor finding remains.
+
+Additional rulings, including every behavior the reviewer set aside:
+
+1. R1 also repairs the inherited legacy final-read interval because its separate reproduction returned facts after expiry. Cost if wrong: added validation latency or legacy regression; targeted/full checks and repeat timing cover it.
+2. The shared accepted-source factory gains an opt-in `current_only` argument outside the initially listed file set; the default four-turn behavior stays intact. Cost if wrong: learning-source regression; explicit window/bound checks and the full suite cover it.
+3. Actual model relevance/tool choice/spoken multilingual usefulness remains pending until whole-app/provider observation. Cost if wrong: software correctness can coexist with poor live assistance or latency.
+4. Cross-script/fuzzy aliases and references across retired private sessions remain explicit non-goals. Cost if wrong: these requests need clarification instead of seamless recall.
+5. PI-2 extraction/provider qualification stays deferred and its dependency remains unmerged. Cost if wrong: automatic-learning behavior remains unqualified in the whole normal app.
+6. Hosted/platform/production-SQLCipher checks and protected merge authorization remain separate from the local review. Cost if wrong: a green local suite cannot establish deployed readiness. No owner database was inspected or changed by these tests.
+
+## Candidate handoff identity
+
+Final tested source: `74836bbc469019313c39bd1d5ec3d4df2db14d1b`. Review branch: `feat/pi3-question-context-20261022`, based on the unmerged `feat/personal-auto-learning-20261021` / PR #295. The isolated dependent draft PR is prepared for review; publication and exact-head hosted checks must be reported from their actual results. The Desktop CLI imports this checkout and its launcher points to this checkout's virtual environment; no reinstall or local activation was performed. Defaults remain OFF. The full test log and per-task receipts were inspected during execution; this report preserves their outcomes before plan-specific scratch cleanup.
