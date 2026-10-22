@@ -10,7 +10,7 @@
 
 **Spec:** [Approved written design](../specs/2026-10-22-pi3-entity-aware-context-design.md), approved by the owner as “Approve written PI-3A design.”
 
-**Status / execution:** OWNER-APPROVED plan (22 October 2026): “Approve plan — continue Native implementation.” Tasks 1-7 software-verified; the three Important final-review repairs passed regression and full-suite checks. Review PR handoff is prepared; hosted checks and whole-app acceptance remain separate. Preserve the owner's Native execution selection; do not ask for the method again. Base is design commit `22e4ec7e`, on top of unmerged PI-2 candidate `6f52b8ea`; PI-3 implementation is on this candidate; actual-model/normal-app acceptance remains pending. Work in the existing `C:\Users\gkgaj\Desktop\jarvis_v1` checkout, on a non-main branch; do not create another checkout against the owner's declared preference.
+**Status / execution:** OWNER-APPROVED plan (22 October 2026): “Approve plan — continue Native implementation.” Tasks 1-7 software-verified; the three Important final-review repairs passed regression and full-suite checks. Dependent draft PR #296 is published; hosted checks and whole-app acceptance remain separate. Preserve the owner's Native execution selection; do not ask for the method again. Base is design commit `22e4ec7e`, on top of unmerged PI-2 candidate `6f52b8ea`; PI-3 implementation is on this candidate; actual-model/normal-app acceptance remains pending. Work in the existing `C:\Users\gkgaj\Desktop\jarvis_v1` checkout, on a non-main branch; do not create another checkout against the owner's declared preference.
 
 ## Global Constraints
 
