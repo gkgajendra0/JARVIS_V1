@@ -10,7 +10,7 @@
 
 **Spec:** [Owner-approved written design](../specs/2026-10-22-gemini-free-paid-fallback-design.md), approved as “Approve written design” on22 October2026.
 
-**Status:** Plan for owner review. Baseline design commit `94802e07`, atop PI-3A `211c3ade` and unmerged PI-2/PI-3A dependencies. Preserve existing Desktop checkout; use an isolated non-main feature branch after plan approval. No product implementation, paid request, activation or billing operation has occurred.
+**Status:** OWNER-APPROVED plan: “Approve plan — continue Native implementation.” Implementation in progress. Baseline design commit `94802e07`, atop PI-3A `211c3ade` and unmerged PI-2/PI-3A dependencies. Preserve existing Desktop checkout; use an isolated non-main feature branch after plan approval. No product implementation, paid request, activation or billing operation has occurred.
 
 ## Global Constraints
 
@@ -44,11 +44,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** Add `gemini_credential_ref(slot: Literal['free','paid']) -> str`, `resolve_target_api_key(target: ModelTarget) -> str` with allowlisted refs. `GeminiFallbackConfig(enabled=False, budget_id='gemini-paid-fallback-v1', ceiling_inr_minor=35000, cooldown_seconds=60, max_cooldown_seconds=900, pricing_path: Path|None=None)` validates strict finite/positive values. `build_gemini_role_targets(*, role, model, adapter_id, config, cost_profile=None) -> tuple[ModelTarget,...]` produces role/model/slot targets; disabled legacy builders/digests stay exact.
 
-- [ ] **Step1 — Failing tests:** `test_independent_keys`, `test_tts_not_paid_fallback`, `test_missing_paid_key_never_uses_free_as_paid`, `test_secrets_absent_from_diagnostics`, `test_disabled_legacy_digest`, config precedence/invalid cap. Use canaries and block external network in this test package.
-- [ ] **Step2 — RED:** `PY -m pytest tests/gemini_fallback/test_credentials.py tests/gemini_fallback/test_targets.py -q`; expect absent contracts/behavior, not fixture errors.
-- [ ] **Step3 — Implement interfaces/config:** preserve provider/TTS defaults; no key reads on import, environment rewriting or implicit activation. Missing Paid key/config excludes Paid.
-- [ ] **Step4 — GREEN:** same tests plus `tests/test_c2_tts_separation.py`, `tests/test_ai_provider_policy.py`, `tests/test_config.py`, `tests/test_provider_cli.py`, `tests/test_model_routing_models.py`, `tests/test_model_routing_registry.py`, `tests/test_model_routing_strategy.py`.
-- [ ] **Step5 — Commit:** `feat(routing): add independent Gemini credential targets`; ledger actual evidence.
+- [x] **Step1 — Failing tests:** `test_independent_keys`, `test_tts_not_paid_fallback`, `test_missing_paid_key_never_uses_free_as_paid`, `test_secrets_absent_from_diagnostics`, `test_disabled_legacy_digest`, config precedence/invalid cap. Use canaries and block external network in this test package.
+- [x] **Step2 — RED:** `PY -m pytest tests/gemini_fallback/test_credentials.py tests/gemini_fallback/test_targets.py -q`; expect absent contracts/behavior, not fixture errors.
+- [x] **Step3 — Implement interfaces/config:** preserve provider/TTS defaults; no key reads on import, environment rewriting or implicit activation. Missing Paid key/config excludes Paid.
+- [x] **Step4 — GREEN:** same tests plus `tests/test_c2_tts_separation.py`, `tests/test_ai_provider_policy.py`, `tests/test_config.py`, `tests/test_provider_cli.py`, `tests/test_model_routing_models.py`, `tests/test_model_routing_registry.py`, `tests/test_model_routing_strategy.py`.
+- [x] **Step5 — Commit:** `feat(routing): add independent Gemini credential targets`; ledger actual evidence.
 
 ### Task 2: Scoped requests in the same router/store and immutable replay
 
