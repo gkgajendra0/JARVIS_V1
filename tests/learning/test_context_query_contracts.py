@@ -95,3 +95,11 @@ def test_validated_models_are_revalidated_not_trusted_as_authority():
     forged = PersonalContextRequest.model_construct(scope_key="private_address")
     with pytest.raises(ValueError):
         parse_context_requests([forged], question="My information?")
+
+
+@pytest.mark.parametrize("scope", [[], {}])
+def test_structured_scope_values_are_invalid_not_parser_exceptions(scope):
+    with pytest.raises(ValueError):
+        parse_context_requests(
+            [{"scope_key": scope, "target_quote": "City"}], question="City?"
+        )

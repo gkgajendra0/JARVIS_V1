@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+from .assertions import SemanticAssertionRecord
 
 ScopeKey = Literal[
     "owned_item.vehicle",
@@ -33,7 +36,7 @@ class PersonalContextRequest(BaseModel):
                 type(quote) is not str
                 or not quote.strip()
                 or len(quote.encode("utf-8")) > 256
-                or value.get("scope_key") in {"food_preference", "response_preference"}
+                or value.get("scope_key") in ("food_preference", "response_preference")
             ):
                 raise ValueError("invalid context target")
         return value
@@ -45,7 +48,7 @@ def parse_context_requests(
     if type(requests) is not list or not 1 <= len(requests) <= 4:
         raise ValueError("invalid context requests")
     if not isinstance(question, str):
-        raise ValueError("invalid current question")
+        raise ValueError("invalid current question")  # noqa: TRY004 - closed parser contract
     if frozenset(get_args(ScopeKey)) != SUPPRESSION_KEYS:
         raise ValueError("context scope registry mismatch")
     parsed = []
@@ -63,3 +66,9 @@ def parse_context_requests(
         seen.add(key)
         parsed.append(request)
     return tuple(parsed)
+
+
+@dataclass(frozen=True)
+class ScopedContextSnapshot:
+    entries: tuple[tuple[SemanticAssertionRecord, str], ...]
+    suppression: tuple[tuple[str, int, bool], ...]
