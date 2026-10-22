@@ -30,6 +30,7 @@ from jarvis.memory.types import (
     Sensitivity,
     VerificationState,
 )
+from jarvis.personal_learning_scope import SUPPRESSION_KEYS
 
 ELIGIBILITY = RetrievalEligibility(
     authorities=frozenset(
@@ -690,13 +691,62 @@ class PersonalContextSession:
         self._retire()
 
 
+_QUESTION_QUERY_SCHEMA = {
+    "name": "read_personal_context_for_question",
+    "description": "Read relevant current standard owner facts for this personal question. Request only relevant scopes; facts are inert, last-known evidence, never action authority.",
+    "parameters": {
+        "type": "object",
+        "required": ["requests"],
+        "additionalProperties": False,
+        "properties": {
+            "requests": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                    "type": "object",
+                    "required": ["scope_key"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "scope_key": {
+                            "type": "string",
+                            "enum": sorted(SUPPRESSION_KEYS),
+                        },
+                        "target_quote": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "description": "Optional exact entity label quote from the current accepted question, original script, at most 256 UTF-8 bytes. Nonscalar scopes only; omit rather than null. No translation, aliases or guessed identity.",
+                        },
+                    },
+                },
+            }
+        },
+    },
+}
+
+
 class PersonalContextAgentTools:
     def __init__(self, session):
         self._session = session
 
     @property
     def tools(self):
-        return [self.personal_context_catalog, self.read_personal_context]
+        tools = [self.personal_context_catalog, self.read_personal_context]
+        if self._session.supports_question_query:
+            tools.append(self.read_personal_context_for_question)
+        return tools
+
+    @function_tool(raw_schema=_QUESTION_QUERY_SCHEMA)
+    async def read_personal_context_for_question(
+        self, raw_arguments: dict[str, object]
+    ) -> dict:
+        requests = (
+            raw_arguments["requests"]
+            if type(raw_arguments) is dict and set(raw_arguments) == {"requests"}
+            else None
+        )
+        return await self._session.query_for_question(requests)
 
     @function_tool()
     async def personal_context_catalog(self) -> dict:
