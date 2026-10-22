@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>JARVIS • Dynamic Context Stage</title>
+  <link rel="stylesheet" href="/ui.css">
+  <script src="/ui.js" defer></script>
+</head>
+<body>
+  <div class="app-shell" id="app">
+    <div class="ambient-backdrop" aria-hidden="true">
+      <div class="horizon"></div><div class="ambient-grid"></div><div class="atmosphere"></div>
+    </div>
+    <header class="topbar">
+      <div class="brand"><div class="brandword">J<span class="brand-a">Λ</span>RVIS</div><span class="brand-sub">YOUR PERSONAL INTELLIGENCE</span></div>
+      <div class="topbar-center" id="modeHint"><span class="pulse-dot"></span> CONTEXT-AWARE INTERFACE</div>
+      <div class="top-meta">
+        <span class="connection-tag" id="connectionBadge">UI PREVIEW • NO RUNTIME</span>
+        <time id="localClock" aria-live="off">--:--</time>
+        <button class="icon-button menu-shortcut" id="helpButton" aria-label="Keyboard help" title="Keyboard shortcuts">?</button>
+      </div>
+    </header>
+    <nav class="rail" aria-label="Visual workspace">
+      <button class="rail-button selected" data-action="home" aria-label="Ambient home" title="Ambient home"><span>⌂</span><small>HOME</small></button>
+      <button class="rail-button" data-panel="work" aria-label="Show work" title="Work"><span>▤</span><small>WORK</small></button>
+      <button class="rail-button" data-panel="research" aria-label="Show research" title="Research"><span>◎</span><small>RESEARCH</small></button>
+      <button class="rail-button" data-panel="vision" aria-label="Show vision" title="Vision"><span>◉</span><small>VISION</small></button>
+      <button class="rail-button" data-panel="document" aria-label="Show documents" title="Documents"><span>▧</span><small>FILES</small></button>
+      <button class="rail-button" data-panel="system" aria-label="System status" title="System"><span>◇</span><small>SYSTEM</small></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-button rail-help" id="previewButton" aria-label="Toggle labeled preview sample" title="Preview sample"><span>✦</span><small>PREVIEW</small></button>
+    </nav>
+    <main class="layout" id="layout">
+      <section class="presence" aria-label="Jarvis presence">
+        <div class="eyebrow presence-eyebrow"><span class="line-accent"></span> ALWAYS HERE. WHEN YOU NEED ME.</div>
+        <div class="orb-wrap">
+          <canvas id="orbCanvas" role="img" aria-label="Animated Jarvis energy orb responding to runtime state"></canvas>
+          <div class="orb-rim rim-a" aria-hidden="true"></div>
+          <div class="orb-rim rim-b" aria-hidden="true"></div>
+          <div class="orb-beacon" aria-hidden="true"></div>
+        </div>
+        <div class="presence-label">
+          <h1>JARVIS</h1>
+          <div id="voiceState" class="voice-label"><span class="small-status"></span> UI preview · runtime not connected</div>
+          <div class="wave" id="wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <p id="ambientMessage">An intelligence at your side. Your workspace appears when it matters.</p>
+        </div>
+      </section>
+      <section class="stage" id="stage" aria-label="Contextual panels">
+        <div class="stage-heading">
+          <div><div class="eyebrow"><span class="line-accent"></span> LIVE CONTEXT STAGE</div><h2 id="stageTitle">Right information. Right moment.</h2></div>
+          <button class="text-button" id="clearButton">Clear unpinned <span>×</span></button>
+        </div>
+        <div id="cards" class="cards" aria-live="polite"></div>
+      </section>
+      <div class="quiet-prompt" id="quietPrompt" aria-hidden="true">
+        <span class="prompt-line"></span><span>NOTHING NEEDS YOUR ATTENTION RIGHT NOW</span><span class="prompt-line"></span>
+      </div>
+    </main>
+    <footer class="command-dock">
+      <div class="dock-status">
+        <span class="dock-orb" aria-hidden="true"></span>
+        <span><strong id="dockHeading">AMBIENT MODE</strong><small id="dockStatus">Minimal by design</small></span>
+      </div>
+      <form class="command-form" id="commandForm">
+        <label for="visualCommand" class="sr-only">Choose a visual panel (local UI only)</label>
+        <span class="command-chevron" aria-hidden="true">⌘</span>
+        <input id="visualCommand" type="text" autocomplete="off" maxlength="120" placeholder="Show a visual panel... (UI only)" spellcheck="false">
+        <button type="submit" id="showPanelButton">DISPLAY <span aria-hidden="true">↗</span></button>
+      </form>
+      <div class="dock-extra">
+        <span id="workCounter">NO WORK FEED</span>
+        <button class="dock-button" id="backHome" title="Return to ambient mode">◌ AMBIENT</button>
+      </div>
+    </footer>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="helpDialog" class="help-dialog">
+      <h2>Visual workspace shortcuts</h2>
+      <p>This interface is a read-only companion. It does not execute system actions.</p>
+      <dl><dt>Ctrl + K</dt><dd>Focus local panel chooser</dd><dt>Escape</dt><dd>Close help or return to ambient mode</dd><dt>Pin</dt><dd>Keep a context panel when the topic changes</dd></dl>
+      <button id="closeHelp" class="text-button">Close</button>
+    </dialog>
+  </div>
+</body>
+</html>
