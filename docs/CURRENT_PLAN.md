@@ -197,17 +197,10 @@ bypass of Authority/OPA. The approved active product goal still requires the
 release gates above. **Protected main remains unchanged until the owner
 approves and all required checks pass.**
 
-## Next action
+## Active slice: PI-3A question-bound contextual assistance
 
-Advance the North Star's PI-3contextual-assistance slice: inspect existing
-normal-voice context selection/use and identify the smallest observed gap in
-personally useful advice and supported follow-up references. Reuse canonical
-memory/conversation/Authority; then research/design only the gap. Do not start a
-new generic reasoning engine, use Step8tasks/reminders as a substitute, restart
-the deferred provider benchmark, or claim that PI-2acceptance is complete.
-Relevant Work/Hands context integration belongs after the ordinary-assistance
-path is understood. Preserve normal-app acceptance and promotion boundaries.
+The owner approved the [written design](superpowers/specs/2026-10-22-pi3-entity-aware-context-design.md) and [seven-task Native plan](superpowers/plans/2026-10-22-pi3-entity-aware-context.md) on 22 October 2026. Tasks 1-6 are implemented on the dependent candidate in the existing Desktop checkout; Task 7 software verification and review repairs are complete (2,858 tests / 8 skips). This supersedes the earlier inspect/research-only next action. The [gap map](research/PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md) and [technology review](research/PI3_TECHNOLOGY_REVIEW_2026-10-22.md) preserve how native structured projection was selected.
 
-Initial PI-3read-only inspection is recorded in the [gap map](research/PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md): learned nonscalar catalog IDs are opaque; actual model selection among multiple entities is not proven by forced-index answer fixtures. Proposed first slice is bounded entity-aware selection plus grounded use through existing realtime tools. The descriptor/query contract and privacy budgets still need architectural design review before code or live execution.
+Implemented: question-bound registered-scope queries, exact current label matching/clarification, bounded multi-fact evidence, one shared read budget, coherent canonical snapshots, scope/source/version invalidation and normal learning-APPLY tool/instruction integration. Context-only/OFF, explicit mutations, default OFF, existing grants and provider-history retirement remain supported. No new memory engine, HTTP reasoner, model/dependency change, provider request or owner activation occurred.
 
-[PI-3technology review](research/PI3_TECHNOLOGY_REVIEW_2026-10-22.md) completes the bounded desk comparison/prior-experiment reconciliation for the first-slice shortlist. Native entity-aware tools are recommended; semantic descriptors versus structured query projection, privacy budgets and offline contract comparison remain design/validation work. No new framework/model adoption or product code is approved.
+Draft [PR #296](https://github.com/gkgajendra0/JARVIS_V1/pull/296) contains this candidate against unmerged PR #295. Next: follow its exact-head hosted checks and the [implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md), then owner-selected whole normal-app validation. Actual-model selection and spoken usefulness are not proven by forced tool/audio harnesses. Exact-head CI, dependency integration, applicable owner acceptance and explicit protected merge remain separate gates. PI-2 broad qualification is still deferred, never counted as passed; PI-3 as a whole and CAP-053 remain PARTIAL. Do not restart quota-bound benchmarks, replace this with Step8 reminders, or broaden alias/episode/proactive behavior silently.

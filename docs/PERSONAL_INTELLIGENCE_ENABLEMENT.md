@@ -8,6 +8,7 @@ Last reconciled: 22 October 2026. This is the permanent record of what is implem
 | --- | --- | --- | --- | --- |
 | Saved personal context, recall and existing-memory correction | PR #294 and dependencies #292/#293 merged | OFF |21 October: owner confirmed saved-diet recall, correction, process restart and restoration in the whole Windows app; bounded scope only | `--personal-learning off --personal-context apply` |
 | Automatic conversational learning without per-fact save prompts | Implemented/software-verified; PR #295 still OPEN/DRAFT at this checkpoint | OFF |Full normal-app owner acceptance pending; extended provider benchmark deferred, not passed | `--personal-learning apply` |
+| Question-bound relevant context for ordinary advice (PI-3A) | Implemented on dependent candidate; software-verified; all three Important review repairs regression-verified | OFF; shares learning mode | Actual-model selection and normal-app spoken acceptance pending | `--personal-learning apply` on the PI-3A candidate |
 
 The earlier acceptance explicitly states: APPLY is opt-in; OFF remains default; no saved machine setting changes. See the [21 October owner acceptance](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md). It does not accept automatic learning or all personal-intelligence behavior. The newer candidate's [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md) and [qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md) retain its actual scope and pending gates.
 
@@ -21,7 +22,7 @@ Merging code, enabling a feature for a test, completing owner acceptance and ena
 
 ## Whole-JARVIS test launches
 
-Use the configured Desktop checkout after confirming it contains the intended candidate/merged commit. PR #295 must be present for its new flag/behavior; do not assume an older main checkout contains it.
+Use the configured Desktop checkout after confirming it contains the intended candidate/merged commit. PR #295 must be present for learning behavior, and the PI-3A candidate must also be present for the new question-bound context tool. An older main or PI-2-only checkout does not contain the new selector. See the [PI-3A implementation/whole-app acceptance protocol](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
 
 For the previously accepted personal-context path with automatic learning explicitly disabled:
 
