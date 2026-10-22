@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import mimetypes
-from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import PurePosixPath
