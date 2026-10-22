@@ -691,7 +691,33 @@ class MemoryLifecycleService:
 
         return self._transaction(connection, mutation, commit_guard)
 
-    async def reenable_learning_category(self, category, source, commit_guard):
+    async def suppress_learning_categories(
+        self, categories, source, permit, authority, binding
+    ):
+        def apply(connection):
+            def guard():
+                authority.validate_write(permit)
+                if (
+                    authority.child_binding(permit) != binding
+                    or authority.source_for(permit) is not source
+                ):
+                    raise PermissionError("suppression binding changed")
+
+            def mutation():
+                for category in categories:
+                    connection.execute(
+                        "INSERT INTO personal_learning_suppression VALUES (?,1,1,?) ON CONFLICT(category) DO UPDATE SET epoch=epoch+1,suppressed=1,updated_at=excluded.updated_at",
+                        (category, _db_time(self._clock_utc())),
+                    )
+
+            with authority.commit_scope(permit):
+                return self._transaction(connection, mutation, guard)
+
+        return await self._writer.run(apply)
+
+    async def reenable_learning_category(
+        self, category, source, commit_guard, authority
+    ):
         def apply(connection):
             def mutation():
                 self._ensure_source(connection, source)
@@ -700,14 +726,15 @@ class MemoryLifecycleService:
                     (category, _db_time(self._clock_utc())),
                 )
 
-            return self._transaction(connection, mutation, commit_guard)
+            with authority.reenable_scope(category, commit_guard):
+                return self._transaction(connection, mutation, commit_guard)
 
         return await self._writer.run(apply)
 
     def _purge_learning_lineage(self, connection, target, source, now):
         import json
 
-        from .learning_policy import SCALAR_FACETS
+        from jarvis.personal_learning_scope import LEGACY_FACETS
 
         rows = connection.execute(
             "SELECT assertion_id,source_id,value_json FROM semantic_assertion WHERE subject_scope=? AND subject=? AND predicate=?",
@@ -734,10 +761,9 @@ class MemoryLifecycleService:
                     if cat == "owned_item"
                     else cat
                 )
-        for cat, facets in SCALAR_FACETS.items():
-            if target.predicate in facets:
-                categories.add(cat)
-        from .learning_policy import SUPPRESSION_KEYS
+        if target.predicate in LEGACY_FACETS:
+            categories.add(LEGACY_FACETS[target.predicate])
+        from jarvis.personal_learning_scope import SUPPRESSION_KEYS
 
         for category in categories & SUPPRESSION_KEYS:
             connection.execute(

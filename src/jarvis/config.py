@@ -156,6 +156,7 @@ class JarvisConfig:
     memory_enabled: bool = False
     personal_context_mode: str = "off"
     personal_learning_mode: str = "off"
+    personal_learning_reenable_categories: tuple[str, ...] = ()
     memory_candidate_extraction_enabled: bool = False
     memory_candidate_extraction_model: str | None = None
     memory_semantic_recall_model: str | None = None
@@ -175,6 +176,18 @@ class JarvisConfig:
     pocket3_resend_cooldown_seconds: float = 1.0
 
     def __post_init__(self) -> None:
+        from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+        categories = self.personal_learning_reenable_categories
+        if (
+            type(categories) is not tuple
+            or not set(categories) <= SUPPRESSION_KEYS
+            or len(set(categories)) != len(categories)
+            or (categories and self.personal_learning_mode != "apply")
+        ):
+            raise ValueError(
+                "category re-enable requires scoped personal learning apply"
+            )
         if self.personal_learning_mode not in {"off", "apply"}:
             raise ValueError("personal_learning_mode must be off or apply")
         if self.personal_learning_mode == "apply":

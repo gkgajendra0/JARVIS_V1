@@ -169,3 +169,73 @@ def test_routine_schedule_change_replaces_supported_value_and_preserves_identity
     )
     assert plan.mutations[0].draft.value["value"] == "6 pm"
     assert "6 pm" in plan.mutations[0].draft.normalized_text
+
+
+def test_distinct_entities_can_share_value():
+    for category, kind, old_label, label, value in [
+        ("owned_item", "vehicle", "red City", "blue City", "City"),
+        ("routine", "other", "evening walk", "evening yoga", "6 pm"),
+    ]:
+        s, b = inputs(f"{label}: {value}", [label])
+        c = b.candidates[0].model_copy(
+            update={
+                "category": category,
+                "kind": kind,
+                "value": value,
+                "state": "owned" if category == "owned_item" else "active",
+            }
+        )
+        prior = entry("old", old_label).model_copy(
+            update={
+                "category": category,
+                "kind": kind,
+                "predicate": f"{category}_old",
+                "value": json.dumps(
+                    {
+                        "schema": "personal-learning-v1",
+                        "category": category,
+                        "kind": kind,
+                        "label": old_label,
+                        "value": value,
+                        "state": c.state,
+                    }
+                ),
+            }
+        )
+        plan = LearningReconciler(None, None).plan(
+            s,
+            LearningBatch(candidates=[c]),
+            LearningCatalog(entries=[prior]),
+            resolutions(("new", None)),
+        )
+        assert len(plan.mutations) == 1
+
+
+def test_scalar_correction_cannot_target_other_relation():
+    for facet, other, value in [
+        ("response_language", "response_style", "Hindi"),
+        ("response_style", "response_language", "concise"),
+    ]:
+        s, b = inputs(f"My {facet} is {value}", [value], "correction")
+        c = b.candidates[0].model_copy(
+            update={
+                "category": "response_preference",
+                "kind": "other",
+                "scalar_facet": facet,
+                "state": "active",
+            }
+        )
+        prior = LearningCatalogEntry(
+            assertion_id="old",
+            predicate=other,
+            category="response_preference",
+            text="prior",
+            value="English",
+        )
+        plan = LearningReconciler(None, None).plan(
+            s,
+            LearningBatch(candidates=[c]),
+            LearningCatalog(entries=[prior]),
+            resolutions(("match", "old")),
+        )
+        assert not plan.mutations

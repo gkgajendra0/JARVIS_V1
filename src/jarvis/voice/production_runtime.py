@@ -750,7 +750,9 @@ def _load_voice_config(
 
 
 async def _run_from_configuration(
-    personal_context_mode: str | None = None, personal_learning_mode: str | None = None
+    personal_context_mode: str | None = None,
+    personal_learning_mode: str | None = None,
+    reenable_categories: tuple[str, ...] = (),
 ) -> None:
     migration_needs_preflight_validation = False
     while True:
@@ -773,6 +775,11 @@ async def _run_from_configuration(
                 startup_lifecycle.replacement_model,
             )
             config = _load_voice_config(personal_context_mode, personal_learning_mode)
+
+        if reenable_categories:
+            config = replace(
+                config, personal_learning_reenable_categories=reenable_categories
+            )
 
         self_awareness: SelfAwarenessRuntime | None = None
         try:
@@ -822,6 +829,9 @@ async def _run_from_configuration(
                 continue
             raise
 
+        # A local recovery request is attempted only by the first built controller.
+        # Provider model recycling must not silently request it again.
+        reenable_categories = ()
         migration_needs_preflight_validation = False
         migrated = asyncio.Event()
         lifecycle_task = (
@@ -872,11 +882,30 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Open an owner-operated automatic memory session at startup",
     )
+    from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+    parser.add_argument(
+        "--reenable-learning-category",
+        choices=sorted(SUPPRESSION_KEYS),
+        action="append",
+        default=[],
+        help="Explicitly restore one suppressed category with a separate Windows Hello approval",
+    )
     args = parser.parse_args(argv)
+    if args.reenable_learning_category and args.personal_learning != "apply":
+        parser.error("--reenable-learning-category requires --personal-learning apply")
     if args.personal_learning == "apply" and args.personal_context == "off":
         parser.error("--personal-learning apply requires --personal-context apply")
     try:
-        if args.personal_learning is None:
+        if args.reenable_learning_category:
+            asyncio.run(
+                _run_from_configuration(
+                    args.personal_context,
+                    args.personal_learning,
+                    tuple(dict.fromkeys(args.reenable_learning_category)),
+                )
+            )
+        elif args.personal_learning is None:
             asyncio.run(_run_from_configuration(args.personal_context))
         else:
             asyncio.run(

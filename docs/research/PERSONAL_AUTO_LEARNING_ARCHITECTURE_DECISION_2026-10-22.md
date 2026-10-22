@@ -13,3 +13,9 @@ Forgetting purges exact facet lineage, derived rows, per-item sources and receip
 Earlier Hindsight/LangMem/classifier/retrieval experiments remain the historical evidence described in the design. Hindsight is not dismissed as universally unsuccessful; no vendor superiority claim follows from this implementation. Consider an external component only for a concrete measured gap with a comparable, fresh evaluation. Current [qualification](PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md) is incomplete after provider quota exhaustion and does not establish broad semantic quality.
 
 Do not merge or activate until independent review, exact-head CI, semantic/resource qualification and normal-app owner acceptance pass, followed by the owner's protected-promotion decision. Keep the accepted architecture and CAP-053 status partial until then.
+
+## Reviewed control boundaries
+
+One shared code-owned relation registry limits delegated reads and resolver catalogs to the approved categories, with conservative supported legacy mappings. Category vetoes persist as permission reductions without cloud inference; current-turn vetoes remain scoped to that turn. Forgetting a supported legacy vehicle/device also suppresses its category. Distinct labels/kinds preserve separate identities, and scalar updates must target exactly the registered scalar predicate.
+
+The normal local startup accepts `--reenable-learning-category owned_item.vehicle` together with `--personal-learning apply`. Re-enable uses a separate exact-category fresh Windows Hello approval, consumed once under the canonical writer commit guard. It invalidates old source receipts, reports suppression category state without values, and is never a model tool. The original session-start consent and default-OFF behavior are unchanged.

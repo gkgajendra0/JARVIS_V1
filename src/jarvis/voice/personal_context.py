@@ -250,8 +250,12 @@ class PersonalContextSession:
             LOGGER.info("Personal context catalog | status=denied")
             return {"status": "denied"}
         try:
-            catalog = await self._retrieval.eligible_facet_catalog(
-                eligibility=ELIGIBILITY
+            catalog = (
+                await self._retrieval.learning_facet_catalog()
+                if self._learning_read
+                else await self._retrieval.eligible_facet_catalog(
+                    eligibility=ELIGIBILITY
+                )
             )
             facets = tuple(
                 f
@@ -289,10 +293,12 @@ class PersonalContextSession:
             LOGGER.info("Personal context catalog | status=unavailable")
             return {"status": "unavailable"}
 
-    @staticmethod
-    def _eligible(record):
+    def _eligible(self, record):
+        from jarvis.personal_learning_scope import record_scope
+
         return (
-            record.subject_scope == "personal"
+            (not self._learning_read or record_scope(record) is not None)
+            and record.subject_scope == "personal"
             and record.subject == "owner"
             and record.state is AssertionState.ACTIVE
             and record.valid_to is None

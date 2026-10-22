@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from time import monotonic
 
 from .learning_contracts import AcceptedLearningSource, LearningBatch
+from .learning_controls import category_veto, suppression_binding
 from .learning_policy import LearningPolicy
 
 INFERENCE_TIMEOUT = 10.0
@@ -43,11 +44,13 @@ class PersonalLearningRuntime:
         self.clock, self.status_observer = clock, status_observer
         self._queue = asyncio.Queue(maxsize=32)
         self._pending = {}
+        self._controls = {}
         self._seen = set()
         self._vetoed = set()
         self._window_cutoff = None
         self._worker = None
         self._inflight = None
+        self._inflight_receipt = None
         self._closed = False
         self._grant = None
         self._processed = self._committed = self._dropped = 0
@@ -97,6 +100,20 @@ class PersonalLearningRuntime:
                 raise PermissionError("input limit")
             self._seen.add(turn.turn_id)
             self.authority.observe_accepted_input(grant, turn.turn_id)
+            categories = category_veto(source.text)
+            if categories:
+                self._vetoed.add(turn.turn_id)
+                self.invalidate_sources()
+                if any(
+                    set(categories) <= set(keys) for keys in self._controls.values()
+                ):
+                    self._report("category_suppression_pending")
+                    return
+                self.authority.register_source(grant, source.receipt_id, source=source)
+                self._pending[source.receipt_id] = (source, grant)
+                self._controls[source.receipt_id] = categories
+                self._enqueue(source.receipt_id)
+                return
             if not LearningPolicy.source_allowed(source):
                 self._vetoed.add(turn.turn_id)
                 self.invalidate_sources(turn_id=turn.turn_id)
@@ -127,23 +144,43 @@ class PersonalLearningRuntime:
                 return
             self.authority.register_source(grant, source.receipt_id, source=source)
             self._pending[source.receipt_id] = (source, grant)
-            self._queue.put_nowait(source.receipt_id)
-            if self._worker is None or self._worker.done():
-                self._worker = asyncio.create_task(
-                    self._run(), name="jarvis-personal-learning"
-                )
+            self._enqueue(source.receipt_id)
         except (ValueError, PermissionError):
             self._dropped += 1
             self._report("source_denied")
+
+    def _enqueue(self, receipt):
+        self._queue.put_nowait(receipt)
+        if self._worker is None or self._worker.done():
+            self._worker = asyncio.create_task(
+                self._run(), name="jarvis-personal-learning"
+            )
 
     def invalidate_sources(self, category=None, turn_id=None):
         if turn_id is None:
             self._window_cutoff = datetime.now(UTC)
         for receipt, (source, grant) in tuple(self._pending.items()):
-            if turn_id is None or source.turn_id == turn_id:
+            if (turn_id is None or source.turn_id == turn_id) and (
+                self._closed or receipt not in self._controls
+            ):
                 self.authority.release_source(grant, receipt)
                 self._pending.pop(receipt, None)
-        if self._inflight and not self._inflight.done():
+                self._controls.pop(receipt, None)
+        # Retire dead queue entries immediately, so a full fact queue cannot
+        # discard an owner privacy control. Preserve live control ordering.
+        retained = []
+        while not self._queue.empty():
+            receipt = self._queue.get_nowait()
+            self._queue.task_done()
+            if receipt in self._pending:
+                retained.append(receipt)
+        for receipt in retained:
+            self._queue.put_nowait(receipt)
+        if (
+            self._inflight
+            and not self._inflight.done()
+            and (self._closed or self._inflight_receipt not in self._controls)
+        ):
             self._inflight.cancel()
         self._report("sources_invalidated")
 
@@ -158,6 +195,14 @@ class PersonalLearningRuntime:
 
     async def _process(self, receipt, source, grant):
         self._require(receipt, source, grant)
+        if receipt in self._controls:
+            categories = self._controls[receipt]
+            permit = self.authority.issue_child(
+                grant, suppression_binding(source, categories)
+            )
+            await self.service.suppress_learning_categories(source, categories, permit)
+            self._report("category_suppressed")
+            return
         batch = await asyncio.wait_for(
             self.extractor.extract(source), INFERENCE_TIMEOUT
         )
@@ -199,6 +244,7 @@ class PersonalLearningRuntime:
             try:
                 if item:
                     source, grant = item
+                    self._inflight_receipt = receipt
                     self._inflight = asyncio.create_task(
                         self._process(receipt, source, grant)
                     )
@@ -219,7 +265,9 @@ class PersonalLearningRuntime:
                 if item:
                     self.authority.release_source(item[1], receipt)
                 self._pending.pop(receipt, None)
+                self._controls.pop(receipt, None)
                 self._inflight = None
+                self._inflight_receipt = None
                 self._queue.task_done()
 
     async def drain(self):

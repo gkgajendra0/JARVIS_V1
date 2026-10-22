@@ -710,6 +710,37 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             )
             self._learning_grant = grant
             self._memory_runtime.bind_learning_authority(self._learning_authority)
+            for category in self.config.personal_learning_reenable_categories:
+                from datetime import UTC, datetime
+
+                from jarvis.memory.provenance import MemorySource
+                from jarvis.memory.types import (
+                    AuthorityClass,
+                    MemorySourceClass,
+                    Sensitivity,
+                )
+
+                guard = await asyncio.to_thread(
+                    self._learning_authority.authorize_reenable_category, category
+                )
+                now = datetime.now(UTC)
+                source = MemorySource(
+                    str(uuid4()),
+                    MemorySourceClass.OWNER_EXPLICIT,
+                    "local-control:reenable:" + category,
+                    now,
+                    AuthorityClass.OWNER_EXPLICIT,
+                    Sensitivity.STANDARD,
+                    now,
+                )
+                await self._memory_runtime.service.reenable_learning_category(
+                    category, source, guard
+                )
+            suppression = await self._memory_runtime.service.learning_suppression()
+            LOGGER.info(
+                "Personal learning suppression | categories=%s",
+                ",".join(sorted(suppression.suppressed)) or "none",
+            )
             extractor, resolver = build_learning_adapters(self.config.ai_provider)
             self._personal_learning = PersonalLearningRuntime(
                 self._learning_authority,

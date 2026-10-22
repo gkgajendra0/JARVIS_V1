@@ -194,18 +194,39 @@ class MemoryService:
     async def learning_suppression(self):
         return await self._reader.learning_suppression()
 
-    async def reenable_learning_category(self, category, explicit_source, commit_guard):
-        from .learning_policy import SUPPRESSION_KEYS
+    async def suppress_learning_categories(self, source, categories, permit):
+        from .learning_controls import category_veto, suppression_binding
 
-        if category not in SUPPRESSION_KEYS or not callable(commit_guard):
+        authority = self._learning_authority
+        if authority is None or tuple(categories) != category_veto(source.text):
+            raise PermissionError("canonical category veto required")
+        binding = suppression_binding(source, categories)
+        if (
+            authority.child_binding(permit) != binding
+            or authority.source_for(permit) is not source
+        ):
+            raise PermissionError("suppression source binding mismatch")
+        await self._lifecycle.suppress_learning_categories(
+            categories, source, permit, authority, binding
+        )
+
+    async def reenable_learning_category(self, category, explicit_source, commit_guard):
+        from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+        if (
+            self._learning_authority is None
+            or category not in SUPPRESSION_KEYS
+            or not callable(commit_guard)
+        ):
             raise PermissionError("exact explicit category approval required")
         try:
             self._validate_owner_explicit_source(explicit_source, Sensitivity.STANDARD)
         except MemoryServiceError as exc:
             raise PermissionError("explicit owner source required") from exc
         await self._lifecycle.reenable_learning_category(
-            category, explicit_source, commit_guard
+            category, explicit_source, commit_guard, self._learning_authority
         )
+        self._invalidate_learning()
 
     async def remember_text(
         self,

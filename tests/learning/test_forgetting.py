@@ -75,7 +75,9 @@ async def test_forget_purges_lineage_receipts_and_blocks_late_result(learning):
     with pytest.raises(PermissionError):
         await learning.service.admit_learning(learning.plan, learning.new_permit())
     await learning.service.reenable_learning_category(
-        "owned_item.vehicle", explicit_source(learning), lambda: None
+        "owned_item.vehicle",
+        explicit_source(learning),
+        learning.authority.authorize_reenable_category("owned_item.vehicle"),
     )
     state = await learning.service.learning_suppression()
     assert not state.suppressed and state.epochs["owned_item.vehicle"] == 2

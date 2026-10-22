@@ -12,6 +12,7 @@ from jarvis.capabilities.authority_bridge import (
 )
 from jarvis.capabilities.execution import PreparedCapability
 from jarvis.capabilities.models import CapabilityRequest
+from jarvis.personal_learning_scope import CATEGORIES, POLICY_VERSION, SUPPRESSION_KEYS
 
 from .approval import ApprovalError
 from .proposal import ActionProposal, canonical_json
@@ -24,10 +25,6 @@ from .types import (
     TrustTier,
 )
 
-POLICY_VERSION = "personal-learning-v1"
-CATEGORIES = frozenset(
-    {"owned_item", "food_preference", "response_preference", "routine", "goal"}
-)
 POLICY_DIGEST = hashlib.sha256(
     canonical_json(
         {
@@ -36,6 +33,8 @@ POLICY_DIGEST = hashlib.sha256(
             "absolute": 900,
             "idle": 300,
             "sensitivity": "standard",
+            "category_veto": "persistent",
+            "scope_registry": 1,
         }
     ).encode()
 ).hexdigest()
@@ -95,6 +94,7 @@ class PersonalLearningAuthority:
         self._broker = broker
         self._grants: dict[LearningGrantHandle, _Grant] = {}
         self._children: dict[LearningPermitHandle, _Child] = {}
+        self._reenables = {}
 
     def open(self, runtime_id: str, provider: str) -> LearningGrantHandle:
         if not runtime_id or provider not in {"gemini", "openai"}:
@@ -130,6 +130,64 @@ class PersonalLearningAuthority:
                 handle, lambda proposal: self._proof(handle, proposal)
             )
             return handle
+
+    def authorize_reenable_category(self, category):
+        if category not in SUPPRESSION_KEYS:
+            raise PermissionError("unknown learning category")
+        parameters = {"category": category, "policy_sha256": POLICY_DIGEST}
+        prepared = PreparedCapability(
+            CapabilityRequest(
+                str(uuid4()),
+                "memory:personal_learning",
+                "reenable",
+                parameters,
+                ActionOrigin.DIRECT_USER,
+            ),
+            {"subject_scope": "personal", "subject": "owner", "category": category},
+            parameters,
+            f"Explicitly re-enable automatic learning for {category}; old accepted sources remain invalid.",
+            ActionAttributes(persistent_write=True, security_or_permission_change=True),
+            {},
+        )
+        with self._broker._lock:
+            try:
+                authorized = self._broker.authorize_fresh_owner(prepared)
+            except Exception as exc:
+                raise PermissionError("category re-enable was not authorized") from exc
+
+            def guard():
+                try:
+                    self._broker.validate_binding(authorized)
+                except Exception as exc:
+                    raise PermissionError(
+                        "category approval expired or invalidated"
+                    ) from exc
+
+            self._reenables[guard] = (category, authorized)
+            return guard
+
+    @contextmanager
+    def reenable_scope(self, category, guard):
+        # Enter on the writer thread and retain the same lock through SQL commit.
+        with self._broker._lock:
+            registered = self._reenables.get(guard)
+            if registered is None or registered[0] != category:
+                raise PermissionError("exact registered category approval required")
+            self._reenables.pop(guard)
+            try:
+                guard()
+                self._broker.consume(registered[1])
+                # Invalidate all pre-reenable receipts, including windows accepted
+                # under another still-active wake conversation.
+                for record in self._grants.values():
+                    record.sources.clear()
+                    record.source_objects.clear()
+                yield
+                guard()
+            except PermissionError:
+                raise
+            except Exception as exc:
+                raise PermissionError("category approval unavailable") from exc
 
     def _snapshot(self, grant):
         record = self._grants.get(grant)
@@ -230,7 +288,10 @@ class PersonalLearningAuthority:
     def validate_write(self, permit):
         with self._broker._lock:
             child = self._child(permit)
-            if child.binding.operation != "admit" or not child.consumed:
+            if (
+                child.binding.operation not in {"admit", "suppress"}
+                or not child.consumed
+            ):
                 raise PermissionError("unconsumed write child")
 
     def revoke(self, grant, reason="manual_clear"):
@@ -251,7 +312,7 @@ class PersonalLearningAuthority:
         p = proposal.parameters()
         if (
             proposal.capability != "memory:personal_learning"
-            or proposal.operation not in {"read", "admit"}
+            or proposal.operation not in {"read", "admit", "suppress"}
             or proposal.origin is not ActionOrigin.SYSTEM
             or proposal.session_id != record.parent.context.session_id
             or p.get("policy_sha256") != POLICY_DIGEST
@@ -269,7 +330,7 @@ class PersonalLearningAuthority:
             record = self._require(grant)
             if (
                 not isinstance(binding, LearningActionBinding)
-                or binding.operation not in {"read", "admit"}
+                or binding.operation not in {"read", "admit", "suppress"}
                 or binding.policy_version != POLICY_VERSION
                 or not binding.categories
                 or not set(binding.categories) <= CATEGORIES
@@ -297,7 +358,7 @@ class PersonalLearningAuthority:
                 material_summary="Scoped standard owner memory",
                 attributes=ActionAttributes(
                     private_read=binding.operation == "read",
-                    persistent_write=binding.operation == "admit",
+                    persistent_write=binding.operation in {"admit", "suppress"},
                 ),
                 origin=ActionOrigin.SYSTEM,
                 ttl_seconds=30,
@@ -385,7 +446,7 @@ class PersonalLearningAuthority:
     def commit_scope(self, permit):
         with self._broker._lock:
             child = self._child(permit)
-            if child.binding.operation != "admit":
+            if child.binding.operation not in {"admit", "suppress"}:
                 raise PermissionError("not a write child")
             self._consume(child)
             try:
@@ -411,3 +472,4 @@ class PersonalLearningAuthority:
         for grant in tuple(self._grants):
             self.revoke(grant, "runtime_closed")
         self._children.clear()
+        self._reenables.clear()

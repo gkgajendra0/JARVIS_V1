@@ -2,6 +2,8 @@
 
 from pydantic import ValidationError
 
+from jarvis.personal_learning_scope import SCALAR_FACETS
+
 from .explicit import (
     ExplicitMemoryAuthorizationError,
     MemorySecretRejectedError,
@@ -14,11 +16,6 @@ from .learning_contracts import (
     LearningCandidate,
     LearningEligibility,
 )
-
-SCALAR_FACETS = {
-    "food_preference": frozenset({"diet_preference"}),
-    "response_preference": frozenset({"response_language", "response_style"}),
-}
 
 
 class LearningPolicy:
@@ -73,16 +70,3 @@ class LearningPolicy:
         except MemorySecretRejectedError:
             return LearningEligibility("drop", "secret")
         return LearningEligibility("eligible")
-
-
-SUPPRESSION_KEYS = frozenset(
-    {
-        "owned_item.vehicle",
-        "owned_item.device",
-        "owned_item.other",
-        "food_preference",
-        "response_preference",
-        "routine",
-        "goal",
-    }
-)

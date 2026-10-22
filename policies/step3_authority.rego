@@ -98,7 +98,7 @@ decision := {
 
 personal_learning_child if {
     input.proposal.capability == "memory:personal_learning"
-    input.proposal.operation in {"read", "admit"}
+    input.proposal.operation in {"read", "admit", "suppress"}
 }
 
 decision := {

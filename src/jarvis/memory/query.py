@@ -38,7 +38,14 @@ class CanonicalMemoryReader:
     async def learning_current(self):
         """Bounded standard owner snapshot; caller must hold learning read authority."""
 
+        from jarvis.personal_learning_scope import (
+            LEGACY_FACETS,
+            POLICY_VERSION,
+            record_scope,
+        )
+
         def query(connection):
+            marks = ",".join("?" for _ in LEGACY_FACETS)
             rows = connection.execute(
                 "SELECT "
                 + ", ".join(
@@ -50,11 +57,22 @@ class CanonicalMemoryReader:
                 " AND s.authority_class IN ('owner_explicit','owner_direct','verified')"
                 " AND s.source_class IN ('owner_explicit','owner_direct')"
                 " AND a.freshness_class != 'time_sensitive'"
-                " ORDER BY a.predicate, a.assertion_id LIMIT 33"
+                f" AND (a.predicate IN ({marks}) OR ("
+                " json_extract(a.value_json,'$.schema')=? AND ("
+                " (json_extract(a.value_json,'$.category')='owned_item' AND substr(a.predicate,1,11)='owned_item_' AND json_extract(a.value_json,'$.kind') IN ('vehicle','device','other')) OR"
+                " (json_extract(a.value_json,'$.category')='routine' AND substr(a.predicate,1,8)='routine_') OR"
+                " (json_extract(a.value_json,'$.category')='goal' AND substr(a.predicate,1,5)='goal_'))))"
+                " ORDER BY a.predicate, a.assertion_id LIMIT 33",
+                (*LEGACY_FACETS, POLICY_VERSION),
             ).fetchall()
             if len(rows) > 32:
                 raise ValueError("learning_catalog_overflow")
-            return tuple(semantic_assertion_record_from_row(r) for r in rows)
+            return tuple(
+                record
+                for r in rows
+                if record_scope(record := semantic_assertion_record_from_row(r))
+                is not None
+            )
 
         return await self._reader.run(query)
 

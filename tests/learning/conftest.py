@@ -62,7 +62,7 @@ class Hello:
 class Policy:
     def evaluate(self, policy_input):
         requirements = hard_floor_for(policy_input.risk_class)
-        if policy_input.proposal.operation in {"admit", "read"}:
+        if policy_input.proposal.operation in {"admit", "read", "suppress"}:
             requirements = replace(
                 requirements, approval_requirement=ApprovalRequirement.EXPLICIT
             )

@@ -33,8 +33,9 @@ def test_cli_learning_override_and_explicit_conflict(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("reenable", [False, True])
 async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
-    learning, authority_parts, monkeypatch
+    learning, authority_parts, monkeypatch, reenable
 ):
     from types import SimpleNamespace
 
@@ -68,7 +69,21 @@ async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
         retrieval=SemanticRetrievalService(learning.reader),
         bind_learning_authority=service.bind_learning_authority,
     )
-    config = JarvisConfig(personal_learning_mode="apply")
+    if reenable:
+        await learning.writer.run(
+            lambda c: (
+                c.execute(
+                    "INSERT INTO personal_learning_suppression VALUES ('owned_item.vehicle',1,1,'fictional')"
+                ),
+                c.commit(),
+            )
+        )
+    config = JarvisConfig(
+        personal_learning_mode="apply",
+        personal_learning_reenable_categories=("owned_item.vehicle",)
+        if reenable
+        else (),
+    )
     controller = CanonicalActiveSpeakerRuntimeController(
         config,
         SimpleNamespace(),
@@ -100,7 +115,8 @@ async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
         await worker.drain()
         assert worker.status().processed == 2
         assert controller._personal_learning is worker
-        assert len(authority_parts.hello.calls) == before + 1
+        assert len(authority_parts.hello.calls) == before + 1 + int(reenable)
+        assert not (await service.learning_suppression()).suppressed
     finally:
         await worker.close()
         capabilities.close_personal_learning(controller._learning_grant)
@@ -160,3 +176,51 @@ def _session_pair():
         LiveContext(max_recent_turns=8),
         show_transcript=False,
     )
+
+
+def test_cli_reenable_is_exact_local_control(monkeypatch):
+    seen = []
+
+    async def run(context=None, learning=None, reenable=()):
+        seen.append((context, learning, reenable))
+
+    monkeypatch.setattr(production_runtime, "_run_from_configuration", run)
+    assert (
+        production_runtime.main(
+            [
+                "--personal-learning",
+                "apply",
+                "--reenable-learning-category",
+                "owned_item.vehicle",
+            ]
+        )
+        == 0
+    )
+    assert seen == [(None, "apply", ("owned_item.vehicle",))]
+    with pytest.raises(SystemExit):
+        production_runtime.main(
+            [
+                "--personal-learning",
+                "off",
+                "--reenable-learning-category",
+                "owned_item.vehicle",
+            ]
+        )
+
+
+def test_reenable_configuration_is_ephemeral_and_scoped():
+    c = JarvisConfig(
+        personal_learning_mode="apply",
+        personal_learning_reenable_categories=("owned_item.vehicle",),
+    )
+    assert c.personal_learning_reenable_categories == ("owned_item.vehicle",)
+    with pytest.raises(ValueError):
+        JarvisConfig(
+            personal_learning_mode="off",
+            personal_learning_reenable_categories=("owned_item.vehicle",),
+        )
+    with pytest.raises(ValueError):
+        JarvisConfig(
+            personal_learning_mode="apply",
+            personal_learning_reenable_categories=("home_city",),
+        )

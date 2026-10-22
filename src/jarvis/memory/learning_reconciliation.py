@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from jarvis.authority.personal_learning import POLICY_VERSION, LearningActionBinding
 from jarvis.authority.proposal import canonical_json
+from jarvis.personal_learning_scope import CATEGORIES, LEGACY_FACETS, record_scope
 
 from .assertions import SemanticAssertionDraft
 from .learning_contracts import (
@@ -127,13 +128,25 @@ def _value(entry):
     return entry.value
 
 
+def _label(entry):
+    try:
+        value = json.loads(entry.value)
+    except (ValueError, TypeError):
+        return None
+    return (
+        normalize_memory_surface(str(value.get("label", "")))
+        if isinstance(value, dict)
+        else None
+    )
+
+
 class LearningReconciler:
     def __init__(self, reader, authority):
         self.reader = reader
         self.authority = authority
 
     async def catalog(self, source, batch, grant):
-        categories = tuple(sorted({c.category for c in batch.candidates}))
+        categories = tuple(sorted(CATEGORIES))
         permit = self.authority.issue_child(
             grant,
             LearningActionBinding(
@@ -147,17 +160,13 @@ class LearningReconciler:
         records = await self.reader.learning_current()
         entries = []
         for record in records:
-            category, kind = "legacy", "other"
-            if (
-                isinstance(record.value, dict)
-                and record.value.get("schema") == POLICY_VERSION
-            ):
-                category = record.value.get("category", "legacy")
-                kind = record.value.get("kind", "other")
-            else:
-                for candidate_category, predicates in SCALAR_FACETS.items():
-                    if record.predicate in predicates:
-                        category = candidate_category
+            scope = record_scope(record)
+            if scope is None:
+                continue
+            category, _, kind = scope.partition(".")
+            kind = kind or "other"
+            if record.predicate in LEGACY_FACETS and category == "owned_item":
+                category = "legacy"  # Never split/mutate a plural legacy entity.
             text_value = (
                 json.dumps(record.value, ensure_ascii=False)
                 if isinstance(record.value, dict)
@@ -207,6 +216,11 @@ class LearningReconciler:
                 e
                 for e in catalog.entries
                 if e.category == candidate.category
+                and e.kind == candidate.kind
+                and (
+                    candidate.category in SCALAR_FACETS
+                    or _label(e) == normalize_memory_surface(candidate.label)
+                )
                 and normalize_memory_surface(str(_value(e)))
                 == normalize_memory_surface(candidate.value)
             ]
@@ -237,6 +251,11 @@ class LearningReconciler:
                 action, expected = "create", None
             else:
                 if entry is None or entry.category != candidate.category:
+                    continue
+                if (
+                    candidate.category in SCALAR_FACETS
+                    and entry.predicate != candidate.scalar_facet
+                ):
                     continue
                 if candidate.category == "owned_item" and entry.kind != candidate.kind:
                     continue
