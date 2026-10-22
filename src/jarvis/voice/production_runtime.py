@@ -81,6 +81,12 @@ from jarvis.provider_resilience import (
     ProviderResilienceState,
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.ui.runtime import (
+    attach_work_projection,
+    safely_attach_voice_observers,
+    start_opt_in_ui,
+    stop_opt_in_ui,
+)
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
     OpenCVCameraSource,
@@ -539,6 +545,11 @@ def build_production_voice_runtime(
 
     def production_session_factory(session_config: JarvisConfig):
         session, bridge = create_voice_session(session_config)
+        safely_attach_voice_observers(
+            session,
+            bridge.add_accepted_turn_observer,
+            bridge.add_close_observer,
+        )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
             if (
@@ -808,6 +819,8 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
             raise
 
         migration_needs_preflight_validation = False
+        start_opt_in_ui()
+        attach_work_projection(getattr(runtime, "_work_runtime", None))
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
@@ -831,6 +844,7 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 await asyncio.gather(lifecycle_task, return_exceptions=True)
             if self_awareness is not None:
                 self_awareness.close()
+            stop_opt_in_ui()
 
         if migrated.is_set():
             migration_needs_preflight_validation = True
