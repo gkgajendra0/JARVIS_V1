@@ -169,3 +169,61 @@ async def test_gemini_wire_avoids_rejected_grammar_bounds_but_keeps_local_limits
     )
     with pytest.raises(RuntimeError, match="invalid_schema"):
         await adapter.extract(s)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [429, 503, "timeout"])
+async def test_real_gemini_sdk_transport_does_not_retry(monkeypatch, failure):
+    """Exercise the installed SDK through mock HTTP, never an external request."""
+    import asyncio
+
+    import httpx
+    from google import genai
+
+    import jarvis.memory.learning_extractors as module
+
+    original = genai.Client
+    calls = []
+
+    async def respond(request):
+        calls.append(request)
+        if failure == "timeout":
+            raise httpx.ReadTimeout("fictional timeout", request=request)
+        return httpx.Response(
+            failure,
+            headers={"Retry-After": "60"},
+            json={
+                "error": {
+                    "code": failure,
+                    "message": "fictional unavailable",
+                    "status": "RESOURCE_EXHAUSTED",
+                }
+            },
+        )
+
+    transport = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+
+    def factory(**kwargs):
+        options = {**kwargs["http_options"], "httpx_async_client": transport}
+        return original(api_key="fictional", http_options=options)
+
+    monkeypatch.setattr(genai, "Client", factory)
+    monkeypatch.setattr(module, "require_provider_api_key", lambda *a, **k: "fictional")
+    adapter, _ = module.build_learning_adapters("gemini", "gemini-3.5-flash-lite")
+    try:
+        with pytest.raises(RuntimeError, match="learning_provider_unavailable"):
+            await asyncio.wait_for(
+                adapter._request(
+                    "fictional",
+                    {},
+                    {"type": "object", "properties": {}, "additionalProperties": False},
+                ),
+                1,
+            )
+        assert len(calls) == 1
+        assert adapter.last_failure["status"] == (
+            None if failure == "timeout" else failure
+        )
+    finally:
+        await adapter.close()
+        await transport.aclose()

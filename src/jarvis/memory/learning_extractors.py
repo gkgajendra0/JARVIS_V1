@@ -266,6 +266,11 @@ def build_learning_adapters(provider: str, model: str | None = None):
             api_key=key,
             http_options={"retry_options": {"attempts": 1}, "timeout": 10000},
         )
+        # Pinned google-genai 2.22 Interactions maps attempts=1 to one retry;
+        # attempts=0 is normalized back to 1 by its parent client. Disable the
+        # resource's nullable retry configuration explicitly. Missing
+        # SDK configuration fails startup instead of silently restoring retries.
+        client.aio.interactions.sdk_configuration.retry_config = None
     else:
         from openai import AsyncOpenAI
 
