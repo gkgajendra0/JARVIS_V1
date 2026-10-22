@@ -1,6 +1,6 @@
 # Gemini Free-first / Paid-fallback: proposed architecture
 
-Date: 22 October 2026. Status: **WRITTEN DESIGN FOR OWNER REVIEW; implementation and live acceptance not started.**
+Date: 22 October 2026. Status: **OWNER-APPROVED WRITTEN DESIGN** (22 October2026: “Approve written design”); implementation and live acceptance not started.
 
 ## 1. Requested outcome and inspected baseline
 
