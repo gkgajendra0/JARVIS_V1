@@ -94,6 +94,9 @@ async def test_reenable_rejects_fabricated_explicit_source_with_noop_guard(learn
         "Don't remember my vehicles",
         "Meri gaadiyan yaad mat rakhna",
         "मेरी गाड़ियाँ याद मत रखना",
+        "Do not remember any of my vehicles.",
+        "Mere vehicles ke baare mein kuch yaad mat rakhna.",
+        "मेरे वाहनों के बारे में कुछ याद मत रखना।",
     ],
 )
 async def test_category_veto_persists_without_provider_and_blocks_future_learning(
@@ -234,6 +237,12 @@ def test_category_controls_do_not_promote_current_turn_or_quoted_veto():
         "He said don't remember my vehicles",
         'I said "do not remember my vehicles"',
         "What if I say don't remember my vehicles?",
+        "Do not remember any of my vehicles this time",
+        "My brother said do not remember any of my vehicles",
+        "Mere vehicles ke baare mein ye baat yaad mat rakhna",
+        "मेरे वाहनों के बारे में यह बात याद मत रखना",
+        "मेरे भाई के वाहनों के बारे में कुछ याद मत रखना",
+        '"Mere vehicles ke baare mein kuch yaad mat rakhna"',
     ]:
         assert not category_veto(text)
 

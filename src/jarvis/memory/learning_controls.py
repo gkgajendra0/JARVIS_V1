@@ -21,6 +21,7 @@ _ALIASES = {
         "गाड़ियाँ",
         "गाड़ियां",
         "वाहन",
+        "वाहनों",
     ),
     "owned_item.device": ("devices", "device", "gadgets", "gadget", "डिवाइस"),
     "food_preference": (
@@ -50,9 +51,9 @@ def category_veto(text):
         for alias in aliases:
             alias = re.escape(unicodedata.normalize("NFKC", alias))
             patterns = (
-                rf"(?:please )?(?:don't|do not) (?:remember|save|store|learn) (?:my )?{alias}(?: anymore| from now on)?(?: please)?",
-                rf"(?:meri|mere|mera) {alias} (?:yaad|save|store) mat (?:rakhna|rakho|karna|karo)",
-                rf"(?:मेरी|मेरे|मेरा) {alias} (?:याद|सेव) मत (?:रखना|रखो|करना|करो)",
+                rf"(?:please )?(?:don't|do not) (?:remember|save|store|learn) (?:(?:any of )?my )?{alias}(?: anymore| from now on)?(?: please)?",
+                rf"(?:meri|mere|mera) {alias} (?:ke baare mein (?:kuch )?)?(?:yaad|save|store) mat (?:rakhna|rakho|karna|karo)",
+                rf"(?:मेरी|मेरे|मेरा) {alias} (?:के बारे में (?:कुछ )?)?(?:याद|सेव) मत (?:रखना|रखो|करना|करो)",
             )
             if any(re.fullmatch(pattern, normalized) for pattern in patterns):
                 return (key,)
