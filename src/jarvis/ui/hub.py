@@ -116,9 +116,11 @@ class UIEventHub:
             raise TypeError("priority must be an integer")
         if not 0 <= priority <= 3:
             raise ValueError("priority out of range")
-        if not isinstance(ttl_seconds, (float, int)) or isinstance(
-            ttl_seconds, bool
-        ) or not 1 <= ttl_seconds <= 3600:
+        if (
+            not isinstance(ttl_seconds, (float, int))
+            or isinstance(ttl_seconds, bool)
+            or not 1 <= ttl_seconds <= 3600
+        ):
             raise ValueError("panel TTL out of range")
         now = self._clock()
         with self._lock:
