@@ -185,7 +185,7 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 - [ ] **Step6 — Commit/handoff:** save report/evidence/rulings before deleting only this plan's scratch directory. Keep Desktop checkout/branch/older plan folders. Report software separately from activation/provider acceptance/merge; request only the concrete owner-dependent next step.
 
 **Task12 checkpoint23October:** independent review and one repair pass completed;
-full local3071passed/8skipped, style/whitespace clean. Hosted draft-PR checks and
+full local3071passed/8skipped, style/whitespace clean. Draft PR#298 created against the approved dependent base; hosted checks and
 final handoff still pending. Owner acceptance steps are documented, not executed.
 Actual Paid Live remains unavailable; the separate transport proposal is DRAFT.
 

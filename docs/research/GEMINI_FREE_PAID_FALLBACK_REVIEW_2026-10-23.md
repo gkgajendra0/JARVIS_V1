@@ -58,7 +58,7 @@ All chronological rulings and their costs are preserved in the linked
 ## Final verification and integration
 
 3,071 passed, 8 skipped in293.63s (4m53s); full repository pytest, isolated machine profile. Ruff check passed,1,043 files formatted, git diff --check passed..
-Draft PR/current-head hosted check links will be recorded after creation; no hosted pass claimed at this checkpoint.
+[Draft PR#298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). Exact current-head hosted results are tracked in its checks and verification record; at this report commit they are pending. No earlier-head result substitutes for final-head acceptance..
 
 The branch is dependent on `feat/pi3-question-context-20261022` (PR296), itself
 on PR295. Any PR here must remain draft and target that dependency, not main.

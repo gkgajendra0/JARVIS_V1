@@ -22,6 +22,7 @@ or describe this as fully completed Gemini voice fallback.
 Source branch: `feat/gemini-free-paid-fallback-20261022`; actual dependent base
 `211c3ade4d15ff41447524b4fa742b9cf552f0e2` on
 `feat/pi3-question-context-20261022` (#296, itself dependent on #295).
+Product repair checkpoint (full local3071pass/8skip): `4782cdae1eb46c8fc81210f4fe1ef988c61d83bd`.
 Implementation checkpoint before final review: `576463a3a0baca5b9022770a1b4a5ccf7daf9ba4`.
 No main merge is authorized. Existing PI-2 extended-provider qualification and
 PI-3A actual-model/spoken acceptance remain pending/deferred, not passed here.
@@ -169,7 +170,7 @@ executed pinned-SDK characterization tests, not assumptions about latest release
   See [review and verification evidence](GEMINI_FREE_PAID_FALLBACK_REVIEW_2026-10-23.md).
 - Full-suite checkpoint before the final original-session guard:3069passed,
   8skipped,222.65s. 3,071 passed, 8 skipped in293.63s (4m53s); full repository pytest, isolated machine profile. Ruff check passed,1,043 files formatted, git diff --check passed..
-- Exact-head hosted CI and draft PR: Draft PR/current-head hosted check links will be recorded after creation; no hosted pass claimed at this checkpoint. These remain
+- Exact-head hosted CI and draft PR: [Draft PR#298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). Exact current-head hosted results are tracked in its checks and verification record; at this report commit they are pending. No earlier-head result substitutes for final-head acceptance.. These remain
   separate from real Paid provider/whole-app acceptance, which was not run.
 - Performance: no active streaming budget/frame path exists, so there is no valid
   Paid Live overhead/latency measurement. Fake handoff readiness is bounded10s,
