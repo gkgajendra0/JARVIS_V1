@@ -58,7 +58,7 @@ class _SessionToolBundle:
         memory_runtime: MemoryRuntime | None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
         research_service: CurrentResearchService | None,
-        research_result_observer: Callable[[dict[str, object]], None] | None,
+        research_result_observer: Callable[[dict[str, object]], None] | None = None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
         personal_context_getter: Callable[[], PersonalContextSession | None]
