@@ -458,7 +458,7 @@ def test_http_serves_only_local_read_only_resources(ui_http) -> None:
         assert "JARVIS" in html
         assert "orbCanvas" in html
         assert response.headers["Content-Security-Policy"].startswith("default-src")
-    for asset in ("ui.css", "ui.js"):
+    for asset in ("ui.css", "ui.js", "orb-visual.js"):
         with urlopen(url + asset) as response:
             assert len(response.read()) > 100
             assert response.headers["Cache-Control"] == "no-store"
@@ -500,6 +500,16 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             page.on("pageerror", lambda err: errors.append(str(err)))
             page.goto(url, wait_until="domcontentloaded")
             page.locator("#orbCanvas").wait_for(state="visible")
+            assert page.evaluate(
+                "() => window.JarvisOrbVisual && window.JarvisOrbVisual.version === '2.0-cinematic'"
+            ), "procedural cinematic renderer must load as a same-origin asset"
+            assert page.evaluate(
+                "() => { const c = document.querySelector('#orbCanvas'); "
+                "const ctx = c.getContext('2d'); "
+                "return ctx.getImageData(c.width/2, c.height/2, 1, 1).data[3] > 0; }"
+            ), "real pixels must be rendered in the central globe"
+            assert page.locator(".orb-annotation").count() == 2
+            assert page.locator(".orb-hud").count() == 3
             assert page.locator(".context-card").count() == 0
             assert "PREVIEW" in page.locator("#connectionBadge").inner_text()
             screenshot_dir = os.environ.get("JARVIS_UI_SCREENSHOTS")
@@ -545,6 +555,8 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             first_panel = page.locator(".context-card[data-slot='0']").bounding_box()
             assert first_panel is not None and first_panel["width"] >= 700
             assert page.locator(".context-card[data-slot='0']").count() == 1
+            assert page.locator(".context-card[data-type='research']").count() == 1
+            assert page.locator(".context-card[data-type='info']").count() == 1
             assert page.locator(".context-card[data-slot='1']").count() == 1
             page.wait_for_function(
                 "() => document.querySelectorAll('#beamLayer .projection-link').length === 2"
