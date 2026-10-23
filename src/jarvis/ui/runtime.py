@@ -127,7 +127,7 @@ def attach_diagnostics_projection(
             snapshots = self_awareness.system_snapshot(health_surface_only=True)
             return [
                 {
-                    "component": snap.component_id,
+                    "component": snap.descriptor.component_id,
                     "state": snap.health.state.value,
                 }
                 for snap in snapshots
