@@ -133,6 +133,18 @@ def build_default_self_model() -> SelfModelRegistry:
             docs=("docs/CURRENT_ARCHITECTURE.md",),
         ),
         C(
+            "runtime.visual_ui",
+            "Opt-in loopback-only, read-only dynamic context workspace and "
+            "animated JARVIS presence; no independent action authority.",
+            ("src/jarvis/ui",),
+            parent_component_id="jarvis",
+            tests=("tests/test_dynamic_ui.py",),
+            logger_prefixes=("jarvis.ui",),
+            docs=(
+                "docs/reference/JARVIS_DYNAMIC_CONTEXT_UI_REQUIREMENTS_2026-10-23.md",
+            ),
+        ),
+        C(
             "runtime.voice",
             "Production voice and session runtime.",
             ("src/jarvis/voice",),

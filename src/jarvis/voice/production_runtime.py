@@ -81,6 +81,16 @@ from jarvis.provider_resilience import (
     ProviderResilienceState,
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.ui.runtime import (
+    attach_diagnostics_projection,
+    attach_work_projection,
+    observe_capability_result,
+    observe_provider_issue,
+    observe_research_result,
+    safely_attach_voice_observers,
+    start_opt_in_ui,
+    stop_opt_in_ui,
+)
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
     OpenCVCameraSource,
@@ -372,6 +382,12 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
+
+    def combined_result_observer(result) -> None:
+        if result_observer is not None:
+            result_observer(result)
+        observe_capability_result(result)
+
     package_stack = None
     try:
         active_release = load_active_release_for_startup()
@@ -399,7 +415,7 @@ def build_production_voice_runtime(
         hands_planner_model=config.hands_planner_model,
         chatgpt_plan_enabled=config.chatgpt_plan_enabled,
         chatgpt_plan_model=config.chatgpt_plan_model,
-        result_observer=result_observer,
+        result_observer=combined_result_observer,
         extra_executors=extra_executors,
         catalog_projection=(
             None if package_stack is None else package_stack.projection
@@ -539,8 +555,14 @@ def build_production_voice_runtime(
 
     def production_session_factory(session_config: JarvisConfig):
         session, bridge = create_voice_session(session_config)
+        safely_attach_voice_observers(
+            session,
+            bridge.add_accepted_turn_observer,
+            bridge.add_close_observer,
+        )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
+            observe_provider_issue(failure)
             if (
                 provider_lifecycle_trigger is None
                 or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
@@ -601,6 +623,7 @@ def build_production_voice_runtime(
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
+        research_result_observer=observe_research_result,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
         session_factory=production_session_factory,
@@ -808,6 +831,12 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
             raise
 
         migration_needs_preflight_validation = False
+        start_opt_in_ui()
+        attach_work_projection(getattr(runtime, "_work_runtime", None))
+        attach_diagnostics_projection(
+            vision_service=getattr(runtime, "_vision_service", None),
+            self_awareness=self_awareness,
+        )
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
@@ -831,6 +860,7 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 await asyncio.gather(lifecycle_task, return_exceptions=True)
             if self_awareness is not None:
                 self_awareness.close()
+            stop_opt_in_ui()
 
         if migrated.is_set():
             migration_needs_preflight_validation = True
