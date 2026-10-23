@@ -58,6 +58,7 @@ class _SessionToolBundle:
         memory_runtime: MemoryRuntime | None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
         research_service: CurrentResearchService | None,
+        research_result_observer: Callable[[dict[str, object]], None] | None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
         personal_context_getter: Callable[[], PersonalContextSession | None]
@@ -68,6 +69,7 @@ class _SessionToolBundle:
         self._memory_runtime = memory_runtime
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
+        self._research_result_observer = research_result_observer
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
         self._personal_context_getter = personal_context_getter or (lambda: None)
@@ -91,7 +93,13 @@ class _SessionToolBundle:
             if personal is not None:
                 tools.extend(PersonalContextAgentTools(personal).tools)
         if self._research_service is not None:
-            tools.extend(ResearchAgentTools(self._research_service, conversation).tools)
+            tools.extend(
+                ResearchAgentTools(
+                    self._research_service,
+                    conversation,
+                    result_observer=self._research_result_observer,
+                ).tools
+            )
         if self._capability_runtime is not None:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
@@ -111,6 +119,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         memory_runtime: MemoryRuntime | None = None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         research_service: CurrentResearchService | None = None,
+        research_result_observer: Callable[[dict[str, object]], None] | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         **kwargs: Any,
@@ -283,6 +292,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             )
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
+        self._research_result_observer = research_result_observer
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
         if (
@@ -297,6 +307,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 memory_runtime=memory_runtime,
                 memory_query_coordinator=memory_query_coordinator,
                 research_service=research_service,
+                research_result_observer=research_result_observer,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
                 personal_context_getter=lambda: self._personal_context,
