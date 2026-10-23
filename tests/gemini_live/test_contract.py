@@ -180,3 +180,14 @@ def test_public_sdk_metadata_preserves_explicit_counts():
         "output_tokens": 14,
         "output_audio_tokens": 20,
     }
+
+
+def test_live_exposure_binds_auxiliary_provenance_not_only_equal_token_totals():
+    contract = synthetic_contract()
+    changed = replace(
+        contract, auxiliary_bounds=replace(contract.auxiliary_bounds, version=2)
+    )
+    assert (
+        contract.exposure("session").to_payload()["contract_ref"]
+        != changed.exposure("session").to_payload()["contract_ref"]
+    )

@@ -44,6 +44,7 @@ class PaidExposure:
     scope_kind: str
     scope_id: str
     max_seconds: float | None = None
+    contract_ref: str | None = None
 
     def __post_init__(self):
         if (
@@ -62,15 +63,24 @@ class PaidExposure:
             raise PricingUnavailable("Paid output bound required")
         if self.max_seconds is not None and _epoch(self.max_seconds) <= 0:
             raise PricingUnavailable("Paid duration bound required")
+        if self.contract_ref is not None and (
+            not isinstance(self.contract_ref, str)
+            or len(self.contract_ref) != 64
+            or any(c not in "0123456789abcdef" for c in self.contract_ref)
+        ):
+            raise PricingUnavailable("Invalid exposure contract reference")
         object.__setattr__(self, "usage_bounds", MappingProxyType(values))
 
     def to_payload(self):
-        return {
+        payload = {
             "usage_bounds": dict(self.usage_bounds),
             "scope_kind": self.scope_kind,
             "scope_id": self.scope_id,
             "max_seconds": self.max_seconds,
         }
+        if self.contract_ref is not None:
+            payload["contract_ref"] = self.contract_ref
+        return payload
 
 
 @dataclass(frozen=True, slots=True)

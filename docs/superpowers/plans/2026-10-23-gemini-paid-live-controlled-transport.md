@@ -55,13 +55,13 @@
 
 **Files:** Create `voice/gemini_live_budget.py`, `tests/gemini_live/test_budget.py`; preserve legacy denial in `voice/gemini_budget.py` until actual controlled contract exists.
 
-**Interfaces:** `ControlledLiveAdmission(runtime, *, session_id, authorize)`; `async reserve(target, *, connection_id, trigger_id, exposure) -> ControlledLiveLease`. Lease `.mark_dispatched()`, `.observe(event_id, raw_usage)`, `.finish(complete: bool)`, `.cancel_unsent()`, synchronous `.allow_frame(samples, sample_rate) -> bool`. Stable IDs/dedup remain backed by PaidBudgetGovernor; do not create another budget table. Admission source binds original session/epoch and only quota-authorized Paid target.
+**Interfaces:** `ControlledLiveAdmission(runtime, *, session_id, authorize, contract: LiveModelContract)`; `async reserve(target, *, connection_id, trigger_id, exposure) -> ControlledLiveLease`. Lease `async .mark_dispatched()`, `.observe(event_id, raw_usage)`, `async .finish(complete: bool)`, `async .cancel_unsent()`, synchronous `.allow_frame(samples, sample_rate) -> bool`. Stable IDs/dedup remain backed by PaidBudgetGovernor; do not create another budget table. Admission source binds original session/epoch and only quota-authorized Paid target.
 
-- [ ] **Step1 RED tests:** reserve precedes actual client/connect/trigger; full35000 shared boundary with Work/Hands/memory; missing live price/FX/model/dimension denies; duplicate reserve/send/usage/restart one-shot; cancellation after dispatch/GoAway holds unknown; unsent cancellation only refunds; original source revoked during off-thread reserve cancels unsent and prevents send; no new provider health generation.
-- [ ] **Step2 Observe RED:** `PY -m pytest -o addopts= tests/gemini_live/test_budget.py -q`. Expected missing lifecycle/admission.
-- [ ] **Step3 Implement:** existing runtime price snapshot and governor; offload synchronous transaction with asyncio.to_thread, then revalidate authority before delivery. Every explicit continuation earns a separate reserve; final missing/ambiguous usage holds exposure. Reject overrun/unknown and halt new Paid input. No separate ledger or hidden probe.
-- [ ] **Step4 GREEN:** Task1/2 plus `tests/gemini_fallback/test_paid_budget.py`, pricing, concurrency/crash suites. Expected passing, no network.
-- [ ] **Step5 Commit:** `feat(voice): reserve controlled Live exposure through shared governor`.
+- [x] **Step1 RED tests:** reserve precedes actual client/connect/trigger; full35000 shared boundary with Work/Hands/memory; missing live price/FX/model/dimension denies; duplicate reserve/send/usage/restart one-shot; cancellation after dispatch/GoAway holds unknown; unsent cancellation only refunds; original source revoked during off-thread reserve cancels unsent and prevents send; no new provider health generation.
+- [x] **Step2 Observe RED:** `PY -m pytest -o addopts= tests/gemini_live/test_budget.py -q`. Expected missing lifecycle/admission.
+- [x] **Step3 Implement:** existing runtime price snapshot and governor; offload synchronous transaction with asyncio.to_thread, then revalidate authority before delivery. Every explicit continuation earns a separate reserve; final missing/ambiguous usage holds exposure. Reject overrun/unknown and halt new Paid input. No separate ledger or hidden probe.
+- [x] **Step4 GREEN:** Task1/2 plus `tests/gemini_fallback/test_paid_budget.py`, pricing, concurrency/crash suites. Expected passing, no network.
+- [x] **Step5 Commit:** `feat(voice): reserve controlled Live exposure through shared governor`.
 
 ### Task 3: Public Google Live transport and LiveKit stream/tool protocol
 

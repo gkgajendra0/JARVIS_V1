@@ -8,7 +8,9 @@ they do not register a production billing contract.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import json
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from jarvis.model_routing.pricing import PaidExposure
@@ -101,6 +103,9 @@ class LiveModelContract:
             scope_kind="voice",
             scope_id=scope_id,
             max_seconds=self.max_physical_seconds,
+            contract_ref=hashlib.sha256(
+                json.dumps(asdict(self), sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest(),
         )
 
 
