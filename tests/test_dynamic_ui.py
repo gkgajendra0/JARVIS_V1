@@ -225,7 +225,9 @@ def test_ui_capability_result_observer_is_status_only(monkeypatch) -> None:
     assert "hidden" not in json.dumps(cards)
 
 
-def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(monkeypatch) -> None:
+def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(
+    monkeypatch,
+) -> None:
     from types import SimpleNamespace
 
     from jarvis.ui import runtime as ui_runtime
@@ -253,9 +255,7 @@ def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(monkeypatch
             return [
                 SimpleNamespace(
                     descriptor=SimpleNamespace(component_id="runtime.voice"),
-                    health=SimpleNamespace(
-                        state=SimpleNamespace(value="healthy")
-                    ),
+                    health=SimpleNamespace(state=SimpleNamespace(value="healthy")),
                 )
             ]
 
@@ -264,11 +264,8 @@ def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(monkeypatch
     )
     projection = hub.snapshot()
     assert projection["vision"]["active_source"] == "lenovo"
-    assert projection["health"] == [
-        {"component": "runtime.voice", "state": "healthy"}
-    ]
+    assert projection["health"] == [{"component": "runtime.voice", "state": "healthy"}]
     assert "private_tracking" not in json.dumps(projection)
-
 
 
 def test_research_tool_publishes_only_after_real_warranted_result() -> None:
