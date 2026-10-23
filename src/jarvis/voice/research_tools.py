@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from collections.abc import Callable
 
 from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
@@ -130,6 +131,8 @@ class ResearchAgentTools:
         self,
         service: CurrentResearchService,
         conversation: ConversationSession,
+        *,
+        result_observer: Callable[[dict[str, object]], None] | None = None,
     ) -> None:
         if not isinstance(service, CurrentResearchService):
             raise TypeError("service must be a CurrentResearchService")
@@ -137,6 +140,7 @@ class ResearchAgentTools:
             raise TypeError("conversation must be a ConversationSession")
         self._service = service
         self._conversation = conversation
+        self._result_observer = result_observer
 
     @property
     def tools(self) -> list:
@@ -204,6 +208,11 @@ class ResearchAgentTools:
         )
         payload = result.to_tool_payload()
         payload["canonical_user_turn_id"] = turn.turn_id
+        if self._result_observer is not None:
+            try:
+                self._result_observer(payload)
+            except Exception:  # noqa: BLE001 - visual UI must not affect research
+                LOGGER.warning("Optional research UI observer failed", exc_info=True)
         return payload
 
     @function_tool()
