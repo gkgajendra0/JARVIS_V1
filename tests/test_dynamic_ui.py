@@ -96,6 +96,32 @@ def test_topic_detection_never_returns_raw_user_transcript() -> None:
     assert private_phrase not in json.dumps(snapshot)
 
 
+def test_work_state_change_auto_projects_only_meaningful_transitions() -> None:
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+    state = {"value": "running"}
+    hub.attach_work_provider(
+        lambda: [{"id": "canonical-id-1", "kind": "research", "state": state["value"]}]
+    )
+    assert hub.snapshot()["panels"] == [], "baseline is silent"
+    state["value"] = "retrying"
+    assert hub.snapshot()["panels"] == [], "routine state changes stay quiet"
+    state["value"] = "waiting_for_owner"
+    hub.snapshot()
+    projected = hub.snapshot()["panels"]
+    assert len(projected) == 1
+    assert projected[0]["title"] == "Jarvis requests your input"
+    assert projected[0]["priority"] == 3
+    event_seq = hub.snapshot()["seq"]
+    hub.snapshot()
+    assert hub.snapshot()["seq"] == event_seq, "no duplicate transition alerts"
+    state["value"] = "completed"
+    hub.snapshot()
+    projected = hub.snapshot()["panels"]
+    assert projected[0]["title"] == "Background work completed"
+    assert projected[0]["priority"] == 2
+
+
 def test_topic_routing_prefers_research_without_false_camera_on_eyeglasses() -> None:
     hub = UIEventHub()
     hub.observe_accepted_user_text("I am discussing contact lenses and eye care")
