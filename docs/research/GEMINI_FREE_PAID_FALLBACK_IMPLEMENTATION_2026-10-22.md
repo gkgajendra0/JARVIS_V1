@@ -1,5 +1,7 @@
 # Gemini Free-first / Paid-fallback: implementation and acceptance record
 
+**Later controlled Live amendment, 23 October:** public adapter/handoff implemented; final source b663dbbe passed 3,177 tests with 8 platform skips after one independent review and repair pass. Actual Paid voice remains denied for unqualified auxiliary accounting. The historical findings/results below describe the earlier candidate; the [new implementation and remaining-work record](GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md) supersedes its transport status. Final exact-head hosted receipts are in draft PR #298; no real Paid call, activation or merge.
+
 Reconciled 23 October 2026. Historical design/plan filenames retain 22 October.
 
 ## Actual outcome: PARTIAL candidate, not complete requested voice failover

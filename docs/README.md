@@ -1,12 +1,14 @@
 # JARVIS Documentation — Start Here
 
-**Gemini Free/Paid candidate (23 October 2026):** bounded Work/Hands/memory
-fallback shares the existing router and cumulative INR350 governor; default OFF.
-Actual Paid Live voice is unavailable because the pinned public SDK cannot prove
-pre-send reconnect/generation spending bounds. This is a PARTIAL candidate, not
-completed production voice failover. No paid calls, saved activation, owner-memory
-changes or merge. Final review repairs and the owner-approved Paid Live transport extension in progress
-are tracked in the report. See [implementation, blockers and acceptance record](research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md).
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
 
 **PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,858 tests / 8 skips) after all three Important review findings were repaired; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
 

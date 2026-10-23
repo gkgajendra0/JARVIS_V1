@@ -94,17 +94,19 @@
 - [x] **Step1 Tests:** actual canonical temporary memory/Authority, lock/expiry/forget during every async reserve/setup/tool response; real AgentSession full-duplex/Hindi/Hinglish/English fictional transcripts and pause/barge-in; side-effect counters1 after accepted/uncertain actions. Real independent connections/processes contend with Work/Hands/memory for35000; process death after reserve/send/settle; source epoch never renewed. Exercise setup history and unexpected provider generation, truncated/partial usage, event races and bounded no-extra-wake continuation. No real OS side effect/model/provider inference.
 - [x] **Step2 Run/repair:** `PY -m pytest -o addopts= tests/gemini_live tests/gemini_fallback tests/learning -q`. Passing new adversarial cases are additional evidence; any actual failure needs observed RED before minimal repair. Measure synthetic frame-queue/heartbeat overhead once, no flaky threshold or selective speed reruns.
 - [x] **Step3 Independent review:** Native one fresh whole-amendment reviewer, spec/plan/diff/all Review Focus plus ledger; no implementation delegation. Regrade/ledger all findings and declined judgments before one Important/Critical RED-to-GREEN repair pass. No re-review; Minor deferred durably.
-- [ ] **Step4 Full GREEN:** isolated full repository pytest, Ruff check/format and diff whitespace. Expected passing actual counts/skips. Do not claim real provider quality/latency/ASR correctness or funding readiness from these tests.
-- [ ] **Step5 Commit:** `test(voice): verify controlled fallback concurrency privacy and action safety`.
+- [x] **Step4 Full GREEN:** isolated full repository pytest, Ruff check/format and diff whitespace. Expected passing actual counts/skips. Do not claim real provider quality/latency/ASR correctness or funding readiness from these tests.
+- [x] **Step5 Commit:** `test(voice): verify controlled fallback concurrency privacy and action safety`.
 
 ### Task 6: Report, exact-head hosted checks and whole-app owner acceptance handoff
 
 **Files:** Create `docs/research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md`; update previous candidate report/entrypoints/plan status around actual delivered/unsupported behavior.
 
-- [ ] **Step1 Report:** exact source/base/SDK/charging-contract/auxiliary-cost assumptions, all changed files/tests/rulings/costs/minors, actual performance limits, known vs unknown holds, persisted35000, dedicated keys/TTS/defaultOFF/rollback and actual model support. Preserve earlier semantic qualification deferrals.
+- [x] **Step1 Report:** exact source/base/SDK/charging-contract/auxiliary-cost assumptions, all changed files/tests/rulings/costs/minors, actual performance limits, known vs unknown holds, persisted35000, dedicated keys/TTS/defaultOFF/rollback and actual model support. Preserve earlier semantic qualification deferrals.
 - [ ] **Step2 Hosted:** push only this feature branch, update existing draftPR298; Linux/Windows/Hello/DPAPI and relevantSQLCipher on exact final head. No main/dependency merge; do not reusebbaa99d4 checks as proof of new Live code. Documentation-only head changes tracked honestly.
-- [ ] **Step3 Owner steps:** provide exact final fetch/switch/pull/launch with correct context/learning/paid modes. Real Paid experiment requires separate explicit request-count/duration/reviewed-INR-exposure approval and real price/FX. Whole normal app with fictional multilingual memory/actions; deterministic quota/recovery/402 harness, not burning real quota. No isolated microphone substitute. Actual spoken/model/Paid acceptance stays pending until observed.
+- [x] **Step3 Owner steps:** provide exact final fetch/switch/pull/launch with correct context/learning/paid modes. Real Paid experiment requires separate explicit request-count/duration/reviewed-INR-exposure approval and real price/FX. Whole normal app with fictional multilingual memory/actions; deterministic quota/recovery/402 harness, not burning real quota. No isolated microphone substitute. Actual spoken/model/Paid acceptance stays pending until observed.
 - [ ] **Step4 Handoff:** retain branch/checkout and durable evidence; only own scratch may be cleaned after evidence/rulings preserved. No billing changes, activation or merge. Mark complete only behavior actually delivered; unsupported contract remains explicit rather than advertised as working.
+
+Status at report commit: Task5 full receipt3177passed8skips; Task6 report and supported owner commands delivered. Hosted/publishing completion is recorded against the final docs-inclusive SHA in draftPR298. Paid launcher/accounting/spoken qualification remains explicitly pending; no Paid ON command is delivered.
 
 ## Self-review and preparation
 
