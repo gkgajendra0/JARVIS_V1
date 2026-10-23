@@ -198,6 +198,79 @@ def test_research_projection_strips_sensitive_queries_and_untrusted_urls() -> No
     assert hub.snapshot()["seq"] == before
 
 
+
+def test_ui_capability_result_observer_is_status_only(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from jarvis.ui import runtime as ui_runtime
+
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+    monkeypatch.setattr(ui_runtime, "_active", SimpleNamespace(hub=hub))
+    ui_runtime.observe_capability_result(
+        SimpleNamespace(
+            status=SimpleNamespace(value="succeeded"),
+            capability_key="windows:desktop.control",
+            operation="open_secret_file",
+            data={"private": "confidential text"},
+            reason="hidden operation detail",
+        )
+    )
+    cards = hub.snapshot()["panels"]
+    assert len(cards) == 1
+    assert cards[0]["title"] == "Recent Jarvis action"
+    assert "windows" in cards[0]["summary"]
+    assert "succeeded" in cards[0]["summary"]
+    assert "confidential" not in json.dumps(cards)
+    assert "secret" not in json.dumps(cards)
+    assert "hidden" not in json.dumps(cards)
+
+
+def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from jarvis.ui import runtime as ui_runtime
+
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+    monkeypatch.setattr(ui_runtime, "_active", SimpleNamespace(hub=hub))
+
+    class Vision:
+        running = True
+
+        def report(self, *, event_limit=0):
+            assert event_limit == 0
+            return {
+                "camera": {
+                    "active_source": "lenovo",
+                    "available_sources": ["lenovo", "pocket3"],
+                },
+                "private_tracking": "not released",
+            }
+
+    class Awareness:
+        def system_snapshot(self, *, health_surface_only=False):
+            assert health_surface_only
+            return [
+                SimpleNamespace(
+                    descriptor=SimpleNamespace(component_id="runtime.voice"),
+                    health=SimpleNamespace(
+                        state=SimpleNamespace(value="healthy")
+                    ),
+                )
+            ]
+
+    ui_runtime.attach_diagnostics_projection(
+        vision_service=Vision(), self_awareness=Awareness()
+    )
+    projection = hub.snapshot()
+    assert projection["vision"]["active_source"] == "lenovo"
+    assert projection["health"] == [
+        {"component": "runtime.voice", "state": "healthy"}
+    ]
+    assert "private_tracking" not in json.dumps(projection)
+
+
 def test_diagnostic_projection_failures_are_nonfatal() -> None:
     hub = UIEventHub()
     hub.set_runtime_connected(True)
