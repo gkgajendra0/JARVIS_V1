@@ -66,7 +66,10 @@ def test_structured_client_can_disable_gemini_interactions_retries(
         captured.update(kwargs)
         return SimpleNamespace(
             aio=SimpleNamespace(
-                interactions=SimpleNamespace(create=lambda **_: None),
+                interactions=SimpleNamespace(
+                    create=lambda **_: None,
+                    sdk_configuration=SimpleNamespace(retry_config="synthetic-default"),
+                ),
             )
         )
 

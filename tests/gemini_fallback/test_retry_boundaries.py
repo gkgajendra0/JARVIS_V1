@@ -247,3 +247,17 @@ def test_direct_work_paid_call_is_bounded_settled_and_never_redispatched(
     assert len(env[3]) == 1
     assert env[3][0][0] == "paid-private-canary"
     assert env[2].status().spent_inr_minor == 30
+
+
+def test_pinned_gemini_interactions_resource_has_no_hidden_retries(monkeypatch):
+    from jarvis.hands.provider_adapters import build_structured_output_client
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "synthetic-no-network-key")
+    client = build_structured_output_client(
+        provider="gemini", model="gemini-test", provider_retries=False
+    )
+    try:
+        assert client._client.aio.interactions.sdk_configuration.retry_config is None
+    finally:
+        asyncio.run(client._client.aio.aclose())
+        client._client.close()

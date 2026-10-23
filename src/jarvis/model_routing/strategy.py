@@ -11,6 +11,7 @@ from jarvis.model_routing.models import (
     ModelTarget,
     RoutingRequest,
     RoutingStrategyResult,
+    ScopedRoutingRequest,
 )
 from jarvis.work.models import WorkStep, WorkStepState
 
@@ -81,7 +82,7 @@ def _ordered_unique(values: list[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
-def _feature_int(request: RoutingRequest, key: str) -> int:
+def _feature_int(request: RoutingRequest | ScopedRoutingRequest, key: str) -> int:
     value = request.routing_features.get(key, 0)
     if isinstance(value, bool):
         return int(value)
@@ -92,7 +93,9 @@ def _feature_int(request: RoutingRequest, key: str) -> int:
     return 0
 
 
-def _feature_text(request: RoutingRequest, key: str) -> str | None:
+def _feature_text(
+    request: RoutingRequest | ScopedRoutingRequest, key: str
+) -> str | None:
     value = request.routing_features.get(key)
     if not isinstance(value, str):
         return None
@@ -208,12 +211,12 @@ class EngineeringStageStrategy:
     def rank(
         self,
         *,
-        request: RoutingRequest,
+        request: RoutingRequest | ScopedRoutingRequest,
         eligible_targets: tuple[ModelTarget, ...],
         history: object | None = None,
     ) -> RoutingStrategyResult:
         del history
-        if not isinstance(request, RoutingRequest):
+        if not isinstance(request, (RoutingRequest, ScopedRoutingRequest)):
             raise TypeError("request must be a RoutingRequest")
         if not eligible_targets:
             raise StrategyNoCandidateError("no eligible targets supplied to strategy")

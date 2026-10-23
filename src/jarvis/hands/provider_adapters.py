@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol
+from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
 
 from jarvis.ai_provider import (
+    gemini_credential_ref,
     normalize_ai_provider,
     require_provider_api_key,
     resolve_credential_api_key,
@@ -456,6 +459,124 @@ class GeminiStructuredOutputClient:
         )
 
 
+class RoutedStructuredOutputClient:
+    """Inference-only adapter; ModelRouter remains the sole target selector."""
+
+    provider_name = "gemini"
+
+    def __init__(
+        self,
+        *,
+        routing_runtime,
+        role,
+        model,
+        max_output_tokens=4096,
+        free_output_tokens=None,
+        chatgpt_plan_model=None,
+    ):
+        if type(max_output_tokens) is not int or max_output_tokens <= 0:
+            raise ValueError(
+                "Paid structured output requires an explicit positive bound"
+            )
+        self.runtime = routing_runtime
+        self.role = role
+        self.provider_name = (
+            "chatgpt_plan" if chatgpt_plan_model is not None else "gemini"
+        )
+        self.model_name = chatgpt_plan_model or model
+        self.max_output_tokens = max_output_tokens
+        self.free_output_tokens = free_output_tokens
+        self.router = routing_runtime.router_for(
+            role, model, chatgpt_plan_model=chatgpt_plan_model
+        )
+
+    async def parse(self, **kwargs):
+        return (await self.parse_with_telemetry(**kwargs)).parsed
+
+    async def parse_with_telemetry(
+        self,
+        *,
+        system_prompt,
+        input_payload,
+        response_model,
+        scope_id=None,
+        operation_id=None,
+        before_dispatch=None,
+    ):
+        from jarvis.model_routing.models import (
+            EvidenceSizeClass,
+            LocalityRequirement,
+            PrivacyClass,
+            ScopedRoutingRequest,
+        )
+        from jarvis.model_routing.pricing import PaidExposure
+
+        scope_id = scope_id or str(uuid4())
+        scope_kind = "hands" if self.role == "hands" else "memory"
+        operation_id = operation_id or str(uuid4())
+        request_id = (
+            "inference:"
+            + hashlib.sha256(
+                f"{scope_kind}|{scope_id}|{operation_id}|{self.role}".encode()
+            ).hexdigest()
+        )
+        targets = self.router.target_registry.all()
+        primary = next((t for t in targets if t.provider_id == "chatgpt_plan"), None)
+        if primary is None:
+            primary = next(
+                t for t in targets if t.credential_ref == gemini_credential_ref("free")
+            )
+        wire_bytes = (
+            len(
+                (
+                    system_prompt
+                    + json.dumps(
+                        input_payload, ensure_ascii=False, sort_keys=True, default=str
+                    )
+                    + json.dumps(response_model.model_json_schema(), ensure_ascii=False)
+                ).encode()
+            )
+            + 1024
+        )
+        request = ScopedRoutingRequest(
+            routing_request_id=request_id,
+            scope_kind=scope_kind,
+            scope_id=scope_id,
+            task_kind=self.role,
+            strategy_key="engineering_stage",
+            strategy_version=1,
+            required_capabilities=primary.capabilities,
+            privacy_class=PrivacyClass.STANDARD,
+            locality_requirement=LocalityRequirement.ANY,
+            estimated_context_tokens=max(1, (wire_bytes - 1024 + 3) // 4),
+            evidence_size_class=EvidenceSizeClass.SMALL,
+            recent_progress_signals=(),
+            recent_failure_signals=(),
+            latency_preference="balanced",
+            cost_preference="low",
+            affinity_key=f"{scope_kind}:{scope_id}",
+            routing_features={"affinity_target_id": primary.target_id},
+        )
+        exposure = PaidExposure(
+            usage_bounds={
+                "input_tokens": wire_bytes,
+                "output_tokens": self.max_output_tokens,
+            },
+            scope_kind=scope_kind,
+            scope_id=scope_id,
+        )
+        return await self.runtime.invoker.invoke_scoped_structured(
+            router=self.router,
+            request=request,
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+            exposure=exposure,
+            free_output_tokens=self.free_output_tokens,
+            before_dispatch=before_dispatch,
+        )
+
+
 def build_structured_output_client(
     *,
     provider: str,
@@ -506,8 +627,13 @@ def build_structured_output_client(
                     "attempts": 0,
                 }
             }
+        gemini_client = genai.Client(**client_kwargs)
+        if not provider_retries:
+            # Pinned Interactions resource normalizes attempts=0 back to its default.
+            # The nullable resource policy is the effective no-retry switch.
+            gemini_client.aio.interactions.sdk_configuration.retry_config = None
         return GeminiStructuredOutputClient(
-            client=genai.Client(**client_kwargs),
+            client=gemini_client,
             model=model_name,
             max_output_tokens=max_output_tokens,
         )

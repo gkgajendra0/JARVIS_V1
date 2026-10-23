@@ -292,6 +292,7 @@ class ModelInvoker:
         response_model,
         request_context,
         exposure=None,
+        max_output_tokens=None,
     ) -> StructuredOutputTelemetry:
         if target.credential_ref != "JARVIS_GEMINI_PAID_API_KEY":
             return await self._dispatch_structured(
@@ -300,6 +301,7 @@ class ModelInvoker:
                 input_payload=input_payload,
                 response_model=response_model,
                 request_context=request_context,
+                max_output_tokens=max_output_tokens,
             )
         if (
             target.provider_id != "gemini"
@@ -397,7 +399,16 @@ class ModelInvoker:
         return result
 
     async def invoke_scoped_structured(
-        self, *, router, request, system_prompt, input_payload, response_model, exposure
+        self,
+        *,
+        router,
+        request,
+        system_prompt,
+        input_payload,
+        response_model,
+        exposure,
+        free_output_tokens=None,
+        before_dispatch=None,
     ):
         from jarvis.chatgpt_plan import ChatGPTPlanError
         from jarvis.model_routing.cost import estimate_usage_cost_usd
@@ -503,6 +514,13 @@ class ModelInvoker:
                     previous_target = target
                     previous_failure = None
                     continue
+            if before_dispatch is not None:
+                try:
+                    before_dispatch()
+                except BaseException:
+                    if lease is not None:
+                        store.release_free_recovery(lease)
+                    raise
             attempt_id = f"{decision.decision_id}:{ordinal}"
             context = ScopedModelInvocationContext(
                 request.scope_kind,
@@ -524,6 +542,7 @@ class ModelInvoker:
                     response_model=response_model,
                     request_context=context,
                     exposure=exposure,
+                    max_output_tokens=free_output_tokens,
                 )
             except (Exception, asyncio.CancelledError) as exc:  # noqa: BLE001 - normalize provider errors and preserve cancellation exposure
                 error = exc

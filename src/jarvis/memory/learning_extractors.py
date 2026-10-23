@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError
 
 from jarvis.ai_provider import (
     normalize_ai_provider,
@@ -145,17 +145,56 @@ def _gemini_output_schema(node):
 
 
 class LearningProviderAdapter:
-    def __init__(self, provider, client, model):
+    def __init__(self, provider, client, model, *, routing_runtime=None):
         self.provider = normalize_ai_provider(provider)
         self.client = client
         self.model_name = model
         self.attempts = 0
         self.last_failure = None
+        self.last_provider_failure = None
+        self.routing_runtime = routing_runtime
+        self._source_validator = None
         self.usage: list[dict[str, int]] = []
 
-    async def _request(self, prompt, payload, schema):
+    def bind_source_validator(self, validator):
+        self._source_validator = validator
+
+    async def _request(
+        self, prompt, payload, schema, *, source=None, role="memory.extraction"
+    ):
         self.attempts += 1
         try:
+            if self.routing_runtime is not None:
+                from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
+
+                class LearningInferenceOutput(RootModel[dict]):
+                    @classmethod
+                    def model_json_schema(cls, **kwargs):
+                        return _gemini_output_schema(_strict_output_schema(schema))
+
+                def validate_source():
+                    if source is None or not LearningPolicy.source_allowed(source):
+                        raise PermissionError("Learning source unavailable")
+                    if self._source_validator is not None:
+                        self._source_validator(source)
+
+                client = RoutedStructuredOutputClient(
+                    routing_runtime=self.routing_runtime,
+                    role=role,
+                    model=self.model_name,
+                    max_output_tokens=4096,
+                    free_output_tokens=4096,
+                )
+                result = await client.parse_with_telemetry(
+                    system_prompt=prompt,
+                    input_payload=payload,
+                    response_model=LearningInferenceOutput,
+                    scope_id=source.receipt_id,
+                    operation_id=f"{source.runtime_id}:{source.digest}:{role}",
+                    before_dispatch=validate_source,
+                )
+                self.usage.append(dict(result.usage))
+                return result.parsed.root
             encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
             if self.provider == "gemini":
                 response = await self.client.aio.interactions.create(
@@ -199,7 +238,12 @@ class LearningProviderAdapter:
             self.usage.append(metrics)
             return json.loads(text)
         except Exception as exc:  # noqa: BLE001 - never propagate provider bodies/payloads
-            status = getattr(exc, "status_code", None)
+            from jarvis.provider_resilience import classify_provider_failure
+
+            self.last_provider_failure = getattr(
+                exc, "failure", None
+            ) or classify_provider_failure(exc, provider=self.provider)
+            status = self.last_provider_failure.status_code
             self.last_failure = {
                 "kind": type(exc).__name__,
                 "status": status if type(status) is int else None,
@@ -210,7 +254,11 @@ class LearningProviderAdapter:
         if not LearningPolicy.source_allowed(source):
             return LearningBatch()
         raw = await self._request(
-            EXTRACTION_PROMPT, _input(source), _ProviderBatch.model_json_schema()
+            EXTRACTION_PROMPT,
+            _input(source),
+            _ProviderBatch.model_json_schema(),
+            source=source,
+            role="memory.extraction",
         )
         try:
             proposed = _ProviderBatch.model_validate(raw)
@@ -258,7 +306,9 @@ class LearningProviderAdapter:
             "proposals": batch.model_dump(mode="json"),
             "catalog": catalog.model_dump(mode="json"),
         }
-        raw = await self._request(RESOLUTION_PROMPT, payload, schema)
+        raw = await self._request(
+            RESOLUTION_PROMPT, payload, schema, source=source, role="memory.resolution"
+        )
         try:
             result = LearningResolutionBatch.model_validate(raw)
         except ValidationError:
@@ -271,17 +321,30 @@ class LearningProviderAdapter:
         return result
 
     async def close(self):
+        if self.routing_runtime is not None:
+            return
         if self.provider == "gemini":
             await self.client.aio.aclose()
         else:
             await self.client.close()
 
 
-def build_learning_adapters(provider: str, model: str | None = None):
+def build_learning_adapters(
+    provider: str, model: str | None = None, *, routing_runtime=None
+):
     provider = normalize_ai_provider(provider)
     model = resolve_ai_role_model(
         provider, "memory_candidate_extraction", configured_model=model
     )
+    if (
+        routing_runtime is not None
+        and routing_runtime.config.enabled
+        and provider == "gemini"
+    ):
+        adapter = LearningProviderAdapter(
+            provider, None, model, routing_runtime=routing_runtime
+        )
+        return adapter, adapter
     key = require_provider_api_key(provider, purpose="automatic personal learning")
     if provider == "gemini":
         from google import genai

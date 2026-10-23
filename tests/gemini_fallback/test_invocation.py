@@ -55,6 +55,8 @@ def environment(
             calls.append((key, request, budget.status()))
             values = scripts.setdefault(key, [])
             value = values.pop(0) if values else "ok"
+            if callable(value):
+                value = value(request)
             if isinstance(value, BaseException):
                 raise value
             if isinstance(value, asyncio.Event):
@@ -74,7 +76,12 @@ def environment(
             )
 
         return SimpleNamespace(
-            aio=SimpleNamespace(interactions=SimpleNamespace(create=create))
+            aio=SimpleNamespace(
+                interactions=SimpleNamespace(
+                    create=create,
+                    sdk_configuration=SimpleNamespace(retry_config="synthetic-default"),
+                )
+            )
         )
 
     monkeypatch.setattr(google.genai, "Client", client)
@@ -225,7 +232,12 @@ def test_explicit_paid_builder_uses_paid_key_without_global_mutation(monkeypatch
             captured.append(kwargs)
             or SimpleNamespace(
                 aio=SimpleNamespace(
-                    interactions=SimpleNamespace(create=lambda **_: None)
+                    interactions=SimpleNamespace(
+                        create=lambda **_: None,
+                        sdk_configuration=SimpleNamespace(
+                            retry_config="synthetic-default"
+                        ),
+                    )
                 )
             )
         ),

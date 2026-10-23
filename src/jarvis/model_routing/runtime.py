@@ -67,6 +67,34 @@ class RoutingRuntime:
             result.append(target)
         return tuple(result)
 
+    def router_for(self, role, model, *, chatgpt_plan_model=None):
+        targets = self.targets_for(role, model)
+        if chatgpt_plan_model is not None:
+            plans = tuple(
+                t
+                for t in self.router.target_registry.all()
+                if t.provider_id == "chatgpt_plan"
+            )
+            if len(plans) != 1 or plans[0].model_id != chatgpt_plan_model:
+                raise ValueError(
+                    "Scoped ChatGPT-plan selection must match the configured runtime"
+                )
+            plan = replace(
+                plans[0],
+                target_id=f"{role}.chatgpt_plan.primary",
+                capabilities=targets[0].capabilities,
+            )
+            targets = (*targets, plan)
+        return ModelRouter(
+            target_registry=ModelTargetRegistry(self.router.adapter_registry, targets),
+            adapter_registry=self.router.adapter_registry,
+            strategy_registry=self.router.strategy_registry,
+            routing_store=self.store,
+            credential_available=self.router._credential_available,
+            clock=self.clock,
+            fallback_budget=2 if chatgpt_plan_model is not None else 1,
+        )
+
 
 def _reviewed_prices(path, now):
     if path is None:

@@ -116,11 +116,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** Optional RoutingRuntime injection and stable lane/source/operation IDs at existing adapter construction; no new planner. LearningProviderAdapter keeps sanitized public errors while retaining typed ProviderFailure internally. extract/resolve response contracts unchanged. Reuse original structured/source validation, never retry around admit_learning or Hands execution.
 
-- [ ] **Step1 — Failing tests:** Free/429/Paid behavior for Hands planning, extraction, resolution and eligible semantic recall. Hands action counter remains one after success/uncertain action. Source expiry, suppression/forget/currentness/permit change or deadline during fallback blocks memory admission/release. Dedicated TTS, ChatGPT-plan and local-only exclusion unchanged.
-- [ ] **Step2 — RED:** run new Hands/memory tests using real temporary canonical memory/service and fake inference; require missing integration.
-- [ ] **Step3 — Implement inference-only integration.** Preserve original source deadlines/grants/validators after await; memory4096 output bound stays. Paid Hands requires reviewed output bound without changing disabled/Free behavior. No private prompts in routing/cost diagnostics; no write-admission retries.
-- [ ] **Step4 — GREEN:** new suites plus Hands provider/planner, all `tests/learning`, relevant memory query/retrieval/context/forget regressions; group test paths consistently with fixtures.
-- [ ] **Step5 — Commit:** `feat(assistants): integrate governed Gemini fallback in Hands and memory`.
+- [x] **Step1 — Failing tests:** Free/429/Paid behavior for Hands planning, extraction, resolution and eligible semantic recall. Hands action counter remains one after success/uncertain action. Source expiry, suppression/forget/currentness/permit change or deadline during fallback blocks memory admission/release. Dedicated TTS, ChatGPT-plan and local-only exclusion unchanged.
+- [x] **Step2 — RED:** run new Hands/memory tests using real temporary canonical memory/service and fake inference; require missing integration.
+- [x] **Step3 — Implement inference-only integration.** Preserve original source deadlines/grants/validators after await; memory4096 output bound stays. Paid Hands requires reviewed output bound without changing disabled/Free behavior. No private prompts in routing/cost diagnostics; no write-admission retries.
+- [x] **Step4 — GREEN:** new suites plus Hands provider/planner, all `tests/learning`, relevant memory query/retrieval/context/forget regressions; group test paths consistently with fixtures.
+- [x] **Step5 — Commit:** `feat(assistants): integrate governed Gemini fallback in Hands and memory`.
 
 ### Task 8: Live handoff with canonical context and tool continuity
 
