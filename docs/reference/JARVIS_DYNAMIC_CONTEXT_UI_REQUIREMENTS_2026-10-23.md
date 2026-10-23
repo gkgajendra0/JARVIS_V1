@@ -43,7 +43,7 @@ Source of truth: `docs/PRODUCT.md`, `docs/PROJECT_STATE.md`, `docs/CURRENT_ARCHI
 
 ### Orb
 
-A real continuously rendered animated orb, **not a static image or prerecorded loop**; subtle idle breathing/particle motion; clearer transitions listening/thinking/speaking/error. Orb reduces/moves aside while high-value content is on stage. Respect reduced motion, visibility throttling, reduced GPU modes and battery/performance constraints. Initial renderer can be offline-capable Canvas2D; future WebGL shaders may replace it behind the same state contract, benchmarked before adoption.
+A real continuously rendered animated orb, **not a static image or prerecorded loop**; subtle idle breathing/particle motion; clearer transitions listening/thinking/speaking/error. The orb remains anchored at the center while panels project outward; it may reduce slightly in size to preserve readable projections but never leaves the central axis. Respect reduced motion, visibility throttling, reduced GPU modes and battery/performance constraints. Initial renderer can be offline-capable Canvas2D; future WebGL shaders may replace it behind the same state contract, benchmarked before adoption.
 
 ### Context panels
 
@@ -76,7 +76,7 @@ Use a **single narrow presentation/event adapter** beside existing runtime owner
 
 ## Visual design
 
-- 16:9 and **3440x1440 ultrawide** layouts; right-side context stage; center orb as landmark when idle, relocates to a compact presence dock when stage is occupied.
+- 16:9 and **3440x1440 ultrawide** layouts; centered primary orb with side projections that materialize outward and preserve the orb's central position even while content is visible.
 - Futuristic midnight navy/near-black, restrained cyan/blue and violet highlights, thin glass borders; glow should highlight state, not every border.
 - Use legible type, real contrast, keyboard access, focus styles, usable control targets, mobile/browser resize behavior; no animated text that hides important alerts.
 - `prefers-reduced-motion` and frame throttling; no hard dependency on CDN or third-party fonts.
