@@ -205,16 +205,48 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             page.locator("#backHome").click()
             assert page.locator(".context-card").count() == 1
             page.get_by_label("Dismiss panel").click()
-            assert page.locator(".context-card").count() == 0
+            page.wait_for_function(
+                "() => document.querySelectorAll('.context-card').length === 0"
+            )
             page.locator("#previewButton").click()
             assert "DEMO" in page.locator("#connectionBadge").inner_text()
-            assert page.locator(".context-card").count() == 2
+            assert page.locator(".context-card:not(.is-closing)").count() == 2
+            assert page.locator("#layout").evaluate(
+                "(node) => node.classList.contains('has-stage')"
+            )
+            orb = page.locator("#orbCanvas").bounding_box()
+            layout = page.locator("#layout").bounding_box()
+            assert orb is not None and layout is not None
+            orb_midpoint = orb["x"] + orb["width"] / 2
+            layout_midpoint = layout["x"] + layout["width"] / 2
+            assert abs(orb_midpoint - layout_midpoint) <= 12
+            assert page.locator(".context-card[data-slot='0']").count() == 1
+            assert page.locator(".context-card[data-slot='1']").count() == 1
+            assert page.locator("#beamLayer .projection-link").count() == 2
+            assert page.locator(".holo-telemetry").count() == 1
+            assert page.locator(".holo-activity").count() == 1
+            assert page.evaluate(
+                "() => document.querySelector('.context-card').getAnimations().length > 0"
+            )
+            page.locator("#motionButton").click()
+            assert page.locator("#app").get_attribute("data-quality") == "balanced"
+            page.locator("#motionButton").click()
+            assert page.locator("#app").get_attribute("data-quality") == "eco"
+            page.locator("#motionButton").click()
+            assert page.locator("#app").get_attribute("data-quality") == "cinematic"
             page.locator("#previewButton").click()
-            assert page.locator(".context-card").count() == 0
+            page.wait_for_function(
+                "() => document.querySelectorAll('.context-card').length === 0"
+            )
             assert not errors, errors
             # On reduced-motion systems the globe remains visible but stops
             # continuous animation.
             page.emulate_media(reduced_motion="reduce")
             assert page.locator("#orbCanvas").is_visible()
+            page.locator("#previewButton").click()
+            assert page.locator(".context-card:not(.is-closing)").count() == 2
+            assert page.locator(".context-card").first.evaluate(
+                "(node) => node.getAnimations().length === 0"
+            )
         finally:
             browser.close()
