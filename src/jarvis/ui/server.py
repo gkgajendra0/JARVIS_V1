@@ -75,7 +75,7 @@ class _LocalUIHandler(BaseHTTPRequestHandler):
             return
         if url.path in {"/", "/index.html"}:
             filename = "index.html"
-        elif url.path in {"/ui.css", "/ui.js"}:
+        elif url.path in {"/ui.css", "/ui.js", "/orb-visual.js"}:
             filename = url.path[1:]
         else:
             self._send(404, b"Not found", "text/plain; charset=utf-8")
