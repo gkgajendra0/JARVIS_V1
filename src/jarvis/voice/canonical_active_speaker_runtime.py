@@ -318,6 +318,22 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 personal_context_getter=lambda: self._personal_context,
             )
 
+    async def _validate_gemini_handoff(self, bridge):
+        if (
+            not await super()._validate_gemini_handoff(bridge)
+            or self._session_conversation is not bridge.conversation
+        ):
+            return False
+        if (
+            self._learning_grant is not None
+            and self._learning_authority is not None
+            and self._learning_authority.validate(self._learning_grant).status
+            != "active"
+        ):
+            return False
+        personal = self._personal_context
+        return personal is None or await personal.validate_transport_restore()
+
     def _session_audio_output(self, bridge, output):
         personal = self._personal_context
         if personal is not None and bridge.conversation is self._session_conversation:
