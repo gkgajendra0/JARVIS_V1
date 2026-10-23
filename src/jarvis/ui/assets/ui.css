@@ -445,3 +445,20 @@ button:disabled{opacity:.4;cursor:not-allowed}
   .projection-beam{stroke-width:2.5}
   .projection-beam-glow{stroke-width:12}
 }
+
+/* Extra pinned projections compress into two spatial rows rather than
+   overlapping the primary/secondary panel on typical desktop heights. */
+@media(min-width:741px){
+  .layout.multi-projection .context-card{
+    max-height:min(34vh,370px);
+    overflow-x:hidden;
+    overflow-y:auto;
+    scrollbar-color:rgba(86,184,232,.48) rgba(1,14,30,.4);
+    scrollbar-width:thin;
+  }
+  .layout.multi-projection .context-card[data-slot="0"],
+  .layout.multi-projection .context-card[data-slot="1"]{top:9%}
+  .layout.multi-projection .context-card[data-slot="2"],
+  .layout.multi-projection .context-card[data-slot="3"]{top:56%}
+  .layout.multi-projection .context-card::after{display:none}
+}
