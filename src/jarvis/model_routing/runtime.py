@@ -42,6 +42,14 @@ class RoutingRuntime:
     def work_store(self):
         return self.store.work_store
 
+    async def aclose(self):
+        # Consumers do not own shared clients. Close cached SDK resources once,
+        # after Work, memory workers and capability users have stopped.
+        for adapter in self.router.adapter_registry.all():
+            close = getattr(adapter, "aclose", None)
+            if callable(close):
+                await close()
+
     def pricing_for(self, target):
         if target.pricing_ref is not None:
             return self.store.get_pricing_snapshot(target.pricing_ref)
@@ -216,3 +224,27 @@ def build_routing_runtime(
         runtime.router = router
         runtime.primary_target_id = primary
     return runtime
+
+
+def build_production_routing_runtime(config, *, store_path=None):
+    """Open existing protected routing storage without starting Work/DBOS."""
+    if not config.gemini_fallback.enabled or config.ai_provider != "gemini":
+        return None
+    from pathlib import Path
+
+    from jarvis.chatgpt_plan import ChatGPTPlanSessionManager
+    from jarvis.work.privacy import build_default_work_payload_codec
+    from jarvis.work.store import SQLiteWorkStore, default_work_store_path
+
+    path = default_work_store_path() if store_path is None else Path(store_path)
+    store = SQLiteWorkStore(path, payload_codec=build_default_work_payload_codec(path))
+    return build_routing_runtime(
+        work_store=store,
+        provider=config.ai_provider,
+        model=config.work_orchestration_model,
+        config=config.gemini_fallback,
+        chatgpt_plan_session=ChatGPTPlanSessionManager()
+        if config.chatgpt_plan_enabled
+        else None,
+        chatgpt_plan_model=config.chatgpt_plan_model,
+    )

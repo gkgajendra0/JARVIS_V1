@@ -177,3 +177,74 @@ class RoutingStatusReader:
         if not decisions:
             return None
         return self.for_decision(decisions[0].decision.decision_id)
+
+
+def gemini_fallback_status(runtime) -> dict:
+    """Local facts only: presence is not credential validity or provider health."""
+    from dataclasses import asdict
+
+    from jarvis.ai_provider import gemini_credential_ref, resolve_credential_api_key
+    from jarvis.model_routing.pricing import PricingUnavailable
+    from jarvis.voice.gemini_budget import GeminiLiveBudget
+
+    def present(slot):
+        try:
+            return bool(
+                resolve_credential_api_key("gemini", gemini_credential_ref(slot))
+            )
+        except (RuntimeError, ValueError):
+            return False
+
+    now = float(runtime.clock())
+    health = {}
+    for target in runtime.router.target_registry.all():
+        record = runtime.store.get_health(target.target_id)
+        health[target.target_id] = {
+            "state": "unknown" if record is None else record.state.value,
+            "cooldown_until_epoch": None
+            if record is None
+            else record.cooldown_until_epoch,
+        }
+    for record in runtime.store.list_health():
+        health[record.target_id] = {
+            "state": record.state.value,
+            "cooldown_until_epoch": record.cooldown_until_epoch,
+        }
+    valid = 0
+    versions = []
+    for price in runtime.prices.values():
+        versions.append(
+            {
+                "model_id": price.model_id,
+                "service_key": price.service_key,
+                "price_profile_id": price.profile.profile_id,
+                "price_version": price.profile.version,
+                "price_source": price.source,
+                "fx_version": price.fx_version,
+                "fx_source": price.fx_source,
+            }
+        )
+        try:
+            price.validate_at(now)
+        except PricingUnavailable:
+            continue
+        valid += 1
+    budget = asdict(runtime.paid_budget.status())
+    return {
+        "mode": "free_first_paid_fallback" if runtime.config.enabled else "disabled",
+        "free_credential_available": present("free"),
+        "paid_credential_available": present("paid"),
+        "credential_validity_verified": False,
+        "paid_credential_blocked": runtime.store.credential_blocked(
+            gemini_credential_ref("paid")
+        ),
+        "valid_price_count": valid,
+        "price_versions": versions,
+        "pricing_error": runtime.pricing_error
+        if valid or not runtime.prices
+        else "reviewed_pricing_expired",
+        "live_paid_available": GeminiLiveBudget.available,
+        "live_paid_reason": GeminiLiveBudget.reason,
+        "target_health": health,
+        **budget,
+    }

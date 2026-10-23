@@ -113,6 +113,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         research_service: CurrentResearchService | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
+        routing_runtime=None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -301,6 +302,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._research_service = research_service
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._routing_runtime = routing_runtime
         if (
             memory_runtime is not None
             or research_service is not None
@@ -757,7 +759,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "Personal learning suppression | categories=%s",
                 ",".join(sorted(suppression.suppressed)) or "none",
             )
-            extractor, resolver = build_learning_adapters(self.config.ai_provider)
+            extractor, resolver = build_learning_adapters(
+                self.config.ai_provider,
+                **(
+                    {"routing_runtime": self._routing_runtime}
+                    if self._routing_runtime is not None
+                    else {}
+                ),
+            )
             self._personal_learning = PersonalLearningRuntime(
                 self._learning_authority,
                 self._memory_runtime.service,
@@ -857,6 +866,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 await self._research_service.close()
             if memory_runtime is not None:
                 await memory_runtime.close()
+            if self._routing_runtime is not None:
+                await self._routing_runtime.aclose()
 
     async def _score_enrolled_speaker(
         self,

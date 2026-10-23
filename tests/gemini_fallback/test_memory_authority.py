@@ -132,3 +132,49 @@ async def test_expiry_during_paid_answer_blocks_admission_without_extending_dead
         assert runtime.status().committed == 0
     finally:
         await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_normal_learning_controller_uses_shared_runtime_and_original_authority(
+    learning, authority_parts, tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from tests.learning.test_production import capability
+
+    from jarvis.config import JarvisConfig
+    from jarvis.memory.retrieval import SemanticRetrievalService
+    from jarvis.memory.service import MemoryService
+    from jarvis.voice.canonical_active_speaker_runtime import (
+        CanonicalActiveSpeakerRuntimeController,
+    )
+
+    runtime, _ = shared(tmp_path, monkeypatch, {})
+    capabilities = capability(authority_parts.broker)
+    service = MemoryService(learning.lifecycle, learning.service.canonical_reader)
+    memory = SimpleNamespace(
+        service=service,
+        retrieval=SemanticRetrievalService(learning.reader),
+        bind_learning_authority=service.bind_learning_authority,
+    )
+    controller = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(ai_provider="gemini", personal_learning_mode="apply"),
+        SimpleNamespace(),
+        memory_runtime=memory,
+        capability_runtime=capabilities,
+        routing_runtime=runtime,
+    )
+    before = len(authority_parts.hello.calls)
+    await controller._start_personal_learning()
+    try:
+        assert controller._personal_learning.extractor.routing_runtime is runtime
+        assert controller._personal_learning.resolver.routing_runtime is runtime
+        assert (
+            controller._personal_learning.authority
+            is capabilities.personal_learning_authority
+        )
+        assert len(authority_parts.hello.calls) == before + 1
+    finally:
+        await controller._personal_learning.close()
+        capabilities.close_personal_learning(controller._learning_grant)
+        await runtime.aclose()

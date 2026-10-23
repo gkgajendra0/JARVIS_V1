@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -129,6 +130,21 @@ class StructuredOutputModelAdapter:
         self._client_factory = client_factory
         self._target_client_factory = target_client_factory
         self._clients: dict[tuple, StructuredOutputClient] = {}
+
+    async def aclose(self):
+        clients = tuple(
+            {id(client): client for client in self._clients.values()}.values()
+        )
+        self._clients.clear()
+        for client in clients:
+            close = getattr(client, "aclose", None)
+            if callable(close):
+                try:
+                    await close()
+                except Exception:  # noqa: BLE001 - cleanup continues without private provider bodies
+                    logging.getLogger(__name__).warning(
+                        "Routed provider client cleanup unavailable"
+                    )
 
     def _client_for(
         self, target: ModelTarget, *, max_output_tokens: int | None = None

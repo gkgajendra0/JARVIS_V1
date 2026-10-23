@@ -178,6 +178,9 @@ class OpenAIStructuredOutputClient:
         if not self.model_name:
             raise ValueError("Hands planner model must not be empty")
 
+    async def aclose(self):
+        await self._client.close()
+
     async def parse(
         self,
         *,
@@ -387,6 +390,9 @@ class GeminiStructuredOutputClient:
         self.model_name = str(model).strip()
         if not self.model_name:
             raise ValueError("Hands planner model must not be empty")
+
+    async def aclose(self):
+        await self._client.aio.aclose()
 
     async def parse(
         self,

@@ -331,3 +331,34 @@ def test_hands_configured_chatgpt_plan_keeps_priority_and_identity(
     assert env[3] == []
     assert planner.provider_name == "chatgpt_plan"
     assert planner.model_name == "gpt-test"
+
+
+@pytest.mark.asyncio
+async def test_memory_release_verifier_uses_same_governor_after_free_quota(
+    tmp_path, monkeypatch
+):
+    from tests.test_memory_provider_release_guard import _record
+
+    from jarvis.memory.release_guard import build_memory_release_guard
+
+    runtime, env = shared(
+        tmp_path,
+        monkeypatch,
+        {
+            "free-private-canary": [APIError(429, {})],
+            "paid-private-canary": [
+                response({"answer_type": "current_value", "directly_supported": True})
+            ],
+        },
+    )
+    guard = build_memory_release_guard(
+        provider="gemini", model="gemini-budget-test", routing_runtime=runtime
+    )
+    judgement = await guard.evaluate(text="What vehicle do I have?", evidence=_record())
+    assert judgement.allows_release
+    assert guard._client.runtime is runtime
+    assert [call[0] for call in env[3]] == [
+        "free-private-canary",
+        "paid-private-canary",
+    ]
+    assert runtime.paid_budget.status().spent_inr_minor > 0

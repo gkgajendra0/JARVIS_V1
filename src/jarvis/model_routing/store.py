@@ -911,6 +911,16 @@ class ModelRoutingStore:
             version=int(row["version"]),
         )
 
+    def list_health(self, *, limit=128) -> tuple[TargetHealthRecord, ...]:
+        if type(limit) is not int or not 1 <= limit <= 1024:
+            raise ValueError("Bounded health status limit required")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                "SELECT * FROM model_target_health ORDER BY updated_at_epoch DESC,target_id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return tuple(_health_record(row) for row in rows)
+
     def save_health(
         self,
         record: TargetHealthRecord,

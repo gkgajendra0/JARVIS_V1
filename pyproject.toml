@@ -35,6 +35,7 @@ dependencies = [
     "pypi-attestations==0.0.30",
     "zeroconf==0.151.3",
     "tomli-w==1.2.0",
+    "tzdata==2026.5",
 ]
 
 [project.scripts]

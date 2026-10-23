@@ -515,6 +515,7 @@ def build_default_capability_runtime(
     extra_executors: tuple[CapabilityExecutor, ...] = (),
     catalog_projection: CapabilityCatalogProjection | None = None,
     close_callbacks: tuple[Callable[[], None], ...] = (),
+    routing_runtime=None,
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -585,6 +586,11 @@ def build_default_capability_runtime(
             model=hands_planner_model,
             chatgpt_plan_enabled=chatgpt_plan_enabled,
             chatgpt_plan_model=chatgpt_plan_model,
+            **(
+                {"routing_runtime": routing_runtime}
+                if routing_runtime is not None
+                else {}
+            ),
         )
     return CapabilityRuntime(
         executors=executor_tuple,

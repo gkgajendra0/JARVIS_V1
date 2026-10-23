@@ -154,11 +154,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** Production builds/injects one RoutingRuntime from existing protected SQLiteWorkStore; Work/Hands/memory/Live share its router/store/governor. Work-disabled voice can initialize routing/cost extension storage without fake WorkItems or DBOS execution. Preflight/status shows effective mode, slot availability, target/cooldown, known/reserved/unknown spend and pricing validity; no key/probe. Disabled construction stays compatible/lazy.
 
-- [ ] **Step1 — Failing tests:** full production factory shares services across lanes; Work-disabled voice does not start DBOS. OFF constructs no Paid clients/network calls and preserves defaults. Missing/wrong price/key/cap yields sanitized status; TTS/ChatGPT/local unchanged. Startup/lifecycle realtime speech cannot bypass budget through an extra model.
-- [ ] **Step2 — RED:** run production/status suites; require missing composition/status.
-- [ ] **Step3 — Wire existing factories.** No machine-setting edits, key rewriting, normal-app startup or discovery/probe call. Startup greeting, proactive Work delivery and ephemeral Gemini Live messages share eligible credential/budget path; dedicated TTS/local announcements remain independent.
-- [ ] **Step4 — GREEN:** new suites plus existing setup/config/provider CLI, startup/standby, Work builder and memory runtime regression tests.
-- [ ] **Step5 — Commit:** `feat(runtime): compose shared Free Paid routing and cost status`.
+- [x] **Step1 — Failing tests:** full production factory shares services across lanes; Work-disabled voice does not start DBOS. OFF constructs no Paid clients/network calls and preserves defaults. Missing/wrong price/key/cap yields sanitized status; TTS/ChatGPT/local unchanged. Startup/lifecycle realtime speech cannot bypass budget through an extra model.
+- [x] **Step2 — RED:** run production/status suites; require missing composition/status.
+- [x] **Step3 — Wire existing factories.** No machine-setting edits, key rewriting, normal-app startup or discovery/probe call. Startup greeting, proactive Work delivery and ephemeral Gemini Live messages share eligible credential/budget path; dedicated TTS/local announcements remain independent.
+- [x] **Step4 — GREEN:** new suites plus existing setup/config/provider CLI, startup/standby, Work builder and memory runtime regression tests.
+- [x] **Step5 — Commit:** `feat(runtime): compose shared Free Paid routing and cost status`.
 
 ### Task 11: Cross-lane crash/concurrency and duplicate-action verification
 
