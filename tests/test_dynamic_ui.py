@@ -522,6 +522,28 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             assert page.evaluate(
                 "() => document.querySelector('#orbCanvas').width > 100"
             )
+            # Real owner-screen capture (2048x730): the previous design had
+            # a too-small orb, vertical scrolling and overlapping lower copy.
+            page.set_viewport_size({"width": 2048, "height": 730})
+            page.wait_for_timeout(150)
+            owner_orb = page.locator("#orbCanvas").bounding_box()
+            footer = page.locator(".presence-footer").bounding_box()
+            dock = page.locator(".command-dock").bounding_box()
+            assert owner_orb is not None and owner_orb["width"] >= 350
+            assert footer is not None and dock is not None
+            assert footer["y"] + footer["height"] < dock["y"] - 8
+            assert page.locator(".quiet-prompt").evaluate(
+                "(node) => getComputedStyle(node).display === 'none'"
+            ), "do not overlap a second ambient hint over the lower caption"
+            assert page.evaluate(
+                "() => document.documentElement.scrollHeight <= window.innerHeight + 2"
+            ), "desktop UI must not create a vertical page scrollbar"
+            if screenshot_dir:
+                page.screenshot(
+                    path=str(Path(screenshot_dir) / "ambient-owner-2048x730.png"),
+                    animations="disabled",
+                )
+            page.set_viewport_size({"width": 3440, "height": 1440})
             page.locator("#visualCommand").fill("show tasks")
             page.locator("#showPanelButton").click()
             assert page.locator(".context-card").count() == 1
