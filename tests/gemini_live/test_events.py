@@ -76,3 +76,46 @@ async def test_obsolete_epoch_drops_all_incoming_personal_output(tmp_path):
         assert not delivered
     finally:
         await env.model.aclose()
+
+
+@pytest.mark.parametrize(
+    "kind", ["quota", "auth", "balance", "service", "timeout", "connection"]
+)
+def test_sanitized_error_preserves_existing_provider_policy_facts(kind):
+    from google.genai.errors import APIError
+
+    from jarvis.provider_resilience import classify_provider_failure
+    from jarvis.voice.gemini_live_events import sanitized_live_error
+
+    errors = {
+        "quota": APIError(
+            429,
+            {
+                "message": "quota exceeded",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": "120s",
+                    },
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [
+                            {
+                                "quotaId": "RequestsPerDay",
+                                "quotaMetric": "generativelanguage.googleapis.com/requests",
+                            }
+                        ],
+                    },
+                ],
+            },
+        ),
+        "auth": APIError(401, {}),
+        "balance": APIError(402, {}),
+        "service": APIError(503, {}),
+        "timeout": TimeoutError("private payload"),
+        "connection": ConnectionError("private payload"),
+    }
+    original = errors[kind]
+    assert classify_provider_failure(
+        sanitized_live_error(original), provider="gemini"
+    ) == classify_provider_failure(original, provider="gemini")

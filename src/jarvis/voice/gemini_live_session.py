@@ -14,7 +14,7 @@ from livekit.agents import llm
 from livekit.agents.types import NOT_GIVEN
 from livekit.agents.utils import is_given
 
-from jarvis.voice.gemini_live_events import LiveResponse
+from jarvis.voice.gemini_live_events import LiveResponse, sanitized_live_error
 
 
 class ControlledGeminiLiveSession(llm.RealtimeSession):
@@ -428,16 +428,20 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         finally:
             await self._disconnect()
 
+    async def _can_release(self):
+        try:
+            await self._check()
+        except Exception:  # noqa: BLE001 - source errors must deny queued disclosure
+            self._stop("Controlled Live queued source is no longer current")
+            return False
+        return self.model.state.current and self.model.state.ready
+
     def _start_response(self):
         if self._response is not None:
             return self._response
         if self._pending is None or self._pending.done() or self._lease is None:
             raise llm.RealtimeError("Unadmitted provider generation")
-        self._response = LiveResponse(
-            current=lambda: (
-                self.model.state.current and not self._failed and not self._closed
-            )
-        )
+        self._response = LiveResponse(current=self._can_release)
         self._pending.set_result(self._response.event)
         self._pending = None
         self.emit("generation_created", self._response.event)
@@ -602,7 +606,7 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                 llm.RealtimeModelError(
                     timestamp=time.time(),
                     label=self.model.label,
-                    error=error,
+                    error=sanitized_live_error(error),
                     recoverable=False,
                 ),
             )

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from uuid import uuid4
 
 from livekit import rtc
 from livekit.agents import llm
 from livekit.agents.utils import aio
+
+from jarvis.provider_resilience import ProviderFailureKind, classify_provider_failure
 
 
 class LiveResponse:
@@ -44,7 +47,10 @@ class LiveResponse:
 
     async def stream(self, channel):
         async for value in channel:
-            if not self.current():
+            current = self.current()
+            if inspect.isawaitable(current):
+                current = await current
+            if current is not True:
                 return
             yield value
 
@@ -82,3 +88,46 @@ class LiveResponse:
         self.text.close()
         self.audio.close()
         self.functions.close()
+
+
+def sanitized_live_error(error):
+    """SDK errors must carry policy facts, never raw URLs/keys/provider payloads."""
+    failure = classify_provider_failure(error, provider="gemini")
+    phrase = {
+        ProviderFailureKind.QUOTA_EXHAUSTED: "quota exceeded",
+        ProviderFailureKind.RATE_LIMITED: "rate limit exceeded",
+        ProviderFailureKind.BALANCE_EXHAUSTED: "credit_balance_exhausted",
+        ProviderFailureKind.CONNECTION_LOST: "connection closed",
+        ProviderFailureKind.PROVIDER_SERVER_ERROR: "1011 internal error",
+    }.get(failure.kind, failure.kind.value)
+    result = llm.RealtimeError("Controlled Gemini Live: " + phrase)
+    result.status_code = failure.status_code
+    result.retryable = failure.retryable
+    result.response_contract_invalid = (
+        failure.kind is ProviderFailureKind.RESPONSE_CONTRACT_INVALID
+    )
+    result.local_resource_pressure = (
+        failure.kind is ProviderFailureKind.LOCAL_RESOURCE_PRESSURE
+    )
+    details = []
+    if failure.retry_after_seconds is not None:
+        details.append(
+            {
+                "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                "retryDelay": f"{failure.retry_after_seconds}s",
+            }
+        )
+    if failure.quota_period == "day":
+        details.append(
+            {
+                "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                "violations": [
+                    {
+                        "quotaId": "PerDay",
+                        "quotaMetric": "generativelanguage.googleapis.com/requests",
+                    }
+                ],
+            }
+        )
+    result.details = {"details": details}
+    return result
