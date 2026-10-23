@@ -206,6 +206,7 @@ function renderCard(p) {
 }
 const svgNS="http://www.w3.org/2000/svg";
 const beamGroups=new Map();
+const closingAnimations=new WeakMap();
 let projectionTimer=null;
 let beamRaf=0;
 function projectionGlow(){
@@ -304,6 +305,11 @@ function reconcileCards(panels){
   for(const node of [...cards.children]){
     const id=node.dataset.panelId;
     if(desired.has(id)){
+      const exitAnimation=closingAnimations.get(node);
+      if(exitAnimation){
+        exitAnimation.cancel();
+        closingAnimations.delete(node);
+      }
       node.classList.remove("is-closing");
       continue;
     }
@@ -311,7 +317,11 @@ function reconcileCards(panels){
     node.classList.add("is-closing");
     const animation=moveFromOrb(node,true);
     if(animation){
+      closingAnimations.set(node,animation);
       animation.finished.catch(()=>{}).then(()=>{
+        // An interrupted dismissal must not delete a reopened context.
+        if(!node.isConnected||!node.classList.contains("is-closing"))return;
+        closingAnimations.delete(node);
         node.remove();
         if(!cards.children.length)el("layout").classList.remove("has-stage");
         scheduleBeams();
