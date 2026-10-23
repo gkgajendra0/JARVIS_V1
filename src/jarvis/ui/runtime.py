@@ -103,6 +103,48 @@ def attach_work_projection(runtime: WorkRuntime | None) -> None:
     hub.attach_work_provider(public_work)
 
 
+def attach_diagnostics_projection(
+    *, vision_service: object | None, self_awareness: object | None
+) -> None:
+    """Read only documented diagnostics, with no camera frames/face identities."""
+    hub = active_ui_hub()
+    if hub is None:
+        return
+    if vision_service is not None:
+        def vision_status() -> dict[str, object]:
+            report = vision_service.report(event_limit=0)
+            camera = report.get("camera", {})
+            if not isinstance(camera, dict):
+                camera = {}
+            return {
+                "running": vision_service.running,
+                "active_source": camera.get("active_source"),
+                "available_sources": camera.get("available_sources", []),
+            }
+        hub.attach_vision_provider(vision_status)
+    if self_awareness is not None:
+        def health_status() -> list[dict[str, str]]:
+            snapshots = self_awareness.system_snapshot(health_surface_only=True)
+            return [
+                {
+                    "component": snap.component_id,
+                    "state": snap.health.state.value,
+                }
+                for snap in snapshots
+            ]
+        hub.attach_health_provider(health_status)
+
+
+def observe_research_result(payload: dict[str, object]) -> None:
+    hub = active_ui_hub()
+    if hub is None:
+        return
+    try:
+        hub.show_research_result(payload)
+    except (TypeError, ValueError):
+        LOGGER.debug("Research data not eligible for local UI projection")
+
+
 def observe_accepted_turn(turn: ConversationTurn) -> None:
     hub = active_ui_hub()
     if hub is None:
@@ -127,6 +169,16 @@ def observe_agent_state(event: object) -> None:
         hub.set_voice_state(state)
 
 
+def observe_user_state(event: object) -> None:
+    hub = active_ui_hub()
+    if hub is None:
+        return
+    state = str(getattr(event, "new_state", "")).strip().casefold()
+    if state == "speaking":
+        # "listening" means JARVIS hears incoming speech; do not capture PCM.
+        hub.set_voice_state("listening")
+
+
 def observe_session_close() -> None:
     hub = active_ui_hub()
     if hub is not None:
@@ -144,6 +196,7 @@ def safely_attach_voice_observers(
     hub.set_voice_state("activating")
     try:
         session.on("agent_state_changed", observe_agent_state)
+        session.on("user_state_changed", observe_user_state)
         add_turn_observer(observe_accepted_turn)
         add_close_observer(observe_session_close)
     except Exception:
