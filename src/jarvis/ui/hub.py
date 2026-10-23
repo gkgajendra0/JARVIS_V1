@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import threading
+from urllib.parse import urlsplit
 import time
 from collections import deque
 from collections.abc import Callable
@@ -20,7 +21,7 @@ VOICE_STATES = frozenset(
 PANEL_TYPES = frozenset(
     {"work", "research", "document", "vision", "system", "alert", "info"}
 )
-VALID_SOURCES = frozenset({"runtime", "canonical_work", "health", "local_ui"})
+VALID_SOURCES = frozenset({"runtime", "canonical_work", "health", "local_ui", "research_result"})
 _TOPIC_MATCHES = (
     ("vision", ("camera", "webcam", "pocket 3", "lens", "what do you see")),
     ("work", ("background work", "running task", "task progress", "project work")),
@@ -59,6 +60,8 @@ class UIEventHub:
         self._runtime_connected = False
         self._panels: dict[str, dict[str, Any]] = {}
         self._work_provider: Callable[[], list[dict[str, str]]] | None = None
+        self._vision_provider: Callable[[], dict[str, object]] | None = None
+        self._health_provider: Callable[[], list[dict[str, str]]] | None = None
 
     def attach_work_provider(
         self, provider: Callable[[], list[dict[str, str]]]
@@ -67,6 +70,80 @@ class UIEventHub:
             raise TypeError("work provider must be callable")
         with self._lock:
             self._work_provider = provider
+
+    def attach_vision_provider(
+        self, provider: Callable[[], dict[str, object]]
+    ) -> None:
+        if not callable(provider):
+            raise TypeError("vision provider must be callable")
+        with self._lock:
+            self._vision_provider = provider
+
+    def attach_health_provider(
+        self, provider: Callable[[], list[dict[str, str]]]
+    ) -> None:
+        if not callable(provider):
+            raise TypeError("health provider must be callable")
+        with self._lock:
+            self._health_provider = provider
+
+    def show_research_result(self, payload: dict[str, object]) -> None:
+        """Display verified tool evidence, not a query, transcript or model claim.
+
+        Only HTTPS source titles and public domains are exposed. Excerpts and
+        search queries may contain confidential owner context, so omit both.
+        """
+        if not isinstance(payload, dict):
+            raise TypeError("research payload must be a mapping")
+        if payload.get("ok") is not True:
+            return
+        raw_sources = payload.get("sources")
+        if not isinstance(raw_sources, list):
+            return
+        sources: list[dict[str, str]] = []
+        for raw in raw_sources[:10]:
+            if not isinstance(raw, dict):
+                continue
+            url = raw.get("url")
+            title = raw.get("title")
+            if not isinstance(url, str) or not isinstance(title, str):
+                continue
+            try:
+                parsed = urlsplit(url)
+                if (
+                    parsed.scheme != "https"
+                    or not parsed.hostname
+                    or parsed.username
+                    or parsed.password
+                    or parsed.port is not None
+                    or parsed.hostname in {"localhost", "127.0.0.1"}
+                    or not re.fullmatch(r"[a-zA-Z0-9.-]+", parsed.hostname)
+                    or len(url) > 1200
+                ):
+                    continue
+                name = _short_text(title, maximum=140)
+                domain = _short_text(parsed.hostname, maximum=120)
+            except (ValueError, TypeError):
+                continue
+            sources.append({"title": name, "domain": domain, "url": url})
+            if len(sources) >= 5:
+                break
+        self.show_panel(
+            panel_id="research.latest",
+            panel_type="research",
+            title="Research sources",
+            summary=(
+                f"{len(sources)} verified HTTPS source links supplied by the "
+                "existing research tool. Treat external pages as untrusted."
+                if sources else "Research returned no displayable public source links."
+            ),
+            source="research_result",
+            priority=2,
+            ttl_seconds=600,
+        )
+        with self._lock:
+            if "research.latest" in self._panels:
+                self._panels["research.latest"]["sources"] = sources
 
     def _record(self, event_type: str, detail: dict[str, Any]) -> None:
         self._sequence += 1
@@ -184,6 +261,8 @@ class UIEventHub:
             voice_state = self._voice_state
             sequence = self._sequence
             provider = self._work_provider
+            vision_provider = self._vision_provider
+            health_provider = self._health_provider
         work: list[dict[str, str]] = []
         if connected and provider is not None:
             try:
@@ -202,6 +281,43 @@ class UIEventHub:
             except Exception:  # noqa: BLE001 - UI must not break live Work
                 # UI telemetry must not be able to bring down the voice runtime.
                 work = []
+        vision: dict[str, object] = {"connected": False, "running": False}
+        if connected and vision_provider is not None:
+            try:
+                raw = vision_provider()
+                if isinstance(raw, dict):
+                    camera = raw.get("active_source")
+                    available = raw.get("available_sources", [])
+                    vision = {
+                        "connected": True,
+                        "running": raw.get("running") is True,
+                        "active_source": (
+                            _short_text(camera, maximum=48)
+                            if isinstance(camera, str) else "unknown"
+                        ),
+                        "available_sources": [
+                            _short_text(name, maximum=48)
+                            for name in available[:6]
+                            if isinstance(name, str)
+                        ] if isinstance(available, list) else [],
+                    }
+            except Exception:  # noqa: BLE001 - optional read-only projection
+                vision = {"connected": False, "running": False}
+        health: list[dict[str, str]] = []
+        if connected and health_provider is not None:
+            try:
+                raw = health_provider()
+                if isinstance(raw, list):
+                    health = [
+                        {
+                            "component": _short_text(item["component"], maximum=80),
+                            "state": _short_text(item["state"], maximum=24),
+                        }
+                        for item in raw[:20]
+                        if isinstance(item, dict)
+                    ]
+            except Exception:  # noqa: BLE001 - optional read-only projection
+                health = []
         return {
             "schema": 1,
             "seq": sequence,
@@ -209,6 +325,8 @@ class UIEventHub:
             "voice_state": voice_state,
             "panels": panels[:16],
             "work": work,
+            "vision": vision,
+            "health": health,
             "server_time": self._clock(),
         }
 
