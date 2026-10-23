@@ -56,7 +56,14 @@ function panelFromType(type) {
   else summary="No context is available from the approved adapter.";
   return {id:"manual."+type,type,title:names[type]||"Context",summary,source:"local_ui",priority:2,observed_at:now,expires_at:now+1200};
 }
+function setRadialMenu(open) {
+  el("orbToggle").setAttribute("aria-expanded",String(open));
+  el("radialMenu").setAttribute("aria-hidden",String(!open));
+  el("radialMenu").inert=!open;
+  el("orbToggle").parentElement.classList.toggle("menu-open",open);
+}
 function showType(type) {
+  setRadialMenu(false);
   if(!Object.hasOwn(names,type) || type==="alert" || type==="info") {
     toast("Choose Work, Research, Vision, Files, or System.");return;
   }
@@ -67,6 +74,7 @@ function showType(type) {
   render();
 }
 function goHome() {
+  setRadialMenu(false);
   model.local.clear();
   model.dismissed.clear();
   model.currentView="ambient";
@@ -421,6 +429,14 @@ el("commandForm").addEventListener("submit",(event)=>{
 });
 document.querySelectorAll(".rail-button[data-panel]").forEach(b=>b.addEventListener("click",()=>showType(b.dataset.panel)));
 document.querySelector(".rail-button[data-action=home]").addEventListener("click",goHome);
+el("orbToggle").addEventListener("click",()=>{
+  const nowOpen=el("orbToggle").getAttribute("aria-expanded")!=="true";
+  setRadialMenu(nowOpen);
+  if(nowOpen)projectionGlow();
+});
+document.querySelectorAll("[data-orb-panel]").forEach(button=>{
+  button.addEventListener("click",()=>showType(button.dataset.orbPanel));
+});
 el("backHome").addEventListener("click",goHome);
 el("previewButton").addEventListener("click",toggleDemo);
 el("clearButton").addEventListener("click",()=>{
@@ -433,6 +449,9 @@ el("clearButton").addEventListener("click",()=>{
 el("helpButton").addEventListener("click",()=>el("helpDialog").showModal());
 el("closeHelp").addEventListener("click",()=>el("helpDialog").close());
 document.addEventListener("keydown",(event)=>{
+  if(event.key==="Escape" && el("orbToggle").getAttribute("aria-expanded")==="true"){
+    setRadialMenu(false);event.preventDefault();return;
+  }
   if(event.ctrlKey && event.key.toLowerCase()==="k"){event.preventDefault();el("visualCommand").focus();}
   if(event.key==="Escape" && !el("helpDialog").open && document.activeElement!==el("visualCommand"))goHome();
 });
@@ -585,4 +604,5 @@ document.addEventListener("visibilitychange",()=>{prev=0;});
 reduced.addEventListener("change",()=>{prev=0;draw(0);});
 clock();setInterval(clock,10000);
 applyQuality(savedQuality());
+setRadialMenu(false);
 render();resize();frame=requestAnimationFrame(animate);poll();setInterval(poll,1100);
