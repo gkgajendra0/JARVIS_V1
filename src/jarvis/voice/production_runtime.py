@@ -85,6 +85,7 @@ from jarvis.ui.runtime import (
     attach_diagnostics_projection,
     attach_work_projection,
     observe_capability_result,
+    observe_provider_issue,
     observe_research_result,
     safely_attach_voice_observers,
     start_opt_in_ui,
@@ -561,6 +562,7 @@ def build_production_voice_runtime(
         )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
+            observe_provider_issue(failure)
             if (
                 provider_lifecycle_trigger is None
                 or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
