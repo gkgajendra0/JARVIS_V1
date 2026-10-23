@@ -82,7 +82,9 @@ from jarvis.provider_resilience import (
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.ui.runtime import (
+    attach_diagnostics_projection,
     attach_work_projection,
+    observe_research_result,
     safely_attach_voice_observers,
     start_opt_in_ui,
     stop_opt_in_ui,
@@ -612,6 +614,7 @@ def build_production_voice_runtime(
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
+        research_result_observer=observe_research_result,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
         session_factory=production_session_factory,
@@ -821,6 +824,10 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
         migration_needs_preflight_validation = False
         start_opt_in_ui()
         attach_work_projection(getattr(runtime, "_work_runtime", None))
+        attach_diagnostics_projection(
+            vision_service=getattr(runtime, "_vision_service", None),
+            self_awareness=self_awareness,
+        )
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
