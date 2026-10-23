@@ -131,6 +131,87 @@ def test_event_overflow_signals_fresh_snapshot_needed() -> None:
         hub.events_after(-1)
 
 
+
+def test_ui_renders_real_diagnostic_feeds_without_frames_or_secrets() -> None:
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+    hub.attach_vision_provider(
+        lambda: {
+            "running": True,
+            "active_source": "lenovo",
+            "available_sources": ["lenovo", "pocket3"],
+            "raw_frame": "must not escape",
+            "face_embedding": "must not escape",
+        }
+    )
+    hub.attach_health_provider(
+        lambda: [
+            {"component": "runtime.voice", "state": "healthy", "metadata": "secret"},
+            {"component": "vision.base", "state": "degraded"},
+        ]
+    )
+    payload = hub.snapshot()
+    assert payload["vision"] == {
+        "connected": True,
+        "running": True,
+        "active_source": "lenovo",
+        "available_sources": ["lenovo", "pocket3"],
+    }
+    assert payload["health"] == [
+        {"component": "runtime.voice", "state": "healthy"},
+        {"component": "vision.base", "state": "degraded"},
+    ]
+    serialized = json.dumps(payload)
+    assert "raw_frame" not in serialized
+    assert "face_embedding" not in serialized
+    assert "secret" not in serialized
+
+
+def test_research_projection_strips_sensitive_queries_and_untrusted_urls() -> None:
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+    hub.show_research_result(
+        {
+            "ok": True,
+            "query": "PRIVATE SEARCH TEXT SHOULD NEVER APPEAR",
+            "sources": [
+                {
+                    "title": "Official technical documentation",
+                    "url": "https://docs.python.org/3/reference/?q=PRIVATE_QUERY#fragment",
+                    "excerpt": "SECRET EXCERPT",
+                },
+                {"title": "Local file", "url": "file:///C:/secret.txt"},
+                {"title": "Local IP", "url": "https://192.168.1.100/admin"},
+                {"title": "Javascript attack", "url": "javascript:alert(1)"},
+                {"title": "Internal", "url": "https://host.internal/secret"},
+            ],
+        }
+    )
+    panel = hub.snapshot()["panels"][0]
+    assert panel["source"] == "research_result"
+    assert len(panel["sources"]) == 1
+    assert panel["sources"][0]["url"] == "https://docs.python.org/3/reference/"
+    assert "PRIVATE" not in json.dumps(panel)
+    assert "SECRET" not in json.dumps(panel)
+    before = hub.snapshot()["seq"]
+    hub.show_research_result({"ok": False, "sources": []})
+    assert hub.snapshot()["seq"] == before
+
+
+def test_diagnostic_projection_failures_are_nonfatal() -> None:
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+
+    def unavailable():
+        raise OSError("sensitive local details")
+
+    hub.attach_vision_provider(unavailable)
+    hub.attach_health_provider(unavailable)
+    snapshot = hub.snapshot()
+    assert snapshot["vision"] == {"connected": False, "running": False}
+    assert snapshot["health"] == []
+
+
 @pytest.fixture
 def ui_http():
     hub = UIEventHub()
@@ -297,6 +378,70 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             assert page.locator(".context-card").first.evaluate(
                 "(node) => node.getAnimations().length === 0"
             )
+        finally:
+            browser.close()
+
+
+
+def test_live_runtime_research_and_diagnostics_browser_projection(ui_http) -> None:
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+
+    hub, url = ui_http
+    hub.set_runtime_connected(True)
+    hub.set_voice_state("speaking")
+    hub.attach_work_provider(
+        lambda: [{"id": "work-123", "kind": "research", "state": "running"}]
+    )
+    hub.attach_vision_provider(
+        lambda: {
+            "running": True,
+            "active_source": "lenovo",
+            "available_sources": ["lenovo", "pocket3"],
+        }
+    )
+    hub.attach_health_provider(
+        lambda: [{"component": "runtime.voice", "state": "healthy"}]
+    )
+    hub.show_research_result(
+        {
+            "ok": True,
+            "query": "HIDDEN PRIVATE QUERY",
+            "sources": [
+                {
+                    "title": "Official source",
+                    "url": "https://docs.python.org/3/reference/?secret=HIDDEN",
+                }
+            ],
+        }
+    )
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as exc:  # noqa: BLE001 - optional browser
+            pytest.skip(f"Chromium unavailable: {type(exc).__name__}")
+        try:
+            page = browser.new_page(viewport={"width": 1920, "height": 1080})
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_function(
+                "() => document.querySelector('.live-source') !== null"
+            )
+            assert "RUNTIME LINKED" in page.locator("#connectionBadge").inner_text()
+            assert "Speaking" in page.locator("#voiceState").inner_text()
+            assert page.locator(".live-source").count() == 1
+            assert page.locator(".live-source").first.get_attribute("href") == (
+                "https://docs.python.org/3/reference/"
+            )
+            assert "HIDDEN" not in page.locator("#cards").inner_text()
+            page.locator(".rail-button[data-panel='vision']").click()
+            assert "LENOVO" in page.locator("#cards").inner_text()
+            page.locator(".rail-button[data-panel='system']").click()
+            assert "RUNTIME.VOICE" in page.locator("#cards").inner_text().upper()
+            page.locator(".rail-button[data-panel='work']").click()
+            assert "work-123" in page.locator("#cards").inner_text()
+            assert not errors, errors
         finally:
             browser.close()
 
