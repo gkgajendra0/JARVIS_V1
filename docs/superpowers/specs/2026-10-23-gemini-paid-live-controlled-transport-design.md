@@ -1,6 +1,6 @@
 # Proposed amendment: controlled public Gemini Paid Live transport
 
-Status: DRAFT FOR OWNER REVIEW, not approved or implemented. 23 October 2026.
+Status: OWNER APPROVED23October2026 for the next executable plan and Native offline implementation. Implementation is in progress; no real Paid calls/activation/merge authorized.
 This addresses the real Paid Live gap recorded in the Free/Paid implementation
 report. It is not a second router, alternate brain or spending-policy relaxation.
 
@@ -96,10 +96,41 @@ or OFF-only run substitutes for enabled continuity acceptance.
 
 ## Approval scope and tradeoffs
 
-Approving this draft would authorize a detailed executable plan and offline
+Owner approval authorizes a detailed executable plan and Native offline
 implementation/review of option3. It does NOT authorize live Paid API calls,
 activation, paid purchases, SDK-private patches, a price/FX assumption, deployment
 or merge. Native execution preference is retained. Material tradeoff: Paid turn
 boundaries become client-controlled, requiring new pause/barge-in qualification;
 the Free provider path retains its existing behavior. Until verified, the current
 Paid Live denial remains in place. Do not describe a proposed adapter as working.
+
+
+## Research notes after approval (23 October)
+
+The pinned public RealtimeSession has start_user_activity, commit_audio and
+generate_reply hooks. Agent-level public TurnHandlingOptions can select local
+VAD with fixed0.8s endpoint delay; no second microphone/VAD/speaker authority is
+needed. The controlled adapter must characterize those actual AgentSession hooks.
+
+Google documents manual activity control, blocking functions for standard3.8,
+and one completed turn returning to idle. Extended-thinking is excluded: it has
+multiple utterances/background interaction lifecycle. Existing Free models stay
+unchanged. Unsupported aliases/versions do not inherit a proved model contract.
+Sources: https://ai.google.dev/gemini-api/docs/live-api/capabilities and
+https://ai.google.dev/gemini-api/docs/live-api/thinking .
+
+Billing needs extra care: persistent context is re-billed, proactive listening can
+charge idle audio, and transcriptions add text-output charges. Therefore close a
+Paid physical connection after a completed user turn while keeping the logical
+AgentSession locally alive; a subsequent actual turn earns fresh admission and
+canonical context. Blocking tool continuations can retain the connection, but
+must reserve again before the response that resumes generation. No idle Paid
+polling or hidden reconnect. This costs an extra handshake per user turn.
+Source: https://ai.google.dev/gemini-api/docs/live-api/best-practices .
+
+Do not use the approximate25audio-tokens/second as a hard ceiling. The first task
+must qualify full model-capacity exposure across input/audio/output/transcription/
+thinking, including setup/history and uncertain listening; if an auxiliary billing
+bound cannot be justified, reject that model/configuration before client creation.
+The model card gives131072input/65536output, but these numbers alone do not prove
+every auxiliary charge. No completion claim or activation may hide such a gap.

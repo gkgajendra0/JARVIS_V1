@@ -47,8 +47,9 @@ machine configuration and block external network. No private owner DB was opened
 - Actual project separation, funding, valid keys, production price/FX/invoice and
   spoken provider acceptance remain **unverified**, not assumed valid from key
   presence or a synthetic model. Live Paid requests/account changes lack approval.
-- The controlled-transport proposal was outside the reviewed commit, is DRAFT,
-  unapproved and unimplemented. It does not complete Paid voice or relax35000paise
+- The controlled-transport proposal was outside the reviewed commit and was DRAFT,
+  unapproved and unimplemented at review time. The owner subsequently approved
+  its next plan and Native offline implementation; this is not Live acceptance. It does not complete Paid voice or relax35000paise
   admission. Exact live charging-trigger proof is a prerequisite for enabling it.
 - Deferred minors: none.
 
@@ -58,7 +59,7 @@ All chronological rulings and their costs are preserved in the linked
 ## Final verification and integration
 
 3,071 passed, 8 skipped in293.63s (4m53s); full repository pytest, isolated machine profile. Ruff check passed,1,043 files formatted, git diff --check passed..
-[Draft PR#298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). Exact current-head hosted results are tracked in its checks and verification record; at this report commit they are pending. No earlier-head result substitutes for final-head acceptance..
+[Draft PR#298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). Immutable checkpoint `bbaa99d45a86d4cea88b79f1f99781fe7193b25c`: all7hosted jobs passed; [CodeQuality](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/39932296115) Linux3073pass/6skip, Windows3075pass/4skip, Ruff, Hello, DPAPI, promotion-policy; [SQLCipher4.17](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/39932291571) build/bake-off/production adapter. These checks do not certify later controlled-Live changes..
 
 The branch is dependent on `feat/pi3-question-context-20261022` (PR296), itself
 on PR295. Any PR here must remain draft and target that dependency, not main.

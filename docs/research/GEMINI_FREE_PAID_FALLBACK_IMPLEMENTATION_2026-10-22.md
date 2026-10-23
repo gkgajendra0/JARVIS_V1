@@ -27,6 +27,8 @@ Implementation checkpoint before final review: `576463a3a0baca5b9022770a1b4a5ccf
 No main merge is authorized. Existing PI-2 extended-provider qualification and
 PI-3A actual-model/spoken acceptance remain pending/deferred, not passed here.
 
+Owner subsequently approved the [controlled Live plan](../superpowers/plans/2026-10-23-gemini-paid-live-controlled-transport.md) and Native offline execution. That extension is now in progress; no real Paid calls, activation or merge authorized. Its later source requires fresh verification.
+
 ## Routing and credential ownership
 
 - Global Brain Router retains deterministic/local decisions. Phase-4 ModelRouter
@@ -130,12 +132,12 @@ Paid Live modality accounting, real Paid handoff and production Free-return from
 Paid Live are not activated or qualified. Fake-transport recovery tests do not
 prove those production features.
 
-Next owner-dependent decision: review the [controlled Paid Live transport design
+Next authorized work: implement the [controlled Paid Live transport design
 proposal](../superpowers/specs/2026-10-23-gemini-paid-live-controlled-transport-design.md)
-(DRAFT, not approved/implemented) for a controlled Live transport adapter using supported Google/LiveKit interfaces (or a reviewed
+(OWNER APPROVED23October for Native offline implementation; not yet implemented) for a controlled Live transport adapter using supported Google/LiveKit interfaces (or a reviewed
 upstream hook/version), covering pre-connect and per-turn admission plus existing
-full-duplex/private/tool behavior. Retain this denial until that design is approved
-and implemented. Increasing spend or bypassing the gate is not a fix.
+full-duplex/private/tool behavior. Retain this denial until the approved controlled transport is implemented and
+verified. Increasing spend or bypassing the gate is not a fix.
 
 Primary references: [Google Live protocol](https://ai.google.dev/api/live.md),
 [Live session management](https://ai.google.dev/gemini-api/docs/live-api/session-management),
@@ -170,7 +172,7 @@ executed pinned-SDK characterization tests, not assumptions about latest release
   See [review and verification evidence](GEMINI_FREE_PAID_FALLBACK_REVIEW_2026-10-23.md).
 - Full-suite checkpoint before the final original-session guard:3069passed,
   8skipped,222.65s. 3,071 passed, 8 skipped in293.63s (4m53s); full repository pytest, isolated machine profile. Ruff check passed,1,043 files formatted, git diff --check passed..
-- Exact-head hosted CI and draft PR: [Draft PR#298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). Exact current-head hosted results are tracked in its checks and verification record; at this report commit they are pending. No earlier-head result substitutes for final-head acceptance.. These remain
+- Exact-head hosted CI and draft PR: [Draft PR#298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). Immutable checkpoint `bbaa99d45a86d4cea88b79f1f99781fe7193b25c`: all7hosted jobs passed; [CodeQuality](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/39932296115) Linux3073pass/6skip, Windows3075pass/4skip, Ruff, Hello, DPAPI, promotion-policy; [SQLCipher4.17](https://github.com/gkgajendra0/JARVIS_V1/actions/runs/39932291571) build/bake-off/production adapter. These checks do not certify later controlled-Live changes.. These remain
   separate from real Paid provider/whole-app acceptance, which was not run.
 - Performance: no active streaming budget/frame path exists, so there is no valid
   Paid Live overhead/latency measurement. Fake handoff readiness is bounded10s,
@@ -285,7 +287,7 @@ paid acceptance or merge are implied by this record.
 
 - Final: Ruling: account/project separation, funding, keys, actual price/FX and spoken/invoice acceptance remain unverified — user has not authorized Paid calls or account changes — cost if wrong: owner acceptance may reveal credential, funding or production pricing problems; default OFF retained.
 
-- Final: Ruling: controlled-transport amendment is a separate unapproved design proposal outside reviewed implementation — do not implement new transport under an accounting exception — cost if wrong: full Paid Live delivery waits for a supported reviewed transport decision.
+- Final: Ruling: controlled-transport amendment is at review time a separate unapproved design proposal outside reviewed implementation — do not implement new transport under an accounting exception — cost if wrong: full Paid Live delivery waits for a supported reviewed transport decision.
 
 - Final: Ruling: in-flight Free recovery owns a durable process PID plus creation-time fence beyond provisional lease expiry — a live pending call cannot be stolen on clock advance; dead owner becomes eligible after TTL, old version/health facts remain fenced — cost if wrong: an inaccessible or hung process keeps Free recovery occupied until cancellation/exit; other eligible demand can use bounded Paid. No extra API probes.
 

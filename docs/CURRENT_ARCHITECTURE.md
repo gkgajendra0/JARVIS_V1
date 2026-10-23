@@ -5,7 +5,7 @@ fallback shares the existing router and cumulative INR350 governor; default OFF.
 Actual Paid Live voice is unavailable because the pinned public SDK cannot prove
 pre-send reconnect/generation spending bounds. This is a PARTIAL candidate, not
 completed production voice failover. No paid calls, saved activation, owner-memory
-changes or merge. Final review repairs and the unapproved Paid Live transport proposal
+changes or merge. Final review repairs and the owner-approved Paid Live transport extension in progress
 are tracked in the report. See [implementation, blockers and acceptance record](research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md).
 
 ## Status
