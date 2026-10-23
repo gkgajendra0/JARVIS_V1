@@ -453,6 +453,9 @@ function render() {
   el("voiceState").append(dot,document.createTextNode(labels[voice]||"Standing by"));
   el("voiceState").classList.toggle("online",connected||model.demo);
   el("app").dataset.state=voice;
+  el("coreMode").textContent=model.demo?"SIMULATION":!connected?"STANDBY":
+    voice==="speaking"?"TRANSMITTING":voice==="thinking"?"PROCESSING":
+    voice==="listening"?"RECEIVING":"READY";
   el("stageTitle").textContent=panels.length===1?panels[0].title:"Right information. Right moment.";
   el("dockHeading").textContent=active?"PROJECTION ACTIVE":"AMBIENT MODE";
   el("dockStatus").textContent=active?"Context emerges from JARVIS":"Minimal by design";
@@ -591,10 +594,7 @@ el("motionButton").addEventListener("click",()=>{
   toast("Visual effects: "+model.quality);
 });
 let width=440,height=440,prev=0,frame=0,phase=0;
-const particles=Array.from({length:110},(_,i)=>({
-  a:i*2.39996,r:.16+((i*31)%89)/115,s:.12+((i*13)%23)/65,
-  size:.5+((i*19)%8)/8,offset:((i*71)%31)/10
-}));
+const orbVisual=window.JarvisOrbVisual.create(ctx);
 function resize() {
   const box=canvas.getBoundingClientRect();
   width=Math.max(1,Math.round(box.width));height=Math.max(1,Math.round(box.height));
@@ -604,127 +604,15 @@ function resize() {
   draw(performance.now()/1000);
 }
 function draw(t) {
-  const w=width,h=height,cx=w/2,cy=h/2,r=Math.min(w,h)*.405;
-  ctx.clearRect(0,0,w,h);
-  const state=el("app").dataset.state;
-  const active=state==="speaking"||state==="listening",thinking=state==="thinking";
-  const projecting=el("app").classList.contains("is-projecting");
-  const energy=projecting?1.33:active?1.13:thinking?1.09:1;
-  const breath=1+Math.sin(t*1.4)*.024;
-  const halo=ctx.createRadialGradient(cx,cy,0,cx,cy,r*1.21);
-  halo.addColorStop(0,"rgba(8,50,126,.11)");
-  halo.addColorStop(.56,thinking?"rgba(87,43,164,.2)":"rgba(14,111,215,.15)");
-  halo.addColorStop(.83,"rgba(40,162,241,.14)");
-  halo.addColorStop(1,"rgba(11,127,202,0)");
-  ctx.fillStyle=halo;ctx.beginPath();ctx.arc(cx,cy,r*1.21,0,Math.PI*2);ctx.fill();
-  const surface=ctx.createRadialGradient(cx-r*.24,cy-r*.35,r*.04,cx,cy,r*breath);
-  surface.addColorStop(0,"rgba(43,156,238,.40)");
-  surface.addColorStop(.24,"rgba(12,68,147,.50)");
-  surface.addColorStop(.67,thinking?"rgba(51,24,111,.63)":"rgba(4,27,76,.81)");
-  surface.addColorStop(.92,"rgba(1,11,35,.94)");
-  surface.addColorStop(1,"rgba(29,170,248,.29)");
-  ctx.fillStyle=surface;ctx.beginPath();ctx.arc(cx,cy,r*breath,0,Math.PI*2);ctx.fill();
-  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r*.98,0,2*Math.PI);ctx.clip();
-  ctx.globalCompositeOperation="screen";
-  for(let j=0;j<9;j++){
-    const y=cy+(j-4)*r*.145;
-    const amp=r*(.07+.04*Math.sin(t*.85+j*1.2));
-    ctx.beginPath();
-    for(let i=0;i<=110;i++){
-      const x=cx-r+i*r*2/110;
-      const envelope=Math.sqrt(Math.max(0,1-((x-cx)/r)**2));
-      const yy=y+Math.sin(i*.13+t*(j%2?-.65:.9)+j*.65)*amp*envelope;
-      if(i===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
-    }
-    ctx.strokeStyle=j%3===0?"rgba(156,135,255,.24)":"rgba(46,192,253,.16)";
-    ctx.lineWidth=.7+(j%3)*.32;ctx.stroke();
-  }
-  for(const p of particles){
-    const a=p.a+t*p.s*(thinking?1.8:1);
-    const rr=r*p.r;
-    const xx=cx+Math.cos(a)*rr;
-    const yy=cy+Math.sin(a*1.2+p.offset)*rr*.70;
-    const alpha=.2+.4*(.5+.5*Math.sin(t*1.7+p.offset));
-    ctx.beginPath();ctx.arc(xx,yy,p.size,0,Math.PI*2);
-    ctx.fillStyle="rgba(122,217,255,"+alpha.toFixed(3)+")";ctx.fill();
-  }
-  // A second field of refracted filaments gives the core spherical depth.
-  // Lower visual-quality modes reduce work and preserve voice latency.
-  if(model.quality!=="eco"){
-    const spokes=model.quality==="balanced"?22:42;
-    for(let k=0;k<spokes;k++){
-      const angle=(k/spokes)*Math.PI*2 + t*(k%2?-.018:.023);
-      const radial=r*(.48+((k*17)%23)/60);
-      const x1=cx+Math.cos(angle)*radial;
-      const y1=cy+Math.sin(angle)*radial;
-      const x2=cx+Math.cos(angle+.17)*radial*.89;
-      const y2=cy+Math.sin(angle+.17)*radial*.89;
-      ctx.beginPath();ctx.moveTo(x1,y1);
-      ctx.quadraticCurveTo(cx,cy,x2,y2);
-      ctx.strokeStyle=k%5===0?"rgba(161,142,255,.09)":"rgba(67,182,251,.047)";
-      ctx.lineWidth=.6;
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-  ctx.lineCap="round";
-  for(let j=0;j<4;j++) {
-    const offset=j*.039;
-    const rr=r*(1+offset)*breath;
-    const start=t*(j%2?-.1:.13)+j*1.6;
-    ctx.beginPath();ctx.arc(cx,cy,rr,start,start+Math.PI*(.63+j*.04));
-    ctx.strokeStyle=j===1?"rgba(155,141,254,.65)":"rgba(67,206,255,"+(.3+j*.13)+")";
-    ctx.lineWidth=(j===0?2.6:1.05)*energy;ctx.shadowColor="#25bbff";ctx.shadowBlur=j===0?16:5;ctx.stroke();
-  }
-  ctx.shadowBlur=0;
-  // Fresnel edge: the illuminated hemisphere seems glass-like rather than
-  // a flat circle, and its changing rim follows the existing state signal.
-  const fresnel=ctx.createRadialGradient(cx-r*.12,cy-r*.13,r*.60,cx,cy,r*1.012);
-  fresnel.addColorStop(0,"rgba(0,90,160,0)");
-  fresnel.addColorStop(.80,"rgba(15,100,200,.02)");
-  fresnel.addColorStop(.95,thinking?"rgba(164,116,244,.23)":"rgba(75,198,253,.22)");
-  fresnel.addColorStop(1,"rgba(122,224,255,.045)");
-  ctx.beginPath();ctx.arc(cx,cy,r*breath,0,Math.PI*2);
-  ctx.fillStyle=fresnel;ctx.fill();
-  const glint=ctx.createRadialGradient(cx-r*.32,cy-r*.35,0,cx-r*.32,cy-r*.35,r*.6);
-  glint.addColorStop(0,"rgba(191,239,255,.20)");glint.addColorStop(1,"rgba(0,138,255,0)");
-  ctx.fillStyle=glint;ctx.beginPath();ctx.arc(cx-r*.32,cy-r*.35,r*.6,0,Math.PI*2);ctx.fill();
-  // Orbital filaments move on tilted ellipses, creating parallax and a
-  // holographic sense of depth without a heavyweight realtime 3D engine.
-  if(model.quality!=="eco"){
-    ctx.save();
-    ctx.translate(cx,cy);
-    for(let orbit=0;orbit<4;orbit++){
-      ctx.save();
-      ctx.rotate(t*(orbit%2?-.09:.07)+orbit*1.24);
-      ctx.scale(1,.25+(orbit%3)*.11);
-      ctx.beginPath();
-      const start=t*(orbit%2?-.48:.31)+orbit*1.5;
-      ctx.arc(0,0,r*(.65+orbit*.12),start,start+Math.PI*(.62+orbit*.08));
-      ctx.strokeStyle=orbit===2?"rgba(179,135,255,.58)":"rgba(89,220,255,"+(.17+orbit*.09)+")";
-      ctx.lineWidth=orbit%2?1.4:1;
-      ctx.shadowColor="#3aceff";ctx.shadowBlur=orbit===1?18:8;
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.restore();ctx.shadowBlur=0;
-  }
-  // Tiny visible orbit nodes brighten when a projection is materializing.
-  for(let k=0;k<(model.quality==="eco"?4:11);k++){
-    const a=t*(k%2?-.17:.21)+k*2.399;
-    const rr=r*(.79+(k%4)*.088);
-    const z=Math.sin(a+k*.61)*.44;
-    const px=cx+Math.cos(a)*rr;
-    const py=cy+Math.sin(a*1.17+k*.43)*rr*.36;
-    ctx.beginPath();ctx.arc(px,py,1.1+(z+1)*.6,0,Math.PI*2);
-    ctx.fillStyle="rgba(134,224,255,"+(.29+.37*(z+1)/2)+")";
-    ctx.shadowColor="#6bdcff";ctx.shadowBlur=10;ctx.fill();
-  }
-  ctx.shadowBlur=0;
-  const beacon=ctx.createRadialGradient(cx,cy,r*.02,cx,cy,r*.67);
-  beacon.addColorStop(0,thinking?"rgba(174,124,255,.22)":"rgba(59,182,255,.17)");
-  beacon.addColorStop(1,"rgba(0,115,235,0)");
-  ctx.fillStyle=beacon;ctx.beginPath();ctx.arc(cx,cy,r*.67,0,Math.PI*2);ctx.fill();
+  orbVisual.draw({
+    time:t,
+    width,
+    height,
+    quality:model.quality,
+    state:el("app").dataset.state,
+    projecting:el("app").classList.contains("is-projecting"),
+    reduced:reduced.matches,
+  });
 }
 function animate(now) {
   frame=requestAnimationFrame(animate);
