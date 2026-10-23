@@ -211,7 +211,7 @@ class ResearchAgentTools:
         if self._result_observer is not None:
             try:
                 self._result_observer(payload)
-            except Exception:  # noqa: BLE001 - visual UI must not affect research
+            except Exception:
                 LOGGER.warning("Optional research UI observer failed", exc_info=True)
         return payload
 
