@@ -79,6 +79,7 @@ class UIEventHub:
         self._runtime_connected = False
         self._panels: dict[str, dict[str, Any]] = {}
         self._work_provider: Callable[[], list[dict[str, str]]] | None = None
+        self._last_work_states: dict[str, str] | None = None
         self._vision_provider: Callable[[], dict[str, object]] | None = None
         self._health_provider: Callable[[], list[dict[str, str]]] | None = None
 
@@ -305,6 +306,41 @@ class UIEventHub:
             except Exception:  # noqa: BLE001 - UI must not break live Work
                 # UI telemetry must not be able to bring down the voice runtime.
                 work = []
+        if connected and provider is not None:
+            # One baseline observation is silent. Later significant changes
+            # materialize an ephemeral projection instead of a standing grid.
+            # This is purely a display notification; WorkStore stays canonical.
+            fresh = {row["id"]: row["state"] for row in work}
+            with self._lock:
+                previous = self._last_work_states
+                self._last_work_states = fresh
+            if previous is not None:
+                for row in work:
+                    old = previous.get(row["id"])
+                    new = row["state"]
+                    if old is None or old == new:
+                        continue
+                    if new not in {"completed", "failed", "waiting_for_owner"}:
+                        continue
+                    label = {
+                        "completed": "Background work completed",
+                        "failed": "Background work needs attention",
+                        "waiting_for_owner": "Jarvis requests your input",
+                    }[new]
+                    self.show_panel(
+                        panel_id="work.latest_transition",
+                        panel_type="alert" if new != "completed" else "work",
+                        title=label,
+                        summary=(
+                            f"Canonical {row['kind']} work has changed state "
+                            f"from {old} to {new}. "
+                            "Open Work to inspect authorized details."
+                        ),
+                        source="canonical_work",
+                        priority=3 if new != "completed" else 2,
+                        ttl_seconds=180,
+                    )
+                    break
         vision: dict[str, object] = {"connected": False, "running": False}
         if connected and vision_provider is not None:
             try:
