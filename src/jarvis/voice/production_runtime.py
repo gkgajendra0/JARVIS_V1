@@ -84,6 +84,7 @@ from jarvis.self_awareness import SelfAwarenessRuntime
 from jarvis.ui.runtime import (
     attach_diagnostics_projection,
     attach_work_projection,
+    observe_capability_result,
     observe_research_result,
     safely_attach_voice_observers,
     start_opt_in_ui,
@@ -380,6 +381,11 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
+
+    def combined_result_observer(result) -> None:
+        if result_observer is not None:
+            result_observer(result)
+        observe_capability_result(result)
     package_stack = None
     try:
         active_release = load_active_release_for_startup()
@@ -407,7 +413,7 @@ def build_production_voice_runtime(
         hands_planner_model=config.hands_planner_model,
         chatgpt_plan_enabled=config.chatgpt_plan_enabled,
         chatgpt_plan_model=config.chatgpt_plan_model,
-        result_observer=result_observer,
+        result_observer=combined_result_observer,
         extra_executors=extra_executors,
         catalog_projection=(
             None if package_stack is None else package_stack.projection
