@@ -11,7 +11,11 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ValidationError
 
-from jarvis.ai_provider import normalize_ai_provider, require_provider_api_key
+from jarvis.ai_provider import (
+    normalize_ai_provider,
+    require_provider_api_key,
+    resolve_credential_api_key,
+)
 from jarvis.chatgpt_plan import (
     ChatGPTPlanError,
     ChatGPTPlanSessionManager,
@@ -364,11 +368,18 @@ class GeminiStructuredOutputClient:
 
     provider_name = "gemini"
 
-    def __init__(self, *, client: Any, model: str) -> None:
+    def __init__(
+        self, *, client: Any, model: str, max_output_tokens: int | None = None
+    ) -> None:
         aio = getattr(client, "aio", None)
         interactions = getattr(aio, "interactions", None)
         if interactions is None or not callable(getattr(interactions, "create", None)):
             raise TypeError("client must expose aio.interactions.create")
+        if max_output_tokens is not None and (
+            type(max_output_tokens) is not int or max_output_tokens <= 0
+        ):
+            raise ValueError("Output bound must be a positive integer")
+        self.max_output_tokens = max_output_tokens
         self._client = client
         self.model_name = str(model).strip()
         if not self.model_name:
@@ -396,6 +407,11 @@ class GeminiStructuredOutputClient:
         response_model: type[BaseModel],
     ) -> StructuredOutputTelemetry:
         started = time.perf_counter()
+        bounded = (
+            {}
+            if self.max_output_tokens is None
+            else {"generation_config": {"max_output_tokens": self.max_output_tokens}}
+        )
         response = await self._client.aio.interactions.create(
             model=self.model_name,
             input=json.dumps(
@@ -411,6 +427,7 @@ class GeminiStructuredOutputClient:
                 "schema": response_model.model_json_schema(),
             },
             store=False,
+            **bounded,
         )
         elapsed_ms = (time.perf_counter() - started) * 1000
         LOGGER.info(
@@ -444,6 +461,8 @@ def build_structured_output_client(
     provider: str,
     model: str,
     provider_retries: bool = True,
+    credential_ref: str | None = None,
+    max_output_tokens: int | None = None,
 ) -> StructuredOutputClient:
     """Build one Hands planner client inside the approved SDK-import boundary."""
 
@@ -451,10 +470,17 @@ def build_structured_output_client(
     model_name = str(model).strip()
     if not model_name:
         raise ValueError("Hands planner model must not be empty")
-    api_key = require_provider_api_key(
-        normalized_provider,
-        purpose="Hands semantic planning",
+    api_key = (
+        require_provider_api_key(normalized_provider, purpose="Hands semantic planning")
+        if credential_ref is None
+        else resolve_credential_api_key(normalized_provider, credential_ref)
     )
+    if max_output_tokens is not None and (
+        type(max_output_tokens) is not int or max_output_tokens <= 0
+    ):
+        raise ValueError("Output bound must be a positive integer")
+    if max_output_tokens is not None and normalized_provider != "gemini":
+        raise ValueError("This bounded credential path requires Gemini")
 
     if not isinstance(provider_retries, bool):
         raise TypeError("provider_retries must be a boolean")
@@ -483,6 +509,7 @@ def build_structured_output_client(
         return GeminiStructuredOutputClient(
             client=genai.Client(**client_kwargs),
             model=model_name,
+            max_output_tokens=max_output_tokens,
         )
 
     raise AssertionError(f"Unhandled Hands planner provider: {normalized_provider}")

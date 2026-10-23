@@ -408,6 +408,12 @@ class ModelRoutingStore:
                     decision_json TEXT NOT NULL,
                     eligibility_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS model_scoped_invocation_claims (
+                    decision_id TEXT PRIMARY KEY,
+                    binding_digest TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_scoped_routing_decisions(decision_id)
+                );
                 CREATE TABLE IF NOT EXISTS model_scoped_routing_attempts (
                     attempt_id TEXT PRIMARY KEY,
                     decision_id TEXT NOT NULL,
@@ -1202,6 +1208,33 @@ class ModelRoutingStore:
                 self._work_store.decode_extension_json(row["decision_json"])
             ),
         )
+
+    def claim_scoped_invocation(self, *, decision_id, binding_digest):
+        digest = _sha256(binding_digest, field="binding_digest")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            old = connection.execute(
+                "SELECT * FROM model_scoped_invocation_claims WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+            if old is not None:
+                if old["binding_digest"] != digest:
+                    raise RoutingStoreError("Scoped invocation payload binding changed")
+                return False
+            connection.execute(
+                "INSERT INTO model_scoped_invocation_claims VALUES (?,?,?)",
+                (decision_id, digest, "dispatched"),
+            )
+        return True
+
+    def finish_scoped_invocation(self, *, decision_id):
+        with self._work_store.extension_transaction() as connection:
+            cursor = connection.execute(
+                "UPDATE model_scoped_invocation_claims SET state='completed' WHERE decision_id=? AND state='dispatched'",
+                (decision_id,),
+            )
+            if cursor.rowcount != 1:
+                raise RoutingStoreError("No scoped dispatch to finish")
 
     def record_scoped_attempt(
         self, attempt: ScopedRoutingAttempt

@@ -7,6 +7,7 @@ import json
 from collections.abc import Iterable
 from typing import Any, Protocol
 
+from jarvis.ai_provider import credential_environment_name, gemini_credential_ref
 from jarvis.model_routing.models import (
     BenchmarkStatus,
     CostProfile,
@@ -333,8 +334,8 @@ class ModelTargetRegistry:
             provider = raw.get("provider_id")
             ref = raw.get("credential_ref")
             allowed = {
-                "gemini": {"GOOGLE_API_KEY", "JARVIS_GEMINI_PAID_API_KEY"},
-                "openai": {"OPENAI_API_KEY"},
+                "gemini": {gemini_credential_ref("free"), "JARVIS_GEMINI_PAID_API_KEY"},
+                "openai": {credential_environment_name("openai")},
                 "chatgpt_plan": {None},
                 "ollama": {None},
             }

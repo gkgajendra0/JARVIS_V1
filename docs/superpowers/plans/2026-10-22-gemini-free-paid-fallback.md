@@ -92,11 +92,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** Extend `build_structured_output_client(..., credential_ref: str|None=None)` compatibly; StructuredOutputModelAdapter caches by target slot/model/generation and forwards credential_ref. Add scoped invocation context alongside existing ModelInvocationContext without changing Work constructor behavior. Extend `ModelInvoker(registry, *, paid_budget: PaidBudgetGovernor|None=None, pricing: PricingSnapshot|None=None)` with reserve-before-dispatch/settle hooks. Add `invoke_scoped_structured(*, router: ModelRouter, request: ScopedRoutingRequest, system_prompt: str, input_payload: dict, response_model: type[BaseModel], exposure: PaidExposure) -> StructuredOutputTelemetry`; it delegates all selection to that router/shared pressure policy. Stable operation IDs, privacy/exposure facts are required; inference never executes capabilities.
 
-- [ ] **Step1 — Failing tests:** Free success only Free; Free429->Paid once with correct key/reservation; exhausted/unavailable/auth-failed Paid terminates; max2 Free/Paid visits and max3 including configured ChatGPT-plan. No invisible SDK retries. Failed Free and Paid target/correlation/usage facts persisted. Missing price/output bound means no Paid request.
-- [ ] **Step2 — RED:** run invocation/retry tests; require missing credential/admission behavior.
-- [ ] **Step3 — Implement through existing router/invoker.** Evolve client factory by an explicit compatible adapter, not catching arbitrary TypeError and constructing twice. Paid output bounds are required/sent via pinned SDK config; disabled/Free defaults unchanged. No hidden SDK retries on router-owned requests. Legacy direct Work invocation also enforces budget whenever its selected target is Paid.
-- [ ] **Step4 — GREEN:** new suites and existing structured-provider/invoker/routing regressions identified in pre-flight. Canary credentials absent from exceptions/logs/persisted records.
-- [ ] **Step5 — Commit:** `feat(inference): share bounded Gemini credential-target invocation`.
+- [x] **Step1 — Failing tests:** Free success only Free; Free429->Paid once with correct key/reservation; exhausted/unavailable/auth-failed Paid terminates; max2 Free/Paid visits and max3 including configured ChatGPT-plan. No invisible SDK retries. Failed Free and Paid target/correlation/usage facts persisted. Missing price/output bound means no Paid request.
+- [x] **Step2 — RED:** run invocation/retry tests; require missing credential/admission behavior.
+- [x] **Step3 — Implement through existing router/invoker.** Evolve client factory by an explicit compatible adapter, not catching arbitrary TypeError and constructing twice. Paid output bounds are required/sent via pinned SDK config; disabled/Free defaults unchanged. No hidden SDK retries on router-owned requests. Legacy direct Work invocation also enforces budget whenever its selected target is Paid.
+- [x] **Step4 — GREEN:** new suites and existing structured-provider/invoker/routing regressions identified in pre-flight. Canary credentials absent from exceptions/logs/persisted records.
+- [x] **Step5 — Commit:** `feat(inference): share bounded Gemini credential-target invocation`.
 
 ### Task 6: Durable Work wiring without replaying execution
 

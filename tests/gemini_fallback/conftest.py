@@ -1,6 +1,7 @@
 """Provider-free tests: no accidental network, keys or owner profile access."""
 
 import socket
+import sys
 
 import pytest
 
@@ -24,6 +25,16 @@ def isolate_inference(monkeypatch, tmp_path):
             "External inference/network is forbidden in fallback tests"
         )
 
-    monkeypatch.setattr(socket.socket, "connect", blocked)
+    original_connect = socket.socket.connect
+    socketpair_code = socket.socketpair.__code__
+
+    def guarded_connect(self, address):
+        # Windows asyncio creates its wakeup pipe through stdlib socketpair.
+        # Permit that direct internal caller only; provider/network calls stay blocked.
+        if sys._getframe(1).f_code is socketpair_code:
+            return original_connect(self, address)
+        return blocked(self, address)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", blocked)
     monkeypatch.setattr(socket, "create_connection", blocked)

@@ -124,7 +124,7 @@ def gemini_paid_fallback_allowed(failure, *, source_target: ModelTarget) -> bool
         isinstance(failure, ProviderFailure)
         and failure.provider == "gemini"
         and source_target.provider_id == "gemini"
-        and source_target.credential_ref == "GOOGLE_API_KEY"
+        and source_target.credential_ref == gemini_credential_ref("free")
         and failure.status_code in {None, 429}
         and failure.kind
         in {ProviderFailureKind.QUOTA_EXHAUSTED, ProviderFailureKind.RATE_LIMITED}

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from jarvis.ai_provider import (
     credential_environment_name,
+    gemini_credential_ref,
     normalize_ai_provider,
     provider_api_key,
     resolve_ai_role_model,
@@ -431,7 +432,7 @@ class ModelRouter:
             recovery_requires_demand = (
                 target.provider_id == "gemini"
                 and target.registry_version >= 2
-                and target.credential_ref == "GOOGLE_API_KEY"
+                and target.credential_ref == gemini_credential_ref("free")
                 and record.last_failure_kind in {"quota_exhausted", "rate_limited"}
             )
             if effective is not record.state and not recovery_requires_demand:
