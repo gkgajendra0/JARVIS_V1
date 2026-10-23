@@ -195,19 +195,13 @@ def test_opted_in_ui_transport_and_voice_observer_lifecycle(monkeypatch) -> None
             turn_subscribers.append,
             close_subscribers.append,
         )
-        session.callbacks["agent_state_changed"](
-            SimpleNamespace(new_state="speaking")
-        )
+        session.callbacks["agent_state_changed"](SimpleNamespace(new_state="speaking"))
         assert service.hub.snapshot()["voice_state"] == "speaking"
-        session.callbacks["user_state_changed"](
-            SimpleNamespace(new_state="speaking")
-        )
+        session.callbacks["user_state_changed"](SimpleNamespace(new_state="speaking"))
         assert service.hub.snapshot()["voice_state"] == "listening"
         conversation = ConversationSession()
         conversation.start()
-        turn = conversation.accept_turn(
-            ConversationRole.USER, "Jarvis, show my work"
-        )
+        turn = conversation.accept_turn(ConversationRole.USER, "Jarvis, show my work")
         turn_subscribers[0](turn)
         assert service.hub.snapshot()["panels"][0]["type"] == "work"
         close_subscribers[0]()
