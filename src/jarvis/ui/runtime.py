@@ -150,8 +150,15 @@ def observe_capability_result(result: object) -> None:
     key = getattr(result, "capability_key", "")
     domain = key.split(":", 1)[0] if isinstance(key, str) else "capability"
     if domain not in {
-        "windows", "browser", "files", "visual", "device",
-        "memory", "self_awareness", "system", "local",
+        "windows",
+        "browser",
+        "files",
+        "visual",
+        "device",
+        "memory",
+        "self_awareness",
+        "system",
+        "local",
     }:
         domain = "capability"
     try:
