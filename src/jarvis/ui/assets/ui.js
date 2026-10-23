@@ -440,6 +440,26 @@ document.addEventListener("keydown",(event)=>{
 const canvas=el("orbCanvas");
 const ctx=canvas.getContext("2d",{alpha:true});
 const reduced=window.matchMedia("(prefers-reduced-motion: reduce)");
+const QUALITIES=["cinematic","balanced","eco"];
+function savedQuality(){
+  try{
+    const saved=localStorage.getItem("jarvis.ui.visual-quality");
+    return QUALITIES.includes(saved)?saved:"cinematic";
+  }catch(_){return "cinematic";}
+}
+function applyQuality(next){
+  model.quality=next;
+  el("app").dataset.quality=next;
+  el("motionButton").textContent="FX: "+next.toUpperCase();
+  el("motionButton").setAttribute("aria-label","Visual effects quality: "+next);
+  try{localStorage.setItem("jarvis.ui.visual-quality",next);}catch(_){/* optional preference */}
+  resize();
+}
+el("motionButton").addEventListener("click",()=>{
+  const index=QUALITIES.indexOf(model.quality);
+  applyQuality(QUALITIES[(index+1)%QUALITIES.length]);
+  toast("Visual effects: "+model.quality);
+});
 let width=440,height=440,prev=0,frame=0,phase=0;
 const particles=Array.from({length:110},(_,i)=>({
   a:i*2.39996,r:.16+((i*31)%89)/115,s:.12+((i*13)%23)/65,
@@ -448,7 +468,7 @@ const particles=Array.from({length:110},(_,i)=>({
 function resize() {
   const box=canvas.getBoundingClientRect();
   width=Math.max(1,Math.round(box.width));height=Math.max(1,Math.round(box.height));
-  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const dpr=Math.min(window.devicePixelRatio||1,model.quality==="eco"?1:1.75);
   canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   draw(performance.now()/1000);
@@ -458,7 +478,8 @@ function draw(t) {
   ctx.clearRect(0,0,w,h);
   const state=el("app").dataset.state;
   const active=state==="speaking"||state==="listening",thinking=state==="thinking";
-  const energy=active?1.13:thinking?1.09:1;
+  const projecting=el("app").classList.contains("is-projecting");
+  const energy=projecting?1.33:active?1.13:thinking?1.09:1;
   const breath=1+Math.sin(t*1.4)*.024;
   const halo=ctx.createRadialGradient(cx,cy,0,cx,cy,r*1.21);
   halo.addColorStop(0,"rgba(8,50,126,.11)");
@@ -511,6 +532,38 @@ function draw(t) {
   const glint=ctx.createRadialGradient(cx-r*.32,cy-r*.35,0,cx-r*.32,cy-r*.35,r*.6);
   glint.addColorStop(0,"rgba(191,239,255,.20)");glint.addColorStop(1,"rgba(0,138,255,0)");
   ctx.fillStyle=glint;ctx.beginPath();ctx.arc(cx-r*.32,cy-r*.35,r*.6,0,Math.PI*2);ctx.fill();
+  // Orbital filaments move on tilted ellipses, creating parallax and a
+  // holographic sense of depth without a heavyweight realtime 3D engine.
+  if(model.quality!=="eco"){
+    ctx.save();
+    ctx.translate(cx,cy);
+    for(let orbit=0;orbit<4;orbit++){
+      ctx.save();
+      ctx.rotate(t*(orbit%2?-.09:.07)+orbit*1.24);
+      ctx.scale(1,.25+(orbit%3)*.11);
+      ctx.beginPath();
+      const start=t*(orbit%2?-.48:.31)+orbit*1.5;
+      ctx.arc(0,0,r*(.65+orbit*.12),start,start+Math.PI*(.62+orbit*.08));
+      ctx.strokeStyle=orbit===2?"rgba(179,135,255,.58)":"rgba(89,220,255,"+(.17+orbit*.09)+")";
+      ctx.lineWidth=orbit%2?1.4:1;
+      ctx.shadowColor="#3aceff";ctx.shadowBlur=orbit===1?18:8;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();ctx.shadowBlur=0;
+  }
+  // Tiny visible orbit nodes brighten when a projection is materializing.
+  for(let k=0;k<(model.quality==="eco"?4:11);k++){
+    const a=t*(k%2?-.17:.21)+k*2.399;
+    const rr=r*(.79+(k%4)*.088);
+    const z=Math.sin(a+k*.61)*.44;
+    const px=cx+Math.cos(a)*rr;
+    const py=cy+Math.sin(a*1.17+k*.43)*rr*.36;
+    ctx.beginPath();ctx.arc(px,py,1.1+(z+1)*.6,0,Math.PI*2);
+    ctx.fillStyle="rgba(134,224,255,"+(.29+.37*(z+1)/2)+")";
+    ctx.shadowColor="#6bdcff";ctx.shadowBlur=10;ctx.fill();
+  }
+  ctx.shadowBlur=0;
   const beacon=ctx.createRadialGradient(cx,cy,r*.02,cx,cy,r*.67);
   beacon.addColorStop(0,thinking?"rgba(174,124,255,.22)":"rgba(59,182,255,.17)");
   beacon.addColorStop(1,"rgba(0,115,235,0)");
@@ -520,13 +573,16 @@ function animate(now) {
   frame=requestAnimationFrame(animate);
   if(document.hidden||!ctx)return;
   if(reduced.matches){if(prev===0)draw(0);prev=1;return;}
-  const limit=el("app").dataset.state==="idle"?30:50;
+  const limit=model.quality==="eco"?15:
+    model.quality==="balanced"?30:
+    (el("app").dataset.state==="idle"?40:60);
   if(now-prev<1000/limit)return;
   prev=now;
   draw(now/1000);
 }
-window.addEventListener("resize",resize);
+window.addEventListener("resize",()=>{resize();scheduleBeams();});
 document.addEventListener("visibilitychange",()=>{prev=0;});
 reduced.addEventListener("change",()=>{prev=0;draw(0);});
 clock();setInterval(clock,10000);
+applyQuality(savedQuality());
 render();resize();frame=requestAnimationFrame(animate);poll();setInterval(poll,1100);
