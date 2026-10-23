@@ -271,6 +271,57 @@ def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(monkeypatch
     assert "private_tracking" not in json.dumps(projection)
 
 
+
+def test_research_tool_publishes_only_after_real_warranted_result() -> None:
+    import asyncio
+    from datetime import UTC, datetime
+
+    from jarvis.conversation import ConversationRole, ConversationSession
+    from jarvis.knowledge.research import (
+        CurrentResearchService,
+        EvidenceSource,
+        ProviderResearchEvidence,
+    )
+    from jarvis.voice.research_tools import ResearchAgentTools
+
+    class LocalProvider:
+        provider_name = "synthetic-no-network"
+        model_name = "none"
+
+        def research(self, query, mode):
+            assert query == "Python documentation"
+            return ProviderResearchEvidence(
+                sources=(
+                    EvidenceSource(
+                        source_id="synthetic-docs",
+                        url="https://docs.python.org/3/",
+                        title="Python Language Reference",
+                        domain="docs.python.org",
+                        retrieved_at=datetime.now(UTC),
+                    ),
+                )
+            )
+
+        def close(self):
+            pass
+
+    conversation = ConversationSession()
+    conversation.start()
+    conversation.accept_turn(
+        ConversationRole.USER, "Jarvis, search the web for Python documentation"
+    )
+    observed: list[dict[str, object]] = []
+    tools = ResearchAgentTools(
+        CurrentResearchService(LocalProvider()),
+        conversation,
+        result_observer=observed.append,
+    )
+    payload = asyncio.run(tools.research("Python documentation"))
+    assert payload["ok"] is True
+    assert observed == [payload]
+    assert observed[0]["sources"][0]["domain"] == "docs.python.org"
+
+
 def test_diagnostic_projection_failures_are_nonfatal() -> None:
     hub = UIEventHub()
     hub.set_runtime_connected(True)
