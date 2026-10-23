@@ -14,6 +14,7 @@ from jarvis.ai_provider import (
 )
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.machine_config import configured_text, load_machine_settings
+from jarvis.model_routing.gemini import GeminiFallbackConfig
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -109,6 +110,7 @@ def _configured_required_text(
 class JarvisConfig:
     log_level: str = "INFO"
     ai_provider: str = "openai"
+    gemini_fallback: GeminiFallbackConfig = field(default_factory=GeminiFallbackConfig)
     chatgpt_plan_enabled: bool = False
     chatgpt_plan_model: str | None = None
     default_media_target: str | None = None
@@ -197,6 +199,8 @@ class JarvisConfig:
         if self.personal_context_mode == "apply":
             object.__setattr__(self, "memory_enabled", True)
             object.__setattr__(self, "show_transcript", False)
+        if not isinstance(self.gemini_fallback, GeminiFallbackConfig):
+            raise TypeError("gemini_fallback must be GeminiFallbackConfig")
         normalized = str(self.log_level).strip().upper()
         if normalized not in VALID_LOG_LEVELS:
             raise ValueError(f"Unsupported JARVIS_LOG_LEVEL: {self.log_level!r}")
@@ -428,6 +432,7 @@ class JarvisConfig:
         return cls(
             log_level=_configured_required_text("JARVIS_LOG_LEVEL", "INFO", machine),
             ai_provider=configured_ai_provider(machine),
+            gemini_fallback=GeminiFallbackConfig.from_settings(machine),
             chatgpt_plan_enabled=_configured_bool(
                 "JARVIS_CHATGPT_PLAN_ENABLED", False, machine
             ),

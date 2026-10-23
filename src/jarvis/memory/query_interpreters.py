@@ -303,10 +303,35 @@ def build_structured_provider_client(
     raise AssertionError(f"Unhandled AI provider: {normalized_provider}")
 
 
+class RoutedMemoryQueryInterpreter:
+    provider_name = "gemini"
+
+    def __init__(self, *, routing_runtime, model):
+        from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
+
+        self.model_name = model
+        self._client = RoutedStructuredOutputClient(
+            routing_runtime=routing_runtime,
+            role="memory.recall",
+            model=model,
+            max_output_tokens=4096,
+        )
+
+    async def interpret(self, *, text, catalog):
+        payload = json.loads(memory_query_interpreter_input(text=text, catalog=catalog))
+        selection = await self._client.parse(
+            system_prompt=MEMORY_QUERY_INTERPRETATION_SYSTEM_PROMPT,
+            input_payload=payload,
+            response_model=MemoryQuerySelection,
+        )
+        return materialize_memory_query_selection(selection, catalog=catalog)
+
+
 def build_memory_query_interpreter(
     *,
     provider: str,
     model: str,
+    routing_runtime=None,
 ) -> MemoryQueryInterpreter:
     """Build an adapter for the already-selected active production AI provider."""
 
@@ -317,6 +342,14 @@ def build_memory_query_interpreter(
         "memory_semantic_recall",
         configured_model=configured_model,
     )
+    if (
+        routing_runtime is not None
+        and routing_runtime.config.enabled
+        and normalized_provider == "gemini"
+    ):
+        return RoutedMemoryQueryInterpreter(
+            routing_runtime=routing_runtime, model=normalized_model
+        )
     normalized_provider, client = build_structured_provider_client(
         provider=normalized_provider,
         purpose="memory query interpretation",

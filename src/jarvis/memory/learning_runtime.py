@@ -56,6 +56,10 @@ class PersonalLearningRuntime:
         self._processed = self._committed = self._dropped = 0
         self._reason = "ready"
         service.bind_learning_invalidator(self.invalidate_sources)
+        for adapter in {id(extractor): extractor, id(resolver): resolver}.values():
+            binder = getattr(adapter, "bind_source_validator", None)
+            if callable(binder):
+                binder(self._validate_inference_source)
 
     def status(self):
         state = (
@@ -192,6 +196,12 @@ class PersonalLearningRuntime:
             or self.authority.validate(grant).status != "active"
         ):
             raise PermissionError("source no longer current")
+
+    def _validate_inference_source(self, source):
+        item = self._pending.get(source.receipt_id)
+        if item is None or item[0] is not source:
+            raise PermissionError("Learning source no longer registered")
+        self._require(source.receipt_id, source, item[1])
 
     async def _process(self, receipt, source, grant):
         self._require(receipt, source, grant)

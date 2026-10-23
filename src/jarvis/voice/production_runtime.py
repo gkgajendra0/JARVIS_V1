@@ -60,6 +60,8 @@ from jarvis.memory.query_coordinator import MemoryQueryCoordinator
 from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
+from jarvis.model_routing.runtime import build_production_routing_runtime
+from jarvis.model_routing.status import gemini_fallback_status
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
@@ -310,6 +312,19 @@ def build_production_voice_runtime(
         else None
     )
 
+    routing_runtime = (
+        build_production_routing_runtime(config)
+        if config.gemini_fallback.enabled and config.ai_provider == "gemini"
+        else None
+    )
+    routing_options = (
+        {} if routing_runtime is None else {"routing_runtime": routing_runtime}
+    )
+    if routing_runtime is not None:
+        LOGGER.info(
+            "Gemini fallback status | %s", gemini_fallback_status(routing_runtime)
+        )
+
     memory_runtime = build_default_memory_runtime() if config.memory_enabled else None
 
     memory_query_coordinator = None
@@ -323,10 +338,12 @@ def build_production_voice_runtime(
         interpreter = build_memory_query_interpreter(
             provider=config.ai_provider,
             model=query_model,
+            **routing_options,
         )
         release_guard = build_memory_release_guard(
             provider=config.ai_provider,
             model=query_model,
+            **routing_options,
         )
         memory_query_coordinator = ProviderVerifiedMemoryQueryCoordinator(
             coordinator=MemoryQueryCoordinator(
@@ -353,6 +370,7 @@ def build_production_voice_runtime(
         candidate_extractor = build_memory_candidate_extractor(
             provider=config.ai_provider,
             model=config.memory_candidate_extraction_model,
+            **routing_options,
         )
         LOGGER.info(
             "Phase-4.4 memory candidate extraction shadow is configured: "
@@ -408,6 +426,7 @@ def build_production_voice_runtime(
             None if package_stack is None else package_stack.projection
         ),
         close_callbacks=(() if package_stack is None else (package_stack.close,)),
+        **routing_options,
     )
     capability_catalog = capability_runtime.refresh_catalog()
     if self_awareness is not None:
@@ -478,6 +497,7 @@ def build_production_voice_runtime(
                 )
             ),
             capability_catalog_refresher=capability_runtime.refresh_catalog,
+            **routing_options,
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
@@ -541,7 +561,11 @@ def build_production_voice_runtime(
         return output if isinstance(output, MediaDevicesAudioOutput) else None
 
     def production_session_factory(session_config: JarvisConfig):
-        session, bridge = create_voice_session(session_config)
+        session, bridge = (
+            create_voice_session(session_config, routing_runtime=routing_runtime)
+            if routing_runtime is not None and session_config.ai_provider == "gemini"
+            else create_voice_session(session_config)
+        )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
             if (
@@ -570,6 +594,7 @@ def build_production_voice_runtime(
             output_getter=lambda: audio.output,
             health_observer=provider_health_observer,
             failure_observer=observe_provider_failure,
+            handoff=getattr(bridge, "gemini_handoff", None),
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,
@@ -606,6 +631,7 @@ def build_production_voice_runtime(
         research_service=research_service,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
+        routing_runtime=routing_runtime,
         session_factory=production_session_factory,
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(

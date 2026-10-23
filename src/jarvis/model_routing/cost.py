@@ -30,6 +30,32 @@ def estimate_profile_usage_cost_usd(
 ) -> float | None:
     if not isinstance(profile, CostProfile):
         raise TypeError("profile must be a CostProfile")
+    if profile.usage_rates_usd_per_million:
+        import math
+
+        rates = dict(profile.usage_rates_usd_per_million)
+        if not rates.keys() <= usage.keys():
+            return None
+        if any(
+            key not in rates
+            and key not in {"total_tokens", "input_tokens", "output_tokens"}
+            for key in usage
+        ):
+            return None
+        total = 0.0
+        for key, rate in rates.items():
+            value = usage[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError("Invalid modality usage")
+            if rate is None and value > 0:
+                return None
+            total += value * float(rate or 0)
+        return total / 1_000_000
     input_tokens = usage.get("input_tokens")
     output_tokens = usage.get("output_tokens")
     if input_tokens is None or output_tokens is None:
@@ -521,6 +547,19 @@ class CostTelemetryReader:
         self._provider_cost_store = provider_cost_store or ProviderCostEventStore(
             store.work_store
         )
+
+    def paid_fallback_records(self, *, scope_kind=None, scope_id=None):
+        from jarvis.model_routing.budget import read_paid_cost_records
+
+        return read_paid_cost_records(
+            self._store, scope_kind=scope_kind, scope_id=scope_id
+        )
+
+    def paid_fallback_status(self, budget_id="gemini-paid-fallback-v1"):
+        """Read shared paid exposure; no data is not represented as zero spend."""
+        from jarvis.model_routing.budget import read_paid_budget_status
+
+        return read_paid_budget_status(self._store, budget_id)
 
     def for_work(self, work_id: str) -> CostTelemetryReport:
         return summarize_cost_attempts(

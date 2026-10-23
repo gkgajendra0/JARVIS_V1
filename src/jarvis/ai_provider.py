@@ -246,3 +246,36 @@ def resolve_ai_role_model(
             return candidate
 
     return defaults[normalized_provider]
+
+
+def gemini_credential_ref(slot: str) -> str:
+    """Return an allowlisted credential reference, never a secret value."""
+    if slot == "free":
+        return "GOOGLE_API_KEY"
+    if slot == "paid":
+        return "JARVIS_GEMINI_PAID_API_KEY"
+    raise ValueError("Unsupported Gemini credential slot")
+
+
+def resolve_target_api_key(target) -> str:
+    """Resolve only the credential explicitly authorized for a model target."""
+    from jarvis.model_routing.models import ModelTarget
+
+    if not isinstance(target, ModelTarget):
+        raise TypeError("ModelTarget required")
+    return resolve_credential_api_key(target.provider_id, target.credential_ref)
+
+
+def resolve_credential_api_key(provider: str, credential_ref: str) -> str:
+    """Resolve an explicitly allowlisted credential without provider-global mutation."""
+    allowed = {
+        "gemini": {"GOOGLE_API_KEY", "JARVIS_GEMINI_PAID_API_KEY"},
+        "openai": {"OPENAI_API_KEY"},
+    }
+    ref = credential_ref
+    if ref not in allowed.get(provider, set()):
+        raise ValueError("Unsupported target credential reference")
+    value = os.getenv(ref)
+    if value is None or not value.strip():
+        raise RuntimeError(f"{ref} is required for this model target")
+    return value.strip()

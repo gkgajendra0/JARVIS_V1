@@ -1,5 +1,15 @@
 # JARVIS V1 Current Architecture
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
 ## Status
 
 **STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6, 7 AND 8 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 9 OWNER-REQUESTED CAPABILITY ACQUISITION IS DONE BOUNDED WITH THE REAL EXTERNAL TV LIFECYCLE STILL DEFERRED. CHATGPT-PLAN PRIMARY WORK/HANDS REASONING IS OWNER-MACHINE ACCEPTED ON 2026-09-30. STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**

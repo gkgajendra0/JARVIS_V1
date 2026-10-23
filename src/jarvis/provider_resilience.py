@@ -7,6 +7,7 @@ authority or mutate canonical conversation/memory state.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 class ProviderFailureKind(str, Enum):
     QUOTA_EXHAUSTED = "quota_exhausted"
     RATE_LIMITED = "rate_limited"
+    BALANCE_EXHAUSTED = "balance_exhausted"
     AUTHENTICATION_FAILED = "authentication_failed"
     PERMISSION_DENIED = "permission_denied"
     MODEL_UNAVAILABLE = "model_unavailable"
@@ -49,6 +51,22 @@ class ProviderFailure:
     status_code: int | None = None
     retryable: bool | None = None
 
+    retry_after_seconds: float | None = None
+    quota_period: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.retry_after_seconds is not None:
+            value = self.retry_after_seconds
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int | float)
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError("retry_after_seconds must be finite and non-negative")
+        if self.quota_period not in {None, "day"}:
+            raise ValueError("Unsupported quota period")
+
     @property
     def spoken_message(self) -> str:
         name = _provider_display_name(self.provider)
@@ -56,6 +74,9 @@ class ProviderFailure:
             ProviderFailureKind.QUOTA_EXHAUSTED: (
                 f"Sir, {name}'s API quota is exhausted. Cloud conversation is "
                 "temporarily unavailable. I am returning to wake mode."
+            ),
+            ProviderFailureKind.BALANCE_EXHAUSTED: (
+                f"Sir, {name}'s configured paid balance is depleted. Paid fallback is unavailable."
             ),
             ProviderFailureKind.RATE_LIMITED: (
                 f"Sir, {name} is rate-limiting requests at the moment. Please try "
@@ -252,10 +273,9 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         kind = ProviderFailureKind.LOCAL_RESOURCE_PRESSURE
     elif response_contract_invalid:
         kind = ProviderFailureKind.RESPONSE_CONTRACT_INVALID
-    elif any(marker in evidence for marker in quota_markers):
-        kind = ProviderFailureKind.QUOTA_EXHAUSTED
-    elif status == 429 or any(marker in evidence for marker in rate_markers):
-        kind = ProviderFailureKind.RATE_LIMITED
+    elif status == 402:
+        kind = ProviderFailureKind.BALANCE_EXHAUSTED
+        retryable = False
     elif status == 401:
         kind = ProviderFailureKind.AUTHENTICATION_FAILED
     elif status == 403:
@@ -281,8 +301,20 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
         kind = ProviderFailureKind.PROVIDER_SERVER_ERROR
         if retryable is None:
             retryable = True
+    elif status == 429:
+        kind = (
+            ProviderFailureKind.QUOTA_EXHAUSTED
+            if any(marker in evidence for marker in quota_markers)
+            else ProviderFailureKind.RATE_LIMITED
+        )
     elif status is not None and 400 <= status < 500:
         kind = ProviderFailureKind.REQUEST_REJECTED
+    elif status is not None and status >= 500:
+        kind = ProviderFailureKind.PROVIDER_SERVER_ERROR
+    elif any(marker in evidence for marker in quota_markers):
+        kind = ProviderFailureKind.QUOTA_EXHAUSTED
+    elif any(marker in evidence for marker in rate_markers):
+        kind = ProviderFailureKind.RATE_LIMITED
     elif "timeout" in evidence or "timed out" in evidence or "deadline" in evidence:
         kind = ProviderFailureKind.TIMEOUT
     elif any(
@@ -306,9 +338,75 @@ def classify_provider_failure(error: object, *, provider: str) -> ProviderFailur
     else:
         kind = ProviderFailureKind.UNKNOWN
 
+    retry_after, quota_period = (None, None)
+    if provider == "gemini" and kind in {
+        ProviderFailureKind.RATE_LIMITED,
+        ProviderFailureKind.QUOTA_EXHAUSTED,
+    }:
+        retry_after, quota_period = _gemini_pressure_metadata(chain)
     return ProviderFailure(
         provider=provider,
         kind=kind,
         status_code=status,
         retryable=retryable,
+        retry_after_seconds=retry_after,
+        quota_period=quota_period,
     )
+
+
+def _gemini_pressure_metadata(
+    chain: tuple[object, ...],
+) -> tuple[float | None, str | None]:
+    """Keep only documented structured quota/retry facts; never retain raw errors."""
+    retry_after = None
+    period = None
+    for error in chain:
+        response = getattr(error, "response", None)
+        headers = getattr(response, "headers", {})
+        if hasattr(headers, "get"):
+            retry_after = (
+                _retry_seconds(headers.get("Retry-After", headers.get("retry-after")))
+                or retry_after
+            )
+        payload = getattr(error, "details", None)
+        if not isinstance(payload, dict):
+            continue
+        payload = payload.get("error", payload)
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("details"), list
+        ):
+            continue
+        for detail in payload["details"][:32]:
+            if not isinstance(detail, dict):
+                continue
+            if detail.get("@type") == "type.googleapis.com/google.rpc.RetryInfo":
+                value = detail.get("retryDelay")
+                if isinstance(value, str) and value.endswith("s"):
+                    retry_after = _retry_seconds(value[:-1]) or retry_after
+            if detail.get("@type") == "type.googleapis.com/google.rpc.QuotaFailure":
+                violations = detail.get("violations", [])
+                if not isinstance(violations, list):
+                    continue
+                for violation in violations[:32]:
+                    if not isinstance(violation, dict):
+                        continue
+                    quota_id = violation.get("quotaId")
+                    metric = violation.get("quotaMetric")
+                    if (
+                        isinstance(quota_id, str)
+                        and isinstance(metric, str)
+                        and metric.startswith("generativelanguage.googleapis.com/")
+                        and "PerDay" in quota_id
+                    ):
+                        period = "day"
+    return retry_after, period
+
+
+def _retry_seconds(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        return None
+    return seconds if math.isfinite(seconds) and seconds >= 0 else None

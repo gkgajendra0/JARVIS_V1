@@ -644,6 +644,23 @@ class PersonalContextSession:
             and self._same(binding)
         )
 
+    async def validate_transport_restore(self):
+        """Revalidate existing authority/currentness without renewing or playing audio."""
+        if self._closed or self._mutation_inflight or self._busy:
+            return False
+        if not self._protected:
+            return self._conversation.status is ConversationStatus.ACTIVE
+        permit, binding, operation = self._permit, self._binding, self._operation
+        if (
+            not await self._validate()
+            or not await self._facts_current()
+            or not await self._validate()
+            or not self._same_authorization(permit, binding, operation)
+        ):
+            self.close()
+            return False
+        return True
+
     async def allow_audio(self):
         if self._closed:
             return False

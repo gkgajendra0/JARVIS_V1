@@ -1,5 +1,15 @@
 # Personal intelligence: enablement and validation record
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
 Last reconciled: 22 October 2026. This is the permanent record of what is implemented, how it is enabled and which experience has actually been validated. Update this page when a merge, persistent-setting change, normal-app acceptance or dependent milestone changes the status. Do not infer deployment settings from code defaults.
 
 ## Feature status

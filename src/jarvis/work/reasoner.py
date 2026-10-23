@@ -12,11 +12,21 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from jarvis.ai_provider import normalize_ai_provider, resolve_ai_role_model
+from jarvis.ai_provider import (
+    gemini_credential_ref,
+    normalize_ai_provider,
+    resolve_ai_role_model,
+)
 from jarvis.hands.provider_adapters import build_structured_output_client
+from jarvis.model_routing.budget import PaidBudgetDenied
 from jarvis.model_routing.cost import estimate_usage_cost_usd
+from jarvis.model_routing.gemini import (
+    GeminiFallbackConfig,
+    gemini_paid_fallback_allowed,
+)
 from jarvis.model_routing.health import (
     HealthAction,
+    HealthMutation,
     TargetHealthRecord,
     apply_provider_failure,
 )
@@ -26,6 +36,7 @@ from jarvis.model_routing.models import (
     RoutingAttempt,
     RoutingAttemptKind,
 )
+from jarvis.model_routing.pricing import PaidExposure
 from jarvis.model_routing.router import (
     ModelRouter,
     RoutedSelection,
@@ -34,7 +45,7 @@ from jarvis.model_routing.router import (
     build_work_routing_request,
 )
 from jarvis.model_routing.store import RoutingStoreError
-from jarvis.provider_resilience import classify_provider_failure
+from jarvis.provider_resilience import ProviderFailureKind, classify_provider_failure
 from jarvis.work.brain import BrainDecision, BrainRequest, ProviderPressure
 from jarvis.work.context import WorkContextMode, build_context_shadow_report
 
@@ -410,10 +421,33 @@ class RoutedWorkReasoner:
         attempts: tuple[RoutingAttempt, ...],
         *,
         now_epoch: float,
+        excluded_target_ids: frozenset[str] = frozenset(),
     ):
         decision = selection.decision
+        registry = selection.registry or self._router.target_registry
+        if any(
+            registry.require(attempt.target_id).credential_ref
+            == gemini_credential_ref("paid")
+            for attempt in attempts
+        ):
+            # Paid is a terminal visit for this logical cycle, including after reconciliation.
+            return None
+
+        def paid_allowed(target):
+            if target.credential_ref != gemini_credential_ref("paid"):
+                return True
+            if self._router.routing_store.credential_blocked(target.credential_ref):
+                return False
+            free_id = target.target_id.replace(".gemini.paid.", ".gemini.free.")
+            pressure = self._router.routing_store.get_health(free_id)
+            return (
+                pressure is not None
+                and pressure.state.value == "cooldown"
+                and pressure.last_failure_kind in {"rate_limited", "quota_exhausted"}
+            )
+
         if attempts and attempts[-1].failure_class is None:
-            return self._router.target_registry.require(decision.selected_target_id)
+            return registry.require(decision.selected_target_id)
 
         if attempts and attempts[-1].failure_class is not None:
             last_target_id = attempts[-1].target_id
@@ -421,24 +455,32 @@ class RoutedWorkReasoner:
             if (
                 health is not None
                 and health.effective_state(now_epoch=now_epoch).value == "degraded"
+                and last_target_id not in excluded_target_ids
+                and paid_allowed(registry.require(last_target_id))
             ):
-                return self._router.target_registry.require(last_target_id)
+                return registry.require(last_target_id)
 
         failed_target_ids = {
             attempt.target_id
             for attempt in attempts
             if attempt.failure_class is not None
         }
+        failed_target_ids.update(excluded_target_ids)
         allowed_ids = decision.ordered_target_ids[: 1 + decision.fallback_budget]
         for target_id in allowed_ids:
             if target_id in failed_target_ids:
+                continue
+            # Durable order is retained; availability is a current runtime fact.
+            if not self._router._credential_available(registry.require(target_id)):
+                continue
+            if not paid_allowed(registry.require(target_id)):
                 continue
             health = self._router.routing_store.get_health(target_id)
             if health is not None and health.effective_state(
                 now_epoch=now_epoch
             ).value in {"cooldown", "unavailable", "disabled"}:
                 continue
-            return self._router.target_registry.require(target_id)
+            return registry.require(target_id)
         return None
 
     def _blocked_retry_after(
@@ -472,6 +514,30 @@ class RoutedWorkReasoner:
                 reason="no approved routing target is currently eligible",
                 retry_after_seconds=30.0,
             ) from exc
+        registry = selection.registry or self._router.target_registry
+        durable_v2 = any(t.registry_version >= 2 for t in registry.all())
+        payload = _work_input_payload(request)
+        binding = hashlib.sha256(
+            json.dumps(
+                {
+                    "prompt": _SYSTEM_PROMPT,
+                    "payload": payload,
+                    "schema": _WorkDecisionModel.model_json_schema(),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            ).encode()
+        ).hexdigest()
+        if durable_v2:
+            saved = self._router.routing_store.get_work_inference_result(
+                decision_id=selection.decision.decision_id, binding_digest=binding
+            )
+            if saved is not None:
+                return _brain_decision(
+                    request, _WorkDecisionModel.model_validate(saved)
+                )
+        excluded = set()
         attempts = list(
             self._router.routing_store.list_attempts(selection.decision.decision_id)
         )
@@ -484,6 +550,7 @@ class RoutedWorkReasoner:
                 selection,
                 tuple(attempts),
                 now_epoch=now,
+                excluded_target_ids=frozenset(excluded),
             )
             if target is None:
                 raise RoutingResourceBlocked(
@@ -495,6 +562,23 @@ class RoutedWorkReasoner:
                     ),
                 )
 
+            lease = None
+            if (
+                durable_v2
+                and target.provider_id == "gemini"
+                and target.credential_ref == gemini_credential_ref("free")
+            ):
+                health = self._router.routing_store.get_health(target.target_id)
+                if health is not None and health.state.value == "cooldown":
+                    lease = self._router.routing_store.claim_free_recovery(
+                        target_id=target.target_id,
+                        operation_id=routing_request.routing_request_id,
+                        now_epoch=now,
+                        lease_seconds=60,
+                    )
+                    if lease is None:
+                        excluded.add(target.target_id)
+                        continue
             ordinal = len(attempts) + 1
             attempt_id = _attempt_id(selection.decision.decision_id, ordinal)
             correlation_key = f"{selection.decision.decision_id}:attempt:{ordinal}"
@@ -505,17 +589,70 @@ class RoutedWorkReasoner:
                 attempt_id=attempt_id,
                 correlation_key=correlation_key,
             )
+            if durable_v2 and not self._router.routing_store.claim_work_invocation(
+                attempt_id=attempt_id,
+                decision_id=selection.decision.decision_id,
+                target_id=target.target_id,
+                binding_digest=binding,
+            ):
+                if lease is not None:
+                    self._router.routing_store.release_free_recovery(lease)
+                raise RoutingResourceBlocked(
+                    decision_id=selection.decision.decision_id,
+                    reason="previous inference dispatch has an unknown outcome; redispatch blocked",
+                    retry_after_seconds=60,
+                )
+            invocation_options = {}
+            if durable_v2 and target.credential_ref == gemini_credential_ref("paid"):
+                input_bound = (
+                    len(
+                        (
+                            _SYSTEM_PROMPT
+                            + json.dumps(
+                                payload, ensure_ascii=False, sort_keys=True, default=str
+                            )
+                            + json.dumps(
+                                _WorkDecisionModel.model_json_schema(),
+                                ensure_ascii=False,
+                            )
+                        ).encode()
+                    )
+                    + 1024
+                )
+                invocation_options["exposure"] = PaidExposure(
+                    usage_bounds={"input_tokens": input_bound, "output_tokens": 4096},
+                    scope_kind="work",
+                    scope_id=request.work.work_id,
+                )
+            if lease is not None and not self._router.routing_store.start_free_recovery(
+                lease, now_epoch=float(self._clock())
+            ):
+                self._router.routing_store.release_free_recovery(lease)
+                raise RoutingResourceBlocked(
+                    decision_id=selection.decision.decision_id,
+                    reason="Free recovery ownership changed before dispatch",
+                    retry_after_seconds=60,
+                )
             started = float(self._clock())
             new_attempts += 1
             try:
                 invocation = await self._invoker.invoke_structured_with_telemetry(
                     target=target,
                     system_prompt=_SYSTEM_PROMPT,
-                    input_payload=_work_input_payload(request),
+                    input_payload=payload,
                     response_model=_WorkDecisionModel,
                     request_context=context,
+                    **invocation_options,
                 )
                 parsed = invocation.parsed
+            except PaidBudgetDenied as exc:
+                if lease is not None:
+                    self._router.routing_store.release_free_recovery(lease)
+                raise RoutingResourceBlocked(
+                    decision_id=selection.decision.decision_id,
+                    reason="paid inference admission unavailable or outcome unknown",
+                    retry_after_seconds=60,
+                ) from exc
             except Exception as exc:
                 ended = float(self._clock())
                 failure = classify_provider_failure(
@@ -546,18 +683,67 @@ class RoutedWorkReasoner:
                 )
                 self._router.routing_store.record_attempt(attempt)
                 attempts.append(attempt)
-                mutation = self._record_failure_health(
-                    target_id=target.target_id,
-                    failure=failure,
-                    now_epoch=ended,
-                )
+                if durable_v2 and gemini_paid_fallback_allowed(
+                    failure, source_target=target
+                ):
+                    config = (
+                        self._invoker.paid_budget.config
+                        if self._invoker.paid_budget is not None
+                        else GeminiFallbackConfig()
+                    )
+                    record = self._router.routing_store.record_pressure(
+                        target=target, failure=failure, config=config, now_epoch=ended
+                    )
+                    mutation = HealthMutation(
+                        record,
+                        HealthAction.FALLBACK_ALLOWED,
+                        "provider_pressure_cooldown",
+                    )
+                else:
+                    mutation = self._record_failure_health(
+                        target_id=target.target_id, failure=failure, now_epoch=ended
+                    )
+                if lease is not None:
+                    self._router.routing_store.release_free_recovery(lease)
+                if durable_v2 and target.credential_ref == gemini_credential_ref(
+                    "paid"
+                ):
+                    if failure.kind in {
+                        ProviderFailureKind.BALANCE_EXHAUSTED,
+                        ProviderFailureKind.AUTHENTICATION_FAILED,
+                    }:
+                        self._router.routing_store.disable_paid_credential(
+                            failure=failure, now_epoch=ended
+                        )
+                    raise RoutingResourceBlocked(
+                        decision_id=selection.decision.decision_id,
+                        reason="paid inference failed; no further funded hop",
+                        retry_after_seconds=60,
+                    ) from None
                 if mutation.action is HealthAction.FAIL_CLOSED_NO_FALLBACK:
+                    if durable_v2:
+                        raise RoutingResourceBlocked(
+                            decision_id=selection.decision.decision_id,
+                            reason=f"provider inference rejected: {failure.kind.value}",
+                            retry_after_seconds=60,
+                        ) from None
                     raise
                 continue
+            except BaseException:
+                if lease is not None:
+                    self._router.routing_store.release_free_recovery(lease)
+                raise
 
             ended = float(self._clock())
             if not isinstance(parsed, _WorkDecisionModel):
                 raise TypeError("work reasoner returned unexpected response type")
+            accepted = _brain_decision(request, parsed) if durable_v2 else None
+            if durable_v2:
+                self._router.routing_store.save_work_inference_result(
+                    decision_id=selection.decision.decision_id,
+                    binding_digest=binding,
+                    result=parsed.model_dump(mode="json"),
+                )
             attempt = RoutingAttempt(
                 attempt_id=attempt_id,
                 decision_id=selection.decision.decision_id,
@@ -586,8 +772,14 @@ class RoutedWorkReasoner:
                 correlation_key=correlation_key,
             )
             self._router.routing_store.record_attempt(attempt)
-            self._mark_target_recovered(target.target_id, now_epoch=ended)
-            return _brain_decision(request, parsed)
+            if durable_v2:
+                if lease is not None:
+                    self._router.routing_store.complete_free_recovery(
+                        lease, now_epoch=ended
+                    )
+            else:
+                self._mark_target_recovered(target.target_id, now_epoch=ended)
+            return accepted if durable_v2 else _brain_decision(request, parsed)
 
         now = float(self._clock())
         raise RoutingResourceBlocked(

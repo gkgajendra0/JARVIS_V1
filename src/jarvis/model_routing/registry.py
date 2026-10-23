@@ -7,7 +7,11 @@ import json
 from collections.abc import Iterable
 from typing import Any, Protocol
 
+from jarvis.ai_provider import credential_environment_name, gemini_credential_ref
 from jarvis.model_routing.models import (
+    BenchmarkStatus,
+    CostProfile,
+    ModelLocality,
     ModelTarget,
     RoutingRequest,
     RoutingStrategyResult,
@@ -236,7 +240,7 @@ class ModelTargetRegistry:
             target for target in self.all() if normalized in target.capabilities
         )
 
-    def digest(self) -> str:
+    def _snapshot_targets(self) -> list[dict]:
         """Return a deterministic non-secret digest of the approved target registry."""
 
         payload = []
@@ -279,6 +283,16 @@ class ModelTargetRegistry:
                     ),
                 }
             )
+            if target.pricing_ref is not None:
+                payload[-1]["pricing_ref"] = target.pricing_ref
+            if cost_profile is not None and cost_profile.usage_rates_usd_per_million:
+                payload[-1]["cost_profile"]["usage_rates_usd_per_million"] = list(
+                    cost_profile.usage_rates_usd_per_million
+                )
+        return payload
+
+    def digest(self) -> str:
+        payload = self._snapshot_targets()
         encoded = json.dumps(
             payload,
             ensure_ascii=True,
@@ -286,3 +300,60 @@ class ModelTargetRegistry:
             sort_keys=True,
         ).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()
+
+    def to_snapshot(self) -> dict:
+        return json.loads(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "registry_digest": self.digest(),
+                    "targets": self._snapshot_targets(),
+                }
+            )
+        )
+
+    @classmethod
+    def from_snapshot(cls, snapshot: dict, *, adapter_registry: ModelAdapterRegistry):
+        if not isinstance(snapshot, dict) or set(snapshot) != {
+            "schema_version",
+            "registry_digest",
+            "targets",
+        }:
+            raise ValueError("Invalid registry snapshot shape")
+        if (
+            type(snapshot["schema_version"]) is not int
+            or snapshot["schema_version"] != 1
+        ):
+            raise ValueError("Unsupported registry snapshot version")
+        if (
+            not isinstance(snapshot["targets"], list)
+            or not 0 < len(snapshot["targets"]) <= 128
+        ):
+            raise ValueError("Invalid registry snapshot targets")
+        targets = []
+        for original in snapshot["targets"]:
+            raw = dict(original)
+            provider = raw.get("provider_id")
+            ref = raw.get("credential_ref")
+            allowed = {
+                "gemini": {gemini_credential_ref("free"), "JARVIS_GEMINI_PAID_API_KEY"},
+                "openai": {credential_environment_name("openai")},
+                "chatgpt_plan": {None},
+                "ollama": {None},
+            }
+            if ref not in allowed.get(provider, set()):
+                raise ValueError("Registry credential reference is not source-approved")
+            endpoint = raw.get("endpoint_ref")
+            if endpoint is not None and not (
+                provider == "chatgpt_plan" and endpoint == "https://api.openai.com/v1"
+            ):
+                raise ValueError("Registry endpoint is not source-approved")
+            raw["locality"] = ModelLocality(raw["locality"])
+            raw["benchmark_status"] = BenchmarkStatus(raw["benchmark_status"])
+            if raw.get("cost_profile") is not None:
+                raw["cost_profile"] = CostProfile(**raw["cost_profile"])
+            targets.append(ModelTarget(**raw))
+        result = cls(adapter_registry, tuple(targets))
+        if result.digest() != snapshot["registry_digest"]:
+            raise ValueError("Registry snapshot digest mismatch")
+        return result

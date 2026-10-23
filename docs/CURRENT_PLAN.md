@@ -1,5 +1,15 @@
 # JARVIS — Current Execution Plan
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
 **Reconciled with both development chats, 20 October 2026.** This file contains *current
 priority and next actionable work*, not a complete chronology. The previous plan is
 preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_SNAPSHOT_2026-10-18.md).
@@ -204,3 +214,8 @@ The owner approved the [written design](superpowers/specs/2026-10-22-pi3-entity-
 Implemented: question-bound registered-scope queries, exact current label matching/clarification, bounded multi-fact evidence, one shared read budget, coherent canonical snapshots, scope/source/version invalidation and normal learning-APPLY tool/instruction integration. Context-only/OFF, explicit mutations, default OFF, existing grants and provider-history retirement remain supported. No new memory engine, HTTP reasoner, model/dependency change, provider request or owner activation occurred.
 
 Draft [PR #296](https://github.com/gkgajendra0/JARVIS_V1/pull/296) contains this candidate against unmerged PR #295. Next: follow its exact-head hosted checks and the [implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md), then owner-selected whole normal-app validation. Actual-model selection and spoken usefulness are not proven by forced tool/audio harnesses. Exact-head CI, dependency integration, applicable owner acceptance and explicit protected merge remain separate gates. PI-2 broad qualification is still deferred, never counted as passed; PI-3 as a whole and CAP-053 remain PARTIAL. Do not restart quota-bound benchmarks, replace this with Step8 reminders, or broaden alias/episode/proactive behavior silently.
+
+
+## Requested architecture: Gemini Free-first / Paid-fallback
+
+The owner requested shared Free/Paid credential-aware fallback for Gemini Live, eligible Hands/Work/memory inference and a cumulative INR350 internal paid ceiling. Baseline is the clean Desktop PI-3A candidate `211c3ade`; protected main and the unmerged PI-2/PI-3A dependency status are unchanged. The [written design](superpowers/specs/2026-10-22-gemini-free-paid-fallback-design.md) records repository findings, existing-router reuse, durable compatibility, privacy/Authority continuity, bounded recovery, reservation/unknown-cost behavior and the verification/owner-acceptance matrix. Status: written design owner-approved; the [12-task implementation plan](superpowers/plans/2026-10-22-gemini-free-paid-fallback.md) is owner-approved for Native implementation. Software implementation is in progress; no live API calls or activation are authorized by this approval. Keep Native execution preference. The new request authorizes this software work but does not authorize paid inference, billing changes, purchases, saved-setting activation or merge; earlier benchmark deferrals are not reopened.
