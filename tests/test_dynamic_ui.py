@@ -233,7 +233,7 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             # Projection starts as a tiny point at the orb. Wait for its
             # materialization before asserting the final responsive width.
             page.wait_for_function(
-                "() => { const panel = document.querySelector('.context-card[data-slot=\\'0\\']'); "
+                "() => { const panel = document.querySelector('.context-card[data-slot=\"0\"]'); "
                 "return panel && panel.getBoundingClientRect().width >= 700; }"
             )
             first_panel = page.locator(".context-card[data-slot='0']").bounding_box()
