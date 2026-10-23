@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -194,6 +196,13 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             page.locator("#orbCanvas").wait_for(state="visible")
             assert page.locator(".context-card").count() == 0
             assert "PREVIEW" in page.locator("#connectionBadge").inner_text()
+            screenshot_dir=os.environ.get("JARVIS_UI_SCREENSHOTS")
+            if screenshot_dir:
+                Path(screenshot_dir).mkdir(parents=True, exist_ok=True)
+                page.screenshot(
+                    path=str(Path(screenshot_dir) / "ambient-ultrawide.png"),
+                    animations="disabled",
+                )
             assert page.evaluate(
                 "() => document.querySelector('#orbCanvas').width > 100"
             )
@@ -227,6 +236,17 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             )
             assert page.locator(".holo-telemetry").count() == 1
             assert page.locator(".holo-activity").count() == 1
+            if screenshot_dir:
+                page.screenshot(
+                    path=str(Path(screenshot_dir) / "projection-ultrawide.png"),
+                    animations="disabled",
+                )
+                page.set_viewport_size({"width": 1920, "height": 1080})
+                page.screenshot(
+                    path=str(Path(screenshot_dir) / "projection-1920.png"),
+                    animations="disabled",
+                )
+                page.set_viewport_size({"width": 3440, "height": 1440})
             assert page.evaluate(
                 "() => document.querySelector('.context-card').getAnimations().length > 0"
             )
