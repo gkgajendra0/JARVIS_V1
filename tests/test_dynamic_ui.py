@@ -196,7 +196,7 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             page.locator("#orbCanvas").wait_for(state="visible")
             assert page.locator(".context-card").count() == 0
             assert "PREVIEW" in page.locator("#connectionBadge").inner_text()
-            screenshot_dir=os.environ.get("JARVIS_UI_SCREENSHOTS")
+            screenshot_dir = os.environ.get("JARVIS_UI_SCREENSHOTS")
             if screenshot_dir:
                 Path(screenshot_dir).mkdir(parents=True, exist_ok=True)
                 page.screenshot(
