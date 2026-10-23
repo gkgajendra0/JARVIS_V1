@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 import time
 from collections import deque
 from collections.abc import Callable
@@ -118,6 +118,9 @@ class UIEventHub:
                     or parsed.port is not None
                     or parsed.hostname in {"localhost", "127.0.0.1"}
                     or not re.fullmatch(r"[a-zA-Z0-9.-]+", parsed.hostname)
+                    or "." not in parsed.hostname
+                    or parsed.hostname.endswith((".local", ".internal", ".localhost"))
+                    or re.fullmatch(r"[0-9.]+", parsed.hostname)
                     or len(url) > 1200
                 ):
                     continue
@@ -125,7 +128,10 @@ class UIEventHub:
                 domain = _short_text(parsed.hostname, maximum=120)
             except (ValueError, TypeError):
                 continue
-            sources.append({"title": name, "domain": domain, "url": url})
+            # Query strings can carry the owner's private search parameters.
+            # Published links only retain scheme/domain/path, never credentials.
+            clean_url = urlunsplit(("https", parsed.netloc, parsed.path, "", ""))
+            sources.append({"title": name, "domain": domain, "url": clean_url})
             if len(sources) >= 5:
                 break
         self.show_panel(
