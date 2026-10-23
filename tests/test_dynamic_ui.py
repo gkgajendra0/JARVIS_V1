@@ -274,6 +274,19 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             page.wait_for_function(
                 "() => document.querySelectorAll('.context-card').length === 0"
             )
+            # A rapid off/on sequence must cancel the retracting animation,
+            # never delete a panel that the owner has just reopened.
+            page.locator("#previewButton").click()
+            assert page.locator(".context-card:not(.is-closing)").count() == 2
+            page.locator("#previewButton").click()
+            page.locator("#previewButton").click()
+            page.wait_for_timeout(750)
+            assert page.locator(".context-card:not(.is-closing)").count() == 2
+            assert page.locator(".context-card.is-closing").count() == 0
+            page.locator("#previewButton").click()
+            page.wait_for_function(
+                "() => document.querySelectorAll('.context-card').length === 0"
+            )
             assert not errors, errors
             # On reduced-motion systems the globe remains visible but stops
             # continuous animation.
