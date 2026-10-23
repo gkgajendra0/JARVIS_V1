@@ -10,7 +10,7 @@ from collections import deque
 from uuid import uuid4
 from weakref import WeakSet
 
-from livekit.agents import Agent
+from livekit.agents import Agent, TurnHandlingOptions, inference
 from livekit.agents.llm import ChatMessage
 
 from jarvis.ai_provider import gemini_credential_ref
@@ -24,13 +24,30 @@ from jarvis.model_routing.models import (
 )
 from jarvis.model_routing.router import RoutingUnavailableError
 from jarvis.provider_resilience import ProviderFailureKind, classify_provider_failure
+from jarvis.voice.gemini_live_budget import ControlledLiveAdmission
+from jarvis.voice.gemini_live_model import ControlledGeminiLiveModel
 from jarvis.voice.gemini_transport import GeminiTransportState
 from jarvis.voice.livekit_session import _create_realtime_model
 
 
 class _TransportAgent(Agent):
     def __init__(self, *, previous, model, context, ready):
+        controlled = isinstance(
+            getattr(model, "inner", None), ControlledGeminiLiveModel
+        )
+        options = {}
+        if controlled:
+            options = {
+                "vad": inference.VAD(model="silero"),
+                "turn_handling": TurnHandlingOptions(
+                    turn_detection="vad",
+                    endpointing={"mode": "fixed", "min_delay": 0.8, "max_delay": 3.0},
+                    interruption={"enabled": True},
+                    preemptive_generation={"enabled": False},
+                ),
+            }
         super().__init__(
+            **options,
             instructions=previous.instructions,
             tools=previous.tools,
             llm=model,
@@ -89,6 +106,7 @@ class GeminiLiveHandoff:
         self._output_speaking = False
         self._output_delivered = False
         self._paid_visits = 0
+        self._recovery_demand = False
         self._recovery_lease = None
         self.last_reason = "ready"
         bridge.bind_transport_error_handler(self.try_handle_event)
@@ -110,9 +128,36 @@ class GeminiLiveHandoff:
 
     def _user_state(self, event):
         self._user_speaking = event.new_state == "speaking"
+        if (
+            self._user_speaking
+            and self.current_target.credential_ref == gemini_credential_ref("paid")
+        ):
+            self._recovery_demand = True
+        self._schedule_free_recovery()
 
     def _agent_state(self, event):
         self._output_speaking = event.new_state == "speaking"
+        self._schedule_free_recovery()
+
+    def _controlled_idle(self):
+        inner = getattr(self.current_model, "inner", None)
+        return not isinstance(inner, ControlledGeminiLiveModel) or all(
+            s.idle for s in inner.sessions
+        )
+
+    def _schedule_free_recovery(self):
+        if (
+            not self._closed
+            and self._recovery_demand
+            and not self._user_speaking
+            and not self._output_speaking
+            and not self._pending_tools
+            and self._controlled_idle()
+            and (self.task is None or self.task.done())
+        ):
+            self.task = asyncio.create_task(
+                self.maybe_recover_free(), name="jarvis-gemini-free-recovery"
+            )
 
     def _tool_state(self, event):
         update = event.update
@@ -318,7 +363,8 @@ class GeminiLiveHandoff:
             and not self._user_speaking
         )
         budget = None
-        if target.credential_ref == gemini_credential_ref("paid"):
+        controlled = isinstance(self.paid_admission, ControlledLiveAdmission)
+        if target.credential_ref == gemini_credential_ref("paid") and not controlled:
             try:
                 budget = self.paid_admission.reserve_transport(
                     target=target,
@@ -349,7 +395,20 @@ class GeminiLiveHandoff:
             ready=False,
             output_sample_rate=getattr(self.output, "sample_rate", None),
             restored_ids=frozenset(item.id for item in context.items),
+            on_idle=self._schedule_free_recovery,
         )
+        if target.credential_ref == gemini_credential_ref("paid") and controlled:
+
+            async def controlled_source_current():
+                await state.require_context()
+                return True
+
+            state.controlled_admission = ControlledLiveAdmission(
+                self.runtime,
+                session_id=self.bridge.conversation.session_id,
+                authorize=controlled_source_current,
+                contract=self.paid_admission.contract,
+            )
         try:
             model = self.model_factory(
                 self.config, target=target, transport_state=state
@@ -376,6 +435,8 @@ class GeminiLiveHandoff:
                     allow_interruptions=True,
                     input_modality="text",
                 )
+            if target.credential_ref == gemini_credential_ref("free"):
+                self._recovery_demand = False
             self.last_reason = "switched"
             return True
         except (TimeoutError, RuntimeError, ValueError):
@@ -392,6 +453,7 @@ class GeminiLiveHandoff:
                 or self._pending_tools
                 or self._user_speaking
                 or self._output_speaking
+                or not self._controlled_idle()
                 or not await self._authorized()
             ):
                 return False

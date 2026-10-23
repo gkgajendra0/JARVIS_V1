@@ -151,3 +151,80 @@ async def test_conflicting_tool_batch_cannot_partially_execute_actions(tmp_path)
     finally:
         await session.aclose()
         await env.model.aclose()
+
+
+@pytest.mark.asyncio
+async def test_real_local_vad_and_audio_pipeline_drive_manual_activity_and_endpoint(
+    tmp_path,
+):
+    from livekit import rtc
+    from tests.gemini_live.vad_helpers import ActivityVAD
+
+    from jarvis.voice.audio import SessionAudioInput
+
+    env = environment(tmp_path)
+    local_vad = ActivityVAD()
+    session = AgentSession(
+        llm=env.model,
+        vad=local_vad,
+        turn_handling=TurnHandlingOptions(
+            turn_detection="vad",
+            endpointing={"mode": "fixed", "min_delay": 0.8, "max_delay": 3},
+            interruption={"enabled": True},
+            preemptive_generation={"enabled": False},
+        ),
+    )
+    source = SessionAudioInput()
+    session.input.audio = source
+    received = []
+    session.on("conversation_item_added", received.append)
+
+    def pcm(active=False):
+        return rtc.AudioFrame(
+            data=(bytes([1, 0]) if active else bytes(2)) * 960,
+            sample_rate=48000,
+            num_channels=1,
+            samples_per_channel=960,
+        )
+
+    try:
+        await session.start(
+            agent=Agent(instructions="Fictional local VAD check", llm=env.model),
+            record=False,
+        )
+        source.push_frame(pcm())
+        await until(lambda: local_vad.frames >= 1)
+        assert env.endpoint.clients == 0
+        source.push_frame(pcm(True))
+        await until(lambda: env.endpoint.wires)
+        source.push_frame(pcm())
+        await until(
+            lambda: any(
+                kind == "input" and item.activity_end is not None
+                for kind, item in env.endpoint.wires[0].sent
+            )
+        )
+        assert any(
+            kind == "input" and item.audio is not None
+            for kind, item in env.endpoint.wires[0].sent
+        )
+        env.endpoint.wires[0].feed(
+            server_content={
+                "input_transcription": {"text": "मेरी गाड़ी", "finished": True},
+                "output_transcription": {"text": "आपकी काल्पनिक City"},
+                "turn_complete": True,
+            },
+            usage_metadata=raw_usage(),
+        )
+        await until(
+            lambda: any(
+                e.item.type == "message"
+                and e.item.role == "assistant"
+                and e.item.text_content == "आपकी काल्पनिक City"
+                for e in received
+            )
+        )
+    finally:
+        source.close()
+        await session.aclose()
+        await env.model.aclose()

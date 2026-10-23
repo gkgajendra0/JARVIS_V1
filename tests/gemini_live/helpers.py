@@ -124,3 +124,37 @@ async def context(session):
     )
     await session.update_chat_ctx(ctx)
     return ctx
+
+
+from livekit.agents.voice.io import AudioOutput, AudioOutputCapabilities
+
+
+class SyntheticPlayback(AudioOutput):
+    def __init__(self):
+        super().__init__(
+            label="synthetic playback",
+            sample_rate=24000,
+            capabilities=AudioOutputCapabilities(pause=False),
+        )
+        self.pending = False
+        self.duration = 0
+
+    async def capture_frame(self, frame):
+        await super().capture_frame(frame)
+        self.pending = True
+        self.duration += frame.duration
+
+    def flush(self):
+        super().flush()
+        if self.pending:
+            self.pending = False
+            self.on_playback_finished(
+                playback_position=self.duration, interrupted=False
+            )
+            self.duration = 0
+
+    def clear_buffer(self):
+        if self.pending:
+            self.pending = False
+            self.on_playback_finished(playback_position=0, interrupted=True)
+            self.duration = 0

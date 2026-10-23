@@ -561,7 +561,11 @@ def build_production_voice_runtime(
         return output if isinstance(output, MediaDevicesAudioOutput) else None
 
     def production_session_factory(session_config: JarvisConfig):
-        session, bridge = create_voice_session(session_config)
+        session, bridge = (
+            create_voice_session(session_config, routing_runtime=routing_runtime)
+            if routing_runtime is not None and session_config.ai_provider == "gemini"
+            else create_voice_session(session_config)
+        )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
             if (
@@ -590,6 +594,7 @@ def build_production_voice_runtime(
             output_getter=lambda: audio.output,
             health_observer=provider_health_observer,
             failure_observer=observe_provider_failure,
+            handoff=getattr(bridge, "gemini_handoff", None),
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,

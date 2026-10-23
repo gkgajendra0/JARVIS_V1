@@ -75,20 +75,35 @@ async def probe_gemini_live_model(
 
 
 def _create_realtime_model(config: JarvisConfig, *, target=None, transport_state=None):
-    if (
-        target is not None
-        and target.credential_ref == gemini_credential_ref("paid")
-        and (transport_state is None or transport_state.budget is None)
-    ):
-        from jarvis.model_routing.budget import PaidBudgetDenied
-
-        raise PaidBudgetDenied("Paid Live requires bounded transport admission")
     if target is not None and target.credential_ref == gemini_credential_ref("paid"):
-        from jarvis.voice.gemini_budget import GeminiLiveBudget
+        from jarvis.model_routing.budget import PaidBudgetDenied
+        from jarvis.voice.gemini_live_budget import ControlledLiveAdmission
+        from jarvis.voice.gemini_live_model import ControlledGeminiLiveModel
+        from jarvis.voice.gemini_transport import GuardedGeminiRealtimeModel
 
-        # Supplying an arbitrary budget object cannot bypass the SDK limitation.
-        # Deny before resolving a key or constructing a provider client.
-        GeminiLiveBudget().before_connect()
+        admission = getattr(transport_state, "controlled_admission", None)
+        if (
+            not isinstance(admission, ControlledLiveAdmission)
+            or not transport_state.current
+            or target.provider_id != "gemini"
+            or config.ai_provider != "gemini"
+            or target.model_id != config.gemini_realtime_model
+            or target.model_id != admission.contract.model_id
+            or transport_state.budget is not None
+        ):
+            raise PaidBudgetDenied(
+                "Paid Live requires current qualified controlled admission"
+            )
+        # Resolving the exact target key and constructing the public client are
+        # delayed until the transport has its durable shared-governor hold.
+        model = ControlledGeminiLiveModel(
+            target=target,
+            voice=config.gemini_realtime_voice,
+            state=transport_state,
+            admission=admission,
+            client_factory=lambda: genai.Client(api_key=resolve_target_api_key(target)),
+        )
+        return GuardedGeminiRealtimeModel(model, transport_state)
     if target is not None and target.provider_id != config.ai_provider:
         raise ValueError("Realtime target provider must match configured provider")
     api_key = (
@@ -439,16 +454,32 @@ class LiveKitConversationBridge:
 
 def create_voice_session(
     config: JarvisConfig,
+    *,
+    routing_runtime=None,
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
     conversation = ConversationSession()
     live_context = LiveContext(max_recent_turns=config.live_context_recent_turns)
+    model = _create_realtime_model(config)
+    transport_state = None
+    if (
+        config.ai_provider == "gemini"
+        and routing_runtime is not None
+        and routing_runtime.config.enabled
+    ):
+        from jarvis.voice.gemini_transport import (
+            GeminiTransportState,
+            GuardedGeminiRealtimeModel,
+        )
+
+        transport_state = GeminiTransportState(epoch=0, current_epoch=lambda: 0)
+        model = GuardedGeminiRealtimeModel(model, transport_state)
     # Do not pass vad=None here. LiveKit auto-provisions its bundled local Silero VAD
     # when the argument is omitted. JARVIS uses that VAD only for local user-activity
     # state (speaking/listening) so inactivity timers cannot expire during continuous
     # speech. Realtime Gemini/OpenAI still own actual turn completion through their
     # provider-native server-side turn detection.
     livekit_session = AgentSession(
-        llm=_create_realtime_model(config),
+        llm=model,
         # An explicit instance of the SAME bundled local VAD makes user-state
         # events physical activity. The default-VAD SDK path also maps Gemini's
         # synthetic input_speech_started on automatic tool replies to user speech.
@@ -469,4 +500,36 @@ def create_voice_session(
         live_context,
         show_transcript=config.show_transcript,
     )
+    if transport_state is not None:
+        from jarvis.voice.gemini_handoff import GeminiLiveHandoff
+        from jarvis.voice.gemini_live_budget import ControlledLiveAdmission
+        from jarvis.voice.gemini_live_contract import (
+            LiveContractUnavailable,
+            reviewed_live_contract,
+        )
+
+        transport_state.current_epoch = lambda: bridge.transport_epoch
+        handoff = GeminiLiveHandoff(
+            config=config,
+            routing_runtime=routing_runtime,
+            session=livekit_session,
+            bridge=bridge,
+            current_model=model,
+            guard=lambda: False,
+        )
+        try:
+            contract = reviewed_live_contract(config.gemini_realtime_model)
+        except LiveContractUnavailable:
+            # Public protocol support is not a reviewed production billing bound.
+            # No fabricated auxiliary envelope or test fixture enters production.
+            handoff.last_reason = "paid_live_billing_contract_unqualified"
+        else:
+            handoff.paid_admission = ControlledLiveAdmission(
+                routing_runtime,
+                session_id=conversation.session_id,
+                authorize=handoff._authorized,
+                contract=contract,
+            )
+        bridge.gemini_handoff = handoff
+        bridge.add_close_observer(handoff.close)
     return livekit_session, bridge

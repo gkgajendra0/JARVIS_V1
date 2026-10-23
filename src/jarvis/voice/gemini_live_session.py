@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections import deque
 from uuid import uuid4
 
 from google.genai import types
+from livekit import rtc
 from livekit.agents import llm
 from livekit.agents.types import NOT_GIVEN
 from livekit.agents.utils import is_given
@@ -23,7 +25,11 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         self._tools = llm.ToolContext.empty()
         self._instructions = ""
         self._queue = asyncio.Queue(maxsize=32)
+        self._resampler = None
         self._queued_samples = 0
+        self._preroll = deque()
+        self._preroll_samples = 0
+        self._input_started = False
         self._pending = None
         self._response = None
         self._lease = None
@@ -41,6 +47,20 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         self._usage_sequence = 0
         self._turn_done = asyncio.Event()
         self._worker = asyncio.create_task(self._run(), name="jarvis-controlled-live")
+
+    @property
+    def idle(self):
+        return (
+            not self._failed
+            and not self._closed
+            and self._wire is None
+            and self._lease is None
+            and self._pending is None
+            and self._response is None
+            and not self._input_started
+            and not self._pending_tools
+            and self._queue.empty()
+        )
 
     @property
     def chat_ctx(self):
@@ -108,15 +128,42 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             self._queue.put_nowait(("abort", None))
 
     def start_user_activity(self):
+        if self._input_started or self._closed or self._failed:
+            return
+        self._input_started = True
         self._enqueue("activity")
+        while self._preroll:
+            self._push_pcm(self._preroll.popleft())
+        self._preroll_samples = 0
 
     def push_audio(self, frame):
         if (
-            frame.sample_rate != 16000
+            frame.sample_rate not in (16000, 48000)
             or frame.num_channels != 1
             or frame.samples_per_channel <= 0
         ):
-            self._stop("Controlled Live requires mono PCM16 at16000Hz")
+            self._stop("Controlled Live requires owner mono PCM16")
+            return
+        if frame.sample_rate == 48000:
+            if self._resampler is None:
+                self._resampler = rtc.AudioResampler(
+                    input_rate=48000, output_rate=16000, num_channels=1
+                )
+            frames = self._resampler.push(frame)
+        else:
+            if self._resampler is not None:
+                self._stop("Controlled Live input format changed during a turn")
+                return
+            frames = [frame]
+        for item in frames:
+            self._push_pcm(item)
+
+    def _push_pcm(self, frame):
+        if not self._input_started:
+            self._preroll.append(frame)
+            self._preroll_samples += frame.samples_per_channel
+            while self._preroll_samples > 2560:
+                self._preroll_samples -= self._preroll.popleft().samples_per_channel
             return
         if self._queued_samples + frame.samples_per_channel > 2560:
             self._stop("Controlled Live160ms input queue exceeded")
@@ -128,6 +175,11 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         raise llm.RealtimeError("Paid Live video has no admitted exposure")
 
     def commit_audio(self):
+        if self._resampler is not None:
+            for frame in self._resampler.flush():
+                self._push_pcm(frame)
+            self._resampler = None
+        self._input_started = False
         self._commit = True
 
     def generate_reply(
@@ -148,7 +200,10 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             )
             return future
         if (
-            is_given(instructions)
+            (
+                is_given(instructions)
+                and (not isinstance(instructions, str) or len(instructions) > 65536)
+            )
             or is_given(tools)
             or (is_given(tool_choice) and tool_choice not in (None, "auto"))
         ):
@@ -163,7 +218,7 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                 self._stop("Controlled Live generation cancelled")
 
         future.add_done_callback(cancelled)
-        if not self._enqueue("generate"):
+        if not self._enqueue("generate", instructions):
             self._pending = None
             future.set_exception(
                 llm.RealtimeError("Controlled Live response unavailable")
@@ -271,7 +326,7 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             "Controlled Live physical lifetime exceeded",
         )
 
-    async def _generate(self):
+    async def _generate(self, instructions):
         await self._open()
         if self._pending_tools:
             if self._lease is not None:
@@ -304,11 +359,26 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             self._pending_tools.clear()
         elif self._activity:
             await self._check()
+            if is_given(instructions):
+                await self._wire.send_client_content(
+                    turns=[
+                        types.Content(
+                            role="model", parts=[types.Part(text=instructions)]
+                        )
+                    ],
+                    turn_complete=False,
+                )
+                await self._check()
             await self._wire.send_realtime_input(activity_end=types.ActivityEnd())
             self._activity = False
         else:
             await self._check()
-            await self._wire.send_client_content(turns=[], turn_complete=True)
+            turns = (
+                [types.Content(role="model", parts=[types.Part(text=instructions)])]
+                if is_given(instructions)
+                else []
+            )
+            await self._wire.send_client_content(turns=turns, turn_complete=True)
         self._commit = False
 
     async def _run(self):
@@ -348,7 +418,7 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                         )
                     )
                 elif kind == "generate":
-                    await self._generate()
+                    await self._generate(value)
                 elif kind == "end":
                     await self._end(value)
         except asyncio.CancelledError:
@@ -504,7 +574,15 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             client, self._client = self._client, None
             if client is not None:
                 await client.aio.aclose()
-        self._activity = self._commit = False
+        self._activity = self._commit = self._input_started = False
+        self._preroll.clear()
+        self._preroll_samples = 0
+        if (
+            self.idle
+            and self.model.state.current
+            and self.model.state.on_idle is not None
+        ):
+            self.model.state.on_idle()
 
     async def _fail(self, error):
         self._failed = True
