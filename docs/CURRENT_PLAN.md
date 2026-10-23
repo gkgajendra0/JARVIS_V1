@@ -1,5 +1,12 @@
 # JARVIS — Current Execution Plan
 
+**Gemini Free/Paid candidate (23 October 2026):** bounded Work/Hands/memory
+fallback shares the existing router and cumulative INR350 governor; default OFF.
+Actual Paid Live voice is unavailable because the pinned public SDK cannot prove
+pre-send reconnect/generation spending bounds. This is a PARTIAL candidate, not
+completed production voice failover. No paid calls, saved activation, owner-memory
+changes or merge. See [implementation, blockers and acceptance record](research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md).
+
 **Reconciled with both development chats, 20 October 2026.** This file contains *current
 priority and next actionable work*, not a complete chronology. The previous plan is
 preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_SNAPSHOT_2026-10-18.md).

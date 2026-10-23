@@ -1,5 +1,12 @@
 # Personal intelligence: enablement and validation record
 
+**Gemini Free/Paid candidate (23 October 2026):** bounded Work/Hands/memory
+fallback shares the existing router and cumulative INR350 governor; default OFF.
+Actual Paid Live voice is unavailable because the pinned public SDK cannot prove
+pre-send reconnect/generation spending bounds. This is a PARTIAL candidate, not
+completed production voice failover. No paid calls, saved activation, owner-memory
+changes or merge. See [implementation, blockers and acceptance record](research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md).
+
 Last reconciled: 22 October 2026. This is the permanent record of what is implemented, how it is enabled and which experience has actually been validated. Update this page when a merge, persistent-setting change, normal-app acceptance or dependent milestone changes the status. Do not infer deployment settings from code defaults.
 
 ## Feature status
