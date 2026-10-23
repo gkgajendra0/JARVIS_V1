@@ -577,7 +577,11 @@ class ModelInvoker:
                     )
                 elif (
                     target.credential_ref == "JARVIS_GEMINI_PAID_API_KEY"
-                    and failure.kind is ProviderFailureKind.BALANCE_EXHAUSTED
+                    and failure.kind
+                    in {
+                        ProviderFailureKind.BALANCE_EXHAUSTED,
+                        ProviderFailureKind.AUTHENTICATION_FAILED,
+                    }
                 ):
                     store.disable_paid_credential(
                         failure=failure, now_epoch=float(self._clock())

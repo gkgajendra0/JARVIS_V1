@@ -999,12 +999,12 @@ class ModelRoutingStore:
     def disable_paid_credential(self, *, failure, now_epoch):
         from jarvis.provider_resilience import ProviderFailureKind
 
-        if (
-            failure.provider != "gemini"
-            or failure.kind is not ProviderFailureKind.BALANCE_EXHAUSTED
-        ):
+        if failure.provider != "gemini" or failure.kind not in {
+            ProviderFailureKind.BALANCE_EXHAUSTED,
+            ProviderFailureKind.AUTHENTICATION_FAILED,
+        }:
             raise ValueError(
-                "Only a typed Gemini depleted-balance failure disables Paid"
+                "Only typed Gemini balance or authentication failure disables Paid"
             )
         now = _epoch(now_epoch, field="now_epoch")
         with self._work_store.extension_transaction() as connection:

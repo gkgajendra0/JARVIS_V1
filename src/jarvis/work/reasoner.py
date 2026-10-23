@@ -470,6 +470,9 @@ class RoutedWorkReasoner:
         for target_id in allowed_ids:
             if target_id in failed_target_ids:
                 continue
+            # Durable order is retained; availability is a current runtime fact.
+            if not self._router._credential_available(registry.require(target_id)):
+                continue
             if not paid_allowed(registry.require(target_id)):
                 continue
             health = self._router.routing_store.get_health(target_id)
@@ -696,7 +699,10 @@ class RoutedWorkReasoner:
                 if durable_v2 and target.credential_ref == gemini_credential_ref(
                     "paid"
                 ):
-                    if failure.kind is ProviderFailureKind.BALANCE_EXHAUSTED:
+                    if failure.kind in {
+                        ProviderFailureKind.BALANCE_EXHAUSTED,
+                        ProviderFailureKind.AUTHENTICATION_FAILED,
+                    }:
                         self._router.routing_store.disable_paid_credential(
                             failure=failure, now_epoch=ended
                         )

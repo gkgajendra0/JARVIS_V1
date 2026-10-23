@@ -264,3 +264,58 @@ def test_v2_work_request_rejection_exposes_only_sanitized_failure(
         asyncio.run(reasoner.decide(request))
     assert "private-provider-body-canary" not in str(raised.value)
     assert len(env[3]) == 1
+
+
+def test_accepted_work_replays_after_new_price_and_fx_config_without_another_call(
+    tmp_path, monkeypatch
+):
+    from decimal import Decimal
+
+    from jarvis.model_routing.gemini import GeminiFallbackConfig
+    from jarvis.model_routing.runtime import build_routing_runtime
+
+    env, _, _, request = work_environment(
+        tmp_path,
+        monkeypatch,
+        {"free-private-canary": [APIError(429, {})], "paid-private-canary": [output()]},
+    )
+    path = tmp_path / "reviewed-prices.json"
+    price = env[0].pricing
+    path.write_text(json.dumps(price.to_payload()), encoding="utf-8")
+    config = GeminiFallbackConfig(enabled=True, pricing_path=path)
+
+    def runtime():
+        return build_routing_runtime(
+            work_store=env[1].routing_store.work_store,
+            provider="gemini",
+            model="gemini-budget-test",
+            config=config,
+            clock=lambda: 100,
+        )
+
+    first_runtime = runtime()
+    first_reasoner = RoutedWorkReasoner(
+        router=first_runtime.router,
+        invoker=first_runtime.invoker,
+        primary_target_id=first_runtime.primary_target_id,
+        clock=lambda: 100,
+    )
+    first = asyncio.run(first_reasoner.decide(request))
+    assert first.goal_complete and len(env[3]) == 2
+    updated = replace(
+        price,
+        profile=replace(price.profile, version=2),
+        inr_per_usd=Decimal(110),
+        fx_version="new-reviewed-test-fx",
+    )
+    path.write_text(json.dumps(updated.to_payload()), encoding="utf-8")
+    restarted = runtime()
+    next_reasoner = RoutedWorkReasoner(
+        router=restarted.router,
+        invoker=restarted.invoker,
+        primary_target_id=restarted.primary_target_id,
+        clock=lambda: 100,
+    )
+    assert asyncio.run(next_reasoner.decide(request)) == first
+    assert len(env[3]) == 2
+    assert restarted.paid_budget.status().spent_inr_minor == 30

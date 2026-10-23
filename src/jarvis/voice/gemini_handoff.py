@@ -195,10 +195,12 @@ class GeminiLiveHandoff:
         if getattr(event, "source", None) is not self.current_model:
             return False
         failure = classify_provider_failure(event.error, provider="gemini")
-        if (
-            self.current_target.credential_ref == gemini_credential_ref("paid")
-            and failure.kind is ProviderFailureKind.BALANCE_EXHAUSTED
-        ):
+        if self.current_target.credential_ref == gemini_credential_ref(
+            "paid"
+        ) and failure.kind in {
+            ProviderFailureKind.BALANCE_EXHAUSTED,
+            ProviderFailureKind.AUTHENTICATION_FAILED,
+        }:
             self.runtime.store.disable_paid_credential(
                 failure=failure, now_epoch=float(self.runtime.clock())
             )

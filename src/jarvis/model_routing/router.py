@@ -422,6 +422,15 @@ class ModelRouter:
 
         for target in self.target_registry.all():
             credentials[target.target_id] = bool(self._credential_available(target))
+            # Plan access uses a connected session, not an API-key reference.
+            # Express its current availability through the existing health fact,
+            # retaining the credential-free eligibility policy and replay digest.
+            if (
+                target.provider_id == "chatgpt_plan"
+                and not credentials[target.target_id]
+            ):
+                health[target.target_id] = TargetHealthEligibility.UNAVAILABLE
+                continue
             if self.routing_store.credential_blocked(target.credential_ref):
                 health[target.target_id] = TargetHealthEligibility.UNAVAILABLE
                 continue

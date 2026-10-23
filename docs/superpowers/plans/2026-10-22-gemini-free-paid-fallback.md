@@ -166,10 +166,10 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** Consume Tasks1-10 public production composition, canonical temporary stores, real Authority and fake OS/provider transport with action counters. No simplified test-only routing/governor implementation.
 
-- [ ] **Step1 — Add adversarial tests:** concurrent Paid Live/Work/Hands/memory share35000 ceiling across independent connections/processes; kill after dispatch/settlement; old Live events during lock/forget; v1/v2 Work restart with config change; Paid402 then Free recovery; ChatGPT-plan availability drift; completed/uncertain send/click/write does not execute twice. Canary secrets/private text absent from logs/telemetry.
-- [ ] **Step2 — Observe uncovered RED:** run system/crash suites. Already passing cases are additional verification, not fictitious pre-implementation RED. Diagnose failures before minimal fixes; no unrelated refactor.
-- [ ] **Step3 — GREEN:** all `tests/gemini_fallback` and learning/routing/global-brain/cost/resilience plus affected voice/Hands/Work suites. No live inference/owner DB access.
-- [ ] **Step4 — Commit:** `test(routing): verify cross-lane spend and duplicate-action boundaries`.
+- [x] **Step1 — Add adversarial tests:** concurrent Paid Live/Work/Hands/memory share35000 ceiling across independent connections/processes; kill after dispatch/settlement; old Live events during lock/forget; v1/v2 Work restart with config change; Paid402 then Free recovery; ChatGPT-plan availability drift; completed/uncertain send/click/write does not execute twice. Canary secrets/private text absent from logs/telemetry.
+- [x] **Step2 — Observe uncovered RED:** run system/crash suites. Already passing cases are additional verification, not fictitious pre-implementation RED. Diagnose failures before minimal fixes; no unrelated refactor.
+- [x] **Step3 — GREEN:** all `tests/gemini_fallback` and learning/routing/global-brain/cost/resilience plus affected voice/Hands/Work suites. No live inference/owner DB access.
+- [x] **Step4 — Commit:** `test(routing): verify cross-lane spend and duplicate-action boundaries`.
 
 ### Task 12: Final review, full verification and truthful acceptance handoff
 
