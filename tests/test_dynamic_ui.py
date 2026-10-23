@@ -96,6 +96,40 @@ def test_topic_detection_never_returns_raw_user_transcript() -> None:
     assert private_phrase not in json.dumps(snapshot)
 
 
+
+def test_topic_routing_prefers_research_without_false_camera_on_eyeglasses() -> None:
+    hub = UIEventHub()
+    hub.observe_accepted_user_text("I am discussing contact lenses and eye care")
+    assert hub.snapshot()["panels"] == []
+    hub.observe_accepted_user_text("Jarvis, search the web about a webcam")
+    panel = hub.snapshot()["panels"][0]
+    assert panel["type"] == "research"
+    assert "search the web about a webcam" not in json.dumps(panel)
+
+
+def test_provider_alert_is_only_confirmed_failure_kind(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from jarvis.ui import runtime as ui_runtime
+
+    hub = UIEventHub()
+    hub.set_runtime_connected(True)
+    monkeypatch.setattr(ui_runtime, "_active", SimpleNamespace(hub=hub))
+    ui_runtime.observe_provider_issue(
+        SimpleNamespace(
+            kind=SimpleNamespace(value="quota_exhausted"),
+            provider="gemini",
+            secret="GOOGLE_API_KEY",
+        )
+    )
+    panels = hub.snapshot()["panels"]
+    assert len(panels) == 1
+    assert panels[0]["type"] == "alert"
+    assert panels[0]["priority"] == 3
+    assert "quota_exhausted" in panels[0]["summary"]
+    assert "GOOGLE_API_KEY" not in json.dumps(panels)
+
+
 def test_canonical_work_projection_omits_payloads_and_handles_failures() -> None:
     hub = UIEventHub()
     hub.attach_work_provider(
