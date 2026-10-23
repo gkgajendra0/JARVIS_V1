@@ -139,6 +139,33 @@ def attach_diagnostics_projection(
         hub.attach_health_provider(health_status)
 
 
+def observe_provider_issue(failure: object) -> None:
+    """Provider health warning from the existing resilience diagnosis only."""
+    hub = active_ui_hub()
+    if hub is None:
+        return
+    kind = getattr(getattr(failure, "kind", None), "value", "")
+    if not isinstance(kind, str) or kind not in {
+        "quota_exhausted",
+        "rate_limited",
+        "authentication_failed",
+        "permission_denied",
+        "model_unavailable",
+        "transient_unavailable",
+        "unknown",
+    }:
+        kind = "unavailable"
+    hub.show_panel(
+        panel_id="provider.latest",
+        panel_type="alert",
+        title="AI service attention",
+        summary=f"Existing provider monitor reported: {kind}. No credentials are displayed.",
+        source="health",
+        priority=3,
+        ttl_seconds=300,
+    )
+
+
 def observe_capability_result(result: object) -> None:
     """Show only capability class/status; never action arguments or output."""
     hub = active_ui_hub()
