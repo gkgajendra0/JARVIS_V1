@@ -18,6 +18,7 @@
       <div class="topbar-center" id="modeHint"><span class="pulse-dot"></span> CONTEXT-AWARE INTERFACE</div>
       <div class="top-meta">
         <span class="connection-tag" id="connectionBadge">UI PREVIEW • NO RUNTIME</span>
+        <button class="motion-button" id="motionButton" type="button" aria-label="Visual effects quality: Cinematic" title="Toggle visual effects quality">FX: CINEMATIC</button>
         <time id="localClock" aria-live="off">--:--</time>
         <button class="icon-button menu-shortcut" id="helpButton" aria-label="Keyboard help" title="Keyboard shortcuts">?</button>
       </div>
@@ -33,6 +34,17 @@
       <button class="rail-button rail-help" id="previewButton" aria-label="Toggle labeled preview sample" title="Preview sample"><span>✦</span><small>PREVIEW</small></button>
     </nav>
     <main class="layout" id="layout">
+      <svg id="projectionLinks" class="projection-links" aria-hidden="true" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="energyLine" x1="0%" x2="100%" y1="0%" y2="0%">
+            <stop offset="0%" stop-color="#7beeff" stop-opacity=".94"/>
+            <stop offset="56%" stop-color="#4a93ff" stop-opacity=".66"/>
+            <stop offset="100%" stop-color="#b68cff" stop-opacity=".82"/>
+          </linearGradient>
+          <filter id="lineGlow"><feGaussianBlur stdDeviation="3"/></filter>
+        </defs>
+        <g id="beamLayer"></g>
+      </svg>
       <section class="presence" aria-label="Jarvis presence">
         <div class="eyebrow presence-eyebrow"><span class="line-accent"></span> ALWAYS HERE. WHEN YOU NEED ME.</div>
         <div class="orb-wrap">
@@ -40,6 +52,9 @@
           <div class="orb-rim rim-a" aria-hidden="true"></div>
           <div class="orb-rim rim-b" aria-hidden="true"></div>
           <div class="orb-beacon" aria-hidden="true"></div>
+          <div class="orb-satellite satellite-one" aria-hidden="true"></div>
+          <div class="orb-satellite satellite-two" aria-hidden="true"></div>
+          <div class="orb-projection-flash" aria-hidden="true"></div>
         </div>
         <div class="presence-label">
           <h1>JARVIS</h1>
@@ -54,6 +69,7 @@
           <button class="text-button" id="clearButton">Clear unpinned <span>×</span></button>
         </div>
         <div id="cards" class="cards" aria-live="polite"></div>
+        <div class="projection-caption" aria-hidden="true"><span class="caption-pulse"></span> JARVIS VISUAL PROJECTION</div>
       </section>
       <div class="quiet-prompt" id="quietPrompt" aria-hidden="true">
         <span class="prompt-line"></span><span>NOTHING NEEDS YOUR ATTENTION RIGHT NOW</span><span class="prompt-line"></span>
