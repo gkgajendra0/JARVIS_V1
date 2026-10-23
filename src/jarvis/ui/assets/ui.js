@@ -11,6 +11,7 @@ const model = {
   demo: false,
   currentView: "ambient",
   lastSequence: -1,
+  quality: "cinematic",
 };
 const icons = {work:"▤", research:"◎", document:"▧", vision:"◉", system:"◇", alert:"!", info:"✦"};
 const names = {
@@ -101,10 +102,54 @@ function currentPanels() {
   const unpinned=all.filter(p=>!model.pinned.has(p.id)).slice(0,2);
   return [...pinned,...unpinned].slice(0,4);
 }
+function buildPreviewVisual(p) {
+  if(p.source!=="demo")return null;
+  const outer=document.createElement("div");
+  outer.className="holo-preview";
+  if(p.type==="research") {
+    const stats=document.createElement("div");stats.className="holo-telemetry";
+    for(const [amount,label] of [["03","SOURCES"],["07","LINKS"],["01","FOCUS"]]) {
+      const stat=document.createElement("div");stat.className="holo-stat";
+      const strong=document.createElement("strong");strong.textContent=amount;
+      const small=document.createElement("span");small.textContent=label;
+      stat.append(strong,small);stats.append(stat);
+    }
+    const item=document.createElement("div");item.className="holo-source-row";
+    const symbol=document.createElement("div");symbol.className="holo-source-icon";symbol.textContent="⟡";
+    const details=document.createElement("div");details.className="holo-source-text";
+    const a=document.createElement("strong");a.textContent="Contextual source projection";
+    const b=document.createElement("small");b.textContent="Design preview • no live research queried";
+    details.append(a,b);item.append(symbol,details);
+    outer.append(stats,item);
+  } else {
+    const telemetry=document.createElement("div");telemetry.className="holo-activity";
+    const top=document.createElement("div");top.className="holo-activity-head";
+    const title=document.createElement("span");title.textContent="PANEL MATERIALIZATION";
+    const pct=document.createElement("span");pct.textContent="PREVIEW";
+    top.append(title,pct);
+    const progress=document.createElement("div");progress.className="holo-progress";
+    const fill=document.createElement("span");fill.style.width="76%";
+    progress.append(fill);
+    const bars=document.createElement("div");bars.className="holo-signal";
+    for(let i=0;i<18;i++) {
+      const b=document.createElement("span");
+      b.style.height=(18+((i*37+19)%72))+"%";
+      bars.append(b);
+    }
+    const status=document.createElement("div");status.className="holo-pulse-badge";
+    status.textContent="PROJECTION CHANNEL • SIMULATED";
+    telemetry.append(top,progress,bars,status);outer.append(telemetry);
+  }
+  return outer;
+}
 function renderCard(p) {
   const card=document.createElement("article");
   card.className="context-card";
   if(p.priority===3)card.classList.add("high-priority");
+  card.dataset.signature=JSON.stringify([
+    p.title,p.summary,p.source,p.priority,model.pinned.has(p.id),
+    p.type==="work"?model.snapshot.work:[]
+  ]);
   card.dataset.panelId=p.id;
   const header=document.createElement("header");
   const heading=document.createElement("div");heading.className="card-heading";
@@ -129,6 +174,8 @@ function renderCard(p) {
   const eyebrow=document.createElement("div");eyebrow.className="card-eyebrow";
   eyebrow.textContent=p.source==="demo"?"DEMO CONTENT":p.source==="canonical_work"?"CANONICAL WORK":"VISUAL CONTEXT";
   body.append(eyebrow,paragraph(p.summary));
+  const visual=buildPreviewVisual(p);
+  if(visual)body.append(visual);
   if(p.type==="work" && model.snapshot.work.length && p.source!=="demo") {
     const list=document.createElement("div");list.className="work-list";
     for(const item of model.snapshot.work.slice(0,8)) {
@@ -149,13 +196,150 @@ function renderCard(p) {
   foot.append(origin,ts);card.append(foot);
   return card;
 }
+const svgNS="http://www.w3.org/2000/svg";
+const beamGroups=new Map();
+let projectionTimer=null;
+let beamRaf=0;
+function projectionGlow(){
+  const app=el("app");
+  app.classList.remove("is-projecting");
+  // Force a new flash cycle on each deliberate reveal.
+  void app.offsetWidth;
+  app.classList.add("is-projecting");
+  if(projectionTimer!==null)clearTimeout(projectionTimer);
+  projectionTimer=setTimeout(()=>app.classList.remove("is-projecting"),960);
+}
+function moveFromOrb(card,reverse=false){
+  if(reduced.matches||model.quality==="eco")return null;
+  const orb=el("orbCanvas").getBoundingClientRect();
+  const rect=card.getBoundingClientRect();
+  const offsetX=(orb.left+orb.width/2)-(rect.left+rect.width/2);
+  const offsetY=(orb.top+orb.height/2)-(rect.top+rect.height/2);
+  // The border begins as a small beam at the orb, unfolds into a
+  // horizontal line, then resolves as an entire holographic surface.
+  const from={opacity:0, transform:"translate("+offsetX+"px,"+offsetY+"px) scale(.035)",clipPath:"inset(48% 48% 48% 48%)",filter:"brightness(2.6) blur(7px)"};
+  const midpoint={opacity:1,transform:"translate("+(offsetX*.14)+"px,"+(offsetY*.14)+"px) scale(.62,.09)",clipPath:"inset(40% 0% 40% 0%)",filter:"brightness(2) blur(0px)",offset:.43};
+  const to={opacity:1,transform:"translate(0px,0px) scale(1)",clipPath:"inset(0% 0% 0% 0%)",filter:"brightness(1) blur(0px)"};
+  return card.animate(reverse?[to,midpoint,from]:[from,midpoint,to],{
+    duration:reverse?520:830,
+    easing:reverse?"cubic-bezier(.65,.05,.82,.3)":"cubic-bezier(.15,.83,.22,1)",
+    fill:"both"
+  });
+}
+function svgNode(tag,cls) {
+  const node=document.createElementNS(svgNS,tag);
+  if(cls)node.setAttribute("class",cls);
+  return node;
+}
+function updateProjectionBeams() {
+  beamRaf=0;
+  const surface=el("projectionLinks");
+  const frame=el("layout").getBoundingClientRect();
+  const orb=el("orbCanvas").getBoundingClientRect();
+  if(frame.width<1||frame.height<1||window.innerWidth<=740){
+    for(const group of beamGroups.values())group.remove();
+    beamGroups.clear();
+    return;
+  }
+  surface.setAttribute("viewBox","0 0 "+frame.width+" "+frame.height);
+  const ox=orb.left+orb.width/2-frame.left;
+  const oy=orb.top+orb.height/2-frame.top;
+  const current=new Set();
+  for(const card of el("cards").children) {
+    if(card.classList.contains("is-closing"))continue;
+    const id=card.dataset.panelId;
+    current.add(id);
+    const box=card.getBoundingClientRect();
+    const targetX=box.left+box.width/2-frame.left;
+    const targetY=box.top+box.height/2-frame.top;
+    const left=targetX<ox;
+    const sx=ox+(left?-1:1)*orb.width*.43;
+    const sy=oy+(targetY-oy)*.2;
+    const ex=targetX+(left?1:-1)*box.width*.48;
+    const ey=targetY;
+    const bend=(ex-sx)*.52;
+    const path="M "+sx+" "+sy+" C "+(sx+bend)+" "+sy+" "+(ex-bend*.4)+" "+ey+" "+ex+" "+ey;
+    let group=beamGroups.get(id);
+    if(!group){
+      group=svgNode("g","projection-link");
+      group.dataset.id=id;
+      const glow=svgNode("path","projection-beam-glow");
+      const line=svgNode("path","projection-beam");
+      const cap=svgNode("circle","projection-beam-pulse");
+      cap.setAttribute("r","3.5");
+      const rim=svgNode("circle","projection-endcap");
+      rim.setAttribute("r","8");
+      group.append(glow,line,cap,rim);
+      el("beamLayer").append(group);
+      beamGroups.set(id,group);
+      if(!reduced.matches && model.quality!=="eco"){
+        group.animate([{opacity:0},{opacity:1}],{duration:540,easing:"ease-out",fill:"both"});
+      }
+    }
+    const [glow,line,cap,rim]=group.children;
+    glow.setAttribute("d",path);line.setAttribute("d",path);
+    cap.setAttribute("cx",String(ex));cap.setAttribute("cy",String(ey));
+    rim.setAttribute("cx",String(ex));rim.setAttribute("cy",String(ey));
+  }
+  for(const [id,group] of beamGroups){
+    if(!current.has(id)){group.remove();beamGroups.delete(id);}
+  }
+}
+function scheduleBeams(){
+  if(beamRaf)return;
+  beamRaf=requestAnimationFrame(updateProjectionBeams);
+}
+function reconcileCards(panels){
+  const cards=el("cards");
+  const desired=new Map(panels.map((p,i)=>[p.id,{p,slot:i}]));
+  let anyNew=false;
+  for(const node of [...cards.children]){
+    const id=node.dataset.panelId;
+    if(desired.has(id)){
+      node.classList.remove("is-closing");
+      continue;
+    }
+    if(node.classList.contains("is-closing"))continue;
+    node.classList.add("is-closing");
+    const animation=moveFromOrb(node,true);
+    if(animation){
+      animation.finished.catch(()=>{}).then(()=>{
+        node.remove();
+        if(!cards.children.length)el("layout").classList.remove("has-stage");
+        scheduleBeams();
+      });
+    } else node.remove();
+  }
+  for(const [id,{p,slot}] of desired) {
+    const signature=JSON.stringify([
+      p.title,p.summary,p.source,p.priority,model.pinned.has(p.id),
+      p.type==="work"?model.snapshot.work:[]
+    ]);
+    const previous=[...cards.children].find(n=>n.dataset.panelId===id);
+    if(previous){
+      previous.dataset.slot=String(slot);
+      if(previous.dataset.signature!==signature){
+        const next=renderCard(p);next.dataset.slot=String(slot);
+        previous.replaceWith(next);
+      }
+      continue;
+    }
+    const node=renderCard(p);
+    node.dataset.slot=String(slot);
+    cards.append(node);anyNew=true;
+    moveFromOrb(node);
+  }
+  if(anyNew){projectionGlow();scheduleBeams();}
+  if(!cards.children.length)el("layout").classList.remove("has-stage");
+  scheduleBeams();
+}
 function render() {
   const panels=currentPanels();
   const active=panels.length>0;
-  el("layout").classList.toggle("has-stage",active);
+  if(active)el("layout").classList.add("has-stage");
   el("quietPrompt").hidden=active;
-  el("stage").setAttribute("aria-hidden",String(!active));
-  const cards=el("cards");cards.replaceChildren(...panels.map(renderCard));
+  el("stage").setAttribute("aria-hidden",String(!active && !el("cards").children.length));
+  reconcileCards(panels);
   const connected=Boolean(model.snapshot.runtime_connected);
   el("connectionBadge").textContent=model.demo?"DEMO • SAMPLE DATA":connected?"JARVIS RUNTIME LINKED":"UI PREVIEW • NO RUNTIME";
   el("connectionBadge").classList.toggle("live",connected && !model.demo);
@@ -167,10 +351,10 @@ function render() {
   el("voiceState").classList.toggle("online",connected||model.demo);
   el("app").dataset.state=voice;
   el("stageTitle").textContent=panels.length===1?panels[0].title:"Right information. Right moment.";
-  el("dockHeading").textContent=active?"CONTEXT STAGE":"AMBIENT MODE";
-  el("dockStatus").textContent=active?"Only relevant panels are shown":"Minimal by design";
+  el("dockHeading").textContent=active?"PROJECTION ACTIVE":"AMBIENT MODE";
+  el("dockStatus").textContent=active?"Context emerges from JARVIS":"Minimal by design";
   el("workCounter").textContent=connected ? model.snapshot.work.length+" RECENT WORK ITEMS" : "NO WORK FEED";
-  el("modeHint").lastChild.textContent=active?" DYNAMIC WORKSPACE":" CONTEXT-AWARE INTERFACE";
+  el("modeHint").lastChild.textContent=active?" SPATIAL PROJECTION":" CONTEXT-AWARE INTERFACE";
   el("previewButton").classList.toggle("selected",model.demo);
   document.querySelectorAll(".rail-button[data-panel]").forEach(b=>b.classList.toggle("selected",panels.some(p=>p.type===b.dataset.panel)));
   document.querySelector(".rail-button[data-action=home]").classList.toggle("selected",!active);
