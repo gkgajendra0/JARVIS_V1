@@ -501,6 +501,15 @@ function toggleDemo() {
   }
   render();
 }
+function refreshManualRuntimeStatus(){
+  for(const [id,p] of model.local){
+    if(["work","system","vision"].includes(p.type)){
+      const updated=panelFromType(p.type);
+      p.summary=updated.summary;
+      model.local.set(id,p);
+    }
+  }
+}
 async function poll() {
   try {
     const response=await fetch("/api/snapshot",{cache:"no-store"});
@@ -510,15 +519,8 @@ async function poll() {
     if(!snapshot.vision || typeof snapshot.vision!=="object")snapshot.vision={connected:false,running:false};
     if(!Array.isArray(snapshot.health))snapshot.health=[];
     model.snapshot=snapshot;
-    // Refresh manually opened status panels as canonical read-only evidence
-    // changes, without replaying their orb-origin reveal animation.
-    for(const [id,p] of model.local){
-      if(["work","system","vision"].includes(p.type)){
-        const updated=panelFromType(p.type);
-        p.summary=updated.summary;
-        model.local.set(id,p);
-      }
-    }
+    // Keep manual status panels in sync without retriggering projection motion.
+    refreshManualRuntimeStatus();
     // A topic that changes should replace transient unpinned context. The
     // server owns prioritization; the UI merely presents its bounded snapshot.
     render();
@@ -527,6 +529,8 @@ async function poll() {
       model.snapshot={schema:1,seq:0,runtime_connected:false,voice_state:"offline",panels:[],work:[],vision:{connected:false,running:false},health:[]};
       toast("JARVIS visual feed disconnected");
     }
+    // Any retained manual card must immediately stop claiming live data.
+    refreshManualRuntimeStatus();
     render();
   }
 }
