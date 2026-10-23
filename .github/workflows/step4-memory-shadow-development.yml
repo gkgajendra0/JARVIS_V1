@@ -1,0 +1,59 @@
+name: Step 4 Memory Shadow Development Benchmark
+
+on:
+  push:
+    branches:
+      - research/step4-memory-decision-shadow-20261016
+    paths:
+      - "src/jarvis/memory/decision_shadow.py"
+      - "src/jarvis/memory/candidates.py"
+      - "tools/research/step4_memory_shadow_benchmark.py"
+      - "tools/research/step4_memory_shadow_development_cases_v1.json"
+      - ".github/workflows/step4-memory-shadow-development.yml"
+  pull_request:
+    paths:
+      - "src/jarvis/memory/decision_shadow.py"
+      - "tools/research/step4_memory_shadow_benchmark.py"
+      - "tools/research/step4_memory_shadow_development_cases_v1.json"
+      - ".github/workflows/step4-memory-shadow-development.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-development-only:
+    name: Offline synthetic evaluation (not production acceptance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install only policy evaluation dependency
+        run: python -m pip install "pydantic==2.13.5"
+      - name: Run synthetic benchmark (no network inference and no memory writes)
+        shell: bash
+        run: |
+          python tools/research/step4_memory_shadow_benchmark.py > "$RUNNER_TEMP/step4-memory-shadow-dev.json"
+          cat "$RUNNER_TEMP/step4-memory-shadow-dev.json"
+          python - "$RUNNER_TEMP/step4-memory-shadow-dev.json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              report = json.load(stream)
+          assert report["acceptance_status"] == "NOT_ACCEPTANCE_DEVELOPMENT_FIXTURES"
+          assert report["counts"] == {"candidate": 18, "context": 24}
+          assert report["candidate_results"]["shadow_review"]["correct"] == 18
+          # An intentionally optimistic task-scope probe MUST display the
+          # remaining unsafe-influence gap rather than appear accepted.
+          assert report["context_results"]["scope_probe"]["unsafe_steering_influence"] > 0
+          PY
+      - name: Archive only aggregate development metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: step4-memory-shadow-development-report
+          path: "${{ runner.temp }}/step4-memory-shadow-dev.json"
+          if-no-files-found: error
+          retention-days: 7
