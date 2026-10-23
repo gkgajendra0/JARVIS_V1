@@ -171,6 +171,7 @@ function buildPreviewVisual(p) {
 function renderCard(p) {
   const card=document.createElement("article");
   card.className="context-card";
+  card.dataset.type=p.type;
   if(p.priority===3)card.classList.add("high-priority");
   card.dataset.signature=JSON.stringify([
     p.title,p.summary,p.source,p.priority,model.pinned.has(p.id),
