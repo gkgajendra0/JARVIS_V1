@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from datetime import datetime, time, timedelta
 from enum import StrEnum
+from zoneinfo import ZoneInfo
 
 from jarvis.model_routing.eligibility import TargetHealthEligibility
 from jarvis.provider_resilience import ProviderFailure, ProviderFailureKind
@@ -279,4 +281,55 @@ def apply_provider_failure(
         record=next_record,
         action=HealthAction.FAIL_CLOSED_NO_FALLBACK,
         reason_code="unclassified_failure_no_provider_hop",
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryLease:
+    target_id: str
+    operation_id: str
+    expires_at_epoch: float
+    version: int
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.target_id, str)
+            or not self.target_id.strip()
+            or not isinstance(self.operation_id, str)
+            or not self.operation_id.strip()
+        ):
+            raise ValueError("Recovery lease requires target and operation identity")
+        _epoch(self.expires_at_epoch, field="expires_at_epoch")
+        if (
+            isinstance(self.version, bool)
+            or not isinstance(self.version, int)
+            or self.version < 1
+        ):
+            raise ValueError("Recovery lease version must be positive")
+
+
+def apply_gemini_pressure(record, failure, *, config, now_epoch):
+    """Exponential unknown-pressure delay; honor trustworthy provider reset facts."""
+    now = _epoch(now_epoch, field="now_epoch")
+    count = record.consecutive_failures + 1
+    seconds = min(
+        config.max_cooldown_seconds, config.cooldown_seconds * (2 ** min(count - 1, 30))
+    )
+    until = now + seconds
+    if failure.retry_after_seconds is not None:
+        until = max(until, now + failure.retry_after_seconds)
+    if failure.quota_period == "day":
+        pacific = ZoneInfo("America/Los_Angeles")
+        next_day = datetime.fromtimestamp(now, pacific).date() + timedelta(days=1)
+        until = max(
+            until, datetime.combine(next_day, time(), tzinfo=pacific).timestamp()
+        )
+    return replace(
+        record,
+        state=TargetHealthEligibility.COOLDOWN,
+        consecutive_failures=count,
+        cooldown_until_epoch=until,
+        last_failure_kind=failure.kind.value,
+        updated_at_epoch=now,
+        version=record.version + 1,
     )

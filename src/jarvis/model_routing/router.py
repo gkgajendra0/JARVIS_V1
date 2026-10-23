@@ -24,6 +24,7 @@ from jarvis.model_routing.eligibility import (
     EligibilityPolicy,
     EligibilityRuntimeState,
     NoEligibleTargets,
+    TargetHealthEligibility,
 )
 from jarvis.model_routing.models import (
     BenchmarkStatus,
@@ -420,11 +421,20 @@ class ModelRouter:
 
         for target in self.target_registry.all():
             credentials[target.target_id] = bool(self._credential_available(target))
+            if self.routing_store.credential_blocked(target.credential_ref):
+                health[target.target_id] = TargetHealthEligibility.UNAVAILABLE
+                continue
             record = self.routing_store.get_health(target.target_id)
             if record is None:
                 continue
             effective = record.effective_state(now_epoch=now_epoch)
-            if effective is not record.state:
+            recovery_requires_demand = (
+                target.provider_id == "gemini"
+                and target.registry_version >= 2
+                and target.credential_ref == "GOOGLE_API_KEY"
+                and record.last_failure_kind in {"quota_exhausted", "rate_limited"}
+            )
+            if effective is not record.state and not recovery_requires_demand:
                 recovered = record.recovered(now_epoch=now_epoch)
                 try:
                     self.routing_store.save_health(

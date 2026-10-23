@@ -80,11 +80,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** Add typed depleted-balance402 recognition without changing old enum values. `gemini_paid_fallback_allowed(failure: ProviderFailure, *, source_target: ModelTarget) -> bool` only permits Free pressure. `claim_free_recovery(*, target_id, operation_id, now_epoch, lease_seconds) -> RecoveryLease|None`, with immutable RecoveryLease(target_id, operation_id, expires_at_epoch, version); release/complete require the matching lease version and live in existing health/store. `record_pressure` accepts trusted sanitized Retry-After/reset facts; config60/900 bounds; unrelated health behavior unchanged.
 
-- [ ] **Step1 — Failing tests:** typed429/Live quota allows edge;401/403/400/404/402/503/timeout/unknown cannot create paid hop. Paid402 disables its credential scope, not Free/TTS. Model429 stays local. One multiprocess recovery claim, no probe before demand. Pacific DST daily reset; ambiguous RESOURCE_EXHAUSTED uses cooldown, not guessed daily reset.
-- [ ] **Step2 — RED:** run pressure/recovery tests; require missing policy/leases.
-- [ ] **Step3 — Implement classification precedence** so401/403 cannot be overridden by stray quota text. Persist health/half-open claims; no secret/raw payload logs or cross-caller lease corruption.
-- [ ] **Step4 — GREEN:** new tests plus `test_provider_resilience.py`, `test_model_routing_health.py`, `test_model_routing_fallback.py`, `test_model_routing_provider_retry_boundary.py`.
-- [ ] **Step5 — Commit:** `feat(resilience): add quota-only Gemini fallback and demand recovery`.
+- [x] **Step1 — Failing tests:** typed429/Live quota allows edge;401/403/400/404/402/503/timeout/unknown cannot create paid hop. Paid402 disables its credential scope, not Free/TTS. Model429 stays local. One multiprocess recovery claim, no probe before demand. Pacific DST daily reset; ambiguous RESOURCE_EXHAUSTED uses cooldown, not guessed daily reset.
+- [x] **Step2 — RED:** run pressure/recovery tests; require missing policy/leases.
+- [x] **Step3 — Implement classification precedence** so401/403 cannot be overridden by stray quota text. Persist health/half-open claims; no secret/raw payload logs or cross-caller lease corruption.
+- [x] **Step4 — GREEN:** new tests plus `test_provider_resilience.py`, `test_model_routing_health.py`, `test_model_routing_fallback.py`, `test_model_routing_provider_retry_boundary.py`.
+- [x] **Step5 — Commit:** `feat(resilience): add quota-only Gemini fallback and demand recovery`.
 
 ### Task 5: Shared target-aware invocation and paid admission
 

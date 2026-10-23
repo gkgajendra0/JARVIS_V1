@@ -8,7 +8,12 @@ import sqlite3
 from dataclasses import asdict, dataclass
 
 from jarvis.model_routing.eligibility import TargetHealthEligibility
-from jarvis.model_routing.health import TargetHealthRecord
+from jarvis.model_routing.health import (
+    RecoveryLease,
+    TargetHealthRecord,
+    _epoch,
+    apply_gemini_pressure,
+)
 from jarvis.model_routing.models import (
     EligibilitySnapshot,
     LocalityRequirement,
@@ -363,6 +368,20 @@ class ModelRoutingStore:
                     last_failure_kind TEXT,
                     updated_at_epoch REAL NOT NULL,
                     version INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS gemini_free_recovery_leases (
+                    target_id TEXT PRIMARY KEY,
+                    operation_id TEXT NOT NULL,
+                    expires_at_epoch REAL NOT NULL,
+                    version INTEGER NOT NULL,
+                    health_version INTEGER NOT NULL,
+                    active INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_credential_blocks (
+                    credential_ref TEXT PRIMARY KEY,
+                    failure_kind TEXT NOT NULL,
+                    updated_at_epoch REAL NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS model_routing_outcomes (
@@ -906,6 +925,158 @@ class ModelRoutingStore:
                 )
         return record
 
+    def record_pressure(self, *, target, failure, config, now_epoch):
+        from jarvis.model_routing.gemini import gemini_paid_fallback_allowed
+
+        if not gemini_paid_fallback_allowed(failure, source_target=target):
+            raise ValueError("Only Gemini Free pressure may enter recovery cooldown")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM model_target_health WHERE target_id=?",
+                (target.target_id,),
+            ).fetchone()
+            old = (
+                _health_record(row)
+                if row is not None
+                else TargetHealthRecord(target.target_id)
+            )
+            record = apply_gemini_pressure(
+                old, failure, config=config, now_epoch=now_epoch
+            )
+            _write_health(connection, record)
+            connection.execute(
+                "UPDATE gemini_free_recovery_leases SET active=0 WHERE target_id=?",
+                (target.target_id,),
+            )
+        return record
+
+    def credential_blocked(self, credential_ref: str | None) -> bool:
+        if credential_ref is None:
+            return False
+        with self._work_store.extension_transaction() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM model_credential_blocks WHERE credential_ref=?",
+                    (credential_ref,),
+                ).fetchone()
+                is not None
+            )
+
+    def disable_paid_credential(self, *, failure, now_epoch):
+        from jarvis.provider_resilience import ProviderFailureKind
+
+        if (
+            failure.provider != "gemini"
+            or failure.kind is not ProviderFailureKind.BALANCE_EXHAUSTED
+        ):
+            raise ValueError(
+                "Only a typed Gemini depleted-balance failure disables Paid"
+            )
+        now = _epoch(now_epoch, field="now_epoch")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute(
+                "INSERT INTO model_credential_blocks VALUES (?,?,?) ON CONFLICT(credential_ref) DO UPDATE SET failure_kind=excluded.failure_kind, updated_at_epoch=excluded.updated_at_epoch",
+                ("JARVIS_GEMINI_PAID_API_KEY", failure.kind.value, now),
+            )
+
+    def claim_free_recovery(self, *, target_id, operation_id, now_epoch, lease_seconds):
+        now = _epoch(now_epoch, field="now_epoch")
+        seconds = _epoch(lease_seconds, field="lease_seconds")
+        if (
+            seconds <= 0
+            or not isinstance(operation_id, str)
+            or not operation_id.strip()
+        ):
+            raise ValueError(
+                "Recovery claim requires positive duration and operation identity"
+            )
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM model_target_health WHERE target_id=?", (target_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            health = _health_record(row)
+            if (
+                health.state is not TargetHealthEligibility.COOLDOWN
+                or health.last_failure_kind not in {"rate_limited", "quota_exhausted"}
+                or health.cooldown_until_epoch is None
+                or now < health.cooldown_until_epoch
+            ):
+                return None
+            previous = connection.execute(
+                "SELECT * FROM gemini_free_recovery_leases WHERE target_id=?",
+                (target_id,),
+            ).fetchone()
+            if (
+                previous is not None
+                and previous["active"]
+                and previous["expires_at_epoch"] > now
+            ):
+                return None
+            lease = RecoveryLease(
+                target_id,
+                operation_id,
+                now + seconds,
+                1 if previous is None else previous["version"] + 1,
+            )
+            connection.execute(
+                "INSERT INTO gemini_free_recovery_leases VALUES (?,?,?,?,?,1) ON CONFLICT(target_id) DO UPDATE SET operation_id=excluded.operation_id, expires_at_epoch=excluded.expires_at_epoch, version=excluded.version, health_version=excluded.health_version, active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.expires_at_epoch,
+                    lease.version,
+                    health.version,
+                ),
+            )
+        return lease
+
+    def release_free_recovery(self, lease: RecoveryLease) -> bool:
+        with self._work_store.extension_transaction() as connection:
+            cursor = connection.execute(
+                "UPDATE gemini_free_recovery_leases SET active=0 WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.version,
+                    lease.expires_at_epoch,
+                ),
+            )
+            return cursor.rowcount == 1
+
+    def complete_free_recovery(self, lease: RecoveryLease, *, now_epoch) -> bool:
+        now = _epoch(now_epoch, field="now_epoch")
+        if now >= lease.expires_at_epoch:
+            return False
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM gemini_free_recovery_leases WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.version,
+                    lease.expires_at_epoch,
+                ),
+            ).fetchone()
+            if row is None:
+                return False
+            health = connection.execute(
+                "SELECT * FROM model_target_health WHERE target_id=?",
+                (lease.target_id,),
+            ).fetchone()
+            if health is None or health["version"] != row["health_version"]:
+                return False
+            _write_health(connection, _health_record(health).recovered(now_epoch=now))
+            connection.execute(
+                "UPDATE gemini_free_recovery_leases SET active=0 WHERE target_id=?",
+                (lease.target_id,),
+            )
+        return True
+
     def save_registry_snapshot(self, snapshot: dict) -> None:
         if not isinstance(snapshot, dict) or set(snapshot) != {
             "schema_version",
@@ -1101,3 +1272,30 @@ class ModelRoutingStore:
             )
             result.append(ScopedRoutingAttempt(**data))
         return tuple(result)
+
+
+def _health_record(row) -> TargetHealthRecord:
+    return TargetHealthRecord(
+        target_id=row["target_id"],
+        state=TargetHealthEligibility(row["state"]),
+        consecutive_failures=row["consecutive_failures"],
+        cooldown_until_epoch=row["cooldown_until_epoch"],
+        last_failure_kind=row["last_failure_kind"],
+        updated_at_epoch=row["updated_at_epoch"],
+        version=row["version"],
+    )
+
+
+def _write_health(connection, record) -> None:
+    connection.execute(
+        "INSERT INTO model_target_health VALUES (?,?,?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET state=excluded.state,consecutive_failures=excluded.consecutive_failures,cooldown_until_epoch=excluded.cooldown_until_epoch,last_failure_kind=excluded.last_failure_kind,updated_at_epoch=excluded.updated_at_epoch,version=excluded.version",
+        (
+            record.target_id,
+            record.state.value,
+            record.consecutive_failures,
+            record.cooldown_until_epoch,
+            record.last_failure_kind,
+            record.updated_at_epoch,
+            record.version,
+        ),
+    )
