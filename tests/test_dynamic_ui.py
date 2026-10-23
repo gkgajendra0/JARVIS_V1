@@ -639,6 +639,26 @@ def test_live_runtime_research_and_diagnostics_browser_projection(ui_http) -> No
             assert "RUNTIME.VOICE" in page.locator("#cards").inner_text().upper()
             page.locator(".rail-button[data-panel='work']").click()
             assert "work-123" in page.locator("#cards").inner_text()
+            page.locator(".rail-button[data-action='home']").click()
+            page.wait_for_function(
+                "() => document.querySelectorAll('.context-card').length === 0"
+            )
+            # Ambient mode must actually dismiss the currently observed
+            # runtime projections, not immediately reopen stale research.
+            page.wait_for_timeout(1250)
+            assert page.locator(".context-card").count() == 0
+            # Fresh canonical evidence may deliberately rematerialize the UI.
+            hub.show_panel(
+                panel_id="topic.research.fresh",
+                panel_type="research",
+                title="Fresh research",
+                summary="New accepted topic",
+                source="runtime",
+                priority=2,
+            )
+            page.wait_for_function(
+                "() => [...document.querySelectorAll('.context-card')].some(p => p.dataset.panelId === 'topic.research.fresh')"
+            )
             assert not errors, errors
         finally:
             browser.close()
