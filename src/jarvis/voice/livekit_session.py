@@ -83,6 +83,12 @@ def _create_realtime_model(config: JarvisConfig, *, target=None, transport_state
         from jarvis.model_routing.budget import PaidBudgetDenied
 
         raise PaidBudgetDenied("Paid Live requires bounded transport admission")
+    if target is not None and target.credential_ref == gemini_credential_ref("paid"):
+        from jarvis.voice.gemini_budget import GeminiLiveBudget
+
+        # Supplying an arbitrary budget object cannot bypass the SDK limitation.
+        # Deny before resolving a key or constructing a provider client.
+        GeminiLiveBudget().before_connect()
     if target is not None and target.provider_id != config.ai_provider:
         raise ValueError("Realtime target provider must match configured provider")
     api_key = (

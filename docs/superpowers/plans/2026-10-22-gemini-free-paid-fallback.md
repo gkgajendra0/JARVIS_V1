@@ -140,11 +140,13 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** `GeminiLiveBudget` pins target/transport epoch/price snapshot. Methods `async reserve_interval(exposure: PaidExposure)`, synchronous `allow_input(*, modality, quantity, now_epoch) -> bool`, `observe_usage(*, event_id, usage, cumulative, complete)`, `close(*, uncertain: bool)`. Wrap the supported Google model/session boundary to gate audio/video/text before send. Reuse usage metrics and modality metadata with epoch/event deduplication; preserve public model/session protocol.
 
-- [ ] **Step1 — Failing tests:** no Paid frames without reserve; next interval denial at35000 stops forwarding/uses local status. Duplicate/cumulative/partial/thinking/cached/audio/video/context usage cannot double count or become zero. Close/crash retains unknown exposure. Free recovery defers through input/output/tools, then one demand-driven attempt keeps context without health probes. Missing audio price excludes Paid Live.
-- [ ] **Step2 — RED:** run Live budget/recovery suites; require missing gating/accounting.
-- [ ] **Step3 — Implement bounded interval gates.** Reserve ahead off event loop; frame path consumes only existing proved reserve. Review context/input/output bounds and set supported SDK max_output_tokens. Automatic reconnect/context reprocessing reserves again. No private SDK patch or hard-invoice-cap claim. Incomplete usage stays unknown; no defensible bound means Paid unavailable, not unbounded streaming advertised as protected.
-- [ ] **Step4 — GREEN:** new suites plus Tasks3/4/8, existing full-duplex/output guard and private-context source/forget/expiry regressions. Measure gate overhead/heartbeat with fictional data once; no brittle timing assertions/selective score reruns.
-- [ ] **Step5 — Commit:** `feat(voice): bound paid streaming and recover Free at safe boundaries`.
+- [x] **Step1 — Failing tests:** no Paid frames without reserve; next interval denial at35000 stops forwarding/uses local status. Duplicate/cumulative/partial/thinking/cached/audio/video/context usage cannot double count or become zero. Close/crash retains unknown exposure. Free recovery defers through input/output/tools, then one demand-driven attempt keeps context without health probes. Missing audio price excludes Paid Live.
+- [x] **Step2 — RED:** run Live budget/recovery suites; require missing gating/accounting.
+- [x] **Step3 — Implement bounded interval gates.** Reserve ahead off event loop; frame path consumes only existing proved reserve. Review context/input/output bounds and set supported SDK max_output_tokens. Automatic reconnect/context reprocessing reserves again. No private SDK patch or hard-invoice-cap claim. Incomplete usage stays unknown; no defensible bound means Paid unavailable, not unbounded streaming advertised as protected.
+- [x] **Step4 — GREEN:** new suites plus Tasks3/4/8, existing full-duplex/output guard and private-context source/forget/expiry regressions. Measure gate overhead/heartbeat with fictional data once; no brittle timing assertions/selective score reruns.
+- [x] **Step5 — Commit:** `feat(voice): bound paid streaming and recover Free at safe boundaries`.
+
+**Recorded outcome:** approved unsupported-SDK branch taken: actual Paid Live is explicitly unavailable, including interval/accounting activation. No hard bounded streaming claim. See ledger and final report; safe recovery/context are software verified with fake provider transport only.
 
 ### Task 10: Shared production composition, preflight and status
 
