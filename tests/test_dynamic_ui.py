@@ -230,6 +230,12 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             layout_midpoint = layout["x"] + layout["width"] / 2
             assert abs(orb_midpoint - layout_midpoint) <= 12
             assert orb["width"] >= 550, "ultrawide orb must remain a focal object"
+            # Projection starts as a tiny point at the orb. Wait for its
+            # materialization before asserting the final responsive width.
+            page.wait_for_function(
+                "() => { const panel = document.querySelector('.context-card[data-slot=\\'0\\']'); "
+                "return panel && panel.getBoundingClientRect().width >= 700; }"
+            )
             first_panel = page.locator(".context-card[data-slot='0']").bounding_box()
             assert first_panel is not None and first_panel["width"] >= 700
             assert page.locator(".context-card[data-slot='0']").count() == 1
