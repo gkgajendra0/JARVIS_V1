@@ -164,6 +164,59 @@ def test_event_overflow_signals_fresh_snapshot_needed() -> None:
         hub.events_after(-1)
 
 
+def test_opted_in_ui_transport_and_voice_observer_lifecycle(monkeypatch) -> None:
+    from types import SimpleNamespace
+    from urllib.request import urlopen
+
+    from jarvis.conversation import ConversationRole, ConversationSession
+    from jarvis.ui import runtime as ui_runtime
+
+    monkeypatch.setenv("JARVIS_UI_ENABLED", "true")
+    monkeypatch.setenv("JARVIS_UI_PORT", "0")
+    service = ui_runtime.start_opt_in_ui()
+    assert service is not None
+    try:
+        url = f"http://127.0.0.1:{service.server.server_port}/api/snapshot"
+        with urlopen(url) as response:
+            assert json.load(response)["runtime_connected"] is True
+
+        class FakeSession:
+            def __init__(self):
+                self.callbacks = {}
+
+            def on(self, event, callback):
+                self.callbacks[event] = callback
+
+        session = FakeSession()
+        turn_subscribers = []
+        close_subscribers = []
+        ui_runtime.safely_attach_voice_observers(
+            session,
+            turn_subscribers.append,
+            close_subscribers.append,
+        )
+        session.callbacks["agent_state_changed"](
+            SimpleNamespace(new_state="speaking")
+        )
+        assert service.hub.snapshot()["voice_state"] == "speaking"
+        session.callbacks["user_state_changed"](
+            SimpleNamespace(new_state="speaking")
+        )
+        assert service.hub.snapshot()["voice_state"] == "listening"
+        conversation = ConversationSession()
+        conversation.start()
+        turn = conversation.accept_turn(
+            ConversationRole.USER, "Jarvis, show my work"
+        )
+        turn_subscribers[0](turn)
+        assert service.hub.snapshot()["panels"][0]["type"] == "work"
+        close_subscribers[0]()
+        assert service.hub.snapshot()["voice_state"] == "idle"
+    finally:
+        ui_runtime.stop_opt_in_ui()
+    assert ui_runtime.active_ui_hub() is None
+
+
 def test_ui_renders_real_diagnostic_feeds_without_frames_or_secrets() -> None:
     hub = UIEventHub()
     hub.set_runtime_connected(True)
