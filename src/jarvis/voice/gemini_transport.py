@@ -20,6 +20,8 @@ class GeminiTransportState:
     budget: object | None = None
     controlled_admission: object | None = None
     on_idle: Callable | None = None
+    context_for_replay: Callable | None = None
+    before_demand: Callable | None = None
     ready: bool = True
     active: bool = True
     output_sample_rate: int | None = None

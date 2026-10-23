@@ -47,6 +47,7 @@ async def test_every_part_and_transcription_in_same_event_is_processed(tmp_path)
         )
         assert await messages[0].modalities == ["text", "audio"]
         await until(lambda: env.endpoint.wires[0].closed)
+        await until(lambda: env.runtime.paid_budget.status().spent_inr_minor == 1)
         assert env.runtime.paid_budget.status().spent_inr_minor == 1
     finally:
         await env.model.aclose()

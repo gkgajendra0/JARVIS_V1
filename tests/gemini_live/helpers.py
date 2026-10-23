@@ -25,6 +25,9 @@ class Wire:
         self.sent = []
         self.closed = False
 
+    async def close(self):
+        self.closed = True
+
     async def send_client_content(self, **kwargs):
         self.sent.append(("content", types.LiveClientContent(**kwargs)))
 

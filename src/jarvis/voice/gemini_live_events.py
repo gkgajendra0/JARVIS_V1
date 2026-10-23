@@ -21,6 +21,7 @@ class LiveResponse:
         self.input_id = "live-input-" + uuid4().hex
         self.started_at = time.time()
         self.transcript = ""
+        self.output_text = ""
         self.final_transcript = False
         self.closed = False
         self.text = aio.Chan(maxsize=128)
@@ -77,8 +78,10 @@ class LiveResponse:
                         )
                     )
             if part.text and content.output_transcription is None:
+                self.output_text += part.text
                 self.text.send_nowait(part.text)
         if content.output_transcription and content.output_transcription.text:
+            self.output_text += content.output_transcription.text
             self.text.send_nowait(content.output_transcription.text)
 
     def close(self):

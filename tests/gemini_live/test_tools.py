@@ -59,6 +59,7 @@ async def test_blocking_tools_dedupe_and_only_matching_results_trigger_paid_cont
         wire.feed(server_content={"turn_complete": True}, usage_metadata=raw_usage())
         await asyncio.wait_for(second, 5)
         await until(lambda: wire.closed)
+        await until(lambda: env.runtime.paid_budget.status().spent_inr_minor == 2)
         assert sum(k == "tool" for k, _ in wire.sent) == 1
         assert env.runtime.paid_budget.status().spent_inr_minor == 2
     finally:
@@ -122,6 +123,7 @@ async def test_fast_tool_result_waits_for_final_usage_without_duplicate_action(
         wire.feed(server_content={"turn_complete": True}, usage_metadata=raw_usage())
         await asyncio.wait_for(second, 5)
         await until(lambda: wire.closed)
+        await until(lambda: env.runtime.paid_budget.status().spent_inr_minor == 2)
         assert env.endpoint.clients == 1
         assert env.runtime.paid_budget.status().spent_inr_minor == 2
     finally:

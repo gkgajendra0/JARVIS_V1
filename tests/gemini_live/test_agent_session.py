@@ -228,3 +228,119 @@ async def test_real_local_vad_and_audio_pipeline_drive_manual_activity_and_endpo
         source.close()
         await session.aclose()
         await env.model.aclose()
+
+
+@pytest.mark.asyncio
+async def test_real_agent_session_cancellation_with_blocked_send_executes_no_action(
+    tmp_path,
+):
+    from contextlib import asynccontextmanager
+
+    env = environment(tmp_path)
+    effects = []
+    entered, gate = asyncio.Event(), asyncio.Event()
+    original = env.endpoint.connect
+
+    @asynccontextmanager
+    async def connect(**kwargs):
+        async with original(**kwargs) as wire:
+            send = wire.send_client_content
+
+            async def blocked(**content):
+                await send(**content)
+                if len(wire.sent) == 2:
+                    entered.set()
+                    await gate.wait()
+
+            wire.send_client_content = blocked
+            yield wire
+
+    env.endpoint.connect = connect
+
+    @llm.function_tool
+    async def fictional_action(name: str) -> str:
+        """Perform a reversible fictional test action."""
+        effects.append(name)
+        return "done"
+
+    session = AgentSession(
+        llm=env.model, vad=None, turn_handling=TurnHandlingOptions(turn_detection=None)
+    )
+    try:
+        await session.start(
+            agent=Agent(
+                instructions="Fictional only", llm=env.model, tools=[fictional_action]
+            ),
+            record=False,
+        )
+        handle = session.generate_reply(user_input="Fictional action")
+        await asyncio.wait_for(entered.wait(), 5)
+        env.endpoint.wires[0].feed(
+            tool_call={
+                "function_calls": [
+                    {
+                        "id": "cancel-before-release",
+                        "name": "fictional_action",
+                        "args": {"name": "once"},
+                    }
+                ]
+            },
+            tool_call_cancellation={"ids": ["cancel-before-release"]},
+        )
+        await asyncio.wait_for(handle, 5)
+        assert effects == []
+        await until(lambda: env.endpoint.wires[0].closed)
+        await until(lambda: env.runtime.paid_budget.status().unknown_reservations == 1)
+    finally:
+        gate.set()
+        await session.aclose()
+        await env.model.aclose()
+
+
+@pytest.mark.asyncio
+async def test_real_agent_session_uncertain_tool_reply_never_reexecutes_action(
+    tmp_path,
+):
+    env = environment(tmp_path)
+    effects = []
+
+    @llm.function_tool
+    async def fictional_action(name: str) -> str:
+        """Perform a reversible fictional test action."""
+        effects.append(name)
+        return "done"
+
+    session = AgentSession(
+        llm=env.model, vad=None, turn_handling=TurnHandlingOptions(turn_detection=None)
+    )
+    try:
+        await session.start(
+            agent=Agent(
+                instructions="Fictional only", llm=env.model, tools=[fictional_action]
+            ),
+            record=False,
+        )
+        handle = session.generate_reply(user_input="Fictional action")
+        await until(lambda: env.endpoint.wires)
+        wire = env.endpoint.wires[0]
+        wire.feed(
+            tool_call={
+                "function_calls": [
+                    {
+                        "id": "uncertain-reply",
+                        "name": "fictional_action",
+                        "args": {"name": "once"},
+                    }
+                ]
+            },
+            server_content={"turn_complete": True},
+            usage_metadata=raw_usage(),
+        )
+        await until(lambda: any(kind == "tool" for kind, _ in wire.sent))
+        wire.feed(go_away={"time_left": "1s"})
+        await asyncio.wait_for(handle, 5)
+        await until(lambda: env.runtime.paid_budget.status().unknown_reservations == 1)
+        assert effects == ["once"] and env.endpoint.clients == 1
+    finally:
+        await session.aclose()
+        await env.model.aclose()

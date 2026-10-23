@@ -48,6 +48,7 @@ async def test_public_connection_has_prior_hold_manual_activity_and_no_idle_sock
         assert len(messages) == 1
         assert [t async for t in messages[0].text_stream] == ["Haan"]
         await until(lambda: wire.closed)
+        await until(lambda: env.runtime.paid_budget.status().spent_inr_minor == 1)
         assert env.runtime.paid_budget.status().spent_inr_minor == 1
         assert env.runtime.paid_budget.status().reserved_inr_minor == 0
         assert env.endpoint.clients == 1

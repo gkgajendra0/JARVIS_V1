@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import time
 from collections import deque
@@ -35,10 +36,14 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         self._lease = None
         self._client = self._connection = self._wire = None
         self._receiver = self._timer = None
+        self._connection_entered = False
+        self._worker_started = False
+        self._final_usage_identity = None
         self._activity = False
         self._commit = False
         self._failed = self._closed = False
         self._failure = None
+        self._abort_requested = False
         self._pending_tools = {}
         self._seen_tools = {}
         self._cancelled_tools = set()
@@ -47,6 +52,32 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         self._usage_sequence = 0
         self._turn_done = asyncio.Event()
         self._worker = asyncio.create_task(self._run(), name="jarvis-controlled-live")
+
+    @property
+    def connection_idle(self):
+        return (
+            not self._failed
+            and not self._closed
+            and self._failure is None
+            and self._wire is None
+            and self._lease is None
+            and self._response is None
+            and not self._pending_tools
+        )
+
+    def take_pending_audio(self):
+        """Transfer only the bounded current, not-yet-dispatched input to Free."""
+        frames, retained = [], []
+        while not self._queue.empty():
+            kind, value = self._queue.get_nowait()
+            if kind == "audio":
+                frames.append(value)
+                self._queued_samples -= value.samples_per_channel
+            else:
+                retained.append((kind, value))
+        for command in retained:
+            self._queue.put_nowait(command)
+        return tuple(frames)
 
     @property
     def idle(self):
@@ -71,10 +102,12 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         return self._tools
 
     async def _check(self):
-        if self._closed or self._failed:
+        if self._closed or self._failed or self._failure is not None:
             raise llm.RealtimeError("Controlled Live session unavailable")
         await self.model.state.require_context()
         await self.model.admission.require_authority()
+        if self._closed or self._failed or self._failure is not None:
+            raise llm.RealtimeError("Controlled Live session unavailable")
 
     async def update_instructions(self, instructions):
         await self._check()
@@ -119,13 +152,23 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             return False
 
     def _stop(self, reason):
-        if not self._failure:
+        if self._closed or self._failed:
+            return
+        if self._failure is None:
             self._failure = llm.RealtimeError(reason)
-            # Wake the existing serialized owner; do not start an unowned cleanup.
-            while not self._queue.empty():
-                self._queue.get_nowait()
-            self._queued_samples = 0
-            self._queue.put_nowait(("abort", None))
+        if self._abort_requested:
+            return
+        self._abort_requested = True
+        while not self._queue.empty():
+            self._queue.get_nowait()
+        self._queued_samples = 0
+        self._queue.put_nowait(("abort", None))
+        if (
+            self._worker_started
+            and not self._worker.done()
+            and self._worker is not asyncio.current_task()
+        ):
+            self._worker.cancel()
 
     def start_user_activity(self):
         if self._input_started or self._closed or self._failed:
@@ -274,6 +317,7 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         await self._check()
         self._sequence += 1
         self._turn_done.clear()
+        self._final_usage_identity = None
         self._lease = await self.model.admission.reserve(
             self.model.target,
             connection_id=self._connection_id,
@@ -289,7 +333,23 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
     async def _open(self):
         if self._wire is not None:
             return
+        if self.model.state.before_demand is not None:
+            allowed = self.model.state.before_demand(self)
+            if inspect.isawaitable(allowed):
+                allowed = await allowed
+            if allowed is not True:
+                raise llm.RealtimeError("Original demand transferred to another target")
+            await self._check()
         self._connection_id = "live-connection-" + uuid4().hex
+        lifetime = self.model.admission.contract.max_physical_seconds
+        # Reserve three bounded cleanup operations inside the physical envelope.
+        # The watchdog starts before admission/setup, not after the first send.
+        self._close_grace = min(1.0, lifetime / 10)
+        self._timer = asyncio.get_running_loop().call_later(
+            lifetime - 3 * self._close_grace,
+            self._stop,
+            "Controlled Live absolute physical lifetime exceeded",
+        )
         await self._admit()
         self._client = self.model.client_factory()
         await self._check()
@@ -297,10 +357,19 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             model=self.model.model, config=self._config()
         )
         self._wire = await self._connection.__aenter__()
+        self._connection_entered = True
         await self._check()
         # Only text from accepted canonical projection; no historical raw tool
         # results, media or resumable handles are replayed into another project.
-        history = self._ctx.copy(
+        projection = self._ctx
+        if self.model.state.context_for_replay is not None:
+            projection = self.model.state.context_for_replay()
+            if inspect.isawaitable(projection):
+                projection = await projection
+            await self._check()
+            if not isinstance(projection, llm.ChatContext):
+                raise llm.RealtimeError("Original canonical projection required")
+        history = projection.copy(
             exclude_function_call=True,
             exclude_handoff=True,
             exclude_instructions=True,
@@ -319,11 +388,6 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         await self._wire.send_client_content(turns=turns, turn_complete=True)
         self._receiver = asyncio.create_task(
             self._receive(), name="jarvis-controlled-live-receive"
-        )
-        self._timer = asyncio.get_running_loop().call_later(
-            self.model.admission.contract.max_physical_seconds,
-            self._stop,
-            "Controlled Live physical lifetime exceeded",
         )
 
     async def _generate(self, instructions):
@@ -382,8 +446,9 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         self._commit = False
 
     async def _run(self):
+        self._worker_started = True
         try:
-            while True:
+            while not self._closed:
                 kind, value = await self._queue.get()
                 if self._failure or kind == "abort":
                     raise self._failure or llm.RealtimeError("Controlled Live aborted")
@@ -422,7 +487,10 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                 elif kind == "end":
                     await self._end(value)
         except asyncio.CancelledError:
-            raise
+            if self._failure is not None and not self._closed:
+                await self._fail(self._failure)
+            else:
+                raise
         except Exception as exc:  # noqa: BLE001 - terminal public transport boundary
             await self._fail(exc)
         finally:
@@ -434,7 +502,13 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
         except Exception:  # noqa: BLE001 - source errors must deny queued disclosure
             self._stop("Controlled Live queued source is no longer current")
             return False
-        return self.model.state.current and self.model.state.ready
+        return (
+            self.model.state.current
+            and self.model.state.ready
+            and not self._failure
+            and not self._failed
+            and not self._closed
+        )
 
     def _start_response(self):
         if self._response is not None:
@@ -454,6 +528,13 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
             final = final or item.finished is True
         if response.transcript and not response.final_transcript:
             response.final_transcript = final
+            if final and self._ctx.get_by_id(response.input_id) is None:
+                self._ctx.add_message(
+                    role="user",
+                    content=response.transcript,
+                    id=response.input_id,
+                    created_at=response.started_at,
+                )
             self.emit(
                 "input_audio_transcription_completed",
                 llm.InputTranscriptionCompleted(
@@ -536,48 +617,83 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                         self._transcription(response, final=True)
                         response.close()
                         self._turn_done.set()
-                        self._enqueue("end", (self._lease.invocation_id, True))
+                        self._final_usage_identity = (
+                            self._lease.invocation_id
+                            if event.usage_metadata is not None
+                            else None
+                        )
+                        self._enqueue(
+                            "end",
+                            (
+                                self._lease.invocation_id,
+                                event.usage_metadata is not None,
+                            ),
+                        )
                 if not self._pending_tools:
                     return
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - fail closed without provider retries
-            self._failure = exc
-            self._enqueue("abort")
+            if self._failure is None:
+                self._failure = exc
+            self._stop("Controlled Live receive failed")
 
     async def _end(self, outcome):
         identity, complete = outcome
         if self._lease is None or self._lease.invocation_id != identity:
-            return  # An already consumed final snapshot cannot settle a new lease.
-        await self._lease.finish(complete=complete)
-        self._lease = None
+            return
+        complete = complete and self._final_usage_identity == identity
+        if (
+            self._response is not None
+            and self._response.output_text
+            and self._ctx.get_by_id(self._response.response_id) is None
+        ):
+            self._ctx.add_message(
+                role="assistant",
+                content=self._response.output_text,
+                id=self._response.response_id,
+            )
         self._response = None
-        if not self._pending_tools:
-            await self._disconnect()
+        if self._pending_tools:
+            await self._lease.finish(complete=complete)
+            self._lease = None
+        else:
+            # Final usage cannot release exposure before bounded socket teardown.
+            await self._disconnect(complete=complete)
 
-    async def _disconnect(self):
-        if self._timer is not None:
-            self._timer.cancel()
-            self._timer = None
+    async def _disconnect(self, *, complete=False):
         receiver, self._receiver = self._receiver, None
         if receiver is not None and receiver is not asyncio.current_task():
             receiver.cancel()
             await asyncio.gather(receiver, return_exceptions=True)
         connection, self._connection = self._connection, None
-        self._wire = None
+        entered, self._connection_entered = self._connection_entered, False
+        wire, self._wire = self._wire, None
+        client, self._client = self._client, None
+        grace = getattr(self, "_close_grace", 1.0)
+        closed = False
         try:
-            if connection is not None:
-                await connection.__aexit__(None, None, None)
+            if wire is not None:
+                await asyncio.wait_for(wire.close(), timeout=grace)
+            if entered and connection is not None:
+                await asyncio.wait_for(
+                    connection.__aexit__(None, None, None), timeout=grace
+                )
+            if client is not None:
+                await asyncio.wait_for(client.aio.aclose(), timeout=grace)
+            closed = True
         finally:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
             if self._lease is not None:
                 lease, self._lease = self._lease, None
                 if lease.reservation.state == "reserved":
                     await lease.cancel_unsent()
                 else:
-                    await lease.finish(complete=False)
-            client, self._client = self._client, None
-            if client is not None:
-                await client.aio.aclose()
+                    await lease.finish(
+                        complete=bool(complete and closed and not self._failure)
+                    )
         self._activity = self._commit = self._input_started = False
         self._preroll.clear()
         self._preroll_samples = 0

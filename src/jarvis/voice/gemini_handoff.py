@@ -139,11 +139,29 @@ class GeminiLiveHandoff:
         self._output_speaking = event.new_state == "speaking"
         self._schedule_free_recovery()
 
-    def _controlled_idle(self):
+    def _controlled_idle(self, pending_input=None):
         inner = getattr(self.current_model, "inner", None)
         return not isinstance(inner, ControlledGeminiLiveModel) or all(
-            s.idle for s in inner.sessions
+            (s.connection_idle if s is pending_input else s.idle)
+            for s in inner.sessions
         )
+
+    async def _before_paid_demand(self, source):
+        if not await self._authorized() or not source.connection_idle:
+            return False
+        if self.task is not None and not self.task.done():
+            await asyncio.shield(self.task)
+            if not source.model.state.current:
+                return False
+        self._recovery_demand = True
+        # A separate shielded owner survives retirement/cancellation of the old
+        # Paid sender while public update_agent installs Free. No new grant.
+        self.task = asyncio.create_task(
+            self.maybe_recover_free(pending_input=source),
+            name="jarvis-gemini-demand-selection",
+        )
+        switched = await asyncio.shield(self.task)
+        return not switched and source.model.state.current
 
     def _schedule_free_recovery(self):
         if (
@@ -326,9 +344,7 @@ class GeminiLiveHandoff:
             self._paid_visits += 1
             return await self._switch(selection.target, continue_request=True)
 
-    async def _switch(self, target, *, continue_request):
-        if self.agent is None or not await self._authorized():
-            return False
+    def _context_for_replay(self):
         context = self.bridge.project_accepted_context()
         current_turns = {t.turn_id for t in self.bridge.live_context.recent_turns}
         for receipt in self._tool_receipts:
@@ -346,6 +362,12 @@ class GeminiLiveHandoff:
                         ],
                     )
                 )
+        return context
+
+    async def _switch(self, target, *, continue_request, pending_input=None):
+        if self.agent is None or not await self._authorized():
+            return False
+        context = self._context_for_replay()
         self.bridge.register_restored_context(context)
         latest = (
             self.bridge.conversation.turns[-1]
@@ -379,6 +401,11 @@ class GeminiLiveHandoff:
             if budget is not None:
                 budget.cancel_unsent()
             return False
+        pending_frames = (
+            pending_input.take_pending_audio() if pending_input is not None else ()
+        )
+        if pending_frames:
+            can_continue = False
         epoch = self.bridge.begin_transport_handoff()
         if self.input is not None:
             self.input.set_transport_enabled(False)
@@ -396,6 +423,8 @@ class GeminiLiveHandoff:
             output_sample_rate=getattr(self.output, "sample_rate", None),
             restored_ids=frozenset(item.id for item in context.items),
             on_idle=self._schedule_free_recovery,
+            context_for_replay=self._context_for_replay,
+            before_demand=self._before_paid_demand,
         )
         if target.credential_ref == gemini_credential_ref("paid") and controlled:
 
@@ -427,6 +456,10 @@ class GeminiLiveHandoff:
             self.agent = agent
             self.bridge.finish_transport_handoff(epoch)
             state.ready = True
+            # Preserve the bounded current PCM before enabling later live frames.
+            if pending_frames:
+                for frame in pending_frames:
+                    model.sessions[-1].push_audio(frame)
             if self.input is not None:
                 self.input.set_transport_enabled(True)
             if can_continue:
@@ -446,14 +479,14 @@ class GeminiLiveHandoff:
             self.last_reason = "handoff_unavailable"
             return False
 
-    async def maybe_recover_free(self):
+    async def maybe_recover_free(self, *, pending_input=None):
         async with self._lock:
             if (
                 self.current_target.credential_ref != gemini_credential_ref("paid")
                 or self._pending_tools
-                or self._user_speaking
+                or (self._user_speaking and pending_input is None)
                 or self._output_speaking
-                or not self._controlled_idle()
+                or not self._controlled_idle(pending_input)
                 or not await self._authorized()
             ):
                 return False
@@ -479,7 +512,11 @@ class GeminiLiveHandoff:
                 return False
             self._recovery_lease = lease
             self._paid_visits = 0
-            if not await self._switch(selection.target, continue_request=False):
+            if not await self._switch(
+                selection.target,
+                continue_request=pending_input is not None,
+                pending_input=pending_input,
+            ):
                 self.runtime.store.release_free_recovery(lease)
                 self._recovery_lease = None
                 return False
