@@ -273,8 +273,8 @@ def test_live_diagnostic_adapter_uses_canonical_read_only_interfaces(
     class Vision:
         running = True
 
-        def report(self, *, event_limit=0):
-            assert event_limit == 0
+        def report(self, *, event_limit=1):
+            assert event_limit == 1
             return {
                 "camera": {
                     "active_source": "lenovo",
