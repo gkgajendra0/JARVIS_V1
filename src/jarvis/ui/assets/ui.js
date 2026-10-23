@@ -417,7 +417,13 @@ function reconcileCards(panels){
     const node=renderCard(p);
     node.dataset.slot=String(slot);
     cards.append(node);anyNew=true;
-    moveFromOrb(node);
+    const projection=moveFromOrb(node);
+    if(projection){
+      node.classList.add("is-materializing");
+      projection.finished.catch(()=>{}).then(()=>{
+        if(node.isConnected)node.classList.remove("is-materializing");
+      });
+    }
   }
   if(anyNew){projectionGlow();scheduleBeams();}
   if(!cards.children.length)el("layout").classList.remove("has-stage");
@@ -622,6 +628,24 @@ function draw(t) {
     ctx.beginPath();ctx.arc(xx,yy,p.size,0,Math.PI*2);
     ctx.fillStyle="rgba(122,217,255,"+alpha.toFixed(3)+")";ctx.fill();
   }
+  // A second field of refracted filaments gives the core spherical depth.
+  // Lower visual-quality modes reduce work and preserve voice latency.
+  if(model.quality!=="eco"){
+    const spokes=model.quality==="balanced"?22:42;
+    for(let k=0;k<spokes;k++){
+      const angle=(k/spokes)*Math.PI*2 + t*(k%2?-.018:.023);
+      const radial=r*(.48+((k*17)%23)/60);
+      const x1=cx+Math.cos(angle)*radial;
+      const y1=cy+Math.sin(angle)*radial;
+      const x2=cx+Math.cos(angle+.17)*radial*.89;
+      const y2=cy+Math.sin(angle+.17)*radial*.89;
+      ctx.beginPath();ctx.moveTo(x1,y1);
+      ctx.quadraticCurveTo(cx,cy,x2,y2);
+      ctx.strokeStyle=k%5===0?"rgba(161,142,255,.09)":"rgba(67,182,251,.047)";
+      ctx.lineWidth=.6;
+      ctx.stroke();
+    }
+  }
   ctx.restore();
   ctx.lineCap="round";
   for(let j=0;j<4;j++) {
@@ -633,6 +657,15 @@ function draw(t) {
     ctx.lineWidth=(j===0?2.6:1.05)*energy;ctx.shadowColor="#25bbff";ctx.shadowBlur=j===0?16:5;ctx.stroke();
   }
   ctx.shadowBlur=0;
+  // Fresnel edge: the illuminated hemisphere seems glass-like rather than
+  // a flat circle, and its changing rim follows the existing state signal.
+  const fresnel=ctx.createRadialGradient(cx-r*.12,cy-r*.13,r*.60,cx,cy,r*1.012);
+  fresnel.addColorStop(0,"rgba(0,90,160,0)");
+  fresnel.addColorStop(.80,"rgba(15,100,200,.02)");
+  fresnel.addColorStop(.95,thinking?"rgba(164,116,244,.23)":"rgba(75,198,253,.22)");
+  fresnel.addColorStop(1,"rgba(122,224,255,.045)");
+  ctx.beginPath();ctx.arc(cx,cy,r*breath,0,Math.PI*2);
+  ctx.fillStyle=fresnel;ctx.fill();
   const glint=ctx.createRadialGradient(cx-r*.32,cy-r*.35,0,cx-r*.32,cy-r*.35,r*.6);
   glint.addColorStop(0,"rgba(191,239,255,.20)");glint.addColorStop(1,"rgba(0,138,255,0)");
   ctx.fillStyle=glint;ctx.beginPath();ctx.arc(cx-r*.32,cy-r*.35,r*.6,0,Math.PI*2);ctx.fill();
