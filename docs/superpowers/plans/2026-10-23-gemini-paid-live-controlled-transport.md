@@ -39,19 +39,19 @@
 - Modify `model_routing/status.py`, relevant config only if new explicit bound diagnostics need it; reuse original keys/price catalog and OFF flag.
 - Tests under `tests/gemini_live/` reuse existing no-network fixtures, actual AgentSession/Authority/canonical temporary stores and fake public transport. Existing `tests/gemini_fallback` stay regression owners.
 
-### Task1: Prove and encode the supported model, charging triggers and usage contract
+### Task 1: Prove and encode the supported model, charging triggers and usage contract
 
 **Files:** Create `voice/gemini_live_contract.py`, `tests/gemini_live/{conftest,test_contract}.py`; record `docs/research/GEMINI_CONTROLLED_LIVE_CONTRACT_2026-10-23.md`.
 
-**Interfaces:** `LiveContractUnavailable(ValueError)`; frozen `LiveModelContract` with model/source/version, full input/output/modal/transcription bounds, maximum activity30s and physical lifetime60s. `reviewed_live_contract(model_id: str) -> LiveModelContract`; `.exposure(scope_id: str) -> PaidExposure`; `normalize_live_usage(raw, *, contract) -> tuple[dict[str,int], bool]`. Only qualified exact standard3.8 model accepted. Price dimensions must cover native input/output and separately billed text transcription/thinking; do not infer absent costs are free.
+**Interfaces:** `LiveContractUnavailable(ValueError)`; frozen `LiveModelContract` with model/source/version, full input/output/modal/transcription bounds, maximum activity30s and physical lifetime60s. `reviewed_live_contract(model_id: str, *, auxiliary_bounds: LiveAuxiliaryBounds | None = None) -> LiveModelContract`; `.exposure(scope_id: str) -> PaidExposure`; `normalize_live_usage(raw, *, contract) -> tuple[dict[str,int], bool]`. `LiveAuxiliaryBounds` pins model, three positive auxiliary token bounds, response-text usage mode, source/version. Missing production proof remains denial; synthetic values are software fixtures only. Only qualified exact standard3.8 model accepted. Price dimensions must cover native input/output and separately billed text transcription/thinking; do not infer absent costs are free.
 
-- [ ] **Step1 RED tests:** `test_unknown_alias_or_extended_thinking_denied_before_client`; `test_full_context_and_transcription_exposure_is_priced`; `test_partial_or_unpriced_usage_not_zero`; `test_thought_cache_modal_totals_and_repeated_snapshots`; `test_model_limit_alone_does_not_qualify_unknown_auxiliary_bound`. Assert unsupported proof raises before any client construction; no synthetic rate can certify an unknown production model.
-- [ ] **Step2 Observe RED:** `PY -m pytest -o addopts= tests/gemini_live/test_contract.py -q`. Expected missing contract interface or reproduced unsafe normalization; not fixture/import typos.
-- [ ] **Step3 Implement:** qualify fields against official Live protocol, standard3.8 model card, thinking and billing docs plus pinned SDK schemas. Explicitly account persistent context, listening and ASR text; derive per-exchange conservative bounds without approximate audio-rate assumptions. Keep unsupported exact config denied if any charge cannot be bounded. Real provider validation remains separate, not assumed from SDK field presence.
-- [ ] **Step4 GREEN:** same test command plus existing pricing/provider-policy tests. Expected all pass with unsupported configuration still explicitly unavailable, no external calls.
-- [ ] **Step5 Commit:** `feat(voice): define reviewed controlled Live cost and protocol contract`.
+- [x] **Step1 RED tests:** `test_unknown_alias_or_extended_thinking_denied_before_client`; `test_full_context_and_transcription_exposure_is_priced`; `test_partial_or_unpriced_usage_not_zero`; `test_thought_cache_modal_totals_and_repeated_snapshots`; `test_model_limit_alone_does_not_qualify_unknown_auxiliary_bound`. Assert unsupported proof raises before any client construction; no synthetic rate can certify an unknown production model.
+- [x] **Step2 Observe RED:** `PY -m pytest -o addopts= tests/gemini_live/test_contract.py -q`. Expected missing contract interface or reproduced unsafe normalization; not fixture/import typos.
+- [x] **Step3 Implement:** qualify fields against official Live protocol, standard3.8 model card, thinking and billing docs plus pinned SDK schemas. Explicitly account persistent context, listening and ASR text; derive per-exchange conservative bounds without approximate audio-rate assumptions. Keep unsupported exact config denied if any charge cannot be bounded. Real provider validation remains separate, not assumed from SDK field presence.
+- [x] **Step4 GREEN:** same test command plus existing pricing/provider-policy tests. Expected all pass with unsupported configuration still explicitly unavailable, no external calls.
+- [x] **Step5 Commit:** `feat(voice): define reviewed controlled Live cost and protocol contract`.
 
-### Task2: Reuse shared governor for connection and generation admission
+### Task 2: Reuse shared governor for connection and generation admission
 
 **Files:** Create `voice/gemini_live_budget.py`, `tests/gemini_live/test_budget.py`; preserve legacy denial in `voice/gemini_budget.py` until actual controlled contract exists.
 
@@ -63,7 +63,7 @@
 - [ ] **Step4 GREEN:** Task1/2 plus `tests/gemini_fallback/test_paid_budget.py`, pricing, concurrency/crash suites. Expected passing, no network.
 - [ ] **Step5 Commit:** `feat(voice): reserve controlled Live exposure through shared governor`.
 
-### Task3: Public Google Live transport and LiveKit stream/tool protocol
+### Task 3: Public Google Live transport and LiveKit stream/tool protocol
 
 **Files:** Create `voice/gemini_live_{model,session,events}.py`, `tests/gemini_live/{test_public_transport,test_events,test_tools,test_activity}.py`; extend only public forwarding in `gemini_transport.py`.
 
@@ -75,7 +75,7 @@
 - [ ] **Step4 GREEN:** `PY -m pytest -o addopts= tests/gemini_live tests/gemini_fallback/test_live_context.py tests/gemini_fallback/test_live_tool_replay.py -q`. Expected actual public event/AgentSession integration passes, fake network only.
 - [ ] **Step5 Commit:** `feat(voice): add admitted public Gemini Live transport adapter`.
 
-### Task4: Wire normal production failover and safe actual-demand Free recovery
+### Task 4: Wire normal production failover and safe actual-demand Free recovery
 
 **Files:** Modify `voice/{gemini_handoff,livekit_session,production_runtime,runtime}.py`, status if required; `tests/gemini_live/{test_production,test_handoff,test_recovery}.py`.
 
@@ -87,7 +87,7 @@
 - [ ] **Step4 GREEN:** Tasks1-4 plus original voice/production/learning/context/resilience/TTS/ChatGPT tests. Expected no duplicate observer/tool/action and original Free regressions pass.
 - [ ] **Step5 Commit:** `feat(runtime): enable controlled Paid voice handoff on eligible quota pressure`.
 
-### Task5: Adversarial acceptance, performance evidence and one independent review
+### Task 5: Adversarial acceptance, performance evidence and one independent review
 
 **Files:** Create `tests/gemini_live/{test_boundaries,test_crash,test_agent_session}.py`; product changes only for reproduced findings. Review scope begins atbbaa99d4, consumes prior structured-candidate evidence.
 
@@ -97,7 +97,7 @@
 - [ ] **Step4 Full GREEN:** isolated full repository pytest, Ruff check/format and diff whitespace. Expected passing actual counts/skips. Do not claim real provider quality/latency/ASR correctness or funding readiness from these tests.
 - [ ] **Step5 Commit:** `test(voice): verify controlled fallback concurrency privacy and action safety`.
 
-### Task6: Report, exact-head hosted checks and whole-app owner acceptance handoff
+### Task 6: Report, exact-head hosted checks and whole-app owner acceptance handoff
 
 **Files:** Create `docs/research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md`; update previous candidate report/entrypoints/plan status around actual delivered/unsupported behavior.
 
