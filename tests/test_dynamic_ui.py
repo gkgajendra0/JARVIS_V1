@@ -131,7 +131,6 @@ def test_event_overflow_signals_fresh_snapshot_needed() -> None:
         hub.events_after(-1)
 
 
-
 def test_ui_renders_real_diagnostic_feeds_without_frames_or_secrets() -> None:
     hub = UIEventHub()
     hub.set_runtime_connected(True)
@@ -568,7 +567,6 @@ def test_live_runtime_research_and_diagnostics_browser_projection(ui_http) -> No
             assert not errors, errors
         finally:
             browser.close()
-
 
 def test_ui_responsive_keyboard_and_projection_geometry(ui_http) -> None:
     """UI-only acceptance over laptop and phone viewports, with no runtime actions."""
