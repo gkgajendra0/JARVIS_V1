@@ -139,6 +139,38 @@ def attach_diagnostics_projection(
         hub.attach_health_provider(health_status)
 
 
+def observe_capability_result(result: object) -> None:
+    """Show only capability class/status; never action arguments or output."""
+    hub = active_ui_hub()
+    if hub is None:
+        return
+    raw_status = getattr(getattr(result, "status", None), "value", "")
+    if raw_status not in {"succeeded", "partial", "failed", "denied", "invalid"}:
+        return
+    key = getattr(result, "capability_key", "")
+    domain = key.split(":", 1)[0] if isinstance(key, str) else "capability"
+    if domain not in {
+        "windows", "browser", "files", "visual", "device",
+        "memory", "self_awareness", "system", "local",
+    }:
+        domain = "capability"
+    try:
+        hub.show_panel(
+            panel_id="action.latest",
+            panel_type="alert" if raw_status in {"failed", "denied"} else "info",
+            title="Recent Jarvis action",
+            summary=(
+                f"Governed {domain} operation completed: {raw_status}. "
+                "Action arguments, output and private details are not shown."
+            ),
+            source="runtime",
+            priority=2 if raw_status in {"failed", "denied"} else 1,
+            ttl_seconds=120,
+        )
+    except (TypeError, ValueError):
+        pass
+
+
 def observe_research_result(payload: dict[str, object]) -> None:
     hub = active_ui_hub()
     if hub is None:
