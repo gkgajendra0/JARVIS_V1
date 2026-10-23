@@ -159,6 +159,19 @@ The browser is an observation and panel-selection surface, **not** a text
 command channel to the Jarvis AI. For actual actions, use normal governed
 Jarvis voice/tools. A missing UI must not disrupt voice or Work.
 
+Now connected (when enabled in the actual voice process): lifecycle state,
+canonical Work status, sanitized vision-camera diagnostics, Self Model component
+health, completed real-web research source links and governed capability
+outcomes. These are **observation-only** channels: camera video, private
+documents, personal memory and browser-origin execution are NOT enabled.
+
+For the actual owner's Windows live acceptance sequence (including how to
+avoid colliding with ongoing Gemini-fallback development), see the
+[live UI acceptance runbook](docs/reference/JARVIS_DYNAMIC_UI_LIVE_ACCEPTANCE_2026-10-23.md).
+The animated central orb now projects outward into left/right holograms with
+energy beams, reversible collapse, a radial panel selector, and Cinematic /
+Balanced / Eco performance settings.
+
 See [owner requirements and phased UI acceptance](docs/reference/JARVIS_DYNAMIC_CONTEXT_UI_REQUIREMENTS_2026-10-23.md).
 Real Windows visual/performance acceptance and source-grounded topic-specific
 panel integration are further work; green CI is not an owner-machine pass.
