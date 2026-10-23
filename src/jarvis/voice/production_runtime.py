@@ -386,6 +386,7 @@ def build_production_voice_runtime(
         if result_observer is not None:
             result_observer(result)
         observe_capability_result(result)
+
     package_stack = None
     try:
         active_release = load_active_release_for_startup()
