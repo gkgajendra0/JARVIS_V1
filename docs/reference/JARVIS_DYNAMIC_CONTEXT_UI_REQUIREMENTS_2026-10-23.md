@@ -105,3 +105,32 @@ Acceptance criteria:
 ## Non-goals / prohibitions
 
 Not a replacement for the voice brain, Global Brain Router, capability registry, permission system or memory. Not a proof of automatic personal intelligence, scheduled automation, smart-home/calendar integrations, unrestricted shell access, and not a reason to permanently occupy several gigabytes of VRAM.
+
+
+## Owner visual-direction correction — 2026-10-23 (UI-first)
+
+The owner reviewed the first real browser preview and **rejected the lateral dashboard-like composition** where the orb shrinks and moves left and ordinary cards appear to its right. That composition is superseded. The correct visual contract is:
+
+- **Orb-first center of gravity:** at desktop/ultrawide widths the orb's horizontal center must remain within 12 CSS px of the workspace center before and after projecting panels. The orb is never replaced by a card grid.
+- **Materialization from the orb itself:** every new contextual panel originates visibly at the orb center as a bright point, extends into a narrow energy line, unfolds a holographic frame, then resolves its content with a glow/scan pass. Dismissals reverse toward that same origin. Pinned panels remain while other topics change.
+- **Spatial arrangement:** one primary panel projects to the right; a second to the left, balanced around the central orb. Up to four pinned/priority panels may be displayed without becoming a standing dashboard. On narrow screens use a centered orb above a vertically scrollable panel stack rather than overflow.
+- **Connected energy trails:** dynamically measured/positioned paths link the outer orb radius to the projected panel edges; they animate subtly rather than cluttering the content. Paths update on resize and do not pretend to represent network activity.
+- **Interactive orb:** clicking/keyboard activation reveals optional radial quick controls for local visual presentation. These are not privileged execution tools or a second conversation brain.
+- **Content-first presentation:** demo visuals include graphical structure, telemetry shapes, activity bands, and believable spatial layering. Every invented preview value remains explicitly marked SAMPLE / DEMO / NOT LIVE.
+- **Frame-time awareness:** Cinematic/Balanced/Eco visual quality settings; `prefers-reduced-motion` disables projection travel and repeating decorative motion. Hidden tabs must not continuously redraw an expensive effect. Preview must not claim a real microphone waveform unless actual audio amplitude is supplied by an authorized adapter.
+- **One coordinated owner preview at the end:** do not require the owner to reload/test every small commit. CI captures ambient and projected screenshots at 3440×1440 and 1920×1080 for visual review before final Windows-owner acceptance.
+
+### UI-only freeze / explicit sequencing
+
+The **current development priority is visual and interaction design only**: orb, spatial composition, animations, transitions, keyboard navigation, pin/dismiss lifecycle, adaptive sizes, accessibility and performance. Do not expand camera streaming, private-memory display, hands execution, personal learning, provider failover or autonomous orchestration in this workstream. Existing bounded opt-in adapters in the phase-1 branch remain isolated and must not silently activate. Full live Jarvis integration is a **separate phase after owner acceptance of UI quality**.
+
+### Visual acceptance checkpoints
+
+1. At 3440×1440 and 1920×1080, ambient scene has no large panel and the orb is horizontally centered; this stays true after opening two panels.
+2. A fresh UI panel creates an orb-origin animation and connected beam, never a direct right-column pop-in.
+3. Removing an unpinned panel retracts it; pin/unpin retains expected state and a change of topic does not erase pinned content.
+4. The radial orb palette is keyboard and mouse accessible and never executes a real capability action.
+5. On mobile/narrow width the presentation remains readable and scrollable, with no fullscreen overflow or controls obstructed.
+6. Reduced-motion and Eco modes omit elaborate transitions, while all semantic content remains available.
+7. Browser errors, failed network updates and reconnects leave Jarvis core unaffected; sample data remains visibly labeled.
+8. Complete automated/UI smoke and GitHub checks, then exactly one owner-machine visual acceptance session before reopening deeper integration.
