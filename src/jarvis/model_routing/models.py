@@ -239,6 +239,7 @@ class ModelTarget:
     credential_ref: str | None = None
     cost_profile: CostProfile | None = None
     enabled: bool = True
+    pricing_ref: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -328,6 +329,12 @@ class ModelTarget:
             "credential_ref",
             _optional_text(self.credential_ref),
         )
+        if self.pricing_ref is not None and (
+            not isinstance(self.pricing_ref, str)
+            or len(self.pricing_ref) != 64
+            or any(c not in "0123456789abcdef" for c in self.pricing_ref)
+        ):
+            raise ValueError("pricing_ref must identify an immutable pricing snapshot")
         if self.cost_profile is not None and not isinstance(
             self.cost_profile,
             CostProfile,

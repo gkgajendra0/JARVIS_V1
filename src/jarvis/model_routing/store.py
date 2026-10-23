@@ -394,6 +394,23 @@ class ModelRoutingStore:
                     FOREIGN KEY(work_id) REFERENCES work_items(work_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS model_routing_pricing_snapshots (
+                    pricing_ref TEXT PRIMARY KEY,
+                    pricing_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_work_invocation_claims (
+                    attempt_id TEXT PRIMARY KEY,
+                    decision_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    binding_digest TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_routing_decisions(decision_id)
+                );
+                CREATE TABLE IF NOT EXISTS model_work_inference_results (
+                    decision_id TEXT PRIMARY KEY,
+                    binding_digest TEXT NOT NULL,
+                    result_json TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_routing_decisions(decision_id)
+                );
                 CREATE TABLE IF NOT EXISTS model_routing_registry_snapshots (
                     registry_digest TEXT PRIMARY KEY,
                     snapshot_json TEXT NOT NULL
@@ -1208,6 +1225,97 @@ class ModelRoutingStore:
                 self._work_store.decode_extension_json(row["decision_json"])
             ),
         )
+
+    def save_pricing_snapshot(self, pricing):
+        payload = pricing.to_payload()
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        ref = hashlib.sha256(canonical.encode()).hexdigest()
+        with self._work_store.extension_transaction() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO model_routing_pricing_snapshots VALUES (?,?)",
+                (ref, self._work_store.encode_extension_json(payload)),
+            )
+        return ref
+
+    def get_pricing_snapshot(self, pricing_ref):
+        from jarvis.model_routing.pricing import PricingSnapshot
+
+        ref = _sha256(pricing_ref, field="pricing_ref")
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT pricing_json FROM model_routing_pricing_snapshots WHERE pricing_ref=?",
+                (ref,),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._work_store.decode_extension_json(row["pricing_json"])
+        if (
+            hashlib.sha256(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            != ref
+        ):
+            raise RoutingStoreError("Stored pricing snapshot binding mismatch")
+        return PricingSnapshot.from_payload(payload)
+
+    def claim_work_invocation(
+        self, *, attempt_id, decision_id, target_id, binding_digest
+    ):
+        digest = _sha256(binding_digest, field="binding_digest")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            old = connection.execute(
+                "SELECT * FROM model_work_invocation_claims WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+            if old is not None:
+                if (old["decision_id"], old["target_id"], old["binding_digest"]) != (
+                    decision_id,
+                    target_id,
+                    digest,
+                ):
+                    raise RoutingStoreError("Work invocation binding changed")
+                return False
+            connection.execute(
+                "INSERT INTO model_work_invocation_claims VALUES (?,?,?,?)",
+                (attempt_id, decision_id, target_id, digest),
+            )
+        return True
+
+    def save_work_inference_result(self, *, decision_id, binding_digest, result):
+        digest = _sha256(binding_digest, field="binding_digest")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            old = connection.execute(
+                "SELECT * FROM model_work_inference_results WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+            if old is not None:
+                if (
+                    old["binding_digest"] != digest
+                    or self._work_store.decode_extension_json(old["result_json"])
+                    != result
+                ):
+                    raise RoutingStoreError(
+                        "Accepted Work inference result is immutable"
+                    )
+                return
+            connection.execute(
+                "INSERT INTO model_work_inference_results VALUES (?,?,?)",
+                (decision_id, digest, self._work_store.encode_extension_json(result)),
+            )
+
+    def get_work_inference_result(self, *, decision_id, binding_digest):
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_work_inference_results WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row["binding_digest"] != binding_digest:
+            raise RoutingStoreError("Accepted Work inference payload binding changed")
+        return self._work_store.decode_extension_json(row["result_json"])
 
     def claim_scoped_invocation(self, *, decision_id, binding_digest):
         digest = _sha256(binding_digest, field="binding_digest")

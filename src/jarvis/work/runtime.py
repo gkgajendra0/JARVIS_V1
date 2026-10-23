@@ -119,6 +119,7 @@ from jarvis.model_routing.router import (
     ModelRouter,
     build_default_work_targets,
 )
+from jarvis.model_routing.runtime import RoutingRuntime
 from jarvis.model_routing.store import ModelRoutingStore
 from jarvis.model_routing.strategy import EngineeringStageStrategy
 from jarvis.promotion.release import DeploymentMetadataStore
@@ -546,16 +547,25 @@ def build_work_runtime(
     promotion_runtime_config: PromotionRuntimeConfig | None = None,
     capability_catalog_refresher: Callable[[], object] | None = None,
     autonomy_periodic_reconciler: object | None = None,
+    routing_runtime: RoutingRuntime | None = None,
 ) -> WorkRuntime:
     """Build one durable work runtime around the configured JARVIS brain provider."""
 
     loop = event_loop or asyncio.get_running_loop()
-    resolved_store_path = Path(store_path or default_work_store_path())
-    payload_codec = build_default_work_payload_codec(resolved_store_path)
-    store = SQLiteWorkStore(
-        resolved_store_path,
-        payload_codec=payload_codec,
-    )
+    if routing_runtime is None:
+        resolved_store_path = Path(store_path or default_work_store_path())
+        payload_codec = build_default_work_payload_codec(resolved_store_path)
+        store = SQLiteWorkStore(resolved_store_path, payload_codec=payload_codec)
+    else:
+        store = routing_runtime.work_store
+        resolved_store_path = store.path
+        if (
+            store_path is not None
+            and Path(store_path).expanduser().resolve() != store.path
+        ):
+            raise ValueError(
+                "Shared routing and Work must use the same canonical store"
+            )
     store.protect_existing_payloads()
     change_store = ChangeStore(
         store,
@@ -583,44 +593,55 @@ def build_work_runtime(
     acquisition_work_context = AcquisitionWorkContextResolver(change_store)
     acquisition_discovery = default_discovery_broker()
 
-    chatgpt_plan_session = ChatGPTPlanSessionManager() if chatgpt_plan_enabled else None
-    adapter_registry = build_default_model_adapter_registry(
-        chatgpt_plan_session_manager=chatgpt_plan_session,
-    )
-    work_targets = build_default_work_targets(
-        configured_provider=provider,
-        configured_model=model,
-        adapter_registry=adapter_registry,
-        chatgpt_plan_enabled=chatgpt_plan_enabled,
-        chatgpt_plan_model=chatgpt_plan_model,
-    )
-    routing_store = ModelRoutingStore(store)
+    if routing_runtime is None:
+        chatgpt_plan_session = (
+            ChatGPTPlanSessionManager() if chatgpt_plan_enabled else None
+        )
+        adapter_registry = build_default_model_adapter_registry(
+            chatgpt_plan_session_manager=chatgpt_plan_session,
+        )
+        work_targets = build_default_work_targets(
+            configured_provider=provider,
+            configured_model=model,
+            adapter_registry=adapter_registry,
+            chatgpt_plan_enabled=chatgpt_plan_enabled,
+            chatgpt_plan_model=chatgpt_plan_model,
+        )
+        routing_store = ModelRoutingStore(store)
+        strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
+
+        def _credential_available(target) -> bool:
+            if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
+                return bool(
+                    chatgpt_plan_session is not None
+                    and chatgpt_plan_session.is_connected()
+                )
+            try:
+                return provider_api_key(target.provider_id) is not None
+            except (KeyError, TypeError, ValueError):
+                return False
+
+        model_router = ModelRouter(
+            target_registry=work_targets.registry,
+            adapter_registry=adapter_registry,
+            strategy_registry=strategy_registry,
+            routing_store=routing_store,
+            eligibility_policy=EligibilityPolicy(),
+            credential_available=_credential_available,
+        )
+        model_invoker = ModelInvoker(adapter_registry)
+        primary_target_id = work_targets.primary_target_id
+    else:
+        routing_store = routing_runtime.store
+        model_router = routing_runtime.router
+        model_invoker = routing_runtime.invoker
+        primary_target_id = routing_runtime.primary_target_id
     brain_route_store = BrainRouteStore(store)
     provider_cost_store = ProviderCostEventStore(store)
-    strategy_registry = RoutingStrategyRegistry((EngineeringStageStrategy(),))
-
-    def _credential_available(target) -> bool:
-        if target.provider_id == CHATGPT_PLAN_PROVIDER_ID:
-            return bool(
-                chatgpt_plan_session is not None and chatgpt_plan_session.is_connected()
-            )
-        try:
-            return provider_api_key(target.provider_id) is not None
-        except (KeyError, TypeError, ValueError):
-            return False
-
-    model_router = ModelRouter(
-        target_registry=work_targets.registry,
-        adapter_registry=adapter_registry,
-        strategy_registry=strategy_registry,
-        routing_store=routing_store,
-        eligibility_policy=EligibilityPolicy(),
-        credential_available=_credential_available,
-    )
     model_reasoner = RoutedWorkReasoner(
         router=model_router,
-        invoker=ModelInvoker(adapter_registry),
-        primary_target_id=work_targets.primary_target_id,
+        invoker=model_invoker,
+        primary_target_id=primary_target_id,
     )
     reasoner = GlobalBrainRouterReasoner(
         model_reasoner,

@@ -283,6 +283,8 @@ class ModelTargetRegistry:
                     ),
                 }
             )
+            if target.pricing_ref is not None:
+                payload[-1]["pricing_ref"] = target.pricing_ref
             if cost_profile is not None and cost_profile.usage_rates_usd_per_million:
                 payload[-1]["cost_profile"]["usage_rates_usd_per_million"] = list(
                     cost_profile.usage_rates_usd_per_million

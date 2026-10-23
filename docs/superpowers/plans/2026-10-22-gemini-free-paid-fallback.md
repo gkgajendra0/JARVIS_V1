@@ -104,11 +104,11 @@ Existing `ai_provider.py`/`config.py` own credentials/config. Existing `model_ro
 
 **Interfaces:** `RoutingRuntime` is a composition holder for existing router/store/invoker/budget/health, not another router. `build_routing_runtime(*, work_store: SQLiteWorkStore, provider, model, config: GeminiFallbackConfig, chatgpt_plan_session=None) -> RoutingRuntime`. Extend `build_work_runtime(..., routing_runtime: RoutingRuntime|None=None)` compatibly; production injects shared services. Keep GlobalBrainRouterReasoner/RoutedWorkReasoner. v1 requests retain original registry/policy; new opt-in decisions pin v2 graph/prices once.
 
-- [ ] **Step1 — Failing tests:** deterministic/ChatGPT-plan still wins. v2 Free429->Paid persists lineage, restarts same WorkItem and does not duplicate request/attempt/reservation/action. Crash after dispatch before result stays uncertain/blocked rather than reissued. v1 replay works and never silently acquires Paid edge.
-- [ ] **Step2 — RED:** run Work suites; require missing wiring/compatibility behavior.
-- [ ] **Step3 — Inject shared services; preserve execution ownership.** Keep WorkStep actions/checkpoints/Authority permits. Change inference/attempt/health/cost only. Preserve existing OpenAI/local configuration and privacy. Reuse approved historical pools/snapshots rather than resetting lineage on current-registry mismatch.
-- [ ] **Step4 — GREEN:** new Work suites, global-brain, model-routing acceptance/fallback/status/store and existing Work recovery tests; no real Google/DBOS calls in synthetic fixtures.
-- [ ] **Step5 — Commit:** `feat(work): preserve durable lineage through Gemini fallback`.
+- [x] **Step1 — Failing tests:** deterministic/ChatGPT-plan still wins. v2 Free429->Paid persists lineage, restarts same WorkItem and does not duplicate request/attempt/reservation/action. Crash after dispatch before result stays uncertain/blocked rather than reissued. v1 replay works and never silently acquires Paid edge.
+- [x] **Step2 — RED:** run Work suites; require missing wiring/compatibility behavior.
+- [x] **Step3 — Inject shared services; preserve execution ownership.** Keep WorkStep actions/checkpoints/Authority permits. Change inference/attempt/health/cost only. Preserve existing OpenAI/local configuration and privacy. Reuse approved historical pools/snapshots rather than resetting lineage on current-registry mismatch.
+- [x] **Step4 — GREEN:** new Work suites, global-brain, model-routing acceptance/fallback/status/store and existing Work recovery tests; no real Google/DBOS calls in synthetic fixtures.
+- [x] **Step5 — Commit:** `feat(work): preserve durable lineage through Gemini fallback`.
 
 ### Task 7: Hands and memory inference integration
 

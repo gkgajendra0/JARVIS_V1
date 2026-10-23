@@ -355,11 +355,14 @@ class ModelInvoker:
         if not isinstance(adapter, StructuredOutputModelAdapter):
             raise PaidBudgetDenied("Adapter cannot attest bounded Paid output")
         bound = exposure.usage_bounds["output_tokens"]
+        pricing = self.pricing(target) if callable(self.pricing) else self.pricing
+        if pricing is None:
+            raise PaidBudgetDenied("Reviewed price for selected target unavailable")
         reservation = self.paid_budget.reserve(
             invocation_id=request_context.attempt_id,
             target=target,
             exposure=exposure,
-            pricing=self.pricing,
+            pricing=pricing,
         )
         try:
             adapter._client_for(target, max_output_tokens=bound)
