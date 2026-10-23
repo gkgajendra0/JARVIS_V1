@@ -48,8 +48,9 @@ PI-3A actual-model/spoken acceptance remain pending/deferred, not passed here.
 
 Only genuine Free Gemini quota/rate-limit pressure creates the new Paid edge.
 HTTP503/timeout/unknown/auth/request/model errors do not. Paid is visited at most
-once per logical request; Free->Paid has at most2 funded target visits, configured
-plan->Free->Paid at most3. Pinned Interactions resource retries are explicitly
+once per logical request; Free->Paid has at most2 target visits, configured
+plan->Free->Paid at most3. A transient Free failure may earn one additional,
+recorded same-target retry under existing health policy, never an extra Paid visit. Pinned Interactions resource retries are explicitly
 turned off; the SDK normalized constructor attempts=0 back to retries otherwise.
 Paid401/typed402 disable the Paid credential scope, independently of Free/TTS.
 There is no automatic balance reload or hidden credential/account rotation.
@@ -57,8 +58,12 @@ There is no automatic balance reload or hidden credential/account rotation.
 Free pressure is durable and target-specific. Unknown limits use bounded60s
 exponential cooldown, capped900s. Trusted Retry-After can exceed that cap; verified
 per-day quota uses next Pacific midnight including DST. Ambiguous text is not
-interpreted as a daily reset. A shared CAS half-open lease permits one real demand
-attempt; no background health generation. Success of actual inference is recovery
+interpreted as a daily reset. Later pressure cannot shorten an existing trusted
+cooldown. A shared CAS half-open lease permits one real demand attempt. Once a
+call starts, PID plus process-creation identity fences it beyond claim expiry;
+a dead owner is reclaimable after expiry, and cancellation releases ownership.
+A hung/inaccessible process conservatively keeps the recovery slot occupied.
+There is no background health generation. Success of actual inference is recovery
 proof. Failed, completed or uncertain actions are not automatically replayed.
 
 ## Spending safeguards and honest unknowns
@@ -81,8 +86,17 @@ Observed overruns are recorded without clipping and block new Paid admission.
 
 Accepted v2 Work inference results are codec-protected in the existing store and
 reused on restart without another provider call, including a new price/FX config.
-Unknown in-flight outcomes and repeated scoped identities fail closed. Scoped
-memory/Hands results are not cached as another personal payload store.
+Unknown in-flight outcomes and repeated scoped identities fail closed. Unknown
+v2 Work claims/exposure block the whole WorkItem across scheduler blocker/version
+changes, so bookkeeping cannot buy a duplicate Paid request. Scoped memory/Hands
+results are not cached as another personal payload store.
+
+Routed semantic release re-reads the same exact current eligible assertion before
+every Free/Paid dispatch and after the result. Forget, correction or conflicting
+current evidence prevents release. The actual recall tool also binds these checks
+to the original accepted conversation/utterance/activity epoch; session close or
+a new request cannot release its old fact to a fallback. This grants no new
+Authority or private-session consent.
 
 Local status reports key-presence booleans (not validity), effective mode,
 target cooldowns, price/FX versions and known/reserved/unknown exposure. Preflight
@@ -115,8 +129,9 @@ Paid Live modality accounting, real Paid handoff and production Free-return from
 Paid Live are not activated or qualified. Fake-transport recovery tests do not
 prove those production features.
 
-Next owner-dependent decision: approve a separate written design for a controlled
-Live transport adapter using supported Google/LiveKit interfaces (or a reviewed
+Next owner-dependent decision: review the [controlled Paid Live transport design
+proposal](../superpowers/specs/2026-10-23-gemini-paid-live-controlled-transport-design.md)
+(DRAFT, not approved/implemented) for a controlled Live transport adapter using supported Google/LiveKit interfaces (or a reviewed
 upstream hook/version), covering pre-connect and per-turn admission plus existing
 full-duplex/private/tool behavior. Retain this denial until that design is approved
 and implemented. Increasing spend or bypassing the gate is not a fix.
@@ -147,8 +162,15 @@ executed pinned-SDK characterization tests, not assumptions about latest release
 - Actual Hands orchestration with fake OS executor writes once for confirmed and
   unconfirmed outcomes, including subsequent quota/Paid inference. Actual SDK tool
   execution counter remains1 across the fake handoff. No real clipboard/action.
-- Full-suite, final reviewer, exact-head hosted CI and PR references: PENDING final
-  task evidence below; do not infer acceptance from the affected subset count.
+- One fresh independent review of211c3ade..acd33067 found six code defects;
+  all entered one repair pass with observed failing tests first. Original-session
+  release and cancellation cleanup regressions extended those same findings.
+  No second review or implementation delegation was used. No deferred minors.
+  See [review and verification evidence](GEMINI_FREE_PAID_FALLBACK_REVIEW_2026-10-23.md).
+- Full-suite checkpoint before the final original-session guard:3069passed,
+  8skipped,222.65s. 3,071 passed, 8 skipped in293.63s (4m53s); full repository pytest, isolated machine profile. Ruff check passed,1,043 files formatted, git diff --check passed..
+- Exact-head hosted CI and draft PR: Draft PR/current-head hosted check links will be recorded after creation; no hosted pass claimed at this checkpoint. These remain
+  separate from real Paid provider/whole-app acceptance, which was not run.
 - Performance: no active streaming budget/frame path exists, so there is no valid
   Paid Live overhead/latency measurement. Fake handoff readiness is bounded10s,
   and may drop unaccepted transition audio. No real provider latency was measured.
@@ -258,18 +280,36 @@ paid acceptance or merge are implied by this record.
 
 - Task11: Ruling: represent disconnected ChatGPT-plan session as an unavailable runtime target-health fact — credential-free targets intentionally bypass API-key presence, so a False connectivity callback alone was ignored; existing health policy handles it without registry/policy digest changes — cost if wrong: plan is excluded while disconnected; owner must reconnect it, and durable decisions retain their original provenance. Observed fresh-request connectivity drift RED before this fix.
 
+- Final: Ruling: retain unconditional Paid Live denial under approved Task9 unsupported-SDK branch — safe public transport accounting is not implemented; fake handoff cannot certify funded voice — cost if wrong: requested automatic Paid voice remains unavailable and full feature cannot be claimed complete.
+
+- Final: Ruling: account/project separation, funding, keys, actual price/FX and spoken/invoice acceptance remain unverified — user has not authorized Paid calls or account changes — cost if wrong: owner acceptance may reveal credential, funding or production pricing problems; default OFF retained.
+
+- Final: Ruling: controlled-transport amendment is a separate unapproved design proposal outside reviewed implementation — do not implement new transport under an accounting exception — cost if wrong: full Paid Live delivery waits for a supported reviewed transport decision.
+
+- Final: Ruling: in-flight Free recovery owns a durable process PID plus creation-time fence beyond provisional lease expiry — a live pending call cannot be stolen on clock advance; dead owner becomes eligible after TTL, old version/health facts remain fenced — cost if wrong: an inaccessible or hung process keeps Free recovery occupied until cancellation/exit; other eligible demand can use bounded Paid. No extra API probes.
+
+- Final: Ruling: unresolved v2 inference claims and unfinalized Paid exposure block new dispatch for the whole WorkItem across scheduler bookkeeping — a new blocker step is not a new authorized operation — cost if wrong: ambiguous Work stalls for reconciliation rather than paying or reasoning twice; legacy decision digests remain unchanged.
+
 ## Deferred minors
 
-Final independent reviewer not yet returned; no deferred minors are asserted yet.
+None. The independent reviewer reported no Minor findings.
 
-## Changed files at implementation checkpoint
+## Changed files in this dependent candidate
 
-Generated from the actual dependency diff. This list includes tests/docs and SDK
-fake-shape fixes needed to verify retries, not external billing changes.
+Generated from the actual dependency diff plus this candidate's new files.
+Includes source, tests and documentation; no billing/account/machine changes.
 
+- `README.md`
+- `docs/CURRENT_ARCHITECTURE.md`
 - `docs/CURRENT_PLAN.md`
+- `docs/PERSONAL_INTELLIGENCE_ENABLEMENT.md`
+- `docs/PROJECT_STATE.md`
+- `docs/README.md`
+- `docs/research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md`
+- `docs/research/GEMINI_FREE_PAID_FALLBACK_REVIEW_2026-10-23.md`
 - `docs/superpowers/plans/2026-10-22-gemini-free-paid-fallback.md`
 - `docs/superpowers/specs/2026-10-22-gemini-free-paid-fallback-design.md`
+- `docs/superpowers/specs/2026-10-23-gemini-paid-live-controlled-transport-design.md`
 - `pyproject.toml`
 - `src/jarvis/ai_provider.py`
 - `src/jarvis/capabilities/runtime.py`
@@ -279,6 +319,8 @@ fake-shape fixes needed to verify retries, not external billing changes.
 - `src/jarvis/memory/extractors.py`
 - `src/jarvis/memory/learning_extractors.py`
 - `src/jarvis/memory/learning_runtime.py`
+- `src/jarvis/memory/provider_verified_query.py`
+- `src/jarvis/memory/query_coordinator.py`
 - `src/jarvis/memory/query_interpreters.py`
 - `src/jarvis/memory/release_guard.py`
 - `src/jarvis/model_routing/budget.py`
@@ -303,6 +345,7 @@ fake-shape fixes needed to verify retries, not external billing changes.
 - `src/jarvis/voice/gemini_handoff.py`
 - `src/jarvis/voice/gemini_transport.py`
 - `src/jarvis/voice/livekit_session.py`
+- `src/jarvis/voice/memory_tools.py`
 - `src/jarvis/voice/personal_context.py`
 - `src/jarvis/voice/production_runtime.py`
 - `src/jarvis/voice/provider_resilience.py`
@@ -331,6 +374,7 @@ fake-shape fixes needed to verify retries, not external billing changes.
 - `tests/gemini_fallback/test_production_composition.py`
 - `tests/gemini_fallback/test_replay_compatibility.py`
 - `tests/gemini_fallback/test_retry_boundaries.py`
+- `tests/gemini_fallback/test_review_repairs.py`
 - `tests/gemini_fallback/test_scoped_routing.py`
 - `tests/gemini_fallback/test_status.py`
 - `tests/gemini_fallback/test_system_boundaries.py`

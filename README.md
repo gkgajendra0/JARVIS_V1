@@ -5,7 +5,8 @@ fallback shares the existing router and cumulative INR350 governor; default OFF.
 Actual Paid Live voice is unavailable because the pinned public SDK cannot prove
 pre-send reconnect/generation spending bounds. This is a PARTIAL candidate, not
 completed production voice failover. No paid calls, saved activation, owner-memory
-changes or merge. See [implementation, blockers and acceptance record](docs/research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md).
+changes or merge. Final review repairs and the unapproved Paid Live transport proposal
+are tracked in the report. See [implementation, blockers and acceptance record](docs/research/GEMINI_FREE_PAID_FALLBACK_IMPLEMENTATION_2026-10-22.md).
 
 **PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,858 tests / 8 skips) after all three Important review findings were repaired; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](docs/research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
 

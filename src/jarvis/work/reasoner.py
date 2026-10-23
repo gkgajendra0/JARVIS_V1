@@ -624,6 +624,15 @@ class RoutedWorkReasoner:
                     scope_kind="work",
                     scope_id=request.work.work_id,
                 )
+            if lease is not None and not self._router.routing_store.start_free_recovery(
+                lease, now_epoch=float(self._clock())
+            ):
+                self._router.routing_store.release_free_recovery(lease)
+                raise RoutingResourceBlocked(
+                    decision_id=selection.decision.decision_id,
+                    reason="Free recovery ownership changed before dispatch",
+                    retry_after_seconds=60,
+                )
             started = float(self._clock())
             new_attempts += 1
             try:
@@ -720,6 +729,10 @@ class RoutedWorkReasoner:
                         ) from None
                     raise
                 continue
+            except BaseException:
+                if lease is not None:
+                    self._router.routing_store.release_free_recovery(lease)
+                raise
 
             ended = float(self._clock())
             if not isinstance(parsed, _WorkDecisionModel):

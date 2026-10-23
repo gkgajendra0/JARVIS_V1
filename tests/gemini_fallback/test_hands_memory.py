@@ -354,7 +354,13 @@ async def test_memory_release_verifier_uses_same_governor_after_free_quota(
     guard = build_memory_release_guard(
         provider="gemini", model="gemini-budget-test", routing_runtime=runtime
     )
-    judgement = await guard.evaluate(text="What vehicle do I have?", evidence=_record())
+
+    async def current():
+        return None
+
+    judgement = await guard.evaluate_current(
+        text="What vehicle do I have?", evidence=_record(), before_dispatch=current
+    )
     assert judgement.allows_release
     assert guard._client.runtime is runtime
     assert [call[0] for call in env[3]] == [

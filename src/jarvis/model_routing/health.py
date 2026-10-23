@@ -315,7 +315,7 @@ def apply_gemini_pressure(record, failure, *, config, now_epoch):
     seconds = min(
         config.max_cooldown_seconds, config.cooldown_seconds * (2 ** min(count - 1, 30))
     )
-    until = now + seconds
+    until = max(now + seconds, record.cooldown_until_epoch or 0)
     if failure.retry_after_seconds is not None:
         until = max(until, now + failure.retry_after_seconds)
     if failure.quota_period == "day":

@@ -175,11 +175,14 @@ def test_nonquota_failure_does_not_send_paid(tmp_path, monkeypatch, status):
             "free-private-canary": [
                 APIError(status, {"error": {"message": "model unavailable"}})
             ]
+            * (2 if status == 503 else 1)
         },
     )
     with pytest.raises(RoutedInferenceFailure):
         invoke(env)
-    assert [key for key, _, _ in env[3]] == ["free-private-canary"]
+    assert [key for key, _, _ in env[3]] == ["free-private-canary"] * (
+        2 if status == 503 else 1
+    )
 
 
 @pytest.mark.parametrize("status", [401, 402, 429, 503])

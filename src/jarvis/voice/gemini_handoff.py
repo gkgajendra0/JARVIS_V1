@@ -410,6 +410,11 @@ class GeminiLiveHandoff:
             )
             if lease is None:
                 return False
+            if not self.runtime.store.start_free_recovery(
+                lease, now_epoch=float(self.runtime.clock())
+            ):
+                self.runtime.store.release_free_recovery(lease)
+                return False
             self._recovery_lease = lease
             self._paid_visits = 0
             if not await self._switch(selection.target, continue_request=False):

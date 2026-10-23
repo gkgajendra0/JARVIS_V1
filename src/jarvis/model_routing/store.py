@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 from dataclasses import asdict, dataclass
+
+import psutil
 
 from jarvis.model_routing.eligibility import TargetHealthEligibility
 from jarvis.model_routing.health import (
@@ -377,6 +380,12 @@ class ModelRoutingStore:
                     version INTEGER NOT NULL,
                     health_version INTEGER NOT NULL,
                     active INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS gemini_free_recovery_owners (
+                    target_id TEXT PRIMARY KEY,
+                    lease_version INTEGER NOT NULL,
+                    pid INTEGER NOT NULL,
+                    process_started REAL NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS model_credential_blocks (
                     credential_ref TEXT PRIMARY KEY,
@@ -1046,9 +1055,16 @@ class ModelRoutingStore:
             if (
                 previous is not None
                 and previous["active"]
-                and previous["expires_at_epoch"] > now
+                and (
+                    previous["expires_at_epoch"] > now
+                    or _recovery_owner_alive(connection, target_id, previous["version"])
+                )
             ):
                 return None
+            connection.execute(
+                "DELETE FROM gemini_free_recovery_owners WHERE target_id=?",
+                (target_id,),
+            )
             lease = RecoveryLease(
                 target_id,
                 operation_id,
@@ -1067,6 +1083,42 @@ class ModelRoutingStore:
             )
         return lease
 
+    def start_free_recovery(self, lease: RecoveryLease, *, now_epoch) -> bool:
+        """Fence an actual pending call by process identity, beyond a claim's TTL."""
+        now = _epoch(now_epoch, field="now_epoch")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM gemini_free_recovery_leases WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.version,
+                    lease.expires_at_epoch,
+                ),
+            ).fetchone()
+            health = connection.execute(
+                "SELECT version FROM model_target_health WHERE target_id=?",
+                (lease.target_id,),
+            ).fetchone()
+            if (
+                row is None
+                or now >= lease.expires_at_epoch
+                or health is None
+                or health[0] != row["health_version"]
+            ):
+                return False
+            connection.execute(
+                "INSERT INTO gemini_free_recovery_owners VALUES (?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET lease_version=excluded.lease_version,pid=excluded.pid,process_started=excluded.process_started",
+                (
+                    lease.target_id,
+                    lease.version,
+                    os.getpid(),
+                    psutil.Process().create_time(),
+                ),
+            )
+        return True
+
     def release_free_recovery(self, lease: RecoveryLease) -> bool:
         with self._work_store.extension_transaction() as connection:
             cursor = connection.execute(
@@ -1082,10 +1134,12 @@ class ModelRoutingStore:
 
     def complete_free_recovery(self, lease: RecoveryLease, *, now_epoch) -> bool:
         now = _epoch(now_epoch, field="now_epoch")
-        if now >= lease.expires_at_epoch:
-            return False
         with self._work_store.extension_transaction() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if now >= lease.expires_at_epoch and not _recovery_owner_alive(
+                connection, lease.target_id, lease.version, own_process=True
+            ):
+                return False
             row = connection.execute(
                 "SELECT * FROM gemini_free_recovery_leases WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
                 (
@@ -1286,6 +1340,36 @@ class ModelRoutingStore:
                 ):
                     raise RoutingStoreError("Work invocation binding changed")
                 return False
+            work = connection.execute(
+                "SELECT work_id FROM model_routing_decisions WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+            if work is None:
+                raise RoutingStoreError("Work invocation has no routing decision")
+            # Scheduler blocker steps/version changes must not create a fresh paid
+            # operation while the same WorkItem still has an unknown inference.
+            unresolved = connection.execute(
+                """SELECT 1 FROM model_work_invocation_claims c
+                   JOIN model_routing_decisions d ON d.decision_id=c.decision_id
+                   LEFT JOIN model_routing_attempts a ON a.attempt_id=c.attempt_id
+                   LEFT JOIN model_work_inference_results r ON r.decision_id=c.decision_id
+                   WHERE d.work_id=? AND a.attempt_id IS NULL AND r.decision_id IS NULL LIMIT 1""",
+                (work["work_id"],),
+            ).fetchone()
+            if unresolved is not None:
+                return False
+            if (
+                connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='paid_fallback_reservations'"
+                ).fetchone()
+                is not None
+                and connection.execute(
+                    "SELECT 1 FROM paid_fallback_reservations WHERE scope_kind='work' AND scope_id=? AND state NOT IN ('settled','cancelled') LIMIT 1",
+                    (work["work_id"],),
+                ).fetchone()
+                is not None
+            ):
+                return False
             connection.execute(
                 "INSERT INTO model_work_invocation_claims VALUES (?,?,?,?)",
                 (attempt_id, decision_id, target_id, digest),
@@ -1450,3 +1534,24 @@ def _write_health(connection, record) -> None:
             record.version,
         ),
     )
+
+
+def _recovery_owner_alive(connection, target_id, version, *, own_process=False):
+    row = connection.execute(
+        "SELECT * FROM gemini_free_recovery_owners WHERE target_id=? AND lease_version=?",
+        (target_id, version),
+    ).fetchone()
+    if row is None or (own_process and row["pid"] != os.getpid()):
+        return False
+    try:
+        process = psutil.Process(row["pid"])
+        return (
+            process.create_time() == row["process_started"]
+            and process.is_running()
+            and process.status() != psutil.STATUS_ZOMBIE
+        )
+    except psutil.NoSuchProcess:
+        return False
+    except psutil.AccessDenied:
+        # Uncertain liveness never authorizes an overlapping recovery call.
+        return True

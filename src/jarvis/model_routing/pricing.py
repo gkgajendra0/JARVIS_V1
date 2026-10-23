@@ -122,7 +122,15 @@ class PricingSnapshot:
 
     def rates(self):
         if self.profile.usage_rates_usd_per_million:
-            return dict(self.profile.usage_rates_usd_per_million)
+            rates = dict(self.profile.usage_rates_usd_per_million)
+            if (
+                self.service_key == "structured"
+                and not {"input_tokens", "output_tokens"} <= rates.keys()
+            ):
+                raise PricingUnavailable(
+                    "Complete structured input/output prices required"
+                )
+            return rates
         if self.service_key == "live":
             raise PricingUnavailable("Live modality prices required")
         return {

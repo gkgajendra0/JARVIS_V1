@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import time
@@ -434,6 +435,7 @@ class ModelInvoker:
             gemini_paid_fallback_allowed,
         )
         from jarvis.model_routing.health import (
+            HealthAction,
             TargetHealthRecord,
             apply_provider_failure,
         )
@@ -481,9 +483,12 @@ class ModelInvoker:
         previous_failure = None
         previous_target = None
         total_limit = min(3, decision.fallback_budget + 1)
-        for ordinal, target_id in enumerate(
-            decision.ordered_target_ids[:total_limit], 1
-        ):
+        pending = list(enumerate(decision.ordered_target_ids[:total_limit], 1))
+        ordinal = 0
+        retry_used = False
+        while pending and ordinal < total_limit + 1:
+            visit, target_id = pending.pop(0)
+            ordinal += 1
             target = registry.require(target_id)
             now = float(self._clock())
             if target.credential_ref == "JARVIS_GEMINI_PAID_API_KEY":
@@ -532,11 +537,20 @@ class ModelInvoker:
                     continue
             if before_dispatch is not None:
                 try:
-                    before_dispatch()
+                    validation = before_dispatch()
+                    if inspect.isawaitable(validation):
+                        await validation
                 except BaseException:
                     if lease is not None:
                         store.release_free_recovery(lease)
                     raise
+            if lease is not None and not store.start_free_recovery(
+                lease, now_epoch=float(self._clock())
+            ):
+                store.release_free_recovery(lease)
+                raise PaidBudgetDenied(
+                    "Free recovery ownership changed before dispatch"
+                )
             attempt_id = f"{decision.decision_id}:{ordinal}"
             context = ScopedModelInvocationContext(
                 request.scope_kind,
@@ -550,6 +564,7 @@ class ModelInvoker:
             result = None
             failure = None
             error = None
+            health_action = None
             try:
                 result = await self.invoke_structured_with_telemetry(
                     target=target,
@@ -595,6 +610,7 @@ class ModelInvoker:
                         failure,
                         now_epoch=float(self._clock()),
                     )
+                    health_action = mutation.action
                     if old is None:
                         store.create_health(mutation.record)
                     else:
@@ -612,7 +628,7 @@ class ModelInvoker:
                     started_at_epoch=started,
                     ended_at_epoch=ended,
                     kind=RoutingAttemptKind.PRIMARY
-                    if ordinal == 1
+                    if visit == 1
                     else RoutingAttemptKind.FALLBACK,
                     latency_ms=0 if result is None else result.latency_ms,
                     failure_class=(
@@ -650,6 +666,14 @@ class ModelInvoker:
                 raise error
             if target.credential_ref == "JARVIS_GEMINI_PAID_API_KEY":
                 raise RoutedInferenceFailure(failure) from None
+            if (
+                target.credential_ref == gemini_credential_ref("free")
+                and health_action is HealthAction.RETRY_SAME_TARGET
+                and not retry_used
+            ):
+                retry_used = True
+                pending.insert(0, (visit, target_id))
+                continue
             if not gemini_paid_fallback_allowed(failure, source_target=target) and not (
                 target.provider_id == "chatgpt_plan"
                 and isinstance(error, ChatGPTPlanError)
