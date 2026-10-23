@@ -191,6 +191,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
   backdrop-filter:blur(20px);
   will-change:transform,opacity,clip-path;
   contain:layout style;
+  /* Motion is owned by the orb-origin projection animator, not card-enter. */
+  animation:none;
 }
 .context-card[data-slot="0"]{right:clamp(18px,2.6vw,60px);top:calc(48% - 144px)}
 .context-card[data-slot="1"]{left:clamp(18px,2.6vw,60px);top:calc(48% - 144px)}
