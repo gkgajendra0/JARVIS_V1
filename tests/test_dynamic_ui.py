@@ -222,12 +222,19 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             assert abs(orb_midpoint - layout_midpoint) <= 12
             assert page.locator(".context-card[data-slot='0']").count() == 1
             assert page.locator(".context-card[data-slot='1']").count() == 1
-            assert page.locator("#beamLayer .projection-link").count() == 2
+            page.wait_for_function(
+                "() => document.querySelectorAll('#beamLayer .projection-link').length === 2"
+            )
             assert page.locator(".holo-telemetry").count() == 1
             assert page.locator(".holo-activity").count() == 1
             assert page.evaluate(
                 "() => document.querySelector('.context-card').getAnimations().length > 0"
             )
+            page.locator("#orbToggle").click()
+            assert page.locator("#orbToggle").get_attribute("aria-expanded") == "true"
+            assert page.locator("#radialMenu").get_attribute("aria-hidden") == "false"
+            page.keyboard.press("Escape")
+            assert page.locator("#orbToggle").get_attribute("aria-expanded") == "false"
             page.locator("#motionButton").click()
             assert page.locator("#app").get_attribute("data-quality") == "balanced"
             page.locator("#motionButton").click()
