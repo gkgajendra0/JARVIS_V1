@@ -331,7 +331,7 @@ def test_ui_responsive_keyboard_and_projection_geometry(ui_http) -> None:
                 "() => document.documentElement.scrollWidth <= innerWidth + 2"
             ), "mobile UI should never scroll horizontally"
             assert page.locator(".context-card:not(.is-closing)").count() == 2
-            for selector in ("#orbCanvas", "#visualCommand", ".rail", "#backHome"):
+            for selector in ("#orbCanvas", "#visualCommand", ".rail", ".rail-button[data-action=home]"):
                 assert page.locator(selector).is_visible()
             assert page.locator("#projectionLinks").evaluate(
                 "(node) => getComputedStyle(node).display === 'none'"
@@ -343,7 +343,7 @@ def test_ui_responsive_keyboard_and_projection_geometry(ui_http) -> None:
                     full_page=True,
                     animations="disabled",
                 )
-            page.locator("#backHome").click()
+            page.locator(".rail-button[data-action=home]").click()
             page.wait_for_function(
                 "() => document.querySelectorAll('.context-card').length === 0"
             )
