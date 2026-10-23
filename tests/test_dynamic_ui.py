@@ -229,6 +229,9 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             orb_midpoint = orb["x"] + orb["width"] / 2
             layout_midpoint = layout["x"] + layout["width"] / 2
             assert abs(orb_midpoint - layout_midpoint) <= 12
+            assert orb["width"] >= 550, "ultrawide orb must remain a focal object"
+            first_panel = page.locator(".context-card[data-slot='0']").bounding_box()
+            assert first_panel is not None and first_panel["width"] >= 700
             assert page.locator(".context-card[data-slot='0']").count() == 1
             assert page.locator(".context-card[data-slot='1']").count() == 1
             page.wait_for_function(
