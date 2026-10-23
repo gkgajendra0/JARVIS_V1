@@ -344,6 +344,7 @@ function reconcileCards(panels){
 function render() {
   const panels=currentPanels();
   const active=panels.length>0;
+  el("layout").classList.toggle("multi-projection",panels.length>2);
   if(active)el("layout").classList.add("has-stage");
   el("quietPrompt").hidden=active;
   el("stage").setAttribute("aria-hidden",String(!active && !el("cards").children.length));
