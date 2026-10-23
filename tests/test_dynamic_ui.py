@@ -286,3 +286,67 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             )
         finally:
             browser.close()
+
+
+def test_ui_responsive_keyboard_and_projection_geometry(ui_http) -> None:
+    """UI-only acceptance over laptop and phone viewports, with no runtime actions."""
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
+
+    _, url = ui_http
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as exc:  # noqa: BLE001 - optional browser
+            pytest.skip(f"Chromium unavailable on this machine: {type(exc).__name__}")
+        try:
+            page = browser.new_page(viewport={"width": 1366, "height": 768})
+            errors: list[str] = []
+            page.on("pageerror", lambda err: errors.append(str(err)))
+            page.goto(url, wait_until="domcontentloaded")
+            page.keyboard.press("Control+k")
+            assert page.locator("#visualCommand").evaluate(
+                "(node) => document.activeElement === node"
+            )
+            page.locator("#visualCommand").fill("Jarvis, show me research")
+            page.keyboard.press("Enter")
+            assert page.locator(".context-card:not(.is-closing)").count() == 1
+            page.wait_for_function(
+                "() => document.querySelectorAll('#beamLayer .projection-link').length === 1"
+            )
+            assert page.evaluate(
+                "() => document.documentElement.scrollWidth <= innerWidth + 2"
+            )
+            page.locator("#orbToggle").click()
+            assert page.locator("#orbToggle").get_attribute("aria-expanded") == "true"
+            page.locator("[data-orb-panel='work']").click()
+            assert page.locator("#orbToggle").get_attribute("aria-expanded") == "false"
+            assert page.locator(".context-card:not(.is-closing)").count() == 2
+
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.wait_for_function(
+                "() => document.querySelector('#orbCanvas').getBoundingClientRect().width > 50"
+            )
+            assert page.evaluate(
+                "() => document.documentElement.scrollWidth <= innerWidth + 2"
+            ), "mobile UI should never scroll horizontally"
+            assert page.locator(".context-card:not(.is-closing)").count() == 2
+            for selector in ("#orbCanvas", "#visualCommand", ".rail", "#backHome"):
+                assert page.locator(selector).is_visible()
+            assert page.locator("#projectionLinks").evaluate(
+                "(node) => getComputedStyle(node).display === 'none'"
+            ), "mobile stacks panel cards instead of drawing overlapping beams"
+            screenshot_dir = os.environ.get("JARVIS_UI_SCREENSHOTS")
+            if screenshot_dir:
+                page.screenshot(
+                    path=str(Path(screenshot_dir) / "projection-mobile.png"),
+                    full_page=True,
+                    animations="disabled",
+                )
+            page.locator("#backHome").click()
+            page.wait_for_function(
+                "() => document.querySelectorAll('.context-card').length === 0"
+            )
+            assert not errors, errors
+        finally:
+            browser.close()
