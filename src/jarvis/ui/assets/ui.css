@@ -858,3 +858,122 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .app-shell[data-quality="eco"] .orb-hud{
   animation:none!important;
 }
+
+
+/* Owner-screen correction: 2048x730 capture of the late cinematic preview.
+   The visual stage is a real viewport composition, not a tall scrolling webpage.
+   Fix the duplicated lower caption and reserve more height for the orb. */
+@media(min-width:741px){
+  html,body{height:100%;overflow:hidden}
+  .app-shell{
+    height:100dvh;
+    min-height:0;
+    grid-template-rows:clamp(60px,8.7vh,79px) minmax(0,1fr) clamp(72px,10vh,100px);
+  }
+  .layout,.layout.has-stage{
+    min-height:0;
+    padding:clamp(7px,1.4vh,22px) 25px clamp(7px,1.4vh,22px);
+    overflow:hidden;
+  }
+  .layout:not(.has-stage) .presence-eyebrow{
+    margin-bottom:clamp(3px,1vh,12px);
+    font-size:clamp(10px,.78vw,13px);
+    color:#8fdcff;
+  }
+  .layout:not(.has-stage) .presence-divider{
+    height:12px;
+    margin:1px auto 0;
+  }
+  .layout:not(.has-stage) .presence-label h1{
+    font-size:clamp(34px,2.5vw,43px);
+    margin:1px auto 3px;
+    letter-spacing:.41em;
+  }
+  .layout:not(.has-stage) .wave{
+    height:clamp(12px,2.4vh,24px);
+    margin:6px auto 5px;
+  }
+  .layout:not(.has-stage) .presence-label p{
+    font-size:clamp(12px,.88vw,15px);
+    color:#9ac4df;
+    margin:4px auto;
+    line-height:1.4;
+    max-width:445px;
+  }
+  .layout:not(.has-stage) .presence-footer{
+    font-size:clamp(9px,.68vw,11px);
+    letter-spacing:.16em;
+    margin:7px auto 0;
+  }
+  /* Ambient silence is already conveyed by the sentence beneath JARVIS.
+     The absolute-positioned duplicate previously overlapped its HUD footer. */
+  .quiet-prompt{display:none!important}
+  .layout:not(.has-stage)::before{
+    content:"";
+    position:absolute;
+    width:min(870px,76vw,90vh);
+    aspect-ratio:1;
+    left:50%;top:46%;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    pointer-events:none;
+    opacity:.59;
+    background:
+      repeating-conic-gradient(from 7deg,transparent 0 7deg,rgba(92,188,255,.13) 7.2deg 7.38deg,transparent 7.6deg 13deg),
+      radial-gradient(circle,transparent 49%,rgba(70,187,251,.11) 49.2%,transparent 49.5%,transparent 61%,rgba(95,114,225,.065) 61.2%,transparent 61.7%);
+    mask-image:radial-gradient(circle,transparent 31%,rgba(0,0,0,.6) 34%,black 60%,transparent 68%);
+    z-index:0;
+  }
+  .layout:not(.has-stage) .presence{z-index:5}
+  .layout:not(.has-stage) .orb-annotation{
+    font-size:clamp(10px,.8vw,12px);
+    opacity:.89;
+  }
+  .layout:not(.has-stage) .orb-annotation small{font-size:9px}
+  .layout:not(.has-stage) .hud-annotation-left{left:-36%}
+  .layout:not(.has-stage) .hud-annotation-right{right:-36%}
+}
+@media(min-width:741px) and (max-height:860px){
+  .layout .orb-wrap,.layout.has-stage .orb-wrap{
+    width:min(460px,32vw,50vh);
+  }
+  .layout:not(.has-stage) .orb-wrap{
+    width:min(500px,35vw,52vh);
+  }
+  .layout:not(.has-stage) .presence{
+    width:min(650px,42vw);
+  }
+  .layout:not(.has-stage) .presence-eyebrow{margin-bottom:4px}
+  .layout:not(.has-stage) .presence-label h1{margin:0 auto 2px}
+  .layout:not(.has-stage) .presence-footer{margin-top:4px}
+}
+@media(min-width:741px) and (min-height:861px) and (max-width:2499px){
+  .layout:not(.has-stage) .orb-wrap{
+    width:min(510px,34vw,48vh);
+  }
+  .layout:not(.has-stage) .presence{
+    width:min(660px,43vw);
+  }
+}
+@media(min-width:2500px) and (min-height:861px){
+  .layout:not(.has-stage) .orb-wrap{
+    width:min(690px,51vh);
+  }
+}
+@media(max-width:740px){
+  .presence-footer{white-space:normal}
+  .quiet-prompt{display:none!important}
+}
+/* A stronger presence, driven by REAL voice states (not fabricated telemetry). */
+.app-shell[data-state="speaking"] .orb-wrap{
+  filter:drop-shadow(0 0 54px rgba(39,212,255,.38));
+}
+.app-shell[data-state="thinking"] .orb-wrap{
+  filter:drop-shadow(0 0 54px rgba(140,102,255,.31));
+}
+.app-shell.is-projecting .orb-wrap{
+  filter:drop-shadow(0 0 66px rgba(98,231,255,.41));
+}
+@media(prefers-reduced-motion:reduce){
+  .layout:not(.has-stage)::before{animation:none}
+}
