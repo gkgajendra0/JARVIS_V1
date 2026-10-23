@@ -327,3 +327,48 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .app-shell[data-quality="eco"] .orb-satellite,
 .app-shell[data-quality="eco"] .context-card::after,
 .app-shell[data-quality="eco"] .holo-signal span{animation:none!important}
+
+/* The orb doubles as an optional spatial launcher; it does not issue actions. */
+.orb-hit{
+  position:absolute;inset:15%;
+  z-index:7;border:0;border-radius:50%;
+  background:transparent;outline-offset:-13px;
+  cursor:pointer;
+}
+.orb-hit:hover{box-shadow:inset 0 0 45px rgba(53,193,251,.07)}
+.orb-hit:focus-visible{outline:2px solid #90efff}
+.radial-menu{
+  position:absolute;inset:-19%;pointer-events:none;z-index:8;
+}
+.radial-menu button{
+  position:absolute;display:flex;align-items:center;justify-content:center;flex-direction:column;
+  gap:5px;width:82px;height:67px;border-radius:12px;
+  border:1px solid rgba(82,218,255,.55);
+  background:linear-gradient(145deg,rgba(9,53,91,.97),rgba(3,18,38,.95));
+  box-shadow:0 0 19px rgba(24,170,250,.11),inset 0 0 18px rgba(11,99,162,.15);
+  color:#a8dfff;
+  opacity:0;transform:scale(.18);
+  transition:opacity .22s,transform .36s cubic-bezier(.16,1,.3,1),border-color .2s;
+}
+.radial-menu button strong{font-size:23px;font-weight:300;line-height:1;color:#6addff}
+.radial-menu button span{font-size:9px;letter-spacing:.14em}
+.radial-menu button:nth-child(1){left:2%;top:13%;transform-origin:110% 130%}
+.radial-menu button:nth-child(2){right:2%;top:13%;transform-origin:-10% 130%}
+.radial-menu button:nth-child(3){left:-10%;top:49%;transform-origin:150% 50%}
+.radial-menu button:nth-child(4){right:-10%;top:49%;transform-origin:-50% 50%}
+.radial-menu button:nth-child(5){left:calc(50% - 41px);bottom:-2%;transform-origin:50% -45%}
+.orb-wrap.menu-open .radial-menu{pointer-events:auto}
+.orb-wrap.menu-open .radial-menu button{opacity:1;transform:scale(1)}
+.radial-menu button:hover{border-color:#a1f0ff;box-shadow:0 0 25px rgba(39,174,251,.3)}
+@media(max-width:740px){
+  .radial-menu{inset:-20%}
+  .radial-menu button{width:58px;height:51px;border-radius:8px}
+  .radial-menu button strong{font-size:17px}
+  .radial-menu button span{font-size:7px}
+  .radial-menu button:nth-child(3){left:-13%}
+  .radial-menu button:nth-child(4){right:-13%}
+  .radial-menu button:nth-child(5){left:calc(50% - 29px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .radial-menu button{transition:none!important}
+}
