@@ -96,7 +96,6 @@ def test_topic_detection_never_returns_raw_user_transcript() -> None:
     assert private_phrase not in json.dumps(snapshot)
 
 
-
 def test_topic_routing_prefers_research_without_false_camera_on_eyeglasses() -> None:
     hub = UIEventHub()
     hub.observe_accepted_user_text("I am discussing contact lenses and eye care")
@@ -229,7 +228,6 @@ def test_research_projection_strips_sensitive_queries_and_untrusted_urls() -> No
     before = hub.snapshot()["seq"]
     hub.show_research_result({"ok": False, "sources": []})
     assert hub.snapshot()["seq"] == before
-
 
 
 def test_ui_capability_result_observer_is_status_only(monkeypatch) -> None:
@@ -536,7 +534,6 @@ def test_ui_browser_smoke_and_animated_canvas(ui_http) -> None:
             browser.close()
 
 
-
 def test_live_runtime_research_and_diagnostics_browser_projection(ui_http) -> None:
     pytest.importorskip("playwright")
     from playwright.sync_api import sync_playwright
@@ -598,6 +595,7 @@ def test_live_runtime_research_and_diagnostics_browser_projection(ui_http) -> No
             assert not errors, errors
         finally:
             browser.close()
+
 
 def test_ui_responsive_keyboard_and_projection_geometry(ui_http) -> None:
     """UI-only acceptance over laptop and phone viewports, with no runtime actions."""
