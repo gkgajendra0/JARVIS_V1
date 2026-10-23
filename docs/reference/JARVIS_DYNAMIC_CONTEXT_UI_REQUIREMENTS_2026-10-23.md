@@ -134,3 +134,17 @@ The **current development priority is visual and interaction design only**: orb,
 6. Reduced-motion and Eco modes omit elaborate transitions, while all semantic content remains available.
 7. Browser errors, failed network updates and reconnects leave Jarvis core unaffected; sample data remains visibly labeled.
 8. Complete automated/UI smoke and GitHub checks, then exactly one owner-machine visual acceptance session before reopening deeper integration.
+
+
+## Cinematic appearance refresh — 2026-10-23 late session
+
+The owner accepted the central orb/projection composition but reported that the visual quality was still not sufficiently futuristic or impressive. **Visual polish takes priority over the single failed Work-intent projection test**, which remains a separate follow-up. This refresh changes only presentation assets and the allowlisted read-only local asset route.
+
+- Replace the flat, single-layer sphere with a **procedural 3D-illusion energy core**: rotating spherical latitude/longitude lattice, depth-weighted point cloud, plasma filaments, spectral interior, layered volumetric bloom, metallic gyroscope arcs and radial calibration marks. No remote images, web service or 3D runtime dependency.
+- Keep the orb on the exact visual center with existing meaningful state animation for `listening`, `thinking`, `speaking`, and projecting. Avoid fictional live audio data.
+- Introduce a restrained dark science-fiction stage: deep cosmic background, gentle nebula, subtle particle field, thin technical overlays and readable 'JARVIS' presence typography. The orb must remain the most important visual element.
+- Refine contextual projections into angular, glowing panes with topic-specific accent colors, optical highlights and clearer content hierarchy. Panels still originate from and retract toward the center, without becoming a fixed multi-widget dashboard.
+- Retain **Cinematic / Balanced / Eco** rendering density and frame-rate ceilings. Honor `prefers-reduced-motion` and `document.hidden`; leave CPU/GPU space for LiveKit audio and computer vision.
+- Desktop, ultrawide, mobile, pin/dismiss, read-only localhost security and all existing live integration contracts must remain unchanged in behavior.
+- CI acceptance: verify renderer script serves as a same-origin allowed asset, the canvas draws actual nonempty pixels, runtime does not produce JS page errors, and browser captures work at 3440x1440 / 1920x1080 / mobile. Real owner-monitor visual/performance acceptance remains mandatory.
+- Explicit deferred item: automatically projecting Work when voice says 'show my background work' failed owner acceptance. Do not silently mark fixed because the WorkStore feed exists; separately diagnose actual Work tool result/accepted-turn paths once visual quality is accepted.
