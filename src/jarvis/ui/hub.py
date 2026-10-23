@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import re
 import threading
-from urllib.parse import urlsplit, urlunsplit
 import time
 from collections import deque
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 VOICE_STATES = frozenset(
     {"offline", "idle", "activating", "listening", "thinking", "speaking", "error"}
