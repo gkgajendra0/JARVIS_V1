@@ -21,7 +21,9 @@ VOICE_STATES = frozenset(
 PANEL_TYPES = frozenset(
     {"work", "research", "document", "vision", "system", "alert", "info"}
 )
-VALID_SOURCES = frozenset({"runtime", "canonical_work", "health", "local_ui", "research_result"})
+VALID_SOURCES = frozenset(
+    {"runtime", "canonical_work", "health", "local_ui", "research_result"}
+)
 _TOPIC_MATCHES = (
     ("vision", ("camera", "webcam", "pocket 3", "lens", "what do you see")),
     ("work", ("background work", "running task", "task progress", "project work")),
@@ -71,9 +73,7 @@ class UIEventHub:
         with self._lock:
             self._work_provider = provider
 
-    def attach_vision_provider(
-        self, provider: Callable[[], dict[str, object]]
-    ) -> None:
+    def attach_vision_provider(self, provider: Callable[[], dict[str, object]]) -> None:
         if not callable(provider):
             raise TypeError("vision provider must be callable")
         with self._lock:
@@ -135,7 +135,8 @@ class UIEventHub:
             summary=(
                 f"{len(sources)} verified HTTPS source links supplied by the "
                 "existing research tool. Treat external pages as untrusted."
-                if sources else "Research returned no displayable public source links."
+                if sources
+                else "Research returned no displayable public source links."
             ),
             source="research_result",
             priority=2,
@@ -293,13 +294,16 @@ class UIEventHub:
                         "running": raw.get("running") is True,
                         "active_source": (
                             _short_text(camera, maximum=48)
-                            if isinstance(camera, str) else "unknown"
+                            if isinstance(camera, str)
+                            else "unknown"
                         ),
                         "available_sources": [
                             _short_text(name, maximum=48)
                             for name in available[:6]
                             if isinstance(name, str)
-                        ] if isinstance(available, list) else [],
+                        ]
+                        if isinstance(available, list)
+                        else [],
                     }
             except Exception:  # noqa: BLE001 - optional read-only projection
                 vision = {"connected": False, "running": False}
