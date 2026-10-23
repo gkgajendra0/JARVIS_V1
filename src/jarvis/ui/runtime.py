@@ -113,7 +113,7 @@ def attach_diagnostics_projection(
     if vision_service is not None:
 
         def vision_status() -> dict[str, object]:
-            report = vision_service.report(event_limit=0)
+            report = vision_service.report(event_limit=1)
             camera = report.get("camera", {})
             if not isinstance(camera, dict):
                 camera = {}
