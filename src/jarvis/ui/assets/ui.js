@@ -4,7 +4,7 @@
 // loopback snapshot. All text is rendered using textContent.
 const el = (id) => document.getElementById(id);
 const model = {
-  snapshot: {schema: 1, seq: 0, runtime_connected: false, voice_state: "offline", panels: [], work: []},
+  snapshot: {schema: 1, seq: 0, runtime_connected: false, voice_state: "offline", panels: [], work: [], vision: {connected:false,running:false}, health: []},
   local: new Map(),
   pinned: new Map(),
   dismissed: new Map(),
@@ -44,7 +44,19 @@ function panelFromType(type) {
   const now=Date.now()/1000;
   const live=model.snapshot.runtime_connected;
   let summary="";
-  if(type==="work") summary=live
+  if(type==="vision" && live){
+    const vision=model.snapshot.vision||{};
+    summary=vision.connected
+      ? (vision.running?"Vision processing is active. ":"Vision processing is not running. ")+
+        "Active source: "+String(vision.active_source||"unknown")+
+        ". No camera frames or identities are transmitted to this UI."
+      : "The Jarvis vision diagnostics feed is unavailable.";
+  } else if(type==="system" && live){
+    const items=model.snapshot.health||[];
+    summary=items.length
+      ? "Live, sanitized Self Model health states from Jarvis. Detailed incident and private diagnostic data remain in the governed runtime."
+      : "Jarvis is linked, but component-health diagnostics are unavailable.";
+  } else if(type==="work") summary=live
     ? "Showing current canonical background WorkItem state. Task descriptions are omitted until their permission boundary is wired."
     : "Jarvis's runtime WorkStore is not connected. Start the opted-in voice runtime to view real task states.";
   else if(type==="system") summary=live
@@ -156,7 +168,10 @@ function renderCard(p) {
   if(p.priority===3)card.classList.add("high-priority");
   card.dataset.signature=JSON.stringify([
     p.title,p.summary,p.source,p.priority,model.pinned.has(p.id),
-    p.type==="work"?model.snapshot.work:[]
+    p.sources||[],
+    p.type==="work"?model.snapshot.work:[],
+    p.type==="vision"?model.snapshot.vision:{},
+    p.type==="system"?model.snapshot.health:[]
   ]);
   card.dataset.panelId=p.id;
   const header=document.createElement("header");
@@ -180,10 +195,61 @@ function renderCard(p) {
   actions.append(pin,close);header.append(heading,actions);card.append(header);
   const body=document.createElement("div");body.className="card-body";
   const eyebrow=document.createElement("div");eyebrow.className="card-eyebrow";
-  eyebrow.textContent=p.source==="demo"?"DEMO CONTENT":p.source==="canonical_work"?"CANONICAL WORK":"VISUAL CONTEXT";
+  eyebrow.textContent=p.source==="demo"?"DEMO CONTENT":
+    p.source==="research_result"?"GROUNDED RESEARCH TOOL OUTPUT":
+    p.type==="work"&&model.snapshot.runtime_connected?"CANONICAL WORK STATUS":
+    p.type==="vision"&&model.snapshot.vision?.connected?"LIVE CAMERA DIAGNOSTICS":
+    p.type==="system"&&model.snapshot.health?.length?"LIVE SELF MODEL HEALTH":"VISUAL CONTEXT";
   body.append(eyebrow,paragraph(p.summary));
   const visual=buildPreviewVisual(p);
   if(visual)body.append(visual);
+  if(p.type==="research" && p.source==="research_result"){
+    const sourceList=document.createElement("div");sourceList.className="live-source-list";
+    for(const source of (Array.isArray(p.sources)?p.sources:[]).slice(0,5)){
+      if(!source || typeof source.title!=="string" || typeof source.url!=="string")continue;
+      let valid;
+      try{
+        valid=new URL(source.url);
+        if(valid.protocol!=="https:" || valid.username || valid.password || valid.port)continue;
+      }catch(_){continue;}
+      const link=document.createElement("a");
+      link.className="live-source";link.href=valid.href;
+      link.target="_blank";link.rel="noopener noreferrer";
+      const label=document.createElement("strong");label.textContent=source.title;
+      const domain=document.createElement("small");domain.textContent=source.domain||valid.hostname;
+      link.append(label,domain);sourceList.append(link);
+    }
+    if(sourceList.children.length)body.append(sourceList);
+  }
+  if(p.type==="vision" && p.source!=="demo"){
+    const vision=model.snapshot.vision||{};
+    const telemetry=document.createElement("div");telemetry.className="live-status-stack";
+    const line=document.createElement("div");line.className="live-status-row";
+    const label=document.createElement("span");label.textContent="CAMERA DIAGNOSTICS";
+    const state=document.createElement("strong");state.textContent=
+      vision.connected?(vision.running?"RUNNING":"STOPPED"):"UNAVAILABLE";
+    line.append(label,state);telemetry.append(line);
+    if(vision.connected){
+      const detail=document.createElement("div");detail.className="live-status-row";
+      const name=document.createElement("span");name.textContent="ACTIVE CAMERA";
+      const value=document.createElement("strong");
+      value.textContent=String(vision.active_source||"unknown").toUpperCase();
+      detail.append(name,value);telemetry.append(detail);
+    }
+    body.append(telemetry);
+  }
+  if(p.type==="system" && p.source!=="demo"){
+    const statuses=Array.isArray(model.snapshot.health)?model.snapshot.health:[];
+    const container=document.createElement("div");container.className="live-health-list";
+    for(const item of statuses.slice(0,10)){
+      const row=document.createElement("div");row.className="live-status-row";
+      const name=document.createElement("span");name.textContent=item.component||"component";
+      const state=document.createElement("strong");state.textContent=
+        String(item.state||"unknown").toUpperCase();
+      row.append(name,state);container.append(row);
+    }
+    if(container.children.length)body.append(container);
+  }
   if(p.type==="work" && model.snapshot.work.length && p.source!=="demo") {
     const list=document.createElement("div");list.className="work-list";
     for(const item of model.snapshot.work.slice(0,8)) {
@@ -197,7 +263,10 @@ function renderCard(p) {
   card.append(body);
   const foot=document.createElement("footer");foot.className="card-note";
   const origin=document.createElement("span");
-  origin.textContent=p.source==="demo"?"SAMPLE • NOT LIVE":p.source==="local_ui"?"LOCAL UI • READ ONLY":"JARVIS RUNTIME • SUBJECT TO FRESHNESS";
+  origin.textContent=p.source==="demo"?"SAMPLE • NOT LIVE":
+    p.source==="research_result"?"LIVE TOOL SOURCES • UNTRUSTED PAGES":
+    p.source==="local_ui"?"UI SELECTION • RUNTIME READ-ONLY":
+    "JARVIS RUNTIME • SUBJECT TO FRESHNESS";
   if(p.source==="demo")origin.className="sample";
   const ts=document.createElement("span");
   ts.textContent=Number.isFinite(p.observed_at)?new Date(p.observed_at*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}):"";
@@ -331,7 +400,10 @@ function reconcileCards(panels){
   for(const [id,{p,slot}] of desired) {
     const signature=JSON.stringify([
       p.title,p.summary,p.source,p.priority,model.pinned.has(p.id),
-      p.type==="work"?model.snapshot.work:[]
+      p.sources||[],
+      p.type==="work"?model.snapshot.work:[],
+      p.type==="vision"?model.snapshot.vision:{},
+      p.type==="system"?model.snapshot.health:[]
     ]);
     const previous=[...cards.children].find(n=>n.dataset.panelId===id);
     if(previous){
@@ -423,13 +495,15 @@ async function poll() {
     if(!response.ok)throw Error("offline");
     const snapshot=await response.json();
     if(snapshot.schema!==1||!Array.isArray(snapshot.panels)||!Array.isArray(snapshot.work))throw Error("invalid snapshot");
+    if(!snapshot.vision || typeof snapshot.vision!=="object")snapshot.vision={connected:false,running:false};
+    if(!Array.isArray(snapshot.health))snapshot.health=[];
     model.snapshot=snapshot;
     // A topic that changes should replace transient unpinned context. The
     // server owns prioritization; the UI merely presents its bounded snapshot.
     render();
   } catch (_) {
     if(model.snapshot.runtime_connected || model.snapshot.voice_state!=="offline") {
-      model.snapshot={schema:1,seq:0,runtime_connected:false,voice_state:"offline",panels:[],work:[]};
+      model.snapshot={schema:1,seq:0,runtime_connected:false,voice_state:"offline",panels:[],work:[],vision:{connected:false,running:false},health:[]};
       toast("JARVIS visual feed disconnected");
     }
     render();
