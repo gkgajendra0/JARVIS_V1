@@ -88,7 +88,12 @@ function showType(type) {
 function goHome() {
   setRadialMenu(false);
   model.local.clear();
-  model.dismissed.clear();
+  // Returning to ambient mode dismisses currently projected runtime cards
+  // locally, never in Jarvis's canonical subsystem. Freshly observed events
+  // can still reopen a relevant hologram without another browser command.
+  for(const p of model.snapshot.panels||[]) {
+    if(!model.pinned.has(p.id))model.dismissed.set(p.id,p.observed_at);
+  }
   model.currentView="ambient";
   render();
 }
@@ -504,6 +509,15 @@ async function poll() {
     if(!snapshot.vision || typeof snapshot.vision!=="object")snapshot.vision={connected:false,running:false};
     if(!Array.isArray(snapshot.health))snapshot.health=[];
     model.snapshot=snapshot;
+    // Refresh manually opened status panels as canonical read-only evidence
+    // changes, without replaying their orb-origin reveal animation.
+    for(const [id,p] of model.local){
+      if(["work","system","vision"].includes(p.type)){
+        const updated=panelFromType(p.type);
+        p.summary=updated.summary;
+        model.local.set(id,p);
+      }
+    }
     // A topic that changes should replace transient unpinned context. The
     // server owns prioritization; the UI merely presents its bounded snapshot.
     render();
