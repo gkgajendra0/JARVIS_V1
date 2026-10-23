@@ -25,11 +25,28 @@ VALID_SOURCES = frozenset(
     {"runtime", "canonical_work", "health", "local_ui", "research_result"}
 )
 _TOPIC_MATCHES = (
-    ("research", ("search the web", "research", "latest news", "sources", "look up")),
-    ("work", ("background work", "running task", "task progress", "project work")),
-    ("vision", ("camera", "webcam", "pocket 3", "what do you see", "camera dikhao")),
+    (
+        "research",
+        ("search the web", "research", "latest news", "sources", "look up", "रिसर्च"),
+    ),
+    (
+        "work",
+        (
+            "background work",
+            "running task",
+            "task progress",
+            "project work",
+            "my tasks",
+            "my work",
+            "काम",
+        ),
+    ),
+    (
+        "vision",
+        ("camera", "webcam", "pocket 3", "what do you see", "camera dikhao", "कैमरा"),
+    ),
     ("document", ("document", "pdf", "project file", "repository", "code file")),
-    ("system", ("system status", "health", "diagnostic", "cpu", "gpu")),
+    ("system", ("system status", "health", "diagnostic", "cpu", "gpu", "सिस्टम")),
 )
 _EXPLICIT = re.compile(r"\b(show|display|open|bring up|pull up)\b", re.IGNORECASE)
 
