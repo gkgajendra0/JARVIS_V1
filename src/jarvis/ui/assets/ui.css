@@ -462,3 +462,91 @@ button:disabled{opacity:.4;cursor:not-allowed}
   .layout.multi-projection .context-card[data-slot="3"]{top:56%}
   .layout.multi-projection .context-card::after{display:none}
 }
+
+/* Final visual pass — refracted holographic panes with readable live evidence.
+   All source text and URLs are constructed with safe DOM APIs, never HTML. */
+.context-card{
+  background:
+    radial-gradient(ellipse at 82% -22%,rgba(46,158,251,.145),transparent 45%),
+    linear-gradient(130deg,rgba(15,66,110,.79),rgba(3,16,33,.89) 58%,rgba(4,16,34,.94));
+  border:1px solid rgba(97,217,252,.51);
+  box-shadow:
+    0 0 1px rgba(160,243,255,.5),
+    0 0 28px rgba(21,139,236,.11),
+    0 25px 70px rgba(0,0,0,.38),
+    inset 0 0 20px rgba(17,122,211,.095),
+    inset 0 1px rgba(164,237,255,.17);
+}
+.context-card header::before,.context-card header::after{
+  content:"";position:absolute;width:22px;height:14px;
+  border-color:rgba(108,232,255,.88);pointer-events:none;
+}
+.context-card header::before{
+  top:0;left:0;border-left:2px solid;border-top:2px solid;
+  border-color:inherit;
+}
+.context-card header::after{
+  top:0;right:0;border-right:2px solid;border-top:2px solid;
+  border-color:inherit;
+}
+.context-card .card-body{
+  background:
+    linear-gradient(90deg,transparent,rgba(34,139,222,.055),transparent),
+    repeating-linear-gradient(180deg,transparent 0 5px,rgba(52,159,224,.019) 5px 6px);
+}
+.context-card .card-note{color:#95b8cf}
+.context-card.is-materializing .card-body,
+.context-card.is-materializing .card-note{
+  animation:reveal-evidence .65s ease-out .25s both;
+}
+@keyframes reveal-evidence{
+  from{opacity:0;filter:blur(7px);transform:translateY(7px)}
+  to{opacity:1;filter:blur(0);transform:translateY(0)}
+}
+.card-body p{font-size:clamp(13px,.91vw,17px);line-height:1.78;color:#c0d8e9}
+.card-eyebrow{color:#75d6fa;font-size:10px;letter-spacing:.16em}
+.live-source-list,.live-health-list,.live-status-stack{
+  display:flex;flex-direction:column;gap:8px;margin-top:16px;
+}
+.live-source{
+  display:flex;flex-direction:column;gap:5px;
+  border:1px solid rgba(78,180,238,.26);
+  background:rgba(6,30,53,.52);border-radius:9px;
+  padding:11px 13px;
+  color:#ceecff;text-decoration:none;
+  transition:background .2s,border-color .2s;
+}
+.live-source strong{font-size:13px;line-height:1.35;font-weight:500;overflow-wrap:anywhere}
+.live-source small{font-size:11px;color:#72c5e9;overflow-wrap:anywhere}
+.live-source:hover,.live-source:focus-visible{
+  background:rgba(16,79,123,.62);border-color:#76d7ff;
+}
+.live-status-row{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:14px;min-height:31px;padding:8px 11px;
+  border:1px solid rgba(58,144,202,.22);border-radius:7px;
+  background:rgba(5,27,46,.44);
+  font-size:11px;color:#95b9cf;
+}
+.live-status-row strong{
+  font-size:11px;font-weight:500;color:#77e5e1;
+  overflow-wrap:anywhere;text-align:right;
+}
+@media(min-width:2500px){
+  .card-body p{font-size:16px}
+  .live-source{padding:16px 18px}
+  .live-source strong{font-size:17px}
+  .live-source small,.live-status-row,.live-status-row strong{font-size:14px}
+}
+@media(max-width:740px){
+  .card-body p{font-size:13px}
+  .live-source strong{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){
+  .context-card.is-materializing .card-body,
+  .context-card.is-materializing .card-note{animation:none!important}
+}
+.app-shell[data-quality="eco"] .context-card.is-materializing .card-body,
+.app-shell[data-quality="eco"] .context-card.is-materializing .card-note{
+  animation:none!important;
+}
