@@ -550,3 +550,311 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .app-shell[data-quality="eco"] .context-card.is-materializing .card-note{
   animation:none!important;
 }
+
+
+/* ================================================================
+   JARVIS CINEMATIC SYSTEM — visual-only design pass / 2026-10-23
+   One living intelligence at the center; information is summoned,
+   never an always-on grid. No external image, font, JS or network.
+   ================================================================ */
+:root {
+  --electric:#65daff;
+  --cold-white:#e5faff;
+  --aether:#987eff;
+  --holo-edge:rgba(96,220,255,.48);
+}
+.ambient-backdrop{
+  background:
+    radial-gradient(ellipse 38% 48% at 50% 46%,rgba(10,51,105,.68),transparent 80%),
+    radial-gradient(ellipse 50% 46% at 63% 28%,rgba(28,37,94,.34),transparent 75%),
+    radial-gradient(ellipse 34% 53% at 14% 77%,rgba(3,94,116,.13),transparent 75%),
+    linear-gradient(165deg,#01050e 0%,#061020 46%,#01050d 100%);
+}
+.cosmic-dust{
+  position:absolute;inset:-20%;opacity:.78;
+  background-image:
+    radial-gradient(circle,rgba(157,215,255,.51) 0 1px,transparent 1.5px),
+    radial-gradient(circle,rgba(85,174,247,.38) 0 .75px,transparent 1.25px),
+    radial-gradient(circle,rgba(161,129,255,.42) 0 1px,transparent 1.5px);
+  background-size:299px 241px,181px 239px,397px 307px;
+  background-position:12px 21px,97px 63px,171px 105px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 46%,black 13%,transparent 97%);
+  animation:cosmic-drift 100s linear infinite alternate;
+}
+.depth-vignette{
+  position:absolute;inset:0;
+  background:
+    linear-gradient(90deg,rgba(0,4,12,.55),transparent 28%,transparent 75%,rgba(0,4,12,.51)),
+    radial-gradient(ellipse 88% 88% at 50% 43%,transparent 40%,rgba(0,2,9,.65) 100%);
+}
+.ambient-grid{
+  background-size:98px 98px;
+  background-image:
+    linear-gradient(rgba(92,176,244,.028) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(92,176,244,.028) 1px,transparent 1px);
+  transform:perspective(570px) rotateX(59deg) scale(1.65) translateY(9%);
+}
+.horizon{bottom:0;opacity:.72;height:51%;filter:blur(56px)}
+.ambient-backdrop .atmosphere{
+  animation:nebulous 23s ease-in-out infinite alternate;
+  background:
+    radial-gradient(ellipse at 35% 53%,rgba(54,174,240,.095),transparent 45%),
+    radial-gradient(ellipse at 69% 49%,rgba(114,73,224,.10),transparent 37%);
+}
+.topbar{
+  box-shadow:0 1px rgba(77,191,255,.045),0 12px 50px rgba(0,0,0,.2);
+  border-bottom-color:rgba(92,177,236,.21);
+}
+.topbar::after{
+  content:"";position:absolute;bottom:-1px;left:50%;height:1px;width:min(470px,30vw);
+  transform:translateX(-50%);
+  background:linear-gradient(90deg,transparent,rgba(62,204,255,.60),transparent);
+  pointer-events:none;
+}
+.brandword{font-weight:270;letter-spacing:.4em;text-shadow:0 0 25px rgba(62,207,255,.3)}
+.brand-a{color:#88ebff;text-shadow:0 0 25px rgba(75,236,255,.7)}
+.rail{
+  border-right-color:rgba(63,175,235,.18);
+  background:linear-gradient(180deg,rgba(5,19,37,.93),rgba(1,7,17,.79));
+  box-shadow:6px 0 35px rgba(0,0,0,.14);
+}
+.rail-button{border-radius:9px;position:relative}
+.rail-button.selected::after{
+  content:"";position:absolute;left:-10px;top:21%;bottom:21%;width:2px;
+  border-radius:2px;background:#6edcff;box-shadow:0 0 12px 2px rgba(31,171,255,.65);
+}
+.rail-button:hover{transform:translateY(-2px)}
+.command-dock{
+  border-top:1px solid rgba(99,202,255,.22);
+  background:linear-gradient(180deg,rgba(2,10,24,.89),rgba(1,6,16,.985));
+}
+.command-dock::before{
+  content:"";position:absolute;left:50%;top:-1px;transform:translateX(-50%);
+  width:clamp(150px,28vw,480px);height:1px;
+  background:linear-gradient(90deg,transparent,rgba(92,218,255,.56),transparent);
+  pointer-events:none;
+}
+.command-form{
+  border-color:rgba(101,220,255,.4);
+  box-shadow:0 0 36px rgba(12,112,219,.12),inset 0 0 19px rgba(33,112,204,.10);
+}
+.command-form:focus-within{
+  border-color:rgba(120,226,255,.92);
+  box-shadow:0 0 36px rgba(25,168,240,.2),inset 0 0 13px rgba(37,167,248,.13);
+}
+.command-form button{
+  background:linear-gradient(130deg,#176fac,#123e85);
+  border-color:rgba(117,212,255,.48);
+  box-shadow:inset 0 1px rgba(194,246,255,.15),0 0 18px rgba(30,143,249,.11);
+}
+
+/* The center isn't just a sphere, it's a floating, mechanized holographic core. */
+.orb-wrap{
+  isolation:isolate;
+  --orb-bloom:rgba(56,170,255,.25);
+  filter:drop-shadow(0 0 32px var(--orb-bloom));
+  transition:filter .45s ease;
+}
+#orbCanvas{position:relative;z-index:2}
+.orb-wrap::before{
+  inset:-25%;
+  background:
+    radial-gradient(circle,rgba(67,198,251,.16),rgba(12,60,143,.06) 40%,transparent 70%);
+  opacity:.66;
+}
+.orb-wrap::after{z-index:-1}
+.orb-hud{
+  position:absolute;z-index:3;border-radius:50%;pointer-events:none;
+}
+.hud-track-one{
+  inset:1.4%;
+  border:1px dotted rgba(108,213,255,.30);
+  border-left-color:transparent;border-bottom-color:transparent;
+  animation:spin 37s linear infinite;
+  box-shadow:inset 0 0 22px rgba(48,143,238,.065);
+}
+.hud-track-two{
+  inset:-11%;
+  border:1px solid rgba(86,173,239,.14);
+  border-left-color:transparent;border-right-color:transparent;
+  transform:rotate(35deg);animation:spin 42s linear infinite reverse;
+}
+.hud-track-three{
+  inset:-17%;opacity:.6;
+  border:1px dashed rgba(84,181,240,.17);
+  border-top-color:transparent;border-bottom-color:rgba(152,118,243,.24);
+  animation:spin 56s linear infinite;
+}
+.orb-core-ray{
+  position:absolute;inset:-24%;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(90deg,transparent 49.95%,rgba(55,163,228,.045) 50%,transparent 50.05%),
+    linear-gradient(0deg,transparent 49.95%,rgba(55,163,228,.040) 50%,transparent 50.05%);
+  mask-image:radial-gradient(circle,transparent 24%,black 30%,transparent 73%);
+}
+.orb-rim{z-index:3}
+.orb-satellite{z-index:3}
+.orb-hit{z-index:7}
+.radial-menu{z-index:8}
+.orb-annotation{
+  position:absolute;z-index:2;top:45%;display:flex;flex-direction:column;
+  width:155px;gap:5px;align-items:flex-start;
+  color:#89d7f9;white-space:nowrap;letter-spacing:.15em;
+  font-size:9px;text-align:left;pointer-events:none;
+  text-shadow:0 0 9px rgba(35,190,255,.28);
+  opacity:.8;
+}
+.orb-annotation b{font-size:18px;font-weight:200;color:#64cfff}
+.orb-annotation span{font-weight:500}
+.orb-annotation small{font-size:8px;letter-spacing:.13em;color:#6a9fbb}
+.orb-annotation::after{
+  content:"";height:1px;width:112px;
+  background:linear-gradient(90deg,rgba(98,203,249,.48),transparent);
+}
+.hud-annotation-left{left:-30%;top:38%}
+.hud-annotation-right{
+  right:-30%;top:52%;text-align:right;align-items:flex-end;
+}
+.hud-annotation-right::after{transform:scaleX(-1)}
+.layout.has-stage .orb-annotation{opacity:.0;transition:opacity .25s}
+.presence-divider{
+  display:flex;align-items:center;gap:11px;justify-content:center;
+  height:19px;margin:5px auto 0;color:rgba(73,185,240,.59);font-size:9px;
+}
+.presence-divider i{
+  width:54px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(82,183,245,.43));
+}
+.presence-divider i:last-child{transform:scaleX(-1)}
+.presence-label h1{
+  margin:6px 0 9px;letter-spacing:.47em;font-weight:260;
+  text-shadow:0 0 36px rgba(67,177,249,.46),0 0 60px rgba(10,100,217,.12);
+}
+.presence-label .voice-label{font-size:13px;letter-spacing:.045em;color:#a7e5ff}
+.presence-footer{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  margin:16px auto 0;font-size:9px;letter-spacing:.21em;
+  color:rgba(103,178,219,.68);
+}
+.micro-diamond{font-size:14px;color:#8be5ff}
+.micro-separator{color:rgba(111,157,224,.4)}
+.app-shell[data-state="speaking"] .orb-wrap{--orb-bloom:rgba(77,219,255,.37)}
+.app-shell[data-state="thinking"] .orb-wrap{--orb-bloom:rgba(155,114,255,.32)}
+.app-shell.is-projecting .orb-wrap{--orb-bloom:rgba(120,234,255,.62)}
+.app-shell.is-projecting .hud-track-two{border-top-color:rgba(109,248,255,.68)}
+.app-shell[data-state="speaking"] .presence-label h1{color:#e6fbff}
+.app-shell[data-state="thinking"] .presence-divider{color:#b494ff}
+.layout .projection-links{
+  filter:drop-shadow(0 0 8px rgba(68,172,255,.16));
+}
+
+/* Holograms have optical edges, dimensional content and angular geometry.
+   Do not insert fictitious data merely for cinematic decoration. */
+.context-card{
+  --holo-edge:rgba(104,225,255,.56);
+  --holo-ambient:rgba(30,117,202,.13);
+  background:
+    repeating-linear-gradient(0deg,transparent 0 7px,rgba(117,206,255,.018) 7px 8px),
+    radial-gradient(ellipse at 13% -24%,rgba(38,162,240,.25),transparent 61%),
+    linear-gradient(150deg,rgba(7,39,70,.92) 0%,rgba(3,14,31,.94) 65%,rgba(5,23,50,.96));
+  border-color:var(--holo-edge);
+  border-radius:5px 16px 7px 16px;
+  box-shadow:
+    0 0 0 1px rgba(11,53,96,.25),
+    0 0 28px var(--holo-ambient),
+    0 28px 80px rgba(0,2,11,.56),
+    inset 0 1px rgba(179,244,255,.18),
+    inset 0 0 35px rgba(16,99,182,.085);
+}
+.context-card[data-type="research"]{--holo-edge:rgba(90,224,248,.59)}
+.context-card[data-type="work"]{--holo-edge:rgba(117,171,255,.63);--holo-ambient:rgba(79,111,223,.14)}
+.context-card[data-type="alert"]{
+  --holo-edge:rgba(241,165,96,.59);
+  --holo-ambient:rgba(241,126,56,.12);
+}
+.context-card header{
+  background:linear-gradient(90deg,rgba(14,65,107,.27),transparent 75%);
+  border-bottom-color:rgba(100,213,249,.16);
+  position:relative;
+}
+.context-card header::before,
+.context-card header::after{
+  width:25px;height:17px;
+  border-color:rgba(117,221,255,.84);
+  filter:drop-shadow(0 0 5px rgba(62,212,255,.5));
+}
+.card-heading{gap:13px}
+.card-icon{
+  border-color:rgba(116,228,255,.47);
+  border-radius:4px 10px 4px 10px;
+  background:linear-gradient(145deg,rgba(42,169,232,.19),rgba(14,52,107,.15));
+  box-shadow:inset 0 0 16px rgba(50,187,241,.1),0 0 14px rgba(35,171,234,.095);
+}
+.card-title{font-weight:520;letter-spacing:.04em;color:#dcf5ff}
+.card-eyebrow{letter-spacing:.22em;color:#82d6fc}
+.card-body{
+  background:
+    linear-gradient(90deg,rgba(46,194,255,.025),transparent 33%),
+    repeating-linear-gradient(180deg,transparent 0 7px,rgba(52,159,224,.015) 7px 8px);
+}
+.card-body p{color:#c4d9e8;line-height:1.78}
+.card-note{background:rgba(0,9,22,.52);border-top-color:rgba(105,189,236,.17)}
+.context-card .card-body::after{
+  content:"";display:block;height:2px;width:32px;
+  margin-top:17px;
+  background:linear-gradient(90deg,rgba(90,223,255,.75),transparent);
+}
+.context-card .card-note::after{content:" ◈";color:#54c9ff;opacity:.7}
+.work-row,.live-status-row,.live-source{
+  border-radius:3px 9px 3px 9px;
+  border-color:rgba(86,184,245,.28);
+  background:linear-gradient(110deg,rgba(10,49,81,.55),rgba(3,20,42,.57));
+}
+.work-row strong{font-size:12px}
+.work-row em{font-size:11px;letter-spacing:.08em}
+.projection-caption{
+  color:#91bcd4;font-size:10px;letter-spacing:.27em;opacity:.8;
+}
+.stage-heading .text-button{
+  background:linear-gradient(90deg,rgba(8,42,78,.8),rgba(3,24,51,.7));
+  border-color:rgba(102,207,255,.31);
+}
+@keyframes cosmic-drift{
+  from{transform:translate3d(-1.2%,0,0)}
+  to{transform:translate3d(2.6%,1.6%,0)}
+}
+@keyframes nebulous{
+  from{opacity:.58;transform:scale(1)}
+  to{opacity:1;transform:scale(1.09)}
+}
+@media(min-width:2500px){
+  .orb-annotation{font-size:12px;width:195px}
+  .orb-annotation small{font-size:10px}
+  .hud-annotation-left{left:-31%;top:38%}
+  .hud-annotation-right{right:-31%;top:56%}
+  .presence-footer{font-size:11px}
+}
+@media(min-width:741px) and (max-width:1600px){
+  .orb-annotation{opacity:.55;transform:scale(.8)}
+  .hud-annotation-left{left:-35%}
+  .hud-annotation-right{right:-35%}
+}
+@media(max-width:740px){
+  .cosmic-dust{opacity:.52;animation:none}
+  .orb-annotation{display:none}
+  .hud-track-three{display:none}
+  .presence-divider{margin-top:0}
+  .presence-footer{font-size:7px;letter-spacing:.09em;gap:7px;margin-top:7px}
+  .presence-label h1{font-size:20px}
+  .context-card{border-radius:5px 13px 5px 13px}
+  .card-body p{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){
+  .cosmic-dust,.ambient-backdrop .atmosphere,
+  .orb-hud,.orb-wrap::before{animation:none!important}
+}
+.app-shell[data-quality="eco"] .cosmic-dust,
+.app-shell[data-quality="eco"] .ambient-backdrop .atmosphere,
+.app-shell[data-quality="eco"] .orb-hud{
+  animation:none!important;
+}
