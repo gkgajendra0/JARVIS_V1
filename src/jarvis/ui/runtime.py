@@ -111,6 +111,7 @@ def attach_diagnostics_projection(
     if hub is None:
         return
     if vision_service is not None:
+
         def vision_status() -> dict[str, object]:
             report = vision_service.report(event_limit=0)
             camera = report.get("camera", {})
@@ -121,8 +122,10 @@ def attach_diagnostics_projection(
                 "active_source": camera.get("active_source"),
                 "available_sources": camera.get("available_sources", []),
             }
+
         hub.attach_vision_provider(vision_status)
     if self_awareness is not None:
+
         def health_status() -> list[dict[str, str]]:
             snapshots = self_awareness.system_snapshot(health_surface_only=True)
             return [
@@ -132,6 +135,7 @@ def attach_diagnostics_projection(
                 }
                 for snap in snapshots
             ]
+
         hub.attach_health_provider(health_status)
 
 
