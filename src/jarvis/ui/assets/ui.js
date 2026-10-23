@@ -87,6 +87,7 @@ function showType(type) {
 }
 function goHome() {
   setRadialMenu(false);
+  model.demo=false;
   model.local.clear();
   // Returning to ambient mode dismisses currently projected runtime cards
   // locally, never in Jarvis's canonical subsystem. Freshly observed events
@@ -545,6 +546,7 @@ document.querySelectorAll("[data-orb-panel]").forEach(button=>{
 el("backHome").addEventListener("click",goHome);
 el("previewButton").addEventListener("click",toggleDemo);
 el("clearButton").addEventListener("click",()=>{
+  model.demo=false;
   model.local.clear();
   for(const p of model.snapshot.panels) {
     if(!model.pinned.has(p.id))model.dismissed.set(p.id,p.observed_at);
@@ -724,9 +726,10 @@ function animate(now) {
   frame=requestAnimationFrame(animate);
   if(document.hidden||!ctx)return;
   if(reduced.matches){if(prev===0)draw(0);prev=1;return;}
+  const state=el("app").dataset.state;
   const limit=model.quality==="eco"?15:
     model.quality==="balanced"?30:
-    (el("app").dataset.state==="idle"?40:60);
+    (state==="offline"||state==="idle"?36:60);
   if(now-prev<1000/limit)return;
   prev=now;
   draw(now/1000);
