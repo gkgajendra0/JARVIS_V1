@@ -57,7 +57,7 @@ $voice = Join-Path $AppPath '.venv\Scripts\jarvis-voice.exe'
 Require-File $python 'Python virtual environment'
 Require-File $setup 'Jarvis setup'
 Require-File $voice 'Jarvis voice'
-& $python -c 'import jarvis; print("Jarvis code:", jarvis.__file__)'
+& $python -c 'import jarvis; print(jarvis.__file__)'
 if ($LASTEXITCODE -ne 0) { throw 'Jarvis import failed; the virtual environment needs repair.' }
 
 Write-Host '=== JARVIS restore: persistent storage ===' -ForegroundColor Cyan
@@ -85,7 +85,7 @@ if ($null -eq $item) {
     }
     Write-Host "Junction already correct: $source => $actual"
 }
-& $python -c 'from jarvis.machine_config import default_machine_config_path; from jarvis.memory.runtime import default_memory_database_path; from jarvis.work.store import default_work_state_dir; print("Config:", default_machine_config_path().resolve()); print("Memory:", default_memory_database_path().resolve()); print("Work:", default_work_state_dir().resolve())'
+& $python -c 'from jarvis.machine_config import default_machine_config_path; from jarvis.memory.runtime import default_memory_database_path; from jarvis.work.store import default_work_state_dir; print(default_machine_config_path().resolve()); print(default_memory_database_path().resolve()); print(default_work_state_dir().resolve())'
 if ($LASTEXITCODE -ne 0) { throw 'Unable to verify Jarvis data paths.' }
 
 Write-Host '=== JARVIS restore: wake-word model ===' -ForegroundColor Cyan
