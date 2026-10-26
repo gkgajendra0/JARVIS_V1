@@ -157,7 +157,7 @@ const ArcReactor: React.FC<ArcReactorProps> = ({ state, taskComplexity, audioLev
         <Lightformer intensity={1.6} position={[-4, -2, -5]} scale={[5, 4, 1]} color="#6a7078" />
       </Environment>
 
-      <group ref={groupRef} scale={0.54} position={[0, 0.35, 0]}>
+      <group ref={groupRef} scale={0.66} position={[0, 0.35, 0]}>
         {/* Front bezel, sitting proud of the housing lip. */}
         <mesh position={[0, 0, FRONT_Z]}>
           <torusGeometry args={[3.1, 0.2, 24, 96]} />

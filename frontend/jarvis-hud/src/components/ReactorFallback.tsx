@@ -33,7 +33,9 @@ const ReactorFallback: React.FC<{ reason?: string }> = ({ reason }) => (
       </div>
 
       <div className="max-w-xs text-center">
-        <p className="etch">Reactor visualisation offline</p>
+        <p className="etch">
+          {reason?.startsWith('Low-GPU') ? 'Reactor schematic / low GPU' : 'Reactor visualisation offline'}
+        </p>
         <p className="etch mt-2 !tracking-normal !text-[#dde4ea]/30">
           {reason ?? 'This browser has no WebGL support available.'} Live controls remain in
           the original JARVIS runtime.

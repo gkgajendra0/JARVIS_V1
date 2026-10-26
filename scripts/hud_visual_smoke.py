@@ -63,7 +63,7 @@ def main() -> int:
                         page.get_by_role("button", name="GPU: AUTO").click()
                         assert page.get_by_role("button", name="GPU: LOW").is_visible()
                         assert page.get_by_text(
-                            "Reactor visualisation offline"
+                            "Reactor schematic / low GPU"
                         ).is_visible()
                         page.screenshot(
                             path=str(args.output / "jarvis-low-gpu.png"), full_page=True
