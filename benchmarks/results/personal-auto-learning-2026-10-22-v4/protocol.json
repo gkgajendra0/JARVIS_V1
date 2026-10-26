@@ -1,0 +1,14 @@
+{
+  "candidate": "fd7c702520f91b3ad1c623b2196c4381c61e1c54",
+  "input_sha256": "5f23aaafe33d22aec625e7ae5422764060887c7a3e3af2b76fab498033ab9f19",
+  "gold_sha256": "44b16dc01370aae55c69adab771d2351beb3733d8caaabf15a535591220c3617",
+  "reserved_prior_send_upper_bound": 266,
+  "new_single_send_cap": 266,
+  "cumulative_ceiling": 532,
+  "episode_spacing_seconds": 8,
+  "retry": false,
+  "answer_pairs": 30,
+  "stop": "any semantic-stage unavailability or answer/provider failure; no replay",
+  "provenance_limit": "requested model recorded; server alias/effective model is not proven by requested string",
+  "owner_acceptance": false
+}

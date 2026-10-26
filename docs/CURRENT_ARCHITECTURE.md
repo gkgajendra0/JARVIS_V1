@@ -1,5 +1,15 @@
 # JARVIS V1 Current Architecture
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
 ## Status
 
 **STEPS 0–3 COMPLETE. STEPS 4–6 BOUNDED COMPLETE. STEP 7 COMPLETE. POST-STEP-7 HANDS / POCKET 3 / PERFORMANCE / STABILITY / SAFETY WORK IS ACCEPTED IN PRODUCTION. SELF-AWARENESS PR #41 IS OWNER ACCEPTED. PERSISTENT CONCURRENT WORK ORCHESTRATION PR #55 IS OWNER ACCEPTED. THE DETERMINISTIC REPAIR FRAMEWORK AND R2 RUNTIME CRASH/HANG RECOVERY FOUNDATION ARE OWNER ACCEPTED ON 2026-09-23. PHASE 1H FOUNDATION HARDENING IS OWNER-MACHINE ACCEPTED ON 2026-09-24. PHASE 2 ENGINEERINGKNOWLEDGE AND PHASE 3 ENGINEERINGCHANGE ARE OWNER-MACHINE ACCEPTED ON 2026-09-25. PHASE 4 RESEARCH + DIAGNOSTIC MODEL ROUTER IS OWNER-MACHINE ACCEPTED ON 2026-09-26. PHASES 5, 6, 7 AND 8 ARE OWNER-MACHINE ACCEPTED ON 2026-09-27. PHASE 9 OWNER-REQUESTED CAPABILITY ACQUISITION IS DONE BOUNDED WITH THE REAL EXTERNAL TV LIFECYCLE STILL DEFERRED. CHATGPT-PLAN PRIMARY WORK/HANDS REASONING IS OWNER-MACHINE ACCEPTED ON 2026-09-30. STEP 8 REMAINS THE NEXT NUMBERED PRODUCT SLICE.**
@@ -20,6 +30,8 @@ remains disabled. The later opt-in context release below supplies a bounded read
 
 ## Opt-in personal context — bounded October 21 release
 
+The separate automatic-learning branch is an unaccepted candidate and is not part of the protected-main architecture described here. Its source/Authority/storage/worker composition and private-session limitation are recorded in the [subordinate implementation decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md); qualification and activation remain pending.
+
 PR #294 adds per-conversation PersonalContextSession and native model tools to
 normal voice sessions. Exact-request Hello grants read access to eligible standard
 canonical facet names and up to four current facts. Concrete changes need separate
@@ -32,6 +44,12 @@ The owner confirmed saved-preference recall/correction/restart/restoration and
 authorized checked promotion. This paragraph describes the PR release on main
 after merge, not a complete personal-intelligence architecture. See the
 [acceptance record](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md).
+
+## Unmerged PI-3A candidate — separate from protected-main architecture
+
+The approved question-bound context design is implemented on the candidate built atop unmerged PI-2. Canonical reader/retrieval provides one coherent current/suppression snapshot. A focused projection module resolves seven registered scopes and exact current-question entity labels; the existing PersonalContextSession owns the shared legacy/new read ledger and requested-scope/version/audio invalidation. The registered LiveKit raw tool keeps strict parsing/attempt accounting local. Learning-APPLY ordinary-advice instructions use that tool; explicit mutation and context-only paths retain their existing purposes.
+
+This is candidate architecture, not a declaration of deployment or owner acceptance. No memory migration, new provider/model, new write permission or default change occurred. Local software checks passed (2,858 tests / 8 skips); all three Important review findings were repaired and regression-verified; live selection and spoken usefulness remain pending. See the [PI-3A record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md) for evidence, exact limits and rollback.
 
 ## Top-level production architecture
 

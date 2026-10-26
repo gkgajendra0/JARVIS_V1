@@ -40,6 +40,9 @@ class MemoryRuntime:
         self._started = False
         self._closed = False
 
+    def bind_learning_authority(self, authority):
+        self.service.bind_learning_authority(authority)
+
     async def start(self) -> None:
         if self._closed:
             raise RuntimeError("memory runtime is closed")

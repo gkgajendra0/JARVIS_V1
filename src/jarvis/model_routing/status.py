@@ -177,3 +177,115 @@ class RoutingStatusReader:
         if not decisions:
             return None
         return self.for_decision(decisions[0].decision.decision_id)
+
+
+def gemini_fallback_status(runtime) -> dict:
+    """Local facts only: presence is not credential validity or provider health."""
+    from dataclasses import asdict
+
+    from jarvis.ai_provider import gemini_credential_ref, resolve_credential_api_key
+    from jarvis.model_routing.pricing import PricingUnavailable
+    from jarvis.voice.gemini_budget import GeminiLiveBudget
+
+    def present(slot):
+        try:
+            return bool(
+                resolve_credential_api_key("gemini", gemini_credential_ref(slot))
+            )
+        except (RuntimeError, ValueError):
+            return False
+
+    now = float(runtime.clock())
+    health = {}
+    for target in runtime.router.target_registry.all():
+        record = runtime.store.get_health(target.target_id)
+        health[target.target_id] = {
+            "state": "unknown" if record is None else record.state.value,
+            "cooldown_until_epoch": None
+            if record is None
+            else record.cooldown_until_epoch,
+        }
+    for record in runtime.store.list_health():
+        health[record.target_id] = {
+            "state": record.state.value,
+            "cooldown_until_epoch": record.cooldown_until_epoch,
+        }
+    valid = 0
+    versions = []
+    for price in runtime.prices.values():
+        versions.append(
+            {
+                "model_id": price.model_id,
+                "service_key": price.service_key,
+                "price_profile_id": price.profile.profile_id,
+                "price_version": price.profile.version,
+                "price_source": price.source,
+                "fx_version": price.fx_version,
+                "fx_source": price.fx_source,
+            }
+        )
+        try:
+            price.validate_at(now)
+        except PricingUnavailable:
+            continue
+        valid += 1
+    budget = asdict(runtime.paid_budget.status())
+    return {
+        "mode": "free_first_paid_fallback" if runtime.config.enabled else "disabled",
+        "local_spending_enforcement": runtime.config.budget_enforced,
+        "ledger_scope": "current_budget"
+        if runtime.config.budget_enforced
+        else "historical_budget_records_only",
+        "free_credential_available": present("free"),
+        "paid_credential_available": present("paid"),
+        "credential_validity_verified": False,
+        "paid_credential_blocked": runtime.store.credential_blocked(
+            gemini_credential_ref("paid")
+        ),
+        "valid_price_count": valid,
+        "price_versions": versions,
+        "pricing_error": runtime.pricing_error
+        if valid or not runtime.prices
+        else "reviewed_pricing_expired",
+        "live_paid_available": not runtime.config.budget_enforced
+        or GeminiLiveBudget.available,
+        "live_paid_reason": GeminiLiveBudget.reason
+        if runtime.config.budget_enforced
+        else "automatic_fallback_without_local_spending_gate",
+        "target_health": health,
+        **budget,
+    }
+
+
+def paid_live_ledger_status(runtime) -> list[dict]:
+    """Numeric local operational status, never a provider invoice or balance."""
+    with runtime.store.work_store.extension_transaction() as c:
+        rows = c.execute(
+            "SELECT reservation_id,state,reserved_minor,accounted_minor,operational_json FROM paid_fallback_reservations WHERE budget_id=? AND admission_kind='operational_live_v1' ORDER BY reserved_at,reservation_id",
+            (runtime.config.budget_id,),
+        ).fetchall()
+    result = []
+    from jarvis.model_routing.live_policy import digest
+
+    for row in rows:
+        data = runtime.store.work_store.decode_extension_json(row["operational_json"])
+        result.append(
+            {
+                "reservation_id": row["reservation_id"],
+                "state": row["state"],
+                "known_minor": row["accounted_minor"],
+                "held_minor": max(0, row["reserved_minor"] - row["accounted_minor"])
+                if row["state"] not in {"settled", "cancelled"}
+                else 0,
+                "policy_ref": digest(data["policy"]),
+                "profile_ref": digest(data["profile"]) if data["profile"] else None,
+                "usage_status": "unknown"
+                if row["state"] in {"uncertain", "acknowledged_unknown"}
+                else (
+                    "pending" if row["state"] in {"reserved", "dispatched"} else "final"
+                ),
+                "soft_stop_minor": data["policy"]["soft_stop_minor"],
+                "allowance_minor": row["reserved_minor"],
+            }
+        )
+    return result

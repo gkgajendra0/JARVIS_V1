@@ -35,9 +35,12 @@ dependencies = [
     "pypi-attestations==0.0.30",
     "zeroconf==0.151.3",
     "tomli-w==1.2.0",
+    "tzdata==2026.5",
 ]
 
 [project.scripts]
+jarvis-paid-budget = "jarvis.paid_budget_cli:main"
+jarvis-ui = "jarvis.ui.__main__:main"
 jarvis-setup = "jarvis.setup:main"
 jarvis-provider = "jarvis.provider_cli:main"
 jarvis-chatgpt-plan = "jarvis.chatgpt_plan_cli:main"
@@ -162,6 +165,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
+"jarvis.ui" = ["assets/*.html", "assets/*.css", "assets/*.js"]
 "jarvis.identity" = ["manifests/*.json"]
 "jarvis.memory" = ["migrations/*.sql"]
 "jarvis.incidents" = ["migrations/*.sql"]

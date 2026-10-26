@@ -1,8 +1,24 @@
 # JARVIS Documentation — Start Here
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
+**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,858 tests / 8 skips) after all three Important review findings were repaired; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
+
 **Repository-wide product/documentation audit — 18 October 2026.**
 
 This is the navigation and reconciliation record, not another North Star, second product plan or a claim of completed runtime features.
+
+Automatic learning: [implemented/software-verified handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md), [decision](research/PERSONAL_AUTO_LEARNING_ARCHITECTURE_DECISION_2026-10-22.md) and [preserved qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md). The owner chose to advance development; broader provider testing is deferred. DefaultOFF/unpromoted; owner acceptance and protected promotion are not implied.
+
+[Enablement and validation record](PERSONAL_INTELLIGENCE_ENABLEMENT.md) — which personal features are defaultOFF, which opt-in tests passed, how to enable normal-app testing, and how future dependent milestones must be checked.
 
 ## Read these documents first
 
@@ -63,6 +79,8 @@ Use **PRODUCT** for desired behavior, **AUTONOMOUS NORTH STAR** for enduring int
 - [Normal-app personal-context candidate](research/PERSONAL_INTELLIGENCE_RUNTIME_2026-10-20.md)
 - [Natural memory-intent and canonical-target repair](research/MEMORY_INTENT_REPAIR_2026-10-21.md)
 - [Bounded normal-app owner acceptance and release](acceptance/PERSONAL_MEMORY_OWNER_ACCEPTANCE_2026-10-21.md)
+- [Automatic conversational learning: approved written design](superpowers/specs/2026-10-21-personal-auto-learning-design.md)
+- [Automatic conversational learning: implementation plan for review](superpowers/plans/2026-10-21-personal-auto-learning.md)
 
 PRs #285–#286 established the product/documentation hierarchy; #288 approved
 the native direction and #289–#291 added evaluation, shadow and fictional

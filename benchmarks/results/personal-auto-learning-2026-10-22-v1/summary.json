@@ -1,0 +1,78 @@
+{
+  "summary": {
+    "status": "incomplete",
+    "completed": 0,
+    "unavailable": 1,
+    "unrun": 89,
+    "provider_attempts": 1,
+    "accepted": false
+  },
+  "manifest": {
+    "input_sha256": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "gold_sha256": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010"
+  },
+  "scores": {
+    "completed": 0,
+    "unavailable": 1,
+    "true_positive": 0,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision": null,
+    "recall": null,
+    "precision_wilson": null,
+    "recall_wilson": null,
+    "languages": {},
+    "quality_floor_pass": false,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers"
+  },
+  "usage": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [],
+      "last_failure": {
+        "kind": "BadRequestError",
+        "status": 400
+      }
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    }
+  ],
+  "request_latency_ms": {
+    "n": 1,
+    "p50": 1581.1257999999953,
+    "p95": 1581.1257999999953
+  },
+  "accepted_turn_callback_ms": {
+    "n": 1,
+    "p50": 1.1799999999766442,
+    "p95": 1.1799999999766442
+  },
+  "canonical_accept_baseline_ms": {
+    "n": 1,
+    "p50": 0.023600000076839933,
+    "p95": 0.023600000076839933
+  },
+  "background_ms": null,
+  "resource_notes": "Synthetic OS/Hello, real OPA/canonical DB and provider; no microphone/first-speech/GPU workload measured. Paired answer model uses active-provider work role; normal realtime routing still needs owner acceptance.",
+  "rows": [
+    {
+      "id": "en-01",
+      "status": "unavailable",
+      "reason": "processing_denied",
+      "predictions": [],
+      "callback_ms": [
+        1.1799999999766442
+      ],
+      "baseline_ms": [
+        0.023600000076839933
+      ]
+    }
+  ]
+}

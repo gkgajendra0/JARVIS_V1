@@ -1,0 +1,86 @@
+"""Execute only the owner's approved three-opportunity recovery protocol."""
+import asyncio,hashlib,json,subprocess,sys
+from pathlib import Path
+from time import perf_counter
+from datetime import datetime,timezone
+sys.path.insert(0,str(Path.cwd()))
+from tools.research import personal_auto_learning_fresh_eval as fresh
+from tools.research import personal_auto_learning_eval as base
+from tools.research.personal_learning_bounded_recovery import recover_remaining,RECOVERY_DELAYS
+from jarvis.config import JarvisConfig
+from jarvis.ai_provider import resolve_ai_role_model
+from jarvis.memory.learning_extractors import build_learning_adapters
+ROOT=Path.cwd();OUT=ROOT/'benchmarks/results/personal-auto-learning-2026-10-22-v4-recovery';START=293;CEILING=532
+prior_path=ROOT/'benchmarks/results/personal-auto-learning-2026-10-22-v4-remaining-1/summary.json'
+prior=json.loads(prior_path.read_text(encoding='utf-8'))
+assert prior['summary']['conservative_cumulative_send_upper_bound']==START
+assert len(prior['rows'])==11
+inputs,gold=fresh.load_frozen_v4()
+OUT.mkdir(exist_ok=False)
+(OUT/'orchestration.py.txt').write_text(Path(__file__).read_text(encoding='utf-8'),encoding='utf-8')
+protocol={'candidate':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'product_candidate':'fd7c7025','prior_summary_sha256':hashlib.sha256(prior_path.read_bytes()).hexdigest(),'input_sha256':fresh.INPUT_HASH,'gold_sha256':fresh.GOLD_HASH,'approved_maximum_recovery_opportunities':3,'wait_seconds':list(RECOVERY_DELAYS),'prior_cumulative_send_upper_bound':START,'new_single_send_cap':239,'cumulative_ceiling':CEILING,'segment_spacing_seconds':15,'per_inference_deadline_seconds':10,'retry_failed_cases':False,'no_model_account_purchase_or_activation_change':True,'accepted':False,'orchestrator_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'initial_unattempted_ids':[e['id'] for e in inputs['episodes'] if e['id'] not in {r['id'] for r in prior['rows']}]}
+(OUT/'protocol.json').write_text(json.dumps(protocol,indent=2)+'\n',encoding='utf-8')
+budget=base.AttemptBudget(239);take=budget.take
+
+def journal():
+ take();(OUT/'attempt_journal.json').write_text(json.dumps({'recovery_single_send_calls':budget.attempts,'conservative_cumulative_send_upper_bound':START+budget.attempts,'remaining_under_532':CEILING-START-budget.attempts})+'\n',encoding='utf-8')
+budget.take=journal
+# Research output provenance only; no product/runtime/admission setting changes.
+fresh.PRIOR_SEND_RESERVE=START
+execute=fresh.execute_cases
+async def paced(*args,**kwargs):
+ kwargs['spacing']=15
+ return await execute(*args,**kwargs)
+fresh.execute_cases=paced
+health_inputs=[
+ ('How should you begin my replies?',[{'text':'response_style: start with a short summary'}]),
+ ('मेरे जवाबों में उदाहरण कैसे होने चाहिए?',[{'text':'response_style: simple everyday examples'}]),
+ ('Mere reply ka tone kaisa hona chahiye?',[{'text':'response_style: calm and respectful'}]),
+]
+health_reports=[];segments=[]
+def observer(state):
+ state={**state,'utc':datetime.now(timezone.utc).isoformat(),'conservative_cumulative_send_upper_bound':START+budget.attempts,'remaining_requests':CEILING-START-budget.attempts}
+ (OUT/'recovery_state.json').write_text(json.dumps(state,indent=2)+'\n',encoding='utf-8')
+ print(json.dumps({k:v for k,v in state.items() if k!='attempted_ids'}),flush=True)
+async def health(index):
+ q,facts=health_inputs[index-1];config=JarvisConfig.from_environment()
+ adapter,_=build_learning_adapters(config.ai_provider,resolve_ai_role_model(config.ai_provider,'work_orchestration',configured_model=config.work_orchestration_model));base._instrument(adapter,budget)
+ began=perf_counter()
+ try:
+  raw=await asyncio.wait_for(adapter._request(base.ANSWER_PROMPT,base.answer_payload(q,facts),base.ANSWER_SCHEMA),10)
+  if not isinstance(raw.get('answer'),str):raise TypeError('invalid answer schema')
+  row={'cycle':index,'status':'returned','question':q,'fictional_context':facts,'fictional_response':raw}
+ except Exception as exc:
+  row={'cycle':index,'status':'unavailable','question':q,'failure_kind':type(exc).__name__,'provider_failure':adapter.last_failure}
+ finally:
+  row.update({'latency_ms':(perf_counter()-began)*1000,'usage':adapter.usage,'requested_model':adapter.model_name,'conservative_cumulative_send_upper_bound':START+budget.attempts,'accepted':False})
+  (OUT/f'health-{index}.json').write_text(json.dumps(row,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+  health_reports.append(row)
+  await adapter.close()
+ return row['status']=='returned'
+async def segment(remaining,index):
+ folder=OUT/f'segment-{index}';folder.mkdir(exist_ok=False)
+ began_calls=budget.attempts
+ rows,pairs,keys,usage=await fresh._provider_run({'episodes':remaining},folder,budget)
+ artifact={'cycle':index,'rows':rows,'pair_count':len(pairs),'usage':usage,'single_send_calls':budget.attempts-began_calls,'cumulative_upper_bound':START+budget.attempts,'accepted':False}
+ (folder/'segment_summary.json').write_text(json.dumps(artifact,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+ segments.append(artifact)
+ return rows
+async def main():
+ result=await recover_remaining(inputs['episodes'],prior['rows'],budget=budget,health=health,segment=segment,observer=observer)
+ rows=result['rows'];scores=base.score_rows(rows,gold)
+ scores['capture_floor_pass']=scores['quality_floor_pass'];scores['quality_floor_pass']=False
+ scores['context_mismatches']=fresh.context_mismatches(rows,gold)
+ scores['advice_review']='pending blind author review for new pairs; original failures preserved; no owner acceptance'
+ new_pairs=[];new_keys=[]
+ for seg in segments:
+  folder=OUT/f"segment-{seg['cycle']}"
+  new_pairs+=json.loads((folder/'blind_answers.json').read_text(encoding='utf-8'))
+  new_keys+=json.loads((folder/'answer_arm_key.json').read_text(encoding='utf-8'))
+ (OUT/'blind_new_answers.json').write_text(json.dumps(new_pairs,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+ (OUT/'new_answer_arm_key.json').write_text(json.dumps(new_keys,indent=2)+'\n',encoding='utf-8')
+ summary={'status':'incomplete','stop_reason':result['stop_reason'],'completed':scores['completed'],'unavailable':scores['unavailable'],'unrun':len(result['unrun_ids']),'new_complete_pairs':len(new_pairs),'total_complete_pairs':6+len(new_pairs),'answer_unavailable':scores['answer_unavailable'],'recovery_opportunities_used':result['opportunities_used'],'recovery_single_send_calls':budget.attempts,'conservative_cumulative_send_upper_bound':START+budget.attempts,'remaining_under_532':CEILING-START-budget.attempts,'accepted':False}
+ artifact={'summary':summary,'protocol':protocol,'cycles':result['cycles'],'scores':scores,'rows':rows,'health_results':health_reports,'segment_usage':[s['usage'] for s in segments],'request_latency_ms':base.distribution(budget.latencies),'accepted_turn_callback_ms':base.distribution([v for r in rows for v in r.get('callback_ms',[])])}
+ (OUT/'summary.json').write_text(json.dumps(artifact,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+ print(json.dumps(summary),flush=True)
+asyncio.run(main())

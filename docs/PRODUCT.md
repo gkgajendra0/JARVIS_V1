@@ -1,5 +1,7 @@
 # JARVIS V1 Product
 
+**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,858 tests / 8 skips) after all three Important review findings were repaired; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
+
 ## Vision
 
 JARVIS V1 is a personal, voice-first intelligent assistant intended to mature into one coherent **governed autonomous self-managing personal intelligence runtime** across conversation, memory, knowledge, local computer work, devices, communication, proactive assistance, operations, self-repair and self-evolution.
@@ -21,6 +23,8 @@ The complete top-level operating architecture is defined in `AUTONOMOUS_SELF_MAN
 The goal is not to reproduce the old JARVIS implementation. Preserve worthwhile product intent, research the best suitable current technology for each active slice, and keep JARVIS-owned truth/authority around commodity technology.
 
 ## Owner-Centered Personal Intelligence Contract
+
+Candidate update (22 October 2026): automatic conversational learning is implemented and software-verified on its dedicated branch/draft PR#295 (all7CI on c03666b7 passed). The owner chose to advance development and defer extended quota-bound provider qualification. Learning remains OFF by default and unpromoted; multilingual quality/resource and normal-app acceptance are still open, not passed by this decision. CAP-053stays PARTIAL. See the [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md) and [immutable qualification](research/PERSONAL_AUTO_LEARNING_QUALIFICATION_2026-10-22.md).
 
 Implementation update (21 October 2026): PR #294 supplies the first opt-in active
 read slice with fresh exact-request Hello, natural existing-memory changes and

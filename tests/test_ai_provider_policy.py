@@ -242,8 +242,11 @@ def test_provider_sdk_imports_stay_inside_approved_adapter_boundaries() -> None:
         Path("src/jarvis/computer/providers.py"),
         Path("src/jarvis/hands/provider_adapters.py"),
         Path("src/jarvis/memory/extractors.py"),
+        Path("src/jarvis/memory/learning_extractors.py"),
         Path("src/jarvis/memory/query_interpreters.py"),
         Path("src/jarvis/voice/livekit_session.py"),
+        # Owner-approved controlled public Live adapter; no credential resolver.
+        Path("src/jarvis/voice/gemini_live_session.py"),
         Path("src/jarvis/voice/scripted_speech.py"),
     }
     violations: list[tuple[Path, str]] = []

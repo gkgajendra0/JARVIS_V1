@@ -1,0 +1,24 @@
+{
+  "cycle": 3,
+  "status": "returned",
+  "question": "Mere reply ka tone kaisa hona chahiye?",
+  "fictional_context": [
+    {
+      "text": "response_style: calm and respectful"
+    }
+  ],
+  "fictional_response": {
+    "answer": "Aapke reply ka tone calm aur respectful (शांत और आदरपूर्ण) hona chahiye."
+  },
+  "latency_ms": 3044.2810999993526,
+  "usage": [
+    {
+      "input_tokens": 95,
+      "output_tokens": 28,
+      "total_tokens": 417
+    }
+  ],
+  "requested_model": "gemini-3.5-flash",
+  "conservative_cumulative_send_upper_bound": 301,
+  "accepted": false
+}

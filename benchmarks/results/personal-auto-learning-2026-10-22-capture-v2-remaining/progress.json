@@ -1,0 +1,229 @@
+{
+  "rows": [
+    {
+      "id": "hi-capture-v2-11",
+      "status": "unavailable",
+      "reason": "timeout",
+      "predictions": [],
+      "callback_ms": [
+        17.402000004949514
+      ],
+      "baseline_ms": [
+        0.02720000338740647
+      ]
+    },
+    {
+      "id": "hinglish-capture-v2-11",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_804efb5fa9704f06ae7f6d319da4d6dd",
+          "text": "Jawa 42: Jawa 42; state=owned"
+        },
+        {
+          "predicate": "owned_item_9927bfb507224b3489dbd2a158262ca6",
+          "text": "KTM 250 Duke: KTM 250 Duke; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5433999976958148
+      ],
+      "baseline_ms": [
+        0.03989999822806567
+      ],
+      "background_ms": 18178.87740000151
+    },
+    {
+      "id": "en-capture-v2-12",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4748999999719672
+      ],
+      "baseline_ms": [
+        0.024900000425986946
+      ],
+      "background_ms": 9299.212599995371
+    },
+    {
+      "id": "hi-capture-v2-12",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5077999958302826
+      ],
+      "baseline_ms": [
+        0.022599997464567423
+      ],
+      "background_ms": 9950.108099998033
+    },
+    {
+      "id": "hinglish-capture-v2-12",
+      "status": "unavailable",
+      "reason": "timeout",
+      "predictions": [],
+      "callback_ms": [
+        0.4886999959126115
+      ],
+      "baseline_ms": [
+        0.029100003303028643
+      ]
+    },
+    {
+      "id": "en-capture-v2-13",
+      "status": "unavailable",
+      "reason": "timeout",
+      "predictions": [],
+      "callback_ms": [
+        0.5572000009124167
+      ],
+      "baseline_ms": [
+        0.022899999748915434
+      ]
+    },
+    {
+      "id": "hi-capture-v2-13",
+      "status": "unavailable",
+      "reason": "timeout",
+      "predictions": [],
+      "callback_ms": [
+        0.6345000001601875
+      ],
+      "baseline_ms": [
+        0.02179999864893034
+      ]
+    },
+    {
+      "id": "hinglish-capture-v2-13",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5311999993864447
+      ],
+      "baseline_ms": [
+        0.02130000211764127
+      ],
+      "background_ms": 9174.214799997571
+    },
+    {
+      "id": "en-capture-v2-14",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.447600003099069
+      ],
+      "baseline_ms": [
+        0.02149999636458233
+      ],
+      "background_ms": 8412.968600001477
+    },
+    {
+      "id": "hi-capture-v2-14",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4886999959126115
+      ],
+      "baseline_ms": [
+        0.021700005163438618
+      ],
+      "background_ms": 9214.616299999761
+    },
+    {
+      "id": "hinglish-capture-v2-14",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.47030000132508576
+      ],
+      "baseline_ms": [
+        0.020899999071843922
+      ],
+      "background_ms": 9797.214899997925
+    },
+    {
+      "id": "en-capture-v2-15",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.19109999993816018,
+        0.33489999623270705
+      ],
+      "baseline_ms": [
+        0.02160000440198928,
+        0.014699995517730713
+      ],
+      "background_ms": 31.239299998560455
+    },
+    {
+      "id": "hi-capture-v2-15",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.19769999926211312,
+        0.3499000013107434
+      ],
+      "baseline_ms": [
+        0.02099999983329326,
+        0.015599995094817132
+      ],
+      "background_ms": 18.85480000055395
+    },
+    {
+      "id": "hinglish-capture-v2-15",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.18849999469239265,
+        0.32700000156182796
+      ],
+      "baseline_ms": [
+        0.01960000372491777,
+        0.015400000847876072
+      ],
+      "background_ms": 66.12560000212397
+    }
+  ],
+  "single_send_calls": 56,
+  "conservative_cumulative_send_upper_bound": 261
+}

@@ -1,0 +1,82 @@
+[
+  {
+    "id": "hi-fresh-v4-01",
+    "question": "मेरी कार और मोटरसाइकिल कौन सी हैं?",
+    "facts": [
+      {
+        "predicate": "owned_item_824ddb0879264e8ab0b17c8bc9f4ee8c",
+        "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned"
+      },
+      {
+        "predicate": "owned_item_afc8926fcc5748cda38d23a163972007",
+        "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+      }
+    ],
+    "A": "मुझे आपकी कार और मोटरसाइकिल के बारे में कोई जानकारी नहीं है।",
+    "B": "आपकी कार टोयोटा ग्लैंज़ा (Toyota Glanza) और मोटरसाइकिल सुज़ुकी जिक्सर 250 (Suzuki Gixxer 250) है।"
+  },
+  {
+    "id": "hinglish-fresh-v4-01",
+    "question": "Meri car aur motorcycle kaunsi hain?",
+    "facts": [
+      {
+        "predicate": "owned_item_48c9403b626e42b89bc5704699fb3dbb",
+        "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+      },
+      {
+        "predicate": "owned_item_70fbcaf7e2874899aa74eb9218768d3d",
+        "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned"
+      }
+    ],
+    "A": "Aapki car Toyota Glanza hai aur motorcycle Suzuki Gixxer 250 hai.",
+    "B": "Mere paas aapki car aur motorcycle ke baare mein koi jankari nahi hai."
+  },
+  {
+    "id": "en-fresh-v4-02",
+    "question": "Which keyboard do I have?",
+    "facts": [
+      {
+        "predicate": "owned_item_c0b9c5a8bb514e03a0ff1976d42d0138",
+        "text": "owned_item.device: Keychron K8 Pro keyboard; value=Keychron K8 Pro keyboard; state=owned"
+      }
+    ],
+    "A": "You have a Keychron K8 Pro keyboard.",
+    "B": "I don't have information about which keyboard you have."
+  },
+  {
+    "id": "hi-fresh-v4-02",
+    "question": "मेरे पास कौन सा कीबोर्ड है?",
+    "facts": [
+      {
+        "predicate": "owned_item_ea40ec5b4e914b67b761fe0d23223f24",
+        "text": "owned_item.device: Keychron K8 Pro कीबोर्ड; value=Keychron K8 Pro कीबोर्ड; state=owned"
+      }
+    ],
+    "A": "मुझे इसकी जानकारी नहीं है कि आपके पास कौन सा कीबोर्ड है।",
+    "B": "आपके पास Keychron K8 Pro कीबोर्ड है।"
+  },
+  {
+    "id": "hinglish-fresh-v4-02",
+    "question": "Mere paas kaunsa keyboard hai?",
+    "facts": [
+      {
+        "predicate": "owned_item_137cc05f11104e2ba5b9e5dbee074087",
+        "text": "owned_item.device: Keychron K8 Pro keyboard; value=Keychron K8 Pro keyboard; state=owned"
+      }
+    ],
+    "A": "Mujhe iski jaankari nahi hai ki aapke paas kaunsa keyboard hai.",
+    "B": "Aapke paas Keychron K8 Pro keyboard hai."
+  },
+  {
+    "id": "en-fresh-v4-04",
+    "question": "What style should you use when replying to me?",
+    "facts": [
+      {
+        "predicate": "response_style",
+        "text": "response_preference: brief and encouraging style"
+      }
+    ],
+    "A": "I should use a brief and encouraging style when replying to you.",
+    "B": "I don't have any specific style preferences saved for you, so I will reply naturally, clearly, and directly."
+  }
+]

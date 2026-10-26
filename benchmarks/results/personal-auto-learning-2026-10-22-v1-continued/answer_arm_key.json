@@ -1,0 +1,17 @@
+[
+  {
+    "id": "en-05",
+    "A": "enabled",
+    "B": "baseline"
+  },
+  {
+    "id": "hi-01",
+    "A": "baseline",
+    "B": "enabled"
+  },
+  {
+    "id": "hinglish-01",
+    "A": "enabled",
+    "B": "baseline"
+  }
+]

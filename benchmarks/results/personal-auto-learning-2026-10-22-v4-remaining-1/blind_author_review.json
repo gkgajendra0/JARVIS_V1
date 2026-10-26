@@ -1,0 +1,114 @@
+{
+  "method": "author read only blind_answers.json before saving these ratings; no arm key opened before this file",
+  "limits": "content may reveal arm; not independent human acceptance; relevant cases only",
+  "pairs": [
+    {
+      "id": "hi-fresh-v4-01",
+      "arms": {
+        "A": {
+          "uses_supported_current_fact": false,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": true
+        },
+        "B": {
+          "uses_supported_current_fact": true,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": false
+        }
+      },
+      "reason": "One arm names both correct current vehicles in Hindi; other honestly lacks owner information."
+    },
+    {
+      "id": "hinglish-fresh-v4-01",
+      "arms": {
+        "A": {
+          "uses_supported_current_fact": true,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": false
+        },
+        "B": {
+          "uses_supported_current_fact": false,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": true
+        }
+      },
+      "reason": "One arm names both vehicles in Hinglish; other honestly lacks owner information."
+    },
+    {
+      "id": "en-fresh-v4-02",
+      "arms": {
+        "A": {
+          "uses_supported_current_fact": true,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": false
+        },
+        "B": {
+          "uses_supported_current_fact": false,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": true
+        }
+      },
+      "reason": "One arm identifies the current keyboard; other honestly says unknown."
+    },
+    {
+      "id": "hi-fresh-v4-02",
+      "arms": {
+        "A": {
+          "uses_supported_current_fact": false,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": true
+        },
+        "B": {
+          "uses_supported_current_fact": true,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": false
+        }
+      },
+      "reason": "One arm identifies the keyboard in Hindi; other honestly says unknown."
+    },
+    {
+      "id": "hinglish-fresh-v4-02",
+      "arms": {
+        "A": {
+          "uses_supported_current_fact": false,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": true
+        },
+        "B": {
+          "uses_supported_current_fact": true,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": false
+        }
+      },
+      "reason": "One arm identifies the keyboard in Hinglish; other honestly says unknown."
+    },
+    {
+      "id": "en-fresh-v4-04",
+      "arms": {
+        "A": {
+          "uses_supported_current_fact": true,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": false
+        },
+        "B": {
+          "uses_supported_current_fact": false,
+          "unsupported_owner_claim": false,
+          "appropriate_language": true,
+          "honest_if_no_context": true
+        }
+      },
+      "reason": "One arm uses the saved brief/encouraging style; other acknowledges no saved preference and gives a neutral default."
+    }
+  ]
+}

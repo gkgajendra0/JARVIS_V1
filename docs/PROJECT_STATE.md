@@ -1,5 +1,17 @@
 # JARVIS V1 Project State
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
+**PI-3A candidate (22 October 2026):** question-bound selection of relevant current personal facts is implemented on the dependent candidate branch. Local software verification passed (2,858 tests / 8 skips) after all three Important review findings were repaired; actual-model selection and whole normal-app spoken acceptance remain pending. Default OFF and CAP-053 PARTIAL are unchanged. See [PI-3A implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md).
+
 ## Purpose
 
 This is the canonical repository-state ledger.
@@ -19,6 +31,10 @@ Snapshot baseline verified from protected `main` at
 `c04ede5c3f63ad803541a2f3d15a5e85c1b41023` on 2026-09-25, immediately after Phase-3 PR #108 merge.
 
 ---
+
+## Automatic conversational learning candidate — 22 October 2026
+
+**IMPLEMENTED / SOFTWARE-VERIFIED; BROADER QUALIFICATION DEFERRED BY OWNER DIRECTION22OCTOBER2026.** Normal voice integration is on `feat/personal-auto-learning-20261021`, draft PR#295. Evidence headc03666b7 passed all7CI checks; latest full local suite2,759passed/8skipped. Product codefd7c7025 is unchanged. One completed independent review/six verified repairs; later fixes have regression evidence. Automatic learning remains OFF by default and unpromoted. The owner chose to move development forward rather than continue multi-day quota-bound testing; this is not performed owner acceptance or protected merge/activation authorization. V4evidence remains15complete/one unavailable/74unrun,18/18conditional effects, six complete/four failed pairs; old v1recall and v2Hindi partial correction remain unqualified. Provider/resource/whole normal-app owner gates stay deferred/open; CAP-053is PARTIAL. All3recovery opportunities exhausted, budget upper304/532with228remain; no new inference/purchase/model change/schedule. Next inspect grounded personal advice/task follow-through within the existing north star. [Handoff and limits](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md).
 
 ## Documentation reconciliation and owner priority — 2026-10-18
 

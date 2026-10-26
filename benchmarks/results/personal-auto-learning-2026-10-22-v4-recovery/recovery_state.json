@@ -1,0 +1,27 @@
+{
+  "event": "segment_stopped",
+  "cycle": 3,
+  "single_send_calls": 11,
+  "attempted_ids": [
+    "en-fresh-v4-01",
+    "hi-fresh-v4-01",
+    "hinglish-fresh-v4-01",
+    "en-fresh-v4-02",
+    "hi-fresh-v4-02",
+    "hinglish-fresh-v4-02",
+    "en-fresh-v4-03",
+    "hi-fresh-v4-03",
+    "hinglish-fresh-v4-03",
+    "en-fresh-v4-04",
+    "hi-fresh-v4-04",
+    "hinglish-fresh-v4-04",
+    "en-fresh-v4-05",
+    "hi-fresh-v4-05",
+    "hinglish-fresh-v4-05",
+    "en-fresh-v4-06"
+  ],
+  "opportunities_used": 3,
+  "utc": "2026-10-22T11:48:00.626316+00:00",
+  "conservative_cumulative_send_upper_bound": 304,
+  "remaining_requests": 228
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "personal-auto-learning-manifest-v1",
+  "frozen_before_provider": true,
+  "files": {
+    "personal_auto_learning_v1.json": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "personal_auto_learning_v1_gold.json": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010"
+  },
+  "episodes": 90,
+  "answer_pairs": 30,
+  "max_attempts": 270
+}

@@ -17,6 +17,7 @@ from jarvis.model_routing.models import (
     PrivacyClass,
     RoutingRequest,
     RoutingStrategyResult,
+    ScopedRoutingRequest,
     TargetExclusion,
 )
 from jarvis.model_routing.registry import ModelAdapterRegistry
@@ -170,13 +171,13 @@ class EligibilityPolicy:
     def evaluate(
         self,
         *,
-        request: RoutingRequest,
+        request: RoutingRequest | ScopedRoutingRequest,
         targets: tuple[ModelTarget, ...],
         adapter_registry: ModelAdapterRegistry,
         runtime_state: EligibilityRuntimeState,
         snapshot_id: str,
     ) -> EligibilityResult:
-        if not isinstance(request, RoutingRequest):
+        if not isinstance(request, (RoutingRequest, ScopedRoutingRequest)):
             raise TypeError("request must be a RoutingRequest")
         if not isinstance(adapter_registry, ModelAdapterRegistry):
             raise TypeError("adapter_registry must be a ModelAdapterRegistry")
@@ -265,7 +266,7 @@ class EligibilityPolicy:
     def _exclusion_reasons(
         self,
         *,
-        request: RoutingRequest,
+        request: RoutingRequest | ScopedRoutingRequest,
         target: ModelTarget,
         adapter_registry: ModelAdapterRegistry,
         runtime_state: EligibilityRuntimeState,
@@ -353,7 +354,7 @@ class EligibilityPolicy:
         return False
 
     @staticmethod
-    def _required_role(request: RoutingRequest) -> str | None:
+    def _required_role(request: RoutingRequest | ScopedRoutingRequest) -> str | None:
         value = request.routing_features.get("required_role")
         if value is None:
             return None

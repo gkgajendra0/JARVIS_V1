@@ -20,6 +20,7 @@ from jarvis.hands.contracts import (
 )
 from jarvis.hands.models import HandsOperation
 from jarvis.hands.provider_adapters import (
+    RoutedStructuredOutputClient,
     StructuredOutputClient,
     build_chatgpt_plan_structured_output_client,
     build_structured_output_client,
@@ -256,6 +257,8 @@ def build_hands_planner(
     model: str | None = None,
     chatgpt_plan_enabled: bool = False,
     chatgpt_plan_model: str | None = None,
+    routing_runtime=None,
+    paid_output_tokens: int = 4096,
 ) -> HandsSemanticPlanner:
     normalized_provider = normalize_ai_provider(provider)
     model_name = resolve_ai_role_model(
@@ -263,6 +266,22 @@ def build_hands_planner(
         "hands_planner",
         configured_model=model,
     )
+    if (
+        routing_runtime is not None
+        and routing_runtime.config.enabled
+        and normalized_provider == "gemini"
+    ):
+        if chatgpt_plan_enabled and not chatgpt_plan_model:
+            raise ValueError("Configured ChatGPT-plan model required")
+        return HandsSemanticPlanner(
+            RoutedStructuredOutputClient(
+                routing_runtime=routing_runtime,
+                role="hands",
+                model=model_name,
+                max_output_tokens=paid_output_tokens,
+                chatgpt_plan_model=chatgpt_plan_model if chatgpt_plan_enabled else None,
+            )
+        )
     if chatgpt_plan_enabled:
         plan_model = str(chatgpt_plan_model or "").strip()
         if not plan_model:

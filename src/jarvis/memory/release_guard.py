@@ -213,10 +213,45 @@ class GeminiMemoryReleaseGuard:
             ) from exc
 
 
+class RoutedMemoryReleaseGuard:
+    provider_name = "gemini"
+
+    def __init__(self, *, routing_runtime, model):
+        from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
+
+        self.model_name = model
+        self._client = RoutedStructuredOutputClient(
+            routing_runtime=routing_runtime,
+            role="memory.recall",
+            model=model,
+            max_output_tokens=4096,
+        )
+
+    async def evaluate(self, *, text, evidence):
+        raise MemoryReleaseGuardError("Routed release requires canonical revalidation")
+
+    async def evaluate_current(self, *, text, evidence, before_dispatch):
+        if not callable(before_dispatch):
+            raise MemoryReleaseGuardError("Canonical revalidation is required")
+        result = await self._client.parse(
+            system_prompt=MEMORY_RELEASE_GUARD_SYSTEM_PROMPT,
+            input_payload={
+                "release_evidence": memory_release_guard_input(
+                    text=text, evidence=evidence
+                )
+            },
+            response_model=MemoryReleaseJudgement,
+            before_dispatch=before_dispatch,
+        )
+        await before_dispatch()
+        return result
+
+
 def build_memory_release_guard(
     *,
     provider: str,
     model: str,
+    routing_runtime=None,
 ) -> MemoryReleaseGuard:
     """Build the verifier under the already-selected production provider family."""
 
@@ -227,6 +262,14 @@ def build_memory_release_guard(
         "memory_semantic_recall",
         configured_model=configured_model,
     )
+    if (
+        routing_runtime is not None
+        and routing_runtime.config.enabled
+        and normalized_provider == "gemini"
+    ):
+        return RoutedMemoryReleaseGuard(
+            routing_runtime=routing_runtime, model=normalized_model
+        )
     normalized_provider, client = build_structured_provider_client(
         provider=normalized_provider,
         purpose="semantic memory release verification",

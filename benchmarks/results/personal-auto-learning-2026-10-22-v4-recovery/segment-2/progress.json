@@ -1,0 +1,263 @@
+{
+  "rows": [
+    {
+      "id": "en-fresh-v4-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: Gujarati",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: Gujarati"
+        }
+      ],
+      "callback_ms": [
+        0.4822999999305466
+      ],
+      "baseline_ms": [
+        0.026899999284069054
+      ],
+      "background_ms": 1736.3064000001032,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                "text": "My preferred reply language is Gujarati."
+              }
+            ],
+            "current_turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "reply language",
+                "value": "Gujarati",
+                "evidence": [
+                  {
+                    "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                    "quote": "My preferred reply language is Gujarati."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_language",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply language",
+            "value": "Gujarati",
+            "evidence": [
+              {
+                "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                "start": 0,
+                "end": 40
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply language",
+            "value": "Gujarati",
+            "evidence": [
+              {
+                "turn_id": "ad751e01-a9a8-4b8f-a2e7-7e5d3cfef482",
+                "start": 0,
+                "end": 40
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hi-fresh-v4-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: गुजराती",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: गुजराती"
+        }
+      ],
+      "callback_ms": [
+        0.5417000011220807
+      ],
+      "baseline_ms": [
+        0.025200000891345553
+      ],
+      "background_ms": 1697.174000000814,
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                "text": "जवाबों के लिए मेरी पसंदीदा भाषा गुजराती है।"
+              }
+            ],
+            "current_turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "पसंद की भाषा",
+                "value": "गुजराती",
+                "evidence": [
+                  {
+                    "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                    "quote": "जवाबों के लिए मेरी पसंदीदा भाषा गुजराती है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_language",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "पसंद की भाषा",
+            "value": "गुजराती",
+            "evidence": [
+              {
+                "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                "start": 0,
+                "end": 43
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "पसंद की भाषा",
+            "value": "गुजराती",
+            "evidence": [
+              {
+                "turn_id": "b0a0c8bc-d797-4d31-b881-38300776dac7",
+                "start": 0,
+                "end": 43
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_language",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "id": "hinglish-fresh-v4-05",
+      "status": "unavailable",
+      "reason": "timeout",
+      "predictions": [],
+      "callback_ms": [
+        0.4895000001852168
+      ],
+      "baseline_ms": [
+        0.02469999890308827
+      ],
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "f095a9f5-3ac6-44f8-9a5e-e800132c95f7",
+                "text": "Replies ke liye meri preferred language Gujarati hai."
+              }
+            ],
+            "current_turn_id": "f095a9f5-3ac6-44f8-9a5e-e800132c95f7"
+          },
+          "unavailable": "CancelledError"
+        }
+      ]
+    }
+  ],
+  "single_send_calls": 7,
+  "conservative_cumulative_send_upper_bound": 300
+}

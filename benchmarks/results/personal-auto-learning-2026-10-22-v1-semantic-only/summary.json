@@ -1,0 +1,3593 @@
+{
+  "continuation_plan": {
+    "candidate": "842a5cba5c536119a06fa08df1d7ec307ee0238a",
+    "input_sha256": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "gold_sha256": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010",
+    "prior_summary_sha256": "61b17421dfa9c557fc22b789843545e05aada3f19000c68642ede77c15490f7f",
+    "reserved_start_send_upper_bound": 98,
+    "historical_outer_calls": 33,
+    "historical_send_reserve": 87,
+    "diagnostic_single_sends": 2,
+    "remaining_cap": 172,
+    "minimum_episode_spacing_seconds": 8,
+    "answer_execution": "disabled after confirmed work-role HTTP429; original answer_subset retained in metadata; no answer-provider inference",
+    "order": [
+      "en-08",
+      "hi-04",
+      "hinglish-04",
+      "en-09",
+      "hi-05",
+      "hinglish-05",
+      "en-10",
+      "hi-06",
+      "hinglish-06",
+      "en-11",
+      "hi-07",
+      "hinglish-07",
+      "en-12",
+      "hi-08",
+      "hinglish-08",
+      "en-13",
+      "hi-09",
+      "hinglish-09",
+      "en-14",
+      "hi-10",
+      "hinglish-10",
+      "en-15",
+      "hi-11",
+      "hinglish-11",
+      "en-16",
+      "hi-12",
+      "hinglish-12",
+      "en-17",
+      "hi-13",
+      "hinglish-13",
+      "en-18",
+      "hi-14",
+      "hinglish-14",
+      "en-19",
+      "hi-15",
+      "hinglish-15",
+      "en-20",
+      "hi-16",
+      "hinglish-16",
+      "en-21",
+      "hi-17",
+      "hinglish-17",
+      "en-22",
+      "hi-18",
+      "hinglish-18",
+      "en-23",
+      "hi-19",
+      "hinglish-19",
+      "en-24",
+      "hi-20",
+      "hinglish-20",
+      "en-25",
+      "hi-21",
+      "hinglish-21",
+      "en-26",
+      "hi-22",
+      "hinglish-22",
+      "en-27",
+      "hi-23",
+      "hinglish-23",
+      "en-28",
+      "hi-24",
+      "hinglish-24",
+      "en-29",
+      "hi-25",
+      "hinglish-25",
+      "en-30",
+      "hi-26",
+      "hinglish-26",
+      "hi-27",
+      "hinglish-27",
+      "hi-28",
+      "hinglish-28",
+      "hi-29",
+      "hinglish-29",
+      "hi-30",
+      "hinglish-30"
+    ],
+    "retry": false,
+    "notes": "Round robin language order fixed before calls. Owner approved remaining validation. Installed SDK retry disabled and mock-transport verified. Conservative reserve98 at start includes historical uncertainty, two diagnostic sends and nine verified-transport sends. No failed/exposed episode replay, no paid fallback/account change. Only learning/canonical-context stage executes; answer stage disabled after confirmed work-role429. Original corpus bytes unchanged. Advance only to new cases after timeout; stop on any learning HTTP/transport error or non-timeout semantic/authority failure. Preserve unavailable outcomes; acceptance false."
+  },
+  "summary": {
+    "status": "incomplete",
+    "completed": 77,
+    "unavailable": 0,
+    "unrun": 0,
+    "provider_attempts": 101,
+    "cumulative_send_upper_bound": 199,
+    "accepted": false
+  },
+  "scores": {
+    "completed": 77,
+    "unavailable": 0,
+    "true_positive": 20,
+    "false_positive": 0,
+    "false_negative": 12,
+    "precision": 1.0,
+    "recall": 0.625,
+    "precision_wilson": [
+      0.8388698745050667,
+      1.0
+    ],
+    "recall_wilson": [
+      0.45254100589525126,
+      0.7706633153404079
+    ],
+    "languages": {
+      "en": {
+        "completed": 23,
+        "captured": 5,
+        "expected": 8
+      },
+      "hi": {
+        "completed": 27,
+        "captured": 8,
+        "expected": 12
+      },
+      "hinglish": {
+        "completed": 27,
+        "captured": 7,
+        "expected": 12
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 0,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers"
+  },
+  "usage": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 375,
+          "output_tokens": 182,
+          "total_tokens": 557
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 380,
+          "output_tokens": 183,
+          "total_tokens": 563
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 385,
+          "output_tokens": 188,
+          "total_tokens": 573
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 186,
+          "total_tokens": 563
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 381,
+          "output_tokens": 189,
+          "total_tokens": 570
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 378,
+          "output_tokens": 182,
+          "total_tokens": 560
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 388,
+          "output_tokens": 191,
+          "total_tokens": 579
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 378,
+          "output_tokens": 184,
+          "total_tokens": 562
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 384,
+          "output_tokens": 188,
+          "total_tokens": 572
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 385,
+          "output_tokens": 192,
+          "total_tokens": 577
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 385,
+          "output_tokens": 190,
+          "total_tokens": 575
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 381,
+          "output_tokens": 183,
+          "total_tokens": 564
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 387,
+          "output_tokens": 191,
+          "total_tokens": 578
+        },
+        {
+          "input_tokens": 445,
+          "output_tokens": 78,
+          "total_tokens": 523
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 190,
+          "total_tokens": 576
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 380,
+          "output_tokens": 188,
+          "total_tokens": 568
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 397,
+          "output_tokens": 201,
+          "total_tokens": 598
+        },
+        {
+          "input_tokens": 545,
+          "output_tokens": 80,
+          "total_tokens": 625
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 381,
+          "output_tokens": 186,
+          "total_tokens": 567
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 190,
+          "total_tokens": 576
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 387,
+          "output_tokens": 190,
+          "total_tokens": 577
+        },
+        {
+          "input_tokens": 516,
+          "output_tokens": 78,
+          "total_tokens": 594
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 383,
+          "output_tokens": 192,
+          "total_tokens": 575
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 189,
+          "total_tokens": 575
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 375,
+          "output_tokens": 178,
+          "total_tokens": 553
+        },
+        {
+          "input_tokens": 496,
+          "output_tokens": 79,
+          "total_tokens": 575
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 394,
+          "output_tokens": 197,
+          "total_tokens": 591
+        },
+        {
+          "input_tokens": 687,
+          "output_tokens": 81,
+          "total_tokens": 768
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 389,
+          "output_tokens": 195,
+          "total_tokens": 584
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 380,
+          "output_tokens": 184,
+          "total_tokens": 564
+        },
+        {
+          "input_tokens": 518,
+          "output_tokens": 76,
+          "total_tokens": 594
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 384,
+          "output_tokens": 192,
+          "total_tokens": 576
+        },
+        {
+          "input_tokens": 441,
+          "output_tokens": 79,
+          "total_tokens": 520
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 191,
+          "total_tokens": 577
+        },
+        {
+          "input_tokens": 443,
+          "output_tokens": 80,
+          "total_tokens": 523
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 182,
+          "total_tokens": 561
+        },
+        {
+          "input_tokens": 438,
+          "output_tokens": 80,
+          "total_tokens": 518
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 183,
+          "total_tokens": 560
+        },
+        {
+          "input_tokens": 502,
+          "output_tokens": 78,
+          "total_tokens": 580
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 389,
+          "output_tokens": 192,
+          "total_tokens": 581
+        },
+        {
+          "input_tokens": 514,
+          "output_tokens": 59,
+          "total_tokens": 573
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 390,
+          "output_tokens": 196,
+          "total_tokens": 586
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 375,
+          "output_tokens": 180,
+          "total_tokens": 555
+        },
+        {
+          "input_tokens": 431,
+          "output_tokens": 79,
+          "total_tokens": 510
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 388,
+          "output_tokens": 186,
+          "total_tokens": 574
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 382,
+          "output_tokens": 182,
+          "total_tokens": 564
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 384,
+          "output_tokens": 186,
+          "total_tokens": 570
+        },
+        {
+          "input_tokens": 456,
+          "output_tokens": 79,
+          "total_tokens": 535
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 374,
+          "output_tokens": 181,
+          "total_tokens": 555
+        },
+        {
+          "input_tokens": 508,
+          "output_tokens": 76,
+          "total_tokens": 584
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 184,
+          "total_tokens": 563
+        },
+        {
+          "input_tokens": 515,
+          "output_tokens": 75,
+          "total_tokens": 590
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 395,
+          "output_tokens": 9,
+          "total_tokens": 404
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 380,
+          "output_tokens": 189,
+          "total_tokens": 569
+        },
+        {
+          "input_tokens": 440,
+          "output_tokens": 77,
+          "total_tokens": 517
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 181,
+          "total_tokens": 558
+        },
+        {
+          "input_tokens": 433,
+          "output_tokens": 78,
+          "total_tokens": 511
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 390,
+          "output_tokens": 9,
+          "total_tokens": 399
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 388,
+          "output_tokens": 189,
+          "total_tokens": 577
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 392,
+          "output_tokens": 191,
+          "total_tokens": 583
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 393,
+          "output_tokens": 9,
+          "total_tokens": 402
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 382,
+          "output_tokens": 187,
+          "total_tokens": 569
+        },
+        {
+          "input_tokens": 443,
+          "output_tokens": 78,
+          "total_tokens": 521
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 376,
+          "output_tokens": 182,
+          "total_tokens": 558
+        },
+        {
+          "input_tokens": 432,
+          "output_tokens": 80,
+          "total_tokens": 512
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 9,
+          "total_tokens": 388
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 378,
+          "output_tokens": 183,
+          "total_tokens": 561
+        },
+        {
+          "input_tokens": 447,
+          "output_tokens": 79,
+          "total_tokens": 526
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 184,
+          "total_tokens": 563
+        },
+        {
+          "input_tokens": 446,
+          "output_tokens": 77,
+          "total_tokens": 523
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 388,
+          "output_tokens": 9,
+          "total_tokens": 397
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 390,
+          "output_tokens": 9,
+          "total_tokens": 399
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 400,
+          "output_tokens": 9,
+          "total_tokens": 409
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 392,
+          "output_tokens": 9,
+          "total_tokens": 401
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 391,
+          "output_tokens": 9,
+          "total_tokens": 400
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 381,
+          "output_tokens": 183,
+          "total_tokens": 564
+        },
+        {
+          "input_tokens": 440,
+          "output_tokens": 79,
+          "total_tokens": 519
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 9,
+          "total_tokens": 388
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 388,
+          "output_tokens": 9,
+          "total_tokens": 397
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 187,
+          "total_tokens": 566
+        },
+        {
+          "input_tokens": 519,
+          "output_tokens": 76,
+          "total_tokens": 595
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 383,
+          "output_tokens": 9,
+          "total_tokens": 392
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 389,
+          "output_tokens": 9,
+          "total_tokens": 398
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 9,
+          "total_tokens": 386
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 385,
+          "output_tokens": 9,
+          "total_tokens": 394
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 389,
+          "output_tokens": 9,
+          "total_tokens": 398
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 381,
+          "output_tokens": 186,
+          "total_tokens": 567
+        },
+        {
+          "input_tokens": 686,
+          "output_tokens": 45,
+          "total_tokens": 731
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 379,
+          "output_tokens": 188,
+          "total_tokens": 567
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 189,
+          "total_tokens": 575
+        },
+        {
+          "input_tokens": 446,
+          "output_tokens": 77,
+          "total_tokens": 523
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 181,
+          "total_tokens": 558
+        },
+        {
+          "input_tokens": 434,
+          "output_tokens": 79,
+          "total_tokens": 513
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 385,
+          "output_tokens": 190,
+          "total_tokens": 575
+        },
+        {
+          "input_tokens": 536,
+          "output_tokens": 79,
+          "total_tokens": 615
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 385,
+          "output_tokens": 192,
+          "total_tokens": 577
+        },
+        {
+          "input_tokens": 535,
+          "output_tokens": 78,
+          "total_tokens": 613
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 382,
+          "output_tokens": 9,
+          "total_tokens": 391
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 377,
+          "output_tokens": 9,
+          "total_tokens": 386
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 382,
+          "output_tokens": 187,
+          "total_tokens": 569
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 383,
+          "output_tokens": 188,
+          "total_tokens": 571
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 0,
+      "usage": [],
+      "last_failure": null
+    }
+  ],
+  "request_latency_ms": {
+    "n": 101,
+    "p50": 1364.0881000028457,
+    "p95": 1738.0876999959582
+  },
+  "rows": [
+    {
+      "id": "en-08",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        17.661300000327174
+      ],
+      "baseline_ms": [
+        0.0242000023717992
+      ],
+      "background_ms": 1481.173599997419,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "create",
+          "text": "goal.other: Spanish course; value=Spanish course पूरा करना; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_b8454b3b4ade4fbca29eac9b69272532",
+          "text": "goal.other: Spanish course; value=Spanish course पूरा करना; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5283999998937361
+      ],
+      "baseline_ms": [
+        0.0242000023717992
+      ],
+      "background_ms": 1562.8080000024056,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "create",
+          "text": "goal.other: Spanish course complete karna; value=Spanish course complete karna; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_1234a5d9470a4cb188335e1e63f31385",
+          "text": "goal.other: Spanish course complete karna; value=Spanish course complete karna; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4934999960823916
+      ],
+      "baseline_ms": [
+        0.023800006601959467
+      ],
+      "background_ms": 1517.001699998218,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "en-09",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Burgman scooter; value=Suzuki Burgman scooter; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_6d4269a9e0d9468eb3d3618d1649755c",
+          "text": "owned_item.vehicle: Suzuki Burgman scooter; value=Suzuki Burgman scooter; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4628999959095381
+      ],
+      "baseline_ms": [
+        0.025300003471784294
+      ],
+      "background_ms": 1711.3492999997106,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: शाकाहारी",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: शाकाहारी"
+        }
+      ],
+      "callback_ms": [
+        0.4884999943897128
+      ],
+      "baseline_ms": [
+        0.021599997126031667
+      ],
+      "background_ms": 1470.4759999949601,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: vegetarian",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: vegetarian"
+        }
+      ],
+      "callback_ms": [
+        0.5482999986270443
+      ],
+      "baseline_ms": [
+        0.021099993318784982
+      ],
+      "background_ms": 1490.8947000003536,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "en-10",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.473300002340693
+      ],
+      "baseline_ms": [
+        0.02130000211764127
+      ],
+      "background_ms": 1566.4808000001358,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: हिन्दी",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: हिन्दी"
+        }
+      ],
+      "callback_ms": [
+        0.47229999472619966
+      ],
+      "baseline_ms": [
+        0.02119999408023432
+      ],
+      "background_ms": 1412.0814999987488,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: Hindi",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "response_preference: Hindi"
+        }
+      ],
+      "callback_ms": [
+        0.43200000072829425
+      ],
+      "baseline_ms": [
+        0.020799998310394585
+      ],
+      "background_ms": 1441.180699999677,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "en-11",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_6349717caa1f402bae8cf3e05d05cc42",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_886ff5d4a6a443ee96795e63587310a3",
+          "text": "Toyota Glanza: Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.49650000437395647
+      ],
+      "baseline_ms": [
+        0.022799998987466097
+      ],
+      "background_ms": 1689.577700002701,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-07",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: वीगन",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: वीगन"
+        }
+      ],
+      "callback_ms": [
+        0.44460000208346173
+      ],
+      "baseline_ms": [
+        0.020300001779105514
+      ],
+      "background_ms": 1462.1686999962549,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-07",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: vegan",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: vegan"
+        }
+      ],
+      "callback_ms": [
+        0.41200000123353675
+      ],
+      "baseline_ms": [
+        0.01939999492606148
+      ],
+      "background_ms": 1391.3296999962768,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-12",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "correct",
+          "text": "food_preference: vegan",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: vegan"
+        }
+      ],
+      "callback_ms": [
+        0.5344000019249506
+      ],
+      "baseline_ms": [
+        0.021400002879090607
+      ],
+      "background_ms": 2506.557699998666,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-08",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: छोटे संक्षिप्त जवाब",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: छोटे संक्षिप्त जवाब"
+        }
+      ],
+      "callback_ms": [
+        0.4960000005667098
+      ],
+      "baseline_ms": [
+        0.02179999864893034
+      ],
+      "background_ms": 1450.1362999944831,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-08",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: short concise replies",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: short concise replies"
+        }
+      ],
+      "callback_ms": [
+        0.4680999991251156
+      ],
+      "baseline_ms": [
+        0.021899999410379678
+      ],
+      "background_ms": 1741.7563000053633,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-13",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "text": "owned_item.device: Olympus OM-5; value=camera; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_5407df3f84bc423893be17586cf32929",
+          "text": "owned_item.device: Olympus OM-5; value=camera; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5846999993082136
+      ],
+      "baseline_ms": [
+        0.020200001017656177
+      ],
+      "background_ms": 2741.9731999980286,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-09",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Burgman स्कूटर; value=Suzuki Burgman; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_aa1de3b2a9244c9788d06e3c76e4542b",
+          "text": "owned_item.vehicle: Suzuki Burgman स्कूटर; value=Suzuki Burgman; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.46830000064801425
+      ],
+      "baseline_ms": [
+        0.02099999983329326
+      ],
+      "background_ms": 1423.1322999985423,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-09",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Burgman scooter; value=Suzuki Burgman scooter; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_c7d57bade59344418cc29859acfb6545",
+          "text": "owned_item.vehicle: Suzuki Burgman scooter; value=Suzuki Burgman scooter; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.42350000148871914
+      ],
+      "baseline_ms": [
+        0.02059999678749591
+      ],
+      "background_ms": 1447.2569999998086,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-14",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "change",
+          "text": "routine.other: morning walk; value=8 am every day; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_28cbf9a31d4d45ee917f61930f5a6897",
+          "text": "routine.other: morning walk; value=8 am every day; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5030000029364601
+      ],
+      "baseline_ms": [
+        0.021299994841683656
+      ],
+      "background_ms": 2959.6974000014598,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-10",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "create",
+          "text": "goal.other: 10 km दौड़ पूरी करना; value=10 km दौड़ पूरी करना; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_f9ecaa52240044bbacaa2d3dda046ec1",
+          "text": "goal.other: 10 km दौड़ पूरी करना; value=10 km दौड़ पूरी करना; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.861699998495169
+      ],
+      "baseline_ms": [
+        0.022499996703118086
+      ],
+      "background_ms": 1437.652500004333,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-10",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.47110000014072284
+      ],
+      "baseline_ms": [
+        0.020900006347801536
+      ],
+      "background_ms": 1413.1782999975258,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-15",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "change",
+          "text": "goal.other: Spanish course; value=completed; state=completed",
+          "state": "completed"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_80400c9c27304bc38bfc69ce9a01ead4",
+          "text": "goal.other: Spanish course; value=completed; state=completed"
+        }
+      ],
+      "callback_ms": [
+        0.4737999988719821
+      ],
+      "baseline_ms": [
+        0.02340000355616212
+      ],
+      "background_ms": 3135.789100000693,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-11",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=not_owned",
+          "state": "not_owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_46e53da2158645298727acfb01558fd5",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_d02f2bb88aaf433cb0b2532be6f085bf",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=not_owned"
+        }
+      ],
+      "callback_ms": [
+        0.5480000036186539
+      ],
+      "baseline_ms": [
+        0.021200001356191933
+      ],
+      "background_ms": 2694.8952000020654,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-11",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_172c4c1b0071404d8e49f5d82893388e",
+          "text": "Toyota Glanza: Toyota Glanza; state=owned"
+        },
+        {
+          "predicate": "owned_item_c14a6704a44f478db3f7b66257a83dee",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5022999976063147
+      ],
+      "baseline_ms": [
+        0.020799998310394585
+      ],
+      "background_ms": 1369.241399996099,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-16",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_f8478f8a49d240f4a864ebf313eae502",
+          "text": "Toyota Glanza: Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.40920000174082816
+      ],
+      "baseline_ms": [
+        0.0208000055863522
+      ],
+      "background_ms": 2960.8960000041407,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-12",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.6182999932207167
+      ],
+      "baseline_ms": [
+        0.021699997887481004
+      ],
+      "background_ms": 2880.0486999971326,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-12",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "correct",
+          "text": "food_preference: vegan",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: vegan"
+        }
+      ],
+      "callback_ms": [
+        0.534200000402052
+      ],
+      "baseline_ms": [
+        0.022600004740525037
+      ],
+      "background_ms": 2674.5402999949874,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-17",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4214000000501983
+      ],
+      "baseline_ms": [
+        0.02099999983329326
+      ],
+      "background_ms": 2550.552399996377,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-13",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_e8cef5c9b1eb4288b6f9c97ebe3e939b",
+          "text": "Nikon Z30: Nikon Z30; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.3968999953940511
+      ],
+      "baseline_ms": [
+        0.021899999410379678
+      ],
+      "background_ms": 0.4241999995429069,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-13",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_6b1757f4c9ea49fe8b7819c6c4777a17",
+          "text": "Nikon Z30: Nikon Z30; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.34500000037951395
+      ],
+      "baseline_ms": [
+        0.020200001017656177
+      ],
+      "background_ms": 0.36920000275131315,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-18",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_50d3e4fa24e2490fb67274bad48a4500",
+          "text": "Spanish course: Spanish course; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.49479999870527536
+      ],
+      "baseline_ms": [
+        0.02130000211764127
+      ],
+      "background_ms": 2601.716799996211,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-14",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_bdbefe641b604e21a1db7a47445dfffb",
+          "text": "morning walk: 7 am; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5743000001530163
+      ],
+      "baseline_ms": [
+        0.020899999071843922
+      ],
+      "background_ms": 2521.501100003661,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-14",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_d0b91182273346f3aae168da4b7e5053",
+          "text": "morning walk: 7 am; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5010000022593886
+      ],
+      "baseline_ms": [
+        0.022100000933278352
+      ],
+      "background_ms": 1354.7849000024144,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-19",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "language: Hindi; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4152000037720427
+      ],
+      "baseline_ms": [
+        0.020399995264597237
+      ],
+      "background_ms": 3369.2177000048105,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-15",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_7eeb86b3fe5d4f8094195737a33b765f",
+          "text": "Spanish course: Spanish course; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5319999982020818
+      ],
+      "baseline_ms": [
+        0.020399995264597237
+      ],
+      "background_ms": 1492.1819999945,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-15",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_a98b447c7218459aa64ba01b99f0628e",
+          "text": "Spanish course: Spanish course; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.487299999804236
+      ],
+      "baseline_ms": [
+        0.020899999071843922
+      ],
+      "background_ms": 1473.1040999977267,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-20",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "vehicles",
+          "text": "vehicles: Toyota Glanza and TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.41369999962626025
+      ],
+      "baseline_ms": [
+        0.020899999071843922
+      ],
+      "background_ms": 2992.4858000013046,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-16",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_63449e42f7c347588f68aec41efdf046",
+          "text": "Toyota Glanza: Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4413999995449558
+      ],
+      "baseline_ms": [
+        0.02239999594166875
+      ],
+      "background_ms": 2500.1952999955392,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-16",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_5e578c2520fc4b8e80736265c30fd8bb",
+          "text": "Toyota Glanza: Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.42160000157309696
+      ],
+      "baseline_ms": [
+        0.020799998310394585
+      ],
+      "background_ms": 2569.550200001686,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-21",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5651999963447452
+      ],
+      "baseline_ms": [
+        0.021100000594742596
+      ],
+      "background_ms": 964.3845000027795,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-17",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.45640000462299213
+      ],
+      "baseline_ms": [
+        0.022599997464567423
+      ],
+      "background_ms": 2959.640200002468,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-17",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5063000062364154
+      ],
+      "baseline_ms": [
+        0.022799998987466097
+      ],
+      "background_ms": 2997.554100002162,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-22",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5044999998062849
+      ],
+      "baseline_ms": [
+        0.022400003217626363
+      ],
+      "background_ms": 1113.577099997201,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-18",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_4fa0d2b328834d4691cf3ec32441efb8",
+          "text": "Spanish course: Spanish course; state=active"
+        }
+      ],
+      "callback_ms": [
+        1.6936000029090792
+      ],
+      "baseline_ms": [
+        0.06620000203838572
+      ],
+      "background_ms": 1321.6079000048921,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-18",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_b2a1383c7adb4838aadeb3265a1b9394",
+          "text": "Spanish course: Spanish course; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.54190000082599
+      ],
+      "baseline_ms": [
+        0.021200001356191933
+      ],
+      "background_ms": 1254.4799000024796,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-23",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4994999981136061
+      ],
+      "baseline_ms": [
+        0.021400002879090607
+      ],
+      "background_ms": 1129.9308000016026,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hi-19",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "language: Hindi; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4861999987042509
+      ],
+      "baseline_ms": [
+        0.02280000626342371
+      ],
+      "background_ms": 3855.600399998366,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-19",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_language",
+          "text": "language: Hindi; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4324999972595833
+      ],
+      "baseline_ms": [
+        0.02099999983329326
+      ],
+      "background_ms": 2900.5357999994885,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-24",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4650999981095083
+      ],
+      "baseline_ms": [
+        0.023200002033263445
+      ],
+      "background_ms": 1083.9864000008674,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-20",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "vehicles",
+          "text": "vehicles: Toyota Glanza and TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4999000011594035
+      ],
+      "baseline_ms": [
+        0.022300002456177026
+      ],
+      "background_ms": 2493.9194999969914,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-20",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "vehicles",
+          "text": "vehicles: Toyota Glanza and TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.43710000318242237
+      ],
+      "baseline_ms": [
+        0.022600004740525037
+      ],
+      "background_ms": 2601.1834000019007,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-25",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.47250000352505594
+      ],
+      "baseline_ms": [
+        0.021200001356191933
+      ],
+      "background_ms": 1153.5664000039105,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hi-21",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.6409000052371994
+      ],
+      "baseline_ms": [
+        0.019899998733308166
+      ],
+      "background_ms": 1029.7788999960176,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-21",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5655999993905425
+      ],
+      "baseline_ms": [
+        0.019700004486367106
+      ],
+      "background_ms": 1064.737000000605,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-26",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_a3df31f2e0984467a27ea1b3e5d9b2e6",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.30420000257436186
+      ],
+      "baseline_ms": [
+        0.02099999983329326
+      ],
+      "background_ms": 0.32890000147745013,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-22",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5754000012530014
+      ],
+      "baseline_ms": [
+        0.020200001017656177
+      ],
+      "background_ms": 1102.541599997494,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-22",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4961000013281591
+      ],
+      "baseline_ms": [
+        0.01979999797185883
+      ],
+      "background_ms": 1153.626200000872,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-27",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.47030000132508576
+      ],
+      "baseline_ms": [
+        0.021500003640539944
+      ],
+      "background_ms": 2857.0363000035286,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-23",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5770999996457249
+      ],
+      "baseline_ms": [
+        0.021200001356191933
+      ],
+      "background_ms": 1028.2923999984632,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-23",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5356999972718768
+      ],
+      "baseline_ms": [
+        0.020300001779105514
+      ],
+      "background_ms": 1484.4238000005134,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "en-28",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_2770bbcf462a4dff89385e851ec860fc",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.42010000470327213
+      ],
+      "baseline_ms": [
+        0.019699997210409492
+      ],
+      "background_ms": 2817.5802000041585,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hi-24",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5256000004010275
+      ],
+      "baseline_ms": [
+        0.02050000330200419
+      ],
+      "background_ms": 1377.544899994973,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-24",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5524999942281283
+      ],
+      "baseline_ms": [
+        0.021100000594742596
+      ],
+      "background_ms": 1398.5327999980655,
+      "original_answer_subset": false
+    },
+    {
+      "id": "en-29",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_28037ace607a4bf687a7257dbb84e681",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4172000044491142
+      ],
+      "baseline_ms": [
+        0.02040000254055485
+      ],
+      "background_ms": 1045.721100002993,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hi-25",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.5429000011645257
+      ],
+      "baseline_ms": [
+        0.021200001356191933
+      ],
+      "background_ms": 1162.458400001924,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-25",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4830000034417026
+      ],
+      "baseline_ms": [
+        0.020699997548945248
+      ],
+      "background_ms": 1068.9608999964548,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "en-30",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_03616a8e4d034dd683aa20328b3a9f1e",
+          "text": "blue TVS Ronin: blue TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_774d8b6d5f52428293936feec11a4980",
+          "text": "red TVS Ronin: red TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.40609999996377155
+      ],
+      "baseline_ms": [
+        0.02130000211764127
+      ],
+      "background_ms": 2526.556700002402,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-26",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_114c058b7e4846f695556a39fa148742",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.47510000149486586
+      ],
+      "baseline_ms": [
+        0.019500002963468432
+      ],
+      "background_ms": 1854.338800003461,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-26",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_c39d22bf2a274c8cb4979649ae2a4841",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.3037999995285645
+      ],
+      "baseline_ms": [
+        0.017799997294787318
+      ],
+      "background_ms": 0.32559999817749485,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-27",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.46799999836366624
+      ],
+      "baseline_ms": [
+        0.022100000933278352
+      ],
+      "background_ms": 4154.815499998222,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-27",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "diet: vegetarian; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.6124999999883585
+      ],
+      "baseline_ms": [
+        0.021400002879090607
+      ],
+      "background_ms": 4248.570000003383,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hi-28",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_5d439c7c890042d68146d3d103a2a271",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5110999991302378
+      ],
+      "baseline_ms": [
+        0.023200002033263445
+      ],
+      "background_ms": 2941.981099997065,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-28",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_583206758e4f41899c05a47d9d0954c9",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.42940000275848433
+      ],
+      "baseline_ms": [
+        0.019500002963468432
+      ],
+      "background_ms": 2372.2620000044117,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hi-29",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_07ae5de81eae4b94889c19ebcd48f0cb",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4414000068209134
+      ],
+      "baseline_ms": [
+        0.02099999983329326
+      ],
+      "background_ms": 1229.6096999998554,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hinglish-29",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_80d32c1b49974e7c875c66183faf60ff",
+          "text": "TVS Ronin: TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4186000005574897
+      ],
+      "baseline_ms": [
+        0.02220000169472769
+      ],
+      "background_ms": 1073.5580999971717,
+      "original_answer_subset": true,
+      "answer_status": "not_run_provider_quota"
+    },
+    {
+      "id": "hi-30",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_1e22c2ac1cf7482dbfb9c305b8dcc5ee",
+          "text": "blue TVS Ronin: blue TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_48fd464506b7466db380c9b17238bb72",
+          "text": "red TVS Ronin: red TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4824999996344559
+      ],
+      "baseline_ms": [
+        0.02359999780310318
+      ],
+      "background_ms": 1397.0053999946686,
+      "original_answer_subset": false
+    },
+    {
+      "id": "hinglish-30",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_4c801f08cb874417a1a9b057c64fb896",
+          "text": "blue TVS Ronin: blue TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_fcac238d228541f6a19bbe2672e59919",
+          "text": "red TVS Ronin: red TVS Ronin; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4935999968438409
+      ],
+      "baseline_ms": [
+        0.02340000355616212
+      ],
+      "background_ms": 1644.6979000029387,
+      "original_answer_subset": false
+    }
+  ]
+}

@@ -14,6 +14,7 @@ from jarvis.ai_provider import (
 )
 from jarvis.autonomy.mode import AutonomyMode
 from jarvis.machine_config import configured_text, load_machine_settings
+from jarvis.model_routing.gemini import GeminiFallbackConfig
 
 VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -109,6 +110,7 @@ def _configured_required_text(
 class JarvisConfig:
     log_level: str = "INFO"
     ai_provider: str = "openai"
+    gemini_fallback: GeminiFallbackConfig = field(default_factory=GeminiFallbackConfig)
     chatgpt_plan_enabled: bool = False
     chatgpt_plan_model: str | None = None
     default_media_target: str | None = None
@@ -155,6 +157,8 @@ class JarvisConfig:
     live_context_recent_turns: int = 24
     memory_enabled: bool = False
     personal_context_mode: str = "off"
+    personal_learning_mode: str = "off"
+    personal_learning_reenable_categories: tuple[str, ...] = ()
     memory_candidate_extraction_enabled: bool = False
     memory_candidate_extraction_model: str | None = None
     memory_semantic_recall_model: str | None = None
@@ -174,11 +178,29 @@ class JarvisConfig:
     pocket3_resend_cooldown_seconds: float = 1.0
 
     def __post_init__(self) -> None:
+        from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+        categories = self.personal_learning_reenable_categories
+        if (
+            type(categories) is not tuple
+            or not set(categories) <= SUPPRESSION_KEYS
+            or len(set(categories)) != len(categories)
+            or (categories and self.personal_learning_mode != "apply")
+        ):
+            raise ValueError(
+                "category re-enable requires scoped personal learning apply"
+            )
+        if self.personal_learning_mode not in {"off", "apply"}:
+            raise ValueError("personal_learning_mode must be off or apply")
+        if self.personal_learning_mode == "apply":
+            object.__setattr__(self, "personal_context_mode", "apply")
         if self.personal_context_mode not in {"off", "apply"}:
             raise ValueError("personal_context_mode must be off or apply")
         if self.personal_context_mode == "apply":
             object.__setattr__(self, "memory_enabled", True)
             object.__setattr__(self, "show_transcript", False)
+        if not isinstance(self.gemini_fallback, GeminiFallbackConfig):
+            raise TypeError("gemini_fallback must be GeminiFallbackConfig")
         normalized = str(self.log_level).strip().upper()
         if normalized not in VALID_LOG_LEVELS:
             raise ValueError(f"Unsupported JARVIS_LOG_LEVEL: {self.log_level!r}")
@@ -410,6 +432,7 @@ class JarvisConfig:
         return cls(
             log_level=_configured_required_text("JARVIS_LOG_LEVEL", "INFO", machine),
             ai_provider=configured_ai_provider(machine),
+            gemini_fallback=GeminiFallbackConfig.from_settings(machine),
             chatgpt_plan_enabled=_configured_bool(
                 "JARVIS_CHATGPT_PLAN_ENABLED", False, machine
             ),
@@ -548,6 +571,9 @@ class JarvisConfig:
             memory_enabled=_configured_bool("JARVIS_MEMORY_ENABLED", False, machine),
             personal_context_mode=_configured_required_text(
                 "JARVIS_PERSONAL_CONTEXT_MODE", "off", machine
+            ),
+            personal_learning_mode=_configured_required_text(
+                "JARVIS_PERSONAL_LEARNING_MODE", "off", machine
             ),
             memory_candidate_extraction_enabled=_configured_bool(
                 "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", False, machine

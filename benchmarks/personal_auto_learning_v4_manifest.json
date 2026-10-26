@@ -1,0 +1,21 @@
+{
+  "schema": "personal-auto-learning-v4-manifest",
+  "episodes": 90,
+  "language_counts": {
+    "en": 30,
+    "hi": 30,
+    "hinglish": 30
+  },
+  "answer_pairs": 30,
+  "answer_kinds_per_language": {
+    "relevant": 6,
+    "irrelevant": 2,
+    "unknown_relation": 2
+  },
+  "input_sha256": "5f23aaafe33d22aec625e7ae5422764060887c7a3e3af2b76fab498033ab9f19",
+  "gold_sha256": "44b16dc01370aae55c69adab771d2351beb3733d8caaabf15a535591220c3617",
+  "reserved_prior_send_upper_bound": 266,
+  "approved_ceiling": 532,
+  "new_single_send_cap": 266,
+  "notes": "Frozen before any v4 call after deterministic privacy repair. V3 is offline development only and was never sent to provider. No previous exact source turns. Scenario families share structure/language correlation; no independence or superiority claim. Prior failed outcomes unchanged."
+}

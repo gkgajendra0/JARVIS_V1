@@ -1,0 +1,171 @@
+{
+  "protocol": {
+    "purpose": "development diagnosis, not acceptance; new cases only",
+    "reserved_prior_send_upper_bound": 262,
+    "new_single_send_cap": 2,
+    "total_send_cap": 532,
+    "answer_model_calls": 0,
+    "cases": [
+      {
+        "id": "dev-stage2-hindi-bike-correction",
+        "language": "hi",
+        "turns": [
+          "मैंने पहले Yamaha FZ बताया था; मेरे पास असल में TVS Ronin है।"
+        ],
+        "seed": [
+          {
+            "category": "owned_item",
+            "label": "Yamaha FZ",
+            "value": "Yamaha FZ",
+            "kind": "vehicle",
+            "state": "owned",
+            "facet": null
+          }
+        ],
+        "question": "मेरी असली बाइक कौन सी है?",
+        "answer_subset": false,
+        "control": "none"
+      }
+    ],
+    "adapter_sha256": "0506f86d609b1e2e9661480726d76898b9c08b54f9e5430faac4a8d5694a9004"
+  },
+  "rows": [
+    {
+      "id": "dev-stage2-hindi-bike-correction",
+      "result": {
+        "id": "dev-stage2-hindi-bike-correction",
+        "status": "completed",
+        "predictions": [
+          {
+            "category": "owned_item",
+            "action": "correct",
+            "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned",
+            "state": "owned"
+          }
+        ],
+        "committed_count": 1,
+        "canonical_current_count": 1,
+        "context_status": "selected",
+        "facts": [
+          {
+            "predicate": "owned_item_605da3b8182a44dd80d1afeb0f954435",
+            "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+          }
+        ],
+        "callback_ms": [
+          17.685300001176074
+        ],
+        "baseline_ms": [
+          0.02680000034160912
+        ],
+        "background_ms": 11063.716799995746
+      },
+      "policy_events": [
+        {
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "correction",
+            "label": "TVS Ronin",
+            "value": "TVS Ronin",
+            "evidence": [
+              {
+                "turn_id": "fdb6644c-d546-4d5e-a09e-bc189b5a533a",
+                "start": 0,
+                "end": 61
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "correction",
+            "label": "TVS Ronin",
+            "value": "TVS Ronin",
+            "evidence": [
+              {
+                "turn_id": "fdb6644c-d546-4d5e-a09e-bc189b5a533a",
+                "start": 0,
+                "end": 61
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ],
+      "fictional_provider_outputs": [
+        {
+          "stage": "extract",
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "correction",
+                "label": "TVS Ronin",
+                "value": "TVS Ronin",
+                "evidence": [
+                  {
+                    "turn_id": "fdb6644c-d546-4d5e-a09e-bc189b5a533a",
+                    "quote": "मैंने पहले Yamaha FZ बताया था; मेरे पास असल में TVS Ronin है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "resolve",
+          "output": {
+            "resolutions": [
+              {
+                "candidate_index": 0,
+                "decision": "match",
+                "target_id": "b0502acd-f1b9-4591-9b68-f084594b8f76"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "new_single_send_calls": 2,
+  "conservative_cumulative_send_upper_bound": 264,
+  "usage": [
+    {
+      "input_tokens": 546,
+      "output_tokens": 198,
+      "total_tokens": 744
+    },
+    {
+      "input_tokens": 540,
+      "output_tokens": 80,
+      "total_tokens": 620
+    }
+  ],
+  "last_failure": null,
+  "accepted": false
+}

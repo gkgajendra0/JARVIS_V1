@@ -1,0 +1,1165 @@
+{
+  "summary": {
+    "status": "incomplete",
+    "completed": 30,
+    "unavailable": 1,
+    "unrun": 14,
+    "single_send_calls": 44,
+    "conservative_cumulative_send_upper_bound": 249,
+    "accepted": false
+  },
+  "protocol": {
+    "input_sha256": "882441e59595d46b5f817cceb4940b691063cddd47414dff4ff6ba2508c2313b",
+    "gold_sha256": "e59859a492803e582ba05339df2441adbd3dec86a722dda120f76a95a8f43488",
+    "reserved_prior_send_upper_bound": 205,
+    "new_single_send_cap": 65,
+    "minimum_episode_spacing_seconds": 8,
+    "answering": false,
+    "retry": false,
+    "candidate": "ede4372052794c90dc845b7af92356e53d5f0aa2",
+    "scope": "fresh capture-only subset; no full90, answer or owner acceptance"
+  },
+  "scores": {
+    "completed": 30,
+    "unavailable": 1,
+    "true_positive": 29,
+    "false_positive": 1,
+    "false_negative": 1,
+    "precision": 0.9666666666666667,
+    "recall": 0.9666666666666667,
+    "precision_wilson": [
+      0.8332924860304112,
+      0.9940915620051425
+    ],
+    "recall_wilson": [
+      0.8332924860304112,
+      0.9940915620051425
+    ],
+    "languages": {
+      "en": {
+        "completed": 10,
+        "captured": 10,
+        "expected": 10
+      },
+      "hi": {
+        "completed": 10,
+        "captured": 9,
+        "expected": 10
+      },
+      "hinglish": {
+        "completed": 10,
+        "captured": 10,
+        "expected": 10
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 0,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers",
+    "preliminary_semantic_floor": false
+  },
+  "usage": {
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite",
+    "usage": [
+      {
+        "input_tokens": 540,
+        "output_tokens": 382,
+        "total_tokens": 922
+      },
+      {
+        "input_tokens": 539,
+        "output_tokens": 380,
+        "total_tokens": 919
+      },
+      {
+        "input_tokens": 538,
+        "output_tokens": 380,
+        "total_tokens": 918
+      },
+      {
+        "input_tokens": 530,
+        "output_tokens": 184,
+        "total_tokens": 714
+      },
+      {
+        "input_tokens": 537,
+        "output_tokens": 189,
+        "total_tokens": 726
+      },
+      {
+        "input_tokens": 536,
+        "output_tokens": 191,
+        "total_tokens": 727
+      },
+      {
+        "input_tokens": 533,
+        "output_tokens": 187,
+        "total_tokens": 720
+      },
+      {
+        "input_tokens": 535,
+        "output_tokens": 195,
+        "total_tokens": 730
+      },
+      {
+        "input_tokens": 537,
+        "output_tokens": 189,
+        "total_tokens": 726
+      },
+      {
+        "input_tokens": 525,
+        "output_tokens": 183,
+        "total_tokens": 708
+      },
+      {
+        "input_tokens": 538,
+        "output_tokens": 192,
+        "total_tokens": 730
+      },
+      {
+        "input_tokens": 534,
+        "output_tokens": 195,
+        "total_tokens": 729
+      },
+      {
+        "input_tokens": 537,
+        "output_tokens": 189,
+        "total_tokens": 726
+      },
+      {
+        "input_tokens": 526,
+        "output_tokens": 195,
+        "total_tokens": 721
+      },
+      {
+        "input_tokens": 540,
+        "output_tokens": 196,
+        "total_tokens": 736
+      },
+      {
+        "input_tokens": 533,
+        "output_tokens": 188,
+        "total_tokens": 721
+      },
+      {
+        "input_tokens": 541,
+        "output_tokens": 200,
+        "total_tokens": 741
+      },
+      {
+        "input_tokens": 536,
+        "output_tokens": 190,
+        "total_tokens": 726
+      },
+      {
+        "input_tokens": 540,
+        "output_tokens": 189,
+        "total_tokens": 729
+      },
+      {
+        "input_tokens": 518,
+        "output_tokens": 77,
+        "total_tokens": 595
+      },
+      {
+        "input_tokens": 550,
+        "output_tokens": 205,
+        "total_tokens": 755
+      },
+      {
+        "input_tokens": 549,
+        "output_tokens": 77,
+        "total_tokens": 626
+      },
+      {
+        "input_tokens": 543,
+        "output_tokens": 192,
+        "total_tokens": 735
+      },
+      {
+        "input_tokens": 525,
+        "output_tokens": 80,
+        "total_tokens": 605
+      },
+      {
+        "input_tokens": 537,
+        "output_tokens": 195,
+        "total_tokens": 732
+      },
+      {
+        "input_tokens": 693,
+        "output_tokens": 79,
+        "total_tokens": 772
+      },
+      {
+        "input_tokens": 543,
+        "output_tokens": 198,
+        "total_tokens": 741
+      },
+      {
+        "input_tokens": 698,
+        "output_tokens": 76,
+        "total_tokens": 774
+      },
+      {
+        "input_tokens": 539,
+        "output_tokens": 197,
+        "total_tokens": 736
+      },
+      {
+        "input_tokens": 698,
+        "output_tokens": 80,
+        "total_tokens": 778
+      },
+      {
+        "input_tokens": 552,
+        "output_tokens": 199,
+        "total_tokens": 751
+      },
+      {
+        "input_tokens": 561,
+        "output_tokens": 79,
+        "total_tokens": 640
+      },
+      {
+        "input_tokens": 545,
+        "output_tokens": 398,
+        "total_tokens": 943
+      },
+      {
+        "input_tokens": 672,
+        "output_tokens": 111,
+        "total_tokens": 783
+      },
+      {
+        "input_tokens": 545,
+        "output_tokens": 199,
+        "total_tokens": 744
+      },
+      {
+        "input_tokens": 555,
+        "output_tokens": 79,
+        "total_tokens": 634
+      },
+      {
+        "input_tokens": 535,
+        "output_tokens": 190,
+        "total_tokens": 725
+      },
+      {
+        "input_tokens": 535,
+        "output_tokens": 79,
+        "total_tokens": 614
+      },
+      {
+        "input_tokens": 523,
+        "output_tokens": 184,
+        "total_tokens": 707
+      },
+      {
+        "input_tokens": 515,
+        "output_tokens": 79,
+        "total_tokens": 594
+      },
+      {
+        "input_tokens": 540,
+        "output_tokens": 193,
+        "total_tokens": 733
+      },
+      {
+        "input_tokens": 538,
+        "output_tokens": 78,
+        "total_tokens": 616
+      },
+      {
+        "input_tokens": 535,
+        "output_tokens": 183,
+        "total_tokens": 718
+      }
+    ],
+    "last_failure": {
+      "kind": "APITimeoutError",
+      "status": null
+    }
+  },
+  "request_latency_ms": {
+    "n": 44,
+    "p50": 2403.3638999972027,
+    "p95": 7328.780199997709
+  },
+  "rows": [
+    {
+      "id": "en-capture-v2-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Bajaj Avenger 160; value=Bajaj Avenger 160; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_4c0785e507504c819867be873cdc19b5",
+          "text": "owned_item.vehicle: Bajaj Avenger 160; value=Bajaj Avenger 160; state=owned"
+        },
+        {
+          "predicate": "owned_item_ab64ba4b79f64ade94775980051a2043",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=owned"
+        }
+      ],
+      "callback_ms": [
+        17.564800000400282
+      ],
+      "baseline_ms": [
+        0.025000001187436283
+      ],
+      "background_ms": 5056.296099995961
+    },
+    {
+      "id": "hi-capture-v2-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Bajaj Avenger 160; value=Bajaj Avenger 160; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_005e8338c60140f1851aaa23c8e2c5f0",
+          "text": "owned_item.vehicle: Bajaj Avenger 160; value=Bajaj Avenger 160; state=owned"
+        },
+        {
+          "predicate": "owned_item_0edf4c7d823c4bbd83a93f8eed77ae8f",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5380000002332963
+      ],
+      "baseline_ms": [
+        0.025300003471784294
+      ],
+      "background_ms": 3654.1932999971323
+    },
+    {
+      "id": "hinglish-capture-v2-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Bajaj Avenger 160; value=Bajaj Avenger 160; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_30d8538c01034b92a88444cef6414738",
+          "text": "owned_item.vehicle: Bajaj Avenger 160; value=Bajaj Avenger 160; state=owned"
+        },
+        {
+          "predicate": "owned_item_63081ef471fd4608bcf89da564ccec64",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.516500003868714
+      ],
+      "baseline_ms": [
+        0.028999995265621692
+      ],
+      "background_ms": 6368.644100002712
+    },
+    {
+      "id": "en-capture-v2-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: camera; value=Canon PowerShot V1; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_8ea745620bc34bac8d059e8ae60d42ce",
+          "text": "owned_item.device: camera; value=Canon PowerShot V1; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.7611999972141348
+      ],
+      "baseline_ms": [
+        0.03560000186553225
+      ],
+      "background_ms": 2004.5237000013003
+    },
+    {
+      "id": "hi-capture-v2-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: कैमरा; value=Canon PowerShot V1; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_b583a71065d047e48c9c70632cd7d89a",
+          "text": "owned_item.device: कैमरा; value=Canon PowerShot V1; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4698999982792884
+      ],
+      "baseline_ms": [
+        0.023399996280204505
+      ],
+      "background_ms": 2543.914299996686
+    },
+    {
+      "id": "hinglish-capture-v2-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: Canon PowerShot V1; value=Canon PowerShot V1; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_18877dfce7f744a6ad1d738998e57cfa",
+          "text": "owned_item.device: Canon PowerShot V1; value=Canon PowerShot V1; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4554000042844564
+      ],
+      "baseline_ms": [
+        0.022899999748915434
+      ],
+      "background_ms": 1715.6648999953177
+    },
+    {
+      "id": "en-capture-v2-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: pescatarian",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: pescatarian"
+        }
+      ],
+      "callback_ms": [
+        0.451300002168864
+      ],
+      "baseline_ms": [
+        0.021200001356191933
+      ],
+      "background_ms": 2377.2838999939268
+    },
+    {
+      "id": "hi-capture-v2-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: पेस्केटेरियन",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: पेस्केटेरियन"
+        }
+      ],
+      "callback_ms": [
+        0.5224000051384792
+      ],
+      "baseline_ms": [
+        0.02149999636458233
+      ],
+      "background_ms": 4070.8460999958334
+    },
+    {
+      "id": "hinglish-capture-v2-03",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "text": "food_preference: pescatarian",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: pescatarian"
+        }
+      ],
+      "callback_ms": [
+        0.48439999955007806
+      ],
+      "baseline_ms": [
+        0.026200003048870713
+      ],
+      "background_ms": 2413.7536999987788
+    },
+    {
+      "id": "en-capture-v2-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: calm and practical",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: calm and practical"
+        }
+      ],
+      "callback_ms": [
+        0.4680999991251156
+      ],
+      "baseline_ms": [
+        0.022799998987466097
+      ],
+      "background_ms": 1353.0752000006032
+    },
+    {
+      "id": "hi-capture-v2-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: शांत और व्यावहारिक जवाब",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: शांत और व्यावहारिक जवाब"
+        }
+      ],
+      "callback_ms": [
+        0.4804999989573844
+      ],
+      "baseline_ms": [
+        0.021699997887481004
+      ],
+      "background_ms": 2062.8105999930995
+    },
+    {
+      "id": "hinglish-capture-v2-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: Mujhe calm aur practical replies pasand hain.",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: Mujhe calm aur practical replies pasand hain."
+        }
+      ],
+      "callback_ms": [
+        0.45760000648442656
+      ],
+      "baseline_ms": [
+        0.05419999797595665
+      ],
+      "background_ms": 1428.6451000007219
+    },
+    {
+      "id": "en-capture-v2-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: weekday drawing practice; value=4:20 pm; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_ef00004054a54cacad409d837fd47539",
+          "text": "routine.other: weekday drawing practice; value=4:20 pm; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.49649999709799886
+      ],
+      "baseline_ms": [
+        0.021900006686337292
+      ],
+      "background_ms": 1534.660299999814
+    },
+    {
+      "id": "hi-capture-v2-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: सप्ताह के दिनों वाला ड्रॉइंग अभ्यास; value=शाम 4:20 बजे; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_84cf63a9ddf541abbbc9d2c6bc73d823",
+          "text": "routine.other: सप्ताह के दिनों वाला ड्रॉइंग अभ्यास; value=शाम 4:20 बजे; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5823999963467941
+      ],
+      "baseline_ms": [
+        0.02340000355616212
+      ],
+      "background_ms": 2584.0632999970694
+    },
+    {
+      "id": "hinglish-capture-v2-05",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "create",
+          "text": "routine.other: weekday drawing practice; value=shaam 4:20 baje; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_5f3f875045b34678ba8fc564c2a19aaa",
+          "text": "routine.other: weekday drawing practice; value=shaam 4:20 baje; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4900999992969446
+      ],
+      "baseline_ms": [
+        0.02269999822601676
+      ],
+      "background_ms": 1814.423199997691
+    },
+    {
+      "id": "en-capture-v2-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "create",
+          "text": "goal.other: finish a beginner astronomy course; value=finish a beginner astronomy course; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_562d7c9fc1ea42d6b6b970d897825ac9",
+          "text": "goal.other: finish a beginner astronomy course; value=finish a beginner astronomy course; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5066999947302975
+      ],
+      "baseline_ms": [
+        0.03239999932702631
+      ],
+      "background_ms": 1577.809000002162
+    },
+    {
+      "id": "hi-capture-v2-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "create",
+          "text": "goal.other: शुरुआती खगोल विज्ञान कोर्स; value=शुरुआती खगोल विज्ञान कोर्स पूरा करना है; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_ab80aa7d3785486e90413d73b429be1e",
+          "text": "goal.other: शुरुआती खगोल विज्ञान कोर्स; value=शुरुआती खगोल विज्ञान कोर्स पूरा करना है; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5992000005790032
+      ],
+      "baseline_ms": [
+        0.02239999594166875
+      ],
+      "background_ms": 2368.430000002263
+    },
+    {
+      "id": "hinglish-capture-v2-06",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "goal",
+          "action": "create",
+          "text": "goal.other: beginner astronomy course; value=beginner astronomy course poora karna hai; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "goal_4d8c0a4214c94b0eb555689a1f5007af",
+          "text": "goal.other: beginner astronomy course; value=beginner astronomy course poora karna hai; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5127999975229613
+      ],
+      "baseline_ms": [
+        0.023200002033263445
+      ],
+      "background_ms": 1979.2304000002332
+    },
+    {
+      "id": "en-capture-v2-07",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "change",
+          "text": "routine.other: Saturday guitar practice; value=2 pm; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_aa37ea12ff60432eac2b328bf5531982",
+          "text": "routine.other: Saturday guitar practice; value=2 pm; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.4889999981969595
+      ],
+      "baseline_ms": [
+        0.02239999594166875
+      ],
+      "background_ms": 2744.326199994248
+    },
+    {
+      "id": "hi-capture-v2-07",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "change",
+          "text": "routine.other: शनिवार का गिटार अभ्यास; value=दोपहर 2 बजे; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_d7bf9e32fb3141fd87e52010a0ae933d",
+          "text": "routine.other: शनिवार का गिटार अभ्यास; value=दोपहर 2 बजे; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.6451000008382834
+      ],
+      "baseline_ms": [
+        0.022600004740525037
+      ],
+      "background_ms": 2746.554700002889
+    },
+    {
+      "id": "hinglish-capture-v2-07",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "routine",
+          "action": "change",
+          "text": "routine.other: Saturday guitar practice; value=2 pm; state=active",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "routine_e3013fbe91544657aacff3d0287e228a",
+          "text": "routine.other: Saturday guitar practice; value=2 pm; state=active"
+        }
+      ],
+      "callback_ms": [
+        0.5677000008290634
+      ],
+      "baseline_ms": [
+        0.029499999072868377
+      ],
+      "background_ms": 2796.6205999982776
+    },
+    {
+      "id": "en-capture-v2-08",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=not_owned",
+          "state": "not_owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_675360f05eb445349185bbfa2a385175",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=not_owned"
+        },
+        {
+          "predicate": "owned_item_8f578b2c11fd4df5967c2fb484fff4ca",
+          "text": "Bajaj Avenger 160: Bajaj Avenger 160; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.4971000016666949
+      ],
+      "baseline_ms": [
+        0.022899999748915434
+      ],
+      "background_ms": 2620.773700000427
+    },
+    {
+      "id": "hi-capture-v2-08",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=not_owned",
+          "state": "not_owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_1077950f54724a4abe94981073799ecf",
+          "text": "Bajaj Avenger 160: Bajaj Avenger 160; state=owned"
+        },
+        {
+          "predicate": "owned_item_61abb2580398430183b30af567cb40a2",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=not_owned"
+        }
+      ],
+      "callback_ms": [
+        0.8750999986659735
+      ],
+      "baseline_ms": [
+        0.023300002794712782
+      ],
+      "background_ms": 4807.426999999734
+    },
+    {
+      "id": "hinglish-capture-v2-08",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=not_owned",
+          "state": "not_owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_7582ff294a304e0f974985118b6353e9",
+          "text": "owned_item.vehicle: Tata Tiago EV; value=Tata Tiago EV; state=not_owned"
+        },
+        {
+          "predicate": "owned_item_d788091efc414eba91cf3f464a8e0597",
+          "text": "Bajaj Avenger 160: Bajaj Avenger 160; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5196999991312623
+      ],
+      "baseline_ms": [
+        0.021899999410379678
+      ],
+      "background_ms": 9802.765799999179
+    },
+    {
+      "id": "en-capture-v2-09",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "text": "owned_item.device: camera; value=Nikon Z fc; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_00123dd1cc734e92b5258349f37b3aac",
+          "text": "owned_item.device: camera; value=Nikon Z fc; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5460000029415824
+      ],
+      "baseline_ms": [
+        0.02099999983329326
+      ],
+      "background_ms": 7319.665200004238
+    },
+    {
+      "id": "hi-capture-v2-09",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "text": "owned_item.device: Sony ZV-E10 II; value=Sony ZV-E10 II; state=not_owned",
+          "state": "not_owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_ad7167593f764ed3a89c87e4983f14d6",
+          "text": "owned_item.device: Sony ZV-E10 II; value=Sony ZV-E10 II; state=not_owned"
+        }
+      ],
+      "callback_ms": [
+        0.6745999999111518
+      ],
+      "baseline_ms": [
+        0.024300003133248538
+      ],
+      "background_ms": 13268.960699999298
+    },
+    {
+      "id": "hinglish-capture-v2-09",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "text": "owned_item.device: Nikon Z fc; value=Nikon Z fc; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_f0805417702a493fb70f7241616bd722",
+          "text": "owned_item.device: Nikon Z fc; value=Nikon Z fc; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.5206999994697981
+      ],
+      "baseline_ms": [
+        0.021100000594742596
+      ],
+      "background_ms": 8898.906199996418
+    },
+    {
+      "id": "en-capture-v2-10",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_29a58c265e47483d9c41c48fcfff1560",
+          "text": "Canon PowerShot V1: Canon PowerShot V1; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.45569999929284677
+      ],
+      "baseline_ms": [
+        0.026599998818710446
+      ],
+      "background_ms": 12788.470399995276
+    },
+    {
+      "id": "hi-capture-v2-10",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_aa29ba96fc144568946c6c112ea6ab7e",
+          "text": "Canon PowerShot V1: Canon PowerShot V1; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.45170000521466136
+      ],
+      "baseline_ms": [
+        0.024599998141638935
+      ],
+      "background_ms": 13254.85839999601
+    },
+    {
+      "id": "hinglish-capture-v2-10",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_6ee188ec9c684f7bac82fccdb05438e7",
+          "text": "Canon PowerShot V1: Canon PowerShot V1; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.41760000021895394
+      ],
+      "baseline_ms": [
+        0.020699997548945248
+      ],
+      "background_ms": 14023.963100000401
+    },
+    {
+      "id": "en-capture-v2-11",
+      "status": "unavailable",
+      "reason": "processing_denied",
+      "predictions": [],
+      "callback_ms": [
+        0.44270000216783956
+      ],
+      "baseline_ms": [
+        0.02349999704165384
+      ]
+    }
+  ]
+}
