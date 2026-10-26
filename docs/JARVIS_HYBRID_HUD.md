@@ -12,6 +12,16 @@ The UI is **not production/Windows accepted** until the owner inspects it.
 It is opt-in and bound to loopback. It cannot send commands or retrieve audio,
 transcripts, owner data, passwords, memory, work payloads or camera frames.
 
+## Mark I arc reactor visual direction
+
+The owner chose the original *Iron Man* (2008) cave-built **Mark I** look:
+ten copper winding packs, stepped and blackened metal rings, exposed rivets,
+three structural braces and a screened, blue-white concentric emitter. The
+metal housing no longer spins; JARVIS listening/thinking/speaking affects the
+light output only. GPU: LOW has a matching static schematic. All details
+are procedurally modeled and ship inside the existing offline frontend bundle.
+Visual fidelity and frame rate still require owner-machine review.
+
 ## Preview the HUD without a running JARVIS
 
 After checking out this feature branch and updating the Python install in the
