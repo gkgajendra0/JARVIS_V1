@@ -81,6 +81,7 @@ from jarvis.provider_resilience import (
     ProviderResilienceState,
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.ui.runtime import start_ui_if_enabled
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
     OpenCVCameraSource,
@@ -823,9 +824,15 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
             if config.ai_provider == "gemini"
             else None
         )
+        ui_service = start_ui_if_enabled(runtime, self_awareness)
         try:
             await runtime.run()
         finally:
+            if ui_service is not None:
+                try:
+                    ui_service.close()
+                except Exception:  # noqa: BLE001 - HUD cannot block voice cleanup
+                    LOGGER.warning("Optional JARVIS HUD failed to close cleanly")
             if lifecycle_task is not None and not lifecycle_task.done():
                 lifecycle_task.cancel()
                 await asyncio.gather(lifecycle_task, return_exceptions=True)

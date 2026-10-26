@@ -120,6 +120,22 @@ Normal production runtime:
 jarvis-voice
 ```
 
+### Optional holographic HUD (unaccepted visual candidate)
+
+The new local hybrid UI combines a 3D arc-reactor with a minimal diagnostics
+shell and reads *existing* canonical voice/Work/health/vision status. It is
+disabled by default and has no execution or microphone authority.
+
+```powershell
+jarvis-ui --open-browser                   # offline UI visual preview
+$env:JARVIS_UI_ENABLED = "true"
+jarvis-voice                               # normal JARVIS, with read-only HUD
+```
+
+Open `http://127.0.0.1:8765`. See
+[HUD runbook and Windows acceptance](docs/JARVIS_HYBRID_HUD.md). This UI
+candidate does not alter accepted JARVIS production status.
+
 Run `jarvis-setup` to persist the wake model, stable audio selectors, active cloud-AI provider, and other non-secret machine settings. Idle wake detection remains local; cloud realtime conversation starts only after an accepted wake.
 
 ## Development supervisor

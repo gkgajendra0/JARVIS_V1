@@ -4,6 +4,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+frontend/jarvis-hud/node_modules/
+frontend/jarvis-hud/dist/
+/artifacts/ui-hud/
 build/
 dist/
 .env

@@ -104,6 +104,15 @@ class _SessionToolBundle:
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     """Run CAM++ + LR-ASD shadow analysis on one canonical microphone timeline."""
 
+    @property
+    def presentation_voice_state(self) -> str:
+        """Expose the canonical lifecycle to the optional read-only HUD."""
+        from jarvis.ui.runtime import project_voice_state
+
+        return project_voice_state(
+            self.state, self._agent_state, self._user_is_speaking
+        )
+
     def __init__(
         self,
         *args: Any,
