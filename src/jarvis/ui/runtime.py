@@ -1,273 +1,269 @@
-"""Optional in-process JARVIS UI adapter for the normal voice runtime.
-
-Opt-in only; failure never prevents voice or durable Work operation. The UI
-remains a read-only projection, not a second authority or session store.
-"""
+"""Optional presentation bridge with no authority over canonical JARVIS."""
 
 from __future__ import annotations
 
 import logging
+import math
 import os
-import threading
-from collections.abc import Callable
-from dataclasses import dataclass
-from http.server import ThreadingHTTPServer
-from typing import TYPE_CHECKING
+import time
+from threading import Thread
+from typing import Any
 
-from jarvis.ui.hub import VOICE_STATES, UIEventHub
+from jarvis.ui.hub import UISnapshotHub
 from jarvis.ui.server import create_ui_server
 
-if TYPE_CHECKING:
-    from jarvis.conversation import ConversationTurn
-    from jarvis.work.runtime import WorkRuntime
-
 LOGGER = logging.getLogger(__name__)
-_active: UIService | None = None
+_HANDS_KEYS = frozenset({
+    "windows:desktop.control", "visual:desktop.control", "browser:playwright",
+    "window:management", "app:lifecycle", "local:files.write",
+    "local:documents.edit", "device:bluetooth", "system:display",
+    "system:audio", "media:playback", "system:clipboard",
+    "software:winget", "development:git",
+})
 
 
-@dataclass(slots=True)
-class UIService:
-    hub: UIEventHub
-    server: ThreadingHTTPServer
-    thread: threading.Thread
-
-    def close(self) -> None:
-        self.hub.set_runtime_connected(False)
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=3.0)
+def _enum_value(raw: object) -> str:
+    value = getattr(raw, "value", raw)
+    return value if isinstance(value, str) else ""
 
 
-def active_ui_hub() -> UIEventHub | None:
-    return None if _active is None else _active.hub
+def project_voice_state(
+    state: object, agent_state: object = "", user_is_speaking: bool = False
+) -> str:
+    """Map the existing LiveKit lifecycle to visuals, never infer fake audio."""
+    lifecycle = _enum_value(state)
+    if lifecycle == "idle":
+        return "standby"
+    if lifecycle == "activating":
+        return "activating"
+    if lifecycle == "recovering":
+        return "recovering"
+    if lifecycle == "active":
+        if _enum_value(agent_state) == "speaking":
+            return "speaking"
+        if _enum_value(agent_state) == "thinking":
+            return "thinking"
+        if _enum_value(agent_state) == "listening" or user_is_speaking:
+            return "listening"
+        return "activating"
+    return "offline"
 
 
-def start_opt_in_ui() -> UIService | None:
-    """Start only for explicit local environment opt-in, not by import."""
-    global _active
-    value = os.environ.get("JARVIS_UI_ENABLED", "").strip().casefold()
-    if value not in {"1", "true", "yes", "on"}:
-        return None
-    if _active is not None:
-        return _active
-    raw_port = os.environ.get("JARVIS_UI_PORT", "8765")
-    try:
-        port = int(raw_port)
-        hub = UIEventHub()
-        server = create_ui_server(hub, port=port)
-        thread = threading.Thread(
-            target=server.serve_forever,
-            name="jarvis-ui-loopback",
-            daemon=True,
-            kwargs={"poll_interval": 0.25},
+def build_runtime_hub(
+    runtime: Any, self_awareness: Any | None, *, activity_feed: Any | None = None
+) -> UISnapshotHub:
+    """Read small already-canonical records without opening new subscriptions."""
+
+    def voice() -> dict[str, str]:
+        explicit = getattr(runtime, "presentation_voice_state", None)
+        state = (
+            explicit
+            if isinstance(explicit, str)
+            else project_voice_state(
+                runtime.state,
+                getattr(runtime, "_agent_state", ""),
+                bool(getattr(runtime, "_user_is_speaking", False)),
+            )
         )
-        thread.start()
-        hub.set_runtime_connected(True)
-        _active = UIService(hub=hub, server=server, thread=thread)
-        LOGGER.info(
-            "Opt-in JARVIS UI active at http://127.0.0.1:%s/ (read-only)",
-            server.server_port,
-        )
-        return _active
-    except (OSError, ValueError) as exc:
-        LOGGER.warning(
-            "Optional UI unavailable, voice will continue: %s", type(exc).__name__
-        )
-        return None
+        return {"state": state}
 
+    def work() -> list[dict[str, object]]:
+        work_runtime = getattr(runtime, "_work_runtime", None)
+        if work_runtime is None:
+            return []
+        from jarvis.work.estimates import estimate_work
 
-def stop_opt_in_ui() -> None:
-    global _active
-    service = _active
-    _active = None
-    if service is not None:
-        service.close()
+        result = []
+        for item in work_runtime.store.list_recent(limit=6):
+            projected: dict[str, object] = {
+                "id": getattr(item, "work_id", None),
+                "type": _enum_value(item.work_type),
+                "state": _enum_value(item.state),
+            }
+            try:
+                estimate = estimate_work(work_runtime.store, item)
+            except Exception:  # noqa: BLE001 - one incomplete Work estimate is not a HUD outage
+                LOGGER.debug("HUD work estimate unavailable", exc_info=True)
+            else:
+                projected.update(
+                    progress=estimate.progress_percent,
+                    approximate=estimate.progress_is_approximate,
+                    milestone=estimate.milestone,
+                    eta_low_seconds=estimate.eta_low_seconds,
+                    eta_high_seconds=estimate.eta_high_seconds,
+                )
+            routing_store = getattr(work_runtime, "routing_store", None)
+            if routing_store is not None:
+                try:
+                    decisions = routing_store.list_decisions_for_work(item.work_id, limit=1)
+                    if decisions:
+                        projected["model_target"] = decisions[0].decision.selected_target_id
+                except Exception:  # noqa: BLE001 - optional model routing display
+                    LOGGER.debug("HUD routing decision unavailable", exc_info=True)
+            result.append(projected)
+        return result
 
-
-def attach_work_projection(runtime: WorkRuntime | None) -> None:
-    hub = active_ui_hub()
-    if hub is None or runtime is None:
-        return
-
-    def public_work() -> list[dict[str, str]]:
-        # No work.request, steps, customer details, credentials or payloads.
+    def health() -> list[dict[str, str]]:
+        if self_awareness is None:
+            return []
         return [
             {
-                "id": item.work_id,
-                "kind": item.work_type.value,
-                "state": item.state.value,
+                "component": item.descriptor.component_id,
+                "state": _enum_value(item.health.state),
             }
-            for item in runtime.store.list_recent(limit=8)
+            for item in self_awareness.system_snapshot(health_surface_only=True)[:8]
         ]
 
-    hub.attach_work_provider(public_work)
+    def vision() -> dict[str, object]:
+        service = getattr(runtime, "vision_service", None)
+        status = getattr(getattr(service, "diagnostics", None), "status", None)
+        result: dict[str, object] = {
+            "state": "active" if service is not None and service.running else "offline"
+        }
+        if result["state"] == "active" and status is not None:
+            captured_at = getattr(status, "captured_at", None)
+            if captured_at is None:
+                result["frame"] = "pending"
+                return result
+            if (
+                type(captured_at) not in (int, float)
+                or not math.isfinite(captured_at)
+                or not 0 <= time.monotonic() - captured_at <= 5
+            ):
+                result["frame"] = "stale"
+                return result
+            result["frame"] = "fresh"
+            result["people"] = getattr(status, "visible_people", None)
+            if getattr(status, "target_id", None) is None:
+                result["target"] = "searching"
+            elif bool(getattr(status, "target_visible", False)):
+                # An armed camera target is not trusted OWNER native LOCKED evidence.
+                result["target"] = "following" if getattr(status, "armed", False) else "visible"
+            else:
+                result["target"] = "searching"
+        return result
 
+    def features() -> dict[str, str]:
+        config = getattr(runtime, "config", None)
+        work_ready = getattr(runtime, "_work_runtime", None) is not None
+        memory_ready = getattr(runtime, "_memory_runtime", None) is not None
+        context_mode = getattr(config, "personal_context_mode", "off")
+        learning_mode = getattr(config, "personal_learning_mode", "off")
+        vision_present = getattr(runtime, "vision_service", None) is not None
+        hands_ready = False
+        capability_runtime = getattr(runtime, "_capability_runtime", None)
+        if capability_runtime is not None:
+            try:
+                hands_ready = any(
+                    getattr(descriptor, "key", None) in _HANDS_KEYS
+                    and getattr(descriptor, "execution_enabled", False) is True
+                    for descriptor in capability_runtime.catalog.capabilities
+                )
+            except Exception:  # noqa: BLE001 - capability discovery may be transient
+                hands_ready = False
+        return {
+            "work": "ready" if work_ready else "disabled",
+            "vision": "ready" if vision_present else "disabled",
+            "memory": "ready" if memory_ready else "disabled",
+            "personal_context": (
+                "ready" if context_mode == "apply" and memory_ready else
+                "unavailable" if context_mode == "apply" else "disabled"
+            ),
+            "learning": (
+                "ready" if learning_mode == "apply" and memory_ready else
+                "unavailable" if learning_mode == "apply" else "disabled"
+            ),
+            "research": "ready" if getattr(runtime, "_research_service", None) is not None else "unavailable",
+            "hands": "ready" if hands_ready else "unavailable",
+        }
 
-def attach_diagnostics_projection(
-    *, vision_service: object | None, self_awareness: object | None
-) -> None:
-    """Read only documented diagnostics, with no camera frames/face identities."""
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    if vision_service is not None:
-
-        def vision_status() -> dict[str, object]:
-            report = vision_service.report(event_limit=1)
-            camera = report.get("camera", {})
-            if not isinstance(camera, dict):
-                camera = {}
-            return {
-                "running": vision_service.running,
-                "active_source": camera.get("active_source"),
-                "available_sources": camera.get("available_sources", []),
+    def models() -> dict[str, dict[str, str]]:
+        config = getattr(runtime, "config", None)
+        if config is None:
+            return {}
+        provider = getattr(config, "ai_provider", "")
+        realtime_model = (
+            getattr(config, "gemini_realtime_model", "")
+            if provider == "gemini" else getattr(config, "realtime_model", "")
+        )
+        result = {"voice": {"name": provider, "model": realtime_model}}
+        research = getattr(runtime, "_research_service", None)
+        if research is not None:
+            result["research"] = {
+                "name": getattr(research, "provider_name", ""),
+                "model": getattr(research, "model_name", ""),
             }
+        if getattr(runtime, "_work_runtime", None) is not None:
+            result["work"] = {
+                "name": "chatgpt_plan" if getattr(config, "chatgpt_plan_enabled", False) else provider,
+                "model": (
+                    getattr(config, "chatgpt_plan_model", "")
+                    if getattr(config, "chatgpt_plan_enabled", False)
+                    else getattr(config, "work_orchestration_model", "")
+                ),
+            }
+        return result
 
-        hub.attach_vision_provider(vision_status)
-    if self_awareness is not None:
-
-        def health_status() -> list[dict[str, str]]:
-            snapshots = self_awareness.system_snapshot(health_surface_only=True)
-            return [
-                {
-                    "component": snap.descriptor.component_id,
-                    "state": snap.health.state.value,
-                }
-                for snap in snapshots
-            ]
-
-        hub.attach_health_provider(health_status)
-
-
-def observe_provider_issue(failure: object) -> None:
-    """Provider health warning from the existing resilience diagnosis only."""
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    kind = getattr(getattr(failure, "kind", None), "value", "")
-    if not isinstance(kind, str) or kind not in {
-        "quota_exhausted",
-        "rate_limited",
-        "authentication_failed",
-        "permission_denied",
-        "model_unavailable",
-        "transient_unavailable",
-        "unknown",
-    }:
-        kind = "unavailable"
-    hub.show_panel(
-        panel_id="provider.latest",
-        panel_type="alert",
-        title="AI service attention",
-        summary=f"Existing provider monitor reported: {kind}. No credentials are displayed.",
-        source="health",
-        priority=3,
-        ttl_seconds=300,
+    return UISnapshotHub(
+        voice_provider=voice,
+        work_provider=work,
+        health_provider=health,
+        vision_provider=vision,
+        feature_provider=features,
+        model_provider=models,
+        activity_provider=(None if activity_feed is None else activity_feed.snapshot),
     )
 
 
-def observe_capability_result(result: object) -> None:
-    """Show only capability class/status; never action arguments or output."""
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    raw_status = getattr(getattr(result, "status", None), "value", "")
-    if raw_status not in {"succeeded", "partial", "failed", "denied", "invalid"}:
-        return
-    key = getattr(result, "capability_key", "")
-    domain = key.split(":", 1)[0] if isinstance(key, str) else "capability"
-    if domain not in {
-        "windows",
-        "browser",
-        "files",
-        "visual",
-        "device",
-        "memory",
-        "self_awareness",
-        "system",
-        "local",
-    }:
-        domain = "capability"
-    try:
-        hub.show_panel(
-            panel_id="action.latest",
-            panel_type="alert" if raw_status in {"failed", "denied"} else "info",
-            title="Recent Jarvis action",
-            summary=(
-                f"Governed {domain} operation completed: {raw_status}. "
-                "Action arguments, output and private details are not shown."
-            ),
-            source="runtime",
-            priority=2 if raw_status in {"failed", "denied"} else 1,
-            ttl_seconds=120,
+class UIService:
+    """Daemon server that can be stopped independently from voice shutdown."""
+
+    def __init__(self, hub: UISnapshotHub, *, port: int = 8765) -> None:
+        self.server = create_ui_server(hub, port=port)
+        self.thread = Thread(
+            target=self.server.serve_forever,
+            daemon=True,
+            name="jarvis-ui-readonly",
         )
-    except (TypeError, ValueError):
-        pass
+        self.thread.start()
+
+    @property
+    def port(self) -> int:
+        return self.server.server_port
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=3)
 
 
-def observe_research_result(payload: dict[str, object]) -> None:
-    hub = active_ui_hub()
-    if hub is None:
-        return
+def start_ui_if_enabled(runtime: Any, self_awareness: Any | None) -> UIService | None:
+    """Never turn an optional display failure into a voice startup failure."""
+    if os.getenv("JARVIS_UI_ENABLED", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return None
     try:
-        hub.show_research_result(payload)
-    except (TypeError, ValueError):
-        LOGGER.debug("Research data not eligible for local UI projection")
-
-
-def observe_accepted_turn(turn: ConversationTurn) -> None:
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    from jarvis.conversation import ConversationRole
-
-    if turn.role is not ConversationRole.USER:
-        return
-    try:
-        hub.observe_accepted_user_text(turn.text)
-    except (ValueError, TypeError):
-        # UI topic hints are optional, not a reason to reject a canonical turn.
-        pass
-
-
-def observe_agent_state(event: object) -> None:
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    state = str(getattr(event, "new_state", "")).strip().casefold()
-    if state in VOICE_STATES:
-        hub.set_voice_state(state)
-
-
-def observe_user_state(event: object) -> None:
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    state = str(getattr(event, "new_state", "")).strip().casefold()
-    if state == "speaking":
-        # "listening" means JARVIS hears incoming speech; do not capture PCM.
-        hub.set_voice_state("listening")
-
-
-def observe_session_close() -> None:
-    hub = active_ui_hub()
-    if hub is not None:
-        hub.set_voice_state("idle")
-
-
-def safely_attach_voice_observers(
-    session: object,
-    add_turn_observer: Callable[[Callable[[ConversationTurn], None]], None],
-    add_close_observer: Callable[[Callable[[], None]], None],
-) -> None:
-    hub = active_ui_hub()
-    if hub is None:
-        return
-    hub.set_voice_state("activating")
-    try:
-        session.on("agent_state_changed", observe_agent_state)
-        session.on("user_state_changed", observe_user_state)
-        add_turn_observer(observe_accepted_turn)
-        add_close_observer(observe_session_close)
-    except Exception:
-        LOGGER.exception("Optional UI observer not attached; voice remains active")
+        port = int(os.getenv("JARVIS_UI_PORT", "8765"))
+        if not 1024 <= port <= 65535:
+            raise ValueError("invalid port")
+        service = UIService(
+            build_runtime_hub(
+                runtime,
+                self_awareness,
+                activity_feed=getattr(runtime, "_hud_activity_feed", None),
+            ),
+            port=port,
+        )
+    except Exception as exc:  # noqa: BLE001 - optional UI must never fail voice
+        LOGGER.warning(
+            "Optional JARVIS HUD unavailable (%s); voice continues", type(exc).__name__
+        )
+        return None
+    LOGGER.info(
+        "JARVIS local read-only HUD available at http://127.0.0.1:%s", service.port
+    )
+    return service

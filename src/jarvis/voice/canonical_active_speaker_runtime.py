@@ -112,6 +112,15 @@ class _SessionToolBundle:
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     """Run CAM++ + LR-ASD shadow analysis on one canonical microphone timeline."""
 
+    @property
+    def presentation_voice_state(self) -> str:
+        """Expose the canonical lifecycle to the optional read-only HUD."""
+        from jarvis.ui.runtime import project_voice_state
+
+        return project_voice_state(
+            self.state, self._agent_state, self._user_is_speaking
+        )
+
     def __init__(
         self,
         *args: Any,
@@ -120,6 +129,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         research_service: CurrentResearchService | None = None,
         research_result_observer: Callable[[dict[str, object]], None] | None = None,
+        hud_turn_observer: Callable[[object], None] | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         routing_runtime=None,
@@ -152,6 +162,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
             self._agent_state = "unavailable"
+            if hud_turn_observer is not None:
+                bridge.add_accepted_turn_observer(hud_turn_observer)
             if config.personal_context_mode == "apply":
                 if memory_runtime is None or capability_runtime is None:
                     raise ValueError(

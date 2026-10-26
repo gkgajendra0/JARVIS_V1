@@ -165,7 +165,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"jarvis.ui" = ["assets/*.html", "assets/*.css", "assets/*.js"]
+"jarvis.ui" = ["assets/index.html", "assets/assets/*.js", "assets/assets/*.css", "assets/THIRD_PARTY_NOTICES.txt"]
 "jarvis.identity" = ["manifests/*.json"]
 "jarvis.memory" = ["migrations/*.sql"]
 "jarvis.incidents" = ["migrations/*.sql"]

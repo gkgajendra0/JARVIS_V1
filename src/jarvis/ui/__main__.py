@@ -1,30 +1,33 @@
-"""Run the optional visual companion without starting any cloud clients."""
+"""Offline/no-credentials HUD preview entrypoint."""
 
 from __future__ import annotations
 
 import argparse
+import sys
 import webbrowser
 
+from jarvis.ui.hub import UISnapshotHub
 from jarvis.ui.server import create_ui_server
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="JARVIS read-only context stage")
+    parser = argparse.ArgumentParser(description="Local JARVIS HUD (read-only preview)")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument(
-        "--open-browser",
-        action="store_true",
-        help="Open localhost UI in the default browser",
-    )
+    parser.add_argument("--open-browser", action="store_true")
     args = parser.parse_args(argv)
-    server = create_ui_server(port=args.port)
-    url = f"http://127.0.0.1:{server.server_port}/"
-    print(f"JARVIS visual companion: {url}")
-    print("Standalone preview mode; no live JARVIS data is connected.")
-    if args.open_browser:
-        webbrowser.open(url)
+    if not 1024 <= args.port <= 65535:
+        parser.error("port must be between 1024 and 65535")
     try:
-        server.serve_forever(poll_interval=0.25)
+        server = create_ui_server(UISnapshotHub(), port=args.port)
+    except OSError as exc:
+        print(f"Could not start local HUD: {exc}", file=sys.stderr)
+        return 2
+    url = f"http://127.0.0.1:{args.port}/"
+    print(f"JARVIS HUD preview (no runtime): {url}", flush=True)
+    try:
+        if args.open_browser:
+            webbrowser.open(url)
+        server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:

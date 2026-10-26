@@ -1,408 +1,287 @@
-"""Bounded, thread-safe, non-authoritative UI state projection.
-
-This module never executes a capability, queries a model, or grants permission.
-Only confirmed runtime adapters may publish operational context. Browser state
-is entirely a disposable projection of the canonical JARVIS subsystems.
-"""
+"""Bounded allowlist between internal runtime data and the public local HUD."""
 
 from __future__ import annotations
 
 import re
-import threading
-import time
-from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
-VOICE_STATES = frozenset(
-    {"offline", "idle", "activating", "listening", "thinking", "speaking", "error"}
+_VOICE = frozenset(
+    {
+        "offline",
+        "standby",
+        "activating",
+        "listening",
+        "thinking",
+        "speaking",
+        "recovering",
+    }
 )
-PANEL_TYPES = frozenset(
-    {"work", "research", "document", "vision", "system", "alert", "info"}
+_WORK_STATES = frozenset(
+    {
+        "queued",
+        "running",
+        "waiting_resource",
+        "waiting_dependency",
+        "waiting_until",
+        "waiting_for_owner",
+        "paused",
+        "retrying",
+        "completed",
+        "failed",
+        "cancelled",
+    }
 )
-VALID_SOURCES = frozenset(
-    {"runtime", "canonical_work", "health", "local_ui", "research_result"}
-)
-_TOPIC_MATCHES = (
-    (
+_WORK_TYPES = frozenset(
+    {
+        "development",
         "research",
-        ("search the web", "research", "latest news", "sources", "look up", "रिसर्च"),
-    ),
-    (
-        "work",
-        (
-            "background work",
-            "running task",
-            "task progress",
-            "project work",
-            "my tasks",
-            "my work",
-            "काम",
-        ),
-    ),
-    (
-        "vision",
-        ("camera", "webcam", "pocket 3", "what do you see", "camera dikhao", "कैमरा"),
-    ),
-    ("document", ("document", "pdf", "project file", "repository", "code file")),
-    ("system", ("system status", "health", "diagnostic", "cpu", "gpu", "सिस्टम")),
+        "diagnostics",
+        "hands",
+        "monitoring",
+        "reminder",
+        "generic",
+        "external_acceptance",
+    }
 )
-_EXPLICIT = re.compile(r"\b(show|display|open|bring up|pull up)\b", re.IGNORECASE)
+_HEALTH_STATES = frozenset(
+    {
+        "healthy",
+        "degraded",
+        "unhealthy",
+        "unavailable",
+        "unknown",
+        "ok",
+        "warning",
+        "critical",
+        "stale",
+        "starting",
+        "failed",
+        "recovering",
+        "disabled",
+    }
+)
+_COMPONENT = re.compile(r"^[a-zA-Z0-9_.:-]{1,48}$")
+_MODEL_TOKEN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,79}$")
+_WORK_ID = re.compile(r"^work_[0-9a-f]{16}$")
+_FEATURE_NAMES = frozenset({"work", "vision", "memory", "learning", "hands", "research", "personal_context"})
+_FEATURE_STATES = frozenset({"ready", "disabled", "unavailable", "degraded"})
+_MODEL_ROLES = frozenset({"voice", "research", "work"})
+_VISION_TARGET = frozenset({"unknown", "searching", "visible", "following"})
+_MILESTONES = frozenset(
+    {
+        "evidence_gathered", "gathering_evidence", "provider_pressure_before_evidence",
+        "queued", "preparing_evidence", "isolated_commit_ready", "diff_verified",
+        "tests_passed", "implementation_written", "repository_inspected",
+        "workspace_prepared", "preparing_workspace", "advancing_recorded_steps",
+        "completed", "failed", "cancelled",
+    }
+)
+_EVENT_AT = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+_EVENT_LABELS = frozenset(
+    {"USER TURN", "ASSISTANT REPLY", "WEB RESEARCH", "BROWSER ACTION", "FILE ACTION", "SYSTEM ACTION", "CAPABILITY ACTION"}
+)
+_EVENT_STATES = frozenset(
+    {
+        "accepted", "interrupted", "succeeded", "partial", "denied", "invalid",
+        "unavailable", "failed", "web_researched", "multi_source_researched",
+        "authoritative_source_present", "insufficient_evidence", "research_unavailable",
+    }
+)
 
 
-def _short_text(value: object, *, maximum: int = 200) -> str:
-    if not isinstance(value, str):
-        raise TypeError("UI text must be a string")
-    text = "".join(ch for ch in value.strip() if ch >= " " and ch != "\x7f")
-    if len(text) > maximum:
-        raise ValueError("UI text exceeds bounded projection limit")
-    return text
+def _read(provider: Callable[[], Any] | None) -> Any:
+    if provider is None:
+        return None
+    try:
+        return provider()
+    except Exception:  # noqa: BLE001 - UI is never a runtime failure domain
+        return None
 
 
-class UIEventHub:
-    """In-memory presentation state, never canonical memory or a secret store."""
+def _value(entry: object, field: str) -> object:
+    if not isinstance(entry, Mapping):
+        return None
+    return entry.get(field)
+
+
+def _rows(data: object, *, size: int, fields: dict[str, frozenset[str] | None]):
+    if not isinstance(data, (list, tuple)):
+        return []
+    result = []
+    for entry in data[:size]:
+        projected: dict[str, str] = {}
+        for key, allowed in fields.items():
+            value = _value(entry, key)
+            if not isinstance(value, str):
+                continue
+            if allowed is None:
+                if not _COMPONENT.fullmatch(value):
+                    continue
+            elif value not in allowed:
+                continue
+            projected[key] = value
+        if len(projected) == len(fields):
+            result.append(projected)
+    return result
+
+
+def _bounded_work(data: object) -> list[dict[str, object]]:
+    if not isinstance(data, (tuple, list)):
+        return []
+    result: list[dict[str, object]] = []
+    for entry in data[:6]:
+        work_type = _value(entry, "type")
+        state = _value(entry, "state")
+        if not isinstance(work_type, str) or not isinstance(state, str):
+            continue
+        if work_type not in _WORK_TYPES or state not in _WORK_STATES:
+            continue
+        projected: dict[str, object] = {"type": work_type, "state": state}
+        work_id = _value(entry, "id")
+        if isinstance(work_id, str) and _WORK_ID.fullmatch(work_id):
+            projected["id"] = work_id
+        progress = _value(entry, "progress")
+        approximate = _value(entry, "approximate")
+        if type(progress) is int and 0 <= progress <= 100 and type(approximate) is bool:
+            projected["progress"] = progress
+            projected["approximate"] = approximate
+        milestone = _value(entry, "milestone")
+        if isinstance(milestone, str) and milestone in _MILESTONES:
+            projected["milestone"] = milestone
+        target = _value(entry, "model_target")
+        if isinstance(target, str) and _MODEL_TOKEN.fullmatch(target):
+            projected["model_target"] = target
+        for eta_key in ("eta_low_seconds", "eta_high_seconds"):
+            eta = _value(entry, eta_key)
+            if type(eta) is int and 0 <= eta <= 604800:
+                projected[eta_key] = eta
+        result.append(projected)
+    return result
+
+
+def _features(data: object) -> dict[str, str]:
+    if not isinstance(data, Mapping):
+        return {}
+    return {
+        name: value
+        for name, value in data.items()
+        if name in _FEATURE_NAMES and isinstance(value, str) and value in _FEATURE_STATES
+    }
+
+
+def _models(data: object) -> dict[str, dict[str, str]]:
+    if not isinstance(data, Mapping):
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for role in _MODEL_ROLES:
+        entry = data.get(role)
+        name = _value(entry, "name")
+        model = _value(entry, "model")
+        if isinstance(name, str) and _MODEL_TOKEN.fullmatch(name):
+            item = {"name": name}
+            if isinstance(model, str) and _MODEL_TOKEN.fullmatch(model):
+                item["model"] = model
+            result[role] = item
+    return result
+
+
+def _vision(data: object) -> dict[str, object]:
+    state = _value(data, "state")
+    result: dict[str, object] = {
+        "state": state if isinstance(state, str) and state in {"active", "standby", "offline"} else "offline"
+    }
+    frame = _value(data, "frame")
+    if isinstance(frame, str) and frame in {"fresh", "stale", "pending"}:
+        result["frame"] = frame
+    if isinstance(frame, str) and frame in {"stale", "pending"}:
+        return result
+    people = _value(data, "people")
+    if type(people) is int and 0 <= people <= 99:
+        result["people"] = people
+    target = _value(data, "target")
+    if isinstance(target, str) and target in _VISION_TARGET:
+        result["target"] = target
+    return result
+
+
+def _activity(data: object) -> list[dict[str, object]]:
+    if not isinstance(data, (list, tuple)):
+        return []
+    result = []
+    for raw in data[:12]:
+        event_id = _value(raw, "id")
+        at = _value(raw, "at")
+        kind = _value(raw, "kind")
+        state = _value(raw, "state")
+        label = _value(raw, "label")
+        if (
+            type(event_id) is int and 0 < event_id <= 2**53
+            and isinstance(at, str) and _EVENT_AT.fullmatch(at)
+            and isinstance(kind, str) and kind in {"voice", "research", "capability"}
+            and isinstance(state, str) and state in _EVENT_STATES
+            and isinstance(label, str) and label in _EVENT_LABELS
+        ):
+            result.append({"id": event_id, "at": at, "kind": kind, "state": state, "label": label})
+    return result
+
+
+class UISnapshotHub:
+    """Read-only pull adapters; no cross-domain user text is ever serialized."""
 
     def __init__(
         self,
         *,
-        clock: Callable[[], float] = time.time,
-        event_limit: int = 100,
+        voice_provider: Callable[[], Any] | None = None,
+        work_provider: Callable[[], Any] | None = None,
+        health_provider: Callable[[], Any] | None = None,
+        vision_provider: Callable[[], Any] | None = None,
+        feature_provider: Callable[[], Any] | None = None,
+        model_provider: Callable[[], Any] | None = None,
+        activity_provider: Callable[[], Any] | None = None,
     ) -> None:
-        if event_limit < 4 or event_limit > 1000:
-            raise ValueError("event_limit must be between 4 and 1000")
-        self._lock = threading.RLock()
-        self._clock = clock
-        self._events: deque[dict[str, Any]] = deque(maxlen=event_limit)
-        self._sequence = 0
-        self._voice_state = "offline"
-        self._runtime_connected = False
-        self._panels: dict[str, dict[str, Any]] = {}
-        self._work_provider: Callable[[], list[dict[str, str]]] | None = None
-        self._last_work_states: dict[str, str] | None = None
-        self._vision_provider: Callable[[], dict[str, object]] | None = None
-        self._health_provider: Callable[[], list[dict[str, str]]] | None = None
+        self.voice_provider = voice_provider
+        self.work_provider = work_provider
+        self.health_provider = health_provider
+        self.vision_provider = vision_provider
+        self.feature_provider = feature_provider
+        self.model_provider = model_provider
+        self.activity_provider = activity_provider
 
-    def attach_work_provider(
-        self, provider: Callable[[], list[dict[str, str]]]
-    ) -> None:
-        if not callable(provider):
-            raise TypeError("work provider must be callable")
-        with self._lock:
-            self._work_provider = provider
-
-    def attach_vision_provider(self, provider: Callable[[], dict[str, object]]) -> None:
-        if not callable(provider):
-            raise TypeError("vision provider must be callable")
-        with self._lock:
-            self._vision_provider = provider
-
-    def attach_health_provider(
-        self, provider: Callable[[], list[dict[str, str]]]
-    ) -> None:
-        if not callable(provider):
-            raise TypeError("health provider must be callable")
-        with self._lock:
-            self._health_provider = provider
-
-    def show_research_result(self, payload: dict[str, object]) -> None:
-        """Display verified tool evidence, not a query, transcript or model claim.
-
-        Only HTTPS source titles and public domains are exposed. Excerpts and
-        search queries may contain confidential owner context, so omit both.
-        """
-        if not isinstance(payload, dict):
-            raise TypeError("research payload must be a mapping")
-        if payload.get("ok") is not True:
-            return
-        raw_sources = payload.get("sources")
-        if not isinstance(raw_sources, list):
-            return
-        sources: list[dict[str, str]] = []
-        for raw in raw_sources[:10]:
-            if not isinstance(raw, dict):
-                continue
-            url = raw.get("url")
-            title = raw.get("title")
-            if not isinstance(url, str) or not isinstance(title, str):
-                continue
-            try:
-                parsed = urlsplit(url)
-                if (
-                    parsed.scheme != "https"
-                    or not parsed.hostname
-                    or parsed.username
-                    or parsed.password
-                    or parsed.port is not None
-                    or parsed.hostname in {"localhost", "127.0.0.1"}
-                    or not re.fullmatch(r"[a-zA-Z0-9.-]+", parsed.hostname)
-                    or "." not in parsed.hostname
-                    or parsed.hostname.endswith((".local", ".internal", ".localhost"))
-                    or re.fullmatch(r"[0-9.]+", parsed.hostname)
-                    or len(url) > 1200
-                ):
-                    continue
-                name = _short_text(title, maximum=140)
-                domain = _short_text(parsed.hostname, maximum=120)
-            except (ValueError, TypeError):
-                continue
-            # Query strings can carry the owner's private search parameters.
-            # Published links only retain scheme/domain/path, never credentials.
-            clean_url = urlunsplit(("https", parsed.netloc, parsed.path, "", ""))
-            sources.append({"title": name, "domain": domain, "url": clean_url})
-            if len(sources) >= 5:
-                break
-        self.show_panel(
-            panel_id="research.latest",
-            panel_type="research",
-            title="Research sources",
-            summary=(
-                f"{len(sources)} verified HTTPS source links supplied by the "
-                "existing research tool. Treat external pages as untrusted."
-                if sources
-                else "Research returned no displayable public source links."
-            ),
-            source="research_result",
-            priority=2,
-            ttl_seconds=600,
+    def snapshot(self) -> dict[str, object]:
+        raw_voice = _read(self.voice_provider)
+        state = _value(raw_voice, "state")
+        raw_work = _read(self.work_provider)
+        raw_health = _read(self.health_provider)
+        raw_vision = _read(self.vision_provider)
+        raw_features = _read(self.feature_provider)
+        raw_models = _read(self.model_provider)
+        features = _features(raw_features)
+        if self.work_provider is not None and raw_work is None and features.get("work") == "ready":
+            features["work"] = "degraded"
+        if self.vision_provider is not None and raw_vision is None and features.get("vision") == "ready":
+            features["vision"] = "degraded"
+        work = _bounded_work(raw_work)
+        # Voice can be stopped while other canonical subsystems keep running.
+        connected = (isinstance(state, str) and state in _VOICE) or any(
+            value is not None
+            for value in (raw_work, raw_health, raw_vision, raw_features, raw_models)
         )
-        with self._lock:
-            if "research.latest" in self._panels:
-                self._panels["research.latest"]["sources"] = sources
-
-    def _record(self, event_type: str, detail: dict[str, Any]) -> None:
-        self._sequence += 1
-        self._events.append(
-            {"seq": self._sequence, "type": event_type, "at": self._clock(), **detail}
-        )
-
-    def set_runtime_connected(self, connected: bool) -> None:
-        if not isinstance(connected, bool):
-            raise TypeError("runtime connection must be boolean")
-        with self._lock:
-            self._runtime_connected = connected
-            self._voice_state = "idle" if connected else "offline"
-            self._record("runtime.connection", {"connected": connected})
-
-    def set_voice_state(self, state: str) -> None:
-        normalized = _short_text(state, maximum=32).casefold()
-        if normalized not in VOICE_STATES:
-            raise ValueError("unknown voice state")
-        with self._lock:
-            if not self._runtime_connected:
-                return
-            if normalized == self._voice_state:
-                return
-            self._voice_state = normalized
-            self._record("voice.state", {"state": normalized})
-
-    def show_panel(
-        self,
-        *,
-        panel_id: str,
-        panel_type: str,
-        title: str,
-        summary: str,
-        source: str = "runtime",
-        priority: int = 1,
-        ttl_seconds: float = 180.0,
-    ) -> None:
-        identity = _short_text(panel_id, maximum=64)
-        kind = _short_text(panel_type, maximum=24).casefold()
-        origin = _short_text(source, maximum=24).casefold()
-        if not re.fullmatch(r"[a-zA-Z0-9_.:-]+", identity):
-            raise ValueError("panel id must be a bounded opaque token")
-        if kind not in PANEL_TYPES or origin not in VALID_SOURCES:
-            raise ValueError("unsupported UI panel type/source")
-        if isinstance(priority, bool) or not isinstance(priority, int):
-            raise TypeError("priority must be an integer")
-        if not 0 <= priority <= 3:
-            raise ValueError("priority out of range")
-        if (
-            not isinstance(ttl_seconds, (float, int))
-            or isinstance(ttl_seconds, bool)
-            or not 1 <= ttl_seconds <= 3600
-        ):
-            raise ValueError("panel TTL out of range")
-        now = self._clock()
-        with self._lock:
-            self._panels[identity] = {
-                "id": identity,
-                "type": kind,
-                "title": _short_text(title, maximum=100),
-                "summary": _short_text(summary, maximum=500),
-                "source": origin,
-                "priority": priority,
-                "observed_at": now,
-                "expires_at": now + ttl_seconds,
-            }
-            self._record("panel.show", {"id": identity, "panel_type": kind})
-
-    def dismiss_panel(self, panel_id: str) -> None:
-        with self._lock:
-            if self._panels.pop(panel_id, None) is not None:
-                self._record("panel.dismiss", {"id": panel_id})
-
-    def observe_accepted_user_text(self, text: str) -> None:
-        """Show only bounded topical hints, never expose or store transcript text.
-
-        In particular a spoken request for memories, camera or private files does
-        NOT release that content; the real governed tool must supply authorized data.
-        """
-        normalized = _short_text(text, maximum=8000).casefold()
-        for kind, phrases in _TOPIC_MATCHES:
-            if any(phrase in normalized for phrase in phrases):
-                explicit = bool(_EXPLICIT.search(normalized))
-                self.show_panel(
-                    panel_id=f"topic.{kind}",
-                    panel_type=kind,
-                    title={
-                        "work": "Background work",
-                        "research": "Research context",
-                        "document": "Project and documents",
-                        "vision": "Vision",
-                        "system": "System health",
-                    }[kind],
-                    summary=(
-                        "Relevant topic detected. Open a grounded source to see details; "
-                        "the visual layer does not invent results or bypass permissions."
-                    ),
-                    source="runtime",
-                    priority=2 if explicit else 1,
-                    ttl_seconds=150,
-                )
-                break
-
-    def snapshot(self) -> dict[str, Any]:
-        """Copy data without holding the lock while querying canonical Work."""
-        with self._lock:
-            now = self._clock()
-            for key in tuple(self._panels):
-                if self._panels[key]["expires_at"] <= now:
-                    del self._panels[key]
-            panels = [dict(panel) for panel in self._panels.values()]
-            panels.sort(key=lambda p: (-p["priority"], -p["observed_at"]))
-            connected = self._runtime_connected
-            voice_state = self._voice_state
-            sequence = self._sequence
-            provider = self._work_provider
-            vision_provider = self._vision_provider
-            health_provider = self._health_provider
-        work: list[dict[str, str]] = []
-        if connected and provider is not None:
-            try:
-                candidate = provider()
-                if isinstance(candidate, list):
-                    work = [
-                        {
-                            "id": _short_text(row["id"], maximum=80),
-                            "kind": _short_text(row["kind"], maximum=50),
-                            "state": _short_text(row["state"], maximum=50),
-                        }
-                        for row in candidate[:8]
-                    ]
-            except (KeyError, TypeError, ValueError):
-                work = []
-            except Exception:  # noqa: BLE001 - UI must not break live Work
-                # UI telemetry must not be able to bring down the voice runtime.
-                work = []
-        if connected and provider is not None:
-            # One baseline observation is silent. Later significant changes
-            # materialize an ephemeral projection instead of a standing grid.
-            # This is purely a display notification; WorkStore stays canonical.
-            fresh = {row["id"]: row["state"] for row in work}
-            with self._lock:
-                previous = self._last_work_states
-                self._last_work_states = fresh
-            if previous is not None:
-                for row in work:
-                    old = previous.get(row["id"])
-                    new = row["state"]
-                    if old is None or old == new:
-                        continue
-                    if new not in {"completed", "failed", "waiting_for_owner"}:
-                        continue
-                    label = {
-                        "completed": "Background work completed",
-                        "failed": "Background work needs attention",
-                        "waiting_for_owner": "Jarvis requests your input",
-                    }[new]
-                    self.show_panel(
-                        panel_id="work.latest_transition",
-                        panel_type="alert" if new != "completed" else "work",
-                        title=label,
-                        summary=(
-                            f"Canonical {row['kind']} work has changed state "
-                            f"from {old} to {new}. "
-                            "Open Work to inspect authorized details."
-                        ),
-                        source="canonical_work",
-                        priority=3 if new != "completed" else 2,
-                        ttl_seconds=180,
-                    )
-                    break
-        vision: dict[str, object] = {"connected": False, "running": False}
-        if connected and vision_provider is not None:
-            try:
-                raw = vision_provider()
-                if isinstance(raw, dict):
-                    camera = raw.get("active_source")
-                    available = raw.get("available_sources", [])
-                    vision = {
-                        "connected": True,
-                        "running": raw.get("running") is True,
-                        "active_source": (
-                            _short_text(camera, maximum=48)
-                            if isinstance(camera, str)
-                            else "unknown"
-                        ),
-                        "available_sources": [
-                            _short_text(name, maximum=48)
-                            for name in available[:6]
-                            if isinstance(name, str)
-                        ]
-                        if isinstance(available, list)
-                        else [],
-                    }
-            except Exception:  # noqa: BLE001 - optional read-only projection
-                vision = {"connected": False, "running": False}
-        health: list[dict[str, str]] = []
-        if connected and health_provider is not None:
-            try:
-                raw = health_provider()
-                if isinstance(raw, list):
-                    health = [
-                        {
-                            "component": _short_text(item["component"], maximum=80),
-                            "state": _short_text(item["state"], maximum=24),
-                        }
-                        for item in raw[:20]
-                        if isinstance(item, dict)
-                    ]
-            except Exception:  # noqa: BLE001 - optional read-only projection
-                health = []
         return {
-            "schema": 1,
-            "seq": sequence,
-            "runtime_connected": connected,
-            "voice_state": voice_state,
-            "panels": panels[:16],
+            "schema": 2,
+            "connected": connected,
+            "voice": {"state": state if isinstance(state, str) and state in _VOICE else "offline"},
             "work": work,
-            "vision": vision,
-            "health": health,
-            "server_time": self._clock(),
+            "health": _rows(
+                raw_health,
+                size=8,
+                fields={"component": None, "state": _HEALTH_STATES},
+            ),
+            "vision": _vision(raw_vision),
+            "features": features,
+            "models": _models(raw_models),
+            "attention_count": sum(
+                1 for item in work if item["state"] == "waiting_for_owner"
+            ),
+            "activity": _activity(_read(self.activity_provider)),
         }
-
-    def events_after(self, after: int) -> dict[str, Any]:
-        if isinstance(after, bool) or not isinstance(after, int) or after < 0:
-            raise ValueError("after must be a non-negative integer")
-        with self._lock:
-            return {
-                "seq": self._sequence,
-                "events": [
-                    dict(event) for event in self._events if event["seq"] > after
-                ],
-                "requires_snapshot": bool(
-                    self._events and after < self._events[0]["seq"] - 1
-                ),
-            }

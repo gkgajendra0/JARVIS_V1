@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -83,16 +84,8 @@ from jarvis.provider_resilience import (
     ProviderResilienceState,
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
-from jarvis.ui.runtime import (
-    attach_diagnostics_projection,
-    attach_work_projection,
-    observe_capability_result,
-    observe_provider_issue,
-    observe_research_result,
-    safely_attach_voice_observers,
-    start_opt_in_ui,
-    stop_opt_in_ui,
-)
+from jarvis.ui.activity import HUDActivityFeed
+from jarvis.ui.runtime import start_ui_if_enabled
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
     OpenCVCameraSource,
@@ -165,6 +158,10 @@ def build_production_voice_runtime(
     gemini_live_diagnostic_plan=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
+    hud_enabled = os.getenv("JARVIS_UI_ENABLED", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    hud_activity_feed = HUDActivityFeed() if hud_enabled else None
     if config.wake_model_path is None:
         raise RuntimeError("wake model is required for Step-2 wake mode")
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
@@ -415,9 +412,12 @@ def build_production_voice_runtime(
     )
 
     def combined_result_observer(result) -> None:
-        if result_observer is not None:
-            result_observer(result)
-        observe_capability_result(result)
+        try:
+            if result_observer is not None:
+                result_observer(result)
+        finally:
+            if hud_activity_feed is not None:
+                hud_activity_feed.record_capability(result)
 
     package_stack = None
     try:
@@ -592,14 +592,8 @@ def build_production_voice_runtime(
             if routing_runtime is not None and session_config.ai_provider == "gemini"
             else create_voice_session(session_config)
         )
-        safely_attach_voice_observers(
-            session,
-            bridge.add_accepted_turn_observer,
-            bridge.add_close_observer,
-        )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
-            observe_provider_issue(failure)
             if (
                 provider_lifecycle_trigger is None
                 or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
@@ -649,7 +643,7 @@ def build_production_voice_runtime(
             "JARVIS_AUDIO_OUTPUT_DEVICE through LiveKit MediaDevices"
         )
 
-    return CanonicalActiveSpeakerRuntimeController(
+    controller = CanonicalActiveSpeakerRuntimeController(
         config,
         audio,
         vision_service=vision_service,
@@ -661,7 +655,12 @@ def build_production_voice_runtime(
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
-        research_result_observer=observe_research_result,
+        research_result_observer=(
+            None if hud_activity_feed is None else hud_activity_feed.record_research
+        ),
+        hud_turn_observer=(
+            None if hud_activity_feed is None else hud_activity_feed.observe_turn
+        ),
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
         routing_runtime=routing_runtime,
@@ -678,6 +677,8 @@ def build_production_voice_runtime(
             config.gemini_realtime_model
         ),
     )
+    controller._hud_activity_feed = hud_activity_feed
+    return controller
 
 
 async def _reconcile_provider_model_lifecycle(
@@ -903,12 +904,6 @@ async def _run_from_configuration(
         # Provider model recycling must not silently request it again.
         reenable_categories = ()
         migration_needs_preflight_validation = False
-        start_opt_in_ui()
-        attach_work_projection(getattr(runtime, "_work_runtime", None))
-        attach_diagnostics_projection(
-            vision_service=getattr(runtime, "_vision_service", None),
-            self_awareness=self_awareness,
-        )
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
@@ -924,15 +919,20 @@ async def _run_from_configuration(
             if config.ai_provider == "gemini"
             else None
         )
+        ui_service = start_ui_if_enabled(runtime, self_awareness)
         try:
             await runtime.run()
         finally:
+            if ui_service is not None:
+                try:
+                    ui_service.close()
+                except Exception:  # noqa: BLE001 - HUD cannot block voice cleanup
+                    LOGGER.warning("Optional JARVIS HUD failed to close cleanly")
             if lifecycle_task is not None and not lifecycle_task.done():
                 lifecycle_task.cancel()
                 await asyncio.gather(lifecycle_task, return_exceptions=True)
             if self_awareness is not None:
                 self_awareness.close()
-            stop_opt_in_ui()
 
         if migrated.is_set():
             migration_needs_preflight_validation = True

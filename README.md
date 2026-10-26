@@ -124,59 +124,29 @@ jarvis-voice
 
 Run `jarvis-setup` to persist the wake model, stable audio selectors, active cloud-AI provider, and other non-secret machine settings. Idle wake detection remains local; cloud realtime conversation starts only after an accepted wake.
 
-## Optional visual companion — dynamic context stage (candidate)
+## Optional hybrid JARVIS HUD (owner review candidate)
 
-An experimental **read-only, local-only** interface lives in `src/jarvis/ui/`.
-It is a feature-branch candidate and not Step-13 HUD acceptance. By default
-it opens in a quiet ambient state: an animated JARVIS orb, a minimal shell,
-and **no permanent dashboard grid**. Use the left rail or the local display
-field to bring up a Work, Research, Files, Vision or System context panel;
-panels can be pinned or dismissed. The **PREVIEW** button displays explicitly
-labeled fictional examples and never claims live data.
-
-Standalone launch (no API key, cloud call or Jarvis voice process required):
+The previous dynamic-context UI implementation is superseded. The new local
+visual companion combines a 3D arc reactor with a quieter peripheral HUD,
+while the existing Python/LiveKit runtime remains responsible for all voice,
+Work, authority, memory and vision operations. It is disabled by default.
 
 ```powershell
-python -m jarvis.ui --open-browser
-# Or, after pip install -e ".[dev]":
-jarvis-ui --open-browser
-```
-
-Open `http://127.0.0.1:8765/` in your desktop browser.
-
-To run the same visual companion inside an existing `jarvis-voice` process
-and see **real bounded** voice lifecycle, accepted-turn topic hints and
-redacted WorkItem states, opt in in the same PowerShell session:
-
-```powershell
+jarvis-ui --open-browser                   # offline visual preview
 $env:JARVIS_UI_ENABLED = "true"
-$env:JARVIS_UI_PORT = "8765"
-jarvis-voice
+jarvis-voice                               # actual JARVIS with read-only HUD
 ```
 
-Do **not** also start `jarvis-ui` on the same port. No camera frames, raw
-voice/audio, personal memory, unapproved computer actions, fake email/calendar
-events or sensitive Work descriptions are sent to the visual companion.
-The browser is an observation and panel-selection surface, **not** a text
-command channel to the Jarvis AI. For actual actions, use normal governed
-Jarvis voice/tools. A missing UI must not disrupt voice or Work.
+Open `http://127.0.0.1:8765` in Edge/Chrome. The HUD displays only bounded
+voice lifecycle, Work types/states, system health and vision status, never
+commands, transcripts, private memory or camera frames. UI startup failure
+cannot prevent the voice runtime from starting. Do not start standalone
+`jarvis-ui` and integrated `jarvis-voice` on the same HUD port.
 
-Now connected (when enabled in the actual voice process): lifecycle state,
-canonical Work status, sanitized vision-camera diagnostics, Self Model component
-health, completed real-web research source links and governed capability
-outcomes. These are **observation-only** channels: camera video, private
-documents, personal memory and browser-origin execution are NOT enabled.
-
-For the actual owner's Windows live acceptance sequence (including how to
-avoid colliding with ongoing Gemini-fallback development), see the
-[live UI acceptance runbook](docs/reference/JARVIS_DYNAMIC_UI_LIVE_ACCEPTANCE_2026-10-23.md).
-The animated central orb now projects outward into left/right holograms with
-energy beams, reversible collapse, a radial panel selector, and Cinematic /
-Balanced / Eco performance settings.
-
-See [owner requirements and phased UI acceptance](docs/reference/JARVIS_DYNAMIC_CONTEXT_UI_REQUIREMENTS_2026-10-23.md).
-Real Windows visual/performance acceptance and source-grounded topic-specific
-panel integration are further work; green CI is not an owner-machine pass.
+See [the hybrid HUD runbook and Windows visual acceptance checklist](docs/JARVIS_HYBRID_HUD.md).
+Historical prior-UI requirements/acceptance are preserved in `docs/reference/`
+as evidence, not as the design implemented by this candidate. Owner-machine
+visual/performance/voice acceptance is still required before production merge.
 
 ## Development supervisor
 
