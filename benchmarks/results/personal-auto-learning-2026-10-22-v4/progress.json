@@ -1,0 +1,202 @@
+{
+  "rows": [
+    {
+      "id": "en-fresh-v4-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_0c53dfa14042443cb8aaaadc6c52d11d",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        },
+        {
+          "predicate": "owned_item_eabb86ceeb4040cdbdd2ec305a600217",
+          "text": "owned_item.vehicle: Suzuki Gixxer 250; value=Suzuki Gixxer 250; state=owned"
+        }
+      ],
+      "callback_ms": [
+        20.948299999872688
+      ],
+      "baseline_ms": [
+        0.025499999537714757
+      ],
+      "background_ms": 6632.236000001285,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "text": "My two vehicles are a Toyota Glanza and a Suzuki Gixxer 250."
+              }
+            ],
+            "current_turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Toyota Glanza",
+                "value": "Toyota Glanza",
+                "evidence": [
+                  {
+                    "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                    "quote": "My two vehicles are a Toyota Glanza and a Suzuki Gixxer 250."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              },
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "new",
+                "label": "Suzuki Gixxer 250",
+                "value": "Suzuki Gixxer 250",
+                "evidence": [
+                  {
+                    "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                    "quote": "My two vehicles are a Toyota Glanza and a Suzuki Gixxer 250."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Toyota Glanza",
+            "value": "Toyota Glanza",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "new",
+            "label": "Suzuki Gixxer 250",
+            "value": "Suzuki Gixxer 250",
+            "evidence": [
+              {
+                "turn_id": "e59639f7-3a95-4287-97d7-89d5183d03fb",
+                "start": 0,
+                "end": 60
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    }
+  ],
+  "single_send_calls": 2,
+  "conservative_cumulative_send_upper_bound": 268
+}

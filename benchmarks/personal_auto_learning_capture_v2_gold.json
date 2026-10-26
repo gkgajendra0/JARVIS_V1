@@ -1,0 +1,458 @@
+{
+  "episodes": {
+    "en-capture-v2-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Tata Tiago EV"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Bajaj Avenger 160"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Canon PowerShot V1"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "pescatarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "calm and practical"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-05": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "4:20"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-06": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "astronomy course"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-07": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "2 pm"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Tata Tiago EV"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "Nikon Z fc"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "en-capture-v2-10": {
+      "expected": [],
+      "case_class": "duplicate"
+    },
+    "en-capture-v2-11": {
+      "expected": [],
+      "case_class": "ambiguous"
+    },
+    "en-capture-v2-12": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "en-capture-v2-13": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "en-capture-v2-14": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "en-capture-v2-15": {
+      "expected": [],
+      "case_class": "persistent_veto"
+    },
+    "hi-capture-v2-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Tata Tiago EV"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Bajaj Avenger 160"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Canon PowerShot V1"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "पेस्केटेरियन"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "शांत और व्यावहारिक"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-05": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "4:20"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-06": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "खगोल विज्ञान कोर्स"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-07": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "2 बजे"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Tata Tiago EV"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "Nikon Z fc"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hi-capture-v2-10": {
+      "expected": [],
+      "case_class": "duplicate"
+    },
+    "hi-capture-v2-11": {
+      "expected": [],
+      "case_class": "ambiguous"
+    },
+    "hi-capture-v2-12": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "hi-capture-v2-13": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "hi-capture-v2-14": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "hi-capture-v2-15": {
+      "expected": [],
+      "case_class": "persistent_veto"
+    },
+    "hinglish-capture-v2-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Tata Tiago EV"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Bajaj Avenger 160"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Canon PowerShot V1"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "pescatarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "calm aur practical"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-05": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "4:20"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-06": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "astronomy course"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-07": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "2 pm"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Tata Tiago EV"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "Nikon Z fc"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive"
+    },
+    "hinglish-capture-v2-10": {
+      "expected": [],
+      "case_class": "duplicate"
+    },
+    "hinglish-capture-v2-11": {
+      "expected": [],
+      "case_class": "ambiguous"
+    },
+    "hinglish-capture-v2-12": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "hinglish-capture-v2-13": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "hinglish-capture-v2-14": {
+      "expected": [],
+      "case_class": "exclusion"
+    },
+    "hinglish-capture-v2-15": {
+      "expected": [],
+      "case_class": "persistent_veto"
+    }
+  },
+  "rubric": {
+    "scope": "preliminary semantic validation; never a substitute for full90 plus paired answers and owner acceptance",
+    "minimum_precision": 0.95,
+    "minimum_recall": 0.8,
+    "minimum_language_recall": 0.7,
+    "confidence_intervals": "Wilson; correlated language scenario families limit independence"
+  }
+}

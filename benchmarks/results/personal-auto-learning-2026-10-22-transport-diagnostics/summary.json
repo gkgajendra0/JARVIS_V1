@@ -1,0 +1,82 @@
+{
+  "protocol": {
+    "historical_outer_calls": 33,
+    "reserved_historical_send_upper_bound": 87,
+    "total_send_cap": 270,
+    "new_probe_cap": 2,
+    "retry": false,
+    "fictional_only": true,
+    "holdout_replay": false,
+    "adapter_sha256": "cf0a94adae9802539a689c235ffb2f181484aa15a1600f3b451f2c7c3505d9ba",
+    "cases": [
+      "new cycling routine extraction",
+      "new Hindi unsweetened-tea preference answer"
+    ],
+    "note": "Installed SDK no-retry verified offline; concurrent deterministic suite may affect latency. This is diagnosis, not frozen acceptance."
+  },
+  "single_send_calls": 2,
+  "conservative_cumulative_send_upper_bound": 89,
+  "rows": [
+    {
+      "case": "routine",
+      "status": "returned",
+      "latency_ms": 1495.5670999988797,
+      "fictional_response": {
+        "candidates": [
+          {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "weekly cycling practice",
+            "value": "every Saturday at 6 am",
+            "evidence": [
+              {
+                "turn_id": "5f22c0b8-e720-4a30-88a8-40e08fc0b4d6",
+                "quote": "My weekly cycling practice is every Saturday at 6 am."
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "case": "answer",
+      "status": "returned",
+      "latency_ms": 3247.3898000025656,
+      "fictional_response": {
+        "answer": "Aapko bina cheeni ki chai pasand hai."
+      }
+    }
+  ],
+  "usage": [
+    {
+      "model": "gemini-3.5-flash-lite",
+      "usage": [
+        {
+          "input_tokens": 389,
+          "output_tokens": 192,
+          "total_tokens": 581
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "model": "gemini-3.5-flash",
+      "usage": [
+        {
+          "input_tokens": 94,
+          "output_tokens": 21,
+          "total_tokens": 297
+        }
+      ],
+      "last_failure": null
+    }
+  ],
+  "accepted": false
+}

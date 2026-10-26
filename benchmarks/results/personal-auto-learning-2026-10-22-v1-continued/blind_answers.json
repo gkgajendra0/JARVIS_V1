@@ -1,0 +1,54 @@
+{
+  "rubric": {
+    "relevant": "Use supported requested facts; no invented owner facts.",
+    "irrelevant": "Answer general question without mentioning irrelevant owner facts.",
+    "unknown_relation": "State missing owner reason/preference; ownership alone supplies no reason.",
+    "reviewer": "Blind arm order, agent authored review reported separately from owner acceptance."
+  },
+  "pairs": [
+    {
+      "id": "en-05",
+      "question": "Suggest a dinner that fits my diet.",
+      "facts": [
+        {
+          "predicate": "diet_preference",
+          "text": "food_preference: vegetarian"
+        }
+      ],
+      "A": "Since you follow a vegetarian diet, a great dinner idea would be a vegetable stir-fry with tofu and rice, a creamy mushroom risotto, or a hearty chickpea and lentil curry served with warm naan.",
+      "B": "I don't have any information about your specific diet or restrictions. If you can share your dietary preferences or requirements, I'd be happy to suggest a dinner that fits!"
+    },
+    {
+      "id": "hi-01",
+      "question": "मेरे पास कौन से वाहन हैं?",
+      "facts": [
+        {
+          "predicate": "owned_item_184477107b1147d8b3b1109749e091a3",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_62f1215440c84990a3fd4cfc14130398",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "A": "मुझे आपके पास मौजूद वाहनों के बारे में कोई जानकारी नहीं है।",
+      "B": "आपके पास TVS Ronin और Toyota Glanza हैं।"
+    },
+    {
+      "id": "hinglish-01",
+      "question": "Mere paas kaunse vehicles hain?",
+      "facts": [
+        {
+          "predicate": "owned_item_4a4a37b2fd0b488ba497722aa26de144",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_d06400928aa746b4bb22b46169bbdb75",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "A": "Aapke paas TVS Ronin aur Toyota Glanza hain.",
+      "B": "Mere paas aapke vehicles ki koi jankari nahi hai."
+    }
+  ]
+}

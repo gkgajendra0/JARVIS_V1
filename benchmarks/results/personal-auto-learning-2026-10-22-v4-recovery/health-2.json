@@ -1,0 +1,24 @@
+{
+  "cycle": 2,
+  "status": "returned",
+  "question": "मेरे जवाबों में उदाहरण कैसे होने चाहिए?",
+  "fictional_context": [
+    {
+      "text": "response_style: simple everyday examples"
+    }
+  ],
+  "fictional_response": {
+    "answer": "आपके जवाबों में उदाहरण सरल और रोज़मर्रा के जीवन से जुड़े होने चाहिए।"
+  },
+  "latency_ms": 3113.5007000011683,
+  "usage": [
+    {
+      "input_tokens": 95,
+      "output_tokens": 25,
+      "total_tokens": 358
+    }
+  ],
+  "requested_model": "gemini-3.5-flash",
+  "conservative_cumulative_send_upper_bound": 297,
+  "accepted": false
+}

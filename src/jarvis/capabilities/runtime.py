@@ -225,6 +225,24 @@ class CapabilityRuntime:
         )
         return authorize(prepared)
 
+    @property
+    def personal_learning_authority(self):
+        from jarvis.authority.personal_learning import PersonalLearningAuthority
+
+        issuer = getattr(self, "_personal_learning_authority", None)
+        if issuer is None:
+            if not isinstance(self._authority, CapabilityAuthorityBroker):
+                raise CapabilityAuthorizationError("learning authority is unavailable")
+            issuer = PersonalLearningAuthority(self._authority)
+            self._personal_learning_authority = issuer
+        return issuer
+
+    def open_personal_learning(self, runtime_id: str, provider: str):
+        return self.personal_learning_authority.open(runtime_id, provider)
+
+    def close_personal_learning(self, grant) -> None:
+        self.personal_learning_authority.revoke(grant)
+
     def consume_personal_context(self, authorized: AuthorizedCapability) -> None:
         self._authority.consume(authorized)
 
@@ -458,6 +476,9 @@ class CapabilityRuntime:
 
     def close(self) -> None:
         try:
+            issuer = getattr(self, "_personal_learning_authority", None)
+            if issuer is not None:
+                issuer.close()
             for callback in self._close_callbacks:
                 try:
                     callback()
@@ -494,6 +515,7 @@ def build_default_capability_runtime(
     extra_executors: tuple[CapabilityExecutor, ...] = (),
     catalog_projection: CapabilityCatalogProjection | None = None,
     close_callbacks: tuple[Callable[[], None], ...] = (),
+    routing_runtime=None,
 ) -> CapabilityRuntime:
     project = LocalProjectReadExecutor()
     system = SystemReadExecutor()
@@ -564,6 +586,11 @@ def build_default_capability_runtime(
             model=hands_planner_model,
             chatgpt_plan_enabled=chatgpt_plan_enabled,
             chatgpt_plan_model=chatgpt_plan_model,
+            **(
+                {"routing_runtime": routing_runtime}
+                if routing_runtime is not None
+                else {}
+            ),
         )
     return CapabilityRuntime(
         executors=executor_tuple,

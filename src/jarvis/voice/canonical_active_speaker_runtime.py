@@ -58,6 +58,7 @@ class _SessionToolBundle:
         memory_runtime: MemoryRuntime | None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None,
         research_service: CurrentResearchService | None,
+        research_result_observer: Callable[[dict[str, object]], None] | None = None,
         capability_runtime: CapabilityRuntime | None,
         work_runtime: WorkRuntime | None = None,
         personal_context_getter: Callable[[], PersonalContextSession | None]
@@ -68,6 +69,7 @@ class _SessionToolBundle:
         self._memory_runtime = memory_runtime
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
+        self._research_result_observer = research_result_observer
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
         self._personal_context_getter = personal_context_getter or (lambda: None)
@@ -91,7 +93,13 @@ class _SessionToolBundle:
             if personal is not None:
                 tools.extend(PersonalContextAgentTools(personal).tools)
         if self._research_service is not None:
-            tools.extend(ResearchAgentTools(self._research_service, conversation).tools)
+            tools.extend(
+                ResearchAgentTools(
+                    self._research_service,
+                    conversation,
+                    result_observer=self._research_result_observer,
+                ).tools
+            )
         if self._capability_runtime is not None:
             tools.extend(
                 LocalReadAgentTools(self._capability_runtime, conversation).tools
@@ -111,8 +119,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         memory_runtime: MemoryRuntime | None = None,
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         research_service: CurrentResearchService | None = None,
+        research_result_observer: Callable[[dict[str, object]], None] | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
+        routing_runtime=None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -122,6 +132,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._agent_state = "unavailable"
         self._live_session: Any | None = None
         self._personal_context: PersonalContextSession | None = None
+        self._personal_learning = None
+        self._learning_authority = None
+        self._learning_grant = None
+        self._learning_start_attempted = False
         if (
             args
             and args[0].personal_context_mode == "apply"
@@ -162,6 +176,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     authority=capability_runtime,
                     retire=retire_personal,
                     busy_changed=personal_busy,
+                    learning_authority=(
+                        capability_runtime.personal_learning_authority
+                        if config.personal_learning_mode == "apply"
+                        else None
+                    ),
+                    learning_grant=self._learning_grant,
                 )
                 self._personal_context = personal
                 bridge.add_accepted_turn_observer(personal.observe_turn)
@@ -169,6 +189,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             else:
                 personal = None
                 self._personal_context = None
+            if self._personal_learning is not None and self._learning_grant is not None:
+                bridge.add_accepted_turn_observer(
+                    self._personal_learning.bind(
+                        bridge.conversation, self._learning_grant
+                    )
+                )
             if work_runtime is not None:
                 work_runtime.set_interactive_brain_active(False)
 
@@ -283,8 +309,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             )
         self._memory_query_coordinator = memory_query_coordinator
         self._research_service = research_service
+        self._research_result_observer = research_result_observer
         self._capability_runtime = capability_runtime
         self._work_runtime = work_runtime
+        self._routing_runtime = routing_runtime
         if (
             memory_runtime is not None
             or research_service is not None
@@ -297,10 +325,27 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 memory_runtime=memory_runtime,
                 memory_query_coordinator=memory_query_coordinator,
                 research_service=research_service,
+                research_result_observer=research_result_observer,
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
                 personal_context_getter=lambda: self._personal_context,
             )
+
+    async def _validate_gemini_handoff(self, bridge):
+        if (
+            not await super()._validate_gemini_handoff(bridge)
+            or self._session_conversation is not bridge.conversation
+        ):
+            return False
+        if (
+            self._learning_grant is not None
+            and self._learning_authority is not None
+            and self._learning_authority.validate(self._learning_grant).status
+            != "active"
+        ):
+            return False
+        personal = self._personal_context
+        return personal is None or await personal.validate_transport_restore()
 
     def _session_audio_output(self, bridge, output):
         personal = self._personal_context
@@ -671,6 +716,96 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             expire_inactivity,
         )
 
+    async def _start_personal_learning(self):
+        if (
+            self.config.personal_learning_mode != "apply"
+            or self._learning_start_attempted
+        ):
+            return
+        self._learning_start_attempted = True
+        from uuid import uuid4
+
+        from jarvis.memory.learning_extractors import build_learning_adapters
+        from jarvis.memory.learning_reconciliation import LearningReconciler
+        from jarvis.memory.learning_runtime import PersonalLearningRuntime
+
+        capabilities = self._capability_runtime
+        self._learning_authority = capabilities.personal_learning_authority
+        try:
+            grant = await asyncio.to_thread(
+                capabilities.open_personal_learning,
+                str(uuid4()),
+                self.config.ai_provider,
+            )
+            self._learning_grant = grant
+            self._memory_runtime.bind_learning_authority(self._learning_authority)
+            for category in self.config.personal_learning_reenable_categories:
+                from datetime import UTC, datetime
+
+                from jarvis.memory.provenance import MemorySource
+                from jarvis.memory.types import (
+                    AuthorityClass,
+                    MemorySourceClass,
+                    Sensitivity,
+                )
+
+                guard = await asyncio.to_thread(
+                    self._learning_authority.authorize_reenable_category, category
+                )
+                now = datetime.now(UTC)
+                source = MemorySource(
+                    str(uuid4()),
+                    MemorySourceClass.OWNER_EXPLICIT,
+                    "local-control:reenable:" + category,
+                    now,
+                    AuthorityClass.OWNER_EXPLICIT,
+                    Sensitivity.STANDARD,
+                    now,
+                )
+                await self._memory_runtime.service.reenable_learning_category(
+                    category, source, guard
+                )
+            suppression = await self._memory_runtime.service.learning_suppression()
+            LOGGER.info(
+                "Personal learning suppression | categories=%s",
+                ",".join(sorted(suppression.suppressed)) or "none",
+            )
+            extractor, resolver = build_learning_adapters(
+                self.config.ai_provider,
+                **(
+                    {"routing_runtime": self._routing_runtime}
+                    if self._routing_runtime is not None
+                    else {}
+                ),
+            )
+            self._personal_learning = PersonalLearningRuntime(
+                self._learning_authority,
+                self._memory_runtime.service,
+                extractor,
+                resolver,
+                LearningReconciler(
+                    self._memory_runtime.service.canonical_reader,
+                    self._learning_authority,
+                ),
+                status_observer=lambda state: LOGGER.info(
+                    "Personal learning | session=%s | queued=%s | processed=%s | committed=%s | dropped=%s | reason=%s",
+                    state.session,
+                    state.queued,
+                    state.processed,
+                    state.committed,
+                    state.dropped,
+                    state.reason,
+                ),
+            )
+            LOGGER.info(
+                "Personal learning session active | maximum_seconds=900 | idle_seconds=300 | speaker_verification=False"
+            )
+        except Exception:  # noqa: BLE001 - no provider/private error body in logs
+            if self._learning_grant is not None:
+                capabilities.close_personal_learning(self._learning_grant)
+                self._learning_grant = None
+            LOGGER.info("Personal learning session unavailable; no automatic reopening")
+
     async def run(self) -> None:
         memory_runtime = self._memory_runtime
         capability_runtime = self._capability_runtime
@@ -678,8 +813,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         if memory_runtime is not None:
             await memory_runtime.start()
             LOGGER.info(
-                "JARVIS explicit persistent memory is active; implicit admission remains disabled"
+                "JARVIS canonical persistent memory is active | learning_mode=%s",
+                self.config.personal_learning_mode,
             )
+            await self._start_personal_learning()
             if self._memory_query_coordinator is not None:
                 LOGGER.warning(
                     "Bounded provider-assisted semantic recall is active | provider=%s | "
@@ -732,12 +869,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self._work_runtime.set_interactive_brain_active(False)
             if self._work_runtime is not None:
                 self._work_runtime.close()
+            if self._personal_learning is not None:
+                await self._personal_learning.close()
             if capability_runtime is not None:
                 capability_runtime.close()
             if self._research_service is not None:
                 await self._research_service.close()
             if memory_runtime is not None:
                 await memory_runtime.close()
+            if self._routing_runtime is not None:
+                await self._routing_runtime.aclose()
 
     async def _score_enrolled_speaker(
         self,

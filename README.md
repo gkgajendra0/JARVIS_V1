@@ -1,5 +1,7 @@
 # JARVIS V1
 
+**Current integration:** [implemented behavior and remaining limits](docs/reference/IMPLEMENTATION_STATUS.md). This status page supersedes older dated candidate statements; [Windows recovery recipes](docs/reference/WINDOWS_E_DRIVE_RECOVERY.md) are preserved in the repository.
+
 JARVIS V1 is a personal, voice-first intelligent assistant built research-first around explicit JARVIS-owned truth, authority, memory, and execution boundaries, with an owner-approved north star of becoming a governed autonomous self-managing personal intelligence runtime.
 
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS V1 does not import it or depend on it at runtime.
@@ -121,6 +123,60 @@ jarvis-voice
 ```
 
 Run `jarvis-setup` to persist the wake model, stable audio selectors, active cloud-AI provider, and other non-secret machine settings. Idle wake detection remains local; cloud realtime conversation starts only after an accepted wake.
+
+## Optional visual companion — dynamic context stage (candidate)
+
+An experimental **read-only, local-only** interface lives in `src/jarvis/ui/`.
+It is a feature-branch candidate and not Step-13 HUD acceptance. By default
+it opens in a quiet ambient state: an animated JARVIS orb, a minimal shell,
+and **no permanent dashboard grid**. Use the left rail or the local display
+field to bring up a Work, Research, Files, Vision or System context panel;
+panels can be pinned or dismissed. The **PREVIEW** button displays explicitly
+labeled fictional examples and never claims live data.
+
+Standalone launch (no API key, cloud call or Jarvis voice process required):
+
+```powershell
+python -m jarvis.ui --open-browser
+# Or, after pip install -e ".[dev]":
+jarvis-ui --open-browser
+```
+
+Open `http://127.0.0.1:8765/` in your desktop browser.
+
+To run the same visual companion inside an existing `jarvis-voice` process
+and see **real bounded** voice lifecycle, accepted-turn topic hints and
+redacted WorkItem states, opt in in the same PowerShell session:
+
+```powershell
+$env:JARVIS_UI_ENABLED = "true"
+$env:JARVIS_UI_PORT = "8765"
+jarvis-voice
+```
+
+Do **not** also start `jarvis-ui` on the same port. No camera frames, raw
+voice/audio, personal memory, unapproved computer actions, fake email/calendar
+events or sensitive Work descriptions are sent to the visual companion.
+The browser is an observation and panel-selection surface, **not** a text
+command channel to the Jarvis AI. For actual actions, use normal governed
+Jarvis voice/tools. A missing UI must not disrupt voice or Work.
+
+Now connected (when enabled in the actual voice process): lifecycle state,
+canonical Work status, sanitized vision-camera diagnostics, Self Model component
+health, completed real-web research source links and governed capability
+outcomes. These are **observation-only** channels: camera video, private
+documents, personal memory and browser-origin execution are NOT enabled.
+
+For the actual owner's Windows live acceptance sequence (including how to
+avoid colliding with ongoing Gemini-fallback development), see the
+[live UI acceptance runbook](docs/reference/JARVIS_DYNAMIC_UI_LIVE_ACCEPTANCE_2026-10-23.md).
+The animated central orb now projects outward into left/right holograms with
+energy beams, reversible collapse, a radial panel selector, and Cinematic /
+Balanced / Eco performance settings.
+
+See [owner requirements and phased UI acceptance](docs/reference/JARVIS_DYNAMIC_CONTEXT_UI_REQUIREMENTS_2026-10-23.md).
+Real Windows visual/performance acceptance and source-grounded topic-specific
+panel integration are further work; green CI is not an owner-machine pass.
 
 ## Development supervisor
 

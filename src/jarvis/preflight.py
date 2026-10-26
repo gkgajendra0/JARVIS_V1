@@ -76,6 +76,45 @@ def _credential_check(config: JarvisConfig) -> PreflightCheck:
     )
 
 
+def _gemini_fallback_check(config: JarvisConfig) -> PreflightCheck:
+    """Informational readiness: optional Paid unavailability never disables Free."""
+    if not config.gemini_fallback.enabled or config.ai_provider != "gemini":
+        return PreflightCheck(
+            "Gemini Paid fallback",
+            True,
+            "disabled; existing provider behavior retained",
+        )
+    import time
+
+    from jarvis.ai_provider import gemini_credential_ref, resolve_credential_api_key
+    from jarvis.model_routing.runtime import _reviewed_prices
+    from jarvis.voice.gemini_budget import GeminiLiveBudget
+
+    try:
+        paid_present = bool(
+            resolve_credential_api_key("gemini", gemini_credential_ref("paid"))
+        )
+    except (RuntimeError, ValueError):
+        paid_present = False
+    if not config.gemini_fallback.budget_enforced:
+        return PreflightCheck(
+            "Gemini Paid fallback",
+            True,
+            f"mode=free_first_paid_fallback; paid_credential_available={paid_present}; "
+            "local_spending_enforcement=disabled; automatic_paid_on_free_quota; provider_billing_applies",
+        )
+    prices, error = _reviewed_prices(config.gemini_fallback.pricing_path, time.time())
+    return PreflightCheck(
+        "Gemini Paid fallback",
+        True,
+        f"mode=free_first_paid_fallback; paid_credential_available={paid_present}; "
+        f"credential_validity_verified=False; ceiling_inr_minor={config.gemini_fallback.ceiling_inr_minor}; "
+        f"valid_price_count={len(prices)}; pricing={error or 'configured'}; "
+        f"paid_live={GeminiLiveBudget.reason}; cumulative_spend=reported_after_protected_store_open; "
+        "no provider probe or automatic purchase",
+    )
+
+
 def _version_triplet(value: str) -> tuple[int, int, int]:
     parts = value.strip().split(".", maxsplit=3)
     if len(parts) < 3:
@@ -313,6 +352,7 @@ def run_startup_preflight(config: JarvisConfig) -> list[PreflightCheck]:
     checks = [
         _check_file("Wake model", config.wake_model_path),
         _credential_check(config),
+        _gemini_fallback_check(config),
         _gemini_realtime_compatibility_check(config),
         _realtime_lifecycle_voice_check(config),
         *_audio_checks(config),

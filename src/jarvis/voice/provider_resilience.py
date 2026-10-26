@@ -23,6 +23,7 @@ LOGGER = logging.getLogger(__name__)
 _JARVIS_TERMINAL_FAILURE_KINDS = frozenset(
     {
         ProviderFailureKind.QUOTA_EXHAUSTED,
+        ProviderFailureKind.BALANCE_EXHAUSTED,
         ProviderFailureKind.AUTHENTICATION_FAILED,
         ProviderFailureKind.PERMISSION_DENIED,
         ProviderFailureKind.MODEL_UNAVAILABLE,
@@ -51,8 +52,10 @@ class ProviderResilienceSessionObserver:
         output_getter: Callable[[], io.AudioOutput | None],
         health_observer: Callable[[ProviderResilienceState], None] | None = None,
         failure_observer: Callable[[ProviderFailure], None] | None = None,
+        handoff=None,
     ) -> None:
         self._session = session
+        self._handoff = handoff
         self._provider = provider
         self._state = state
         self._status_speech = status_speech
@@ -95,6 +98,10 @@ class ProviderResilienceSessionObserver:
             return
 
         failure = classify_provider_failure(error, provider=self._provider)
+        if self._handoff is not None and self._handoff.try_handle_event(event):
+            self._state.mark_failure(failure)
+            self._notify_health()
+            return
         if self._failure_observer is not None:
             try:
                 self._failure_observer(failure)

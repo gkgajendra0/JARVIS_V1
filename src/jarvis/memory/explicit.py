@@ -36,6 +36,8 @@ _NEGATION_PATTERNS = (
     ),
     re.compile(r"\b(?:mat|nahi|nahin)\b.{0,24}\b(?:yaad|bhool|save|delete|remove)\b"),
     re.compile(r"(?:मत|नहीं).{0,24}(?:याद|भूल|सेव|डिलीट)"),
+    re.compile(r"\byaad\b.{0,12}\bmat\b.{0,12}\brakh(?:na|o)?\b"),
+    re.compile(r"याद.{0,12}मत.{0,12}रख"),
 )
 _REMEMBER_PATTERNS = (
     re.compile(r"\bremember\b"),

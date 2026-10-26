@@ -1,0 +1,123 @@
+{
+  "rows": [
+    {
+      "id": "hinglish-fresh-v4-04",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "text": "response_preference: short aur encouraging",
+          "state": "active"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "response_style",
+          "text": "response_preference: short aur encouraging"
+        }
+      ],
+      "callback_ms": [
+        20.41359999930137
+      ],
+      "baseline_ms": [
+        0.024400000256719068
+      ],
+      "background_ms": 1500.9898000007524,
+      "answer_status": "unavailable",
+      "answer_failure": "RuntimeError",
+      "fictional_learning_trace": [
+        {
+          "stage": "extract",
+          "fictional_input": {
+            "turns": [
+              {
+                "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                "text": "Tumhare replies mein mujhe short aur encouraging style pasand hai."
+              }
+            ],
+            "current_turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10"
+          },
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "reply style",
+                "value": "short aur encouraging",
+                "evidence": [
+                  {
+                    "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                    "quote": "Tumhare replies mein mujhe short aur encouraging style pasand hai."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_style",
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply style",
+            "value": "short aur encouraging",
+            "evidence": [
+              {
+                "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                "start": 0,
+                "end": 66
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "stage": "policy",
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply style",
+            "value": "short aur encouraging",
+            "evidence": [
+              {
+                "turn_id": "6809a7e1-629c-489b-82b2-8b5e987d9d10",
+                "start": 0,
+                "end": 66
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ]
+    }
+  ],
+  "single_send_calls": 3,
+  "conservative_cumulative_send_upper_bound": 296
+}

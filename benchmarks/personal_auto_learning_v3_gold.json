@@ -1,0 +1,950 @@
+{
+  "schema": "personal-auto-learning-v3-gold",
+  "episodes": {
+    "en-fresh-v3-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Renault Kiger"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Honda CB350"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v3-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Renault Kiger"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Honda CB350"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v3-01": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Renault Kiger"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Honda CB350"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v3-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Logitech MX Keys"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v3-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Logitech MX Keys"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v3-02": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Logitech MX Keys"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v3-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "vegan"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "वीगन"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-03": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "create",
+          "contains": [
+            "vegan"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "concise and technical"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v3-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "संक्षिप्त और तकनीकी"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v3-04": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "short aur technical"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v3-05": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "Marathi"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-05": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "मराठी"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-05": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "create",
+          "contains": [
+            "Marathi"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-06": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "2:15"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v3-06": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "2:15"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v3-06": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "create",
+          "contains": [
+            "2:15"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v3-07": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "learn conversational Spanish"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-07": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "बातचीत की स्पैनिश सीखना"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-07": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "create",
+          "contains": [
+            "conversational Spanish seekhna"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Renault Kiger"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Renault Kiger"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-08": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "change",
+          "contains": [
+            "Renault Kiger"
+          ],
+          "state": "not_owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "JBL Flip 6"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant",
+      "context_contains": [
+        "JBL Flip 6"
+      ],
+      "context_excludes": [
+        "Beosound A1"
+      ]
+    },
+    "hi-fresh-v3-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "JBL Flip 6"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant",
+      "context_contains": [
+        "JBL Flip 6"
+      ],
+      "context_excludes": [
+        "Beosound A1"
+      ]
+    },
+    "hinglish-fresh-v3-09": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "correct",
+          "contains": [
+            "JBL Flip 6"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant",
+      "context_contains": [
+        "JBL Flip 6"
+      ],
+      "context_excludes": [
+        "Beosound A1"
+      ]
+    },
+    "en-fresh-v3-10": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "4:45"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none",
+      "context_contains": [
+        "4:45"
+      ]
+    },
+    "hi-fresh-v3-10": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "4:45"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none",
+      "context_contains": [
+        "4:45"
+      ]
+    },
+    "hinglish-fresh-v3-10": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "change",
+          "contains": [
+            "4:45"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none",
+      "context_contains": [
+        "4:45"
+      ]
+    },
+    "en-fresh-v3-11": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "change",
+          "contains": [
+            "finish the watercolour workshop"
+          ],
+          "state": "completed"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-11": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "change",
+          "contains": [
+            "वॉटरकलर वर्कशॉप पूरी करना"
+          ],
+          "state": "completed"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-11": {
+      "expected": [
+        {
+          "category": "goal",
+          "action": "change",
+          "contains": [
+            "watercolour workshop complete karna"
+          ],
+          "state": "completed"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "change",
+          "contains": [
+            "ovo-vegetarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hi-fresh-v3-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "change",
+          "contains": [
+            "ओवो-शाकाहारी"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "hinglish-fresh-v3-12": {
+      "expected": [
+        {
+          "category": "food_preference",
+          "action": "change",
+          "contains": [
+            "ovo-vegetarian"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "relevant"
+    },
+    "en-fresh-v3-13": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "change",
+          "contains": [
+            "bullet points"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-13": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "change",
+          "contains": [
+            "बुलेट पॉइंट"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-13": {
+      "expected": [
+        {
+          "category": "response_preference",
+          "action": "change",
+          "contains": [
+            "bullet points"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-14": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Amazfit Bip 6"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "IKEA Melltorp"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-14": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Amazfit Bip 6"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "IKEA Melltorp"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-14": {
+      "expected": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "Amazfit Bip 6"
+          ],
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "contains": [
+            "IKEA Melltorp"
+          ],
+          "state": "owned"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-15": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "correct",
+          "contains": [
+            "Monday"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-15": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "correct",
+          "contains": [
+            "सोमवार"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-15": {
+      "expected": [
+        {
+          "category": "routine",
+          "action": "correct",
+          "contains": [
+            "Monday"
+          ],
+          "state": "active"
+        }
+      ],
+      "case_class": "positive",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-16": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hi-fresh-v3-16": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hinglish-fresh-v3-16": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "en-fresh-v3-17": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hi-fresh-v3-17": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "hinglish-fresh-v3-17": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "irrelevant"
+    },
+    "en-fresh-v3-18": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hi-fresh-v3-18": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hinglish-fresh-v3-18": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "en-fresh-v3-19": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hi-fresh-v3-19": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "hinglish-fresh-v3-19": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "unknown_relation"
+    },
+    "en-fresh-v3-20": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-20": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-20": {
+      "expected": [],
+      "case_class": "duplicate",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-21": {
+      "expected": [],
+      "case_class": "hypothetical",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-21": {
+      "expected": [],
+      "case_class": "hypothetical",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-21": {
+      "expected": [],
+      "case_class": "hypothetical",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-22": {
+      "expected": [],
+      "case_class": "third_party",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-22": {
+      "expected": [],
+      "case_class": "third_party",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-22": {
+      "expected": [],
+      "case_class": "third_party",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-23": {
+      "expected": [],
+      "case_class": "medical",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-23": {
+      "expected": [],
+      "case_class": "medical",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-23": {
+      "expected": [],
+      "case_class": "medical",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-24": {
+      "expected": [],
+      "case_class": "financial",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-24": {
+      "expected": [],
+      "case_class": "financial",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-24": {
+      "expected": [],
+      "case_class": "financial",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-25": {
+      "expected": [],
+      "case_class": "secret",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-25": {
+      "expected": [],
+      "case_class": "secret",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-25": {
+      "expected": [],
+      "case_class": "secret",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-26": {
+      "expected": [],
+      "case_class": "turn_veto",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-26": {
+      "expected": [],
+      "case_class": "turn_veto",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-26": {
+      "expected": [],
+      "case_class": "turn_veto",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-27": {
+      "expected": [],
+      "case_class": "category_veto",
+      "answer_kind": "none"
+    },
+    "hi-fresh-v3-27": {
+      "expected": [],
+      "case_class": "category_veto",
+      "answer_kind": "none"
+    },
+    "hinglish-fresh-v3-27": {
+      "expected": [],
+      "case_class": "category_veto",
+      "answer_kind": "none"
+    },
+    "en-fresh-v3-28": {
+      "expected": [],
+      "case_class": "forget_suppression",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hi-fresh-v3-28": {
+      "expected": [],
+      "case_class": "forget_suppression",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hinglish-fresh-v3-28": {
+      "expected": [],
+      "case_class": "forget_suppression",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "en-fresh-v3-29": {
+      "expected": [],
+      "case_class": "restart",
+      "answer_kind": "none",
+      "context_contains": [
+        "Logitech MX Keys"
+      ]
+    },
+    "hi-fresh-v3-29": {
+      "expected": [],
+      "case_class": "restart",
+      "answer_kind": "none",
+      "context_contains": [
+        "Logitech MX Keys"
+      ]
+    },
+    "hinglish-fresh-v3-29": {
+      "expected": [],
+      "case_class": "restart",
+      "answer_kind": "none",
+      "context_contains": [
+        "Logitech MX Keys"
+      ]
+    },
+    "en-fresh-v3-30": {
+      "expected": [],
+      "case_class": "unknown",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hi-fresh-v3-30": {
+      "expected": [],
+      "case_class": "unknown",
+      "answer_kind": "none",
+      "context_empty": true
+    },
+    "hinglish-fresh-v3-30": {
+      "expected": [],
+      "case_class": "unknown",
+      "answer_kind": "none",
+      "context_empty": true
+    }
+  }
+}

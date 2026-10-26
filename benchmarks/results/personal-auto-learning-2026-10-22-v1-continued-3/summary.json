@@ -1,0 +1,119 @@
+{
+  "continuation_plan": {
+    "candidate": "5af652a6a4dbc86c03ea9bd4368e76736eec25da",
+    "input_sha256": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "gold_sha256": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010",
+    "prior_summary_sha256": "ef44235f06789effd64904d67d91d0776622507860e8ba3e1e2ab1743bf8b154",
+    "prior_attempts": 30,
+    "remaining_cap": 3,
+    "minimum_episode_spacing_seconds": 10,
+    "minimum_after_answer_episode_seconds": 45,
+    "order": [
+      "hi-02"
+    ],
+    "authorization": "Owner explicitly approved one never-executed Hindi case, at most three requests, existing account, no failed-case retry or paid fallback",
+    "retry": false,
+    "notes": "Round robin language order fixed before calls. No exposed case repeated. No provider/model/account switch. Continue to new cases after an isolated answer timeout; any transport/semantic unavailable stops this segment. Preserve every unavailable answer. Mixed-head descriptive evidence only; acceptance stays false."
+  },
+  "summary": {
+    "status": "incomplete",
+    "completed": 1,
+    "unavailable": 0,
+    "unrun_in_remaining_cohort": 80,
+    "provider_attempts": 3,
+    "cumulative_attempts": 33,
+    "accepted": false
+  },
+  "scores": {
+    "completed": 1,
+    "unavailable": 0,
+    "true_positive": 1,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "precision_wilson": [
+      0.20654329147389294,
+      1.0
+    ],
+    "recall_wilson": [
+      0.20654329147389294,
+      1.0
+    ],
+    "languages": {
+      "hi": {
+        "completed": 1,
+        "captured": 1,
+        "expected": 1
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 1,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers"
+  },
+  "usage": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 1,
+      "usage": [
+        {
+          "input_tokens": 383,
+          "output_tokens": 191,
+          "total_tokens": 574
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 2,
+      "usage": [
+        {
+          "input_tokens": 83,
+          "output_tokens": 21,
+          "total_tokens": 257
+        }
+      ],
+      "last_failure": null
+    }
+  ],
+  "request_latency_ms": {
+    "n": 3,
+    "p50": 2428.197799999907,
+    "p95": 9990.940300005605
+  },
+  "rows": [
+    {
+      "id": "hi-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: कैमरा; value=Fujifilm X-S20; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_b9d77aac522b40a69ec1041071c91fde",
+          "text": "owned_item.device: कैमरा; value=Fujifilm X-S20; state=owned"
+        }
+      ],
+      "callback_ms": [
+        18.21580000250833
+      ],
+      "baseline_ms": [
+        0.02559999848017469
+      ],
+      "background_ms": 2212.6822999998694,
+      "answer_status": "unavailable",
+      "answer_failure": "provider_or_budget_unavailable"
+    }
+  ]
+}

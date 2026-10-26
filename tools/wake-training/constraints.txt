@@ -1,0 +1,12 @@
+torch==2.7.1
+torchaudio==2.7.1
+numpy==1.26.4
+scipy==1.12.0
+librosa==0.10.2.post1
+soundfile==0.13.1
+audiomentations==0.37.0
+torch-audiomentations==0.12.0
+setuptools==80.9.0
+onnx==1.19.1
+onnxruntime==1.23.2
+onnxscript==0.6.2

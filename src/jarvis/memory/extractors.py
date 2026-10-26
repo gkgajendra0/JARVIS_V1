@@ -137,10 +137,34 @@ class GeminiMemoryCandidateExtractor:
             ) from exc
 
 
+class RoutedMemoryCandidateExtractor:
+    provider_name = "gemini"
+
+    def __init__(self, *, routing_runtime, model):
+        from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
+
+        self.model_name = model
+        self._client = RoutedStructuredOutputClient(
+            routing_runtime=routing_runtime,
+            role="memory.extraction",
+            model=model,
+            max_output_tokens=4096,
+        )
+
+    async def extract(self, *, text):
+        source_text = _require_non_empty(text, name="text")
+        return await self._client.parse(
+            system_prompt=MEMORY_EXTRACTION_SYSTEM_PROMPT,
+            input_payload={"user_utterance": source_text},
+            response_model=MemoryExtractionProposal,
+        )
+
+
 def build_memory_candidate_extractor(
     *,
     provider: str,
     model: str,
+    routing_runtime=None,
 ) -> MemoryCandidateExtractor:
     """Build an adapter for the already-selected active production AI provider."""
 
@@ -151,6 +175,14 @@ def build_memory_candidate_extractor(
         "memory_candidate_extraction",
         configured_model=configured_model,
     )
+    if (
+        routing_runtime is not None
+        and routing_runtime.config.enabled
+        and normalized_provider == "gemini"
+    ):
+        return RoutedMemoryCandidateExtractor(
+            routing_runtime=routing_runtime, model=normalized_model
+        )
     api_key = require_provider_api_key(
         normalized_provider,
         purpose="memory candidate extraction",

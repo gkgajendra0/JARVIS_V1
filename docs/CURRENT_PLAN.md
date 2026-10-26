@@ -1,10 +1,36 @@
 # JARVIS — Current Execution Plan
 
+**Gemini Free/Paid candidate (23 October 2026):** existing routers and one
+cumulative INR350 governor support bounded Work/Hands/memory fallback. The
+controlled public Live adapter and normal handoff are implemented and software
+verified: 3,177 tests passed / 8 platform skips. Actual Paid voice remains
+unavailable because auxiliary billing/usage bounds are unqualified; a funded key
+alone does not enable it. Default OFF; no real API calls, saved activation,
+billing changes or merge. Final docs-inclusive hosted evidence is recorded in
+[draft PR #298](https://github.com/gkgajendra0/JARVIS_V1/pull/298). See the
+[implementation, remaining work and exact owner steps](research/GEMINI_CONTROLLED_LIVE_IMPLEMENTATION_2026-10-23.md).
+
 **Reconciled with both development chats, 20 October 2026.** This file contains *current
 priority and next actionable work*, not a complete chronology. The previous plan is
 preserved verbatim at [the October 18 snapshot](archive/operations/CURRENT_PLAN_SNAPSHOT_2026-10-18.md).
 Historical engineering milestones and evidence remain in [Project State](PROJECT_STATE.md)
 and the [Documentation Index](README.md).
+
+## Active owner decision — advance after software verification (22 October 2026)
+
+The owner directed that, given the implementation and passing software checks, work should move forward rather than spend multiple days on quota-limited provider testing. Record this as **IMPLEMENTED / SOFTWARE-VERIFIED; BROADER QUALIFICATION DEFERRED**. It does not assert that unrun semantic cases passed, that whole-app owner acceptance occurred, or that protected promotion/automatic activation was authorized.
+
+Draft PR#295 (`feat/personal-auto-learning-20261021`) contains the normal voice integration: session delegation, extraction, canonical reconciliation/admission, replay/suppression, bounded worker and current-context use. Product codefd7c7025 and research control5bb72ec0 are unchanged in evidence headc03666b7. All7exact-head CI checks on c03666b7 passed; latest full local software2,759passed/8skipped. Automatic learning is OFF by default. Earlier accepted main/explicit-memory behavior remains separate.
+
+Deferred evidence stays visible: v4has15complete/one unavailable/74unrun semantic cases,18/18conditional expected effects, six complete/four failed answer pairs; no full quality pass. The old v1recall33/47(70.2%) and v2partial Hindi replacement remain recorded. Cold callback p95=20.99ms(n16) does not meet the proposed10ms qualification target. Normal-app owner acceptance and protected-promotion decisions are open, not completed by this deferral. CAP-053 remains PARTIAL.
+
+The owner supplied the quota evidence: displayed Free tier, answering5RPM/20RPD and learning15RPM/500RPD; the screenshots show28-day peaks rather than current headroom. The three approved recovery opportunities are exhausted. Budget upper304/532,228remain, but no additional inference, automatic schedule, purchase, model/account/key change or local activation is authorized by moving development priority. The proposed next-reset batch and suggested paid/model-comparison alternatives are not adopted or running. Do not keep requesting screenshots or budget approvals to resume the deferred benchmark.
+
+Next development priority is **PI-3: contextual assistance across life domains**, following the explicit sequence in [North Star Section17.9](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md#179-prioritized-capability-delivery-and-gono-go-tests). PI-1has bounded owner acceptance; PI-2natural learning is implemented/software-verified with broader qualification deferred, not fully accepted. PI-3already has basic context-selection/read/prompt wiring. Inspect its actual missing behaviors and complete useful, multi-fact, current/source-backed ordinary advice without inventing a new memory store or personal brain. Conversation reference/continuity must respect the current provider-history and speaker/session boundaries. Relevant Work/Hands decisions follow within PI-3when justified; standalone tasks/reminders are not the immediate priority selected from the numbered roadmap. PI-4situated/proactive awareness and PI-5continual adaptation remain later. See the [corrected next-gap inspection](research/PERSONAL_ASSISTANCE_NEXT_GAP_TRIAGE_2026-10-22.md) and [handoff](research/PERSONAL_AUTO_LEARNING_IMPLEMENTED_HANDOFF_2026-10-22.md). No new feature design, model switch, retention scope or implementation is approved by this alignment.
+
+## Recorded activation and dependent-test workflow —22October2026
+
+Maintain the [personal-intelligence enablement record](PERSONAL_INTELLIGENCE_ENABLEMENT.md) across future milestones. Earlier PR294was owner-tested in the whole app with personal-context APPLY and merged, while OFF remained default and saved settings were unchanged. Automatic learning in PR295is separately implemented/software-verified, defaultOFF, with whole-app acceptance pending. After integration, normal-app validation and any milestone depending on learning/context must launch with `--personal-learning apply`; APPLY enables both for that process, without making the default/persistent machine setting ON. Repeat the intended mode after restart. OFF-only tests do not prove the dependent enabled experience. Keep implementation, merge, actual mode, normal-owner acceptance and default/persistent activation distinct in reports. No merge or owner-app activation was performed by this documentation update.
 
 ## Owner direction — active personal intelligence (2026-10-19)
 
@@ -94,7 +120,7 @@ Permanent requirements: [Product](PRODUCT.md) and Section 17 of
 CAP-053 is **PARTIAL**: the opt-in saved-preference flow has bounded owner
 acceptance; the broader personal-intelligence contract is not complete.
 
-### Immediate next work — promote the accepted flow, then qualify useful advice
+### Earlier PI-1 release sequence — promotion complete; qualification retained
 
 The owner-log correction failure is repaired in the same candidate: natural
 correction/deletion proposals resolve the actual canonical target, then require
@@ -103,8 +129,8 @@ The owner confirmed correct spoken results for the prescribed saved-diet
 sequence. Promotion was explicitly authorized conditional on checks; this does
 not accept broader advice quality, automatic learning or seamless attribution.
 
-1. Complete the authorized #292 → #293 → #294 promotion with applicable exact-head
-   checks and verify protected main. Preserve owner acceptance and CI evidence.
+1. **Completed:** authorized #292 → #293 → #294 promotion. Preserve owner acceptance
+   and exact-head/protected-main verification evidence.
 2. Qualify personally useful everyday advice with general fictional scenarios in
    English/Hindi/Hinglish, including relevant/irrelevant context and honest absence.
    Saved-preference recall acceptance alone does not prove this broader behavior.
@@ -181,10 +207,15 @@ bypass of Authority/OPA. The approved active product goal still requires the
 release gates above. **Protected main remains unchanged until the owner
 approves and all required checks pass.**
 
-## Next action
+## Active slice: PI-3A question-bound contextual assistance
 
-Complete owner-machine qualification and protected promotion of the reviewed
-repair slice, then qualify synthetic provider delivery and the trusted
-owner-turn boundary. Continue
-through the implementation/qualification sequence above until a real owner
-observation, exact promotion approval or unavailable resource is needed.
+The owner approved the [written design](superpowers/specs/2026-10-22-pi3-entity-aware-context-design.md) and [seven-task Native plan](superpowers/plans/2026-10-22-pi3-entity-aware-context.md) on 22 October 2026. Tasks 1-6 are implemented on the dependent candidate in the existing Desktop checkout; Task 7 software verification and review repairs are complete (2,858 tests / 8 skips). This supersedes the earlier inspect/research-only next action. The [gap map](research/PI3_CONTEXTUAL_ASSISTANCE_GAP_MAP_2026-10-22.md) and [technology review](research/PI3_TECHNOLOGY_REVIEW_2026-10-22.md) preserve how native structured projection was selected.
+
+Implemented: question-bound registered-scope queries, exact current label matching/clarification, bounded multi-fact evidence, one shared read budget, coherent canonical snapshots, scope/source/version invalidation and normal learning-APPLY tool/instruction integration. Context-only/OFF, explicit mutations, default OFF, existing grants and provider-history retirement remain supported. No new memory engine, HTTP reasoner, model/dependency change, provider request or owner activation occurred.
+
+Draft [PR #296](https://github.com/gkgajendra0/JARVIS_V1/pull/296) contains this candidate against unmerged PR #295. Next: follow its exact-head hosted checks and the [implementation/acceptance record](research/PI3_CONTEXT_QUERY_IMPLEMENTATION_2026-10-22.md), then owner-selected whole normal-app validation. Actual-model selection and spoken usefulness are not proven by forced tool/audio harnesses. Exact-head CI, dependency integration, applicable owner acceptance and explicit protected merge remain separate gates. PI-2 broad qualification is still deferred, never counted as passed; PI-3 as a whole and CAP-053 remain PARTIAL. Do not restart quota-bound benchmarks, replace this with Step8 reminders, or broaden alias/episode/proactive behavior silently.
+
+
+## Requested architecture: Gemini Free-first / Paid-fallback
+
+The owner requested shared Free/Paid credential-aware fallback for Gemini Live, eligible Hands/Work/memory inference and a cumulative INR350 internal paid ceiling. Baseline is the clean Desktop PI-3A candidate `211c3ade`; protected main and the unmerged PI-2/PI-3A dependency status are unchanged. The [written design](superpowers/specs/2026-10-22-gemini-free-paid-fallback-design.md) records repository findings, existing-router reuse, durable compatibility, privacy/Authority continuity, bounded recovery, reservation/unknown-cost behavior and the verification/owner-acceptance matrix. Status: written design owner-approved; the [12-task implementation plan](superpowers/plans/2026-10-22-gemini-free-paid-fallback.md) is owner-approved for Native implementation. Software implementation is in progress; no live API calls or activation are authorized by this approval. Keep Native execution preference. The new request authorizes this software work but does not authorize paid inference, billing changes, purchases, saved-setting activation or merge; earlier benchmark deferrals are not reopened.

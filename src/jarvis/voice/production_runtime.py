@@ -60,6 +60,8 @@ from jarvis.memory.query_coordinator import MemoryQueryCoordinator
 from jarvis.memory.query_interpreters import build_memory_query_interpreter
 from jarvis.memory.release_guard import build_memory_release_guard
 from jarvis.memory.runtime import build_default_memory_runtime
+from jarvis.model_routing.runtime import build_production_routing_runtime
+from jarvis.model_routing.status import gemini_fallback_status
 from jarvis.preflight import StartupPreflightError, require_startup_preflight
 from jarvis.promotion.release import (
     DeploymentMetadataStore,
@@ -81,6 +83,16 @@ from jarvis.provider_resilience import (
     ProviderResilienceState,
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.ui.runtime import (
+    attach_diagnostics_projection,
+    attach_work_projection,
+    observe_capability_result,
+    observe_provider_issue,
+    observe_research_result,
+    safely_attach_voice_observers,
+    start_opt_in_ui,
+    stop_opt_in_ui,
+)
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
     OpenCVCameraSource,
@@ -150,6 +162,7 @@ def build_production_voice_runtime(
     self_awareness: SelfAwarenessRuntime | None = None,
     provider_lifecycle_trigger: asyncio.Event | None = None,
     provider_migration_rollback_trigger: asyncio.Event | None = None,
+    gemini_live_diagnostic_plan=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
@@ -310,6 +323,28 @@ def build_production_voice_runtime(
         else None
     )
 
+    routing_runtime = (
+        build_production_routing_runtime(config)
+        if config.gemini_fallback.enabled and config.ai_provider == "gemini"
+        else None
+    )
+    routing_options = (
+        {} if routing_runtime is None else {"routing_runtime": routing_runtime}
+    )
+    if gemini_live_diagnostic_plan is not None:
+        if (
+            routing_runtime is None
+            or routing_runtime.config.live_policy_mode != "operational_v1"
+        ):
+            raise ValueError(
+                "Live diagnostics require explicit operational fallback configuration"
+            )
+        routing_runtime.live_diagnostic_plan = gemini_live_diagnostic_plan
+    if routing_runtime is not None:
+        LOGGER.info(
+            "Gemini fallback status | %s", gemini_fallback_status(routing_runtime)
+        )
+
     memory_runtime = build_default_memory_runtime() if config.memory_enabled else None
 
     memory_query_coordinator = None
@@ -323,10 +358,12 @@ def build_production_voice_runtime(
         interpreter = build_memory_query_interpreter(
             provider=config.ai_provider,
             model=query_model,
+            **routing_options,
         )
         release_guard = build_memory_release_guard(
             provider=config.ai_provider,
             model=query_model,
+            **routing_options,
         )
         memory_query_coordinator = ProviderVerifiedMemoryQueryCoordinator(
             coordinator=MemoryQueryCoordinator(
@@ -345,11 +382,15 @@ def build_production_voice_runtime(
         )
 
     candidate_extractor = None
-    if config.memory_candidate_extraction_enabled:
+    if (
+        config.memory_candidate_extraction_enabled
+        and config.personal_learning_mode == "off"
+    ):
         assert config.memory_candidate_extraction_model is not None
         candidate_extractor = build_memory_candidate_extractor(
             provider=config.ai_provider,
             model=config.memory_candidate_extraction_model,
+            **routing_options,
         )
         LOGGER.info(
             "Phase-4.4 memory candidate extraction shadow is configured: "
@@ -372,6 +413,12 @@ def build_production_voice_runtime(
         if self_awareness is not None
         else None
     )
+
+    def combined_result_observer(result) -> None:
+        if result_observer is not None:
+            result_observer(result)
+        observe_capability_result(result)
+
     package_stack = None
     try:
         active_release = load_active_release_for_startup()
@@ -399,12 +446,13 @@ def build_production_voice_runtime(
         hands_planner_model=config.hands_planner_model,
         chatgpt_plan_enabled=config.chatgpt_plan_enabled,
         chatgpt_plan_model=config.chatgpt_plan_model,
-        result_observer=result_observer,
+        result_observer=combined_result_observer,
         extra_executors=extra_executors,
         catalog_projection=(
             None if package_stack is None else package_stack.projection
         ),
         close_callbacks=(() if package_stack is None else (package_stack.close,)),
+        **routing_options,
     )
     capability_catalog = capability_runtime.refresh_catalog()
     if self_awareness is not None:
@@ -475,6 +523,7 @@ def build_production_voice_runtime(
                 )
             ),
             capability_catalog_refresher=capability_runtime.refresh_catalog,
+            **routing_options,
         )
         LOGGER.info(
             "Persistent work runtime configured: provider=%s physical_concurrency=%s "
@@ -538,9 +587,19 @@ def build_production_voice_runtime(
         return output if isinstance(output, MediaDevicesAudioOutput) else None
 
     def production_session_factory(session_config: JarvisConfig):
-        session, bridge = create_voice_session(session_config)
+        session, bridge = (
+            create_voice_session(session_config, routing_runtime=routing_runtime)
+            if routing_runtime is not None and session_config.ai_provider == "gemini"
+            else create_voice_session(session_config)
+        )
+        safely_attach_voice_observers(
+            session,
+            bridge.add_accepted_turn_observer,
+            bridge.add_close_observer,
+        )
 
         def observe_provider_failure(failure: ProviderFailure) -> None:
+            observe_provider_issue(failure)
             if (
                 provider_lifecycle_trigger is None
                 or failure.kind is not ProviderFailureKind.MODEL_UNAVAILABLE
@@ -567,6 +626,7 @@ def build_production_voice_runtime(
             output_getter=lambda: audio.output,
             health_observer=provider_health_observer,
             failure_observer=observe_provider_failure,
+            handoff=getattr(bridge, "gemini_handoff", None),
         )
         silent_audio_recovery = SilentRealtimeAudioRecovery(
             session_config,
@@ -601,8 +661,10 @@ def build_production_voice_runtime(
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
+        research_result_observer=observe_research_result,
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
+        routing_runtime=routing_runtime,
         session_factory=production_session_factory,
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(
@@ -727,19 +789,34 @@ async def _run_provider_model_lifecycle_watch(
         return
 
 
-def _load_voice_config(personal_context_mode: str | None = None) -> JarvisConfig:
+def _load_voice_config(
+    personal_context_mode: str | None = None, personal_learning_mode: str | None = None
+) -> JarvisConfig:
     config = JarvisConfig.from_environment()
-    return (
-        replace(config, personal_context_mode=personal_context_mode)
-        if personal_context_mode is not None
-        else config
+    learning = (
+        config.personal_learning_mode
+        if personal_learning_mode is None
+        else personal_learning_mode
     )
+    if learning == "apply" and personal_context_mode == "off":
+        raise ValueError("personal learning apply requires personal context apply")
+    changes = {}
+    if personal_context_mode is not None:
+        changes["personal_context_mode"] = personal_context_mode
+    if personal_learning_mode is not None:
+        changes["personal_learning_mode"] = personal_learning_mode
+    return replace(config, **changes) if changes else config
 
 
-async def _run_from_configuration(personal_context_mode: str | None = None) -> None:
+async def _run_from_configuration(
+    personal_context_mode: str | None = None,
+    personal_learning_mode: str | None = None,
+    reenable_categories: tuple[str, ...] = (),
+    gemini_live_diagnostic_plan=None,
+) -> None:
     migration_needs_preflight_validation = False
     while True:
-        config = _load_voice_config(personal_context_mode)
+        config = _load_voice_config(personal_context_mode, personal_learning_mode)
         configure_logging(config.log_level)
         if has_pending_gemini_live_migration(config.gemini_realtime_model):
             migration_needs_preflight_validation = True
@@ -757,7 +834,12 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 startup_lifecycle.current_model,
                 startup_lifecycle.replacement_model,
             )
-            config = _load_voice_config(personal_context_mode)
+            config = _load_voice_config(personal_context_mode, personal_learning_mode)
+
+        if reenable_categories:
+            config = replace(
+                config, personal_learning_reenable_categories=reenable_categories
+            )
 
         self_awareness: SelfAwarenessRuntime | None = None
         try:
@@ -775,6 +857,11 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 require_startup_preflight(config)
                 runtime = build_production_voice_runtime(
                     config,
+                    **(
+                        {"gemini_live_diagnostic_plan": gemini_live_diagnostic_plan}
+                        if gemini_live_diagnostic_plan is not None
+                        else {}
+                    ),
                     provider_lifecycle_trigger=lifecycle_trigger,
                     provider_migration_rollback_trigger=rollback_trigger,
                 )
@@ -783,6 +870,11 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 require_startup_preflight_with_health(config, self_awareness)
                 runtime = build_production_voice_runtime(
                     config,
+                    **(
+                        {"gemini_live_diagnostic_plan": gemini_live_diagnostic_plan}
+                        if gemini_live_diagnostic_plan is not None
+                        else {}
+                    ),
                     self_awareness=self_awareness,
                     provider_lifecycle_trigger=lifecycle_trigger,
                     provider_migration_rollback_trigger=rollback_trigger,
@@ -807,7 +899,16 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 continue
             raise
 
+        # A local recovery request is attempted only by the first built controller.
+        # Provider model recycling must not silently request it again.
+        reenable_categories = ()
         migration_needs_preflight_validation = False
+        start_opt_in_ui()
+        attach_work_projection(getattr(runtime, "_work_runtime", None))
+        attach_diagnostics_projection(
+            vision_service=getattr(runtime, "_vision_service", None),
+            self_awareness=self_awareness,
+        )
         migrated = asyncio.Event()
         lifecycle_task = (
             asyncio.create_task(
@@ -831,6 +932,7 @@ async def _run_from_configuration(personal_context_mode: str | None = None) -> N
                 await asyncio.gather(lifecycle_task, return_exceptions=True)
             if self_awareness is not None:
                 self_awareness.close()
+            stop_opt_in_ui()
 
         if migrated.is_set():
             migration_needs_preflight_validation = True
@@ -851,9 +953,62 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Use current canonical owner memory with fresh per-request consent",
     )
+    parser.add_argument(
+        "--personal-learning",
+        choices=("off", "apply"),
+        default=None,
+        help="Open an owner-operated automatic memory session at startup",
+    )
+    from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+    parser.add_argument(
+        "--reenable-learning-category",
+        choices=sorted(SUPPRESSION_KEYS),
+        action="append",
+        default=[],
+        help="Explicitly restore one suppressed category with a separate Windows Hello approval",
+    )
+    parser.add_argument(
+        "--gemini-live-diagnostic-plan",
+        type=Path,
+        default=None,
+        help="Bounded whole-app fault plan; requires separate exact financial approval",
+    )
     args = parser.parse_args(argv)
+    if args.gemini_live_diagnostic_plan is not None:
+        from jarvis.voice.gemini_live_diagnostics import load_live_diagnostic_plan
+
+        plan = load_live_diagnostic_plan(args.gemini_live_diagnostic_plan)
+        if plan.scope != "whole_app_diagnostic":
+            parser.error("normal voice diagnostics require a whole_app_diagnostic plan")
+        asyncio.run(
+            _run_from_configuration(
+                args.personal_context,
+                args.personal_learning,
+                tuple(dict.fromkeys(args.reenable_learning_category)),
+                gemini_live_diagnostic_plan=plan,
+            )
+        )
+        return 0
+    if args.reenable_learning_category and args.personal_learning != "apply":
+        parser.error("--reenable-learning-category requires --personal-learning apply")
+    if args.personal_learning == "apply" and args.personal_context == "off":
+        parser.error("--personal-learning apply requires --personal-context apply")
     try:
-        asyncio.run(_run_from_configuration(args.personal_context))
+        if args.reenable_learning_category:
+            asyncio.run(
+                _run_from_configuration(
+                    args.personal_context,
+                    args.personal_learning,
+                    tuple(dict.fromkeys(args.reenable_learning_category)),
+                )
+            )
+        elif args.personal_learning is None:
+            asyncio.run(_run_from_configuration(args.personal_context))
+        else:
+            asyncio.run(
+                _run_from_configuration(args.personal_context, args.personal_learning)
+            )
         return 0
     except StartupPreflightError as exc:
         print(f"\n{exc}", file=sys.stderr)

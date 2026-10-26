@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .assertions import SemanticAssertionRecord
 from .evidence_gate import (
     MemoryEvidenceDecision,
     MemoryEvidenceDisposition,
@@ -11,7 +12,7 @@ from .query_grounding import (
     MemoryQueryGroundingDisposition,
     MemoryQueryGroundingPolicy,
 )
-from .query_plan import MemoryQueryInterpreter, MemoryQueryProposal
+from .query_plan import MemoryFacetKey, MemoryQueryInterpreter, MemoryQueryProposal
 from .retrieval import RetrievalEligibility, SemanticRetrievalService
 
 
@@ -40,6 +41,18 @@ class MemoryQueryCoordinator:
         self._retrieval = retrieval
         self._grounding_policy = grounding_policy or MemoryQueryGroundingPolicy()
         self._evidence_gate = MemoryEvidenceGate(retrieval)
+
+    async def evidence_is_current(
+        self, evidence: SemanticAssertionRecord, *, eligibility: RetrievalEligibility
+    ) -> bool:
+        """Re-read the same eligible exact facet; never trust a prior snapshot."""
+        current = await self._retrieval.retrieve_exact_current_facet(
+            MemoryFacetKey(
+                evidence.subject_scope, evidence.subject, evidence.predicate
+            ),
+            eligibility=eligibility,
+        )
+        return current == (evidence,)
 
     async def resolve(
         self,

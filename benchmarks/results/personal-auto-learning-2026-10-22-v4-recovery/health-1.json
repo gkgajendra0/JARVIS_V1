@@ -1,0 +1,24 @@
+{
+  "cycle": 1,
+  "status": "returned",
+  "question": "How should you begin my replies?",
+  "fictional_context": [
+    {
+      "text": "response_style: start with a short summary"
+    }
+  ],
+  "fictional_response": {
+    "answer": "I should begin your replies with a short summary."
+  },
+  "latency_ms": 2593.430499999158,
+  "usage": [
+    {
+      "input_tokens": 95,
+      "output_tokens": 19,
+      "total_tokens": 302
+    }
+  ],
+  "requested_model": "gemini-3.5-flash",
+  "conservative_cumulative_send_upper_bound": 294,
+  "accepted": false
+}

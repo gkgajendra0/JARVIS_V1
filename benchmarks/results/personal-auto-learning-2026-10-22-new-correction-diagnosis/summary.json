@@ -1,0 +1,56 @@
+{
+  "protocol": {
+    "purpose": "development diagnosis, not acceptance; new cases only",
+    "reserved_prior_send_upper_bound": 261,
+    "new_single_send_cap": 2,
+    "total_send_cap": 270,
+    "answer_model_calls": 0,
+    "cases": [
+      {
+        "id": "dev-new-hindi-headphones-correction",
+        "language": "hi",
+        "turns": [
+          "अभी ध्यान आया: मेरे हेडफ़ोन Bose QuietComfort 45 हैं, Sony WH-1000XM4 नहीं।"
+        ],
+        "seed": [
+          {
+            "category": "owned_item",
+            "label": "Sony WH-1000XM4",
+            "value": "Sony WH-1000XM4",
+            "kind": "device",
+            "state": "owned",
+            "facet": null
+          }
+        ],
+        "question": "मेरे असली हेडफ़ोन कौन से हैं?",
+        "answer_subset": false,
+        "control": "none"
+      }
+    ],
+    "adapter_sha256": "0506f86d609b1e2e9661480726d76898b9c08b54f9e5430faac4a8d5694a9004"
+  },
+  "rows": [
+    {
+      "id": "dev-new-hindi-headphones-correction",
+      "result": {
+        "id": "dev-new-hindi-headphones-correction",
+        "status": "unavailable",
+        "reason": "timeout",
+        "predictions": [],
+        "callback_ms": [
+          17.532699996081647
+        ],
+        "baseline_ms": [
+          0.024100001610349864
+        ]
+      },
+      "policy_events": [],
+      "fictional_provider_outputs": []
+    }
+  ],
+  "new_single_send_calls": 1,
+  "conservative_cumulative_send_upper_bound": 262,
+  "usage": [],
+  "last_failure": null,
+  "accepted": false
+}
