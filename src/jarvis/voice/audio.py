@@ -42,6 +42,7 @@ class SessionAudioInput(io.AudioInput):
             maxsize=capacity_frames
         )
         self._closed = False
+        self._transport_enabled = True
 
     def push_frame(
         self,
@@ -50,10 +51,20 @@ class SessionAudioInput(io.AudioInput):
         observed_at_monotonic: float | None = None,
     ) -> bool:
         del observed_at_monotonic
-        if self._closed or self._queue.full():
+        if self._closed or not self._transport_enabled or self._queue.full():
             return False
         self._queue.put_nowait(frame)
         return True
+
+    def set_transport_enabled(self, enabled: bool) -> None:
+        if type(enabled) is not bool:
+            raise TypeError("Transport input state must be boolean")
+        if self._closed:
+            return
+        self._transport_enabled = enabled
+        if not enabled:
+            while not self._queue.empty():
+                self._queue.get_nowait()
 
     async def __anext__(self) -> rtc.AudioFrame:
         item = await self._queue.get()

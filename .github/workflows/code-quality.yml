@@ -62,7 +62,18 @@ jobs:
           PY
 
       - name: Run unit tests
+        env:
+          JARVIS_UI_SCREENSHOTS: ui-screenshots
         run: python -m pytest -q
+
+      - name: Upload opt-in visual UI smoke captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ui-visual-smoke
+          path: ui-screenshots/*.png
+          if-no-files-found: ignore
+          retention-days: 7
 
   windows-hello-helper:
     runs-on: windows-latest

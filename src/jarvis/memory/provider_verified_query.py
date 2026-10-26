@@ -46,6 +46,7 @@ class ProviderVerifiedMemoryQueryCoordinator:
         text: str,
         *,
         eligibility: RetrievalEligibility | None = None,
+        before_dispatch=None,
     ) -> MemoryEvidenceDecision:
         if not isinstance(text, str):
             raise TypeError("text must be a string")
@@ -62,6 +63,8 @@ class ProviderVerifiedMemoryQueryCoordinator:
             )
 
         try:
+            if before_dispatch is not None:
+                before_dispatch()
             core = await self._coordinator.resolve(query_text, eligibility=policy)
         except Exception:
             LOGGER.exception("Memory query core failed; semantic recall is abstaining")
@@ -77,10 +80,35 @@ class ProviderVerifiedMemoryQueryCoordinator:
             return self._abstain("memory_query_core_missing_evidence")
 
         try:
-            judgement = await self._release_guard.evaluate(
-                text=query_text,
-                evidence=core.evidence.assertion,
-            )
+            evaluate_current = getattr(self._release_guard, "evaluate_current", None)
+            if callable(evaluate_current):
+
+                async def validate_current():
+                    if before_dispatch is not None:
+                        before_dispatch()
+                    if not await self._coordinator.evidence_is_current(
+                        core.evidence.assertion, eligibility=policy
+                    ):
+                        raise RuntimeError(
+                            "Canonical memory evidence is no longer current"
+                        )
+                    if before_dispatch is not None:
+                        before_dispatch()
+
+                judgement = await evaluate_current(
+                    text=query_text,
+                    evidence=core.evidence.assertion,
+                    before_dispatch=validate_current,
+                )
+            else:
+                if before_dispatch is not None:
+                    before_dispatch()
+                judgement = await self._release_guard.evaluate(
+                    text=query_text,
+                    evidence=core.evidence.assertion,
+                )
+                if before_dispatch is not None:
+                    before_dispatch()
         except Exception:
             LOGGER.exception("Provider memory-release verifier failed; abstaining")
             return self._abstain("provider_memory_release_guard_unavailable")

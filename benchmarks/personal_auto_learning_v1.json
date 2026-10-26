@@ -1,0 +1,1473 @@
+{
+  "schema": "personal-auto-learning-v1",
+  "fictional": true,
+  "episodes": [
+    {
+      "id": "en-01",
+      "language": "en",
+      "turns": [
+        "I own a Toyota Glanza and a TVS Ronin."
+      ],
+      "seed": [],
+      "question": "Which vehicles do I own?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-02",
+      "language": "en",
+      "turns": [
+        "My camera is a Fujifilm X-S20."
+      ],
+      "seed": [],
+      "question": "Which camera do I have?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-03",
+      "language": "en",
+      "turns": [
+        "My morning walk is at 7 am every day."
+      ],
+      "seed": [],
+      "question": "When is my morning walk?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-04",
+      "language": "en",
+      "turns": [
+        "My ongoing goal is to finish the Spanish course."
+      ],
+      "seed": [],
+      "question": "What learning goal am I working on?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-05",
+      "language": "en",
+      "turns": [
+        "My regular diet preference is vegetarian."
+      ],
+      "seed": [],
+      "question": "Suggest a dinner that fits my diet.",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-06",
+      "language": "en",
+      "turns": [
+        "I prefer replies in Hindi."
+      ],
+      "seed": [],
+      "question": "What response language do I prefer?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-07",
+      "language": "en",
+      "turns": [
+        "My regular diet is vegan."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-08",
+      "language": "en",
+      "turns": [
+        "I prefer short concise replies."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-09",
+      "language": "en",
+      "turns": [
+        "I own a Suzuki Burgman scooter."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-10",
+      "language": "en",
+      "turns": [
+        "My ongoing goal is to finish a 10 km run."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-11",
+      "language": "en",
+      "turns": [
+        "I sold my Toyota Glanza yesterday; I no longer own it."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-12",
+      "language": "en",
+      "turns": [
+        "My earlier diet statement was wrong: my actual regular diet is vegan."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-13",
+      "language": "en",
+      "turns": [
+        "My earlier camera claim was mistaken; my actual camera is an Olympus OM-5, not a Nikon Z30."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Nikon Z30",
+          "value": "Nikon Z30",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-14",
+      "language": "en",
+      "turns": [
+        "My morning walk has moved from 7 am to 8 am every day."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "morning walk",
+          "value": "7 am",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-15",
+      "language": "en",
+      "turns": [
+        "I completed my Spanish course goal today."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "Spanish course",
+          "value": "Spanish course",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-16",
+      "language": "en",
+      "turns": [
+        "I own a Toyota Glanza."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-17",
+      "language": "en",
+      "turns": [
+        "My regular diet is vegetarian."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-18",
+      "language": "en",
+      "turns": [
+        "I am still working toward completing the Spanish course."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "Spanish course",
+          "value": "Spanish course",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-19",
+      "language": "en",
+      "turns": [
+        "I prefer replies in Hindi."
+      ],
+      "seed": [
+        {
+          "category": "response_preference",
+          "label": "language",
+          "value": "Hindi",
+          "kind": "other",
+          "state": "active",
+          "facet": "response_language"
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-20",
+      "language": "en",
+      "turns": [
+        "I own a Toyota Glanza."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "kind": "vehicle",
+          "label": "vehicles",
+          "value": "Toyota Glanza and TVS Ronin",
+          "state": "owned",
+          "facet": "vehicles"
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-21",
+      "language": "en",
+      "turns": [
+        "In a play I say, \"I own a Ducati Scrambler\"; that is only a fictional line."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-22",
+      "language": "en",
+      "turns": [
+        "If I owned a Kia Seltos, weekend trips would be easier."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-23",
+      "language": "en",
+      "turns": [
+        "I am not sure whether I want to buy a Yamaha Aerox."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-24",
+      "language": "en",
+      "turns": [
+        "Only for lunch today I feel like eating dosa."
+      ],
+      "seed": [],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-25",
+      "language": "en",
+      "turns": [
+        "My neighbour wants to finish a pottery course."
+      ],
+      "seed": [],
+      "question": "How do rainbows form?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-26",
+      "language": "en",
+      "turns": [
+        "Forget my Toyota Glanza memory."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "forget_first"
+    },
+    {
+      "id": "en-27",
+      "language": "en",
+      "turns": [
+        "My regular diet is vegetarian."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "restart"
+    },
+    {
+      "id": "en-28",
+      "language": "en",
+      "turns": [
+        "Why did I buy my TVS Ronin?"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why did I buy my TVS Ronin?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-29",
+      "language": "en",
+      "turns": [
+        "Explain a Python for loop."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Explain a Python for loop.",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-30",
+      "language": "en",
+      "turns": [
+        "I sold my TVS Ronin."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "red TVS Ronin",
+          "value": "red TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "blue TVS Ronin",
+          "value": "blue TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why would I choose that scooter?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-01",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Toyota Glanza और TVS Ronin हैं।"
+      ],
+      "seed": [],
+      "question": "मेरे पास कौन से वाहन हैं?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-02",
+      "language": "hi",
+      "turns": [
+        "मेरा कैमरा Fujifilm X-S20 है।"
+      ],
+      "seed": [],
+      "question": "मेरे पास कौन सा कैमरा है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-03",
+      "language": "hi",
+      "turns": [
+        "मेरी सुबह की सैर रोज़ सुबह 7 बजे होती है।"
+      ],
+      "seed": [],
+      "question": "मेरी सुबह की सैर कब होती है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-04",
+      "language": "hi",
+      "turns": [
+        "मेरा जारी लक्ष्य Spanish course पूरा करना है।"
+      ],
+      "seed": [],
+      "question": "मैं पढ़ाई के किस लक्ष्य पर काम कर रहा हूँ?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-05",
+      "language": "hi",
+      "turns": [
+        "मेरी नियमित खाने की पसंद शाकाहारी है।"
+      ],
+      "seed": [],
+      "question": "मेरे खानपान के अनुसार रात का खाना सुझाओ।",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-06",
+      "language": "hi",
+      "turns": [
+        "मुझे जवाब हिन्दी में पसंद हैं।"
+      ],
+      "seed": [],
+      "question": "मुझे जवाब किस भाषा में पसंद हैं?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-07",
+      "language": "hi",
+      "turns": [
+        "मेरा नियमित खानपान वीगन है।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-08",
+      "language": "hi",
+      "turns": [
+        "मुझे छोटे संक्षिप्त जवाब पसंद हैं।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-09",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Suzuki Burgman स्कूटर है।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-10",
+      "language": "hi",
+      "turns": [
+        "मेरा जारी लक्ष्य 10 km दौड़ पूरी करना है।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-11",
+      "language": "hi",
+      "turns": [
+        "मैंने कल अपनी Toyota Glanza बेच दी; अब वह मेरी नहीं है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-12",
+      "language": "hi",
+      "turns": [
+        "मैंने पहले खानपान गलत बताया था: मेरा असली नियमित खानपान वीगन है।"
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-13",
+      "language": "hi",
+      "turns": [
+        "कैमरे के बारे में पिछली बात गलत थी; मेरा असली कैमरा Olympus OM-5 है, Nikon Z30 नहीं।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Nikon Z30",
+          "value": "Nikon Z30",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-14",
+      "language": "hi",
+      "turns": [
+        "मेरी सुबह की सैर अब रोज़ 7 बजे की जगह 8 बजे होती है।"
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "morning walk",
+          "value": "7 am",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-15",
+      "language": "hi",
+      "turns": [
+        "मैंने आज अपना Spanish course वाला लक्ष्य पूरा कर लिया।"
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "Spanish course",
+          "value": "Spanish course",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-16",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Toyota Glanza है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-17",
+      "language": "hi",
+      "turns": [
+        "मेरा नियमित खानपान शाकाहारी है।"
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-18",
+      "language": "hi",
+      "turns": [
+        "मैं अब भी Spanish course पूरा करने के लक्ष्य पर काम कर रहा हूँ।"
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "Spanish course",
+          "value": "Spanish course",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-19",
+      "language": "hi",
+      "turns": [
+        "मुझे हिन्दी में जवाब पसंद हैं।"
+      ],
+      "seed": [
+        {
+          "category": "response_preference",
+          "label": "language",
+          "value": "Hindi",
+          "kind": "other",
+          "state": "active",
+          "facet": "response_language"
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-20",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Toyota Glanza है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "kind": "vehicle",
+          "label": "vehicles",
+          "value": "Toyota Glanza and TVS Ronin",
+          "state": "owned",
+          "facet": "vehicles"
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-21",
+      "language": "hi",
+      "turns": [
+        "नाटक में मैं कहता हूँ, \"मेरे पास Ducati Scrambler है\"; वह केवल काल्पनिक संवाद है।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-22",
+      "language": "hi",
+      "turns": [
+        "अगर मेरे पास Kia Seltos होती तो सप्ताहांत की यात्राएँ आसान होतीं।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-23",
+      "language": "hi",
+      "turns": [
+        "मैं निश्चित नहीं हूँ कि Yamaha Aerox खरीदना चाहता हूँ या नहीं।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-24",
+      "language": "hi",
+      "turns": [
+        "सिर्फ आज दोपहर के खाने में डोसा खाने का मन है।"
+      ],
+      "seed": [],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-25",
+      "language": "hi",
+      "turns": [
+        "मेरे पड़ोसी का लक्ष्य pottery course पूरा करना है।"
+      ],
+      "seed": [],
+      "question": "इन्द्रधनुष कैसे बनते हैं?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-26",
+      "language": "hi",
+      "turns": [
+        "मेरी Toyota Glanza वाली याद मिटा दो।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "forget_first"
+    },
+    {
+      "id": "hi-27",
+      "language": "hi",
+      "turns": [
+        "मेरा नियमित खानपान शाकाहारी है।"
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "restart"
+    },
+    {
+      "id": "hi-28",
+      "language": "hi",
+      "turns": [
+        "मैंने अपनी TVS Ronin क्यों खरीदी थी?"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मैंने अपनी TVS Ronin क्यों खरीदी थी?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-29",
+      "language": "hi",
+      "turns": [
+        "Python का for loop समझाओ।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Python का for loop समझाओ।",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-30",
+      "language": "hi",
+      "turns": [
+        "मैंने अपनी TVS Ronin बेच दी।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "red TVS Ronin",
+          "value": "red TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "blue TVS Ronin",
+          "value": "blue TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मैं वह स्कूटर क्यों चुनूँगा?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-01",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Toyota Glanza aur TVS Ronin hain."
+      ],
+      "seed": [],
+      "question": "Mere paas kaunse vehicles hain?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-02",
+      "language": "hinglish",
+      "turns": [
+        "Mera camera Fujifilm X-S20 hai."
+      ],
+      "seed": [],
+      "question": "Mere paas kaunsa camera hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-03",
+      "language": "hinglish",
+      "turns": [
+        "Meri morning walk roz subah 7 baje hoti hai."
+      ],
+      "seed": [],
+      "question": "Meri morning walk kab hoti hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-04",
+      "language": "hinglish",
+      "turns": [
+        "Mera ongoing goal Spanish course complete karna hai."
+      ],
+      "seed": [],
+      "question": "Main learning ke kaunse goal par kaam kar raha hoon?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-05",
+      "language": "hinglish",
+      "turns": [
+        "Meri regular diet preference vegetarian hai."
+      ],
+      "seed": [],
+      "question": "Meri diet ke hisaab se dinner suggest karo.",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-06",
+      "language": "hinglish",
+      "turns": [
+        "Mujhe replies Hindi mein pasand hain."
+      ],
+      "seed": [],
+      "question": "Mujhe replies kaunsi language mein pasand hain?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-07",
+      "language": "hinglish",
+      "turns": [
+        "Meri regular diet vegan hai."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-08",
+      "language": "hinglish",
+      "turns": [
+        "Mujhe short concise replies pasand hain."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-09",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Suzuki Burgman scooter hai."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-10",
+      "language": "hinglish",
+      "turns": [
+        "Mera ongoing goal 10 km run complete karna hai."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-11",
+      "language": "hinglish",
+      "turns": [
+        "Maine kal apni Toyota Glanza bech di; ab woh meri nahi hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-12",
+      "language": "hinglish",
+      "turns": [
+        "Maine pehle diet galat batayi thi: meri actual regular diet vegan hai."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-13",
+      "language": "hinglish",
+      "turns": [
+        "Camera wali pehli baat galat thi; mera actual camera Olympus OM-5 hai, Nikon Z30 nahi."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Nikon Z30",
+          "value": "Nikon Z30",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-14",
+      "language": "hinglish",
+      "turns": [
+        "Meri morning walk ab roz 7 baje ki jagah 8 baje hoti hai."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "morning walk",
+          "value": "7 am",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-15",
+      "language": "hinglish",
+      "turns": [
+        "Maine aaj apna Spanish course wala goal complete kar liya."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "Spanish course",
+          "value": "Spanish course",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-16",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Toyota Glanza hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-17",
+      "language": "hinglish",
+      "turns": [
+        "Meri regular diet vegetarian hai."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-18",
+      "language": "hinglish",
+      "turns": [
+        "Main ab bhi Spanish course complete karne ke goal par kaam kar raha hoon."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "Spanish course",
+          "value": "Spanish course",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-19",
+      "language": "hinglish",
+      "turns": [
+        "Mujhe replies Hindi mein pasand hain."
+      ],
+      "seed": [
+        {
+          "category": "response_preference",
+          "label": "language",
+          "value": "Hindi",
+          "kind": "other",
+          "state": "active",
+          "facet": "response_language"
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-20",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Toyota Glanza hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "kind": "vehicle",
+          "label": "vehicles",
+          "value": "Toyota Glanza and TVS Ronin",
+          "state": "owned",
+          "facet": "vehicles"
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-21",
+      "language": "hinglish",
+      "turns": [
+        "Play mein main bolta hoon, \"mere paas Ducati Scrambler hai\"; woh bas fictional dialogue hai."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-22",
+      "language": "hinglish",
+      "turns": [
+        "Agar mere paas Kia Seltos hoti toh weekend trips aasaan hoti."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-23",
+      "language": "hinglish",
+      "turns": [
+        "Main sure nahi hoon ki Yamaha Aerox kharidna chahta hoon ya nahi."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-24",
+      "language": "hinglish",
+      "turns": [
+        "Sirf aaj lunch mein dosa khane ka mann hai."
+      ],
+      "seed": [],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-25",
+      "language": "hinglish",
+      "turns": [
+        "Mere padosi ka goal pottery course complete karna hai."
+      ],
+      "seed": [],
+      "question": "Rainbow kaise banta hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-26",
+      "language": "hinglish",
+      "turns": [
+        "Meri Toyota Glanza wali memory bhool jao."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Toyota Glanza",
+          "value": "Toyota Glanza",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "forget_first"
+    },
+    {
+      "id": "hinglish-27",
+      "language": "hinglish",
+      "turns": [
+        "Meri regular diet vegetarian hai."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegetarian",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "restart"
+    },
+    {
+      "id": "hinglish-28",
+      "language": "hinglish",
+      "turns": [
+        "Maine apni TVS Ronin kyun kharidi thi?"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Maine apni TVS Ronin kyun kharidi thi?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-29",
+      "language": "hinglish",
+      "turns": [
+        "Python ka for loop samjhao."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "TVS Ronin",
+          "value": "TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Python ka for loop samjhao.",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-30",
+      "language": "hinglish",
+      "turns": [
+        "Maine apni TVS Ronin bech di."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "red TVS Ronin",
+          "value": "red TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "blue TVS Ronin",
+          "value": "blue TVS Ronin",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Main woh scooter kyun choose karunga?",
+      "answer_subset": false,
+      "control": "none"
+    }
+  ]
+}

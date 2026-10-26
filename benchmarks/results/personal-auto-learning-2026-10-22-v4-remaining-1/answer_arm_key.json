@@ -1,0 +1,32 @@
+[
+  {
+    "id": "hi-fresh-v4-01",
+    "A": "baseline",
+    "B": "enabled"
+  },
+  {
+    "id": "hinglish-fresh-v4-01",
+    "A": "enabled",
+    "B": "baseline"
+  },
+  {
+    "id": "en-fresh-v4-02",
+    "A": "enabled",
+    "B": "baseline"
+  },
+  {
+    "id": "hi-fresh-v4-02",
+    "A": "baseline",
+    "B": "enabled"
+  },
+  {
+    "id": "hinglish-fresh-v4-02",
+    "A": "baseline",
+    "B": "enabled"
+  },
+  {
+    "id": "en-fresh-v4-04",
+    "A": "enabled",
+    "B": "baseline"
+  }
+]

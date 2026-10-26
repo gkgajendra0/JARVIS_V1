@@ -1,0 +1,35 @@
+{
+  "protocol": {
+    "purpose": "new fictional answering availability probe only, not semantic acceptance",
+    "candidate": "b3330b62cc033fb37de32c8e71d67b9397669842",
+    "prior_cumulative_send_upper_bound": 268,
+    "new_single_send_cap": 1,
+    "approved_cumulative_ceiling": 532,
+    "retry": false,
+    "failed_case_replay": false,
+    "question": "मेरे जवाबों की शैली कैसी होनी चाहिए?",
+    "fictional_context": [
+      {
+        "text": "response_style: patient and step-by-step"
+      }
+    ]
+  },
+  "result": {
+    "status": "returned",
+    "fictional_response": {
+      "answer": "आपके जवाबों की शैली धैर्यपूर्ण और चरणबद्ध (step-by-step) होनी चाहिए।"
+    }
+  },
+  "single_send_calls": 1,
+  "conservative_cumulative_send_upper_bound": 269,
+  "latency_ms": 3513.365099999646,
+  "requested_model": "gemini-3.5-flash",
+  "usage": [
+    {
+      "input_tokens": 99,
+      "output_tokens": 29,
+      "total_tokens": 375
+    }
+  ],
+  "accepted": false
+}

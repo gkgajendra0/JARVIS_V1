@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+
+import psutil
 
 from jarvis.model_routing.eligibility import TargetHealthEligibility
-from jarvis.model_routing.health import TargetHealthRecord
+from jarvis.model_routing.health import (
+    RecoveryLease,
+    TargetHealthRecord,
+    _epoch,
+    apply_gemini_pressure,
+)
 from jarvis.model_routing.models import (
     EligibilitySnapshot,
     LocalityRequirement,
@@ -17,6 +27,8 @@ from jarvis.model_routing.models import (
     RoutingDecision,
     RoutingOutcome,
     RoutingRequest,
+    ScopedRoutingAttempt,
+    ScopedRoutingRequest,
     TargetExclusion,
 )
 from jarvis.work.store import SQLiteWorkStore
@@ -277,6 +289,24 @@ class PersistedRoutingDecision:
     stage_key: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class PersistedScopedRoutingDecision:
+    scope_kind: str
+    scope_id: str
+    request_digest: str
+    registry_digest: str
+    eligibility: EligibilitySnapshot
+    decision: RoutingDecision
+
+
+def scoped_request_digest(request: ScopedRoutingRequest) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            asdict(request), sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode()
+    ).hexdigest()
+
+
 class ModelRoutingStore:
     """Append-only routing lineage plus CAS target health in WorkStore SQLite."""
 
@@ -343,6 +373,26 @@ class ModelRoutingStore:
                     version INTEGER NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS gemini_free_recovery_leases (
+                    target_id TEXT PRIMARY KEY,
+                    operation_id TEXT NOT NULL,
+                    expires_at_epoch REAL NOT NULL,
+                    version INTEGER NOT NULL,
+                    health_version INTEGER NOT NULL,
+                    active INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS gemini_free_recovery_owners (
+                    target_id TEXT PRIMARY KEY,
+                    lease_version INTEGER NOT NULL,
+                    pid INTEGER NOT NULL,
+                    process_started REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_credential_blocks (
+                    credential_ref TEXT PRIMARY KEY,
+                    failure_kind TEXT NOT NULL,
+                    updated_at_epoch REAL NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS model_routing_outcomes (
                     outcome_id TEXT PRIMARY KEY,
                     decision_id TEXT NOT NULL UNIQUE,
@@ -351,6 +401,55 @@ class ModelRoutingStore:
                     FOREIGN KEY(decision_id)
                         REFERENCES model_routing_decisions(decision_id),
                     FOREIGN KEY(work_id) REFERENCES work_items(work_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS model_routing_pricing_snapshots (
+                    pricing_ref TEXT PRIMARY KEY,
+                    pricing_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_work_invocation_claims (
+                    attempt_id TEXT PRIMARY KEY,
+                    decision_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    binding_digest TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_routing_decisions(decision_id)
+                );
+                CREATE TABLE IF NOT EXISTS model_work_inference_results (
+                    decision_id TEXT PRIMARY KEY,
+                    binding_digest TEXT NOT NULL,
+                    result_json TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_routing_decisions(decision_id)
+                );
+                CREATE TABLE IF NOT EXISTS model_routing_registry_snapshots (
+                    registry_digest TEXT PRIMARY KEY,
+                    snapshot_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_scoped_routing_decisions (
+                    decision_id TEXT PRIMARY KEY,
+                    routing_request_id TEXT NOT NULL UNIQUE,
+                    scope_kind TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    request_digest TEXT NOT NULL,
+                    registry_digest TEXT NOT NULL,
+                    decision_json TEXT NOT NULL,
+                    eligibility_json TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS model_scoped_invocation_claims (
+                    decision_id TEXT PRIMARY KEY,
+                    binding_digest TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_scoped_routing_decisions(decision_id)
+                );
+                CREATE TABLE IF NOT EXISTS model_scoped_routing_attempts (
+                    attempt_id TEXT PRIMARY KEY,
+                    decision_id TEXT NOT NULL,
+                    scope_kind TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    attempt_ordinal INTEGER NOT NULL,
+                    attempt_json TEXT NOT NULL,
+                    FOREIGN KEY(decision_id) REFERENCES model_scoped_routing_decisions(decision_id),
+                    UNIQUE(decision_id,attempt_ordinal)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_model_routing_decisions_work
@@ -383,7 +482,7 @@ class ModelRoutingStore:
         decision: RoutingDecision,
         registry_digest: str,
     ) -> str:
-        if not isinstance(request, RoutingRequest):
+        if not isinstance(request, (RoutingRequest, ScopedRoutingRequest)):
             raise TypeError("request must be a RoutingRequest")
         if not isinstance(eligibility, EligibilitySnapshot):
             raise TypeError("eligibility must be an EligibilitySnapshot")
@@ -821,6 +920,16 @@ class ModelRoutingStore:
             version=int(row["version"]),
         )
 
+    def list_health(self, *, limit=128) -> tuple[TargetHealthRecord, ...]:
+        if type(limit) is not int or not 1 <= limit <= 1024:
+            raise ValueError("Bounded health status limit required")
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                "SELECT * FROM model_target_health ORDER BY updated_at_epoch DESC,target_id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return tuple(_health_record(row) for row in rows)
+
     def save_health(
         self,
         record: TargetHealthRecord,
@@ -857,3 +966,589 @@ class ModelRoutingStore:
                     f"{record.target_id} expected v{expected_version}"
                 )
         return record
+
+    def record_pressure(self, *, target, failure, config, now_epoch):
+        from jarvis.model_routing.gemini import gemini_paid_fallback_allowed
+
+        if not gemini_paid_fallback_allowed(failure, source_target=target):
+            raise ValueError("Only Gemini Free pressure may enter recovery cooldown")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM model_target_health WHERE target_id=?",
+                (target.target_id,),
+            ).fetchone()
+            old = (
+                _health_record(row)
+                if row is not None
+                else TargetHealthRecord(target.target_id)
+            )
+            record = apply_gemini_pressure(
+                old, failure, config=config, now_epoch=now_epoch
+            )
+            _write_health(connection, record)
+            connection.execute(
+                "UPDATE gemini_free_recovery_leases SET active=0 WHERE target_id=?",
+                (target.target_id,),
+            )
+        return record
+
+    def credential_blocked(self, credential_ref: str | None) -> bool:
+        if credential_ref is None:
+            return False
+        with self._work_store.extension_transaction() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM model_credential_blocks WHERE credential_ref=?",
+                    (credential_ref,),
+                ).fetchone()
+                is not None
+            )
+
+    def disable_paid_credential(self, *, failure, now_epoch):
+        from jarvis.provider_resilience import ProviderFailureKind
+
+        if failure.provider != "gemini" or failure.kind not in {
+            ProviderFailureKind.BALANCE_EXHAUSTED,
+            ProviderFailureKind.AUTHENTICATION_FAILED,
+        }:
+            raise ValueError(
+                "Only typed Gemini balance or authentication failure disables Paid"
+            )
+        now = _epoch(now_epoch, field="now_epoch")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute(
+                "INSERT INTO model_credential_blocks VALUES (?,?,?) ON CONFLICT(credential_ref) DO UPDATE SET failure_kind=excluded.failure_kind, updated_at_epoch=excluded.updated_at_epoch",
+                ("JARVIS_GEMINI_PAID_API_KEY", failure.kind.value, now),
+            )
+
+    def claim_free_recovery(self, *, target_id, operation_id, now_epoch, lease_seconds):
+        now = _epoch(now_epoch, field="now_epoch")
+        seconds = _epoch(lease_seconds, field="lease_seconds")
+        if (
+            seconds <= 0
+            or not isinstance(operation_id, str)
+            or not operation_id.strip()
+        ):
+            raise ValueError(
+                "Recovery claim requires positive duration and operation identity"
+            )
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM model_target_health WHERE target_id=?", (target_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            health = _health_record(row)
+            if (
+                health.state is not TargetHealthEligibility.COOLDOWN
+                or health.last_failure_kind not in {"rate_limited", "quota_exhausted"}
+                or health.cooldown_until_epoch is None
+                or now < health.cooldown_until_epoch
+            ):
+                return None
+            previous = connection.execute(
+                "SELECT * FROM gemini_free_recovery_leases WHERE target_id=?",
+                (target_id,),
+            ).fetchone()
+            if (
+                previous is not None
+                and previous["active"]
+                and (
+                    previous["expires_at_epoch"] > now
+                    or _recovery_owner_alive(connection, target_id, previous["version"])
+                )
+            ):
+                return None
+            connection.execute(
+                "DELETE FROM gemini_free_recovery_owners WHERE target_id=?",
+                (target_id,),
+            )
+            lease = RecoveryLease(
+                target_id,
+                operation_id,
+                now + seconds,
+                1 if previous is None else previous["version"] + 1,
+            )
+            connection.execute(
+                "INSERT INTO gemini_free_recovery_leases VALUES (?,?,?,?,?,1) ON CONFLICT(target_id) DO UPDATE SET operation_id=excluded.operation_id, expires_at_epoch=excluded.expires_at_epoch, version=excluded.version, health_version=excluded.health_version, active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.expires_at_epoch,
+                    lease.version,
+                    health.version,
+                ),
+            )
+        return lease
+
+    def start_free_recovery(self, lease: RecoveryLease, *, now_epoch) -> bool:
+        """Fence an actual pending call by process identity, beyond a claim's TTL."""
+        now = _epoch(now_epoch, field="now_epoch")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM gemini_free_recovery_leases WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.version,
+                    lease.expires_at_epoch,
+                ),
+            ).fetchone()
+            health = connection.execute(
+                "SELECT version FROM model_target_health WHERE target_id=?",
+                (lease.target_id,),
+            ).fetchone()
+            if (
+                row is None
+                or now >= lease.expires_at_epoch
+                or health is None
+                or health[0] != row["health_version"]
+            ):
+                return False
+            connection.execute(
+                "INSERT INTO gemini_free_recovery_owners VALUES (?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET lease_version=excluded.lease_version,pid=excluded.pid,process_started=excluded.process_started",
+                (
+                    lease.target_id,
+                    lease.version,
+                    os.getpid(),
+                    psutil.Process().create_time(),
+                ),
+            )
+        return True
+
+    def release_free_recovery(self, lease: RecoveryLease) -> bool:
+        with self._work_store.extension_transaction() as connection:
+            cursor = connection.execute(
+                "UPDATE gemini_free_recovery_leases SET active=0 WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.version,
+                    lease.expires_at_epoch,
+                ),
+            )
+            return cursor.rowcount == 1
+
+    def complete_free_recovery(self, lease: RecoveryLease, *, now_epoch) -> bool:
+        now = _epoch(now_epoch, field="now_epoch")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if now >= lease.expires_at_epoch and not _recovery_owner_alive(
+                connection, lease.target_id, lease.version, own_process=True
+            ):
+                return False
+            row = connection.execute(
+                "SELECT * FROM gemini_free_recovery_leases WHERE target_id=? AND operation_id=? AND version=? AND expires_at_epoch=? AND active=1",
+                (
+                    lease.target_id,
+                    lease.operation_id,
+                    lease.version,
+                    lease.expires_at_epoch,
+                ),
+            ).fetchone()
+            if row is None:
+                return False
+            health = connection.execute(
+                "SELECT * FROM model_target_health WHERE target_id=?",
+                (lease.target_id,),
+            ).fetchone()
+            if health is None or health["version"] != row["health_version"]:
+                return False
+            _write_health(connection, _health_record(health).recovered(now_epoch=now))
+            connection.execute(
+                "UPDATE gemini_free_recovery_leases SET active=0 WHERE target_id=?",
+                (lease.target_id,),
+            )
+        return True
+
+    def save_registry_snapshot(self, snapshot: dict) -> None:
+        if not isinstance(snapshot, dict) or set(snapshot) != {
+            "schema_version",
+            "registry_digest",
+            "targets",
+        }:
+            raise ValueError("Invalid registry snapshot")
+        if (
+            type(snapshot["schema_version"]) is not int
+            or snapshot["schema_version"] != 1
+        ):
+            raise ValueError("Invalid registry snapshot version")
+        if (
+            not isinstance(snapshot["targets"], list)
+            or not 0 < len(snapshot["targets"]) <= 128
+        ):
+            raise ValueError("Invalid registry snapshot targets")
+        digest = _sha256(snapshot["registry_digest"], field="registry_digest")
+        actual = hashlib.sha256(
+            json.dumps(
+                snapshot["targets"],
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        if actual != digest:
+            raise ValueError("Registry snapshot digest mismatch")
+        encoded = self._work_store.encode_extension_json(snapshot)
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT snapshot_json FROM model_routing_registry_snapshots WHERE registry_digest=?",
+                (digest,),
+            ).fetchone()
+            if row is not None:
+                if (
+                    self._work_store.decode_extension_json(row["snapshot_json"])
+                    != snapshot
+                ):
+                    raise ValueError("Registry snapshot is immutable")
+                return
+            connection.execute(
+                "INSERT INTO model_routing_registry_snapshots VALUES (?,?)",
+                (digest, encoded),
+            )
+
+    def get_registry_snapshot(self, digest: str) -> dict | None:
+        digest = _sha256(digest, field="registry_digest")
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT snapshot_json FROM model_routing_registry_snapshots WHERE registry_digest=?",
+                (digest,),
+            ).fetchone()
+        return (
+            None
+            if row is None
+            else self._work_store.decode_extension_json(row["snapshot_json"])
+        )
+
+    def record_scoped_decision(
+        self,
+        *,
+        request: ScopedRoutingRequest,
+        eligibility: EligibilitySnapshot,
+        decision: RoutingDecision,
+        registry_digest: str,
+    ) -> PersistedScopedRoutingDecision:
+        if not isinstance(request, ScopedRoutingRequest):
+            raise TypeError("ScopedRoutingRequest required")
+        digest = self._validate_decision_inputs(
+            request, eligibility, decision, registry_digest
+        )
+        request_digest = scoped_request_digest(request)
+        try:
+            with self._work_store.extension_transaction() as connection:
+                connection.execute(
+                    "INSERT INTO model_scoped_routing_decisions VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        decision.decision_id,
+                        request.routing_request_id,
+                        request.scope_kind,
+                        request.scope_id,
+                        request_digest,
+                        digest,
+                        self._work_store.encode_extension_json(
+                            _decision_payload(decision)
+                        ),
+                        self._work_store.encode_extension_json(
+                            _snapshot_payload(eligibility)
+                        ),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise RoutingStoreError("Scoped decision identity already exists") from exc
+        return PersistedScopedRoutingDecision(
+            request.scope_kind,
+            request.scope_id,
+            request_digest,
+            digest,
+            eligibility,
+            decision,
+        )
+
+    def find_scoped_decision_by_request(
+        self, request_id: str
+    ) -> PersistedScopedRoutingDecision | None:
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_scoped_routing_decisions WHERE routing_request_id=?",
+                (request_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return PersistedScopedRoutingDecision(
+            scope_kind=row["scope_kind"],
+            scope_id=row["scope_id"],
+            request_digest=row["request_digest"],
+            registry_digest=row["registry_digest"],
+            eligibility=_snapshot_from_payload(
+                self._work_store.decode_extension_json(row["eligibility_json"])
+            ),
+            decision=_decision_from_payload(
+                self._work_store.decode_extension_json(row["decision_json"])
+            ),
+        )
+
+    def save_pricing_snapshot(self, pricing):
+        payload = pricing.to_payload()
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        ref = hashlib.sha256(canonical.encode()).hexdigest()
+        with self._work_store.extension_transaction() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO model_routing_pricing_snapshots VALUES (?,?)",
+                (ref, self._work_store.encode_extension_json(payload)),
+            )
+        return ref
+
+    def get_pricing_snapshot(self, pricing_ref):
+        from jarvis.model_routing.pricing import PricingSnapshot
+
+        ref = _sha256(pricing_ref, field="pricing_ref")
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT pricing_json FROM model_routing_pricing_snapshots WHERE pricing_ref=?",
+                (ref,),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._work_store.decode_extension_json(row["pricing_json"])
+        if (
+            hashlib.sha256(
+                json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            != ref
+        ):
+            raise RoutingStoreError("Stored pricing snapshot binding mismatch")
+        return PricingSnapshot.from_payload(payload)
+
+    def claim_work_invocation(
+        self, *, attempt_id, decision_id, target_id, binding_digest
+    ):
+        digest = _sha256(binding_digest, field="binding_digest")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            old = connection.execute(
+                "SELECT * FROM model_work_invocation_claims WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+            if old is not None:
+                if (old["decision_id"], old["target_id"], old["binding_digest"]) != (
+                    decision_id,
+                    target_id,
+                    digest,
+                ):
+                    raise RoutingStoreError("Work invocation binding changed")
+                return False
+            work = connection.execute(
+                "SELECT work_id FROM model_routing_decisions WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+            if work is None:
+                raise RoutingStoreError("Work invocation has no routing decision")
+            # Scheduler blocker steps/version changes must not create a fresh paid
+            # operation while the same WorkItem still has an unknown inference.
+            unresolved = connection.execute(
+                """SELECT 1 FROM model_work_invocation_claims c
+                   JOIN model_routing_decisions d ON d.decision_id=c.decision_id
+                   LEFT JOIN model_routing_attempts a ON a.attempt_id=c.attempt_id
+                   LEFT JOIN model_work_inference_results r ON r.decision_id=c.decision_id
+                   WHERE d.work_id=? AND a.attempt_id IS NULL AND r.decision_id IS NULL LIMIT 1""",
+                (work["work_id"],),
+            ).fetchone()
+            if unresolved is not None:
+                return False
+            if (
+                connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='paid_fallback_reservations'"
+                ).fetchone()
+                is not None
+                and connection.execute(
+                    "SELECT 1 FROM paid_fallback_reservations WHERE scope_kind='work' AND scope_id=? AND state NOT IN ('settled','cancelled') LIMIT 1",
+                    (work["work_id"],),
+                ).fetchone()
+                is not None
+            ):
+                return False
+            connection.execute(
+                "INSERT INTO model_work_invocation_claims VALUES (?,?,?,?)",
+                (attempt_id, decision_id, target_id, digest),
+            )
+        return True
+
+    def save_work_inference_result(self, *, decision_id, binding_digest, result):
+        digest = _sha256(binding_digest, field="binding_digest")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            old = connection.execute(
+                "SELECT * FROM model_work_inference_results WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+            if old is not None:
+                if (
+                    old["binding_digest"] != digest
+                    or self._work_store.decode_extension_json(old["result_json"])
+                    != result
+                ):
+                    raise RoutingStoreError(
+                        "Accepted Work inference result is immutable"
+                    )
+                return
+            connection.execute(
+                "INSERT INTO model_work_inference_results VALUES (?,?,?)",
+                (decision_id, digest, self._work_store.encode_extension_json(result)),
+            )
+
+    def get_work_inference_result(self, *, decision_id, binding_digest):
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_work_inference_results WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row["binding_digest"] != binding_digest:
+            raise RoutingStoreError("Accepted Work inference payload binding changed")
+        return self._work_store.decode_extension_json(row["result_json"])
+
+    def claim_scoped_invocation(self, *, decision_id, binding_digest):
+        digest = _sha256(binding_digest, field="binding_digest")
+        with self._work_store.extension_transaction() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            old = connection.execute(
+                "SELECT * FROM model_scoped_invocation_claims WHERE decision_id=?",
+                (decision_id,),
+            ).fetchone()
+            if old is not None:
+                if old["binding_digest"] != digest:
+                    raise RoutingStoreError("Scoped invocation payload binding changed")
+                return False
+            connection.execute(
+                "INSERT INTO model_scoped_invocation_claims VALUES (?,?,?)",
+                (decision_id, digest, "dispatched"),
+            )
+        return True
+
+    def finish_scoped_invocation(self, *, decision_id):
+        with self._work_store.extension_transaction() as connection:
+            cursor = connection.execute(
+                "UPDATE model_scoped_invocation_claims SET state='completed' WHERE decision_id=? AND state='dispatched'",
+                (decision_id,),
+            )
+            if cursor.rowcount != 1:
+                raise RoutingStoreError("No scoped dispatch to finish")
+
+    def record_scoped_attempt(
+        self, attempt: ScopedRoutingAttempt
+    ) -> ScopedRoutingAttempt:
+        if not isinstance(attempt, ScopedRoutingAttempt):
+            raise TypeError("ScopedRoutingAttempt required")
+        data = asdict(attempt)
+        with self._work_store.extension_transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM model_scoped_routing_decisions WHERE decision_id=?",
+                (attempt.decision_id,),
+            ).fetchone()
+            if row is None or (row["scope_kind"], row["scope_id"]) != (
+                attempt.scope_kind,
+                attempt.scope_id,
+            ):
+                raise RoutingStoreError("Scoped attempt does not match decision scope")
+            decision = _decision_from_payload(
+                self._work_store.decode_extension_json(row["decision_json"])
+            )
+            if attempt.target_id not in decision.ordered_target_ids:
+                raise RoutingStoreError("Scoped attempt target outside decision")
+            existing = connection.execute(
+                "SELECT attempt_json FROM model_scoped_routing_attempts WHERE attempt_id=?",
+                (attempt.attempt_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    self._work_store.decode_extension_json(existing["attempt_json"])
+                    != data
+                ):
+                    raise RoutingStoreError("Scoped attempt identity collision")
+                return attempt
+            last = connection.execute(
+                "SELECT MAX(attempt_ordinal) FROM model_scoped_routing_attempts WHERE decision_id=?",
+                (attempt.decision_id,),
+            ).fetchone()[0]
+            if attempt.attempt_ordinal != (last or 0) + 1:
+                raise RoutingStoreError("Scoped attempt order is not contiguous")
+            connection.execute(
+                "INSERT INTO model_scoped_routing_attempts VALUES (?,?,?,?,?,?,?)",
+                (
+                    attempt.attempt_id,
+                    attempt.decision_id,
+                    attempt.scope_kind,
+                    attempt.scope_id,
+                    attempt.target_id,
+                    attempt.attempt_ordinal,
+                    self._work_store.encode_extension_json(data),
+                ),
+            )
+        return attempt
+
+    def list_scoped_attempts(
+        self, decision_id: str
+    ) -> tuple[ScopedRoutingAttempt, ...]:
+        with self._work_store.extension_transaction() as connection:
+            rows = connection.execute(
+                "SELECT attempt_json FROM model_scoped_routing_attempts WHERE decision_id=? ORDER BY attempt_ordinal",
+                (decision_id,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            data = self._work_store.decode_extension_json(row["attempt_json"])
+            data["kind"] = RoutingAttemptKind(data["kind"])
+            data["response_contract_result"] = ResponseContractResult(
+                data["response_contract_result"]
+            )
+            result.append(ScopedRoutingAttempt(**data))
+        return tuple(result)
+
+
+def _health_record(row) -> TargetHealthRecord:
+    return TargetHealthRecord(
+        target_id=row["target_id"],
+        state=TargetHealthEligibility(row["state"]),
+        consecutive_failures=row["consecutive_failures"],
+        cooldown_until_epoch=row["cooldown_until_epoch"],
+        last_failure_kind=row["last_failure_kind"],
+        updated_at_epoch=row["updated_at_epoch"],
+        version=row["version"],
+    )
+
+
+def _write_health(connection, record) -> None:
+    connection.execute(
+        "INSERT INTO model_target_health VALUES (?,?,?,?,?,?,?) ON CONFLICT(target_id) DO UPDATE SET state=excluded.state,consecutive_failures=excluded.consecutive_failures,cooldown_until_epoch=excluded.cooldown_until_epoch,last_failure_kind=excluded.last_failure_kind,updated_at_epoch=excluded.updated_at_epoch,version=excluded.version",
+        (
+            record.target_id,
+            record.state.value,
+            record.consecutive_failures,
+            record.cooldown_until_epoch,
+            record.last_failure_kind,
+            record.updated_at_epoch,
+            record.version,
+        ),
+    )
+
+
+def _recovery_owner_alive(connection, target_id, version, *, own_process=False):
+    row = connection.execute(
+        "SELECT * FROM gemini_free_recovery_owners WHERE target_id=? AND lease_version=?",
+        (target_id, version),
+    ).fetchone()
+    if row is None or (own_process and row["pid"] != os.getpid()):
+        return False
+    from jarvis.model_routing.process_identity import (
+        RoutingProcessIdentity,
+        process_identity_alive,
+    )
+
+    result = process_identity_alive(
+        RoutingProcessIdentity(row["pid"], row["process_started"])
+    )
+    return result is not False

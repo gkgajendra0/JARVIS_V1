@@ -1,5 +1,7 @@
 # JARVIS V1
 
+**Current integration:** [implemented behavior and remaining limits](docs/reference/IMPLEMENTATION_STATUS.md). This status page supersedes older dated candidate statements; [Windows recovery recipes](docs/reference/WINDOWS_E_DRIVE_RECOVERY.md) are preserved in the repository.
+
 JARVIS V1 is a personal, voice-first intelligent assistant built research-first around explicit JARVIS-owned truth, authority, memory, and execution boundaries, with an owner-approved north star of becoming a governed autonomous self-managing personal intelligence runtime.
 
 The previous `gkgajendra0/JARVIS` repository is engineering reference only. JARVIS V1 does not import it or depend on it at runtime.
@@ -120,23 +122,31 @@ Normal production runtime:
 jarvis-voice
 ```
 
-### Optional holographic HUD (unaccepted visual candidate)
+Run `jarvis-setup` to persist the wake model, stable audio selectors, active cloud-AI provider, and other non-secret machine settings. Idle wake detection remains local; cloud realtime conversation starts only after an accepted wake.
 
-The new local hybrid UI combines a 3D arc-reactor with a minimal diagnostics
-shell and reads *existing* canonical voice/Work/health/vision status. It is
-disabled by default and has no execution or microphone authority.
+## Optional hybrid JARVIS HUD (owner review candidate)
+
+The previous dynamic-context UI implementation is superseded. The new local
+visual companion combines a 3D arc reactor with a quieter peripheral HUD,
+while the existing Python/LiveKit runtime remains responsible for all voice,
+Work, authority, memory and vision operations. It is disabled by default.
 
 ```powershell
-jarvis-ui --open-browser                   # offline UI visual preview
+jarvis-ui --open-browser                   # offline visual preview
 $env:JARVIS_UI_ENABLED = "true"
-jarvis-voice                               # normal JARVIS, with read-only HUD
+jarvis-voice                               # actual JARVIS with read-only HUD
 ```
 
-Open `http://127.0.0.1:8765`. See
-[HUD runbook and Windows acceptance](docs/JARVIS_HYBRID_HUD.md). This UI
-candidate does not alter accepted JARVIS production status.
+Open `http://127.0.0.1:8765` in Edge/Chrome. The HUD displays only bounded
+voice lifecycle, Work types/states, system health and vision status, never
+commands, transcripts, private memory or camera frames. UI startup failure
+cannot prevent the voice runtime from starting. Do not start standalone
+`jarvis-ui` and integrated `jarvis-voice` on the same HUD port.
 
-Run `jarvis-setup` to persist the wake model, stable audio selectors, active cloud-AI provider, and other non-secret machine settings. Idle wake detection remains local; cloud realtime conversation starts only after an accepted wake.
+See [the hybrid HUD runbook and Windows visual acceptance checklist](docs/JARVIS_HYBRID_HUD.md).
+Historical prior-UI requirements/acceptance are preserved in `docs/reference/`
+as evidence, not as the design implemented by this candidate. Owner-machine
+visual/performance/voice acceptance is still required before production merge.
 
 ## Development supervisor
 

@@ -1,0 +1,11 @@
+{
+  "input_sha256": "882441e59595d46b5f817cceb4940b691063cddd47414dff4ff6ba2508c2313b",
+  "gold_sha256": "e59859a492803e582ba05339df2441adbd3dec86a722dda120f76a95a8f43488",
+  "reserved_prior_send_upper_bound": 205,
+  "new_single_send_cap": 65,
+  "minimum_episode_spacing_seconds": 8,
+  "answering": false,
+  "retry": false,
+  "candidate": "ede4372052794c90dc845b7af92356e53d5f0aa2",
+  "scope": "fresh capture-only subset; no full90, answer or owner acceptance"
+}

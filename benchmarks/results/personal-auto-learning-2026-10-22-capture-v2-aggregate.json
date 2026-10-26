@@ -1,0 +1,97 @@
+{
+  "candidate": "ede4372052794c90dc845b7af92356e53d5f0aa2",
+  "input_sha256": "882441e59595d46b5f817cceb4940b691063cddd47414dff4ff6ba2508c2313b",
+  "gold_sha256": "e59859a492803e582ba05339df2441adbd3dec86a722dda120f76a95a8f43488",
+  "summary": {
+    "status": "incomplete",
+    "completed": 40,
+    "unavailable": 5,
+    "unrun": 0,
+    "segment_single_send_calls": 12,
+    "v2_single_send_calls": 56,
+    "conservative_cumulative_send_upper_bound": 261,
+    "accepted": false
+  },
+  "scores": {
+    "completed": 40,
+    "unavailable": 5,
+    "true_positive": 29,
+    "false_positive": 1,
+    "false_negative": 1,
+    "precision": 0.9666666666666667,
+    "recall": 0.9666666666666667,
+    "precision_wilson": [
+      0.8332924860304112,
+      0.9940915620051425
+    ],
+    "recall_wilson": [
+      0.8332924860304112,
+      0.9940915620051425
+    ],
+    "languages": {
+      "en": {
+        "completed": 13,
+        "captured": 10,
+        "expected": 10
+      },
+      "hi": {
+        "completed": 13,
+        "captured": 9,
+        "expected": 10
+      },
+      "hinglish": {
+        "completed": 14,
+        "captured": 10,
+        "expected": 10
+      }
+    },
+    "quality_floor_pass": false,
+    "answer_unavailable": 0,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers",
+    "preliminary_semantic_floor": false
+  },
+  "returned_response_total_tokens": 36178,
+  "failed_cancelled_request_billing": "unknown",
+  "request_latency_ms_by_segment": [
+    {
+      "n": 44,
+      "p50": 2403.3638999972027,
+      "p95": 7328.780199997709
+    },
+    {
+      "n": 12,
+      "p50": 9544.53730000023,
+      "p95": 10009.773199999472
+    }
+  ],
+  "accepted_turn_callback_ms": {
+    "n": 48,
+    "p50": 0.4932999981974717,
+    "p95": 0.8750999986659735
+  },
+  "baseline_turn_callback_ms": {
+    "n": 48,
+    "p50": 0.02274999860674143,
+    "p95": 0.03560000186553225
+  },
+  "unavailable_ids": [
+    "en-capture-v2-11",
+    "hi-capture-v2-11",
+    "hinglish-capture-v2-12",
+    "en-capture-v2-13",
+    "hi-capture-v2-13"
+  ],
+  "later_development_probe_single_sends": 1,
+  "final_conservative_cumulative_send_upper_bound": 262,
+  "original_send_cap": 270,
+  "remaining_under_original_cap": 8,
+  "accepted": false,
+  "limits": [
+    "40/45 availability; five unavailable are not abstention passes",
+    "one Hindi partial correction retired old camera without replacement retention",
+    "precision/recall conditional on completed cases; Wilson independence limited by shared scenario families",
+    "capture-only45 is not full90/paired-answer/owner acceptance",
+    "new development probe timed out before raw response; exact partial-correction stage unknown",
+    "no live audio/hardware qualification"
+  ]
+}

@@ -1,0 +1,529 @@
+{
+  "protocol": {
+    "purpose": "development diagnosis, not acceptance; new cases only",
+    "reserved_prior_send_upper_bound": 199,
+    "new_single_send_cap": 8,
+    "total_send_cap": 270,
+    "answer_model_calls": 0,
+    "cases": [
+      {
+        "id": "dev-style",
+        "language": "en",
+        "turns": [
+          "Please keep your replies brief, direct, and friendly."
+        ],
+        "seed": [],
+        "question": "What reply style do I prefer?",
+        "answer_subset": false,
+        "control": "none"
+      },
+      {
+        "id": "dev-goal",
+        "language": "en",
+        "turns": [
+          "My current goal is to complete a pottery certificate."
+        ],
+        "seed": [],
+        "question": "What goal am I working on?",
+        "answer_subset": false,
+        "control": "none"
+      },
+      {
+        "id": "dev-sale",
+        "language": "en",
+        "turns": [
+          "My Ford Figo was sold last week; I no longer own that car."
+        ],
+        "seed": [
+          {
+            "category": "owned_item",
+            "label": "Ford Figo",
+            "value": "Ford Figo",
+            "kind": "vehicle",
+            "state": "owned",
+            "facet": null
+          }
+        ],
+        "question": "Which car do I still own?",
+        "answer_subset": false,
+        "control": "none"
+      },
+      {
+        "id": "dev-routine",
+        "language": "hi",
+        "turns": [
+          "मेरी शाम की सैर अब रोज़ 5 बजे की जगह 6 बजे होती है।"
+        ],
+        "seed": [
+          {
+            "category": "routine",
+            "label": "शाम की सैर",
+            "value": "रोज़ 5 बजे",
+            "kind": "other",
+            "state": "active",
+            "facet": null
+          }
+        ],
+        "question": "मेरी शाम की सैर कब होती है?",
+        "answer_subset": false,
+        "control": "none"
+      }
+    ],
+    "adapter_sha256": "cf0a94adae9802539a689c235ffb2f181484aa15a1600f3b451f2c7c3505d9ba"
+  },
+  "rows": [
+    {
+      "id": "dev-style",
+      "result": {
+        "id": "dev-style",
+        "status": "completed",
+        "predictions": [
+          {
+            "category": "response_preference",
+            "action": "create",
+            "text": "response_preference: brief, direct, and friendly",
+            "state": "active"
+          }
+        ],
+        "committed_count": 1,
+        "canonical_current_count": 1,
+        "context_status": "selected",
+        "facts": [
+          {
+            "predicate": "response_style",
+            "text": "response_preference: brief, direct, and friendly"
+          }
+        ],
+        "callback_ms": [
+          17.4226999952225
+        ],
+        "baseline_ms": [
+          0.025000001187436283
+        ],
+        "background_ms": 1648.6511999974027
+      },
+      "policy_events": [
+        {
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply style",
+            "value": "brief, direct, and friendly",
+            "evidence": [
+              {
+                "turn_id": "3a26f74c-840c-4047-b7e6-81bbe2c0caa2",
+                "start": 0,
+                "end": 53
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "candidate": {
+            "category": "response_preference",
+            "kind": "other",
+            "intent": "new",
+            "label": "reply style",
+            "value": "brief, direct, and friendly",
+            "evidence": [
+              {
+                "turn_id": "3a26f74c-840c-4047-b7e6-81bbe2c0caa2",
+                "start": 0,
+                "end": 53
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": "response_style",
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ],
+      "fictional_provider_outputs": [
+        {
+          "stage": "extract",
+          "output": {
+            "candidates": [
+              {
+                "category": "response_preference",
+                "kind": "other",
+                "intent": "new",
+                "label": "reply style",
+                "value": "brief, direct, and friendly",
+                "evidence": [
+                  {
+                    "turn_id": "3a26f74c-840c-4047-b7e6-81bbe2c0caa2",
+                    "quote": "Please keep your replies brief, direct, and friendly."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": "response_style",
+                "confidence": 1.0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "dev-goal",
+      "result": {
+        "id": "dev-goal",
+        "status": "completed",
+        "predictions": [],
+        "committed_count": 0,
+        "canonical_current_count": 0,
+        "context_status": "no_match",
+        "facts": [],
+        "callback_ms": [
+          0.4932000010740012
+        ],
+        "baseline_ms": [
+          0.02469999890308827
+        ],
+        "background_ms": 1457.8652000054717
+      },
+      "policy_events": [
+        {
+          "candidate": {
+            "category": "goal",
+            "kind": "other",
+            "intent": "new",
+            "label": "complete a pottery certificate",
+            "value": "active",
+            "evidence": [
+              {
+                "turn_id": "6a4892f5-e84e-4215-896a-2baedf6b228c",
+                "start": 0,
+                "end": 53
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "drop",
+          "reason": "unsupported_value"
+        }
+      ],
+      "fictional_provider_outputs": [
+        {
+          "stage": "extract",
+          "output": {
+            "candidates": [
+              {
+                "category": "goal",
+                "kind": "other",
+                "intent": "new",
+                "label": "complete a pottery certificate",
+                "value": "active",
+                "evidence": [
+                  {
+                    "turn_id": "6a4892f5-e84e-4215-896a-2baedf6b228c",
+                    "quote": "My current goal is to complete a pottery certificate."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "ongoing",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "dev-sale",
+      "result": {
+        "id": "dev-sale",
+        "status": "completed",
+        "predictions": [
+          {
+            "category": "owned_item",
+            "action": "change",
+            "text": "owned_item.vehicle: Ford Figo; value=Ford Figo; state=not_owned",
+            "state": "not_owned"
+          }
+        ],
+        "committed_count": 1,
+        "canonical_current_count": 1,
+        "context_status": "selected",
+        "facts": [
+          {
+            "predicate": "owned_item_c1e19b1032c64f739e7f2310afaffd2e",
+            "text": "owned_item.vehicle: Ford Figo; value=Ford Figo; state=not_owned"
+          }
+        ],
+        "callback_ms": [
+          0.5036000002291985
+        ],
+        "baseline_ms": [
+          0.023600005079060793
+        ],
+        "background_ms": 2631.937199999811
+      },
+      "policy_events": [
+        {
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "change",
+            "label": "Ford Figo",
+            "value": "no longer own",
+            "evidence": [
+              {
+                "turn_id": "5d74242f-c1f4-4f04-a6a6-2524497b94f5",
+                "start": 0,
+                "end": 58
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "not_owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "candidate": {
+            "category": "owned_item",
+            "kind": "vehicle",
+            "intent": "change",
+            "label": "Ford Figo",
+            "value": "no longer own",
+            "evidence": [
+              {
+                "turn_id": "5d74242f-c1f4-4f04-a6a6-2524497b94f5",
+                "start": 0,
+                "end": 58
+              }
+            ],
+            "qualification": "direct",
+            "importance": "stable",
+            "sensitivity": "standard",
+            "state": "not_owned",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ],
+      "fictional_provider_outputs": [
+        {
+          "stage": "extract",
+          "output": {
+            "candidates": [
+              {
+                "category": "owned_item",
+                "kind": "vehicle",
+                "intent": "change",
+                "label": "Ford Figo",
+                "value": "no longer own",
+                "evidence": [
+                  {
+                    "turn_id": "5d74242f-c1f4-4f04-a6a6-2524497b94f5",
+                    "quote": "My Ford Figo was sold last week; I no longer own that car."
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "stable",
+                "sensitivity": "standard",
+                "state": "not_owned",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "resolve",
+          "output": {
+            "resolutions": [
+              {
+                "candidate_index": 0,
+                "decision": "match",
+                "target_id": "250c966f-2295-4bb9-aae0-8ecf66e6a8a3"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "dev-routine",
+      "result": {
+        "id": "dev-routine",
+        "status": "completed",
+        "predictions": [],
+        "committed_count": 0,
+        "canonical_current_count": 1,
+        "context_status": "selected",
+        "facts": [
+          {
+            "predicate": "routine_7d406db405504b0493b9cdf428207574",
+            "text": "शाम की सैर: रोज़ 5 बजे; state=active"
+          }
+        ],
+        "callback_ms": [
+          0.5568999986280687
+        ],
+        "baseline_ms": [
+          0.025399996957276016
+        ],
+        "background_ms": 2746.9904000026872
+      },
+      "policy_events": [
+        {
+          "candidate": {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "शाम की सैर",
+            "value": "6 बजे",
+            "evidence": [
+              {
+                "turn_id": "df880c23-eb37-44f9-92d8-0896cd2f4d34",
+                "start": 0,
+                "end": 51
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        },
+        {
+          "candidate": {
+            "category": "routine",
+            "kind": "other",
+            "intent": "new",
+            "label": "शाम की सैर",
+            "value": "6 बजे",
+            "evidence": [
+              {
+                "turn_id": "df880c23-eb37-44f9-92d8-0896cd2f4d34",
+                "start": 0,
+                "end": 51
+              }
+            ],
+            "qualification": "direct",
+            "importance": "ongoing",
+            "sensitivity": "standard",
+            "state": "active",
+            "scalar_facet": null,
+            "confidence": 1.0
+          },
+          "status": "eligible",
+          "reason": ""
+        }
+      ],
+      "fictional_provider_outputs": [
+        {
+          "stage": "extract",
+          "output": {
+            "candidates": [
+              {
+                "category": "routine",
+                "kind": "other",
+                "intent": "new",
+                "label": "शाम की सैर",
+                "value": "6 बजे",
+                "evidence": [
+                  {
+                    "turn_id": "df880c23-eb37-44f9-92d8-0896cd2f4d34",
+                    "quote": "मेरी शाम की सैर अब रोज़ 5 बजे की जगह 6 बजे होती है।"
+                  }
+                ],
+                "qualification": "direct",
+                "importance": "ongoing",
+                "sensitivity": "standard",
+                "state": "active",
+                "scalar_facet": null,
+                "confidence": 1.0
+              }
+            ]
+          }
+        },
+        {
+          "stage": "resolve",
+          "output": {
+            "resolutions": [
+              {
+                "candidate_index": 0,
+                "decision": "match",
+                "target_id": "93aa8c83-a798-4a08-a898-a5f9c29193c8"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "new_single_send_calls": 6,
+  "conservative_cumulative_send_upper_bound": 205,
+  "usage": [
+    {
+      "input_tokens": 382,
+      "output_tokens": 192,
+      "total_tokens": 574
+    },
+    {
+      "input_tokens": 383,
+      "output_tokens": 184,
+      "total_tokens": 567
+    },
+    {
+      "input_tokens": 395,
+      "output_tokens": 198,
+      "total_tokens": 593
+    },
+    {
+      "input_tokens": 541,
+      "output_tokens": 79,
+      "total_tokens": 620
+    },
+    {
+      "input_tokens": 391,
+      "output_tokens": 195,
+      "total_tokens": 586
+    },
+    {
+      "input_tokens": 534,
+      "output_tokens": 81,
+      "total_tokens": 615
+    }
+  ],
+  "last_failure": null,
+  "accepted": false
+}

@@ -395,9 +395,22 @@ class MemoryAgentTools:
                 "semantic memory recall is not enabled for this session"
             )
         turn = self._latest_user_turn()
+        activity_epoch = self._conversation.user_activity_epoch
+
+        def validate_recall_source():
+            if (
+                self._conversation.status is not ConversationStatus.ACTIVE
+                or self._latest_user_turn().turn_id != turn.turn_id
+                or self._conversation.user_activity_epoch != activity_epoch
+            ):
+                raise ExplicitMemoryAuthorizationError(
+                    "The original memory recall session or request changed"
+                )
+
         decision = await coordinator.resolve(
             turn.text,
             eligibility=RetrievalEligibility.cloud_context(),
+            before_dispatch=validate_recall_source,
         )
         if decision.disposition is MemoryEvidenceDisposition.ABSTAIN:
             LOGGER.info(

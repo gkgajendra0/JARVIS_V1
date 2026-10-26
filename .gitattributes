@@ -1,2 +1,10 @@
-# Vite/Three compiled output contains embedded shader whitespace; review source instead.
+benchmarks/personal_auto_learning_v1*.json text eol=lf
+
+benchmarks/personal_auto_learning_capture_v2*.json text eol=lf
+
+benchmarks/personal_auto_learning_v3*.json text eol=lf
+
+benchmarks/personal_auto_learning_v4*.json text eol=lf
+
+# Compiled Three.js shaders contain intentional whitespace; review TypeScript source.
 src/jarvis/ui/assets/assets/*.js binary linguist-generated=true

@@ -4,8 +4,9 @@ This is a **new visual surface**, not a replacement assistant. It combines the
 3D reactor visual from `thisisreyy/jarvis` with the angular HUD treatment of
 `Navaneeth1324/jarvis-ai-assistant` under their MIT licenses. The original
 Python/LiveKit JARVIS continues to own voice, memory, Work, identity, vision
-and all capability authority. The old unmerged UI experiment (PR #297) was
-not reused.
+and all capability authority. The previous PR #297 UI was later merged into
+`main` through a Windows synchronization, so the old UI files and their
+UI-only tests are explicitly replaced rather than layered underneath this HUD.
 
 The UI is **not production/Windows accepted** until the owner inspects it.
 It is opt-in and bound to loopback. It cannot send commands or retrieve audio,

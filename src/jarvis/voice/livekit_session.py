@@ -25,7 +25,11 @@ from openai.types.beta.realtime.session import TurnDetection
 from openai.types.realtime import RealtimeTruncationRetentionRatio
 from openai.types.realtime.realtime_truncation_retention_ratio import TokenLimits
 
-from jarvis.ai_provider import require_provider_api_key
+from jarvis.ai_provider import (
+    gemini_credential_ref,
+    require_provider_api_key,
+    resolve_target_api_key,
+)
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
 from jarvis.memory.live_context import LiveContext
@@ -70,15 +74,79 @@ async def probe_gemini_live_model(
         raise GeminiLiveProbeError("timeout") from exc
 
 
-def _create_realtime_model(config: JarvisConfig):
-    api_key = require_provider_api_key(config.ai_provider, purpose="realtime voice")
+def _create_realtime_model(config: JarvisConfig, *, target=None, transport_state=None):
+    automatic_paid = False
+    if target is not None and target.credential_ref == gemini_credential_ref("paid"):
+        from jarvis.voice.gemini_automatic_fallback import AutomaticLiveAdmission
+
+        admission = getattr(transport_state, "automatic_admission", None)
+        if type(admission) is AutomaticLiveAdmission:
+            if (
+                config.gemini_fallback.budget_enforced
+                or not config.gemini_fallback.enabled
+                or not transport_state.current
+                or transport_state.budget is not None
+                or target.provider_id != config.ai_provider
+                or target.model_id != config.gemini_realtime_model
+                or target.model_id != admission.model_id
+            ):
+                raise ValueError("Automatic Paid Live target/configuration mismatch")
+            admission.validate_target(target)
+            automatic_paid = True
+    if (
+        target is not None
+        and target.credential_ref == gemini_credential_ref("paid")
+        and not automatic_paid
+    ):
+        from jarvis.model_routing.budget import PaidBudgetDenied
+        from jarvis.voice.gemini_live_budget import ControlledLiveAdmission
+        from jarvis.voice.gemini_live_model import ControlledGeminiLiveModel
+        from jarvis.voice.gemini_transport import GuardedGeminiRealtimeModel
+
+        admission = getattr(transport_state, "controlled_admission", None)
+        if (
+            not isinstance(admission, ControlledLiveAdmission)
+            or not transport_state.current
+            or target.provider_id != "gemini"
+            or config.ai_provider != "gemini"
+            or target.model_id != config.gemini_realtime_model
+            or target.model_id != admission.model_id
+            or transport_state.budget is not None
+        ):
+            raise PaidBudgetDenied(
+                "Paid Live requires current qualified controlled admission"
+            )
+        # Resolving the exact target key and constructing the public client are
+        # delayed until the transport has its durable shared-governor hold.
+        model = ControlledGeminiLiveModel(
+            target=target,
+            voice=config.gemini_realtime_voice,
+            state=transport_state,
+            admission=admission,
+            client_factory=lambda: genai.Client(api_key=resolve_target_api_key(target)),
+        )
+        return GuardedGeminiRealtimeModel(model, transport_state)
+    if target is not None and target.provider_id != config.ai_provider:
+        raise ValueError("Realtime target provider must match configured provider")
+    api_key = (
+        require_provider_api_key(config.ai_provider, purpose="realtime voice")
+        if target is None
+        else resolve_target_api_key(target)
+    )
     if config.ai_provider == "gemini":
         # Gemini 3.8 Live permanently enables proactive audio. Keep provider-native
         # activity/turn completion and explicit start-of-activity barge-in. The
         # JARVIS wake boundary removes already-consumed wake audio before this model
         # sees the conversation stream; Gemini then owns normal conversational VAD.
-        return google.realtime.RealtimeModel(
-            model=config.gemini_realtime_model,
+        options = {}
+        if transport_state is not None:
+            from livekit.agents import APIConnectOptions
+
+            options["conn_options"] = APIConnectOptions(max_retry=0)
+            # A fresh model starts with no resumption handle from another project.
+            options["session_resumption"] = google_types.SessionResumptionConfig()
+        model = google.realtime.RealtimeModel(
+            model=config.gemini_realtime_model if target is None else target.model_id,
             voice=config.gemini_realtime_voice,
             api_key=api_key,
             instructions=build_instructions(
@@ -86,6 +154,7 @@ def _create_realtime_model(config: JarvisConfig):
             ),
             input_audio_transcription={},
             output_audio_transcription={},
+            **options,
             realtime_input_config=google_types.RealtimeInputConfig(
                 automatic_activity_detection=google_types.AutomaticActivityDetection(
                     start_of_speech_sensitivity=(
@@ -102,6 +171,11 @@ def _create_realtime_model(config: JarvisConfig):
                 ),
             ),
         )
+        if transport_state is not None:
+            from jarvis.voice.gemini_transport import GuardedGeminiRealtimeModel
+
+            return GuardedGeminiRealtimeModel(model, transport_state)
+        return model
 
     return openai.realtime.RealtimeModel(
         model=config.realtime_model,
@@ -141,6 +215,9 @@ class LiveKitConversationBridge:
         self.conversation = conversation
         self.live_context = live_context
         self._show_transcript = show_transcript
+        self.transport_epoch = 0
+        self._transport_paused = False
+        self._handoff_error_handler = None
         self._seen_item_ids: set[str] = set()
         self._transcript_committed_user_turn_ids: set[str] = set()
         self._accepted_turn_observers: list[AcceptedTurnObserver] = []
@@ -149,6 +226,52 @@ class LiveKitConversationBridge:
         session.on("conversation_item_added", self._on_conversation_item_added)
         session.on("error", self._on_error)
         session.on("close", self._on_close)
+
+    def project_accepted_context(self):
+        from livekit.agents import ChatContext
+
+        context = ChatContext.empty()
+        for turn in self.live_context.recent_turns:
+            if turn.role not in {ConversationRole.USER, ConversationRole.ASSISTANT}:
+                continue
+            item_id = f"jarvis:{turn.turn_id}"
+            context.items.append(
+                ChatMessage(
+                    id=item_id,
+                    role=turn.role.value,
+                    content=[turn.text],
+                    interrupted=turn.interrupted,
+                )
+            )
+            self._seen_item_ids.add(item_id)
+        return context
+
+    def register_restored_context(self, context):
+        if any(not isinstance(item, ChatMessage) for item in context.items):
+            raise ValueError("Only inert accepted context may be restored")
+        self._seen_item_ids.update(item.id for item in context.items)
+
+    def begin_transport_handoff(self):
+        from jarvis.conversation import ConversationStatus
+
+        if self.conversation.status is not ConversationStatus.ACTIVE:
+            raise RuntimeError("Canonical conversation is no longer active")
+        self.transport_epoch += 1
+        self._transport_paused = True
+        return self.transport_epoch
+
+    def finish_transport_handoff(self, epoch):
+        from jarvis.conversation import ConversationStatus
+
+        if (
+            epoch != self.transport_epoch
+            or self.conversation.status is not ConversationStatus.ACTIVE
+        ):
+            raise RuntimeError("Obsolete transport handoff")
+        self._transport_paused = False
+
+    def bind_transport_error_handler(self, handler):
+        self._handoff_error_handler = handler
 
     def add_accepted_turn_observer(self, observer: AcceptedTurnObserver) -> None:
         if not callable(observer):
@@ -266,6 +389,8 @@ class LiveKitConversationBridge:
             break
 
     def _on_user_input_transcribed(self, event: UserInputTranscribedEvent) -> None:
+        if self._transport_paused:
+            return
         if not event.is_final:
             return
 
@@ -296,6 +421,8 @@ class LiveKitConversationBridge:
         )
 
     def _on_conversation_item_added(self, event: ConversationItemAddedEvent) -> None:
+        if self._transport_paused:
+            return
         item = event.item
         if not isinstance(item, ChatMessage):
             return
@@ -327,6 +454,10 @@ class LiveKitConversationBridge:
         )
 
     def _on_error(self, event: ErrorEvent) -> None:
+        if self._handoff_error_handler is not None and self._handoff_error_handler(
+            event
+        ):
+            return
         summary = getattr(event.error, "label", type(event.error).__name__)
         if getattr(event.error, "recoverable", False):
             LOGGER.warning("Recoverable voice-session error: %s", summary)
@@ -345,16 +476,32 @@ class LiveKitConversationBridge:
 
 def create_voice_session(
     config: JarvisConfig,
+    *,
+    routing_runtime=None,
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
     conversation = ConversationSession()
     live_context = LiveContext(max_recent_turns=config.live_context_recent_turns)
+    model = _create_realtime_model(config)
+    transport_state = None
+    if (
+        config.ai_provider == "gemini"
+        and routing_runtime is not None
+        and routing_runtime.config.enabled
+    ):
+        from jarvis.voice.gemini_transport import (
+            GeminiTransportState,
+            GuardedGeminiRealtimeModel,
+        )
+
+        transport_state = GeminiTransportState(epoch=0, current_epoch=lambda: 0)
+        model = GuardedGeminiRealtimeModel(model, transport_state)
     # Do not pass vad=None here. LiveKit auto-provisions its bundled local Silero VAD
     # when the argument is omitted. JARVIS uses that VAD only for local user-activity
     # state (speaking/listening) so inactivity timers cannot expire during continuous
     # speech. Realtime Gemini/OpenAI still own actual turn completion through their
     # provider-native server-side turn detection.
     livekit_session = AgentSession(
-        llm=_create_realtime_model(config),
+        llm=model,
         # An explicit instance of the SAME bundled local VAD makes user-state
         # events physical activity. The default-VAD SDK path also maps Gemini's
         # synthetic input_speech_started on automatic tool replies to user speech.
@@ -375,4 +522,63 @@ def create_voice_session(
         live_context,
         show_transcript=config.show_transcript,
     )
+    if transport_state is not None:
+        from jarvis.voice.gemini_handoff import GeminiLiveHandoff
+        from jarvis.voice.gemini_live_budget import ControlledLiveAdmission
+        from jarvis.voice.gemini_live_contract import (
+            LiveContractUnavailable,
+            reviewed_live_contract,
+        )
+
+        transport_state.current_epoch = lambda: bridge.transport_epoch
+        handoff = GeminiLiveHandoff(
+            config=config,
+            routing_runtime=routing_runtime,
+            session=livekit_session,
+            bridge=bridge,
+            current_model=model,
+            guard=lambda: False,
+        )
+        try:
+            if not routing_runtime.config.budget_enforced:
+                from jarvis.voice.gemini_automatic_fallback import (
+                    AutomaticLiveAdmission,
+                )
+
+                handoff.paid_admission = AutomaticLiveAdmission(
+                    routing_runtime,
+                    model_id=config.gemini_realtime_model,
+                    authorize=handoff._authorized,
+                )
+            elif routing_runtime.config.live_policy_mode == "operational_v1":
+                from jarvis.voice.gemini_operational_budget import (
+                    build_operational_live_admission,
+                )
+
+                handoff.paid_admission = build_operational_live_admission(
+                    routing_runtime,
+                    session_id=conversation.session_id,
+                    authorize=handoff._authorized,
+                )
+            else:
+                contract = reviewed_live_contract(config.gemini_realtime_model)
+                handoff.paid_admission = ControlledLiveAdmission(
+                    routing_runtime,
+                    session_id=conversation.session_id,
+                    authorize=handoff._authorized,
+                    contract=contract,
+                )
+        except (LiveContractUnavailable, RuntimeError, ValueError):
+            # Public protocol support is not a reviewed production billing bound.
+            # No fabricated auxiliary envelope or test fixture enters production.
+            handoff.last_reason = "paid_live_billing_contract_unqualified"
+        bridge.gemini_handoff = handoff
+        diagnostic_plan = getattr(routing_runtime, "live_diagnostic_plan", None)
+        if diagnostic_plan is not None:
+            from jarvis.voice.gemini_live_diagnostics import (
+                configure_handoff_diagnostics,
+            )
+
+            configure_handoff_diagnostics(handoff, diagnostic_plan)
+        bridge.add_close_observer(handoff.close)
     return livekit_session, bridge

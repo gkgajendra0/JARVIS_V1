@@ -12,7 +12,9 @@
 
 ## Global Constraints
 
-- `JARVIS_V1` stays the runtime source of truth and has no active UI on `main`.
+- `JARVIS_V1` stays the runtime source of truth. Since planning, PR #297's
+  earlier UI was merged; its assets, UI-only tests and observation adapter are
+  removed in this replacement without rolling back other runtime work.
 - The rejected PR #297 visuals are excluded; only #1/#2 MIT-licensed visual source is adapted with notices.
 - Bind HTTP only to `127.0.0.1` and expose GET/HEAD only, never secrets or transcripts.
 - Runtime integration is opt-in; failures must not affect LiveKit voice or Work.

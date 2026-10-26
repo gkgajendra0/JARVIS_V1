@@ -1,0 +1,232 @@
+{
+  "summary": {
+    "status": "incomplete",
+    "completed": 4,
+    "unavailable": 0,
+    "unrun": 86,
+    "provider_attempts": 11,
+    "accepted": false
+  },
+  "manifest": {
+    "input_sha256": "c8c275eb89596dfdbee2c5b685642162dc21a1a5e65fe4bb91811b1e86691984",
+    "gold_sha256": "9471f55622a8110515c3c189ff4b9b13278f7f0c91e6818d1f6f2fb4574ec010"
+  },
+  "scores": {
+    "completed": 4,
+    "unavailable": 0,
+    "true_positive": 3,
+    "false_positive": 0,
+    "false_negative": 2,
+    "precision": 1.0,
+    "recall": 0.6,
+    "precision_wilson": [
+      0.43849391955098227,
+      1.0
+    ],
+    "recall_wilson": [
+      0.23071993220883708,
+      0.8823817688407467
+    ],
+    "languages": {
+      "en": {
+        "completed": 4,
+        "captured": 3,
+        "expected": 5
+      }
+    },
+    "quality_floor_pass": false,
+    "advice_review": "pending blind review; never inferred from retrieval or fake providers"
+  },
+  "usage": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "attempts": 4,
+      "usage": [
+        {
+          "input_tokens": 386,
+          "output_tokens": 370,
+          "total_tokens": 756
+        },
+        {
+          "input_tokens": 386,
+          "output_tokens": 191,
+          "total_tokens": 577
+        },
+        {
+          "input_tokens": 388,
+          "output_tokens": 188,
+          "total_tokens": 576
+        },
+        {
+          "input_tokens": 379,
+          "output_tokens": 182,
+          "total_tokens": 561
+        }
+      ],
+      "last_failure": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash",
+      "attempts": 7,
+      "usage": [
+        {
+          "input_tokens": 82,
+          "output_tokens": 21,
+          "total_tokens": 316
+        },
+        {
+          "input_tokens": 128,
+          "output_tokens": 22,
+          "total_tokens": 281
+        },
+        {
+          "input_tokens": 82,
+          "output_tokens": 21,
+          "total_tokens": 296
+        },
+        {
+          "input_tokens": 106,
+          "output_tokens": 20,
+          "total_tokens": 220
+        },
+        {
+          "input_tokens": 82,
+          "output_tokens": 24,
+          "total_tokens": 304
+        },
+        {
+          "input_tokens": 82,
+          "output_tokens": 24,
+          "total_tokens": 321
+        }
+      ],
+      "last_failure": {
+        "kind": "RateLimitError",
+        "status": 429
+      }
+    }
+  ],
+  "request_latency_ms": {
+    "n": 11,
+    "p50": 2455.8073999999124,
+    "p95": 3916.9840999998087
+  },
+  "accepted_turn_callback_ms": {
+    "n": 4,
+    "p50": 0.7086499999786611,
+    "p95": 2.092200000106459
+  },
+  "canonical_accept_baseline_ms": {
+    "n": 4,
+    "p50": 0.03779999991593286,
+    "p95": 0.053700000080425525
+  },
+  "background_ms": {
+    "n": 4,
+    "p50": 1691.7351499999995,
+    "p95": 2372.8399999999965
+  },
+  "resource_notes": "Synthetic OS/Hello, real OPA/canonical DB and provider; no microphone/first-speech/GPU workload measured. Paired answer model uses active-provider work role; normal realtime routing still needs owner acceptance.",
+  "rows": [
+    {
+      "id": "en-01",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned",
+          "state": "owned"
+        },
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 2,
+      "canonical_current_count": 2,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_4cfc1c9d87694007aa137e45600ca0ec",
+          "text": "owned_item.vehicle: TVS Ronin; value=TVS Ronin; state=owned"
+        },
+        {
+          "predicate": "owned_item_9a8191fb0f0f4dc88b1284db8457988d",
+          "text": "owned_item.vehicle: Toyota Glanza; value=Toyota Glanza; state=owned"
+        }
+      ],
+      "callback_ms": [
+        2.092200000106459
+      ],
+      "baseline_ms": [
+        0.03830000002835732
+      ],
+      "background_ms": 2372.8399999999965
+    },
+    {
+      "id": "en-02",
+      "status": "completed",
+      "predictions": [
+        {
+          "category": "owned_item",
+          "action": "create",
+          "text": "owned_item.device: camera; value=Fujifilm X-S20; state=owned",
+          "state": "owned"
+        }
+      ],
+      "committed_count": 1,
+      "canonical_current_count": 1,
+      "context_status": "selected",
+      "facts": [
+        {
+          "predicate": "owned_item_523d0beb3d3e4e4fa086971ea9023202",
+          "text": "owned_item.device: camera; value=Fujifilm X-S20; state=owned"
+        }
+      ],
+      "callback_ms": [
+        0.7868000000144093
+      ],
+      "baseline_ms": [
+        0.053700000080425525
+      ],
+      "background_ms": 1864.1556000000037
+    },
+    {
+      "id": "en-03",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.4466999999976906
+      ],
+      "baseline_ms": [
+        0.030200000082913903
+      ],
+      "background_ms": 1427.0482000000584
+    },
+    {
+      "id": "en-04",
+      "status": "completed",
+      "predictions": [],
+      "committed_count": 0,
+      "canonical_current_count": 0,
+      "context_status": "no_match",
+      "facts": [],
+      "callback_ms": [
+        0.6304999999429128
+      ],
+      "baseline_ms": [
+        0.0372999998035084
+      ],
+      "background_ms": 1519.3146999999954
+    }
+  ]
+}

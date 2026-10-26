@@ -19,6 +19,7 @@ _METHOD_LEVEL = {
     ApprovalMethod.DIRECT_INTENT: ApprovalRequirement.DIRECT_INTENT,
     ApprovalMethod.SPOKEN: ApprovalRequirement.EXPLICIT,
     ApprovalMethod.STRONG_VERIFIER: ApprovalRequirement.STRONG,
+    ApprovalMethod.DELEGATED_POLICY: ApprovalRequirement.EXPLICIT,
 }
 
 
@@ -34,6 +35,7 @@ class ApprovalRecord:
     expires_at_monotonic: float
     method: ApprovalMethod | None = None
     resolved_at_monotonic: float | None = None
+    parent_delegation_id: str | None = None
 
 
 class ApprovalService:
@@ -42,6 +44,47 @@ class ApprovalService:
         self._records: dict[str, ApprovalRecord] = {}
         self._used_strong_verification_ids: set[str] = set()
         self._lock = threading.RLock()
+        self._delegations: dict[object, Callable[[ActionProposal], str]] = {}
+        self._delegated_approvals: dict[str, object] = {}
+
+    def register_delegation(
+        self, grant: object, validator: Callable[[ActionProposal], str]
+    ) -> None:
+        """Trusted issuer hook; the validator is a nonblocking scope snapshot."""
+        with self._lock:
+            if grant in self._delegations or not callable(validator):
+                raise ApprovalError("invalid delegation registration")
+            self._delegations[grant] = validator
+
+    def revoke_delegation(self, grant: object) -> None:
+        with self._lock:
+            self._delegations.pop(grant, None)
+
+    def grant_delegated(
+        self,
+        approval_id: str,
+        *,
+        proposal: ActionProposal,
+        session_id: str,
+        grant: object,
+    ) -> ApprovalRecord:
+        with self._lock:
+            validator = self._delegations.get(grant)
+            if validator is None:
+                raise ApprovalError("unregistered delegation")
+            parent = validator(proposal)
+            if not parent:
+                raise ApprovalError("invalid delegation binding")
+            record = self._grant_locked(
+                approval_id,
+                proposal=proposal,
+                session_id=session_id,
+                method=ApprovalMethod.DELEGATED_POLICY,
+            )
+            record = replace(record, parent_delegation_id=parent)
+            self._records[approval_id] = record
+            self._delegated_approvals[approval_id] = grant
+            return record
 
     def request(
         self,
@@ -86,7 +129,7 @@ class ApprovalService:
         session_id: str,
         method: ApprovalMethod,
     ) -> ApprovalRecord:
-        if method is ApprovalMethod.STRONG_VERIFIER:
+        if method in {ApprovalMethod.STRONG_VERIFIER, ApprovalMethod.DELEGATED_POLICY}:
             raise ApprovalError(
                 "strong verifier approval requires a bound verification result"
             )
@@ -159,6 +202,14 @@ class ApprovalService:
                 raise ApprovalError("approval method is missing")
             if _METHOD_LEVEL[record.method] < minimum_requirement:
                 raise ApprovalError("approval method is too weak")
+            if record.method is ApprovalMethod.DELEGATED_POLICY:
+                handle = self._delegated_approvals.get(approval_id)
+                validator = self._delegations.get(handle)
+                if (
+                    validator is None
+                    or validator(proposal) != record.parent_delegation_id
+                ):
+                    raise ApprovalError("delegation is no longer valid")
             return record
 
     def consume(

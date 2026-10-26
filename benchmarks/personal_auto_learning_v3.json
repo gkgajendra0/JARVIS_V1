@@ -1,0 +1,1425 @@
+{
+  "schema": "personal-auto-learning-v3",
+  "fictional": true,
+  "episodes": [
+    {
+      "id": "en-fresh-v3-01",
+      "language": "en",
+      "turns": [
+        "My two vehicles are a Renault Kiger and a Honda CB350."
+      ],
+      "seed": [],
+      "question": "Which car and motorcycle do I own?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-01",
+      "language": "hi",
+      "turns": [
+        "मेरे दो वाहन Renault Kiger और Honda CB350 हैं।"
+      ],
+      "seed": [],
+      "question": "मेरी कार और मोटरसाइकिल कौन सी हैं?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-01",
+      "language": "hinglish",
+      "turns": [
+        "Mere do vehicles Renault Kiger aur Honda CB350 hain."
+      ],
+      "seed": [],
+      "question": "Meri car aur motorcycle kaunsi hain?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-02",
+      "language": "en",
+      "turns": [
+        "I use my own Logitech MX Keys keyboard every day."
+      ],
+      "seed": [],
+      "question": "Which keyboard do I have?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-02",
+      "language": "hi",
+      "turns": [
+        "मैं रोज़ अपना Logitech MX Keys कीबोर्ड इस्तेमाल करता हूँ।"
+      ],
+      "seed": [],
+      "question": "मेरे पास कौन सा कीबोर्ड है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-02",
+      "language": "hinglish",
+      "turns": [
+        "Main roz apna Logitech MX Keys keyboard use karta hoon."
+      ],
+      "seed": [],
+      "question": "Mere paas kaunsa keyboard hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-03",
+      "language": "en",
+      "turns": [
+        "I follow a vegan diet as my regular food preference."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-03",
+      "language": "hi",
+      "turns": [
+        "मेरी नियमित भोजन पसंद वीगन खाना है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-03",
+      "language": "hinglish",
+      "turns": [
+        "Meri regular food preference vegan hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-04",
+      "language": "en",
+      "turns": [
+        "For your replies, I prefer a concise and technical style."
+      ],
+      "seed": [],
+      "question": "What style should you use when replying to me?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-04",
+      "language": "hi",
+      "turns": [
+        "आपके जवाबों में मुझे संक्षिप्त और तकनीकी शैली पसंद है।"
+      ],
+      "seed": [],
+      "question": "मुझे जवाब देते समय कैसी शैली रखोगे?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-04",
+      "language": "hinglish",
+      "turns": [
+        "Tumhare replies mein mujhe short aur technical style pasand hai."
+      ],
+      "seed": [],
+      "question": "Mujhe reply karte waqt kaisa style rakhoge?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-05",
+      "language": "en",
+      "turns": [
+        "My preferred reply language is Marathi."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-05",
+      "language": "hi",
+      "turns": [
+        "जवाबों के लिए मेरी पसंदीदा भाषा मराठी है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-05",
+      "language": "hinglish",
+      "turns": [
+        "Replies ke liye meri preferred language Marathi hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-06",
+      "language": "en",
+      "turns": [
+        "My midday stretches happen every weekday at 2:15 pm."
+      ],
+      "seed": [],
+      "question": "When is my usual midday stretch?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-06",
+      "language": "hi",
+      "turns": [
+        "मेरा दोपहर का स्ट्रेच हर कार्यदिवस दोपहर 2:15 बजे होता है।"
+      ],
+      "seed": [],
+      "question": "मेरा नियमित दोपहर का स्ट्रेच कब है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-06",
+      "language": "hinglish",
+      "turns": [
+        "Mera midday stretch har weekday dopahar 2:15 baje hota hai."
+      ],
+      "seed": [],
+      "question": "Mera usual midday stretch kab hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-07",
+      "language": "en",
+      "turns": [
+        "My ongoing goal is to learn conversational Spanish."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-07",
+      "language": "hi",
+      "turns": [
+        "मेरा मौजूदा लक्ष्य बातचीत की स्पैनिश सीखना है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-07",
+      "language": "hinglish",
+      "turns": [
+        "Mera current goal conversational Spanish seekhna hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-08",
+      "language": "en",
+      "turns": [
+        "I sold my Renault Kiger yesterday; I still own the Honda CB350."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Honda CB350",
+          "value": "Honda CB350",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-08",
+      "language": "hi",
+      "turns": [
+        "मैंने कल अपनी Renault Kiger बेच दी; Honda CB350 अभी भी मेरी है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Honda CB350",
+          "value": "Honda CB350",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-08",
+      "language": "hinglish",
+      "turns": [
+        "Maine kal apni Renault Kiger bech di; Honda CB350 abhi bhi meri hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Honda CB350",
+          "value": "Honda CB350",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-09",
+      "language": "en",
+      "turns": [
+        "Earlier I said Beosound A1; my actual speaker is JBL Flip 6."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Bang & Olufsen Beosound A1",
+          "value": "Bang & Olufsen Beosound A1",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Which speaker is actually mine?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-09",
+      "language": "hi",
+      "turns": [
+        "पहले मैंने Beosound A1 कहा था; मेरा असली स्पीकर JBL Flip 6 है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Bang & Olufsen Beosound A1",
+          "value": "Bang & Olufsen Beosound A1",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "मेरा असली स्पीकर कौन सा है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-09",
+      "language": "hinglish",
+      "turns": [
+        "Pehle maine Beosound A1 kaha tha; mera actual speaker JBL Flip 6 hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Bang & Olufsen Beosound A1",
+          "value": "Bang & Olufsen Beosound A1",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Mera actual speaker kaunsa hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-10",
+      "language": "en",
+      "turns": [
+        "My Wednesday sketching is now at 4:45 pm instead of 3 pm."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "Wednesday sketching",
+          "value": "3 pm",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-10",
+      "language": "hi",
+      "turns": [
+        "मेरी बुधवार की स्केचिंग अब 3 बजे की जगह 4:45 बजे होती है।"
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "बुधवार की स्केचिंग",
+          "value": "3 बजे",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-10",
+      "language": "hinglish",
+      "turns": [
+        "Meri Wednesday sketching ab 3 baje ki jagah 4:45 baje hoti hai."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "Wednesday sketching",
+          "value": "3 baje",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-11",
+      "language": "en",
+      "turns": [
+        "I have now finished the watercolour workshop that was my goal."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "finish the watercolour workshop",
+          "value": "finish the watercolour workshop",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-11",
+      "language": "hi",
+      "turns": [
+        "वॉटरकलर वर्कशॉप पूरी करना मेरा लक्ष्य था और अब मैंने इसे पूरा कर लिया है।"
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "वॉटरकलर वर्कशॉप पूरी करना",
+          "value": "वॉटरकलर वर्कशॉप पूरी करना",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-11",
+      "language": "hinglish",
+      "turns": [
+        "Watercolour workshop complete karna mera goal tha aur ab maine use complete kar liya hai."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "watercolour workshop complete karna",
+          "value": "watercolour workshop complete karna",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-12",
+      "language": "en",
+      "turns": [
+        "I used to follow a vegan diet; my regular preference is now ovo-vegetarian."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegan",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Which food preference should you consider for me now?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-12",
+      "language": "hi",
+      "turns": [
+        "मैं पहले वीगन था; अब मेरी नियमित भोजन पसंद ओवो-शाकाहारी है।"
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "वीगन",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "अब मेरे लिए कौन सी भोजन पसंद ध्यान में रखोगे?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-12",
+      "language": "hinglish",
+      "turns": [
+        "Main pehle vegan tha; ab meri regular food preference ovo-vegetarian hai."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegan",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Ab meri kaunsi food preference dhyan mein rakhoge?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-13",
+      "language": "en",
+      "turns": [
+        "I used to prefer elaborate replies; now I prefer bullet points."
+      ],
+      "seed": [
+        {
+          "category": "response_preference",
+          "label": "style",
+          "value": "elaborate",
+          "kind": "other",
+          "state": "active",
+          "facet": "response_style"
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-13",
+      "language": "hi",
+      "turns": [
+        "पहले मुझे विस्तृत जवाब पसंद थे; अब मुझे बुलेट पॉइंट पसंद हैं।"
+      ],
+      "seed": [
+        {
+          "category": "response_preference",
+          "label": "style",
+          "value": "विस्तृत",
+          "kind": "other",
+          "state": "active",
+          "facet": "response_style"
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-13",
+      "language": "hinglish",
+      "turns": [
+        "Pehle mujhe elaborate replies pasand the; ab mujhe bullet points pasand hain."
+      ],
+      "seed": [
+        {
+          "category": "response_preference",
+          "label": "style",
+          "value": "elaborate",
+          "kind": "other",
+          "state": "active",
+          "facet": "response_style"
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-14",
+      "language": "en",
+      "turns": [
+        "I own an Amazfit Bip 6 watch and an IKEA Melltorp table."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-14",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Amazfit Bip 6 घड़ी और IKEA Melltorp मेज़ है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-14",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Amazfit Bip 6 watch aur IKEA Melltorp table hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-15",
+      "language": "en",
+      "turns": [
+        "Earlier I said Saturday; my rooftop yoga is on Monday."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "rooftop yoga",
+          "value": "Saturday",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-15",
+      "language": "hi",
+      "turns": [
+        "पहले मैंने शनिवार कहा था; मेरा छत वाला योग सोमवार को होता है।"
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "छत वाला योग",
+          "value": "शनिवार",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-15",
+      "language": "hinglish",
+      "turns": [
+        "Pehle maine Saturday kaha tha; mera rooftop yoga Monday ko hota hai."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "rooftop yoga",
+          "value": "Saturday",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-16",
+      "language": "en",
+      "turns": [
+        "That same Logitech MX Keys keyboard is mine."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Logitech MX Keys",
+          "value": "Logitech MX Keys",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Why does thunder follow lightning?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-16",
+      "language": "hi",
+      "turns": [
+        "वही Logitech MX Keys कीबोर्ड मेरा है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Logitech MX Keys",
+          "value": "Logitech MX Keys",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "बिजली चमकने के बाद गरज क्यों होती है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-16",
+      "language": "hinglish",
+      "turns": [
+        "Wahi Logitech MX Keys keyboard mera hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Logitech MX Keys",
+          "value": "Logitech MX Keys",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Bijli chamakne ke baad garaj kyun hoti hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-17",
+      "language": "en",
+      "turns": [
+        "Vegan is still my usual food preference."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegan",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Why does the Moon orbit Earth?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-17",
+      "language": "hi",
+      "turns": [
+        "वीगन अभी भी मेरी सामान्य भोजन पसंद है।"
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "वीगन",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "चंद्रमा पृथ्वी की परिक्रमा क्यों करता है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-17",
+      "language": "hinglish",
+      "turns": [
+        "Vegan abhi bhi meri usual food preference hai."
+      ],
+      "seed": [
+        {
+          "category": "food_preference",
+          "label": "diet",
+          "value": "vegan",
+          "kind": "other",
+          "state": "active",
+          "facet": "diet_preference"
+        }
+      ],
+      "question": "Chand Earth ke around kyun ghoomta hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-18",
+      "language": "en",
+      "turns": [
+        "My Wednesday sketching is at 3 pm, as before."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "Wednesday sketching",
+          "value": "3 pm",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Why did I choose sketching instead of photography?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-18",
+      "language": "hi",
+      "turns": [
+        "मेरी बुधवार की स्केचिंग पहले की तरह 3 बजे है।"
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "बुधवार की स्केचिंग",
+          "value": "3 बजे",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "मैंने फोटोग्राफी की जगह स्केचिंग क्यों चुनी?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-18",
+      "language": "hinglish",
+      "turns": [
+        "Meri Wednesday sketching pehle ki tarah 3 baje hai."
+      ],
+      "seed": [
+        {
+          "category": "routine",
+          "label": "Wednesday sketching",
+          "value": "3 baje",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Maine photography ki jagah sketching kyun chuni?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-19",
+      "language": "en",
+      "turns": [
+        "Learning conversational Spanish remains my goal."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "learn conversational Spanish",
+          "value": "learn conversational Spanish",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Who is teaching me Spanish?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-19",
+      "language": "hi",
+      "turns": [
+        "बातचीत की स्पैनिश सीखना अभी भी मेरा लक्ष्य है।"
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "बातचीत की स्पैनिश सीखना",
+          "value": "बातचीत की स्पैनिश सीखना",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "मुझे स्पैनिश कौन सिखा रहा है?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-19",
+      "language": "hinglish",
+      "turns": [
+        "Conversational Spanish seekhna abhi bhi mera goal hai."
+      ],
+      "seed": [
+        {
+          "category": "goal",
+          "label": "conversational Spanish seekhna",
+          "value": "conversational Spanish seekhna",
+          "kind": "other",
+          "state": "active",
+          "facet": null
+        }
+      ],
+      "question": "Mujhe Spanish kaun sikha raha hai?",
+      "answer_subset": true,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-20",
+      "language": "en",
+      "turns": [
+        "The Renault Kiger and Honda CB350 are the two vehicles I already told you about."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Honda CB350",
+          "value": "Honda CB350",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-20",
+      "language": "hi",
+      "turns": [
+        "Renault Kiger और Honda CB350 वही दो वाहन हैं जिनका मैंने पहले ज़िक्र किया था।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Honda CB350",
+          "value": "Honda CB350",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-20",
+      "language": "hinglish",
+      "turns": [
+        "Renault Kiger aur Honda CB350 wahi do vehicles hain jinka maine pehle zikr kiya tha."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        },
+        {
+          "category": "owned_item",
+          "label": "Honda CB350",
+          "value": "Honda CB350",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-21",
+      "language": "en",
+      "turns": [
+        "If I owned a Rivian R2, I would take it camping."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-21",
+      "language": "hi",
+      "turns": [
+        "अगर मेरे पास Rivian R2 होती तो मैं उसे कैंपिंग पर ले जाता।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-21",
+      "language": "hinglish",
+      "turns": [
+        "Agar mere paas Rivian R2 hoti to main use camping par le jata."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-22",
+      "language": "en",
+      "turns": [
+        "My cousin owns a Samsung Galaxy Tab S10."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-22",
+      "language": "hi",
+      "turns": [
+        "मेरे चचेरे भाई के पास Samsung Galaxy Tab S10 है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-22",
+      "language": "hinglish",
+      "turns": [
+        "Mere cousin ke paas Samsung Galaxy Tab S10 hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-23",
+      "language": "en",
+      "turns": [
+        "My doctor diagnosed me with asthma last month."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-23",
+      "language": "hi",
+      "turns": [
+        "पिछले महीने डॉक्टर ने मुझे अस्थमा बताया।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-23",
+      "language": "hinglish",
+      "turns": [
+        "Pichhle mahine doctor ne mujhe asthma diagnose kiya."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-24",
+      "language": "en",
+      "turns": [
+        "My monthly salary is 87000 rupees."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-24",
+      "language": "hi",
+      "turns": [
+        "मेरा मासिक वेतन 87000 रुपये है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-24",
+      "language": "hinglish",
+      "turns": [
+        "Meri monthly salary 87000 rupees hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-25",
+      "language": "en",
+      "turns": [
+        "My password is FictionalOnly-77-Blue, a made-up test secret."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-25",
+      "language": "hi",
+      "turns": [
+        "मेरा पासवर्ड FictionalOnly-77-Blue है, यह बनाया हुआ टेस्ट रहस्य है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-25",
+      "language": "hinglish",
+      "turns": [
+        "Mera password FictionalOnly-77-Blue hai, ye banaya hua test secret hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-26",
+      "language": "en",
+      "turns": [
+        "I own a Kobo Clara Colour, but do not remember this."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-26",
+      "language": "hi",
+      "turns": [
+        "मेरे पास Kobo Clara Colour है, लेकिन यह याद मत रखना।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-26",
+      "language": "hinglish",
+      "turns": [
+        "Mere paas Kobo Clara Colour hai, lekin ye yaad mat rakhna."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-27",
+      "language": "en",
+      "turns": [
+        "Do not remember any of my vehicles.",
+        "I own a Skoda Kylaq."
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-27",
+      "language": "hi",
+      "turns": [
+        "मेरे वाहनों के बारे में कुछ याद मत रखना।",
+        "मेरे पास Skoda Kylaq है।"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-27",
+      "language": "hinglish",
+      "turns": [
+        "Mere vehicles ke baare mein kuch yaad mat rakhna.",
+        "Mere paas Skoda Kylaq hai."
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "en-fresh-v3-28",
+      "language": "en",
+      "turns": [
+        "I still own the Renault Kiger."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "forget_first"
+    },
+    {
+      "id": "hi-fresh-v3-28",
+      "language": "hi",
+      "turns": [
+        "Renault Kiger अभी भी मेरी है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "forget_first"
+    },
+    {
+      "id": "hinglish-fresh-v3-28",
+      "language": "hinglish",
+      "turns": [
+        "Renault Kiger abhi bhi meri hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Renault Kiger",
+          "value": "Renault Kiger",
+          "kind": "vehicle",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "forget_first"
+    },
+    {
+      "id": "en-fresh-v3-29",
+      "language": "en",
+      "turns": [
+        "It is raining outside today."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Logitech MX Keys",
+          "value": "Logitech MX Keys",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "restart"
+    },
+    {
+      "id": "hi-fresh-v3-29",
+      "language": "hi",
+      "turns": [
+        "आज बाहर बारिश हो रही है।"
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Logitech MX Keys",
+          "value": "Logitech MX Keys",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "restart"
+    },
+    {
+      "id": "hinglish-fresh-v3-29",
+      "language": "hinglish",
+      "turns": [
+        "Aaj bahar baarish ho rahi hai."
+      ],
+      "seed": [
+        {
+          "category": "owned_item",
+          "label": "Logitech MX Keys",
+          "value": "Logitech MX Keys",
+          "kind": "device",
+          "state": "owned",
+          "facet": null
+        }
+      ],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "restart"
+    },
+    {
+      "id": "en-fresh-v3-30",
+      "language": "en",
+      "turns": [
+        "What do you know about my travel insurance?"
+      ],
+      "seed": [],
+      "question": "Which current facts are known?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hi-fresh-v3-30",
+      "language": "hi",
+      "turns": [
+        "मेरे यात्रा बीमा के बारे में क्या मालूम है?"
+      ],
+      "seed": [],
+      "question": "अभी कौन सी बातें मालूम हैं?",
+      "answer_subset": false,
+      "control": "none"
+    },
+    {
+      "id": "hinglish-fresh-v3-30",
+      "language": "hinglish",
+      "turns": [
+        "Mere travel insurance ke baare mein kya maloom hai?"
+      ],
+      "seed": [],
+      "question": "Abhi kaunsi baatein maloom hain?",
+      "answer_subset": false,
+      "control": "none"
+    }
+  ]
+}

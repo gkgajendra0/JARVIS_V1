@@ -1,0 +1,10 @@
+{
+  "complete_pairs": 6,
+  "enabled_relevant_success": 6,
+  "enabled_relevant_denominator": 6,
+  "baseline_unsupported_owner_claims": 0,
+  "irrelevant_reviewed": 0,
+  "unknown_relation_reviewed": 0,
+  "not_owner_acceptance": true,
+  "original_failed_pairs_retained": 2
+}

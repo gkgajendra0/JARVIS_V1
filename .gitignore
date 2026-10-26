@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.superpowers/
 .venv/
 frontend/jarvis-hud/node_modules/
 frontend/jarvis-hud/dist/
@@ -21,3 +22,9 @@ step3b11_lr_asd_bakeoff*.json
 # .NET build outputs
 **/bin/
 **/obj/
+
+# Alternate local environments are rebuildable, not source.
+.venv-*/
+
+# Pinned upstream trainer is acquired using the recipe README.
+/tools/wake-training/trainer/

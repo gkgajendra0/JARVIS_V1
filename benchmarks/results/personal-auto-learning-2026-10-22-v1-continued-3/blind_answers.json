@@ -1,0 +1,9 @@
+{
+  "rubric": {
+    "relevant": "Use supported requested facts; no invented owner facts.",
+    "irrelevant": "Answer general question without mentioning irrelevant owner facts.",
+    "unknown_relation": "State missing owner reason/preference; ownership alone supplies no reason.",
+    "reviewer": "Blind arm order, agent authored review reported separately from owner acceptance."
+  },
+  "pairs": []
+}

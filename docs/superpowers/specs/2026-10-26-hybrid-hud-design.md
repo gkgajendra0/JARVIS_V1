@@ -9,7 +9,9 @@ JARVIS interface adapted from MIT-licensed `thisisreyy/jarvis` (3D reactor)
 and `Navaneeth1324/jarvis-ai-assistant` (HUD shell). Keep `JARVIS_V1`'s
 Python/LiveKit voice, canonical turns, memory, Work, identity, and Authority
 unchanged and authoritative. The older repository `gkgajendra0/JARVIS` is
-reference-only. Existing UI draft code is not part of this branch.
+reference-only. PR #297's old UI code subsequently arrived in `main` via the
+Windows sync; this replacement deliberately removes its assets, adapter and
+associated UI-only tests while retaining all unrelated newer runtime changes.
 
 ## Experience
 

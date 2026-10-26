@@ -1,0 +1,31 @@
+{
+  "candidate": "ede4372052794c90dc845b7af92356e53d5f0aa2",
+  "prior_summary_sha256": "711686505885978792680be20355a987eea3254348368b755f4b8044ebb7b0be",
+  "input_sha256": "882441e59595d46b5f817cceb4940b691063cddd47414dff4ff6ba2508c2313b",
+  "gold_sha256": "e59859a492803e582ba05339df2441adbd3dec86a722dda120f76a95a8f43488",
+  "prior_single_sends": 44,
+  "reserved_cumulative_start_upper_bound": 249,
+  "maximum_additional_single_sends": 21,
+  "total_cap": 270,
+  "order": [
+    "hi-capture-v2-11",
+    "hinglish-capture-v2-11",
+    "en-capture-v2-12",
+    "hi-capture-v2-12",
+    "hinglish-capture-v2-12",
+    "en-capture-v2-13",
+    "hi-capture-v2-13",
+    "hinglish-capture-v2-13",
+    "en-capture-v2-14",
+    "hi-capture-v2-14",
+    "hinglish-capture-v2-14",
+    "en-capture-v2-15",
+    "hi-capture-v2-15",
+    "hinglish-capture-v2-15"
+  ],
+  "failed_case_replay": false,
+  "answering": false,
+  "retry": false,
+  "stop": "any recorded provider failure",
+  "scope": "remaining previously unattempted capture cases; prior unavailable remains unavailable; no release acceptance"
+}
