@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -83,6 +84,7 @@ from jarvis.provider_resilience import (
     ProviderResilienceState,
 )
 from jarvis.self_awareness import SelfAwarenessRuntime
+from jarvis.ui.activity import HUDActivityFeed
 from jarvis.ui.runtime import start_ui_if_enabled
 from jarvis.vision.camera import (
     OpenCVCameraConfig,
@@ -156,6 +158,10 @@ def build_production_voice_runtime(
     gemini_live_diagnostic_plan=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
+    hud_enabled = os.getenv("JARVIS_UI_ENABLED", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    hud_activity_feed = HUDActivityFeed() if hud_enabled else None
     if config.wake_model_path is None:
         raise RuntimeError("wake model is required for Step-2 wake mode")
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
@@ -406,8 +412,12 @@ def build_production_voice_runtime(
     )
 
     def combined_result_observer(result) -> None:
-        if result_observer is not None:
-            result_observer(result)
+        try:
+            if result_observer is not None:
+                result_observer(result)
+        finally:
+            if hud_activity_feed is not None:
+                hud_activity_feed.record_capability(result)
 
     package_stack = None
     try:
@@ -633,7 +643,7 @@ def build_production_voice_runtime(
             "JARVIS_AUDIO_OUTPUT_DEVICE through LiveKit MediaDevices"
         )
 
-    return CanonicalActiveSpeakerRuntimeController(
+    controller = CanonicalActiveSpeakerRuntimeController(
         config,
         audio,
         vision_service=vision_service,
@@ -645,6 +655,12 @@ def build_production_voice_runtime(
         memory_runtime=memory_runtime,
         memory_query_coordinator=memory_query_coordinator,
         research_service=research_service,
+        research_result_observer=(
+            None if hud_activity_feed is None else hud_activity_feed.record_research
+        ),
+        hud_turn_observer=(
+            None if hud_activity_feed is None else hud_activity_feed.observe_turn
+        ),
         capability_runtime=capability_runtime,
         work_runtime=work_runtime,
         routing_runtime=routing_runtime,
@@ -661,6 +677,8 @@ def build_production_voice_runtime(
             config.gemini_realtime_model
         ),
     )
+    controller._hud_activity_feed = hud_activity_feed
+    return controller
 
 
 async def _reconcile_provider_model_lifecycle(

@@ -129,6 +129,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         memory_query_coordinator: ProviderVerifiedMemoryQueryCoordinator | None = None,
         research_service: CurrentResearchService | None = None,
         research_result_observer: Callable[[dict[str, object]], None] | None = None,
+        hud_turn_observer: Callable[[object], None] | None = None,
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         routing_runtime=None,
@@ -161,6 +162,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
             self._agent_state = "unavailable"
+            if hud_turn_observer is not None:
+                bridge.add_accepted_turn_observer(hud_turn_observer)
             if config.personal_context_mode == "apply":
                 if memory_runtime is None or capability_runtime is None:
                     raise ValueError(
