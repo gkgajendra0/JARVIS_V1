@@ -38,7 +38,10 @@ class LearningPolicy:
             return LearningEligibility("drop", "source_veto")
         if c.sensitivity != "standard" or c.qualification != "direct":
             return LearningEligibility("drop", "not_direct_standard")
-        if c.intent in {"none", "transient"} or c.importance == "transient":
+        episodic = c.category in {"activity", "event", "plan"}
+        if c.intent == "none" or (
+            not episodic and (c.intent == "transient" or c.importance == "transient")
+        ):
             return LearningEligibility("transient", "not_durable")
         if (
             c.category in suppressed_categories
@@ -65,8 +68,15 @@ class LearningPolicy:
             c.label in text for text in fragments
         ):
             return LearningEligibility("drop", "unsupported_label")
+        for field in ("time_expression", "location", "reason"):
+            text = getattr(c, field)
+            if text is not None and not any(text in fragment for fragment in fragments):
+                return LearningEligibility("drop", "unsupported_" + field)
         try:
             reject_prohibited_secret(predicate=c.label, value=c.value)
+            for text in (c.time_expression, c.location, c.reason):
+                if text:
+                    reject_prohibited_secret(predicate="", value=text)
         except MemorySecretRejectedError:
             return LearningEligibility("drop", "secret")
         return LearningEligibility("eligible")

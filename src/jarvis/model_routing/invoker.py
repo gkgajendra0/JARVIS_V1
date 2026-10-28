@@ -340,10 +340,26 @@ class ModelInvoker:
             raise PaidBudgetDenied("Paid credential is unavailable")
         free_id = target.target_id.replace(".gemini.paid.", ".gemini.free.")
         pressure = self.paid_budget.store.get_health(free_id)
-        if pressure is None or pressure.last_failure_kind not in {
-            "quota_exhausted",
-            "rate_limited",
-        }:
+        hands_503_admitted = False
+        if (
+            isinstance(request_context, ScopedModelInvocationContext)
+            and request_context.scope_kind == "hands"
+            and "hands_planning" in target.capabilities
+        ):
+            attempts = self.paid_budget.store.list_scoped_attempts(
+                request_context.decision_id
+            )
+            hands_503_admitted = bool(attempts) and (
+                attempts[-1].target_id == free_id
+                and attempts[-1].failure_class == "service_unavailable_http_503"
+                and attempts[-1].scope_id == request_context.scope_id
+                and request_context.attempt_id
+                == f"{request_context.decision_id}:{attempts[-1].attempt_ordinal + 1}"
+            )
+        if not hands_503_admitted and (
+            pressure is None
+            or pressure.last_failure_kind not in {"quota_exhausted", "rate_limited"}
+        ):
             raise PaidBudgetDenied(
                 "No eligible Free pressure authorizes Paid admission"
             )
@@ -577,6 +593,7 @@ class ModelInvoker:
             failure = None
             error = None
             health_action = None
+            paid_fallback_eligible = False
             try:
                 result = await self.invoke_structured_with_telemetry(
                     target=target,
@@ -590,18 +607,31 @@ class ModelInvoker:
             except (Exception, asyncio.CancelledError) as exc:  # noqa: BLE001 - normalize provider errors and preserve cancellation exposure
                 error = exc
                 failure = classify_provider_failure(exc, provider=target.provider_id)
-                if gemini_paid_fallback_allowed(failure, source_target=target):
-                    config = (
-                        self.paid_budget.config
-                        if self.paid_budget is not None
-                        else GeminiFallbackConfig()
+                paid_fallback_eligible = gemini_paid_fallback_allowed(
+                    failure, source_target=target
+                ) and (
+                    failure.kind is not ProviderFailureKind.SERVICE_UNAVAILABLE
+                    or any(
+                        registry.require(candidate_id).credential_ref
+                        == "JARVIS_GEMINI_PAID_API_KEY"
+                        for _, candidate_id in pending
                     )
-                    store.record_pressure(
-                        target=target,
-                        failure=failure,
-                        config=config,
-                        now_epoch=float(self._clock()),
-                    )
+                )
+                if paid_fallback_eligible:
+                    # A Hands 503 admits one Paid attempt for this invocation only.
+                    # It does not prove quota pressure or create persistent Paid routing.
+                    if failure.kind is not ProviderFailureKind.SERVICE_UNAVAILABLE:
+                        config = (
+                            self.paid_budget.config
+                            if self.paid_budget is not None
+                            else GeminiFallbackConfig()
+                        )
+                        store.record_pressure(
+                            target=target,
+                            failure=failure,
+                            config=config,
+                            now_epoch=float(self._clock()),
+                        )
                 elif (
                     target.credential_ref == "JARVIS_GEMINI_PAID_API_KEY"
                     and failure.kind
@@ -629,6 +659,15 @@ class ModelInvoker:
                         store.save_health(mutation.record, expected_version=old.version)
             ended = float(self._clock())
             attempts = store.list_scoped_attempts(decision.decision_id)
+            failure_class = None if failure is None else failure.kind.value
+            if (
+                failure is not None
+                and failure.status_code == 503
+                and request.scope_kind == "hands"
+                and gemini_paid_fallback_allowed(failure, source_target=target)
+            ):
+                # Admission needs exact HTTP evidence, not the broader 5xx class.
+                failure_class = "service_unavailable_http_503"
             store.record_scoped_attempt(
                 ScopedRoutingAttempt(
                     scope_kind=request.scope_kind,
@@ -646,9 +685,7 @@ class ModelInvoker:
                     failure_class=(
                         "paid_admission_denied"
                         if isinstance(error, PaidBudgetDenied)
-                        else None
-                        if failure is None
-                        else failure.kind.value
+                        else failure_class
                     ),
                     provider_id=target.provider_id,
                     model_id=target.model_id,
@@ -686,7 +723,7 @@ class ModelInvoker:
                 retry_used = True
                 pending.insert(0, (visit, target_id))
                 continue
-            if not gemini_paid_fallback_allowed(failure, source_target=target) and not (
+            if not paid_fallback_eligible and not (
                 target.provider_id == "chatgpt_plan"
                 and isinstance(error, ChatGPTPlanError)
             ):

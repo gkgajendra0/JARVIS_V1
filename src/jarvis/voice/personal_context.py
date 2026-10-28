@@ -87,6 +87,7 @@ class PersonalContextSession:
         self._query_requests = None
         self._query_projection = None
         self._closed = False
+        self.retirement_reason = None
         self._busy = False
         self._consent_timeout = 65
         self._protected = False
@@ -444,8 +445,42 @@ class PersonalContextSession:
         except Exception:  # noqa: BLE001
             return {"status": "unavailable"}
 
+    async def _learning_session_status(self):
+        if self._learning_authority is None or self._learning_grant is None:
+            return "unavailable"
+        try:
+            state = await asyncio.to_thread(
+                self._learning_authority.validate, self._learning_grant
+            )
+            return (
+                state.status
+                if state.status in {"active", "expired", "revoked"}
+                else "invalid"
+            )
+        except Exception:  # noqa: BLE001 - unavailable authority releases no facts
+            return "invalid"
+
     async def query_for_question(self, requests: object) -> dict[str, object]:
         async with self._context_lock:
+            if (
+                not self._closed
+                and not self._protected
+                and self._permit is None
+                and self._learning_authority is not None
+                and await self._learning_session_status() in {"unavailable", "expired"}
+            ):
+                # No private context has been released. Deny memory access while
+                # leaving ordinary conversation available to explain the problem.
+                return {
+                    "status": "denied",
+                    "facts": [],
+                    "reason": "personal_memory_session_unavailable",
+                    "message": (
+                        "Personal memory permission is not active for this session. "
+                        "Explain that saved personal facts are unavailable; ordinary "
+                        "conversation can continue. Restart Jarvis to retry permission setup."
+                    ),
+                }
             if not self.supports_question_query or not await self._authorize("read"):
                 self.close()
                 return {"status": "denied"}
@@ -633,7 +668,7 @@ class PersonalContextSession:
 
     def observe_activity(self):
         if self._binding is not None and not self._same(self._binding):
-            self.close()
+            self.close(reason="user_activity")
 
     def _same_authorization(self, permit, binding, operation):
         return (
@@ -685,18 +720,19 @@ class PersonalContextSession:
         if self._protected and self._audio_started:
             self._played = True
             if self._response_done:
-                self.close()
+                self.close(reason="response_completed")
 
     def response_finished(self):
         if self._protected and not self._busy:
             self._response_done = True
             if self._played or not self._audio_started:
-                self.close()
+                self.close(reason="response_completed")
 
-    def close(self):
+    def close(self, *, reason="invalidated"):
         if self._closed:
             return
         self._closed = True
+        self.retirement_reason = reason
         self._query_projection = None
         self._query_requests = None
         self._clear_audio()

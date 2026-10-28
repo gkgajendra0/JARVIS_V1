@@ -34,6 +34,8 @@ _VALUE_PATTERNS = (
     re.compile(r"(?i)\bbearer\s+[a-z0-9._~+\-/=]{8,}"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"),
     re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
+    re.compile(r"(?i)\bauthorization\s*:\s*basic\s+[a-z0-9+/=]{8,}"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
 )
 
 

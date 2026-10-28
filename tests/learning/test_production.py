@@ -4,12 +4,12 @@ from jarvis.config import JarvisConfig
 from jarvis.voice import production_runtime
 
 
-def test_learning_apply_implies_context_memory_and_no_transcript(monkeypatch):
+def test_learning_apply_preserves_explicit_transcript_choice(monkeypatch):
     config = JarvisConfig(personal_learning_mode="apply", show_transcript=True)
     assert (
         config.personal_context_mode == "apply"
         and config.memory_enabled
-        and not config.show_transcript
+        and config.show_transcript
     )
     monkeypatch.setenv("JARVIS_PERSONAL_LEARNING_MODE", "apply")
     assert JarvisConfig.from_environment().personal_learning_mode == "apply"
@@ -34,8 +34,9 @@ def test_cli_learning_override_and_explicit_conflict(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reenable", [False, True])
+@pytest.mark.parametrize("transcript", [False, True])
 async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
-    learning, authority_parts, monkeypatch, reenable
+    learning, authority_parts, monkeypatch, reenable, transcript
 ):
     from types import SimpleNamespace
 
@@ -58,9 +59,12 @@ async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
             pass
 
     adapter = Adapter()
-    monkeypatch.setattr(
-        adapters, "build_learning_adapters", lambda provider: (adapter, adapter)
-    )
+
+    def build(provider, *, diagnostics=False):
+        assert diagnostics is transcript
+        return adapter, adapter
+
+    monkeypatch.setattr(adapters, "build_learning_adapters", build)
     capabilities = capability(authority_parts.broker)
     capabilities._authority = authority_parts.broker
     service = MemoryService(learning.lifecycle, learning.service.canonical_reader)
@@ -80,6 +84,7 @@ async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
         )
     config = JarvisConfig(
         personal_learning_mode="apply",
+        show_transcript=transcript,
         personal_learning_reenable_categories=("owned_item.vehicle",)
         if reenable
         else (),
@@ -94,6 +99,8 @@ async def test_controller_opens_one_session_and_reuses_worker_on_fresh_wakes(
     before = len(authority_parts.hello.calls)
     await controller._start_personal_learning()
     worker = controller._personal_learning
+    assert worker.diagnostics is transcript
+    assert worker.reconciler.diagnostics is transcript
     await controller._start_personal_learning()
     try:
         for _ in range(2):
@@ -224,3 +231,49 @@ def test_reenable_configuration_is_ephemeral_and_scoped():
             personal_learning_mode="apply",
             personal_learning_reenable_categories=("home_city",),
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["authorize", "memory_binding"])
+async def test_learning_start_failure_logs_safe_phase_and_reason(
+    authority_parts, monkeypatch, caplog, phase
+):
+    import logging
+    from types import SimpleNamespace
+
+    from jarvis.voice.canonical_active_speaker_runtime import (
+        CanonicalActiveSpeakerRuntimeController,
+    )
+
+    capabilities = capability(authority_parts.broker)
+    closed = []
+
+    def fail():
+        raise RuntimeError("PRIVATE-STARTUP-CANARY") from PermissionError(
+            "strong owner verification was not granted: helper_timeout"
+        )
+
+    def open_grant(*_):
+        if phase == "authorize":
+            fail()
+        return "synthetic-grant"
+
+    def bind(*_):
+        fail()
+
+    monkeypatch.setattr(capabilities, "open_personal_learning", open_grant)
+    monkeypatch.setattr(capabilities, "close_personal_learning", closed.append)
+    controller = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(), SimpleNamespace(), capability_runtime=capabilities
+    )
+    controller.config = JarvisConfig(personal_learning_mode="apply")
+    controller._memory_runtime = SimpleNamespace(bind_learning_authority=bind)
+    with caplog.at_level(logging.WARNING):
+        await controller._start_personal_learning()
+    assert f"phase={phase}" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert "reason=helper_timeout" in caplog.text
+    assert "PRIVATE-STARTUP-CANARY" not in caplog.text
+    assert "strong owner verification" not in caplog.text
+    assert controller._learning_grant is None
+    assert closed == (["synthetic-grant"] if phase == "memory_binding" else [])

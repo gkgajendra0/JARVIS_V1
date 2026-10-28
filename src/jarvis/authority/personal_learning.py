@@ -30,8 +30,8 @@ POLICY_DIGEST = hashlib.sha256(
         {
             "version": POLICY_VERSION,
             "categories": sorted(CATEGORIES),
-            "absolute": 900,
-            "idle": 300,
+            "lifetime": "runtime_and_unlocked_windows_session",
+            "session_policy_revision": 3,
             "sensitivity": "standard",
             "category_veto": "persistent",
             "scope_registry": 1,
@@ -110,9 +110,13 @@ class PersonalLearningAuthority:
             ),
             {"subject_scope": "personal", "subject": "owner"},
             parameters,
-            "Open a private owner-operated memory session for 15 minutes maximum, "
-            "5 minutes idle: automatically read and learn standard owned items, "
-            "food/response preferences, routines and goals. No per-fact prompt; "
+            "Open an owner-operated memory session for this Jarvis runtime and "
+            "the same unlocked Windows session, including idle periods. Windows "
+            "lock, user/session change or Jarvis shutdown ends permission. "
+            "Automatically read and learn standard owned items, "
+            "preferences, background/work, relationships relevant to the user, "
+            "current activities, dated experiences and future plans with stated "
+            "time, place and reasons. No per-fact prompt; "
             "later speaker identity is not verified. No sensitive facts/actions.",
             ActionAttributes(security_or_permission_change=True),
             {},
@@ -195,15 +199,14 @@ class PersonalLearningAuthority:
             return LearningSessionState("denied", "unregistered")
         if record.revoked:
             return LearningSessionState("revoked", record.revoked)
-        now = self._broker._clock()
-        if now >= record.created + 900 or now >= record.last_input + 300:
-            return LearningSessionState("expired", "lifetime")
         return LearningSessionState("active")
 
     def validate(self, grant: LearningGrantHandle) -> LearningSessionState:
         with self._broker._lock:
             state = self._snapshot(grant)
-            if state.status != "active":
+            # Session permission survives idle periods; every protected operation
+            # still requires continuity of the original unlocked Windows session.
+            if state.status not in {"active", "expired"}:
                 return state
             record = self._grants[grant]
             try:

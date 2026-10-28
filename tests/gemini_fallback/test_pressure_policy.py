@@ -51,15 +51,17 @@ def test_http_status_cannot_be_overridden_by_stray_quota_text(status, want):
         assert "balance" in failure.spoken_message.casefold()
 
 
-@pytest.mark.parametrize("status", [400, 401, 402, 403, 404, 429, 503])
-def test_paid_edge_only_free_pressure(status):
+@pytest.mark.parametrize("role", ["work", "hands", "voice.live", "memory.extraction"])
+@pytest.mark.parametrize("status", [400, 401, 402, 403, 404, 429, 500, 503])
+def test_paid_edge_only_free_pressure(status, role):
     from jarvis.model_routing.gemini import gemini_paid_fallback_allowed
 
     failure = classify_provider_failure(
         APIError(status, {"error": {"message": "quota exceeded"}}), provider="gemini"
     )
-    free, paid = targets()
-    assert gemini_paid_fallback_allowed(failure, source_target=free) is (status == 429)
+    free, paid = targets(role)
+    expected = status == 429 or (status == 503 and role == "hands")
+    assert gemini_paid_fallback_allowed(failure, source_target=free) is expected
     assert not gemini_paid_fallback_allowed(failure, source_target=paid)
     assert not gemini_paid_fallback_allowed(
         replace(failure, provider="openai"), source_target=free

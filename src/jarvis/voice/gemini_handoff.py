@@ -6,11 +6,13 @@ import asyncio
 import hashlib
 import inspect
 import json
+import logging
+import re
 from collections import deque
 from uuid import uuid4
 from weakref import WeakSet
 
-from livekit.agents import Agent, TurnHandlingOptions, inference
+from livekit.agents import Agent, TurnHandlingOptions
 from livekit.agents.llm import ChatMessage
 
 from jarvis.ai_provider import gemini_credential_ref
@@ -23,11 +25,40 @@ from jarvis.model_routing.models import (
     ScopedRoutingRequest,
 )
 from jarvis.model_routing.router import RoutingUnavailableError
-from jarvis.provider_resilience import ProviderFailureKind, classify_provider_failure
+from jarvis.provider_resilience import (
+    ProviderFailureKind,
+    _error_chain,
+    classify_provider_failure,
+)
 from jarvis.voice.gemini_live_budget import ControlledLiveAdmission
 from jarvis.voice.gemini_live_model import ControlledGeminiLiveModel
 from jarvis.voice.gemini_transport import GeminiTransportState
-from jarvis.voice.livekit_session import _create_realtime_model
+from jarvis.voice.livekit_session import (
+    _create_realtime_model,
+    create_user_activity_vad,
+)
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _fresh_session_failure(error):
+    # Only the explicit Live transport faults qualify; generic policy violations
+    # and model/authentication errors must retain terminal handling.
+    chain = _error_chain(error)
+    coded = [item for item in chain if getattr(item, "code", None) is not None]
+    for item in coded or chain:
+        text = str(item).casefold()
+        code = getattr(item, "code", None)
+        internal = code == 1011 or (code is None and re.search(r"\b1011\b", text))
+        collision = code == 1008 or (code is None and re.search(r"\b1008\b", text))
+        if internal and "internal error" in text:
+            return True
+        if collision and (
+            "bidigeneratecontent session is already connected to an existing client"
+            in text
+        ):
+            return True
+    return False
 
 
 class _TransportAgent(Agent):
@@ -38,7 +69,7 @@ class _TransportAgent(Agent):
         options = {}
         if controlled:
             options = {
-                "vad": inference.VAD(model="silero"),
+                "vad": create_user_activity_vad(),
                 "turn_handling": TurnHandlingOptions(
                     turn_detection="vad",
                     endpointing={"mode": "fixed", "min_delay": 0.8, "max_delay": 3.0},
@@ -106,6 +137,7 @@ class GeminiLiveHandoff:
         self._output_speaking = False
         self._output_delivered = False
         self._paid_visits = 0
+        self._session_recoveries = 0
         self._recovery_demand = False
         self._recovery_lease = None
         self.last_reason = "ready"
@@ -267,6 +299,20 @@ class GeminiLiveHandoff:
             return True
         if getattr(event, "source", None) is not self.current_model:
             return False
+        if (
+            not self._closed
+            and not self._pending_tools
+            and self._session_recoveries == 0
+            and (self.task is None or self.task.done())
+            and _fresh_session_failure(event.error)
+        ):
+            self._session_recoveries += 1
+            event.error.recoverable = True
+            self._handled_events.append(event)
+            self.task = asyncio.create_task(
+                self._recover_fresh_session(), name="jarvis-gemini-fresh-session"
+            )
+            return True
         failure = classify_provider_failure(event.error, provider="gemini")
         if self.current_target.credential_ref == gemini_credential_ref(
             "paid"
@@ -293,6 +339,47 @@ class GeminiLiveHandoff:
                 self._handle_event_failure(failure), name="jarvis-gemini-handoff"
             )
         return True
+
+    async def _recover_fresh_session(self):
+        continued = False
+        try:
+            async with self._lock:
+                if self._pending_tools or not await self._authorized():
+                    self.last_reason = "fresh_session_authority_or_tools_denied"
+                else:
+                    # Freeze old audio/events and fully close physical SDK sessions.
+                    # Reusing a resumption handle can collide with Google's old client.
+                    old = self.current_model
+                    old.state.ready = False
+                    old.state.active = False
+                    self._retired.add(old)
+                    if self.input is not None:
+                        self.input.set_transport_enabled(False)
+                    if self.output is not None:
+                        self.output.clear_buffer()
+
+                    async def close_old_transport():
+                        await asyncio.gather(*(s.aclose() for s in old.sessions))
+                        await old.aclose()
+
+                    await asyncio.wait_for(close_old_transport(), timeout=3.0)
+                    if not self._pending_tools and await self._authorized():
+                        continued = await self._switch(
+                            self.current_target, continue_request=False
+                        )
+                        if continued:
+                            self.last_reason = "fresh_session_ready_waiting_for_user"
+                            LOGGER.info(
+                                "Gemini fresh voice session ready; accepted context restored; "
+                                "waiting for new user speech; automatic request replay disabled"
+                            )
+        except Exception:  # noqa: BLE001 - recovery must fail closed without provider details
+            self.last_reason = "fresh_session_recovery_failed"
+        if not continued:
+            LOGGER.warning(
+                "Gemini fresh session recovery unavailable; closing voice session"
+            )
+            await self.session.aclose()
 
     async def _handle_event_failure(self, failure):
         try:

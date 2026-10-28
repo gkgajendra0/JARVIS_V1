@@ -138,6 +138,21 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                     if old is None or old != item:
                         raise llm.RealtimeError("Unowned controlled Live tool result")
         self._ctx = chat_ctx.copy()
+        results = [
+            item
+            for item in self._ctx.items
+            if item.type == "function_call_output"
+            and item.call_id in self._pending_tools
+        ]
+        if (
+            self._pending_tools
+            and len(results) == len(self._pending_tools)
+            and {item.call_id for item in results} == self._pending_tools.keys()
+            and all(not item.reply_required for item in results)
+        ):
+            # LiveKit will not call generate_reply for silent receipts. Complete the
+            # existing round without buying a response just to acknowledge silence.
+            self._enqueue("silent_tools", tuple(self._pending_tools))
 
     async def update_tools(self, tools):
         await self._check()
@@ -532,6 +547,22 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                     )
                 elif kind == "generate":
                     await self._generate(value)
+                elif kind == "silent_tools":
+                    if set(value) != set(self._pending_tools):
+                        continue
+                    await asyncio.wait_for(
+                        self._turn_done.wait(),
+                        timeout=self.model.controls.fast_tool_wait_seconds,
+                    )
+                    self._cancelled_tools.update(value)
+                    self._pending_tools.clear()
+                    if self._lease is not None:
+                        await self._end(
+                            (self._lease.invocation_id, True),
+                            preserve_pending_input=True,
+                        )
+                    else:
+                        await self._disconnect(preserve_pending_input=True)
                 elif kind == "end":
                     await self._end(value)
         except asyncio.CancelledError:
@@ -727,7 +758,7 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                 self._failure = exc
             self._stop("Controlled Live receive failed")
 
-    async def _end(self, outcome):
+    async def _end(self, outcome, *, preserve_pending_input=False):
         identity, complete = outcome
         if self._lease is None or self._lease.invocation_id != identity:
             return
@@ -759,9 +790,11 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                 self._lease = None
         else:
             # Final usage cannot release exposure before bounded socket teardown.
-            await self._disconnect(complete=complete)
+            await self._disconnect(
+                complete=complete, preserve_pending_input=preserve_pending_input
+            )
 
-    async def _disconnect(self, *, complete=False):
+    async def _disconnect(self, *, complete=False, preserve_pending_input=False):
         receiver, self._receiver = self._receiver, None
         if receiver is not None and receiver is not asyncio.current_task():
             receiver.cancel()
@@ -801,10 +834,12 @@ class ControlledGeminiLiveSession(llm.RealtimeSession):
                     await lease.finish(
                         complete=bool(complete and closed and not self._failure)
                     )
-        self._activity = self._commit = self._input_started = False
+        self._activity = False
+        if not preserve_pending_input:
+            self._commit = self._input_started = False
+            self._preroll.clear()
+            self._preroll_samples = 0
         self._finalized.set()
-        self._preroll.clear()
-        self._preroll_samples = 0
         if (
             self.idle
             and self.model.state.current

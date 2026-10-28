@@ -198,7 +198,6 @@ class JarvisConfig:
             raise ValueError("personal_context_mode must be off or apply")
         if self.personal_context_mode == "apply":
             object.__setattr__(self, "memory_enabled", True)
-            object.__setattr__(self, "show_transcript", False)
         if not isinstance(self.gemini_fallback, GeminiFallbackConfig):
             raise TypeError("gemini_fallback must be GeminiFallbackConfig")
         normalized = str(self.log_level).strip().upper()

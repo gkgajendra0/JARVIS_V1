@@ -236,3 +236,30 @@ async def test_runtime_start_requires_running_full_duplex_source() -> None:
     source.playback_enabled = False
     with pytest.raises(RuntimeError, match="playback/AEC"):
         await runtime.start()
+
+
+@pytest.mark.asyncio
+async def test_paired_followup_preserves_transition_audio_beyond_wake_preroll():
+    runtime = make_runtime(
+        FakeDetector(), pre_roll_seconds=0.01, ring_buffer_seconds=0.10
+    )
+    runtime._loop = asyncio.get_running_loop()
+    for value in range(1, 7):
+        await asyncio.to_thread(
+            runtime.feed_clean_pcm,
+            pcm(value),
+            sample_rate=48000,
+            num_channels=1,
+            samples_per_channel=480,
+            observed_at_monotonic=10.0 + value / 100,
+        )
+    await asyncio.sleep(0.01)
+    incoming = SessionAudioInput(capacity_frames=8)
+    runtime.activate_session(
+        incoming, pre_roll_after_monotonic=10.01, retain_since_boundary=True
+    )
+    values = []
+    while not incoming._queue.empty():
+        item = await incoming.__anext__()
+        values.append(int(np.frombuffer(item.data, dtype=np.int16)[0]))
+    assert values == [2, 3, 4, 5, 6]

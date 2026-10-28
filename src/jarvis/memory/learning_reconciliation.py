@@ -19,7 +19,9 @@ from .learning_contracts import (
     LearningCatalogEntry,
     LearningResolutionBatch,
 )
+from .learning_diagnostics import log_learning
 from .learning_policy import SCALAR_FACETS, LearningPolicy
+from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_context
 from .provenance import MemorySource
 from .service import normalize_memory_surface
 from .types import (
@@ -141,7 +143,8 @@ def _label(entry):
 
 
 class LearningReconciler:
-    def __init__(self, reader, authority):
+    def __init__(self, reader, authority, *, diagnostics=False):
+        self.diagnostics = diagnostics
         self.reader = reader
         self.authority = authority
 
@@ -199,7 +202,20 @@ class LearningReconciler:
         mutations = []
         used = set()
         for index, candidate in enumerate(batch.candidates):
+
+            def skip(reason, *, index=index, candidate=candidate):
+                log_learning(
+                    self.diagnostics,
+                    source,
+                    "reconciliation",
+                    "skipped",
+                    candidate_index=index,
+                    reason=reason,
+                    fact=candidate.model_dump(mode="json"),
+                )
+
             if LearningPolicy().evaluate(source, candidate).status != "eligible":
+                skip("policy_rejected")
                 continue
             choice = choices.get(index)
             if (
@@ -207,6 +223,13 @@ class LearningReconciler:
                 or index in duplicate_indices
                 or choice.decision == "uncertain"
             ):
+                skip(
+                    "missing_resolution"
+                    if choice is None
+                    else "conflicting_resolutions"
+                    if index in duplicate_indices
+                    else "uncertain"
+                )
                 continue
             entry = by_id.get(choice.target_id)
             same = [
@@ -220,15 +243,20 @@ class LearningReconciler:
                 )
                 and normalize_memory_surface(str(_value(e)))
                 == normalize_memory_surface(candidate.value)
+                and occurrence_matches(e, candidate, source)
             ]
             if len(same) > 1:
+                skip("ambiguous_existing_fact")
                 continue
             if choice.decision == "duplicate":
+                skip("duplicate")
                 continue  # No write; semantic equivalence is not a new fact.
             if candidate.intent == "new" and same:
+                skip("already_stored")
                 continue
             if choice.decision == "new":
                 if candidate.intent != "new" or choice.target_id is not None:
+                    skip("new_resolution_conflicts_with_intent_or_target")
                     continue
                 # Do not split a related legacy plural/scalar representation.
                 if any(
@@ -237,6 +265,7 @@ class LearningReconciler:
                     in normalize_memory_surface(e.value)
                     for e in catalog.entries
                 ):
+                    skip("legacy_fact_overlap")
                     continue
                 predicate = (
                     candidate.scalar_facet
@@ -244,19 +273,24 @@ class LearningReconciler:
                     else f"{candidate.category}_{uuid4().hex}"
                 )
                 if any(e.predicate == predicate for e in catalog.entries):
+                    skip("predicate_already_exists")
                     continue
                 action, expected = "create", None
             else:
                 if entry is None or entry.category != candidate.category:
+                    skip("target_missing_or_category_mismatch")
                     continue
                 if (
                     candidate.category in SCALAR_FACETS
                     and entry.predicate != candidate.scalar_facet
                 ):
+                    skip("scalar_facet_mismatch")
                     continue
                 if candidate.category == "owned_item" and entry.kind != candidate.kind:
+                    skip("item_kind_mismatch")
                     continue
                 if candidate.intent == "new":
+                    skip("new_fact_cannot_mutate_target")
                     continue
                 action = {
                     "change": "change",
@@ -264,9 +298,11 @@ class LearningReconciler:
                     "retraction": "retract",
                 }.get(candidate.intent)
                 if action is None:
+                    skip("unsupported_intent")
                     continue
                 predicate, expected = entry.predicate, entry.assertion_id
             if predicate in used:
+                skip("conflicting_mutations")
                 continue
             used.add(predicate)
             value = candidate.value
@@ -276,6 +312,7 @@ class LearningReconciler:
                     try:
                         old = json.loads(entry.value)
                     except (TypeError, ValueError):
+                        skip("invalid_existing_value")
                         continue
                     value = {**old, "state": candidate.state}
                     if candidate.category != "owned_item":
@@ -289,6 +326,15 @@ class LearningReconciler:
                         "value": candidate.value,
                         "state": candidate.state,
                     }
+                if candidate.category in HISTORY_CATEGORIES:
+                    value["label"] = candidate.label
+                    value["certainty"] = candidate.certainty
+                    if candidate.time_expression is not None or "temporal" not in value:
+                        value["temporal"] = temporal_context(source, candidate)
+                    for key in ("location", "reason"):
+                        detail = getattr(candidate, key)
+                        if detail is not None:
+                            value[key] = detail
                 value_type = ValueType.JSON
             normalized = f"{candidate.category}: {candidate.value}"
             if isinstance(value, dict):

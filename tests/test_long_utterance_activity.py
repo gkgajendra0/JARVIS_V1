@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession
+from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.canonical_active_speaker_runtime import (
     CanonicalActiveSpeakerRuntimeController,
@@ -52,7 +52,7 @@ def _mark_session_ready(session: _FakeSession) -> None:
     )
 
 
-def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
+def test_voice_session_uses_explicit_vad_but_keeps_provider_turn_detection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -66,11 +66,15 @@ def test_voice_session_omits_vad_none_but_keeps_provider_turn_detection(
         "jarvis.voice.livekit_session._create_realtime_model", lambda _config: object()
     )
     monkeypatch.setattr("jarvis.voice.livekit_session.AgentSession", fake_agent_session)
+    local_vad = object()
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session.inference.VAD", lambda **kwargs: local_vad
+    )
 
     session, _bridge = create_voice_session(JarvisConfig())
 
     assert session is fake_session
-    assert "vad" not in captured
+    assert captured["vad"] is local_vad
     turn_handling = captured["turn_handling"]
     assert turn_handling["turn_detection"] is None
     assert turn_handling["interruption"]["enabled"] is True
@@ -210,3 +214,77 @@ async def test_user_activity_guard_is_order_independent_for_speaking_handler() -
     await asyncio.sleep(config.max_utterance_seconds * 2.0)
 
     assert runtime._active_end.is_set() is False
+
+
+@pytest.mark.asyncio
+async def test_inactivity_waits_until_agent_finishes_before_followup_window(
+    monkeypatch,
+):
+    config = JarvisConfig(
+        initial_request_timeout_seconds=0.02, follow_up_timeout_seconds=0.06
+    )
+    session, bridge = _session_pair()
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        config, _FakeAudio(), session_factory=lambda _: (session, bridge)
+    )
+    runtime._active_end = asyncio.Event()
+    runtime._session_factory(config)
+    bridge.conversation.start()
+    bridge.conversation.accept_turn(ConversationRole.USER, "Tell me about my bikes")
+    scheduled = []
+
+    def schedule(delay, callback):
+        handle = SimpleNamespace(delay=delay, callback=callback, cancelled=False)
+        handle.cancel = lambda: setattr(handle, "cancelled", True)
+        scheduled.append(handle)
+        return handle
+
+    # Control only the inactivity timer, avoiding real sleeps that overshoot on a
+    # busy GPU/audio workstation. No event-loop yield occurs while patched.
+    with monkeypatch.context() as patch:
+        patch.setattr(asyncio.get_running_loop(), "call_later", schedule)
+        _mark_session_ready(session)
+        previous = scheduled[-1]
+        for old, new in [("listening", "thinking"), ("thinking", "speaking")]:
+            session.emit(
+                "agent_state_changed", SimpleNamespace(old_state=old, new_state=new)
+            )
+            runtime._arm_timeout(0.01)
+            assert runtime._timeout_handle is None
+            previous.callback()  # even an already queued old expiry is harmless
+            assert not runtime._active_end.is_set()
+        session.emit(
+            "agent_state_changed",
+            SimpleNamespace(old_state="speaking", new_state="listening"),
+        )
+        assert previous.cancelled
+        assert scheduled[-1].delay == config.follow_up_timeout_seconds
+        assert not runtime._active_end.is_set()
+        scheduled[-1].callback()
+        assert runtime._active_end.is_set()
+        runtime._cancel_timeout()
+
+
+@pytest.mark.asyncio
+async def test_explicit_standby_keeps_its_bounded_deadline_while_agent_speaks():
+    config = JarvisConfig(initial_request_timeout_seconds=1)
+    session, bridge = _session_pair()
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        config, _FakeAudio(), session_factory=lambda _: (session, bridge)
+    )
+    runtime._active_end = asyncio.Event()
+    runtime._session_factory(config)
+    _mark_session_ready(session)
+    runtime._standby_requested = True
+    runtime._arm_timeout(0.02)
+    session.emit(
+        "agent_state_changed",
+        SimpleNamespace(old_state="listening", new_state="speaking"),
+    )
+    session.emit(
+        "user_state_changed",
+        SimpleNamespace(old_state="listening", new_state="speaking"),
+    )
+    await asyncio.sleep(0.04)
+    assert runtime._active_end.is_set()
+    runtime._cancel_timeout()

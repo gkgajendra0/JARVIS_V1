@@ -39,6 +39,10 @@ _ALIASES = {
     ),
     "routine": ("routines", "routine", "दिनचर्या"),
     "goal": ("goals", "goal", "लक्ष्य"),
+    "personal_fact": ("personal facts", "personal information", "background"),
+    "activity": ("activities", "current activities"),
+    "event": ("experiences", "events", "past events"),
+    "plan": ("plans", "future plans"),
 }
 
 

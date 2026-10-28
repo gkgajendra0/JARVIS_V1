@@ -26,6 +26,24 @@ def test_machine_config_round_trip(tmp_path: Path) -> None:
     }
 
 
+def test_personal_learning_and_ui_activation_persist(tmp_path, monkeypatch):
+    path = tmp_path / "machine.json"
+    save_machine_settings(
+        {
+            "JARVIS_PERSONAL_LEARNING_MODE": "apply",
+            "JARVIS_UI_ENABLED": "true",
+        },
+        path,
+    )
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+    config = JarvisConfig.from_environment()
+    assert config.personal_learning_mode == "apply"
+    assert config.personal_context_mode == "apply"
+    assert config.memory_enabled is True
+    assert load_machine_settings(path)["JARVIS_UI_ENABLED"] == "true"
+
+
 def test_machine_config_persists_tts_provider_but_never_tts_secret(
     tmp_path: Path,
 ) -> None:

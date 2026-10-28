@@ -43,9 +43,9 @@ def test_cli_override_reaches_normal_runtime_without_persisting(monkeypatch, tmp
     assert seen == ["apply"]
 
 
-def test_apply_switch_enables_canonical_memory_and_suppresses_transcripts():
+def test_apply_switch_enables_canonical_memory_and_respects_transcripts():
     config = JarvisConfig(personal_context_mode="apply", show_transcript=True)
-    assert config.memory_enabled and not config.show_transcript
+    assert config.memory_enabled and config.show_transcript
     assert JarvisConfig().personal_context_mode == "off"
     with pytest.raises(ValueError, match="personal_context_mode"):
         JarvisConfig(personal_context_mode="shadow")
@@ -254,7 +254,8 @@ async def test_normal_voice_session_runs_real_context_tools_and_guard(
 
     session.start = start
     session.aclose = close
-    await asyncio.wait_for(runtime._run_one_session(), timeout=3)
+    # Exercise one protected transport; rollover is covered by follow-up tests.
+    await asyncio.wait_for(runtime._run_one_session_owned(), timeout=3)
     assert seen["record"] is False
     assert seen["packet"]["status"] == "selected" and "vegetarian" in str(
         seen["packet"]
@@ -295,8 +296,10 @@ async def test_queued_write_rechecks_request_before_transaction(personal):
 
 
 @pytest.mark.asyncio
-async def test_apply_uses_explicit_local_vad_for_provider_activity_separation(
+@pytest.mark.parametrize("mode", ["off", "apply"])
+async def test_all_modes_use_explicit_local_vad_for_provider_activity_separation(
     monkeypatch,
+    mode,
 ):
     from livekit.agents import inference
     from livekit.agents.llm import InputSpeechStartedEvent
@@ -308,7 +311,7 @@ async def test_apply_uses_explicit_local_vad_for_provider_activity_separation(
         "jarvis.voice.livekit_session._create_realtime_model", lambda config: None
     )
     monkeypatch.setattr(inference, "VAD", lambda **kwargs: object())
-    session, _ = create_voice_session(JarvisConfig(personal_context_mode="apply"))
+    session, _ = create_voice_session(JarvisConfig(personal_context_mode=mode))
     assert session._using_default_vad is False
     events = []
     session.on("user_state_changed", lambda event: events.append(event.new_state))
@@ -317,8 +320,61 @@ async def test_apply_uses_explicit_local_vad_for_provider_activity_separation(
     activity._agent = JarvisVoiceAgent()
     activity._rt_session = None
     activity._rt_overlapping_speech_enabled = False
+    activity._audio_recognition = None
+    activity._user_silence_event = asyncio.Event()
+    activity._false_interruption_timer = None
+    activity._current_speech = None
+    activity._paused_speech = None
     activity.interrupt = lambda **kwargs: None
     activity._on_input_speech_started(InputSpeechStartedEvent())
     assert events == []
-    session._update_user_state("speaking")
+    # Exercise the real SDK physical-VAD hook, not a manufactured state event.
+    activity.on_start_of_speech(None, 1.0)
     assert events == ["speaking"]
+    activity.on_end_of_speech(None)
+    assert events == ["speaking", "listening"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retirement", ["completed", "user_activity", "invalidated"])
+async def test_only_completed_or_interrupted_answer_requests_clean_followup(
+    personal, retirement
+):
+    prototype, service, _, authority, _ = personal
+    config = JarvisConfig(personal_context_mode="apply")
+    session, bridge = _session_pair()
+    capabilities = _runtime()
+    for name in (
+        "authorize_personal_context",
+        "consume_personal_context",
+        "validate_personal_context",
+        "invalidate_personal_context",
+    ):
+        setattr(capabilities, name, getattr(authority, name))
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        config,
+        SimpleNamespace(output=Sink()),
+        session_factory=lambda _: (session, bridge),
+        memory_runtime=SimpleNamespace(service=service, retrieval=prototype._retrieval),
+        capability_runtime=capabilities,
+    )
+    runtime._active_end = asyncio.Event()
+    runtime._session_factory(config)
+    bridge.conversation.start()
+    bridge.conversation.accept_turn(ConversationRole.USER, "What should I eat?")
+    context = runtime._personal_context
+    catalog = await context.catalog()
+    await context.read(catalog["catalog_id"], [0])
+    if retirement == "completed":
+        context.response_finished()
+    elif retirement == "user_activity":
+        bridge.conversation.begin_user_activity()
+        context.observe_activity()
+    else:
+        context.close()
+    assert runtime._active_end.is_set()
+    assert (runtime._follow_up_requested_after is not None) is (
+        retirement != "invalidated"
+    )
+    assert not await context.allow_audio()
+    runtime._cancel_timeout()

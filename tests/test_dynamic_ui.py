@@ -15,6 +15,24 @@ from jarvis.ui.hub import UIEventHub
 from jarvis.ui.server import create_ui_server
 
 
+def test_ui_starts_from_saved_machine_opt_in(tmp_path, monkeypatch):
+    from jarvis.ui import runtime as ui_runtime
+
+    path = tmp_path / "machine.json"
+    # Write the profile directly to exercise the reader independently of the saver.
+    path.write_text('{"schema_version":1,"settings":{"JARVIS_UI_ENABLED":"true"}}')
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", str(path))
+    monkeypatch.setenv("JARVIS_UI_ENABLED", "false")
+    monkeypatch.setenv("JARVIS_UI_PORT", "0")
+    monkeypatch.delenv("JARVIS_RUNTIME_ENV_OVERRIDES", raising=False)
+    service = ui_runtime.start_opt_in_ui()
+    try:
+        assert service is not None
+        assert service.server.server_address[0] == "127.0.0.1"
+    finally:
+        ui_runtime.stop_opt_in_ui()
+
+
 def test_ambient_is_empty_and_offline_until_runtime_attaches() -> None:
     hub = UIEventHub()
     snapshot = hub.snapshot()

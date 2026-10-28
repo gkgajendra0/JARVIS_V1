@@ -143,6 +143,8 @@ class MemoryService:
         self._learning_authority = authority
 
     async def admit_learning(self, plan, permit):
+        from jarvis.personal_learning_scope import CATEGORIES
+
         from .learning_reconciliation import LearningPlan
 
         authority = self._learning_authority
@@ -159,14 +161,7 @@ class MemoryService:
             if (
                 m.ordinal in seen
                 or m.action not in {"create", "correct", "change", "retract"}
-                or m.category
-                not in {
-                    "owned_item",
-                    "food_preference",
-                    "response_preference",
-                    "routine",
-                    "goal",
-                }
+                or m.category not in CATEGORIES
                 or m.source.source_class is not MemorySourceClass.OWNER_DIRECT
                 or m.source.authority_class is not AuthorityClass.OWNER_DIRECT
                 or m.source.sensitivity is not Sensitivity.STANDARD

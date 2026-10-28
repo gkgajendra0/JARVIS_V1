@@ -14,6 +14,7 @@ from livekit.agents import (
     AgentSession,
     AgentStateChangedEvent,
     CloseEvent,
+    CloseReason,
     ConversationItemAddedEvent,
     UserInputTranscribedEvent,
     UserStateChangedEvent,
@@ -143,6 +144,9 @@ class VoiceRuntimeController:
         self._state = VoiceRuntimeState.STOPPED
         self._shutdown = asyncio.Event()
         self._active_end: asyncio.Event | None = None
+        self._follow_up_requested_after: float | None = None
+        self._follow_up_listening = False
+        self._standby_requested = False
         self._timeout_handle: asyncio.TimerHandle | None = None
         self._dev_control = DevControlClient.from_environment()
         self._update_approval_requests: asyncio.Queue[_UpdateApprovalRequest] = (
@@ -786,6 +790,7 @@ class VoiceRuntimeController:
             raise RuntimeError("local audio output is not available")
 
         self._state = VoiceRuntimeState.ACTIVATING
+        self._standby_requested = False
         active_end = asyncio.Event()
         self._active_end = active_end
         decision = asyncio.get_running_loop().create_future()
@@ -869,14 +874,35 @@ class VoiceRuntimeController:
         completion_label: str = "proactive interaction",
     ) -> None:
         async with self._speech_ownership:
-            await self._run_one_session_owned(
-                pre_roll_after_monotonic=pre_roll_after_monotonic,
-                initial_instructions=initial_instructions,
-                initial_prompt_label=initial_prompt_label,
-                session_tool_factory=session_tool_factory,
-                completion_predicate=completion_predicate,
-                completion_label=completion_label,
-            )
+            self._follow_up_listening = False
+            try:
+                while not self._shutdown.is_set():
+                    self._follow_up_requested_after = None
+                    await self._run_one_session_owned(
+                        pre_roll_after_monotonic=pre_roll_after_monotonic,
+                        initial_instructions=initial_instructions,
+                        initial_prompt_label=initial_prompt_label,
+                        session_tool_factory=session_tool_factory,
+                        completion_predicate=completion_predicate,
+                        completion_label=completion_label,
+                    )
+                    requested = self._follow_up_requested_after
+                    if (
+                        requested is None
+                        or self._standby_requested
+                        or initial_instructions is not None
+                        or completion_predicate is not None
+                    ):
+                        break
+                    self._follow_up_listening = True
+                    pre_roll_after_monotonic = requested
+                    LOGGER.info(
+                        "Protected response completed; old context cleared; "
+                        "follow-up listening continues without another wake word"
+                    )
+            finally:
+                self._follow_up_requested_after = None
+                self._follow_up_listening = False
 
     def _session_audio_output(self, bridge, output):
         return output
@@ -904,6 +930,7 @@ class VoiceRuntimeController:
             raise RuntimeError("local audio output is not available")
 
         self._state = VoiceRuntimeState.ACTIVATING
+        self._standby_requested = False
         active_end = asyncio.Event()
         self._active_end = active_end
         session, bridge = self._session_factory(self.config)
@@ -1047,6 +1074,7 @@ class VoiceRuntimeController:
             if exit_in_progress:
                 return False
             exit_in_progress = True
+            self._standby_requested = True
             self._cancel_timeout()
             LOGGER.info(
                 "Semantic voice-session standby accepted; realtime JARVIS will "
@@ -1078,7 +1106,7 @@ class VoiceRuntimeController:
             elif event.new_state == "listening":
                 timeout = (
                     self.config.follow_up_timeout_seconds
-                    if has_user_turn
+                    if has_user_turn or self._follow_up_listening
                     else self.config.initial_request_timeout_seconds
                 )
                 self._arm_timeout(timeout)
@@ -1162,7 +1190,11 @@ class VoiceRuntimeController:
                 self._arm_timeout(self.config.follow_up_timeout_seconds)
 
         def on_close(event: CloseEvent) -> None:
-            del event
+            if self._active_end is active_end and (
+                getattr(event, "error", None) is not None
+                or getattr(event, "reason", None) is CloseReason.ERROR
+            ):
+                self._follow_up_requested_after = None
             active_end.set()
 
         session.on("user_state_changed", on_user_state)
@@ -1181,6 +1213,12 @@ class VoiceRuntimeController:
         bridge.conversation.start()
         if pre_roll_after_monotonic is None:
             self.audio.activate_session(session_input)
+        elif self._follow_up_listening:
+            self.audio.activate_session(
+                session_input,
+                pre_roll_after_monotonic=pre_roll_after_monotonic,
+                retain_since_boundary=True,
+            )
         else:
             self.audio.activate_session(
                 session_input,
@@ -1191,7 +1229,11 @@ class VoiceRuntimeController:
                 "post-wake speech is preserved",
                 pre_roll_after_monotonic,
             )
-        self._arm_timeout(self.config.initial_request_timeout_seconds)
+        self._arm_timeout(
+            self.config.follow_up_timeout_seconds
+            if self._follow_up_listening
+            else self.config.initial_request_timeout_seconds
+        )
         if session_tool_factory is not None:
             tools = list(session_tool_factory(bridge.conversation))
         else:
@@ -1240,7 +1282,7 @@ class VoiceRuntimeController:
                     prompt_handle,
                     label=initial_prompt_label,
                 )
-            if pre_roll_after_monotonic is not None:
+            if pre_roll_after_monotonic is not None and not self._follow_up_listening:
                 wake_ack_task = asyncio.create_task(
                     maybe_acknowledge_wake(),
                     name="jarvis-wake-acknowledgement",
@@ -1272,6 +1314,7 @@ class VoiceRuntimeController:
             if (
                 pre_roll_after_monotonic is not None
                 and not has_user_turn
+                and not self._follow_up_listening
                 and not exit_in_progress
                 and not self._shutdown.is_set()
             ):
@@ -1285,6 +1328,8 @@ class VoiceRuntimeController:
                 handoff.close()
             self.audio.deactivate_session()
             await session.aclose()
+            if bridge.conversation.status is ConversationStatus.FAILED:
+                self._follow_up_requested_after = None
             if session_output is not output:
                 session_output.detach()
             if epoch_output is not None:

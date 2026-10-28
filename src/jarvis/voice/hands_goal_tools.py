@@ -8,7 +8,7 @@ import logging
 import time
 
 from livekit.agents import RunContext, function_tool
-from livekit.agents.llm import ToolError
+from livekit.agents.llm import StopResponse, ToolError
 
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
@@ -32,6 +32,10 @@ _VOICE_RESULT_DATA_CHARACTERS = 4_000
 # Compatibility alias for older imports/tests while the implementation is no longer a
 # phrase/keyword grounding parser.
 HandsGoalGroundingError = HandsOrchestrationError
+
+
+class _HandsTranscriptUnavailable(HandsOrchestrationError):
+    """The current activity did not produce a canonical command in time."""
 
 
 def _bounded_voice_data(value: object) -> object:
@@ -125,6 +129,7 @@ class HandsGoalAgentTools:
         self._orchestrator = orchestrator
         self._transcript_wait_seconds = float(transcript_wait_seconds)
         self._claimed_user_generations: set[int] = set()
+        self._unavailable_activity_epoch: int | None = None
         self._execution_lock = asyncio.Lock()
 
     @property
@@ -156,6 +161,11 @@ class HandsGoalAgentTools:
                     "Hands tool call was superseded before its canonical transcript arrived"
                 )
 
+            if self._unavailable_activity_epoch == activity_epoch:
+                # The first timeout already requested new speech. A tool continuation
+                # must not start another wait/error/reply cycle for the same activity.
+                raise StopResponse()
+
             turn = self._turn_for_activity(activity_epoch)
             if turn is not None:
                 generation = turn.user_utterance_generation
@@ -178,7 +188,8 @@ class HandsGoalAgentTools:
                 return turn, generation
 
             if loop.time() >= deadline:
-                raise HandsOrchestrationError(
+                self._unavailable_activity_epoch = activity_epoch
+                raise _HandsTranscriptUnavailable(
                     "JARVIS Hands timed out waiting for the canonical USER transcript"
                 )
             await asyncio.sleep(_TRANSCRIPT_POLL_SECONDS)
@@ -221,6 +232,16 @@ class HandsGoalAgentTools:
         total_started = time.perf_counter()
         try:
             turn, generation = await self._claim_current_user_turn()
+        except _HandsTranscriptUnavailable:
+            LOGGER.info(
+                "Hands awaiting a repeated USER instruction after transcript timeout"
+            )
+            return {
+                "ok": False,
+                "status": "clarification_required",
+                "reason": "canonical_user_transcript_unavailable",
+                "clarification_question": "Please repeat the computer request; I could not confirm the spoken instruction.",
+            }
         except HandsGoalSuperseded as exc:
             LOGGER.info("Hands voice lease ignored before claim: %s", exc)
             return self._superseded_result(str(exc))
@@ -344,6 +365,8 @@ class HandsGoalAgentTools:
         USER request.
 
         If status is ``clarification_required``, ask the returned clarification question.
+        For ``canonical_user_transcript_unavailable``, wait for new USER speech and
+        never retry this tool automatically.
         Otherwise treat the tool result as authoritative and never claim success for denied,
         failed, unavailable, or unverified work.
         """

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from http.server import ThreadingHTTPServer
 from typing import TYPE_CHECKING
 
+from jarvis.machine_config import configured_text, load_machine_settings
 from jarvis.ui.hub import VOICE_STATES, UIEventHub
 from jarvis.ui.server import create_ui_server
 
@@ -43,9 +44,13 @@ def active_ui_hub() -> UIEventHub | None:
 
 
 def start_opt_in_ui() -> UIService | None:
-    """Start only for explicit local environment opt-in, not by import."""
+    """Start only for explicit saved or environment opt-in, not by import."""
     global _active
-    value = os.environ.get("JARVIS_UI_ENABLED", "").strip().casefold()
+    value = (
+        str(configured_text("JARVIS_UI_ENABLED", load_machine_settings(), "false"))
+        .strip()
+        .casefold()
+    )
     if value not in {"1", "true", "yes", "on"}:
         return None
     if _active is not None:
