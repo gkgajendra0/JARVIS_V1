@@ -404,3 +404,25 @@ async def test_local_output_resamples_physical_playback_but_keeps_aec_canonical(
         audio_frame.samples_per_channel == 480 for audio_frame in apm.reverse_frames
     )
     await output.aclose()
+
+
+@pytest.mark.asyncio
+async def test_followup_retains_transition_audio_beyond_normal_wake_preroll():
+    runtime = LocalAudioRuntime(
+        FakeDetector(),
+        input_device_name=None,
+        output_device_name=None,
+        pre_roll_seconds=0.01,
+        ring_buffer_seconds=0.10,
+    )
+    for value in range(1, 7):
+        runtime._append_ring(frame(value), observed_at_monotonic=10.0 + value / 100)
+    incoming = SessionAudioInput(capacity_frames=8)
+    runtime.activate_session(
+        incoming, pre_roll_after_monotonic=10.01, retain_since_boundary=True
+    )
+    values = []
+    while not incoming._queue.empty():
+        item = await incoming.__anext__()
+        values.append(int(np.frombuffer(item.data, dtype=np.int16)[0]))
+    assert values == [2, 3, 4, 5, 6]

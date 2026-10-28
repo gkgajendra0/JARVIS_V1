@@ -5,15 +5,18 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from time import monotonic
+from time import monotonic, perf_counter
 
 from .learning_contracts import AcceptedLearningSource, LearningBatch
 from .learning_controls import category_veto, suppression_binding
+from .learning_diagnostics import log_learning
+from .learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
 from .learning_policy import LearningPolicy
 
-INFERENCE_TIMEOUT = 10.0
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -38,10 +41,13 @@ class PersonalLearningRuntime:
         *,
         clock=monotonic,
         status_observer=None,
+        diagnostics=False,
     ):
         self.authority, self.service = authority, service
         self.extractor, self.resolver, self.reconciler = extractor, resolver, reconciler
         self.clock, self.status_observer = clock, status_observer
+        self.diagnostics = diagnostics
+        self._stage = "source_validation"
         self._queue = asyncio.Queue(maxsize=32)
         self._pending = {}
         self._controls = {}
@@ -55,6 +61,7 @@ class PersonalLearningRuntime:
         self._grant = None
         self._processed = self._committed = self._dropped = 0
         self._reason = "ready"
+        self._unavailable_reported = False
         service.bind_learning_invalidator(self.invalidate_sources)
         for adapter in {id(extractor): extractor, id(resolver): resolver}.values():
             binder = getattr(adapter, "bind_source_validator", None)
@@ -121,6 +128,9 @@ class PersonalLearningRuntime:
             if not LearningPolicy.source_allowed(source):
                 self._vetoed.add(turn.turn_id)
                 self.invalidate_sources(turn_id=turn.turn_id)
+                log_learning(
+                    self.diagnostics, source, "source", "rejected", reason="source_veto"
+                )
                 self._report("source_veto")
                 return
             # Remove vetoed/pre-forget context before any provider receives it.
@@ -148,8 +158,28 @@ class PersonalLearningRuntime:
                 return
             self.authority.register_source(grant, source.receipt_id, source=source)
             self._pending[source.receipt_id] = (source, grant)
+            log_learning(self.diagnostics, source, "source", "queued", text=source.text)
             self._enqueue(source.receipt_id)
-        except (ValueError, PermissionError):
+        except (ValueError, PermissionError) as exc:
+            state = self.authority.validate(grant)
+            if state.status != "active" and not self._unavailable_reported:
+                self._unavailable_reported = True
+                LOGGER.warning(
+                    "Automatic memory unavailable | state=%s | reason=%s | "
+                    "new memories are not being saved; restart Jarvis and approve Windows Hello",
+                    state.status,
+                    state.reason,
+                )
+            # Canonical assistant turns are expected here; distinguish them from
+            # rejected user sources without changing admission or counters.
+            if self.diagnostics:
+                LOGGER.info(
+                    "Memory source skipped | turn_id=%s | role=%s | reason=%s | error_type=%s",
+                    turn.turn_id,
+                    turn.role.value,
+                    "not_user_turn" if turn.role.value != "user" else "source_denied",
+                    type(exc).__name__,
+                )
             self._dropped += 1
             self._report("source_denied")
 
@@ -203,9 +233,36 @@ class PersonalLearningRuntime:
             raise PermissionError("Learning source no longer registered")
         self._require(source.receipt_id, source, item[1])
 
+    async def _infer(self, source, operation):
+        remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+        if remaining <= 0:
+            raise TimeoutError("source processing budget exhausted")
+        timeout = min(INFERENCE_TIMEOUT, remaining)
+        started = perf_counter()
+        log_learning(
+            self.diagnostics,
+            source,
+            self._stage,
+            "started",
+            timeout_seconds=round(timeout, 3),
+            source_age_ms=round((self.clock() - source.created_monotonic) * 1000, 1),
+        )
+        try:
+            return await asyncio.wait_for(operation(), timeout)
+        finally:
+            log_learning(
+                self.diagnostics,
+                source,
+                self._stage,
+                "finished_wait",
+                elapsed_ms=round((perf_counter() - started) * 1000, 1),
+            )
+
     async def _process(self, receipt, source, grant):
+        self._stage = "source_validation"
         self._require(receipt, source, grant)
         if receipt in self._controls:
+            self._stage = "suppression"
             categories = self._controls[receipt]
             permit = self.authority.issue_child(
                 grant, suppression_binding(source, categories)
@@ -213,38 +270,91 @@ class PersonalLearningRuntime:
             await self.service.suppress_learning_categories(source, categories, permit)
             self._report("category_suppressed")
             return
-        batch = await asyncio.wait_for(
-            self.extractor.extract(source), INFERENCE_TIMEOUT
-        )
+        self._stage = "extraction"
+        batch = await self._infer(source, lambda: self.extractor.extract(source))
         self._require(receipt, source, grant)
+        self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
-        batch = LearningBatch(
-            candidates=[
-                c
-                for c in batch.candidates
-                if LearningPolicy().evaluate(source, c, suppression.suppressed).status
-                == "eligible"
-            ]
-        )
+        eligible = []
+        grounded_count = len(batch.candidates)
+        for index, candidate in enumerate(batch.candidates):
+            decision = LearningPolicy().evaluate(
+                source, candidate, suppression.suppressed
+            )
+            log_learning(
+                self.diagnostics,
+                source,
+                "eligibility",
+                decision.status,
+                grounded_index=index,
+                candidate_index=len(eligible)
+                if decision.status == "eligible"
+                else None,
+                reason=decision.reason,
+                fact=candidate.model_dump(mode="json"),
+            )
+            if decision.status == "eligible":
+                eligible.append(candidate)
+        batch = LearningBatch(candidates=eligible)
         if not batch.candidates:
+            log_learning(
+                self.diagnostics,
+                source,
+                "eligibility",
+                "no_eligible_fact",
+                reason="no_grounded_candidates"
+                if grounded_count == 0
+                else "all_candidates_rejected",
+            )
             self._report("no_eligible_fact")
             return
+        self._stage = "catalog"
         catalog = await self.reconciler.catalog(source, batch, grant)
-        self._require(receipt, source, grant)
-        catalog = catalog.model_copy(update={"suppression_epochs": suppression.epochs})
-        resolutions = await asyncio.wait_for(
-            self.resolver.resolve(source, batch, catalog), INFERENCE_TIMEOUT
+        log_learning(
+            self.diagnostics, source, "catalog", "loaded", count=len(catalog.entries)
         )
         self._require(receipt, source, grant)
+        catalog = catalog.model_copy(update={"suppression_epochs": suppression.epochs})
+        self._stage = "resolution"
+        resolutions = await self._infer(
+            source, lambda: self.resolver.resolve(source, batch, catalog)
+        )
+        self._require(receipt, source, grant)
+        log_learning(
+            self.diagnostics,
+            source,
+            "resolution",
+            "completed",
+            decisions=resolutions.model_dump(mode="json")["resolutions"],
+        )
+        self._stage = "reconciliation"
         plan = self.reconciler.plan(source, batch, catalog, resolutions)
         if not plan.mutations:
+            log_learning(self.diagnostics, source, "reconciliation", "no_change")
             self._report("no_change")
             return
+        self._stage = "storage"
         permit = self.authority.issue_child(grant, plan.binding())
         result = await self.service.admit_learning(plan, permit)
         if result.status == "committed":
             self._committed += len(result.assertion_ids)
+        log_learning(
+            self.diagnostics,
+            source,
+            "storage",
+            result.status,
+            assertion_ids=list(result.assertion_ids),
+            mutations=[
+                {
+                    "action": m.action,
+                    "predicate": m.predicate,
+                    "expected_assertion_id": m.expected_assertion_id,
+                    "stored_value": m.draft.value if m.draft else None,
+                }
+                for m in plan.mutations
+            ],
+        )
         self._report(result.status)
 
     async def _run(self):
@@ -264,11 +374,39 @@ class PersonalLearningRuntime:
                         if self._closed:
                             return
                         self._dropped += 1
+                        log_learning(self.diagnostics, source, self._stage, "cancelled")
                     except TimeoutError:
                         self._dropped += 1
+                        log_learning(
+                            self.diagnostics,
+                            source,
+                            self._stage,
+                            "timeout",
+                            reason="inference_deadline",
+                        )
                         self._report("timeout")
-                    except Exception:  # noqa: BLE001 - sanitized background failure boundary
+                    except Exception as exc:  # noqa: BLE001 - sanitized background failure boundary
                         self._dropped += 1
+                        reason = (
+                            str(exc)
+                            if str(exc)
+                            in {
+                                "learning_provider_unavailable",
+                                "learning_invalid_schema",
+                                "learning_invalid_resolution",
+                                "learning_unknown_target",
+                                "source no longer current",
+                            }
+                            else "processing_denied"
+                        )
+                        log_learning(
+                            self.diagnostics,
+                            source,
+                            self._stage,
+                            "failed",
+                            reason=reason,
+                            error_type=type(exc).__name__,
+                        )
                         self._report("processing_denied")
                     self._processed += 1
             finally:

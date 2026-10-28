@@ -29,6 +29,10 @@ ScopeKey = Literal[
     "response_preference",
     "routine",
     "goal",
+    "personal_fact",
+    "activity",
+    "event",
+    "plan",
 ]
 
 
@@ -229,9 +233,19 @@ def project_personal_context(
             }
             if isinstance(r.value, dict) and r.value.get("schema") == POLICY_VERSION:
                 state = r.value.get("state")
-                if state not in {"owned", "not_owned", "active", "completed"}:
+                if state not in {
+                    "owned",
+                    "not_owned",
+                    "active",
+                    "completed",
+                    "planned",
+                    "cancelled",
+                }:
                     return result("unavailable", "storage_unavailable")
                 fact["state"] = state
+                for key in ("certainty", "temporal", "location", "reason"):
+                    if key in r.value:
+                        fact[key] = r.value[key]
             facts.append(fact)
             selected.append(r)
         encoded = json.dumps(

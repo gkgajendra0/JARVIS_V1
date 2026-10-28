@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 
@@ -32,6 +33,7 @@ from jarvis.ai_provider import (
 )
 from jarvis.config import JarvisConfig
 from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.memory.learning_diagnostics import content_for_log
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import build_instructions
 
@@ -330,7 +332,14 @@ class LiveKitConversationBridge:
             self._seen_item_ids.add(external_item_id)
         if self._show_transcript:
             suffix = " [interrupted]" if turn.interrupted else ""
-            LOGGER.info("%s: %s%s", turn.role.value, turn.text, suffix)
+            LOGGER.info(
+                "%s: %s%s | turn_id=%s | session_id=%s",
+                turn.role.value,
+                json.dumps(content_for_log(turn.text), ensure_ascii=False),
+                suffix,
+                turn.turn_id,
+                self.conversation.session_id,
+            )
         self._notify_accepted_turn(turn)
         return turn
 
@@ -474,6 +483,15 @@ class LiveKitConversationBridge:
         self._notify_close()
 
 
+def create_user_activity_vad():
+    """Reject brief speech-like bursts before they advance request authority."""
+    return inference.VAD(
+        model="silero",
+        min_speech_duration=0.25,
+        prefix_padding_duration=0.5,
+    )
+
+
 def create_voice_session(
     config: JarvisConfig,
     *,
@@ -481,7 +499,6 @@ def create_voice_session(
 ) -> tuple[AgentSession, LiveKitConversationBridge]:
     conversation = ConversationSession()
     live_context = LiveContext(max_recent_turns=config.live_context_recent_turns)
-    model = _create_realtime_model(config)
     transport_state = None
     if (
         config.ai_provider == "gemini"
@@ -490,26 +507,19 @@ def create_voice_session(
     ):
         from jarvis.voice.gemini_transport import (
             GeminiTransportState,
-            GuardedGeminiRealtimeModel,
         )
 
         transport_state = GeminiTransportState(epoch=0, current_epoch=lambda: 0)
-        model = GuardedGeminiRealtimeModel(model, transport_state)
-    # Do not pass vad=None here. LiveKit auto-provisions its bundled local Silero VAD
-    # when the argument is omitted. JARVIS uses that VAD only for local user-activity
-    # state (speaking/listening) so inactivity timers cannot expire during continuous
-    # speech. Realtime Gemini/OpenAI still own actual turn completion through their
-    # provider-native server-side turn detection.
+    model = (
+        _create_realtime_model(config)
+        if transport_state is None
+        else _create_realtime_model(config, transport_state=transport_state)
+    )
+    # Explicit local VAD keeps physical user activity separate from provider-generated
+    # speech events in every mode. Provider-native detection still owns turn completion.
     livekit_session = AgentSession(
         llm=model,
-        # An explicit instance of the SAME bundled local VAD makes user-state
-        # events physical activity. The default-VAD SDK path also maps Gemini's
-        # synthetic input_speech_started on automatic tool replies to user speech.
-        **(
-            {"vad": inference.VAD(model="silero")}
-            if config.personal_context_mode == "apply"
-            else {}
-        ),
+        vad=create_user_activity_vad(),
         turn_handling=TurnHandlingOptions(
             turn_detection=None,
             interruption={"enabled": True},

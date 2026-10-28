@@ -107,6 +107,80 @@ async def test_real_agent_session_executes_tool_once_and_reserves_its_reply(tmp_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("operational", [False, True])
+async def test_silent_tool_receipt_closes_connection_and_accepts_new_request(
+    tmp_path, operational
+):
+    from tests.gemini_operational.helpers import (
+        environment as operational_environment,
+    )
+    from tests.gemini_operational.helpers import (
+        usage,
+    )
+
+    env = operational_environment(tmp_path) if operational else environment(tmp_path)
+    usage_event = usage if operational else raw_usage
+    calls = []
+
+    @llm.function_tool
+    async def wait_for_instruction() -> None:
+        """Wait for a new confirmed instruction without another automatic reply."""
+        calls.append("suppressed")
+        raise llm.StopResponse()
+
+    session = AgentSession(
+        llm=env.model, vad=None, turn_handling=TurnHandlingOptions(turn_detection=None)
+    )
+    try:
+        await session.start(
+            agent=Agent(
+                instructions="Fictional test only",
+                llm=env.model,
+                tools=[wait_for_instruction],
+            ),
+            record=False,
+        )
+        first = session.generate_reply(user_input="Fictional missing instruction")
+        await until(lambda: env.endpoint.wires and len(env.endpoint.wires[0].sent) >= 2)
+        wire = env.endpoint.wires[0]
+        wire.feed(
+            tool_call={
+                "function_calls": [
+                    {
+                        "id": "silent-1",
+                        "name": "wait_for_instruction",
+                        "args": {},
+                    }
+                ]
+            },
+            server_content={"turn_complete": True},
+            usage_metadata=usage_event(),
+        )
+        await until(lambda: wire.closed)
+        await asyncio.wait_for(first, 5)
+        assert first.exception() is None
+        assert calls == ["suppressed"]
+        assert not any(kind == "tool" for kind, _ in wire.sent)
+        assert env.model.sessions[-1]._pending_tools == {}
+
+        second = session.generate_reply(user_input="New confirmed request")
+        await until(lambda: len(env.endpoint.wires) == 2)
+        env.endpoint.wires[1].feed(
+            server_content={
+                "output_transcription": {"text": "New request accepted"},
+                "turn_complete": True,
+            },
+            usage_metadata=usage_event(),
+        )
+        await asyncio.wait_for(second, 5)
+        assert second.exception() is None
+        assert calls == ["suppressed"]
+    finally:
+        await session.aclose()
+        await env.model.aclose()
+
+
+@pytest.mark.asyncio
 async def test_conflicting_tool_batch_cannot_partially_execute_actions(tmp_path):
     env = environment(tmp_path)
     effects = []

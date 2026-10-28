@@ -35,7 +35,7 @@ def _learning_current_scoped_sync(connection):
         " AND h.sensitivity='standard' AND h.value_type='json'"
         " AND r.policy_version=? AND r.category IN (" + scope_marks + ")"
         " AND json_extract(h.value_json,'$.schema')=?"
-        " AND json_extract(h.value_json,'$.category') IN ('owned_item','routine','goal')"
+        " AND json_extract(h.value_json,'$.category') IN ('owned_item','routine','goal','personal_fact','activity','event','plan')"
         " AND r.category=CASE json_extract(h.value_json,'$.category')"
         " WHEN 'owned_item' THEN 'owned_item.'||json_extract(h.value_json,'$.kind')"
         " ELSE json_extract(h.value_json,'$.category') END"
@@ -58,7 +58,8 @@ def _learning_current_scoped_sync(connection):
         " json_extract(a.value_json,'$.schema')=? AND ("
         " (json_extract(a.value_json,'$.category')='owned_item' AND substr(a.predicate,1,11)='owned_item_' AND json_extract(a.value_json,'$.kind') IN ('vehicle','device','other')) OR"
         " (json_extract(a.value_json,'$.category')='routine' AND substr(a.predicate,1,8)='routine_') OR"
-        " (json_extract(a.value_json,'$.category')='goal' AND substr(a.predicate,1,5)='goal_')))"
+        " (json_extract(a.value_json,'$.category')='goal' AND substr(a.predicate,1,5)='goal_') OR"
+        " (json_extract(a.value_json,'$.category') IN ('personal_fact','activity','event','plan') AND instr(a.predicate,json_extract(a.value_json,'$.category')||'_')=1)))"
         " OR (a.value_type='text' AND EXISTS (" + registered_exists + ")))"
         " ORDER BY a.predicate, a.assertion_id LIMIT 33",
         (*LEGACY_FACETS, POLICY_VERSION, *registration_values),

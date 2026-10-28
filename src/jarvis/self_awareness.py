@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.incidents import IncidentService, SqliteIncidentStore
+from jarvis.machine_config import default_machine_config_path
 from jarvis.observability.evidence_query import (
     EvidenceQueryResult,
     LocalOperationalEvidenceQuery,
@@ -24,12 +25,7 @@ LOGGER = get_logger(__name__)
 
 def default_incident_store_path() -> Path:
     if os.name == "nt":
-        base = Path(
-            os.environ.get(
-                "LOCALAPPDATA",
-                str(Path.home() / "AppData" / "Local"),
-            )
-        )
+        return default_machine_config_path().parent / "operations" / "incidents.sqlite3"
     else:
         base = Path(
             os.environ.get(

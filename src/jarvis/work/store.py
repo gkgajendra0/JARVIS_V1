@@ -12,6 +12,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
+from jarvis.machine_config import default_machine_config_path
 from jarvis.work.models import (
     DeliveryPolicy,
     WorkDelivery,
@@ -39,12 +40,9 @@ class WorkStoreError(RuntimeError):
 
 def default_work_state_dir() -> pathlib.Path:
     if os.name == "nt":
-        base = pathlib.Path(
-            os.environ.get(
-                "LOCALAPPDATA",
-                str(pathlib.Path.home() / "AppData" / "Local"),
-            )
-        )
+        # Keep Work beside the selected machine profile, like canonical memory.
+        # A portable E-drive profile must not silently create another C-drive store.
+        path = default_machine_config_path().parent / "work"
     else:
         base = pathlib.Path(
             os.environ.get(
@@ -52,7 +50,7 @@ def default_work_state_dir() -> pathlib.Path:
                 str(pathlib.Path.home() / ".local" / "state"),
             )
         )
-    path = base / "JARVIS" / "work"
+        path = base / "JARVIS" / "work"
     path.mkdir(parents=True, exist_ok=True)
     return path.resolve()
 

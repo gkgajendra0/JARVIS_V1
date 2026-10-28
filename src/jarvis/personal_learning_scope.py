@@ -2,7 +2,17 @@
 
 POLICY_VERSION = "personal-learning-v1"
 CATEGORIES = frozenset(
-    {"owned_item", "food_preference", "response_preference", "routine", "goal"}
+    {
+        "owned_item",
+        "food_preference",
+        "response_preference",
+        "routine",
+        "goal",
+        "personal_fact",
+        "activity",
+        "event",
+        "plan",
+    }
 )
 SCALAR_FACETS = {
     "food_preference": frozenset({"diet_preference"}),
@@ -26,6 +36,10 @@ SUPPRESSION_KEYS = frozenset(
         "response_preference",
         "routine",
         "goal",
+        "personal_fact",
+        "activity",
+        "event",
+        "plan",
     }
 )
 
@@ -42,6 +56,10 @@ def record_scope(record):
         "owned_item",
         "routine",
         "goal",
+        "personal_fact",
+        "activity",
+        "event",
+        "plan",
     } or not record.predicate.startswith(category + "_"):
         return None
     key = f"owned_item.{value.get('kind')}" if category == "owned_item" else category

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from time import monotonic
 from typing import Any
 
 from livekit.agents import AgentStateChangedEvent, UserStateChangedEvent
@@ -160,6 +161,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
                 def retire_personal():
                     if self._live_session is session and self._active_end is not None:
+                        if personal.retirement_reason in {
+                            "response_completed",
+                            "user_activity",
+                        }:
+                            self._follow_up_requested_after = monotonic()
+                        LOGGER.info(
+                            "Personal context session retired | reason=%s",
+                            personal.retirement_reason,
+                        )
                         self._active_end.set()
 
                 def personal_busy(busy):
@@ -217,18 +227,28 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     event.old_state,
                     event.new_state,
                 )
-                if self._session_ready_for_inactivity:
+                if self._standby_requested:
+                    return
+                if event.new_state in {"thinking", "speaking"}:
+                    self._cancel_timeout()
                     return
                 if event.new_state != "listening":
                     return
 
                 self._session_ready_for_inactivity = True
-                if self._user_is_speaking:
-                    self._cancel_timeout()
-                    return
-                self._arm_timeout(config.initial_request_timeout_seconds)
+                has_user_turn = any(
+                    turn.role is ConversationRole.USER
+                    for turn in bridge.conversation.turns
+                )
+                self._arm_timeout(
+                    config.follow_up_timeout_seconds
+                    if has_user_turn or self._follow_up_listening
+                    else config.initial_request_timeout_seconds
+                )
 
             def track_user_activity(event: UserStateChangedEvent) -> None:
+                if self._live_session is not session or self._standby_requested:
+                    return
                 LOGGER.info(
                     "Voice user state changed: %s -> %s",
                     event.old_state,
@@ -256,7 +276,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 timeout = (
                     config.follow_up_timeout_seconds
-                    if has_user_turn
+                    if has_user_turn or self._follow_up_listening
                     else config.initial_request_timeout_seconds
                 )
                 self._arm_timeout(timeout)
@@ -337,13 +357,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             or self._session_conversation is not bridge.conversation
         ):
             return False
-        if (
-            self._learning_grant is not None
-            and self._learning_authority is not None
-            and self._learning_authority.validate(self._learning_grant).status
-            != "active"
-        ):
-            return False
+        # Ordinary voice can outlive the memory timer. OS/authority revocation
+        # still blocks the transport; protected restores keep their own permit.
+        if self._learning_grant is not None and self._learning_authority is not None:
+            try:
+                state = await asyncio.to_thread(
+                    self._learning_authority.validate, self._learning_grant
+                )
+            except Exception:  # noqa: BLE001 - unavailable continuity fails closed
+                return False
+            if state.status not in {"active", "expired"}:
+                return False
         personal = self._personal_context
         return personal is None or await personal.validate_transport_restore()
 
@@ -681,8 +705,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
 
+        if self._standby_requested:
+            super()._arm_timeout(seconds)
+            return
+
         if (
             not self._session_ready_for_inactivity
+            or self._agent_state in {"thinking", "speaking"}
             or self._user_is_speaking
             or (self._personal_context is not None and self._personal_context.busy)
         ):
@@ -695,6 +724,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             return
 
         def expire_inactivity() -> None:
+            if (
+                self._active_end is not active_end
+                or self._user_is_speaking
+                or self._agent_state in {"thinking", "speaking"}
+                or (self._personal_context is not None and self._personal_context.busy)
+            ):
+                return
             LOGGER.info(
                 "Voice session inactivity timeout expired | seconds=%.2f | "
                 "user_speaking=%s | canonical_user_turns=%s",
@@ -716,6 +752,35 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             expire_inactivity,
         )
 
+    @staticmethod
+    def _learning_failure_reason(error):
+        # Emit only fixed reason labels, never exception messages, provider
+        # response bodies, personal facts, or credential values.
+        allowed = (
+            "helper_timeout",
+            "helper_launch_failed",
+            "helper_invalid_output",
+            "helper_failed",
+            "helper_not_found",
+            "helper_not_configured",
+            "helper_unknown_status",
+            "session_mismatch",
+            "proposal_integrity_invalid",
+        )
+        seen = set()
+        for _ in range(8):
+            if error is None or id(error) in seen:
+                break
+            seen.add(id(error))
+            message = str(error)
+            for reason in allowed:
+                if reason in message:
+                    return reason
+            error = getattr(error, "__cause__", None) or getattr(
+                error, "__context__", None
+            )
+        return "unclassified"
+
     async def _start_personal_learning(self):
         if (
             self.config.personal_learning_mode != "apply"
@@ -731,6 +796,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         capabilities = self._capability_runtime
         self._learning_authority = capabilities.personal_learning_authority
+        phase = "authorize"
         try:
             grant = await asyncio.to_thread(
                 capabilities.open_personal_learning,
@@ -738,7 +804,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self.config.ai_provider,
             )
             self._learning_grant = grant
+            phase = "memory_binding"
             self._memory_runtime.bind_learning_authority(self._learning_authority)
+            phase = "category_reenable"
             for category in self.config.personal_learning_reenable_categories:
                 from datetime import UTC, datetime
 
@@ -765,19 +833,28 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 await self._memory_runtime.service.reenable_learning_category(
                     category, source, guard
                 )
+            phase = "suppression_read"
             suppression = await self._memory_runtime.service.learning_suppression()
             LOGGER.info(
                 "Personal learning suppression | categories=%s",
                 ",".join(sorted(suppression.suppressed)) or "none",
             )
+            if self.config.show_transcript:
+                LOGGER.info(
+                    "Conversation diagnostics enabled | accepted transcripts and memory decisions "
+                    "are written to console and rotating logs | credentials=masked"
+                )
+            phase = "provider_adapters"
             extractor, resolver = build_learning_adapters(
                 self.config.ai_provider,
+                diagnostics=self.config.show_transcript,
                 **(
                     {"routing_runtime": self._routing_runtime}
                     if self._routing_runtime is not None
                     else {}
                 ),
             )
+            phase = "learning_worker"
             self._personal_learning = PersonalLearningRuntime(
                 self._learning_authority,
                 self._memory_runtime.service,
@@ -786,7 +863,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 LearningReconciler(
                     self._memory_runtime.service.canonical_reader,
                     self._learning_authority,
+                    diagnostics=self.config.show_transcript,
                 ),
+                diagnostics=self.config.show_transcript,
                 status_observer=lambda state: LOGGER.info(
                     "Personal learning | session=%s | queued=%s | processed=%s | committed=%s | dropped=%s | reason=%s",
                     state.session,
@@ -798,13 +877,19 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 ),
             )
             LOGGER.info(
-                "Personal learning session active | maximum_seconds=900 | idle_seconds=300 | speaker_verification=False"
+                "Personal learning session active | lifetime=Jarvis_runtime_and_same_unlocked_Windows_session | idle_expiry=False | speaker_verification=False"
             )
-        except Exception:  # noqa: BLE001 - no provider/private error body in logs
+        except Exception as exc:  # noqa: BLE001 - no provider/private error body in logs
             if self._learning_grant is not None:
                 capabilities.close_personal_learning(self._learning_grant)
                 self._learning_grant = None
-            LOGGER.info("Personal learning session unavailable; no automatic reopening")
+            LOGGER.warning(
+                "Personal learning session unavailable | phase=%s | error_type=%s | "
+                "reason=%s; no automatic reopening",
+                phase,
+                type(exc).__name__,
+                self._learning_failure_reason(exc),
+            )
 
     async def run(self) -> None:
         memory_runtime = self._memory_runtime

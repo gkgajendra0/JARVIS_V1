@@ -504,3 +504,40 @@ def test_openai_model_uses_stricter_vad_threshold(
     _create_realtime_model(JarvisConfig(ai_provider="openai"))
 
     assert captured["turn_detection"].threshold == 0.8
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_transcript_visibility_logs_canonical_words_and_masks_credentials(
+    caplog, enabled
+):
+    livekit, bridge = active_bridge()
+    bridge._show_transcript = enabled
+    key = "AIza" + "x" * 35
+    with caplog.at_level(logging.INFO):
+        livekit.emit(
+            "conversation_item_added",
+            ConversationItemAddedEvent(
+                item=message("visible-user", "user", "I own a City")
+            ),
+        )
+        livekit.emit(
+            "conversation_item_added",
+            ConversationItemAddedEvent(
+                item=message("visible-assistant", "assistant", "Understood.")
+            ),
+        )
+        livekit.emit(
+            "conversation_item_added",
+            ConversationItemAddedEvent(
+                item=message("secret-user", "user", "Here is " + key)
+            ),
+        )
+    assert ("I own a City" in caplog.text) is enabled
+    assert ("Understood." in caplog.text) is enabled
+    assert key not in caplog.text
+    if enabled:
+        for turn in bridge.conversation.turns:
+            assert f"turn_id={turn.turn_id}" in caplog.text
+        assert f"session_id={bridge.conversation.session_id}" in caplog.text
+    assert bridge.conversation.turns[0].text == "I own a City"
+    assert bridge.conversation.turns[-1].text == "Here is " + key

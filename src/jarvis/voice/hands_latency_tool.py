@@ -123,8 +123,10 @@ class LatencyOptimizedHandsGoalAgentTools(HandsGoalAgentTools):
         Desktop app/window/screen inspection belongs here, not to Pocket3 physical-camera
         vision. If status is ``superseded``, continue with the newer USER request rather
         than reporting the older goal as a failure. If status is
-        ``clarification_required``, ask the returned clarification question. Otherwise
-        the tool result is authoritative: never claim success for denied, failed,
+        ``clarification_required``, ask the returned clarification question. For reason
+        ``canonical_user_transcript_unavailable``, wait for new USER speech rather than
+        retrying the tool automatically. The tool result is authoritative: never claim
+        success for denied, failed,
         unavailable or unverified work.
         """
         del context

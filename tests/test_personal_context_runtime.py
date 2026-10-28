@@ -356,3 +356,38 @@ async def test_no_release_after_last_storage_await_is_interrupted(
     resume.set()
     result = await task
     assert result is False if release == "audio" else result["status"] == "denied"
+
+
+@pytest.mark.asyncio
+async def test_completed_private_response_is_distinct_from_authority_retirement(
+    personal,
+):
+    session, _, _, _, retired = personal
+    catalog = await session.catalog()
+    await session.read(catalog["catalog_id"], [0])
+    session.response_finished()
+    assert retired
+    assert session.retirement_reason == "response_completed"
+
+
+@pytest.mark.asyncio
+async def test_authority_retirement_never_requests_followup(personal):
+    session, _, _, _, retired = personal
+    session.close()
+    assert retired
+    assert session.retirement_reason == "invalidated"
+
+
+@pytest.mark.asyncio
+async def test_missing_learning_permission_returns_explanation_without_retiring_voice(
+    personal,
+):
+    session, _, _, _, retired = personal
+    session._learning_authority = object()
+    session._learning_grant = None
+    result = await session.query_for_question([])
+    assert result["status"] == "denied"
+    assert result["facts"] == []
+    assert result["reason"] == "personal_memory_session_unavailable"
+    assert not retired
+    assert await session.allow_audio()  # ordinary conversation, no personal facts

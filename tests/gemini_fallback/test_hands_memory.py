@@ -37,7 +37,10 @@ def shared(tmp_path, monkeypatch, scripts):
     return runtime, env
 
 
-def test_hands_fallback_after_action_does_not_execute_it_twice(tmp_path, monkeypatch):
+@pytest.mark.parametrize("status", [429, 503])
+def test_hands_fallback_after_action_does_not_execute_it_twice(
+    tmp_path, monkeypatch, status
+):
     from tests.test_hands_orchestrator import (
         FakeCatalog,
         RecordingExecutor,
@@ -64,7 +67,7 @@ def test_hands_fallback_after_action_does_not_execute_it_twice(tmp_path, monkeyp
             "free-private-canary": [
                 response({"group_indices": [0]}),
                 response(action),
-                APIError(429, {}),
+                APIError(status, {}),
             ],
             "paid-private-canary": [response({"actions": [], "goal_complete": True})],
         },

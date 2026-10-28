@@ -18,7 +18,15 @@ from jarvis.conversation import (
 )
 
 Category = Literal[
-    "owned_item", "food_preference", "response_preference", "routine", "goal"
+    "owned_item",
+    "food_preference",
+    "response_preference",
+    "routine",
+    "goal",
+    "personal_fact",
+    "activity",
+    "event",
+    "plan",
 ]
 
 
@@ -85,7 +93,13 @@ class LearningCandidate(BaseModel):
     sensitivity: Literal["standard", "private", "local_only", "secret_prohibited"] = (
         "standard"
     )
-    state: Literal["owned", "not_owned", "active", "completed"] = "active"
+    state: Literal[
+        "owned", "not_owned", "active", "completed", "planned", "cancelled"
+    ] = "active"
+    certainty: Literal["confirmed", "tentative", "uncertain"] = "confirmed"
+    time_expression: str | None = Field(default=None, min_length=1, max_length=240)
+    location: str | None = Field(default=None, min_length=1, max_length=240)
+    reason: str | None = Field(default=None, min_length=1, max_length=500)
     scalar_facet: (
         Literal["diet_preference", "response_language", "response_style"] | None
     ) = None
@@ -111,7 +125,7 @@ class LearningCatalogEntry(BaseModel):
     predicate: str
     category: str
     text: str = Field(max_length=1800)
-    value: str = Field(max_length=1800)
+    value: str = Field(max_length=20000)
     kind: str = "other"
 
 

@@ -410,7 +410,10 @@ class PairedAudioRuntime:
         session_input: SessionAudioInput,
         *,
         pre_roll_after_monotonic: float | None = None,
+        retain_since_boundary: bool = False,
     ) -> None:
+        if retain_since_boundary and pre_roll_after_monotonic is None:
+            raise ValueError("follow-up audio requires an explicit time boundary")
         if self._active_input is not None:
             raise RuntimeError("a voice session already owns routed microphone audio")
         self.detector.disable(clear_buffer=False)
@@ -419,7 +422,14 @@ class PairedAudioRuntime:
         if gate is not None:
             gate.set_target(session_input)
 
-        pre_roll_samples = int(self._pre_roll_seconds * DEVICE_SAMPLE_RATE)
+        # A follow-up can begin while the previous transport is closing. Retain
+        # all post-boundary audio still present in the existing bounded RAM ring.
+        duration = (
+            self._ring_buffer_seconds
+            if retain_since_boundary
+            else self._pre_roll_seconds
+        )
+        pre_roll_samples = int(duration * DEVICE_SAMPLE_RATE)
         selected: deque[_TimedAudioFrame] = deque()
         selected_samples = 0
         for timed_frame in reversed(self._ring):

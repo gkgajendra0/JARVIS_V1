@@ -387,3 +387,237 @@ async def test_guard_failure_closes_claimed_handoff_without_provider_body(
     finally:
         handoff.close()
         await session.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "code,message",
+    [
+        (1011, "Internal error encountered"),
+        (
+            1008,
+            "BidiGenerateContent session is already connected to an existing client",
+        ),
+    ],
+)
+async def test_voice_disconnect_gets_one_fresh_same_key_session_without_replay(
+    tmp_path, monkeypatch, code, message
+):
+    session, bridge, raw, handoff, models, _, observer = await setup(
+        tmp_path, monkeypatch, paid=False
+    )
+    try:
+        session.emit(
+            "user_input_transcribed",
+            UserInputTranscribedEvent(
+                transcript="Remember both bikes", is_final=True, item_id="bike-turn"
+            ),
+        )
+        original = bridge.conversation.turns
+        handoff._completed_tools = True
+        error = llm.RealtimeModelError(
+            timestamp=1,
+            label="disconnect",
+            error=APIError(code, {"message": message}),
+            recoverable=False,
+        )
+        raw.sessions[0].emit("error", error)
+        assert error.recoverable
+        await asyncio.wait_for(handoff.task, 3)
+        assert len(models) == 1
+        assert models[0][0].credential_ref == "GOOGLE_API_KEY"
+        assert raw.sessions[0].closed
+        assert models[0][1].sessions[0].replies == 0
+        assert bridge.conversation.turns == original
+        assert bridge.conversation.status is ConversationStatus.ACTIVE
+        assert observer.terminal_task is None
+        assert "Remember both bikes" in [
+            m.text_content for m in session.current_agent.chat_ctx.messages()
+        ]
+        task = handoff.task
+        models[0][1].sessions[0].emit(
+            "error",
+            llm.RealtimeModelError(
+                timestamp=2,
+                label="again",
+                error=APIError(code, {"message": message}),
+                recoverable=False,
+            ),
+        )
+        assert handoff.task is task
+        assert len(models) == 1
+    finally:
+        handoff.close()
+        await session.aclose()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_recovery_does_not_cross_pending_tool_or_authority_boundary(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    session, _, _, handoff, models, _, _ = await setup(
+        tmp_path, monkeypatch, paid=False
+    )
+    try:
+        for message in [
+            "unrelated policy violation",
+            "BidiGenerateContent session is already connected to an existing client",
+        ]:
+            handoff._pending_tools.add("in-flight")
+            event = SimpleNamespace(
+                source=handoff.current_model,
+                error=llm.RealtimeModelError(
+                    timestamp=1,
+                    label="policy",
+                    error=APIError(1008, {"message": message}),
+                    recoverable=False,
+                ),
+            )
+            assert not handoff.try_handle_event(event)
+        handoff._pending_tools.clear()
+        event.error.error = APIError(1008, {"message": "unrelated policy violation"})
+        assert not handoff.try_handle_event(event)
+        event.error.error = APIError(1011, {"message": "Internal error encountered"})
+        handoff.guard = lambda: False
+        assert handoff.try_handle_event(event)
+        await asyncio.wait_for(handoff.task, 3)
+        assert not models
+    finally:
+        handoff.close()
+        await session.aclose()
+
+
+@pytest.mark.asyncio
+async def test_initial_routed_voice_transport_disables_sdk_reconnect(
+    tmp_path, monkeypatch
+):
+    from jarvis.voice.livekit_session import create_voice_session
+
+    runtime, _ = shared(tmp_path, monkeypatch, {})
+    options = []
+
+    def model(**kwargs):
+        options.append(kwargs)
+        return ProviderModel()
+
+    monkeypatch.setattr(
+        "jarvis.voice.livekit_session.google.realtime.RealtimeModel", model
+    )
+    monkeypatch.setattr("livekit.agents.inference.VAD", lambda **_: None)
+    session, bridge = create_voice_session(
+        JarvisConfig(ai_provider="gemini"), routing_runtime=runtime
+    )
+    try:
+        assert options[0]["conn_options"].max_retry == 0
+    finally:
+        bridge.gemini_handoff.close()
+        await session.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fresh_recovery_preserves_paid_target_and_admission(
+    tmp_path, monkeypatch
+):
+    session, _, raw, handoff, models, admission, _ = await setup(tmp_path, monkeypatch)
+    try:
+        paid = next(
+            t
+            for t in handoff.router.target_registry.all()
+            if t.credential_ref == "JARVIS_GEMINI_PAID_API_KEY"
+        )
+        handoff.current_target = paid
+        raw.sessions[0].emit(
+            "error",
+            llm.RealtimeModelError(
+                timestamp=1,
+                label="disconnect",
+                error=APIError(1011, {"message": "Internal error encountered"}),
+                recoverable=False,
+            ),
+        )
+        await asyncio.wait_for(handoff.task, 3)
+        assert len(models) == 1
+        assert models[0][0] is paid
+        assert len(admission.prepared) == 1
+        assert models[0][1].sessions[0].replies == 0
+    finally:
+        handoff.close()
+        await session.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fresh_recovery_closes_conversation_if_physical_teardown_fails(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    session, _, raw, handoff, models, _, _ = await setup(
+        tmp_path, monkeypatch, paid=False
+    )
+    try:
+        raw.sessions[0].aclose = AsyncMock(side_effect=[TimeoutError, None, None])
+        raw.sessions[0].emit(
+            "error",
+            llm.RealtimeModelError(
+                timestamp=1,
+                label="disconnect",
+                error=APIError(1011, {"message": "Internal error encountered"}),
+                recoverable=False,
+            ),
+        )
+        await asyncio.wait_for(handoff.task, 3)
+        assert not models
+        assert handoff.last_reason == "fresh_session_recovery_failed"
+    finally:
+        raw.sessions[0].aclose = AsyncMock()
+        handoff.close()
+        await session.aclose()
+
+
+@pytest.mark.parametrize(
+    "code,message",
+    [
+        (1008, "1011 Internal error encountered"),
+        (403, "1011 Internal error encountered"),
+        (11011, "Internal error encountered"),
+        (1008, "unrelated policy violation"),
+    ],
+)
+def test_fresh_recovery_rejects_conflicting_structured_codes(code, message):
+    from jarvis.voice.gemini_handoff import _fresh_session_failure
+
+    error = RuntimeError("wrapped 1011 Internal error encountered")
+    error.__cause__ = APIError(code, {"message": message})
+    assert not _fresh_session_failure(error)
+
+
+@pytest.mark.asyncio
+async def test_fresh_recovery_bounds_stalled_model_cleanup(tmp_path, monkeypatch):
+    session, _, raw, handoff, models, _, _ = await setup(
+        tmp_path, monkeypatch, paid=False
+    )
+    original_close = raw.aclose
+
+    async def stalled():
+        await asyncio.Event().wait()
+
+    raw.aclose = stalled
+    try:
+        raw.sessions[0].emit(
+            "error",
+            llm.RealtimeModelError(
+                timestamp=1,
+                label="disconnect",
+                error=APIError(1011, {"message": "Internal error encountered"}),
+                recoverable=False,
+            ),
+        )
+        await asyncio.wait_for(asyncio.shield(handoff.task), 4)
+        assert not models
+        assert handoff.last_reason == "fresh_session_recovery_failed"
+    finally:
+        raw.aclose = original_close
+        handoff.close()
+        await session.aclose()

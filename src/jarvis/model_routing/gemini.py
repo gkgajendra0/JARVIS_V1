@@ -134,7 +134,7 @@ def build_gemini_role_targets(
 
 
 def gemini_paid_fallback_allowed(failure, *, source_target: ModelTarget) -> bool:
-    """The new funded edge admits pressure on the Free credential only."""
+    """Admit Free quota pressure, plus explicit HTTP 503 for Hands planning."""
     from jarvis.provider_resilience import ProviderFailure, ProviderFailureKind
 
     return (
@@ -142,7 +142,19 @@ def gemini_paid_fallback_allowed(failure, *, source_target: ModelTarget) -> bool
         and failure.provider == "gemini"
         and source_target.provider_id == "gemini"
         and source_target.credential_ref == gemini_credential_ref("free")
-        and failure.status_code in {None, 429}
-        and failure.kind
-        in {ProviderFailureKind.QUOTA_EXHAUSTED, ProviderFailureKind.RATE_LIMITED}
+        and (
+            (
+                failure.status_code in {None, 429}
+                and failure.kind
+                in {
+                    ProviderFailureKind.QUOTA_EXHAUSTED,
+                    ProviderFailureKind.RATE_LIMITED,
+                }
+            )
+            or (
+                failure.status_code == 503
+                and failure.kind is ProviderFailureKind.SERVICE_UNAVAILABLE
+                and "hands_planning" in source_target.capabilities
+            )
+        )
     )

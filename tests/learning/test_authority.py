@@ -29,22 +29,22 @@ def opened(authority):
     return grant
 
 
-def test_absolute_expiry_is_not_renewed_by_input(authority, clock):
+def test_session_permission_survives_old_absolute_limit(authority, clock):
     grant = opened(authority)
     for index in range(4):
         clock.advance(200)
         authority.observe_accepted_input(grant, f"turn-{index}")
     clock.advance(100)
-    assert authority.validate(grant).status == "expired"
+    assert authority.validate(grant).status == "active"
 
 
-def test_duplicate_input_does_not_extend_idle(authority, clock):
+def test_session_permission_survives_idle_without_new_input(authority, clock):
     grant = opened(authority)
     authority.observe_accepted_input(grant, "one")
     clock.advance(299)
     authority.observe_accepted_input(grant, "one")
     clock.advance(1)
-    assert authority.validate(grant).status == "expired"
+    assert authority.validate(grant).status == "active"
 
 
 def test_one_hello_for_multiple_exact_system_children(authority, authority_parts):
@@ -58,7 +58,7 @@ def test_one_hello_for_multiple_exact_system_children(authority, authority_parts
     assert len(authority_parts.hello.calls) == 1
     assert authority_parts.broker._trusted_sessions == {}
     summary = authority_parts.hello.calls[0].material_summary
-    assert "15" in summary and "5" in summary and "speaker" in summary
+    assert "unlocked Windows session" in summary and "speaker" in summary
 
 
 def test_lock_epoch_invalidates_late_child(authority, authority_parts):
@@ -114,7 +114,7 @@ def test_parent_id_cannot_be_used_as_generic_approval(authority, authority_parts
         )
 
 
-def test_expiry_checked_inside_lease(authority, clock):
+def test_short_child_lease_expiry_checked_inside_commit(authority, clock):
     grant = opened(authority)
     permit = authority.issue_child(grant, binding())
     with pytest.raises(PermissionError), authority.commit_scope(permit):
@@ -162,3 +162,44 @@ def test_child_must_use_registered_source(authority):
         authority.issue_child(
             grant, binding(source_receipt_id="source-from-other-runtime")
         )
+
+
+@pytest.mark.parametrize("pause", [301, 901, 86400])
+def test_fresh_children_after_long_pause_need_no_new_hello(
+    authority, authority_parts, clock, pause
+):
+    grant = opened(authority)
+    clock.advance(pause)
+    authority.observe_accepted_input(grant, "fresh-turn")
+    authority.register_source(grant, "fresh-source")
+    permit = authority.issue_child(grant, binding(source_receipt_id="fresh-source"))
+    with authority.commit_scope(permit):
+        pass
+    assert len(authority_parts.hello.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"active_unlocked": False},
+        {"windows_user_sid_hash": "another-user"},
+        {"windows_session_id": 2},
+        {"generation": 2},
+    ],
+)
+def test_session_changes_revoke_even_after_long_idle(
+    authority, authority_parts, clock, change
+):
+    grant = opened(authority)
+    clock.advance(86400)
+    authority_parts.windows.value = replace(authority_parts.windows.value, **change)
+    assert authority.validate(grant).status == "revoked"
+    with pytest.raises(PermissionError):
+        authority.register_source(grant, "fresh-source")
+
+
+def test_close_revokes_session_permission(authority, clock):
+    grant = opened(authority)
+    clock.advance(86400)
+    authority.close()
+    assert authority.validate(grant).status == "revoked"

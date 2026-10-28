@@ -26,7 +26,8 @@ function Import-JarvisApiKeys {
     # Values stay in memory and are never written to output or machine.json.
     foreach ($name in @(
         'GOOGLE_API_KEY', 'EXA_API_KEY', 'JARVIS_GEMINI_PAID_API_KEY',
-        'OPENAI_API_KEY', 'JARVIS_TTS_GOOGLE_API_KEY', 'JARVIS_TTS_OPENAI_API_KEY'
+        'OPENAI_API_KEY', 'JARVIS_TTS_GOOGLE_API_KEY', 'JARVIS_TTS_OPENAI_API_KEY',
+        'JARVIS_WORK_DBOS_DATABASE_URL'
     )) {
         $processValue = [Environment]::GetEnvironmentVariable($name, 'Process')
         if (-not [string]::IsNullOrWhiteSpace($processValue)) { continue }
@@ -77,6 +78,16 @@ $jarvisRoot = Split-Path -Parent $AppPath
 $storageBootstrap = Join-Path $jarvisRoot 'Bootstrap\Set-JarvisStorage.ps1'
 Require-File $storageBootstrap 'Jarvis persistent-storage bootstrap'
 . $storageBootstrap -JarvisRoot $jarvisRoot -StatePath $DataPath -ModelsPath $ModelsPath
+$machineProfile = Join-Path $DataPath 'machine.json'
+if (Test-Path -LiteralPath $machineProfile) {
+    $profileSettings = (Get-Content -LiteralPath $machineProfile -Raw | ConvertFrom-Json).settings
+    $workSetting = $profileSettings.PSObject.Properties['JARVIS_WORK_ORCHESTRATION_ENABLED']
+    if ($null -ne $workSetting -and $workSetting.Value -eq 'true') {
+        $workBootstrap = Join-Path $jarvisRoot 'Bootstrap\Start-WorkDatabase.ps1'
+        Require-File $workBootstrap 'Jarvis Work database bootstrap'
+        & $workBootstrap
+    }
+}
 Write-Host '=== JARVIS restore: source and Python ===' -ForegroundColor Cyan
 Require-File (Join-Path $AppPath 'src\jarvis\config.py') 'Jarvis source'
 $python = Join-Path $AppPath '.venv\Scripts\python.exe'
