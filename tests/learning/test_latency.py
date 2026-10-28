@@ -59,9 +59,7 @@ async def test_extraction_over_old_ten_second_limit_finishes(learning):
     c.start()
     try:
         r.bind(c, learning.grant)(
-            c.accept_turn(
-                ConversationRole.USER, "I work for Northstar Design Limited."
-            )
+            c.accept_turn(ConversationRole.USER, "I work for Northstar Design Limited.")
         )
         await asyncio.wait_for(r.drain(), 13)
         assert r.status().reason == "committed" and len(calls) == 1
