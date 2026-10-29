@@ -24,12 +24,22 @@ from .conversation_semantics import (
     SemanticContextEngine,
     SemanticProposal,
     SemanticRejected,
+    TopicSnapshot,
 )
 
 LOGGER = logging.getLogger(__name__)
 
 ProposalProducer = Callable[[ConversationTurn], Awaitable[Sequence[SemanticProposal]]]
 AuthorizationBinding = Callable[[], str | None]
+AppliedStateCallback = Callable[
+    [
+        ConversationTurn,
+        tuple[SemanticProposal, ...],
+        TopicSnapshot | None,
+        TopicSnapshot | None,
+    ],
+    Awaitable[None],
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +66,7 @@ class SemanticTurnPipeline:
         state: SemanticContextEngine,
         producer: ProposalProducer,
         authorization_binding: AuthorizationBinding,
+        on_applied: AppliedStateCallback | None = None,
         max_pending: int = 16,
         timeout_seconds: float = 5.0,
     ) -> None:
@@ -77,6 +88,9 @@ class SemanticTurnPipeline:
         self.state = state
         self._producer = producer
         self._authorization_binding = authorization_binding
+        if on_applied is not None and not callable(on_applied):
+            raise TypeError("on_applied must be an async callback")
+        self._on_applied = on_applied
         self._timeout_seconds = float(timeout_seconds)
         self._queue: asyncio.Queue[tuple[ConversationTurn, str, int]] = asyncio.Queue(
             maxsize=max_pending
@@ -191,8 +205,19 @@ class SemanticTurnPipeline:
                     continue
                 if not isinstance(proposals, (tuple, list)):
                     raise SemanticRejected("producer must return a proposal sequence")
-                self.state.apply(self._conversation, turn, proposals, epoch=epoch)
+                before = self.state.snapshot()
+                changed = self.state.apply(
+                    self._conversation, turn, proposals, epoch=epoch
+                )
                 self._applied += 1
+                if (
+                    changed
+                    and self._on_applied is not None
+                    and self._still_authorized(binding, epoch)
+                ):
+                    await self._on_applied(
+                        turn, tuple(proposals), before, self.state.snapshot()
+                    )
             except asyncio.CancelledError:
                 raise
             except (SemanticRejected, TimeoutError, ValueError, TypeError):
