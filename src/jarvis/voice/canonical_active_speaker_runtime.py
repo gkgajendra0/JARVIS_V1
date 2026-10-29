@@ -126,6 +126,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         routing_runtime=None,
         semantic_producer=None,
         semantic_authorization_binding=None,
+        semantic_topic_resume_enabled=False,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -140,6 +141,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._learning_grant = None
         self._learning_start_attempted = False
         self._semantic_context_attachment = None
+        if type(semantic_topic_resume_enabled) is not bool:
+            raise TypeError("semantic_topic_resume_enabled must be a bool")
+        if semantic_topic_resume_enabled and (
+            memory_runtime is None or capability_runtime is None
+        ):
+            raise ValueError(
+                "Topic resumption requires canonical memory and capability authority"
+            )
         if (semantic_producer is None) != (semantic_authorization_binding is None):
             raise ValueError(
                 "Semantic voice requires both an authorized producer and owner binding"
@@ -205,6 +214,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         else None
                     ),
                     learning_grant=self._learning_grant,
+                    topic_checkpoints=(
+                        memory_runtime.topic_checkpoints
+                        if semantic_topic_resume_enabled
+                        else None
+                    ),
                 )
                 self._personal_context = personal
                 bridge.add_accepted_turn_observer(personal.observe_turn)
