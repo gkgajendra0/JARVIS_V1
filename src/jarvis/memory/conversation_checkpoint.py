@@ -82,7 +82,7 @@ def _explicit_topic(question: str, title: str) -> bool:
         if len(part) >= 4 and part not in _GENERIC_TOPIC_WORDS
     ]
     if distinctive:
-        return any(part in tokens for part in distinctive)
+        return all(part in tokens for part in distinctive)
     return _key(title) in unicodedata.normalize("NFKC", question).casefold()
 
 
