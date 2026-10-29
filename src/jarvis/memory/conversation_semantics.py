@@ -190,6 +190,11 @@ class SemanticContextEngine:
             raise SemanticRejected("session input budget exhausted")
         if not isinstance(proposals, (tuple, list)) or len(proposals) > 12:
             raise SemanticRejected("invalid proposal batch")
+        if (
+            len(proposals) > 1
+            and any(p.action is SemanticAction.FORGET_TOPIC for p in proposals)
+        ):
+            raise SemanticRejected("forget cannot be mixed with other state changes")
         if not proposals:
             self._seen.add(turn.turn_id)
             self._last_applied_at = turn.accepted_at
