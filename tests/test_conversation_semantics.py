@@ -287,9 +287,17 @@ def test_reject_secret_and_unrelated_completion():
         value="route",
     )
     t = utterance(c, 4, "The documents are ready")
-    with pytest.raises(SemanticRejected, match="name the pending step"):
+    with pytest.raises(SemanticRejected, match="explicit confirmed state"):
         apply_epoch(
             e, c, t, [proposal(t.text, SemanticAction.COMPLETE_STEP, key="route")]
+        )
+    unrelated = utterance(c, 5, "The documents are done")
+    with pytest.raises(SemanticRejected, match="name the pending step"):
+        apply_epoch(
+            e,
+            c,
+            unrelated,
+            [proposal(unrelated.text, SemanticAction.COMPLETE_STEP, key="route")],
         )
 
 
