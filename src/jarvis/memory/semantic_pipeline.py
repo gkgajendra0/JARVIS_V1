@@ -31,12 +31,14 @@ LOGGER = logging.getLogger(__name__)
 
 ProposalProducer = Callable[[ConversationTurn], Awaitable[Sequence[SemanticProposal]]]
 AuthorizationBinding = Callable[[], str | None]
+AcceptedPlanEpoch = Callable[[ConversationTurn], int]
 AppliedStateCallback = Callable[
     [
         ConversationTurn,
         tuple[SemanticProposal, ...],
         TopicSnapshot | None,
         TopicSnapshot | None,
+        int,
     ],
     Awaitable[None],
 ]
@@ -67,6 +69,7 @@ class SemanticTurnPipeline:
         producer: ProposalProducer,
         authorization_binding: AuthorizationBinding,
         on_applied: AppliedStateCallback | None = None,
+        accepted_plan_epoch: AcceptedPlanEpoch | None = None,
         max_pending: int = 16,
         timeout_seconds: float = 5.0,
     ) -> None:
@@ -88,11 +91,16 @@ class SemanticTurnPipeline:
         self.state = state
         self._producer = producer
         self._authorization_binding = authorization_binding
-        if on_applied is not None and not callable(on_applied):
-            raise TypeError("on_applied must be an async callback")
+        if on_applied is not None and (
+            not callable(on_applied) or not callable(accepted_plan_epoch)
+        ):
+            raise TypeError(
+                "persisted state requires async callback and accepted-turn epoch"
+            )
         self._on_applied = on_applied
+        self._accepted_plan_epoch = accepted_plan_epoch
         self._timeout_seconds = float(timeout_seconds)
-        self._queue: asyncio.Queue[tuple[ConversationTurn, str, int]] = asyncio.Queue(
+        self._queue: asyncio.Queue[tuple[ConversationTurn, str, int, int]] = asyncio.Queue(
             maxsize=max_pending
         )
         self._worker: asyncio.Task[None] | None = None
@@ -147,7 +155,18 @@ class SemanticTurnPipeline:
             self.invalidate()
         self._binding = binding
         try:
-            self._queue.put_nowait((turn, binding, self.state.epoch))
+            plan_epoch = (
+                self._accepted_plan_epoch(turn)
+                if self._accepted_plan_epoch is not None
+                else 0
+            )
+            if type(plan_epoch) is not int or plan_epoch < 0:
+                raise ValueError("invalid accepted-turn plan epoch")
+        except Exception:
+            self._dropped += 1
+            return False
+        try:
+            self._queue.put_nowait((turn, binding, self.state.epoch, plan_epoch))
         except asyncio.QueueFull:
             self._dropped += 1
             return False
@@ -192,7 +211,7 @@ class SemanticTurnPipeline:
 
     async def _run(self) -> None:
         while True:
-            turn, binding, epoch = await self._queue.get()
+            turn, binding, epoch, plan_epoch = await self._queue.get()
             try:
                 if not self._still_authorized(binding, epoch):
                     self._dropped += 1
@@ -216,7 +235,7 @@ class SemanticTurnPipeline:
                     and self._still_authorized(binding, epoch)
                 ):
                     await self._on_applied(
-                        turn, tuple(proposals), before, self.state.snapshot()
+                        turn, tuple(proposals), before, self.state.snapshot(), plan_epoch
                     )
             except asyncio.CancelledError:
                 raise
