@@ -56,6 +56,7 @@ class SemanticCheckpointWriter:
         proposals: tuple[SemanticProposal, ...],
         before: TopicSnapshot | None,
         after: TopicSnapshot | None,
+        source_plan_epoch: int,
     ) -> None:
         if any(p.action is SemanticAction.FORGET_TOPIC for p in proposals):
             if len(proposals) != 1:
@@ -77,4 +78,5 @@ class SemanticCheckpointWriter:
             after,
             authorize_write=lambda: self._write(turn),
             admit_snapshot=lambda snapshot, source: self._admit(snapshot, source),
+            expected_plan_epoch=source_plan_epoch,
         )
