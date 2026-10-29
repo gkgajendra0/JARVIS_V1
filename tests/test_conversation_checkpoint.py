@@ -628,7 +628,6 @@ async def test_two_matching_topics_fail_closed_without_guessing(tmp_path):
         await reader.close()
 
 
-
 @pytest.mark.asyncio
 async def test_suppressed_plan_category_denies_read_and_fingerprint_without_leak(
     tmp_path,
@@ -677,6 +676,7 @@ async def test_suppressed_plan_category_denies_read_and_fingerprint_without_leak
     finally:
         await writer.close()
         await reader.close()
+
 
 @pytest.mark.asyncio
 async def test_suppression_blocks_stale_save_even_after_reenabled(tmp_path):
@@ -880,6 +880,7 @@ async def test_async_forget_from_accepted_turn_survives_following_chatter(tmp_pa
     finally:
         await writer.close()
         await reader.close()
+
 
 @pytest.mark.asyncio
 async def test_full_named_topic_disambiguates_overlapping_saved_titles(tmp_path):
