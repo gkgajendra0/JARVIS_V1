@@ -81,9 +81,9 @@ class SemanticContextProjector:
         """For a fresh wake/restart, the current question must name the topic."""
         if not isinstance(snapshot, TopicSnapshot):
             raise TypeError("snapshot must be TopicSnapshot")
+        self._allowed(conversation, turn, snapshot.title)
         if not _explicit_topic(turn.text, snapshot.title):
             raise ContextReleaseDenied("new request does not name the topic")
-        self._allowed(conversation, turn, snapshot.title)
         live = LiveContext(max_recent_turns=1)
         live.observe_turn(turn)
         live.set_active_topic(
