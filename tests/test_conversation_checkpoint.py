@@ -262,3 +262,86 @@ async def test_negated_forget_is_not_a_delete_request(tmp_path):
     finally:
         await writer.close()
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_write_revoked_inside_transaction_leaves_no_checkpoint(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        source = accepted(conversation, 1, "Nepal trip")
+        calls = [0]
+
+        def permit():
+            calls[0] += 1
+            return calls[0] < 3
+
+        with pytest.raises(CheckpointRejected, match="permit denied"):
+            await store.save(
+                conversation, source, checkpoint(source), authorize_write=permit
+            )
+        request = accepted(conversation, 2, "Continue Nepal trip")
+        result = await store.read_named(
+            conversation, request,
+            title="Nepal trip", authorize_read=lambda: True,
+        )
+        assert result is None
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_read_revoked_after_database_fetch_releases_no_payload(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        source = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, source, checkpoint(source),
+            authorize_write=lambda: True,
+        )
+        question = accepted(conversation, 2, "Continue Nepal trip")
+        calls = [0]
+
+        def permit():
+            calls[0] += 1
+            return calls[0] < 3
+
+        with pytest.raises(CheckpointRejected, match="permit denied"):
+            await store.read_named(
+                conversation, question, title="Nepal trip", authorize_read=permit
+            )
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_old_forget_cannot_erase_newer_checkpoint(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        first = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, first, checkpoint(first), authorize_write=lambda: True
+        )
+        updated = accepted(conversation, 5, "New Nepal trip details")
+        await store.save(
+            conversation, updated, checkpoint(updated, budget="flexible"),
+            authorize_write=lambda: True,
+        )
+        late_forget = accepted(conversation, 3, "Forget Nepal trip")
+        assert not await store.forget(
+            conversation, late_forget, title="Nepal trip",
+            authorize_forget=lambda: True,
+        )
+        question = accepted(conversation, 6, "Continue Nepal trip")
+        result = await store.read_named(
+            conversation, question,
+            title="Nepal trip", authorize_read=lambda: True,
+        )
+        assert result["constraints"]["budget"] == "flexible"
+    finally:
+        await writer.close()
+        await reader.close()
