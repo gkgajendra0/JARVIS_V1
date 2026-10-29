@@ -55,28 +55,56 @@ def test_nepal_seven_turn_working_state_and_completion():
     session = ConversationSession()
     engine = SemanticContextEngine()
     apply(
-        engine, session, 1, "Let's discuss my Nepal trip",
-        SemanticAction.TOPIC, value="Nepal trip",
+        engine,
+        session,
+        1,
+        "Let's discuss my Nepal trip",
+        SemanticAction.TOPIC,
+        value="Nepal trip",
     )
     apply(
-        engine, session, 2, "My goal is to plan Nepal",
-        SemanticAction.GOAL, value="plan Nepal",
+        engine,
+        session,
+        2,
+        "My goal is to plan Nepal",
+        SemanticAction.GOAL,
+        value="plan Nepal",
     )
     apply(
-        engine, session, 3, "My vehicle is a Jimny",
-        SemanticAction.CONSTRAINT, key="vehicle", value="Jimny",
+        engine,
+        session,
+        3,
+        "My vehicle is a Jimny",
+        SemanticAction.CONSTRAINT,
+        key="vehicle",
+        value="Jimny",
     )
     apply(
-        engine, session, 4, "The permits are sorted",
-        SemanticAction.CONSTRAINT, key="permits", value="sorted",
+        engine,
+        session,
+        4,
+        "The permits are sorted",
+        SemanticAction.CONSTRAINT,
+        key="permits",
+        value="sorted",
     )
     apply(
-        engine, session, 5, "Budget is not a constraint",
-        SemanticAction.CONSTRAINT, key="budget", value="unrestricted",
+        engine,
+        session,
+        5,
+        "Budget is not a constraint",
+        SemanticAction.CONSTRAINT,
+        key="budget",
+        value="unrestricted",
     )
     apply(
-        engine, session, 6, "Next, plan the route",
-        SemanticAction.PENDING_STEP, key="route", value="plan route",
+        engine,
+        session,
+        6,
+        "Next, plan the route",
+        SemanticAction.PENDING_STEP,
+        key="route",
+        value="plan route",
     )
 
     current = engine.snapshot()
@@ -91,13 +119,22 @@ def test_nepal_seven_turn_working_state_and_completion():
     )
 
     apply(
-        engine, session, 7, "Actually the budget is 10000",
-        SemanticAction.CORRECT, key="budget", value="10000",
+        engine,
+        session,
+        7,
+        "Actually the budget is 10000",
+        SemanticAction.CORRECT,
+        key="budget",
+        value="10000",
     )
     assert dict(engine.snapshot().constraints)["budget"].value == "10000"
     apply(
-        engine, session, 8, "The route is planned",
-        SemanticAction.COMPLETE_STEP, key="route",
+        engine,
+        session,
+        8,
+        "The route is planned",
+        SemanticAction.COMPLETE_STEP,
+        key="route",
     )
     assert dict(engine.snapshot().steps)["route"].completed is True
 
@@ -107,12 +144,21 @@ def test_topic_switch_does_not_mix_constraints():
     e = SemanticContextEngine()
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     apply(
-        e, c, 2, "Permits are sorted",
-        SemanticAction.CONSTRAINT, key="permits", value="sorted",
+        e,
+        c,
+        2,
+        "Permits are sorted",
+        SemanticAction.CONSTRAINT,
+        key="permits",
+        value="sorted",
     )
     apply(
-        e, c, 3, "Interview preparation",
-        SemanticAction.TOPIC, value="Interview preparation",
+        e,
+        c,
+        3,
+        "Interview preparation",
+        SemanticAction.TOPIC,
+        value="Interview preparation",
     )
     assert e.snapshot().constraints == ()
     assert dict(e.snapshot("Nepal trip").constraints)["permits"].value == "sorted"
@@ -129,8 +175,11 @@ def test_other_topic_cannot_be_modified_implicitly():
             c, t,
             [
                 proposal(
-                    t.text, SemanticAction.CONSTRAINT,
-                    topic="Nepal trip", key="budget", value="unlimited",
+                    t.text,
+                    SemanticAction.CONSTRAINT,
+                    topic="Nepal trip",
+                    key="budget",
+                    value="unlimited",
                 )
             ],
         )
@@ -146,7 +195,8 @@ def test_assistant_and_foreign_turns_cannot_create_context():
     fake = utterance(other, 2, "Nepal trip")
     with pytest.raises(SemanticRejected, match="canonical"):
         e.apply(
-            c, fake,
+            c,
+            fake,
             [proposal(fake.text, SemanticAction.TOPIC, value="Nepal trip")],
         )
 
@@ -204,15 +254,22 @@ def test_reject_secret_and_unrelated_completion():
             c, t,
             [
                 proposal(
-                    t.text, SemanticAction.TOPIC,
-                    value="password", sensitivity=Sensitivity.SECRET_PROHIBITED,
+                    t.text,
+                    SemanticAction.TOPIC,
+                    value="password",
+                    sensitivity=Sensitivity.SECRET_PROHIBITED,
                 )
             ],
         )
     apply(e, c, 2, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     apply(
-        e, c, 3, "Plan the route",
-        SemanticAction.PENDING_STEP, key="route", value="route",
+        e,
+        c,
+        3,
+        "Plan the route",
+        SemanticAction.PENDING_STEP,
+        key="route",
+        value="route",
     )
     t = utterance(c, 4, "The documents are ready")
     with pytest.raises(SemanticRejected, match="name the pending step"):
@@ -242,8 +299,13 @@ def test_hindi_and_hinglish_evidence_without_losing_source():
     e = SemanticContextEngine()
     apply(e, c, 1, "नेपाल यात्रा", SemanticAction.TOPIC, value="नेपाल यात्रा")
     apply(
-        e, c, 2, "Budget ka issue nahi hai",
-        SemanticAction.CONSTRAINT, key="budget", value="unrestricted",
+        e,
+        c,
+        2,
+        "Budget ka issue nahi hai",
+        SemanticAction.CONSTRAINT,
+        key="budget",
+        value="unrestricted",
     )
     state = dict(e.snapshot().constraints)["budget"]
     assert state.evidence == "Budget ka issue nahi hai"
@@ -263,13 +325,20 @@ def test_stale_correction_cannot_override_newer_value():
     e = SemanticContextEngine()
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     apply(
-        e, c, 5, "Budget is unlimited",
-        SemanticAction.CONSTRAINT, key="budget", value="unlimited",
+        e,
+        c,
+        5,
+        "Budget is unlimited",
+        SemanticAction.CONSTRAINT,
+        key="budget",
+        value="unlimited",
     )
     t = utterance(c, 3, "Budget is tight")
     assert (
         e.apply(
-            c, t, [proposal(t.text, SemanticAction.CORRECT, key="budget", value="tight")]
+            c,
+            t,
+            [proposal(t.text, SemanticAction.CORRECT, key="budget", value="tight")],
         )
         == 0
     )
