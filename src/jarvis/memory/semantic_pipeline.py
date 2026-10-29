@@ -162,7 +162,7 @@ class SemanticTurnPipeline:
             )
             if type(plan_epoch) is not int or plan_epoch < 0:
                 raise ValueError("invalid accepted-turn plan epoch")
-        except Exception:
+        except Exception:  # noqa: BLE001 - reject invalid external epoch callbacks
             self._dropped += 1
             return False
         try:
@@ -206,7 +206,7 @@ class SemanticTurnPipeline:
             return
         # A routed model producer may ignore cancellation temporarily.
         # Voice retirement must not wait forever for third-party I/O.
-        done, pending = await asyncio.wait({task}, timeout=1.0)
+        _done, pending = await asyncio.wait({task}, timeout=1.0)
         if pending:
             LOGGER.warning(
                 "Semantic inference did not cancel promptly; context remains revoked"

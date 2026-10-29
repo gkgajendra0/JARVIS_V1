@@ -601,7 +601,7 @@ class PersonalContextSession:
                         self._learning_authority.validate_read(permit)
                     else:
                         self._authority.validate_personal_context(permit)
-                except Exception:
+                except Exception:  # noqa: BLE001 - deny on validation errors
                     return False
                 return True
 
@@ -677,7 +677,7 @@ class PersonalContextSession:
             except asyncio.CancelledError:
                 self.close()
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - deny and retire on errors
                 self.close()
                 return {"status": "denied"}
 
