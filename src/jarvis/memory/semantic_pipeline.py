@@ -234,9 +234,20 @@ class SemanticTurnPipeline:
                     and self._on_applied is not None
                     and self._still_authorized(binding, epoch)
                 ):
-                    await self._on_applied(
-                        turn, tuple(proposals), before, self.state.snapshot(), plan_epoch
-                    )
+                    try:
+                        await self._on_applied(
+                            turn,
+                            tuple(proposals),
+                            before,
+                            self.state.snapshot(),
+                            plan_epoch,
+                        )
+                    except BaseException:
+                        # A failed durable save/forget cannot leave an
+                        # apparently committed transient semantic state.
+                        # Invalidate pending work and all derived context.
+                        self.invalidate()
+                        raise
             except asyncio.CancelledError:
                 raise
             except (SemanticRejected, TimeoutError, ValueError, TypeError):
