@@ -688,3 +688,64 @@ async def test_reenabled_plan_epoch_rejects_late_old_proposal_even_with_future_t
     finally:
         await writer.close()
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_async_prior_accepted_turn_can_save_after_next_user_turn(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        first = accepted(conversation, 1, "Nepal trip")
+        later = accepted(conversation, 2, "And the budget is flexible")
+        assert await store.save(
+            conversation,
+            first,
+            checkpoint(first),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+            expected_plan_epoch=0,
+        )
+        # Reads remain bound to the CURRENT accepted user request.
+        with pytest.raises(CheckpointRejected, match="canonical owner USER"):
+            await store.read_named(
+                conversation, first,
+                title="Nepal trip", authorize_read=lambda: True,
+            )
+        query = accepted(conversation, 3, "Continue Nepal trip")
+        restored = await store.read_named(
+            conversation, query,
+            title="Nepal trip", authorize_read=lambda: True,
+        )
+        assert restored["constraints"]["budget"] == "unrestricted"
+        assert later is not query
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_async_forget_from_accepted_turn_survives_following_chatter(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        first = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, first, checkpoint(first),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+            expected_plan_epoch=0,
+        )
+        forget = accepted(conversation, 3, "Forget Nepal trip")
+        accepted(conversation, 4, "Thank you")
+        assert await store.forget(
+            conversation, forget, title="Nepal trip",
+            authorize_forget=lambda: True,
+        )
+        query = accepted(conversation, 5, "Continue Nepal trip")
+        assert await store.read_named(
+            conversation, query, title="Nepal trip",
+            authorize_read=lambda: True,
+        ) is None
+    finally:
+        await writer.close()
+        await reader.close()
