@@ -5,7 +5,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 from jarvis.memory.conversation_semantics import (
     EvidenceStrength,
     SemanticAction,
@@ -27,7 +31,9 @@ def utterance(session, number, text, role=ConversationRole.USER):
     return accepted
 
 
-def proposal(text, action, *, value="", key="", topic="", sensitivity=Sensitivity.STANDARD):
+def proposal(
+    text, action, *, value="", key="", topic="", sensitivity=Sensitivity.STANDARD
+):
     return SemanticProposal(
         action=action,
         quote=text,
@@ -48,8 +54,14 @@ def apply(engine, session, index, text, action, **kwargs):
 def test_nepal_seven_turn_working_state_and_completion():
     session = ConversationSession()
     engine = SemanticContextEngine()
-    apply(engine, session, 1, "Let's discuss my Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
-    apply(engine, session, 2, "My goal is to plan Nepal", SemanticAction.GOAL, value="plan Nepal")
+    apply(
+        engine, session, 1, "Let's discuss my Nepal trip",
+        SemanticAction.TOPIC, value="Nepal trip",
+    )
+    apply(
+        engine, session, 2, "My goal is to plan Nepal",
+        SemanticAction.GOAL, value="plan Nepal",
+    )
     apply(
         engine, session, 3, "My vehicle is a Jimny",
         SemanticAction.CONSTRAINT, key="vehicle", value="Jimny",
@@ -73,14 +85,20 @@ def test_nepal_seven_turn_working_state_and_completion():
     assert dict(current.constraints)["vehicle"].value == "Jimny"
     assert dict(current.constraints)["budget"].value == "unrestricted"
     assert dict(current.steps)["route"].completed is False
-    assert dict(current.constraints)["budget"].evidence_strength is EvidenceStrength.INTERPRETED
+    assert (
+        dict(current.constraints)["budget"].evidence_strength
+        is EvidenceStrength.INTERPRETED
+    )
 
     apply(
         engine, session, 7, "Actually the budget is 10000",
         SemanticAction.CORRECT, key="budget", value="10000",
     )
     assert dict(engine.snapshot().constraints)["budget"].value == "10000"
-    apply(engine, session, 8, "The route is planned", SemanticAction.COMPLETE_STEP, key="route")
+    apply(
+        engine, session, 8, "The route is planned",
+        SemanticAction.COMPLETE_STEP, key="route",
+    )
     assert dict(engine.snapshot().steps)["route"].completed is True
 
 
@@ -88,8 +106,14 @@ def test_topic_switch_does_not_mix_constraints():
     c = ConversationSession()
     e = SemanticContextEngine()
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
-    apply(e, c, 2, "Permits are sorted", SemanticAction.CONSTRAINT, key="permits", value="sorted")
-    apply(e, c, 3, "Interview preparation", SemanticAction.TOPIC, value="Interview preparation")
+    apply(
+        e, c, 2, "Permits are sorted",
+        SemanticAction.CONSTRAINT, key="permits", value="sorted",
+    )
+    apply(
+        e, c, 3, "Interview preparation",
+        SemanticAction.TOPIC, value="Interview preparation",
+    )
     assert e.snapshot().constraints == ()
     assert dict(e.snapshot("Nepal trip").constraints)["permits"].value == "sorted"
 
@@ -103,8 +127,12 @@ def test_other_topic_cannot_be_modified_implicitly():
     with pytest.raises(SemanticRejected, match="inactive topic"):
         e.apply(
             c, t,
-            [proposal(t.text, SemanticAction.CONSTRAINT, topic="Nepal trip",
-                      key="budget", value="unlimited")],
+            [
+                proposal(
+                    t.text, SemanticAction.CONSTRAINT,
+                    topic="Nepal trip", key="budget", value="unlimited",
+                )
+            ],
         )
 
 
@@ -117,7 +145,10 @@ def test_assistant_and_foreign_turns_cannot_create_context():
     other = ConversationSession()
     fake = utterance(other, 2, "Nepal trip")
     with pytest.raises(SemanticRejected, match="canonical"):
-        e.apply(c, fake, [proposal(fake.text, SemanticAction.TOPIC, value="Nepal trip")])
+        e.apply(
+            c, fake,
+            [proposal(fake.text, SemanticAction.TOPIC, value="Nepal trip")],
+        )
 
 
 def test_forged_quote_and_batch_failure_are_atomic():
@@ -141,7 +172,9 @@ def test_invented_date_rejected_and_other_updates_not_applied():
             c, t,
             [
                 proposal(t.text, SemanticAction.CONSTRAINT, key="docs", value="sorted"),
-                proposal(t.text, SemanticAction.CONSTRAINT, key="date", value="2026-11-09"),
+                proposal(
+                    t.text, SemanticAction.CONSTRAINT, key="date", value="2026-11-09"
+                ),
             ],
         )
     assert e.snapshot().constraints == ()
@@ -169,11 +202,18 @@ def test_reject_secret_and_unrelated_completion():
     with pytest.raises(SemanticRejected, match="secret"):
         e.apply(
             c, t,
-            [proposal(t.text, SemanticAction.TOPIC, value="password",
-                      sensitivity=Sensitivity.SECRET_PROHIBITED)],
+            [
+                proposal(
+                    t.text, SemanticAction.TOPIC,
+                    value="password", sensitivity=Sensitivity.SECRET_PROHIBITED,
+                )
+            ],
         )
     apply(e, c, 2, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
-    apply(e, c, 3, "Plan the route", SemanticAction.PENDING_STEP, key="route", value="route")
+    apply(
+        e, c, 3, "Plan the route",
+        SemanticAction.PENDING_STEP, key="route", value="route",
+    )
     t = utterance(c, 4, "The documents are ready")
     with pytest.raises(SemanticRejected, match="name the pending step"):
         e.apply(c, t, [proposal(t.text, SemanticAction.COMPLETE_STEP, key="route")])
@@ -222,7 +262,15 @@ def test_stale_correction_cannot_override_newer_value():
     c = ConversationSession()
     e = SemanticContextEngine()
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
-    apply(e, c, 5, "Budget is unlimited", SemanticAction.CONSTRAINT, key="budget", value="unlimited")
+    apply(
+        e, c, 5, "Budget is unlimited",
+        SemanticAction.CONSTRAINT, key="budget", value="unlimited",
+    )
     t = utterance(c, 3, "Budget is tight")
-    assert e.apply(c, t, [proposal(t.text, SemanticAction.CORRECT, key="budget", value="tight")]) == 0
+    assert (
+        e.apply(
+            c, t, [proposal(t.text, SemanticAction.CORRECT, key="budget", value="tight")]
+        )
+        == 0
+    )
     assert dict(e.snapshot().constraints)["budget"].value == "unlimited"
