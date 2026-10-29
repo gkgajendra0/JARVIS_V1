@@ -541,3 +541,81 @@ async def test_two_matching_topics_fail_closed_without_guessing(tmp_path):
     finally:
         await writer.close()
         await reader.close()
+
+
+
+@pytest.mark.asyncio
+async def test_suppressed_plan_category_denies_read_and_fingerprint_without_leak(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        first = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, first, checkpoint(first),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+        )
+
+        def suppress_without_purge(connection):
+            # Simulate a checkpoint surviving from an older database version.
+            connection.execute(
+                "INSERT INTO personal_learning_suppression "
+                "(category,epoch,suppressed,updated_at) VALUES ('plan',1,1,'test')"
+            )
+            connection.commit()
+
+        await writer.run(suppress_without_purge)
+        named = accepted(conversation, 2, "Continue Nepal trip")
+        with pytest.raises(CheckpointRejected, match="suppressed"):
+            await store.read_named(
+                conversation, named, title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+        assert await store.current_fingerprint("Nepal trip") is None
+        new_plan = accepted(conversation, 3, "New Nepal trip")
+        with pytest.raises(CheckpointRejected, match="suppressed"):
+            await store.save(
+                conversation, new_plan, checkpoint(new_plan),
+                authorize_write=lambda: True,
+                admit_snapshot=lambda *_: True,
+            )
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_suppression_blocks_stale_save_even_after_reenabled(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        first = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, first, checkpoint(first),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+        )
+        disabled = accepted(conversation, 5, "Don't remember my plans")
+        await store.purge_for_suppression(
+            conversation, disabled, authorize_suppression=lambda: True,
+        )
+
+        def reenable(connection):
+            connection.execute(
+                "UPDATE personal_learning_suppression "
+                "SET suppressed=0,epoch=epoch+1 WHERE category='plan'"
+            )
+            connection.commit()
+
+        # Even after the feature is re-enabled, the tombstone blocks older work.
+        await writer.run(reenable)
+        late = accepted(conversation, 3, "Nepal trip")
+        with pytest.raises(CheckpointRejected, match="older than forget"):
+            await store.save(
+                conversation, late, checkpoint(late),
+                authorize_write=lambda: True,
+                admit_snapshot=lambda *_: True,
+            )
+    finally:
+        await writer.close()
+        await reader.close()
