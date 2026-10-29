@@ -195,6 +195,7 @@ class SemanticContextEngine:
         self._cutoffs: dict[str, datetime] = {}
         self._epoch = 0
         self._last_applied_at: datetime | None = None
+        self._last_turn_generation = 0
 
     @property
     def epoch(self) -> int:
@@ -213,6 +214,7 @@ class SemanticContextEngine:
         self._seen.clear()
         self._cutoffs.clear()
         self._last_applied_at = None
+        self._last_turn_generation = 0
         self._epoch += 1
 
     def snapshot(self, topic: str | None = None) -> TopicSnapshot | None:
@@ -255,8 +257,11 @@ class SemanticContextEngine:
         if turn.turn_id in self._seen:
             return 0
         if (
-            self._last_applied_at is not None
-            and turn.accepted_at < self._last_applied_at
+            (self._last_applied_at is not None and turn.accepted_at < self._last_applied_at)
+            or (
+                turn.user_utterance_generation is not None
+                and turn.user_utterance_generation < self._last_turn_generation
+            )
         ):
             raise SemanticRejected("stale asynchronous turn")
         if len(self._seen) >= 4096:
@@ -271,6 +276,9 @@ class SemanticContextEngine:
         if not proposals:
             self._seen.add(turn.turn_id)
             self._last_applied_at = turn.accepted_at
+            self._last_turn_generation = (
+                turn.user_utterance_generation or self._last_turn_generation
+            )
             return 0
         for proposal in proposals:
             self._validate_proposal(turn, proposal)
@@ -337,7 +345,7 @@ class SemanticContextEngine:
                 ),
             )
             if proposal.action is SemanticAction.GOAL:
-                if self._newer(state.goal, turn):
+                if self._newer(state.goal, turn, conversation):
                     state.goal = fact
                     changed += 1
             elif proposal.action in (SemanticAction.CONSTRAINT, SemanticAction.CORRECT):
@@ -352,7 +360,7 @@ class SemanticContextEngine:
                     and len(state.constraints) >= self.max_fields
                 ):
                     raise SemanticRejected("constraint capacity exceeded")
-                if self._newer(state.constraints.get(field_key), turn):
+                if self._newer(state.constraints.get(field_key), turn, conversation):
                     state.constraints[field_key] = fact
                     changed += 1
             elif proposal.action is SemanticAction.PENDING_STEP:
@@ -362,7 +370,7 @@ class SemanticContextEngine:
                     and len(state.pending_steps) >= self.max_fields
                 ):
                     raise SemanticRejected("step capacity exceeded")
-                if self._newer(state.pending_steps.get(field_key), turn):
+                if self._newer(state.pending_steps.get(field_key), turn, conversation):
                     state.pending_steps[field_key] = fact
                     changed += 1
             elif proposal.action is SemanticAction.COMPLETE_STEP:
@@ -372,7 +380,7 @@ class SemanticContextEngine:
                 old = state.pending_steps.get(field_key)
                 if old is None:
                     raise SemanticRejected("completion has no matching pending step")
-                if self._newer(old, turn):
+                if self._newer(old, turn, conversation):
                     state.pending_steps[field_key] = GroundedStateValue(
                         value=old.value,
                         evidence=proposal.quote,
@@ -390,6 +398,9 @@ class SemanticContextEngine:
         self._cutoffs = cutoffs
         self._seen.add(turn.turn_id)
         self._last_applied_at = turn.accepted_at
+        self._last_turn_generation = (
+            turn.user_utterance_generation or self._last_turn_generation
+        )
         return changed
 
     @staticmethod
@@ -399,8 +410,26 @@ class SemanticContextEngine:
         return unicodedata.normalize("NFKC", text).strip().casefold()
 
     @staticmethod
-    def _newer(previous: GroundedStateValue | None, turn: ConversationTurn) -> bool:
-        return previous is None or turn.accepted_at > previous.accepted_at
+    def _newer(
+        previous: GroundedStateValue | None,
+        turn: ConversationTurn,
+        conversation: ConversationSession,
+    ) -> bool:
+        if previous is None:
+            return True
+        if turn.accepted_at != previous.accepted_at:
+            return turn.accepted_at > previous.accepted_at
+        # Windows can give two accepted turns the same clock timestamp.
+        # Their canonical accepted-user generation is the ordering authority
+        # for that tie; never choose arbitrary turn IDs or a model ordering.
+        if turn.user_utterance_generation is None:
+            return False
+        return any(
+            old.turn_id == previous.source_turn_id
+            and old.user_utterance_generation is not None
+            and old.user_utterance_generation < turn.user_utterance_generation
+            for old in conversation.turns
+        )
 
     @staticmethod
     def _validate_proposal(turn: ConversationTurn, proposal: SemanticProposal) -> None:
