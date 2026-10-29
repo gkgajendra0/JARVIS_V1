@@ -11,8 +11,8 @@ import hashlib
 import json
 import re
 import unicodedata
-from dataclasses import replace
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,11 +24,11 @@ from jarvis.conversation import (
 )
 
 from .conversation_semantics import (
+    _FORGET_CUE,
+    _FORGET_NEGATION,
     EvidenceStrength,
     GroundedStateValue,
     TopicSnapshot,
-    _FORGET_CUE,
-    _FORGET_NEGATION,
 )
 from .types import Sensitivity
 from .worker import SerialConnectionWorker
