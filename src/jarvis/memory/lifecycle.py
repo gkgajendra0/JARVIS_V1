@@ -786,6 +786,24 @@ class MemoryLifecycleService:
             categories.add(LEGACY_FACETS[target.predicate])
         from jarvis.personal_learning_scope import SUPPRESSION_KEYS
 
+        if "plan" in categories:
+            # A legacy plan facet and a conversational checkpoint have no
+            # trustworthy one-to-one linkage yet. Purge all checkpoints in
+            # this exact forget transaction, rather than resurrecting a
+            # deleted plan through topic recall. The category suppression
+            # below also blocks stale writes until explicit re-enable.
+            connection.execute("DELETE FROM conversation_topic_checkpoint")
+            stamp = now.astimezone(UTC).isoformat(timespec="microseconds")
+            connection.execute(
+                "INSERT INTO conversation_topic_tombstone "
+                "(topic_key,forgotten_at,source_turn_id) VALUES ('*',?,?) "
+                "ON CONFLICT(topic_key) DO UPDATE SET "
+                "forgotten_at=excluded.forgotten_at, "
+                "source_turn_id=excluded.source_turn_id "
+                "WHERE excluded.forgotten_at > forgotten_at",
+                (stamp, source.source_id),
+            )
+
         for category in categories & SUPPRESSION_KEYS:
             connection.execute(
                 "INSERT INTO personal_learning_suppression VALUES (?,1,1,?) ON CONFLICT(category) DO UPDATE SET epoch=epoch+1,suppressed=1,updated_at=excluded.updated_at",
