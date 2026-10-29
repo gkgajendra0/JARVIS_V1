@@ -647,3 +647,44 @@ async def test_generic_topic_hint_cannot_trigger_private_topic_resolution(tmp_pa
     finally:
         await writer.close()
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_reenabled_plan_epoch_rejects_late_old_proposal_even_with_future_time(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        # This turn has a future timestamp relative to the suppression record,
+        # so source-time ordering alone would not catch stale inference.
+        old_turn = accepted(conversation, 10, "Nepal trip")
+
+        def disabled_then_reenabled(connection):
+            connection.execute(
+                "INSERT INTO personal_learning_suppression "
+                "(category,epoch,suppressed,updated_at) "
+                "VALUES ('plan',2,0,'reenabled')"
+            )
+            connection.execute(
+                "INSERT INTO conversation_topic_tombstone VALUES "
+                "('*',?,?)",
+                ((START + timedelta(seconds=5)).isoformat(timespec="microseconds"),
+                 "suppress-turn"),
+            )
+            connection.commit()
+
+        await writer.run(disabled_then_reenabled)
+        with pytest.raises(CheckpointRejected, match="plan epoch changed"):
+            await store.save(
+                conversation, old_turn, checkpoint(old_turn),
+                authorize_write=lambda: True,
+                admit_snapshot=lambda *_: True,
+                expected_plan_epoch=0,
+            )
+        question = accepted(conversation, 11, "Continue Nepal trip")
+        assert await store.read_named(
+            conversation, question, title="Nepal trip",
+            authorize_read=lambda: True,
+        ) is None
+    finally:
+        await writer.close()
+        await reader.close()
