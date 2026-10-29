@@ -279,6 +279,12 @@ class EncryptedTopicCheckpointStore:
         after consent. Ambiguous matches fail closed rather than guessing.
         """
         _canonical(conversation, request)
+        hint_tokens = set(re.findall(r"\w+", _key(topic_hint)))
+        if not any(
+            len(word) >= 4 and word not in _GENERIC_TOPIC_WORDS
+            for word in hint_tokens
+        ):
+            raise CheckpointRejected("topic hint is not distinctive")
         if not _explicit_topic(request.text, topic_hint):
             raise CheckpointRejected("topic hint is absent from current question")
         _permit(authorize_read)
@@ -298,6 +304,7 @@ class EncryptedTopicCheckpointStore:
                 key
                 for key, _source_turn_id, _source_at in rows
                 if _explicit_topic(request.text, key)
+                and _explicit_topic(key, topic_hint)
             ]
             _permit(authorize_read)
             _canonical(conversation, request)
