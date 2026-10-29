@@ -83,6 +83,7 @@ class SemanticTurnPipeline:
         )
         self._worker: asyncio.Task[None] | None = None
         self._binding: str | None = None
+        self._submitted_ids: set[str] = set()
         self._closed = False
         self._submitted = 0
         self._applied = 0
@@ -116,7 +117,10 @@ class SemanticTurnPipeline:
             not isinstance(turn, ConversationTurn)
             or turn.role is not ConversationRole.USER
             or self._conversation.status is not ConversationStatus.ACTIVE
-            or not any(item is turn for item in self._conversation.turns)
+            or not self._conversation.turns
+            or self._conversation.turns[-1] is not turn
+            or turn.turn_id in self._submitted_ids
+            or len(self._submitted_ids) >= 4096
         ):
             self._dropped += 1
             return False
@@ -134,6 +138,7 @@ class SemanticTurnPipeline:
             self._dropped += 1
             return False
         self._submitted += 1
+        self._submitted_ids.add(turn.turn_id)
         return True
 
     def invalidate(self) -> None:
