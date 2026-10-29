@@ -304,7 +304,8 @@ class SemanticContextEngine:
         if len(proposal.value) > 500 or len(proposal.key) > 160:
             raise SemanticRejected("proposal too long")
         if (
-            proposal.action not in (
+            proposal.action
+            not in (
                 SemanticAction.FORGET_TOPIC,
                 SemanticAction.COMPLETE_STEP,
             )
