@@ -195,3 +195,62 @@ async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(lea
         learning.authority.authorize_reenable_category("plan"),
     )
     assert runtime.accepted_plan_epoch(turn) == 2
+
+
+
+@pytest.mark.asyncio
+async def test_legacy_plan_correction_invalidates_old_checkpoint_and_epoch(learning):
+    from jarvis.memory.runtime import MemoryRuntime
+
+    runtime = MemoryRuntime(
+        learning.service, writer=learning.writer, reader=learning.reader
+    )
+    await runtime.start()
+    old = learning.plan.mutations[0]
+    await learning.service.admit_learning(learning.plan, learning.new_permit())
+
+    def seed_plan_receipt_and_checkpoint(connection):
+        connection.execute(
+            "UPDATE personal_learning_receipt SET category='plan' "
+            "WHERE target_id=(SELECT assertion_id FROM current_semantic_assertion "
+            "WHERE predicate=?)",
+            (old.predicate,),
+        )
+        connection.execute(
+            "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
+            (
+                "nepal trip", "old-user-turn",
+                "2026-01-01T00:00:00.000000+00:00",
+                '{"title":"Nepal trip"}',
+            ),
+        )
+        connection.commit()
+
+    await learning.writer.run(seed_plan_receipt_and_checkpoint)
+    owner = replace(
+        old.source,
+        source_id=str(uuid4()),
+        source_class=MemorySourceClass.OWNER_EXPLICIT,
+        authority_class=AuthorityClass.OWNER_EXPLICIT,
+    )
+    await learning.service.correct_text(
+        predicate=old.predicate,
+        value="updated owner plan",
+        source=owner,
+    )
+    assert runtime._plan_epoch == 1
+    assert await learning.reader.run(
+        lambda connection: connection.execute(
+            "SELECT count(*) FROM conversation_topic_checkpoint"
+        ).fetchone()[0]
+    ) == 0
+    snapshot = await learning.service.learning_suppression()
+    assert snapshot.epochs["plan"] == 1
+    assert "plan" not in snapshot.suppressed
+    tombstone = await learning.reader.run(
+        lambda connection: connection.execute(
+            "SELECT source_turn_id FROM conversation_topic_tombstone "
+            "WHERE topic_key='*'"
+        ).fetchone()
+    )
+    assert tombstone == (owner.source_id,)
