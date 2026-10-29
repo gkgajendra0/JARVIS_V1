@@ -352,7 +352,7 @@ class EncryptedTopicCheckpointStore:
             ):
                 raise CheckpointRejected("checkpoint step malformed")
             step = grounded(field["value"])
-                steps.append((_key(key), replace(step, completed=field["completed"])))
+            steps.append((_key(key), replace(step, completed=field["completed"])))
         _canonical(conversation, request)
         _permit(authorize_read)
         return TopicSnapshot(
