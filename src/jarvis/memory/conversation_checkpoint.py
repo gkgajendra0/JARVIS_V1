@@ -176,7 +176,10 @@ class EncryptedTopicCheckpointStore:
         *,
         authorize_write: Callable[[], bool],
         admit_snapshot: Callable[[TopicSnapshot, ConversationTurn], bool],
+        expected_plan_epoch: int,
     ) -> bool:
+        if type(expected_plan_epoch) is not int or expected_plan_epoch < 0:
+            raise CheckpointRejected("accepted-turn plan epoch is required")
         _canonical(conversation, turn)
         _permit(authorize_write)
         _admit_snapshot(admit_snapshot, snapshot, turn)
@@ -191,6 +194,13 @@ class EncryptedTopicCheckpointStore:
             try:
                 if _plan_learning_suppressed(connection):
                     raise CheckpointRejected("plan category is suppressed")
+                plan_epoch_row = connection.execute(
+                    "SELECT epoch FROM personal_learning_suppression "
+                    "WHERE category='plan'"
+                ).fetchone()
+                plan_epoch = plan_epoch_row[0] if plan_epoch_row else 0
+                if plan_epoch != expected_plan_epoch:
+                    raise CheckpointRejected("accepted-turn plan epoch changed")
                 row = connection.execute(
                     "SELECT forgotten_at FROM conversation_topic_tombstone "
                     "WHERE topic_key IN (?, '*') ORDER BY forgotten_at DESC LIMIT 1",
