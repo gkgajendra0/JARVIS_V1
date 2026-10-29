@@ -29,6 +29,35 @@ from .conversation_semantics import (
 
 LOGGER = logging.getLogger(__name__)
 
+# Never interpolate exception text: provider/validation errors can contain source
+# or payload content. Only these reviewed literal messages become diagnostics.
+_REJECTION_CODES = {
+    "no active topic; explicit topic required": "no_active_topic",
+    "topic must be named in the user evidence": "topic_not_in_evidence",
+    "cannot modify inactive topic implicitly": "inactive_topic",
+    "unsupported semantic interpretation": "unsupported_interpretation",
+    "unsupported semantic field key": "unsupported_field_key",
+    "invalid topic or field key": "invalid_key",
+    "correction has no target": "correction_without_target",
+    "completion must name the pending step": "completion_step_not_named",
+    "completion has no matching pending step": "completion_without_step",
+    "completion needs explicit confirmed state": "completion_not_confirmed",
+    "completed work cannot be pending": "completed_work_proposed_pending",
+    "proposal does not match exact user evidence": "evidence_mismatch",
+    "missing semantic value": "missing_value",
+    "missing field key": "missing_field_key",
+    "unquoted numerical claim": "unsupported_number",
+    "ambiguous negated semantic interpretation": "ambiguous_negation",
+    "question is not an owner factual statement": "question_not_statement",
+    "semantic external inference source denied": "source_denied",
+    "ambiguous or unsupported semantic quote": "ambiguous_quote",
+    "canonical source or owner authority changed": "source_or_authority_changed",
+    "owner authority unavailable": "authority_unavailable",
+    "source clearance failed": "clearance_failed",
+    "stale asynchronous turn": "stale_turn",
+    "stale semantic context generation": "stale_epoch",
+}
+
 ProposalProducer = Callable[[ConversationTurn], Awaitable[Sequence[SemanticProposal]]]
 AuthorizationBinding = Callable[[], str | None]
 AcceptedPlanEpoch = Callable[[ConversationTurn], int]
@@ -235,6 +264,7 @@ class SemanticTurnPipeline:
     async def _run(self) -> None:
         while True:
             turn, binding, epoch, plan_epoch = await self._queue.get()
+            stage = "producer"
             try:
                 if not self._still_authorized(binding, epoch):
                     self._dropped += 1
@@ -248,6 +278,7 @@ class SemanticTurnPipeline:
                 if not isinstance(proposals, (tuple, list)):
                     raise SemanticRejected("producer must return a proposal sequence")
                 before = self.state.snapshot()
+                stage = "reducer"
                 changed = self.state.apply(
                     self._conversation, turn, proposals, epoch=epoch
                 )
@@ -258,6 +289,7 @@ class SemanticTurnPipeline:
                     and self._still_authorized(binding, epoch)
                 ):
                     try:
+                        stage = "applied_callback"
                         await self._on_applied(
                             turn,
                             tuple(proposals),
@@ -273,10 +305,20 @@ class SemanticTurnPipeline:
                         raise
             except asyncio.CancelledError:
                 raise
-            except (SemanticRejected, TimeoutError, ValueError, TypeError):
+            except (SemanticRejected, TimeoutError, ValueError, TypeError) as exc:
                 self._failures += 1
+                if isinstance(exc, SemanticRejected):
+                    reason = _REJECTION_CODES.get(str(exc), "unclassified_rejection")
+                elif isinstance(exc, TimeoutError):
+                    reason = "timeout"
+                elif isinstance(exc, TypeError):
+                    reason = "invalid_type"
+                else:
+                    reason = "invalid_value"
                 LOGGER.warning(
-                    "Semantic proposal rejected or timed out; canonical conversation unchanged"
+                    "Semantic update rejected | stage=%s | reason=%s",
+                    stage,
+                    reason,
                 )
             except Exception:
                 self._failures += 1

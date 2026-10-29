@@ -11,8 +11,85 @@ from jarvis.memory.conversation_semantics import (
     SemanticAction,
     SemanticContextEngine,
     SemanticProposal,
+    SemanticRejected,
 )
 from jarvis.memory.semantic_pipeline import SemanticTurnPipeline
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        ("no active topic; explicit topic required", "no_active_topic"),
+        ("unsupported semantic interpretation", "unsupported_interpretation"),
+        ("semantic external inference source denied", "source_denied"),
+        ("private source text must never be logged", "unclassified_rejection"),
+    ],
+)
+async def test_rejection_diagnostics_report_stage_without_source(
+    caplog, message, expected
+):
+    conversation = ConversationSession()
+    conversation.start()
+    state = SemanticContextEngine()
+
+    async def producer(turn):
+        raise SemanticRejected(message)
+
+    pipeline = SemanticTurnPipeline(
+        conversation=conversation,
+        state=state,
+        producer=producer,
+        authorization_binding=lambda: "grant",
+    )
+    pipeline.start()
+    source = conversation.accept_turn(ConversationRole.USER, "private source sentinel")
+    try:
+        assert pipeline.submit(source)
+        await pipeline.drain()
+        assert f"reason={expected}" in caplog.text
+        assert "stage=producer" in caplog.text
+        assert "private source" not in caplog.text
+        assert pipeline.status.failures == 1
+        assert state.snapshot() is None
+    finally:
+        await pipeline.close()
+
+
+@pytest.mark.asyncio
+async def test_reducer_failure_has_distinct_stage_and_keeps_state_empty(caplog):
+    conversation = ConversationSession()
+    conversation.start()
+    state = SemanticContextEngine()
+
+    async def producer(turn):
+        return [
+            SemanticProposal(
+                action=SemanticAction.GOAL,
+                quote=turn.text,
+                start=0,
+                end=len(turn.text),
+                value=turn.text,
+            )
+        ]
+
+    pipeline = SemanticTurnPipeline(
+        conversation=conversation,
+        state=state,
+        producer=producer,
+        authorization_binding=lambda: "grant",
+    )
+    pipeline.start()
+    try:
+        assert pipeline.submit(
+            conversation.accept_turn(ConversationRole.USER, "Nepal trip")
+        )
+        await pipeline.drain()
+        assert "stage=reducer | reason=no_active_topic" in caplog.text
+        assert state.snapshot() is None
+        assert pipeline.status.failures == 1
+    finally:
+        await pipeline.close()
 
 
 def topic_proposal(text: str) -> list[SemanticProposal]:
