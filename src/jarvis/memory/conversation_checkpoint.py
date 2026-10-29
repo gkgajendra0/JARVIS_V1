@@ -63,6 +63,22 @@ def _canonical(
         raise CheckpointRejected("latest canonical owner USER turn required")
 
 
+def _admit_snapshot(
+    validator: Callable[[TopicSnapshot, ConversationTurn], bool],
+    snapshot: TopicSnapshot,
+    turn: ConversationTurn,
+) -> None:
+    """Independent non-model privacy, plan-suppression and source eligibility gate."""
+    if not callable(validator):
+        raise CheckpointRejected("trusted checkpoint admission required")
+    try:
+        allowed = validator(snapshot, turn)
+    except Exception as exc:
+        raise CheckpointRejected("checkpoint source admission denied") from exc
+    if allowed is not True:
+        raise CheckpointRejected("checkpoint source admission denied")
+
+
 def _permit(validator: Callable[[], bool]) -> None:
     if not callable(validator):
         raise CheckpointRejected("validating permit callback required")
@@ -151,15 +167,18 @@ class EncryptedTopicCheckpointStore:
         snapshot: TopicSnapshot,
         *,
         authorize_write: Callable[[], bool],
+        admit_snapshot: Callable[[TopicSnapshot, ConversationTurn], bool],
     ) -> bool:
         _canonical(conversation, turn)
         _permit(authorize_write)
+        _admit_snapshot(admit_snapshot, snapshot, turn)
         state_json = _snapshot_payload(snapshot)
         key, source_at = _key(snapshot.title), _time(turn)
 
         def write(connection) -> bool:
             _canonical(conversation, turn)
             _permit(authorize_write)
+            _admit_snapshot(admit_snapshot, snapshot, turn)
             connection.execute("BEGIN IMMEDIATE")
             try:
                 row = connection.execute(
@@ -185,6 +204,8 @@ class EncryptedTopicCheckpointStore:
                     "source_at=excluded.source_at, state_json=excluded.state_json",
                     (key, turn.turn_id, source_at, state_json),
                 )
+                _canonical(conversation, turn)
+                _admit_snapshot(admit_snapshot, snapshot, turn)
                 _permit(authorize_write)
                 connection.commit()
                 return True
@@ -267,6 +288,7 @@ class EncryptedTopicCheckpointStore:
                     "WHERE excluded.forgotten_at > forgotten_at",
                     (key, timestamp, turn.turn_id),
                 )
+                _canonical(conversation, turn)
                 _permit(authorize_forget)
                 connection.commit()
                 return row is not None
@@ -306,6 +328,7 @@ class EncryptedTopicCheckpointStore:
                     "WHERE excluded.forgotten_at > forgotten_at",
                     (timestamp, turn.turn_id),
                 )
+                _canonical(conversation, turn)
                 _permit(authorize_suppression)
                 connection.commit()
             except BaseException:
