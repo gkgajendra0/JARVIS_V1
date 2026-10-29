@@ -716,10 +716,10 @@ class MemoryLifecycleService:
                     source_time = source.turns[-1].accepted_at.astimezone(UTC).isoformat(
                         timespec="microseconds"
                     )
+                    # Category suppression is universal, not time-scoped.
+                    # A queued newer checkpoint must not survive re-enable.
                     connection.execute(
-                        "DELETE FROM conversation_topic_checkpoint "
-                        "WHERE source_at <= ?",
-                        (source_time,),
+                        "DELETE FROM conversation_topic_checkpoint"
                     )
                     connection.execute(
                         "INSERT INTO conversation_topic_tombstone "
