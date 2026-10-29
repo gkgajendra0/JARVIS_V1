@@ -11,7 +11,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Callable
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from jarvis.conversation import (
@@ -22,6 +22,8 @@ from jarvis.conversation import (
 )
 
 from .conversation_semantics import (
+    EvidenceStrength,
+    GroundedStateValue,
     TopicSnapshot,
     _FORGET_CUE,
     _FORGET_NEGATION,
@@ -106,10 +108,7 @@ def _snapshot_payload(snapshot: TopicSnapshot) -> str:
     _key(snapshot.title)
 
     def checked_value(value) -> str:
-        if value.sensitivity in {
-            Sensitivity.LOCAL_ONLY,
-            Sensitivity.SECRET_PROHIBITED,
-        }:
+        if value.sensitivity is not Sensitivity.STANDARD:
             raise CheckpointRejected("restricted context cannot be checkpointed")
         if not isinstance(value.value, str) or not 1 <= len(value.value) <= 500:
             raise CheckpointRejected("invalid checkpoint field")
@@ -233,15 +232,111 @@ class EncryptedTopicCheckpointStore:
             _canonical(conversation, request)
             _permit(authorize_read)
             row = connection.execute(
-                "SELECT state_json FROM conversation_topic_checkpoint "
-                "WHERE topic_key=?",
+                "SELECT source_turn_id,source_at,state_json "
+                "FROM conversation_topic_checkpoint WHERE topic_key=?",
                 (key,),
             ).fetchone()
             _permit(authorize_read)
             _canonical(conversation, request)
-            return json.loads(row[0]) if row else None
+            if row is None:
+                return None
+            record = json.loads(row[2])
+            if not isinstance(record, dict):
+                raise CheckpointRejected("checkpoint payload malformed")
+            record["_checkpoint_meta"] = {
+                "source_turn_id": row[0],
+                "source_at": row[1],
+            }
+            return record
 
         return await self._reader.run(fetch)
+
+    async def read_named_snapshot(
+        self,
+        conversation: ConversationSession,
+        request: ConversationTurn,
+        *,
+        title: str,
+        authorize_read: Callable[[], bool],
+    ) -> TopicSnapshot | None:
+        """Restore provenance-aware transient state after an authorized topic read.
+
+        Stored topic-level source metadata is retained; this does not claim each
+        field came from the current question or recover lost per-field citations.
+        """
+        record = await self.read_named(
+            conversation, request, title=title, authorize_read=authorize_read
+        )
+        if record is None:
+            return None
+        expected = {
+            "title", "goal", "constraints", "steps", "_checkpoint_meta"
+        }
+        if not isinstance(record, dict) or set(record) != expected:
+            raise CheckpointRejected("checkpoint payload malformed")
+        if not isinstance(record["title"], str) or (
+            _key(record["title"]) != _key(title)
+        ):
+            raise CheckpointRejected("checkpoint topic mismatch")
+        meta = record["_checkpoint_meta"]
+        if not isinstance(meta, dict) or set(meta) != {"source_turn_id", "source_at"}:
+            raise CheckpointRejected("checkpoint source metadata missing")
+        source_id, raw_time = meta["source_turn_id"], meta["source_at"]
+        if not isinstance(source_id, str) or not source_id:
+            raise CheckpointRejected("checkpoint source missing")
+        try:
+            source_time = datetime.fromisoformat(raw_time)
+        except (TypeError, ValueError) as exc:
+            raise CheckpointRejected("checkpoint time malformed") from exc
+        if source_time.tzinfo is None or source_time.utcoffset() is None:
+            raise CheckpointRejected("checkpoint time not UTC")
+        source_time = source_time.astimezone(UTC)
+
+        def grounded(value: str) -> GroundedStateValue:
+            if not isinstance(value, str) or not 1 <= len(value) <= 500:
+                raise CheckpointRejected("checkpoint field malformed")
+            return GroundedStateValue(
+                value=value,
+                evidence="",
+                source_turn_id=source_id,
+                accepted_at=source_time,
+                sensitivity=Sensitivity.STANDARD,
+                evidence_strength=EvidenceStrength.INTERPRETED,
+            )
+
+        goal_raw = record["goal"]
+        goal = grounded(goal_raw) if goal_raw is not None else None
+        raw_constraints = record["constraints"]
+        raw_steps = record["steps"]
+        if (
+            not isinstance(raw_constraints, dict)
+            or not isinstance(raw_steps, dict)
+            or len(raw_constraints) > 20
+            or len(raw_steps) > 20
+        ):
+            raise CheckpointRejected("checkpoint field shape malformed")
+        constraints = []
+        for key, value in sorted(raw_constraints.items()):
+            constraints.append((_key(key), grounded(value)))
+        steps = []
+        for key, field in sorted(raw_steps.items()):
+            if (
+                not isinstance(field, dict)
+                or set(field) != {"value", "completed"}
+                or type(field["completed"]) is not bool
+            ):
+                raise CheckpointRejected("checkpoint step malformed")
+            step = grounded(field["value"])
+            from dataclasses import replace
+            steps.append((_key(key), replace(step, completed=field["completed"])))
+        _canonical(conversation, request)
+        _permit(authorize_read)
+        return TopicSnapshot(
+            title=record["title"],
+            goal=goal,
+            constraints=tuple(constraints),
+            steps=tuple(steps),
+        )
 
     async def forget(
         self,
