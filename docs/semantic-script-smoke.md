@@ -14,6 +14,8 @@ Camera, speaker-shadow, active-speaker and Pocket3 tracking observers are disabl
 
 The lab's initial and follow-up inactivity windows are at least 30 seconds so an otherwise idle wake does not close before extraction's 20-second cancellation deadline. Longer configured windows are preserved. Explicit standby and Ctrl+C still close immediately.
 
+The model wire schema requires a `value` field; topic titles belong in `value`, while `topic` identifies the target of a dependent update. The parser retains a decode default only for bounded recovery. Before returning proposals, the producer checks action-specific required values and keys. Missing content permits one additional routed correction operation, under the same total extraction deadline, with a different operation ID and fresh source/authority checks. The correction sends only the original cleared utterance and fixed schema guidance, never the malformed model payload. Both operations follow the existing free/paid router policy. A second incomplete response is rejected; no empty value is invented or admitted to the reducer.
+
 ## Script
 
 After owner approval, wake Jarvis and say each sentence separately, waiting for the response and inference log:

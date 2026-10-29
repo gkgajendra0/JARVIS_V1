@@ -7,6 +7,7 @@ No networking occurs until this adapter is explicitly wired by the voice runtime
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Protocol
 
@@ -17,12 +18,27 @@ from jarvis.conversation import ConversationRole, ConversationTurn
 from .conversation_semantics import SemanticAction, SemanticProposal, SemanticRejected
 from .types import Sensitivity
 
+LOGGER = logging.getLogger(__name__)
+
 
 class StructuredSemanticPatch(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    # Advertise required wire fields, but retain a permissive decode default so
+    # a missing value can be repaired before semantic admission, without being
+    # misclassified by the shared router as a provider transport failure.
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        json_schema_extra={"required": ["action", "quote", "value"]},
+    )
     action: SemanticAction
     quote: str = Field(min_length=1, max_length=1000)
-    value: str = Field(default="", max_length=500)
+    value: str = Field(
+        default="",
+        max_length=500,
+        description="Required grounded content. For topic, put its title here, "
+        "not only in topic. Must be nonempty for topic, goal, constraint, "
+        "pending_step and correct; empty is permitted for forget_topic/complete_step.",
+    )
     key: str = Field(default="", max_length=160)
     topic: str = Field(default="", max_length=160)
     sensitivity: Sensitivity = Sensitivity.STANDARD
@@ -120,33 +136,79 @@ class RoutedSemanticProducer:
         def before_dispatch() -> None:
             self._clear(turn)
 
-        raw = await self._client.parse(
-            system_prompt=SEMANTIC_SYSTEM_PROMPT,
-            input_payload={"utterance": turn.text},
-            response_model=StructuredSemanticBatch,
-            scope_id=self._scope_id,
-            operation_id=f"semantic:{turn.turn_id}",
-            before_dispatch=before_dispatch,
-        )
-        self._clear(turn)
-        batch = StructuredSemanticBatch.model_validate(raw)
-        patches: list[SemanticProposal] = []
-        for patch in batch.proposals:
-            # Repeated quotes are ambiguous evidence; do not pick one silently.
-            if turn.text.count(patch.quote) != 1:
-                raise SemanticRejected("ambiguous or unsupported semantic quote")
-            start = turn.text.index(patch.quote)
-            patches.append(
-                SemanticProposal(
-                    action=patch.action,
-                    quote=patch.quote,
-                    start=start,
-                    end=start + len(patch.quote),
-                    value=patch.value,
-                    key=patch.key,
-                    topic=patch.topic,
-                    sensitivity=patch.sensitivity,
+        for attempt in range(2):
+            self._clear(turn)
+            repair_instruction = (
+                ""
+                if attempt == 0
+                else (
+                    "\nThe previous response omitted required semantic content. "
+                    "Return a complete grounded batch. Put a nonempty title in value "
+                    "for topic; a nonempty supported value for goal/constraint/"
+                    "pending_step/correct; and a quoted field word in key for "
+                    "constraint/correct/pending_step/complete_step. If unsure, return "
+                    "an empty proposals list. Never invent missing content."
                 )
+            )
+            raw = await self._client.parse(
+                system_prompt=SEMANTIC_SYSTEM_PROMPT + repair_instruction,
+                input_payload={"utterance": turn.text},
+                response_model=StructuredSemanticBatch,
+                scope_id=self._scope_id,
+                operation_id=f"semantic:{turn.turn_id}"
+                + (":contract-repair" if attempt else ""),
+                before_dispatch=before_dispatch,
+            )
+            self._clear(turn)
+            batch = StructuredSemanticBatch.model_validate(raw)
+            patches: list[SemanticProposal] = []
+            for patch in batch.proposals:
+                # Repeated quotes are ambiguous evidence; never repair a forged
+                # or unsupported quote by silently selecting a different span.
+                if turn.text.count(patch.quote) != 1:
+                    raise SemanticRejected("ambiguous or unsupported semantic quote")
+                start = turn.text.index(patch.quote)
+                patches.append(
+                    SemanticProposal(
+                        action=patch.action,
+                        quote=patch.quote,
+                        start=start,
+                        end=start + len(patch.quote),
+                        value=patch.value,
+                        key=patch.key,
+                        topic=patch.topic,
+                        sensitivity=patch.sensitivity,
+                    )
+                )
+            missing = next(
+                (
+                    "missing semantic value"
+                    for p in patches
+                    if p.action
+                    not in {SemanticAction.FORGET_TOPIC, SemanticAction.COMPLETE_STEP}
+                    and not p.value.strip()
+                ),
+                None,
+            )
+            if missing is None and any(
+                p.action
+                in {
+                    SemanticAction.CONSTRAINT,
+                    SemanticAction.CORRECT,
+                    SemanticAction.PENDING_STEP,
+                    SemanticAction.COMPLETE_STEP,
+                }
+                and not p.key.strip()
+                for p in patches
+            ):
+                missing = "missing field key"
+            if missing is None:
+                break
+            if attempt:
+                raise SemanticRejected(missing)
+            LOGGER.info(
+                "Semantic output incomplete; requesting one guarded correction | field=%s",
+                "value" if missing == "missing semantic value" else "key",
             )
         # A model can serialize a dependent before its topic. Normalize an explicit
         # dependency on one topic introduced by this batch; never guess where

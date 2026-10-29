@@ -23,6 +23,151 @@ class FakeModel:
         return self.payload
 
 
+class SequenceModel:
+    def __init__(self, payloads):
+        self.payloads = payloads
+        self.requests = []
+        self.before = lambda: None
+        self.calls = 0
+
+    async def parse(self, **kwargs):
+        self.before()
+        kwargs["before_dispatch"]()
+        self.requests.append(kwargs)
+        result = self.payloads[self.calls]
+        self.calls += 1
+        return result
+
+
+@pytest.mark.asyncio
+async def test_missing_model_value_gets_one_guarded_correction_before_reducer():
+    from jarvis.memory.conversation_semantics import SemanticContextEngine
+
+    conversation = ConversationSession()
+    conversation.start()
+    text = "I am planning a Nepal trip."
+    source = conversation.accept_turn(ConversationRole.USER, text)
+    client = SequenceModel(
+        [
+            {
+                "proposals": [
+                    {
+                        "action": "topic",
+                        "quote": text,
+                        "topic": "MODEL_PAYLOAD_MUST_NOT_BE_ECHOED",
+                    }
+                ]
+            },
+            {"proposals": [{"action": "topic", "quote": text, "value": "Nepal trip"}]},
+        ]
+    )
+    producer = RoutedSemanticProducer(
+        client=client,
+        source_clearance=lambda _: Sensitivity.STANDARD,
+        scope_id=conversation.session_id,
+    )
+    proposals = await producer(source)
+    state = SemanticContextEngine()
+    state.apply(conversation, source, proposals, epoch=state.epoch)
+    assert state.active_topic == "Nepal trip"
+    assert client.calls == 2
+    assert client.requests[0]["operation_id"] != client.requests[1]["operation_id"]
+    assert "MODEL_PAYLOAD_MUST_NOT_BE_ECHOED" not in client.requests[1]["system_prompt"]
+    assert [r["input_payload"] for r in client.requests] == [
+        {"utterance": text},
+        {"utterance": text},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_repeated_missing_value_stops_after_one_correction_attempt():
+    text = "I am planning a Nepal trip."
+    invalid = {"proposals": [{"action": "topic", "quote": text}]}
+    client = SequenceModel([invalid, invalid])
+    producer = RoutedSemanticProducer(
+        client=client, source_clearance=lambda _: Sensitivity.STANDARD, scope_id="test"
+    )
+    with pytest.raises(SemanticRejected, match="missing semantic value"):
+        await producer(user_turn(text))
+    assert client.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_revocation_before_correction_dispatch_blocks_second_request():
+    text = "I am planning a Nepal trip."
+    invalid = {"proposals": [{"action": "topic", "quote": text}]}
+    client = SequenceModel([invalid])
+    approved = [True]
+
+    def before():
+        if client.calls == 1:
+            approved[0] = False
+
+    client.before = before
+    producer = RoutedSemanticProducer(
+        client=client,
+        source_clearance=lambda _: Sensitivity.STANDARD if approved[0] else None,
+        scope_id="test",
+    )
+    with pytest.raises(SemanticRejected, match="denied"):
+        await producer(user_turn(text))
+    assert client.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_gemini_wire_schema_requires_value_and_valid_reply_needs_no_correction():
+    import json
+    from types import SimpleNamespace
+
+    from jarvis.hands.provider_adapters import GeminiStructuredOutputClient
+    from jarvis.memory.conversation_semantics import SemanticContextEngine
+
+    calls = []
+    text = "I am planning a Nepal trip."
+
+    async def create(**kwargs):
+        calls.append(kwargs)
+        wire = kwargs["response_format"]["schema"]["$defs"]["StructuredSemanticPatch"]
+        assert "value" in wire["required"]
+        return SimpleNamespace(
+            output_text=json.dumps(
+                {
+                    "proposals": [
+                        {"action": "topic", "quote": text, "value": "Nepal trip"},
+                    ]
+                }
+            )
+        )
+
+    sdk = SimpleNamespace(
+        aio=SimpleNamespace(interactions=SimpleNamespace(create=create))
+    )
+    adapter = GeminiStructuredOutputClient(client=sdk, model="synthetic-model")
+
+    class Boundary:
+        async def parse(self, **kwargs):
+            kwargs["before_dispatch"]()
+            return await adapter.parse(
+                system_prompt=kwargs["system_prompt"],
+                input_payload=kwargs["input_payload"],
+                response_model=kwargs["response_model"],
+            )
+
+    conversation = ConversationSession()
+    conversation.start()
+    source = conversation.accept_turn(ConversationRole.USER, text)
+    producer = RoutedSemanticProducer(
+        client=Boundary(),
+        source_clearance=lambda _: Sensitivity.STANDARD,
+        scope_id=conversation.session_id,
+    )
+    state = SemanticContextEngine()
+    proposals = await producer(source)
+    state.apply(conversation, source, proposals, epoch=state.epoch)
+    assert state.active_topic == "Nepal trip"
+    assert len(calls) == 1
+
+
 def user_turn(text):
     conversation = ConversationSession()
     conversation.start()
