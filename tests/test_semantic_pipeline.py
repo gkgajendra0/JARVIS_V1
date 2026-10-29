@@ -243,3 +243,62 @@ async def test_old_canonical_turn_cannot_replay_after_grant_rotation() -> None:
     await pipeline.drain()
     assert state.active_topic == "Interview prep"
     await pipeline.close()
+
+
+@pytest.mark.asyncio
+async def test_plan_epoch_captured_before_async_model_call():
+    conversation = ConversationSession()
+    conversation.start()
+    state = SemanticContextEngine()
+    epoch = [0]
+    started = asyncio.Event()
+    proceed = asyncio.Event()
+    committed_epochs = []
+
+    async def producer(turn):
+        started.set()
+        await proceed.wait()
+        return topic_proposal(turn.text)
+
+    async def on_applied(turn, patches, before, after, source_epoch):
+        committed_epochs.append(source_epoch)
+
+    pipeline = SemanticTurnPipeline(
+        conversation=conversation,
+        state=state,
+        producer=producer,
+        authorization_binding=lambda: "valid-owner-binding",
+        on_applied=on_applied,
+        accepted_plan_epoch=lambda _turn: epoch[0],
+    )
+    pipeline.start()
+    try:
+        turn = conversation.accept_turn(ConversationRole.USER, "Nepal trip")
+        assert pipeline.submit(turn)
+        await asyncio.wait_for(started.wait(), timeout=2)
+        epoch[0] = 2  # Suppression followed by explicit re-enable during inference.
+        proceed.set()
+        await pipeline.drain()
+        assert committed_epochs == [0]  # Never silently refresh the source epoch.
+    finally:
+        await pipeline.close()
+
+
+def test_persistence_hook_without_accepted_epoch_is_rejected():
+    conversation = ConversationSession()
+    conversation.start()
+
+    async def producer(turn):
+        return topic_proposal(turn.text)
+
+    async def persist(turn, proposals, before, after, epoch):
+        pass
+
+    with pytest.raises(TypeError, match="accepted-turn epoch"):
+        SemanticTurnPipeline(
+            conversation=conversation,
+            state=SemanticContextEngine(),
+            producer=producer,
+            authorization_binding=lambda: "owner",
+            on_applied=persist,
+        )
