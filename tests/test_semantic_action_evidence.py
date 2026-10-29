@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from jarvis.conversation import ConversationRole, ConversationSession
@@ -154,3 +156,58 @@ def test_explicit_topic_forgetting_is_accepted(statement: str):
         epoch=e.epoch,
     )
     assert e.snapshot("Nepal trip") is None
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "The route is already planned",
+        "The route is done",
+        "Our route is complete",
+        "Route पूरा हो गया",
+    ),
+)
+def test_completion_succeeds_when_windows_gives_turns_identical_timestamps(
+    statement: str,
+):
+    c, e = _session_with_route()
+    route = dict(e.snapshot().steps)["route"]
+    completion = _turn(c, statement)
+    # Reproduce Windows wall-clock resolution: two distinct accepted user turns
+    # may share a timestamp. Their canonical user generations still differ.
+    completion = replace(completion, accepted_at=route.accepted_at)
+    c._turns[-1] = completion
+    changed = e.apply(
+        c,
+        completion,
+        [_patch(statement, SemanticAction.COMPLETE_STEP, key="route")],
+        epoch=e.epoch,
+    )
+    assert changed == 1
+    field = dict(e.snapshot().steps)["route"]
+    assert field.completed is True
+    assert field.source_turn_id == completion.turn_id
+
+
+def test_same_timestamp_old_async_turn_cannot_override_newer_generation():
+    c, e = _session_with_route()
+    route = dict(e.snapshot().steps)["route"]
+    old = _turn(c, "The route is done")
+    newer = _turn(c, "The route is done")
+    old = replace(old, accepted_at=route.accepted_at)
+    newer = replace(newer, accepted_at=route.accepted_at)
+    c._turns[-2:] = [old, newer]
+    assert e.apply(
+        c,
+        newer,
+        [_patch(newer.text, SemanticAction.COMPLETE_STEP, key="route")],
+        epoch=e.epoch,
+    ) == 1
+    with pytest.raises(SemanticRejected, match="stale asynchronous turn"):
+        e.apply(
+            c,
+            old,
+            [_patch(old.text, SemanticAction.COMPLETE_STEP, key="route")],
+            epoch=e.epoch,
+        )
+    assert dict(e.snapshot().steps)["route"].source_turn_id == newer.turn_id
