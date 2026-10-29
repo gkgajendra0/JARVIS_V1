@@ -2,9 +2,16 @@
 
 ## Status
 
-Candidate implementation: `src/jarvis/memory/conversation_semantics.py` and
-`tests/test_conversation_semantics.py`. Standalone reducer only; **not enabled**
-in production. Do not merge this draft as a complete conversational-intelligence
+Candidate components:
+- `src/jarvis/memory/conversation_semantics.py` — canonical grounded reducer
+  with an epoch/turn-order fence.
+- `src/jarvis/memory/semantic_pipeline.py` — bounded async ingestion that
+  requires a rotating authorization binding; no additional wait on the
+  synchronous accepted-turn callback.
+- `tests/test_conversation_semantics.py` and
+  `tests/test_semantic_pipeline.py` — focused behavior and concurrency tests.
+
+These components are **not enabled** in production. Do not merge this draft as a complete conversational-intelligence
 fix.
 
 This branch starts from merged main `488954a6`. A prior, uncommitted isolated
@@ -72,3 +79,32 @@ Do not merge until scoped and whole-repository automated tests pass on the exact
 head, Windows SQLCipher/DPAPI authority checks pass, and the owner accepts normal
 Gemini Live conversation behavior. Do not assert production readiness from this
 module's unit tests alone.
+
+## Runtime wiring specification
+
+The production integration point is `LiveKitConversationBridge.add_accepted_turn_observer`.
+Attach `SemanticTurnPipeline.submit` only after canonical user-turn acceptance
+and after a trusted, revocable owner authorization binding is available.
+The configured producer must emit `SemanticProposal` objects, not write
+memory. It must not block the accepted-turn callback. Do **not** use a raw
+Windows username as the binding. It needs to change when owner authority
+rotates and be invalidated immediately upon lock, revoke or protected response
+retirement.
+
+The pipeline enforces an epoch fence both before and after the asynchronous
+producer completes. It does **not** currently expose any state to a model:
+a separate gated adapter must use `ContextAssembler`, retain original
+source IDs, apply field sensitivity classification, and respect one-response
+protected-answer retirement.
+
+A brief authenticated follow-up may reuse the current working thread as
+authorized; a new wake-up must not inject the prior conversation until the
+owner explicitly names the topic. For cross-day resumption use encrypted
+checkpoint storage only, with fresh question-bound read consent and transactional
+forget. No plaintext checkpoint fallback is permissible.
+
+**Important:** A model-proposed value that quotes a canonical speech transcript
+is grounded to that transcript, not independently verified against the audio.
+The Jimny/Gemini misrecognition therefore remains a separate ASR integrity
+problem; critical names/dates require reconciliation or confirmation before
+durable promotion. This semantic reducer cannot solve it alone.
