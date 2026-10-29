@@ -33,8 +33,10 @@ def resolve_session_commit_callback(
     if direct is not None and factory is not None:
         raise ValueError("semantic callback and factory cannot both be active")
     callback = factory(conversation) if factory is not None else direct
-    if callback is not None and not callable(callback):
+    if factory is not None and not callable(callback):
         raise TypeError("semantic commit factory returned no callback")
+    if callback is not None and not callable(callback):
+        raise TypeError("semantic commit callback must be callable")
     return callback
 
 
