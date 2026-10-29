@@ -456,3 +456,32 @@ async def test_revoked_privacy_admission_inside_transaction_rolls_back(tmp_path)
     finally:
         await writer.close()
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_private_labeled_field_is_not_persisted_with_lost_field_provenance(
+    tmp_path,
+):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        turn = accepted(conversation, 1, "Nepal trip")
+        with pytest.raises(CheckpointRejected, match="restricted"):
+            await store.save(
+                conversation,
+                turn,
+                checkpoint(turn, sensitivity=Sensitivity.PRIVATE),
+                authorize_write=lambda: True,
+                admit_snapshot=lambda *_: True,
+            )
+        request = accepted(conversation, 2, "Continue Nepal trip")
+        assert (
+            await store.read_named_snapshot(
+                conversation, request,
+                title="Nepal trip", authorize_read=lambda: True,
+            )
+            is None
+        )
+    finally:
+        await writer.close()
+        await reader.close()
