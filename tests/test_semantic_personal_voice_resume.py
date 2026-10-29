@@ -37,7 +37,7 @@ class OwnerAuthority:
     def authorize_personal_context(self, **kwargs):
         self.prompt_count += 1
         assert kwargs["operation"] == "read"
-        assert kwargs["question"] == "Continue Nepal trip"
+        assert kwargs["question"] in {"Continue Nepal trip", "Continue Nepal"}
         return object()
 
     def consume_personal_context(self, permit):
@@ -57,6 +57,13 @@ class TopicStore:
         self.present = present
         self.revision = "revision-1"
         self.revoke_on_read = None
+
+    async def resolve_named_topic(
+        self, conversation, turn, *, topic_hint, authorize_read
+    ):
+        assert authorize_read() is True
+        assert topic_hint in {"Nepal", "Nepal trip"}
+        return "Nepal trip" if self.present else None
 
     async def read_named_snapshot(
         self, conversation, turn, *, title, authorize_read
@@ -174,5 +181,21 @@ async def test_revision_changed_during_read_rejects_stale_snapshot():
         result = await personal.resume_topic("Nepal trip")
         assert result == {"status": "denied"}
         assert closed
+    finally:
+        personal.close()
+
+
+@pytest.mark.asyncio
+async def test_short_nepal_topic_hint_resumes_unique_saved_nepal_trip():
+    authority = OwnerAuthority()
+    store = TopicStore()
+    personal, _ = personal_session(
+        authority, store, question="Continue Nepal"
+    )
+    try:
+        result = await personal.resume_topic("Nepal")
+        assert result["status"] == "selected"
+        assert any("plan route" in fact["text"] for fact in result["facts"])
+        assert authority.prompt_count == 1
     finally:
         personal.close()
