@@ -33,6 +33,28 @@ class EvidenceStrength(StrEnum):
     INTERPRETED = "interpreted"
 
 
+_FORGET_CUE = re.compile(
+    r"\\b(?:forget|delete|erase|remove|stop remembering|do not remember|"
+    r"don't remember|dont remember|bhool|yaad mat)\\b|भूल|याद मत|मिटा|हटा",
+    flags=re.IGNORECASE,
+)
+_FORGET_NEGATION = re.compile(
+    r"\\b(?:don't|dont|do not|never|mat|nahi|nahin)\\s+forget\\b|मत भूल",
+    flags=re.IGNORECASE,
+)
+_COMPLETION_CUE = re.compile(
+    r"\\b(?:done|complete|completed|finished|finalized|finalised|"
+    r"already planned|is planned|has been planned|sorted)\\b|"
+    r"हो गया|पूरा हो गया|तैयार है",
+    flags=re.IGNORECASE,
+)
+_COMPLETION_UNCERTAIN = re.compile(
+    r"[?？]|\\b(?:not|isn't|isnt|hasn't|hasnt|haven't|havent|"
+    r"should|could|would|can|will|need to|planning to|nahi|nahin)\\b|नहीं",
+    flags=re.IGNORECASE,
+)
+
+
 class SemanticRejected(ValueError):
     """Untrusted semantic proposal or canonical source does not pass admission."""
 
@@ -321,6 +343,15 @@ class SemanticContextEngine:
         quote = turn.text[proposal.start : proposal.end]
         if not proposal.quote or quote != proposal.quote or len(quote) > 1000:
             raise SemanticRejected("proposal does not match exact user evidence")
+        if proposal.action is SemanticAction.FORGET_TOPIC and (
+            _FORGET_CUE.search(quote) is None or _FORGET_NEGATION.search(quote)
+        ):
+            raise SemanticRejected("forget needs explicit positive owner instruction")
+        if proposal.action is SemanticAction.COMPLETE_STEP and (
+            _COMPLETION_CUE.search(quote) is None
+            or _COMPLETION_UNCERTAIN.search(quote)
+        ):
+            raise SemanticRejected("completion needs explicit confirmed state")
         if len(proposal.value) > 500 or len(proposal.key) > 160:
             raise SemanticRejected("proposal too long")
         if (
