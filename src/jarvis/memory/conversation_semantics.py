@@ -135,7 +135,10 @@ class SemanticContextEngine:
         """
         if not isinstance(conversation, ConversationSession):
             raise SemanticRejected("invalid canonical conversation")
-        if not isinstance(turn, ConversationTurn) or turn.role is not ConversationRole.USER:
+        if (
+            not isinstance(turn, ConversationTurn)
+            or turn.role is not ConversationRole.USER
+        ):
             raise SemanticRejected("only accepted USER turns are eligible")
         if not any(original is turn for original in conversation.turns):
             raise SemanticRejected("turn not present in canonical conversation")
@@ -152,9 +155,15 @@ class SemanticContextEngine:
             self._validate_proposal(turn, proposal)
 
         # Work on a detached copy: no partial changes on an invalid proposal.
-        topics = {key: _Topic(value.title, value.goal,
-                              dict(value.constraints), dict(value.pending_steps))
-                  for key, value in self._topics.items()}
+        topics = {
+            key: _Topic(
+                value.title,
+                value.goal,
+                dict(value.constraints),
+                dict(value.pending_steps),
+            )
+            for key, value in self._topics.items()
+        }
         active = self._active
         cutoffs = dict(self._cutoffs)
         changed = 0
@@ -195,8 +204,10 @@ class SemanticContextEngine:
             if state is None:
                 raise SemanticRejected("unknown topic")
             fact = GroundedStateValue(
-                value=proposal.value.strip(), evidence=proposal.quote,
-                source_turn_id=turn.turn_id, accepted_at=turn.accepted_at,
+                value=proposal.value.strip(),
+                evidence=proposal.quote,
+                source_turn_id=turn.turn_id,
+                accepted_at=turn.accepted_at,
                 sensitivity=proposal.sensitivity,
                 evidence_strength=(
                     EvidenceStrength.LITERAL
@@ -210,16 +221,25 @@ class SemanticContextEngine:
                     changed += 1
             elif proposal.action in (SemanticAction.CONSTRAINT, SemanticAction.CORRECT):
                 field_key = self._key(proposal.key)
-                if proposal.action is SemanticAction.CORRECT and field_key not in state.constraints:
+                if (
+                    proposal.action is SemanticAction.CORRECT
+                    and field_key not in state.constraints
+                ):
                     raise SemanticRejected("correction has no target")
-                if field_key not in state.constraints and len(state.constraints) >= self.max_fields:
+                if (
+                    field_key not in state.constraints
+                    and len(state.constraints) >= self.max_fields
+                ):
                     raise SemanticRejected("constraint capacity exceeded")
                 if self._newer(state.constraints.get(field_key), turn):
                     state.constraints[field_key] = fact
                     changed += 1
             elif proposal.action is SemanticAction.PENDING_STEP:
                 field_key = self._key(proposal.key)
-                if field_key not in state.pending_steps and len(state.pending_steps) >= self.max_fields:
+                if (
+                    field_key not in state.pending_steps
+                    and len(state.pending_steps) >= self.max_fields
+                ):
                     raise SemanticRejected("step capacity exceeded")
                 if self._newer(state.pending_steps.get(field_key), turn):
                     state.pending_steps[field_key] = fact
@@ -233,8 +253,10 @@ class SemanticContextEngine:
                     raise SemanticRejected("completion has no matching pending step")
                 if self._newer(old, turn):
                     state.pending_steps[field_key] = GroundedStateValue(
-                        value=old.value, evidence=proposal.quote,
-                        source_turn_id=turn.turn_id, accepted_at=turn.accepted_at,
+                        value=old.value,
+                        evidence=proposal.quote,
+                        source_turn_id=turn.turn_id,
+                        accepted_at=turn.accepted_at,
                         sensitivity=old.sensitivity,
                         evidence_strength=EvidenceStrength.INTERPRETED,
                         completed=True,
@@ -268,22 +290,30 @@ class SemanticContextEngine:
             raise SemanticRejected("secret prohibited from working state")
         if not isinstance(proposal.sensitivity, Sensitivity):
             raise SemanticRejected("invalid sensitivity")
-        if (type(proposal.start) is not int or type(proposal.end) is not int
-                or proposal.start < 0 or proposal.end <= proposal.start
-                or proposal.end > len(turn.text)):
+        if (
+            type(proposal.start) is not int
+            or type(proposal.end) is not int
+            or proposal.start < 0
+            or proposal.end <= proposal.start
+            or proposal.end > len(turn.text)
+        ):
             raise SemanticRejected("invalid evidence span")
         quote = turn.text[proposal.start:proposal.end]
-        if (not proposal.quote or quote != proposal.quote
-                or len(quote) > 1000):
+        if not proposal.quote or quote != proposal.quote or len(quote) > 1000:
             raise SemanticRejected("proposal does not match exact user evidence")
         if len(proposal.value) > 500 or len(proposal.key) > 160:
             raise SemanticRejected("proposal too long")
-        if proposal.action not in (SemanticAction.FORGET_TOPIC, SemanticAction.COMPLETE_STEP):
+        if proposal.action not in (
+            SemanticAction.FORGET_TOPIC,
+            SemanticAction.COMPLETE_STEP,
+        ):
             if not proposal.value.strip():
                 raise SemanticRejected("missing semantic value")
         if proposal.action in (
-            SemanticAction.CONSTRAINT, SemanticAction.CORRECT,
-            SemanticAction.PENDING_STEP, SemanticAction.COMPLETE_STEP,
+            SemanticAction.CONSTRAINT,
+            SemanticAction.CORRECT,
+            SemanticAction.PENDING_STEP,
+            SemanticAction.COMPLETE_STEP,
         ) and not proposal.key.strip():
             raise SemanticRejected("missing field key")
         # Reject invented numbers, dates, quantities and currency amounts.
