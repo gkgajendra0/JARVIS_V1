@@ -713,7 +713,7 @@ class MemoryLifecycleService:
                     # Same transaction as plan suppression: previously saved
                     # conversational checkpoints cannot reappear on re-enable.
                     # The global tombstone also rejects in-flight stale saves.
-                    source_time = source.accepted_at.astimezone(UTC).isoformat(
+                    source_time = source.turns[-1].accepted_at.astimezone(UTC).isoformat(
                         timespec="microseconds"
                     )
                     connection.execute(
