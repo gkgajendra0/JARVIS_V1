@@ -693,7 +693,9 @@ async def test_generic_topic_hint_cannot_trigger_private_topic_resolution(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_reenabled_plan_epoch_rejects_late_old_proposal_even_with_future_time(tmp_path):
+async def test_reenabled_plan_epoch_rejects_late_old_proposal_even_with_future_time(
+    tmp_path,
+):
     store, writer, reader = await new_store(tmp_path)
     try:
         conversation = ConversationSession()
