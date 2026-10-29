@@ -56,15 +56,19 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         if "Budget" in turn.text:
             return [
                 patch(
-                    turn, SemanticAction.CONSTRAINT,
-                    key="budget", value="unrestricted",
+                    turn,
+                    SemanticAction.CONSTRAINT,
+                    key="budget",
+                    value="unrestricted",
                 )
             ]
         if "route" in turn.text:
             return [
                 patch(
-                    turn, SemanticAction.PENDING_STEP,
-                    key="route", value="plan Nepal route",
+                    turn,
+                    SemanticAction.PENDING_STEP,
+                    key="route",
+                    value="plan Nepal route",
                 )
             ]
         return []
@@ -104,15 +108,19 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         unscoped = resumed.accept_turn(ConversationRole.USER, "Okay continue")
         with pytest.raises(PermissionError, match="does not name"):
             await storage.read_named(
-                resumed, unscoped,
-                title="Nepal trip", authorize_read=lambda: True,
+                resumed,
+                unscoped,
+                title="Nepal trip",
+                authorize_read=lambda: True,
             )
         named = resumed.accept_turn(
             ConversationRole.USER, "Continue with my Nepal trip"
         )
         checkpoint = await storage.read_named(
-            resumed, named,
-            title="Nepal trip", authorize_read=lambda: True,
+            resumed,
+            named,
+            title="Nepal trip",
+            authorize_read=lambda: True,
         )
         assert checkpoint is not None
         assert checkpoint["constraints"] == {
@@ -122,20 +130,24 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         }
         assert checkpoint["steps"]["route"]["completed"] is False
 
-        forgotten = resumed.accept_turn(
-            ConversationRole.USER, "Forget Nepal trip"
-        )
+        forgotten = resumed.accept_turn(ConversationRole.USER, "Forget Nepal trip")
         assert await storage.forget(
-            resumed, forgotten,
-            title="Nepal trip", authorize_forget=lambda: True,
+            resumed,
+            forgotten,
+            title="Nepal trip",
+            authorize_forget=lambda: True,
         )
-        after_forget = resumed.accept_turn(
-            ConversationRole.USER, "Continue Nepal trip"
+        after_forget = resumed.accept_turn(ConversationRole.USER, "Continue Nepal trip")
+        assert (
+            await storage.read_named(
+                resumed,
+                after_forget,
+                title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+            is None
         )
-        assert await storage.read_named(
-            resumed, after_forget,
-            title="Nepal trip", authorize_read=lambda: True,
-        ) is None
+
     finally:
         await pipeline.close()
         await writer.close()
