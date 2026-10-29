@@ -607,6 +607,15 @@ class PersonalContextSession:
 
             try:
                 current_turn = self._latest_turn()
+                resolved_title = await self._topic_checkpoints.resolve_named_topic(
+                    self._conversation,
+                    current_turn,
+                    topic_hint=title,
+                    authorize_read=validate_issued_permit,
+                )
+                if resolved_title is None:
+                    return {"status": "no_match", "facts": []}
+                title = resolved_title
                 revision_before = await self._topic_checkpoints.current_fingerprint(
                     title
                 )
