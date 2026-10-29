@@ -152,7 +152,8 @@ async def test_denied_snapshot_admission_never_creates_checkpoint(tmp_path):
         assert pipeline.submit(turn)
         await pipeline.drain()
         assert pipeline.status.failures == 1
-        assert state.active_topic == "Nepal trip"
+        # Denied durable persistence revokes the associated transient context.
+        assert state.snapshot() is None
         query = conversation.accept_turn(
             ConversationRole.USER, "Continue Nepal trip"
         )
