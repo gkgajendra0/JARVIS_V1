@@ -257,11 +257,11 @@ class SemanticContextEngine:
         if turn.turn_id in self._seen:
             return 0
         if (
-            (self._last_applied_at is not None and turn.accepted_at < self._last_applied_at)
-            or (
-                turn.user_utterance_generation is not None
-                and turn.user_utterance_generation < self._last_turn_generation
-            )
+            self._last_applied_at is not None
+            and turn.accepted_at < self._last_applied_at
+        ) or (
+            turn.user_utterance_generation is not None
+            and turn.user_utterance_generation < self._last_turn_generation
         ):
             raise SemanticRejected("stale asynchronous turn")
         if len(self._seen) >= 4096:
