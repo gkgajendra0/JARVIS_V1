@@ -298,7 +298,7 @@ class SemanticContextEngine:
             or proposal.end > len(turn.text)
         ):
             raise SemanticRejected("invalid evidence span")
-        quote = turn.text[proposal.start:proposal.end]
+        quote = turn.text[proposal.start : proposal.end]
         if not proposal.quote or quote != proposal.quote or len(quote) > 1000:
             raise SemanticRejected("proposal does not match exact user evidence")
         if len(proposal.value) > 500 or len(proposal.key) > 160:
@@ -309,12 +309,16 @@ class SemanticContextEngine:
         ):
             if not proposal.value.strip():
                 raise SemanticRejected("missing semantic value")
-        if proposal.action in (
-            SemanticAction.CONSTRAINT,
-            SemanticAction.CORRECT,
-            SemanticAction.PENDING_STEP,
-            SemanticAction.COMPLETE_STEP,
-        ) and not proposal.key.strip():
+        if (
+            proposal.action
+            in (
+                SemanticAction.CONSTRAINT,
+                SemanticAction.CORRECT,
+                SemanticAction.PENDING_STEP,
+                SemanticAction.COMPLETE_STEP,
+            )
+            and not proposal.key.strip()
+        ):
             raise SemanticRejected("missing field key")
         # Reject invented numbers, dates, quantities and currency amounts.
         # Linguistic paraphrase is permitted in the *transient* context only.
