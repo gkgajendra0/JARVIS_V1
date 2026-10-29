@@ -709,6 +709,27 @@ class MemoryLifecycleService:
                         "INSERT INTO personal_learning_suppression VALUES (?,1,1,?) ON CONFLICT(category) DO UPDATE SET epoch=epoch+1,suppressed=1,updated_at=excluded.updated_at",
                         (category, _db_time(self._clock_utc())),
                     )
+                if "plan" in categories:
+                    # Same transaction as plan suppression: previously saved
+                    # conversational checkpoints cannot reappear on re-enable.
+                    # The global tombstone also rejects in-flight stale saves.
+                    source_time = source.accepted_at.astimezone(UTC).isoformat(
+                        timespec="microseconds"
+                    )
+                    connection.execute(
+                        "DELETE FROM conversation_topic_checkpoint "
+                        "WHERE source_at <= ?",
+                        (source_time,),
+                    )
+                    connection.execute(
+                        "INSERT INTO conversation_topic_tombstone "
+                        "(topic_key,forgotten_at,source_turn_id) "
+                        "VALUES ('*',?,?) ON CONFLICT(topic_key) DO UPDATE SET "
+                        "forgotten_at=excluded.forgotten_at, "
+                        "source_turn_id=excluded.source_turn_id "
+                        "WHERE excluded.forgotten_at > forgotten_at",
+                        (source_time, source.turn_id),
+                    )
 
             with authority.commit_scope(permit):
                 return self._transaction(connection, mutation, guard)
