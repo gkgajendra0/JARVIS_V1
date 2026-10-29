@@ -485,3 +485,59 @@ async def test_private_labeled_field_is_not_persisted_with_lost_field_provenance
     finally:
         await writer.close()
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_unique_short_topic_hint_resolves_without_listing_topics(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        source = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, source, checkpoint(source),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+        )
+        named = accepted(conversation, 2, "Continue Nepal")
+        assert await store.resolve_named_topic(
+            conversation, named, topic_hint="Nepal",
+            authorize_read=lambda: True,
+        ) == "nepal trip"
+        unnamed = accepted(conversation, 3, "Okay continue")
+        with pytest.raises(CheckpointRejected, match="absent"):
+            await store.resolve_named_topic(
+                conversation, unnamed, topic_hint="Nepal",
+                authorize_read=lambda: True,
+            )
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_two_matching_topics_fail_closed_without_guessing(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        first = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, first, checkpoint(first),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+        )
+        second = accepted(conversation, 2, "Nepal hotel")
+        await store.save(
+            conversation, second,
+            replace(checkpoint(second), title="Nepal hotel"),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+        )
+        query = accepted(conversation, 3, "Continue Nepal")
+        with pytest.raises(CheckpointRejected, match="ambiguous named topic"):
+            await store.resolve_named_topic(
+                conversation, query, topic_hint="Nepal",
+                authorize_read=lambda: True,
+            )
+    finally:
+        await writer.close()
+        await reader.close()
