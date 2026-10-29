@@ -181,3 +181,25 @@ explicit *topic* forgetting are covered, but a separate legacy plan-fact
 deletion does not yet target the corresponding checkpoint transactionally.
 Do not advertise full forgetting integration or activate automatic checkpoint
 writes until that is solved. Full CI at the final head is still required.
+
+## 29 October security follow-up — individual plan deletion
+
+Legacy exact plan-fact forgetting now also purges all conversational topic
+checkpoint rows and adds a global forget tombstone in the canonical SQLCipher
+transaction. The same lifecycle path suppresses the plan learning category.
+This conservative fallback avoids resurrecting erased legacy plan facts inside
+checkpoint text where no field-to-assertion identity link currently exists.
+It can discard unrelated unfinished-plan checkpoints; selective deletion can
+be added later once field-level provenance is available. A regression test
+covers the legacy plan receipt path.
+
+Automatic checkpoint writes remain OFF. A trusted source-bound permission and
+independent source privacy admission must be wired at production startup.
+An accepted-turn category epoch must be captured before asynchronous inference
+and compared transactionally on save. A source timestamp alone cannot prove
+fresh authorization after suppression/re-enable. Do not enable the optional
+semantic checkpoint writer until that safeguard is complete.
+
+Merge gates: all CI must pass on the exact head, then Windows Hello, live
+voice, correction, forgetting and topic-resume acceptance. Benchmark after
+implementation, before broader owner testing.
