@@ -2,7 +2,9 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot = "E:\Jarvis\App",
-    [string]$FeatureBranch = "feat/semantic-context-reducer-20261029"
+    [string]$FeatureBranch = "feat/semantic-context-reducer-20261029",
+    [ValidateSet("all", "voice-close")]
+    [string]$Suite = "all"
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -68,6 +70,9 @@ try {
             "tests/test_memory_runtime.py"
         )
         # Stop at the first failure and emit useful stack traces if a test hangs.
+        if ($Suite -eq "voice-close") {
+            $checks = @("tests/test_semantic_voice_attachment.py")
+        }
         & $python -m pytest -x -vv --tb=short -o faulthandler_timeout=20 @checks
         if ($LASTEXITCODE -ne 0) {
             throw "Focused semantic/memory tests failed."
