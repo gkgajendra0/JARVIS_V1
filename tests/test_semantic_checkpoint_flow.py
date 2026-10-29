@@ -98,7 +98,9 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         assert dict(topic.constraints)["budget"].value == "unrestricted"
         assert not dict(topic.steps)["route"].completed
         assert await storage.save(
-            conversation, accepted, topic, authorize_write=lambda: True, admit_snapshot=lambda *_: True, expected_plan_epoch=0
+            conversation, accepted, topic, authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+            expected_plan_epoch=0
         )
 
         await pipeline.close()
