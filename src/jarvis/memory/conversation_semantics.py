@@ -39,7 +39,7 @@ _FORGET_CUE = re.compile(
     flags=re.IGNORECASE,
 )
 _FORGET_NEGATION = re.compile(
-    r"\b(?:don't|dont|do not|never|mat|nahi|nahin)\s+"
+    r"[?？]|\b(?:don't|dont|do not|never|mat|nahi|nahin)\s+"
     r"(?:forget|delete|erase|remove|bhool)\b|"
     r"\b(?:bhool|bhoolna)\s+mat\b|मत भूल|नहीं हटाना|नहीं मिटाना",
     flags=re.IGNORECASE,
