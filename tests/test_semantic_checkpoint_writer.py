@@ -164,3 +164,72 @@ async def test_denied_snapshot_admission_never_creates_checkpoint(tmp_path):
         await pipeline.close()
         await writer.close()
         await reader.close()
+
+
+
+@pytest.mark.asyncio
+async def test_stale_forget_hook_must_not_claim_newer_checkpoint_was_deleted(tmp_path):
+    from dataclasses import replace
+    from datetime import timedelta
+
+    path = tmp_path / "forget-race.db"
+    with sqlite3.connect(path) as connection:
+        assert MemoryMigrationRunner().apply(connection) == 4
+    writer = SerialConnectionWorker(
+        lambda: sqlite3.connect(path), thread_name="forget-race-writer"
+    )
+    reader = SerialConnectionWorker(
+        lambda: sqlite3.connect(path), thread_name="forget-race-reader"
+    )
+    store = EncryptedTopicCheckpointStore(writer=writer, reader=reader)
+    conversation = ConversationSession()
+    conversation.start()
+    state = SemanticContextEngine()
+    checkpoint_writer = SemanticCheckpointWriter(
+        conversation=conversation,
+        store=store,
+        authorize_write=lambda _turn: True,
+        authorize_forget=lambda _turn: True,
+        admit_snapshot=lambda *_: True,
+    )
+    try:
+        started = conversation.accept_turn(
+            ConversationRole.USER, "Nepal trip"
+        )
+        state.apply(
+            conversation,
+            started,
+            proposals_for(started),
+            epoch=state.epoch,
+        )
+        snapshot = state.snapshot()
+        assert snapshot is not None
+        await store.save(
+            conversation,
+            started,
+            snapshot,
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+            expected_plan_epoch=0,
+        )
+        forgot = conversation.accept_turn(
+            ConversationRole.USER, "Forget Nepal trip"
+        )
+        # ASR/transcript delivery was delayed; this accepted source is older
+        # than the checkpoint already written for the current topic.
+        stale = replace(
+            forgot, accepted_at=started.accepted_at - timedelta(seconds=1)
+        )
+        conversation._turns[-1] = stale
+        with pytest.raises(PermissionError, match="newer checkpoint survived"):
+            await checkpoint_writer(
+                stale,
+                tuple(proposals_for(stale)),
+                snapshot,
+                None,
+                0,
+            )
+        assert await store.current_fingerprint("Nepal trip") is not None
+    finally:
+        await writer.close()
+        await reader.close()
