@@ -127,6 +127,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         semantic_producer=None,
         semantic_authorization_binding=None,
         semantic_on_applied=None,
+        semantic_on_applied_factory=None,
         semantic_accepted_plan_epoch=None,
         semantic_topic_resume_enabled=False,
         **kwargs: Any,
@@ -151,7 +152,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             raise ValueError(
                 "Topic resumption requires canonical memory and capability authority"
             )
-        if semantic_on_applied is not None and (
+        if semantic_on_applied is not None and semantic_on_applied_factory is not None:
+            raise ValueError("choose one semantic commit callback or per-session factory")
+        if semantic_on_applied_factory is not None and not callable(
+            semantic_on_applied_factory
+        ):
+            raise TypeError("semantic_on_applied_factory must be callable")
+        if (
+            semantic_on_applied is not None
+            or semantic_on_applied_factory is not None
+        ) and (
             semantic_producer is None
             or not callable(semantic_accepted_plan_epoch)
         ):
@@ -254,11 +264,20 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     attach_semantic_voice_context,
                 )
 
+                # A checkpoint writer binds to ONE canonical ConversationSession.
+                # Construct a new callback for each realtime voice session.
+                applied = (
+                    semantic_on_applied_factory(bridge.conversation)
+                    if semantic_on_applied_factory is not None
+                    else semantic_on_applied
+                )
+                if applied is not None and not callable(applied):
+                    raise TypeError("semantic commit factory returned no callback")
                 self._semantic_context_attachment = attach_semantic_voice_context(
                     bridge,
                     producer=semantic_producer,
                     authorization_binding=semantic_authorization_binding,
-                    on_applied=semantic_on_applied,
+                    on_applied=applied,
                     accepted_plan_epoch=semantic_accepted_plan_epoch,
                 )
             else:
