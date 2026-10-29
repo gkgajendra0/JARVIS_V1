@@ -124,6 +124,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         routing_runtime=None,
+        semantic_producer=None,
+        semantic_authorization_binding=None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -137,6 +139,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._learning_authority = None
         self._learning_grant = None
         self._learning_start_attempted = False
+        self._semantic_context_attachment = None
+        if (semantic_producer is None) != (semantic_authorization_binding is None):
+            raise ValueError(
+                "Semantic voice requires both an authorized producer and owner binding"
+            )
+        if semantic_producer is not None and (
+            memory_runtime is None or capability_runtime is None
+        ):
+            raise ValueError(
+                "Semantic voice requires canonical encrypted memory and capability authority"
+            )
         if (
             args
             and args[0].personal_context_mode == "apply"
@@ -205,6 +218,25 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         bridge.conversation, self._learning_grant
                     )
                 )
+            # Explicit opt-in only. No model dispatch, memory persistence, or
+            # model-visible release without a separately provided, trusted gate.
+            # The bridge closes and invalidates this state on session retirement.
+            if semantic_producer is not None:
+                if config.personal_context_mode != "apply":
+                    raise PermissionError(
+                        "Semantic voice requires protected personal context APPLY"
+                    )
+                from jarvis.voice.semantic_context_bridge import (
+                    attach_semantic_voice_context,
+                )
+
+                self._semantic_context_attachment = attach_semantic_voice_context(
+                    bridge,
+                    producer=semantic_producer,
+                    authorization_binding=semantic_authorization_binding,
+                )
+            else:
+                self._semantic_context_attachment = None
             if work_runtime is not None:
                 work_runtime.set_interactive_brain_active(False)
 
