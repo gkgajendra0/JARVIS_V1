@@ -163,7 +163,7 @@ async def test_no_checkpoint_cannot_invent_trip_context():
 
 
 @pytest.mark.asyncio
-async async def test_no_new_topic_tool_unless_explicitly_configured():
+async def test_no_new_topic_tool_unless_explicitly_configured():
     authority = OwnerAuthority()
     session, _ = personal_session(authority, TopicStore())
     session._topic_checkpoints = None
