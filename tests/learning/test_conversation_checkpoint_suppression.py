@@ -150,3 +150,48 @@ async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learnin
     assert tombstone == (explicit.source_id,)
     suppression = await learning.service.learning_suppression()
     assert "plan" in suppression.suppressed
+
+
+
+@pytest.mark.asyncio
+async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(learning):
+    from jarvis.memory.runtime import MemoryRuntime
+
+    runtime = MemoryRuntime(
+        learning.service, writer=learning.writer, reader=learning.reader
+    )
+    conversation = ConversationSession()
+    conversation.start()
+    turn = conversation.accept_turn(
+        ConversationRole.USER, "Don't remember my plans"
+    )
+    with pytest.raises(PermissionError, match="unavailable"):
+        runtime.accepted_plan_epoch(turn)
+    await runtime.start()
+    assert runtime.accepted_plan_epoch(turn) == 0
+
+    source = AcceptedLearningSource.from_turn(
+        "runtime", conversation, turn, now=101, current_only=True
+    )
+    learning.authority.register_source(
+        learning.grant, source.receipt_id, source=source
+    )
+    permit = learning.authority.issue_child(
+        learning.grant, suppression_binding(source, ("plan",))
+    )
+    await learning.service.suppress_learning_categories(
+        source, ("plan",), permit
+    )
+    assert runtime.accepted_plan_epoch(turn) == 1
+
+    explicit = replace(
+        learning.plan.mutations[0].source,
+        source_id=str(uuid4()),
+        source_class=MemorySourceClass.OWNER_EXPLICIT,
+        authority_class=AuthorityClass.OWNER_EXPLICIT,
+    )
+    await learning.service.reenable_learning_category(
+        "plan", explicit,
+        learning.authority.authorize_reenable_category("plan"),
+    )
+    assert runtime.accepted_plan_epoch(turn) == 2
