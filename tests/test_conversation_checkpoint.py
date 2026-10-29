@@ -619,3 +619,31 @@ async def test_suppression_blocks_stale_save_even_after_reenabled(tmp_path):
     finally:
         await writer.close()
         await reader.close()
+
+
+
+@pytest.mark.asyncio
+async def test_generic_topic_hint_cannot_trigger_private_topic_resolution(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        source = accepted(conversation, 1, "Nepal trip")
+        await store.save(
+            conversation, source, checkpoint(source),
+            authorize_write=lambda: True,
+            admit_snapshot=lambda *_: True,
+        )
+        generic = accepted(conversation, 2, "Continue my trip")
+        with pytest.raises(CheckpointRejected, match="not distinctive"):
+            await store.resolve_named_topic(
+                conversation, generic, topic_hint="trip",
+                authorize_read=lambda: True,
+            )
+        with pytest.raises(CheckpointRejected, match="not distinctive"):
+            await store.resolve_named_topic(
+                conversation, generic, topic_hint="my",
+                authorize_read=lambda: True,
+            )
+    finally:
+        await writer.close()
+        await reader.close()
