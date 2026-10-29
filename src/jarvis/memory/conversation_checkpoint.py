@@ -49,9 +49,7 @@ def _time(turn: ConversationTurn) -> str:
     return turn.accepted_at.astimezone(UTC).isoformat(timespec="microseconds")
 
 
-def _canonical(
-    conversation: ConversationSession, turn: ConversationTurn
-) -> None:
+def _canonical(conversation: ConversationSession, turn: ConversationTurn) -> None:
     if (
         not isinstance(conversation, ConversationSession)
         or conversation.status is not ConversationStatus.ACTIVE
@@ -137,7 +135,9 @@ def _snapshot_payload(snapshot: TopicSnapshot) -> str:
         "constraints": constraints,
         "steps": steps,
     }
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     if len(encoded.encode("utf-8")) > 8192:
         raise CheckpointRejected("checkpoint exceeds 8192 bytes")
     return encoded
