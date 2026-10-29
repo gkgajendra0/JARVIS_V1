@@ -22,9 +22,7 @@ from .conversation_semantics import TopicSnapshot
 from .live_context import LiveContext, LiveContextPriority
 from .types import Sensitivity
 
-ContextReleaseValidator = Callable[
-    [ConversationSession, ConversationTurn, str], bool
-]
+ContextReleaseValidator = Callable[[ConversationSession, ConversationTurn, str], bool]
 
 
 class ContextReleaseDenied(PermissionError):
