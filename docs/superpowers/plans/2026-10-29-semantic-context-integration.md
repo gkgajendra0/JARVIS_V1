@@ -156,3 +156,28 @@ Implemented after the initial isolated reducer:
    updated for schema v4; do not infer readiness from older commits.
 6. Only after implementing these gates: benchmark latency, then run normal
    owner-spoken seven-turn Nepal acceptance and expanded adversarial tests.
+
+
+## Plan-suppression integration checkpoint
+
+The canonical \`MemoryLifecycleService.suppress_learning_categories\` mutation
+now purges **all** \`conversation_topic_checkpoint\` rows and writes a global
+\`conversation_topic_tombstone\` inside the exact same SQLCipher transaction
+as \`personal_learning_suppression(category='plan')\`. It takes the suppression
+timestamp and source ID from the canonical latest accepted turn. A queued stale
+checkpoint cannot survive by carrying a later timestamp, and pre-suppression
+in-flight writes fail against the tombstone.
+
+The checkpoint adapter also consults the canonical suppression flag on
+write, read, unique-name resolution, and response-revision fingerprint, so
+suppressed data cannot leak from an unexpectedly surviving legacy row. A later
+explicit re-enable does not resurrect deleted checkpoints. Regression tests
+seed both older and future-stamped rows, exercise the canonical learning
+authority's plan suppression, and cover delayed writes and denied reads.
+
+**Remaining:** Cross-feature explicit single-fact \`forget_memory\` must be
+reconciled against matching topic checkpoints; plan-category suppression and
+explicit *topic* forgetting are covered, but a separate legacy plan-fact
+deletion does not yet target the corresponding checkpoint transactionally.
+Do not advertise full forgetting integration or activate automatic checkpoint
+writes until that is solved. Full CI at the final head is still required.
