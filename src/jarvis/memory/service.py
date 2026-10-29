@@ -307,6 +307,9 @@ class MemoryService:
             commit_guard=commit_guard,
         )
         self._invalidate_learning()
+        # An explicit legacy plan correction may have advanced the plan epoch
+        # and erased checkpoints in the same canonical transaction.
+        await self._refresh_plan_epoch()
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def forget_exact(
