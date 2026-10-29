@@ -345,3 +345,69 @@ async def test_old_forget_cannot_erase_newer_checkpoint(tmp_path):
     finally:
         await writer.close()
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_untrusted_sensitivity_label_cannot_bypass_privacy_admission(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        turn = accepted(conversation, 1, "Nepal trip: private account 123")
+        proposed = checkpoint(turn, budget="private account 123")
+        calls = [0]
+
+        def trusted_admission(snapshot, source):
+            calls[0] += 1
+            assert source is turn
+            assert snapshot is proposed
+            return False
+
+        with pytest.raises(CheckpointRejected, match="source admission denied"):
+            await store.save(
+                conversation,
+                turn,
+                proposed,
+                authorize_write=lambda: True,
+                admit_snapshot=trusted_admission,
+            )
+        assert calls[0] >= 1
+        question = accepted(conversation, 2, "Continue Nepal trip")
+        result = await store.read_named(
+            conversation, question, title="Nepal trip",
+            authorize_read=lambda: True,
+        )
+        assert result is None
+    finally:
+        await writer.close()
+        await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_revoked_privacy_admission_inside_transaction_rolls_back(tmp_path):
+    store, writer, reader = await new_store(tmp_path)
+    try:
+        conversation = ConversationSession()
+        turn = accepted(conversation, 1, "Nepal trip")
+        checks = [0]
+
+        def admission(_snapshot, _turn):
+            checks[0] += 1
+            return checks[0] < 3
+
+        with pytest.raises(CheckpointRejected, match="source admission denied"):
+            await store.save(
+                conversation,
+                turn,
+                checkpoint(turn),
+                authorize_write=lambda: True,
+                admit_snapshot=admission,
+            )
+        assert checks[0] == 3
+        question = accepted(conversation, 2, "Continue Nepal trip")
+        assert await store.read_named(
+            conversation, question, title="Nepal trip",
+            authorize_read=lambda: True,
+        ) is None
+    finally:
+        await writer.close()
+        await reader.close()
