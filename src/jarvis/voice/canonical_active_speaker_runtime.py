@@ -127,6 +127,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         semantic_producer=None,
         semantic_authorization_binding=None,
         semantic_on_applied=None,
+        semantic_accepted_plan_epoch=None,
         semantic_topic_resume_enabled=False,
         **kwargs: Any,
     ) -> None:
@@ -150,9 +151,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             raise ValueError(
                 "Topic resumption requires canonical memory and capability authority"
             )
-        if semantic_on_applied is not None and semantic_producer is None:
+        if semantic_on_applied is not None and (
+            semantic_producer is None
+            or not callable(semantic_accepted_plan_epoch)
+        ):
             raise ValueError(
-                "Checkpoint persistence requires an authorized semantic producer"
+                "Checkpoint persistence requires authorized producer and "
+                "accepted-turn plan epoch capture"
             )
         if (semantic_producer is None) != (semantic_authorization_binding is None):
             raise ValueError(
@@ -254,6 +259,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     producer=semantic_producer,
                     authorization_binding=semantic_authorization_binding,
                     on_applied=semantic_on_applied,
+                    accepted_plan_epoch=semantic_accepted_plan_epoch,
                 )
             else:
                 self._semantic_context_attachment = None
