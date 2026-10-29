@@ -108,3 +108,51 @@ is grounded to that transcript, not independently verified against the audio.
 The Jimny/Gemini misrecognition therefore remains a separate ASR integrity
 problem; critical names/dates require reconciliation or confirmation before
 durable promotion. This semantic reducer cannot solve it alone.
+
+
+## 29 October continuation — code now present on draft PR #303
+
+Implemented after the initial isolated reducer:
+- \`MemoryRuntime.topic_checkpoints\` shares the canonical writer and reader
+  workers, existing SQLCipher key and migration ledger; no second database.
+- \`0004_conversation_topic_checkpoint.sql\` plus guarded checkpoint
+  save/read/forget, a trusted snapshot admission callback, and commit-time
+  rechecks of the canonical turn, owner permit, and privacy admission.
+- \`read_named_snapshot()\` reconstructs an explicitly grounded, standard-
+  sensitivity typed topic state from a named read, preserving the checkpoint
+  revision source and time rather than treating the new request as provenance.
+- \`current_fingerprint()\` invalidates protected topic responses after
+  correction, overwrite, forget or plan-category suppression.
+- \`SemanticContextProjector\` assembles a bounded model-context packet only
+  after a named-topic question and independent authorization.
+- \`SemanticVoiceAttachment\` is connected as an **optional** accepted-turn
+  observer in \`CanonicalActiveSpeakerRuntimeController\`. It is disabled
+  without explicit injected source-cleared producer and rotating owner binding,
+  and it revokes transient state on bridge close.
+- \`PersonalContextSession.resume_topic()\` and the conditional
+  \`resume_conversation_topic\` function tool reuse existing fresh
+  question-bound memory consent and protected audio lifecycle, with
+  before/after snapshot-revision checks. The controller's
+  \`semantic_topic_resume_enabled=False\` default keeps the feature off.
+
+### Still mandatory before activation or merge
+
+1. **No producer is configured by default.** An actual approved routed
+   semantic inference client and trusted independent source-clearance
+   classifier must be bound to the voice runtime; model sensitivity labels
+   do not grant release or storage permission.
+2. **No automatic checkpoint write is enabled.** The canonical learning
+   authority must issue source-bound write permission, and the checkpoint
+   admission callback must consult live plan suppression. The forget/control
+   path must atomically invalidate queued saves and commit tombstones.
+3. Voice follow-ups across deliberate protected-session retirement need a
+   bounded, owner-authorized work-state handoff. Separate wake-ups must
+   require topic mention; never automatically replay old private context.
+4. Source revision and authorization must also be rechecked at actual
+   provider/audio release; current topic tool leverages the normal protected
+   response checker but requires native Windows qualification.
+5. Full CI / Windows SQLCipher smoke / private owner voice acceptance are
+   pending for exact final commit. Existing smoke/migration assertions were
+   updated for schema v4; do not infer readiness from older commits.
+6. Only after implementing these gates: benchmark latency, then run normal
+   owner-spoken seven-turn Nepal acceptance and expanded adversarial tests.
