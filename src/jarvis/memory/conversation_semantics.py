@@ -96,6 +96,13 @@ class SemanticContextEngine:
         self._active: str | None = None
         self._seen: set[str] = set()
         self._cutoffs: dict[str, datetime] = {}
+        self._epoch = 0
+        self._last_applied_at: datetime | None = None
+
+    @property
+    def epoch(self) -> int:
+        """Invalidate all outstanding asynchronous proposals when clear() runs."""
+        return self._epoch
 
     @property
     def active_topic(self) -> str | None:
@@ -108,6 +115,8 @@ class SemanticContextEngine:
         self._active = None
         self._seen.clear()
         self._cutoffs.clear()
+        self._last_applied_at = None
+        self._epoch += 1
 
     def snapshot(self, topic: str | None = None) -> TopicSnapshot | None:
         """Returns a local snapshot only. The caller must check release authority."""
@@ -127,12 +136,16 @@ class SemanticContextEngine:
         conversation: ConversationSession,
         turn: ConversationTurn,
         proposals: tuple[SemanticProposal, ...] | list[SemanticProposal],
+        *,
+        epoch: int,
     ) -> int:
         """Validate and apply one ordered canonical user turn atomically.
 
         All source and proposal checks run before mutation. No AI-produced
         instruction or assistant turn is treated as owner evidence.
         """
+        if type(epoch) is not int or epoch != self._epoch:
+            raise SemanticRejected("stale semantic context generation")
         if not isinstance(conversation, ConversationSession):
             raise SemanticRejected("invalid canonical conversation")
         if (
@@ -144,12 +157,15 @@ class SemanticContextEngine:
             raise SemanticRejected("turn not present in canonical conversation")
         if turn.turn_id in self._seen:
             return 0
+        if self._last_applied_at is not None and turn.accepted_at < self._last_applied_at:
+            raise SemanticRejected("stale asynchronous turn")
         if len(self._seen) >= 4096:
             raise SemanticRejected("session input budget exhausted")
         if not isinstance(proposals, (tuple, list)) or len(proposals) > 12:
             raise SemanticRejected("invalid proposal batch")
         if not proposals:
             self._seen.add(turn.turn_id)
+            self._last_applied_at = turn.accepted_at
             return 0
         for proposal in proposals:
             self._validate_proposal(turn, proposal)
@@ -268,6 +284,7 @@ class SemanticContextEngine:
         self._active = active
         self._cutoffs = cutoffs
         self._seen.add(turn.turn_id)
+        self._last_applied_at = turn.accepted_at
         return changed
 
     @staticmethod
