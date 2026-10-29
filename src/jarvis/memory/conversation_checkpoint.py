@@ -7,9 +7,11 @@ All operations run on the canonical SerialConnectionWorker connections.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unicodedata
+from dataclasses import replace
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -251,6 +253,29 @@ class EncryptedTopicCheckpointStore:
 
         return await self._reader.run(fetch)
 
+    async def current_fingerprint(self, title: str) -> str | None:
+        """Internal revision check for protected-response retirement.
+
+        This returns only a revision digest, not facts. It does not grant model
+        release or replace an authorized named read.
+        """
+        key = _key(title)
+
+        def query(connection):
+            row = connection.execute(
+                "SELECT source_turn_id,source_at,state_json "
+                "FROM conversation_topic_checkpoint WHERE topic_key=?",
+                (key,),
+            ).fetchone()
+            if row is None:
+                return None
+            material = json.dumps(
+                list(row), ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+            return hashlib.sha256(material).hexdigest()
+
+        return await self._reader.run(query)
+
     async def read_named_snapshot(
         self,
         conversation: ConversationSession,
@@ -327,8 +352,7 @@ class EncryptedTopicCheckpointStore:
             ):
                 raise CheckpointRejected("checkpoint step malformed")
             step = grounded(field["value"])
-            from dataclasses import replace
-            steps.append((_key(key), replace(step, completed=field["completed"])))
+                steps.append((_key(key), replace(step, completed=field["completed"])))
         _canonical(conversation, request)
         _permit(authorize_read)
         return TopicSnapshot(
