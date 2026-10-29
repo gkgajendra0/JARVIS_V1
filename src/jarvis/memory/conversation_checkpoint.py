@@ -53,16 +53,22 @@ def _time(turn: ConversationTurn) -> str:
     return turn.accepted_at.astimezone(UTC).isoformat(timespec="microseconds")
 
 
-def _canonical(conversation: ConversationSession, turn: ConversationTurn) -> None:
+def _canonical(
+    conversation: ConversationSession,
+    turn: ConversationTurn,
+    *,
+    require_latest: bool = True,
+) -> None:
     if (
         not isinstance(conversation, ConversationSession)
         or conversation.status is not ConversationStatus.ACTIVE
         or not isinstance(turn, ConversationTurn)
         or turn.role is not ConversationRole.USER
         or not conversation.turns
-        or conversation.turns[-1] is not turn
+        or not any(item is turn for item in conversation.turns)
+        or (require_latest and conversation.turns[-1] is not turn)
     ):
-        raise CheckpointRejected("latest canonical owner USER turn required")
+        raise CheckpointRejected("accepted canonical owner USER turn required")
 
 
 def _admit_snapshot(
@@ -180,14 +186,14 @@ class EncryptedTopicCheckpointStore:
     ) -> bool:
         if type(expected_plan_epoch) is not int or expected_plan_epoch < 0:
             raise CheckpointRejected("accepted-turn plan epoch is required")
-        _canonical(conversation, turn)
+        _canonical(conversation, turn, require_latest=False)
         _permit(authorize_write)
         _admit_snapshot(admit_snapshot, snapshot, turn)
         state_json = _snapshot_payload(snapshot)
         key, source_at = _key(snapshot.title), _time(turn)
 
         def write(connection) -> bool:
-            _canonical(conversation, turn)
+            _canonical(conversation, turn, require_latest=False)
             _permit(authorize_write)
             _admit_snapshot(admit_snapshot, snapshot, turn)
             connection.execute("BEGIN IMMEDIATE")
@@ -224,7 +230,7 @@ class EncryptedTopicCheckpointStore:
                     "source_at=excluded.source_at, state_json=excluded.state_json",
                     (key, turn.turn_id, source_at, state_json),
                 )
-                _canonical(conversation, turn)
+                _canonical(conversation, turn, require_latest=False)
                 _admit_snapshot(admit_snapshot, snapshot, turn)
                 _permit(authorize_write)
                 connection.commit()
@@ -443,7 +449,7 @@ class EncryptedTopicCheckpointStore:
         title: str,
         authorize_forget: Callable[[], bool],
     ) -> bool:
-        _canonical(conversation, turn)
+        _canonical(conversation, turn, require_latest=False)
         key = _key(title)
         if (
             not _explicit_topic(turn.text, title)
@@ -455,7 +461,7 @@ class EncryptedTopicCheckpointStore:
         timestamp = _time(turn)
 
         def erase(connection) -> bool:
-            _canonical(conversation, turn)
+            _canonical(conversation, turn, require_latest=False)
             _permit(authorize_forget)
             connection.execute("BEGIN IMMEDIATE")
             try:
@@ -480,7 +486,7 @@ class EncryptedTopicCheckpointStore:
                     "WHERE excluded.forgotten_at > forgotten_at",
                     (key, timestamp, turn.turn_id),
                 )
-                _canonical(conversation, turn)
+                _canonical(conversation, turn, require_latest=False)
                 _permit(authorize_forget)
                 connection.commit()
                 return row is not None
