@@ -95,3 +95,58 @@ async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learn
             "SELECT count(*) FROM conversation_topic_checkpoint"
         ).fetchone()[0]
     ) == 0
+
+
+
+@pytest.mark.asyncio
+async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learning):
+    # Existing canonical forgetting can target a plan fact without knowing
+    # which conversation checkpoint contains it. Fail closed by erasing all
+    # checkpoints atomically with the legacy plan-fact deletion.
+    first = learning.plan.mutations[0]
+    await learning.service.admit_learning(
+        learning.plan, learning.new_permit()
+    )
+
+    def mark_as_plan_and_seed(connection):
+        connection.execute(
+            "UPDATE personal_learning_receipt SET category='plan' "
+            "WHERE target_id=(SELECT assertion_id FROM current_semantic_assertion "
+            "WHERE predicate=?)",
+            (first.predicate,),
+        )
+        connection.execute(
+            "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
+            (
+                "nepal trip", "source-turn", "2026-01-01T00:00:00.000000+00:00",
+                '{"title":"Nepal trip"}',
+            ),
+        )
+        connection.commit()
+
+    await learning.writer.run(mark_as_plan_and_seed)
+    explicit = replace(
+        first.source,
+        source_id=str(uuid4()),
+        source_class=MemorySourceClass.OWNER_EXPLICIT,
+        authority_class=AuthorityClass.OWNER_EXPLICIT,
+    )
+    await learning.service.forget_exact(
+        predicate=first.predicate, source=explicit
+    )
+
+    remaining = await learning.reader.run(
+        lambda connection: connection.execute(
+            "SELECT count(*) FROM conversation_topic_checkpoint"
+        ).fetchone()[0]
+    )
+    assert remaining == 0
+    tombstone = await learning.reader.run(
+        lambda connection: connection.execute(
+            "SELECT source_turn_id FROM conversation_topic_tombstone "
+            "WHERE topic_key='*'"
+        ).fetchone()
+    )
+    assert tombstone == (explicit.source_id,)
+    suppression = await learning.service.learning_suppression()
+    assert "plan" in suppression.suppressed
