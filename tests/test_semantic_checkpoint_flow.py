@@ -69,7 +69,7 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
                     turn,
                     SemanticAction.PENDING_STEP,
                     key="route",
-                    value="plan Nepal route",
+                    value="plan route",
                 )
             ]
         return []
@@ -141,7 +141,7 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         projector = SemanticContextProjector(validate_release=lambda *_: True)
         packet = projector.assemble_named(resumed, named, restored)
         assert any("unrestricted" in item.text for item in packet.items)
-        assert any("plan Nepal route" in item.text for item in packet.items)
+        assert any("plan route" in item.text for item in packet.items)
 
         forgotten = resumed.accept_turn(ConversationRole.USER, "Forget Nepal trip")
         assert await storage.forget(
