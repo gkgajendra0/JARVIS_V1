@@ -209,3 +209,37 @@ async def test_bounded_queue_drops_excess_work_without_blocking_voice() -> None:
     assert state.active_topic == "Interview prep"
     assert pipeline.status.dropped == 1
     await pipeline.close()
+
+
+@pytest.mark.asyncio
+async def test_old_canonical_turn_cannot_replay_after_grant_rotation() -> None:
+    conversation = ConversationSession()
+    conversation.start()
+    state = SemanticContextEngine()
+    grant = ["grant-1"]
+
+    async def producer(turn):
+        return topic_proposal(turn.text)
+
+    pipeline = SemanticTurnPipeline(
+        conversation=conversation,
+        state=state,
+        producer=producer,
+        authorization_binding=lambda: grant[0],
+    )
+    pipeline.start()
+    original = conversation.accept_turn(ConversationRole.USER, "Nepal trip")
+    assert pipeline.submit(original)
+    await pipeline.drain()
+    assert state.active_topic == "Nepal trip"
+
+    grant[0] = "grant-2"
+    pipeline.invalidate()
+    assert not pipeline.submit(original)
+    assert state.snapshot() is None
+
+    newer = conversation.accept_turn(ConversationRole.USER, "Interview prep")
+    assert pipeline.submit(newer)
+    await pipeline.drain()
+    assert state.active_topic == "Interview prep"
+    await pipeline.close()
