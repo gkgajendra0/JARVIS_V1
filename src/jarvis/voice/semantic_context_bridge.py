@@ -13,6 +13,7 @@ from collections.abc import Callable
 from jarvis.conversation import ConversationSession
 from jarvis.memory.conversation_semantics import SemanticContextEngine
 from jarvis.memory.semantic_pipeline import (
+    AppliedStateCallback,
     AuthorizationBinding,
     ProposalProducer,
     SemanticTurnPipeline,
@@ -30,6 +31,7 @@ class SemanticVoiceAttachment:
         add_close_observer: Callable[[Callable], None],
         producer: ProposalProducer,
         authorization_binding: AuthorizationBinding,
+        on_applied: AppliedStateCallback | None = None,
     ) -> None:
         if not callable(add_turn_observer) or not callable(add_close_observer):
             raise TypeError("canonical bridge observers required")
@@ -39,6 +41,7 @@ class SemanticVoiceAttachment:
             state=self.state,
             producer=producer,
             authorization_binding=authorization_binding,
+            on_applied=on_applied,
         )
         self._closed = False
         self._closing: asyncio.Task[None] | None = None
@@ -68,6 +71,7 @@ def attach_semantic_voice_context(
     *,
     producer: ProposalProducer,
     authorization_binding: AuthorizationBinding,
+    on_applied: AppliedStateCallback | None = None,
 ) -> SemanticVoiceAttachment:
     """Attach only to a bridge exposing the canonical accepted-turn contract.
 
@@ -84,4 +88,5 @@ def attach_semantic_voice_context(
         add_close_observer=bridge.add_close_observer,
         producer=producer,
         authorization_binding=authorization_binding,
+        on_applied=on_applied,
     )
