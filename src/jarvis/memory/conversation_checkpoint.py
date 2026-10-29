@@ -104,6 +104,13 @@ def _explicit_topic(question: str, title: str) -> bool:
     return _key(title) in unicodedata.normalize("NFKC", question).casefold()
 
 
+def _plan_learning_suppressed(connection) -> bool:
+    row = connection.execute(
+        "SELECT suppressed FROM personal_learning_suppression WHERE category='plan'"
+    ).fetchone()
+    return row is not None and row[0] == 1
+
+
 def _snapshot_payload(snapshot: TopicSnapshot) -> str:
     if not isinstance(snapshot, TopicSnapshot):
         raise TypeError("snapshot must be TopicSnapshot")
@@ -182,6 +189,8 @@ class EncryptedTopicCheckpointStore:
             _admit_snapshot(admit_snapshot, snapshot, turn)
             connection.execute("BEGIN IMMEDIATE")
             try:
+                if _plan_learning_suppressed(connection):
+                    raise CheckpointRejected("plan category is suppressed")
                 row = connection.execute(
                     "SELECT forgotten_at FROM conversation_topic_tombstone "
                     "WHERE topic_key IN (?, '*') ORDER BY forgotten_at DESC LIMIT 1",
@@ -233,6 +242,8 @@ class EncryptedTopicCheckpointStore:
         def fetch(connection):
             _canonical(conversation, request)
             _permit(authorize_read)
+            if _plan_learning_suppressed(connection):
+                raise CheckpointRejected("plan category is suppressed")
             row = connection.execute(
                 "SELECT source_turn_id,source_at,state_json "
                 "FROM conversation_topic_checkpoint WHERE topic_key=?",
@@ -275,6 +286,8 @@ class EncryptedTopicCheckpointStore:
         def resolve(connection):
             _canonical(conversation, request)
             _permit(authorize_read)
+            if _plan_learning_suppressed(connection):
+                raise CheckpointRejected("plan category is suppressed")
             rows = connection.execute(
                 "SELECT topic_key,source_turn_id,source_at "
                 "FROM conversation_topic_checkpoint ORDER BY topic_key LIMIT 33"
@@ -303,6 +316,8 @@ class EncryptedTopicCheckpointStore:
         key = _key(title)
 
         def query(connection):
+            if _plan_learning_suppressed(connection):
+                return None
             row = connection.execute(
                 "SELECT source_turn_id,source_at,state_json "
                 "FROM conversation_topic_checkpoint WHERE topic_key=?",
