@@ -100,8 +100,8 @@ class SemanticTurnPipeline:
         self._on_applied = on_applied
         self._accepted_plan_epoch = accepted_plan_epoch
         self._timeout_seconds = float(timeout_seconds)
-        self._queue: asyncio.Queue[tuple[ConversationTurn, str, int, int]] = asyncio.Queue(
-            maxsize=max_pending
+        self._queue: asyncio.Queue[tuple[ConversationTurn, str, int, int]] = (
+            asyncio.Queue(maxsize=max_pending)
         )
         self._worker: asyncio.Task[None] | None = None
         self._binding: str | None = None

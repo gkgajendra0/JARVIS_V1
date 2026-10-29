@@ -21,6 +21,7 @@ from jarvis.memory.worker import SerialConnectionWorker
 
 def proposals_for(turn):
     text = turn.text
+
     def propose(action, value="", key=""):
         return SemanticProposal(
             action=action,
@@ -30,6 +31,7 @@ def proposals_for(turn):
             value=value,
             key=key,
         )
+
     if text == "Nepal trip":
         return [propose(SemanticAction.TOPIC, "Nepal trip")]
     if text == "Permits are sorted":
@@ -82,30 +84,31 @@ async def test_authorized_semantic_checkpoint_write_read_and_forget(tmp_path):
             turn = conversation.accept_turn(ConversationRole.USER, text)
             assert pipeline.submit(turn)
             await pipeline.drain()
-        query = conversation.accept_turn(
-            ConversationRole.USER, "Continue Nepal trip"
-        )
+        query = conversation.accept_turn(ConversationRole.USER, "Continue Nepal trip")
         snapshot = await store.read_named_snapshot(
-            conversation, query, title="Nepal trip",
+            conversation,
+            query,
+            title="Nepal trip",
             authorize_read=lambda: True,
         )
         assert snapshot is not None
         assert dict(snapshot.constraints)["permits"].value == "sorted"
         assert dict(snapshot.steps)["route"].value == "plan route"
 
-        forget = conversation.accept_turn(
-            ConversationRole.USER, "Forget Nepal trip"
-        )
+        forget = conversation.accept_turn(ConversationRole.USER, "Forget Nepal trip")
         assert pipeline.submit(forget)
         await pipeline.drain()
         assert state.snapshot() is None
-        query = conversation.accept_turn(
-            ConversationRole.USER, "Continue Nepal trip"
+        query = conversation.accept_turn(ConversationRole.USER, "Continue Nepal trip")
+        assert (
+            await store.read_named(
+                conversation,
+                query,
+                title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+            is None
         )
-        assert await store.read_named(
-            conversation, query,
-            title="Nepal trip", authorize_read=lambda: True,
-        ) is None
     finally:
         await pipeline.close()
         await writer.close()
@@ -154,18 +157,20 @@ async def test_denied_snapshot_admission_never_creates_checkpoint(tmp_path):
         assert pipeline.status.failures == 1
         # Denied durable persistence revokes the associated transient context.
         assert state.snapshot() is None
-        query = conversation.accept_turn(
-            ConversationRole.USER, "Continue Nepal trip"
+        query = conversation.accept_turn(ConversationRole.USER, "Continue Nepal trip")
+        assert (
+            await store.read_named(
+                conversation,
+                query,
+                title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+            is None
         )
-        assert await store.read_named(
-            conversation, query, title="Nepal trip",
-            authorize_read=lambda: True,
-        ) is None
     finally:
         await pipeline.close()
         await writer.close()
         await reader.close()
-
 
 
 @pytest.mark.asyncio
@@ -194,9 +199,7 @@ async def test_stale_forget_hook_must_not_claim_newer_checkpoint_was_deleted(tmp
         admit_snapshot=lambda *_: True,
     )
     try:
-        started = conversation.accept_turn(
-            ConversationRole.USER, "Nepal trip"
-        )
+        started = conversation.accept_turn(ConversationRole.USER, "Nepal trip")
         state.apply(
             conversation,
             started,
@@ -213,14 +216,10 @@ async def test_stale_forget_hook_must_not_claim_newer_checkpoint_was_deleted(tmp
             admit_snapshot=lambda *_: True,
             expected_plan_epoch=0,
         )
-        forgot = conversation.accept_turn(
-            ConversationRole.USER, "Forget Nepal trip"
-        )
+        forgot = conversation.accept_turn(ConversationRole.USER, "Forget Nepal trip")
         # ASR/transcript delivery was delayed; this accepted source is older
         # than the checkpoint already written for the current topic.
-        stale = replace(
-            forgot, accepted_at=started.accepted_at - timedelta(seconds=1)
-        )
+        stale = replace(forgot, accepted_at=started.accepted_at - timedelta(seconds=1))
         conversation._turns[-1] = stale
         with pytest.raises(PermissionError, match="newer checkpoint survived"):
             await checkpoint_writer(

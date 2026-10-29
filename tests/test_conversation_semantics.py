@@ -411,17 +411,25 @@ def test_unrelated_quote_cannot_invent_goals_or_constraints():
     turn = utterance(c, 2, "Good morning")
     with pytest.raises(SemanticRejected, match="unsupported semantic"):
         apply_epoch(
-            e, c, turn,
+            e,
+            c,
+            turn,
             [proposal(turn.text, SemanticAction.GOAL, value="fly to Paris")],
         )
     turn = utterance(c, 3, "I like coffee")
     with pytest.raises(SemanticRejected, match="unsupported semantic field key"):
         apply_epoch(
-            e, c, turn,
-            [proposal(
-                turn.text, SemanticAction.CONSTRAINT,
-                key="budget", value="coffee",
-            )],
+            e,
+            c,
+            turn,
+            [
+                proposal(
+                    turn.text,
+                    SemanticAction.CONSTRAINT,
+                    key="budget",
+                    value="coffee",
+                )
+            ],
         )
     assert e.snapshot().goal is None
     assert e.snapshot().constraints == ()
@@ -434,11 +442,17 @@ def test_negation_blocks_positive_constraint_hallucination():
     turn = utterance(c, 2, "The permits are not sorted")
     with pytest.raises(SemanticRejected, match="negated"):
         apply_epoch(
-            e, c, turn,
-            [proposal(
-                turn.text, SemanticAction.CONSTRAINT,
-                key="permits", value="sorted",
-            )],
+            e,
+            c,
+            turn,
+            [
+                proposal(
+                    turn.text,
+                    SemanticAction.CONSTRAINT,
+                    key="permits",
+                    value="sorted",
+                )
+            ],
         )
     assert e.snapshot().constraints == ()
 
@@ -451,13 +465,22 @@ def test_budget_no_constraint_is_explicitly_supported_semantic_paraphrase():
         ("Budget isn't a constraint", "Budget ka issue nahi hai"), start=2
     ):
         turn = utterance(c, n, spoken)
-        assert apply_epoch(
-            e, c, turn,
-            [proposal(
-                spoken, SemanticAction.CONSTRAINT,
-                key="budget", value="unrestricted",
-            )],
-        ) == 1
+        assert (
+            apply_epoch(
+                e,
+                c,
+                turn,
+                [
+                    proposal(
+                        spoken,
+                        SemanticAction.CONSTRAINT,
+                        key="budget",
+                        value="unrestricted",
+                    )
+                ],
+            )
+            == 1
+        )
     assert dict(e.snapshot().constraints)["budget"].value == "unrestricted"
 
 
@@ -468,11 +491,14 @@ def test_forget_cannot_be_batched_with_topic_creation():
     turn = utterance(c, 2, "Forget Nepal trip then discuss Nepal trip")
     with pytest.raises(SemanticRejected, match="cannot be mixed"):
         apply_epoch(
-            e, c, turn,
+            e,
+            c,
+            turn,
             [
                 proposal(turn.text, SemanticAction.FORGET_TOPIC),
                 proposal(
-                    turn.text, SemanticAction.TOPIC,
+                    turn.text,
+                    SemanticAction.TOPIC,
                     value="Nepal trip",
                 ),
             ],
@@ -487,11 +513,17 @@ def test_vehicle_question_cannot_be_promoted_as_owner_statement():
     turn = utterance(c, 2, "Which vehicle am I taking?")
     with pytest.raises(SemanticRejected, match="question"):
         apply_epoch(
-            e, c, turn,
-            [proposal(
-                turn.text, SemanticAction.CONSTRAINT,
-                key="vehicle", value="vehicle",
-            )],
+            e,
+            c,
+            turn,
+            [
+                proposal(
+                    turn.text,
+                    SemanticAction.CONSTRAINT,
+                    key="vehicle",
+                    value="vehicle",
+                )
+            ],
         )
     assert e.snapshot().constraints == ()
 
@@ -503,10 +535,16 @@ def test_already_planned_route_cannot_be_added_as_pending_work():
     turn = utterance(c, 2, "The route is planned")
     with pytest.raises(SemanticRejected, match="completed work"):
         apply_epoch(
-            e, c, turn,
-            [proposal(
-                turn.text, SemanticAction.PENDING_STEP,
-                key="route", value="route",
-            )],
+            e,
+            c,
+            turn,
+            [
+                proposal(
+                    turn.text,
+                    SemanticAction.PENDING_STEP,
+                    key="route",
+                    value="route",
+                )
+            ],
         )
     assert e.snapshot().steps == ()

@@ -197,12 +197,15 @@ def test_same_timestamp_old_async_turn_cannot_override_newer_generation():
     old = replace(old, accepted_at=route.accepted_at)
     newer = replace(newer, accepted_at=route.accepted_at)
     c._turns[-2:] = [old, newer]
-    assert e.apply(
-        c,
-        newer,
-        [_patch(newer.text, SemanticAction.COMPLETE_STEP, key="route")],
-        epoch=e.epoch,
-    ) == 1
+    assert (
+        e.apply(
+            c,
+            newer,
+            [_patch(newer.text, SemanticAction.COMPLETE_STEP, key="route")],
+            epoch=e.epoch,
+        )
+        == 1
+    )
     with pytest.raises(SemanticRejected, match="stale asynchronous turn"):
         e.apply(
             c,

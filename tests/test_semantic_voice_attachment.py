@@ -49,6 +49,7 @@ def topic(turn):
 @pytest.mark.asyncio
 async def test_canonical_turn_attachment_tracks_state_without_blocking_callback():
     bridge = BridgeFixture()
+
     async def producer(turn):
         return [topic(turn)]
 
@@ -110,6 +111,7 @@ async def test_no_binding_never_creates_context():
 @pytest.mark.asyncio
 async def test_assistant_turn_is_not_a_user_context_source():
     bridge = BridgeFixture()
+
     async def producer(turn):
         return [topic(turn)]
 
@@ -189,9 +191,7 @@ def test_invalid_or_ambiguous_commit_callback_factory_is_rejected():
             bridge.conversation, direct=None, factory=lambda _c: "not-a-function"
         )
     assert (
-        resolve_session_commit_callback(
-            bridge.conversation, direct=None, factory=None
-        )
+        resolve_session_commit_callback(bridge.conversation, direct=None, factory=None)
         is None
     )
 

@@ -65,9 +65,7 @@ class TopicStore:
         assert topic_hint in {"Nepal", "Nepal trip"}
         return "Nepal trip" if self.present else None
 
-    async def read_named_snapshot(
-        self, conversation, turn, *, title, authorize_read
-    ):
+    async def read_named_snapshot(self, conversation, turn, *, title, authorize_read):
         assert title == "Nepal trip"
         assert authorize_read() is True
         if self.revoke_on_read is not None:
@@ -189,9 +187,7 @@ async def test_revision_changed_during_read_rejects_stale_snapshot():
 async def test_short_nepal_topic_hint_resumes_unique_saved_nepal_trip():
     authority = OwnerAuthority()
     store = TopicStore()
-    personal, _ = personal_session(
-        authority, store, question="Continue Nepal"
-    )
+    personal, _ = personal_session(authority, store, question="Continue Nepal")
     try:
         result = await personal.resume_topic("Nepal")
         assert result["status"] == "selected"

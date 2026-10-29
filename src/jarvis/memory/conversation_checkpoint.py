@@ -297,11 +297,13 @@ class EncryptedTopicCheckpointStore:
         _canonical(conversation, request)
         hint_tokens = set(re.findall(r"\w+", _key(topic_hint)))
         if not any(
-            len(word) >= 4 and word not in _GENERIC_TOPIC_WORDS
-            for word in hint_tokens
+            len(word) >= 4 and word not in _GENERIC_TOPIC_WORDS for word in hint_tokens
         ):
             raise CheckpointRejected("topic hint is not distinctive")
-        if not _explicit_topic(request.text, topic_hint):
+        request_tokens = set(
+            re.findall(r"\w+", unicodedata.normalize("NFKC", request.text).casefold())
+        )
+        if not hint_tokens.issubset(request_tokens):
             raise CheckpointRejected("topic hint is absent from current question")
         _permit(authorize_read)
 
@@ -319,8 +321,7 @@ class EncryptedTopicCheckpointStore:
             matches = [
                 key
                 for key, _source_turn_id, _source_at in rows
-                if _explicit_topic(request.text, key)
-                and _explicit_topic(key, topic_hint)
+                if hint_tokens.issubset(set(re.findall(r"\w+", key)))
             ]
             _permit(authorize_read)
             _canonical(conversation, request)
@@ -373,9 +374,7 @@ class EncryptedTopicCheckpointStore:
         )
         if record is None:
             return None
-        expected = {
-            "title", "goal", "constraints", "steps", "_checkpoint_meta"
-        }
+        expected = {"title", "goal", "constraints", "steps", "_checkpoint_meta"}
         if not isinstance(record, dict) or set(record) != expected:
             raise CheckpointRejected("checkpoint payload malformed")
         if not isinstance(record["title"], str) or (
@@ -513,9 +512,7 @@ class EncryptedTopicCheckpointStore:
             _permit(authorize_suppression)
             connection.execute("BEGIN IMMEDIATE")
             try:
-                connection.execute(
-                    "DELETE FROM conversation_topic_checkpoint"
-                )
+                connection.execute("DELETE FROM conversation_topic_checkpoint")
                 connection.execute(
                     "INSERT INTO conversation_topic_tombstone "
                     "(topic_key,forgotten_at,source_turn_id) VALUES ('*',?,?) "

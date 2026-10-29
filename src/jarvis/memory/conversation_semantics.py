@@ -61,9 +61,7 @@ def _semantic_tokens(text: str) -> set[str]:
     return set(re.findall(r"\w+", unicodedata.normalize("NFKC", text).casefold()))
 
 
-def _budget_unrestricted_paraphrase(
-    proposal: SemanticProposal, quote: str
-) -> bool:
+def _budget_unrestricted_paraphrase(proposal: SemanticProposal, quote: str) -> bool:
     if (
         proposal.action not in {SemanticAction.CONSTRAINT, SemanticAction.CORRECT}
         or proposal.key.casefold() != "budget"
@@ -110,9 +108,7 @@ def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> Non
         keys = _semantic_tokens(proposal.key)
         aliases = {"docs": {"documents"}}
         for key in keys:
-            if key not in quoted and not (
-                key in aliases and aliases[key] & quoted
-            ):
+            if key not in quoted and not (key in aliases and aliases[key] & quoted):
                 raise SemanticRejected("unsupported semantic field key")
     values = _semantic_tokens(proposal.value)
     if not budget_exception and not values.issubset(quoted):
@@ -123,9 +119,12 @@ def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> Non
         r"नहीं|मत ",
         lowered,
     )
-    if negation and not budget_exception and not (
-        _semantic_tokens(proposal.value)
-        & {"not", "no", "never", "nahi", "nahin"}
+    if (
+        negation
+        and not budget_exception
+        and not (
+            _semantic_tokens(proposal.value) & {"not", "no", "never", "nahi", "nahin"}
+        )
     ):
         raise SemanticRejected("ambiguous negated semantic interpretation")
 
@@ -268,9 +267,8 @@ class SemanticContextEngine:
             raise SemanticRejected("session input budget exhausted")
         if not isinstance(proposals, (tuple, list)) or len(proposals) > 12:
             raise SemanticRejected("invalid proposal batch")
-        if (
-            len(proposals) > 1
-            and any(p.action is SemanticAction.FORGET_TOPIC for p in proposals)
+        if len(proposals) > 1 and any(
+            p.action is SemanticAction.FORGET_TOPIC for p in proposals
         ):
             raise SemanticRejected("forget cannot be mixed with other state changes")
         if not proposals:

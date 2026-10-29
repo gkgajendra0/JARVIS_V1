@@ -499,8 +499,7 @@ class MemoryLifecycleService:
                     (assertion_id,),
                 ).fetchone()
                 old_value = connection.execute(
-                    "SELECT value_json FROM semantic_assertion "
-                    "WHERE assertion_id=?",
+                    "SELECT value_json FROM semantic_assertion WHERE assertion_id=?",
                     (assertion_id,),
                 ).fetchone()
                 structured_plan = False
@@ -763,14 +762,14 @@ class MemoryLifecycleService:
                     # Same transaction as plan suppression: previously saved
                     # conversational checkpoints cannot reappear on re-enable.
                     # The global tombstone also rejects in-flight stale saves.
-                    source_time = source.turns[-1].accepted_at.astimezone(UTC).isoformat(
-                        timespec="microseconds"
+                    source_time = (
+                        source.turns[-1]
+                        .accepted_at.astimezone(UTC)
+                        .isoformat(timespec="microseconds")
                     )
                     # Category suppression is universal, not time-scoped.
                     # A queued newer checkpoint must not survive re-enable.
-                    connection.execute(
-                        "DELETE FROM conversation_topic_checkpoint"
-                    )
+                    connection.execute("DELETE FROM conversation_topic_checkpoint")
                     connection.execute(
                         "INSERT INTO conversation_topic_tombstone "
                         "(topic_key,forgotten_at,source_turn_id) "

@@ -110,8 +110,12 @@ def test_restricted_context_is_not_released_even_with_a_valid_permit():
         title="Nepal trip",
         goal=None,
         constraints=(
-            ("health", field("private", "restricted value",
-                             sensitivity=Sensitivity.LOCAL_ONLY)),
+            (
+                "health",
+                field(
+                    "private", "restricted value", sensitivity=Sensitivity.LOCAL_ONLY
+                ),
+            ),
             ("budget", field("budget", "unrestricted")),
         ),
         steps=(),

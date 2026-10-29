@@ -141,9 +141,7 @@ async def test_routed_semantic_factory_uses_approved_free_paid_router(monkeypatc
             kwargs["before_dispatch"]()
             return {"proposals": []}
 
-    monkeypatch.setattr(
-        provider_adapters, "RoutedStructuredOutputClient", FakeRouted
-    )
+    monkeypatch.setattr(provider_adapters, "RoutedStructuredOutputClient", FakeRouted)
     runtime = object()
     producer = build_routed_semantic_producer(
         routing_runtime=runtime,

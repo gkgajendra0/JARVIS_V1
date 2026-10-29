@@ -98,9 +98,12 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         assert dict(topic.constraints)["budget"].value == "unrestricted"
         assert not dict(topic.steps)["route"].completed
         assert await storage.save(
-            conversation, accepted, topic, authorize_write=lambda: True,
+            conversation,
+            accepted,
+            topic,
+            authorize_write=lambda: True,
             admit_snapshot=lambda *_: True,
-            expected_plan_epoch=0
+            expected_plan_epoch=0,
         )
 
         await pipeline.close()
@@ -134,8 +137,10 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
         assert checkpoint["steps"]["route"]["completed"] is False
 
         restored = await storage.read_named_snapshot(
-            resumed, named,
-            title="Nepal trip", authorize_read=lambda: True,
+            resumed,
+            named,
+            title="Nepal trip",
+            authorize_read=lambda: True,
         )
         assert restored is not None
         assert dict(restored.constraints)["budget"].value == "unrestricted"

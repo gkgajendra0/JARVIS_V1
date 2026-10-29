@@ -43,7 +43,9 @@ class SemanticCheckpointWriter:
             callable(callback)
             for callback in (authorize_write, authorize_forget, admit_snapshot)
         ):
-            raise TypeError("source-bound write, forget and privacy validators required")
+            raise TypeError(
+                "source-bound write, forget and privacy validators required"
+            )
         self._conversation = conversation
         self._store = store
         self._write = authorize_write
@@ -73,9 +75,7 @@ class SemanticCheckpointWriter:
                 # No checkpoint may be a valid no-op, but an older forget may
                 # have raced a newer saved checkpoint. Never report that as
                 # a successful durable deletion.
-                surviving_revision = await self._store.current_fingerprint(
-                    before.title
-                )
+                surviving_revision = await self._store.current_fingerprint(before.title)
                 if surviving_revision is not None:
                     raise PermissionError("newer checkpoint survived forget")
             return

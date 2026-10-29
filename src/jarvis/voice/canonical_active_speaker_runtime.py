@@ -153,18 +153,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "Topic resumption requires canonical memory and capability authority"
             )
         if semantic_on_applied is not None and semantic_on_applied_factory is not None:
-            raise ValueError("choose one semantic commit callback or per-session factory")
+            raise ValueError(
+                "choose one semantic commit callback or per-session factory"
+            )
         if semantic_on_applied_factory is not None and not callable(
             semantic_on_applied_factory
         ):
             raise TypeError("semantic_on_applied_factory must be callable")
         if (
-            semantic_on_applied is not None
-            or semantic_on_applied_factory is not None
-        ) and (
-            semantic_producer is None
-            or not callable(semantic_accepted_plan_epoch)
-        ):
+            semantic_on_applied is not None or semantic_on_applied_factory is not None
+        ) and (semantic_producer is None or not callable(semantic_accepted_plan_epoch)):
             raise ValueError(
                 "Checkpoint persistence requires authorized producer and "
                 "accepted-turn plan epoch capture"

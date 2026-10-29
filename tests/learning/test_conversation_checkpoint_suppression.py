@@ -22,18 +22,17 @@ from jarvis.memory.types import AuthorityClass, MemorySourceClass
 async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learning):
     conversation = ConversationSession()
     conversation.start()
-    turn = conversation.accept_turn(
-        ConversationRole.USER, "Don't remember my plans"
-    )
+    turn = conversation.accept_turn(ConversationRole.USER, "Don't remember my plans")
     source = AcceptedLearningSource.from_turn(
         "runtime", conversation, turn, now=101, current_only=True
     )
-    learning.authority.register_source(
-        learning.grant, source.receipt_id, source=source
+    learning.authority.register_source(learning.grant, source.receipt_id, source=source)
+    old_time = (
+        (turn.accepted_at - timedelta(seconds=5))
+        .astimezone(UTC)
+        .isoformat(timespec="microseconds")
     )
-    old_time = (turn.accepted_at - timedelta(seconds=5)).astimezone(UTC).isoformat(
-        timespec="microseconds"
-    )
+
     def seed_old(connection):
         connection.execute(
             "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
@@ -44,13 +43,21 @@ async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learn
     await learning.writer.run(seed_old)
     # Even a checkpoint carrying a later source timestamp must be erased
     # when the owner disables all plan learning.
-    future_time = (turn.accepted_at + timedelta(seconds=5)).astimezone(
-        UTC
-    ).isoformat(timespec="microseconds")
+    future_time = (
+        (turn.accepted_at + timedelta(seconds=5))
+        .astimezone(UTC)
+        .isoformat(timespec="microseconds")
+    )
+
     def seed_future(connection):
         connection.execute(
             "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
-            ("nepal hotel", "queued-future-turn", future_time, '{"title":"Nepal hotel"}'),
+            (
+                "nepal hotel",
+                "queued-future-turn",
+                future_time,
+                '{"title":"Nepal hotel"}',
+            ),
         )
         connection.commit()
 
@@ -59,9 +66,7 @@ async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learn
     permit = learning.authority.issue_child(
         learning.grant, suppression_binding(source, categories)
     )
-    await learning.service.suppress_learning_categories(
-        source, categories, permit
-    )
+    await learning.service.suppress_learning_categories(source, categories, permit)
     saved = await learning.reader.run(
         lambda conn: conn.execute(
             "SELECT count(*) FROM conversation_topic_checkpoint"
@@ -90,12 +95,14 @@ async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learn
         owner_explicit,
         learning.authority.authorize_reenable_category("plan"),
     )
-    assert await learning.reader.run(
-        lambda conn: conn.execute(
-            "SELECT count(*) FROM conversation_topic_checkpoint"
-        ).fetchone()[0]
-    ) == 0
-
+    assert (
+        await learning.reader.run(
+            lambda conn: conn.execute(
+                "SELECT count(*) FROM conversation_topic_checkpoint"
+            ).fetchone()[0]
+        )
+        == 0
+    )
 
 
 @pytest.mark.asyncio
@@ -104,9 +111,7 @@ async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learnin
     # which conversation checkpoint contains it. Fail closed by erasing all
     # checkpoints atomically with the legacy plan-fact deletion.
     first = learning.plan.mutations[0]
-    await learning.service.admit_learning(
-        learning.plan, learning.new_permit()
-    )
+    await learning.service.admit_learning(learning.plan, learning.new_permit())
 
     def mark_as_plan_and_seed(connection):
         connection.execute(
@@ -118,7 +123,9 @@ async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learnin
         connection.execute(
             "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
             (
-                "nepal trip", "source-turn", "2026-01-01T00:00:00.000000+00:00",
+                "nepal trip",
+                "source-turn",
+                "2026-01-01T00:00:00.000000+00:00",
                 '{"title":"Nepal trip"}',
             ),
         )
@@ -131,9 +138,7 @@ async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learnin
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
     )
-    await learning.service.forget_exact(
-        predicate=first.predicate, source=explicit
-    )
+    await learning.service.forget_exact(predicate=first.predicate, source=explicit)
 
     remaining = await learning.reader.run(
         lambda connection: connection.execute(
@@ -152,7 +157,6 @@ async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learnin
     assert "plan" in suppression.suppressed
 
 
-
 @pytest.mark.asyncio
 async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(learning):
     from jarvis.memory.runtime import MemoryRuntime
@@ -162,9 +166,7 @@ async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(lea
     )
     conversation = ConversationSession()
     conversation.start()
-    turn = conversation.accept_turn(
-        ConversationRole.USER, "Don't remember my plans"
-    )
+    turn = conversation.accept_turn(ConversationRole.USER, "Don't remember my plans")
     with pytest.raises(PermissionError, match="unavailable"):
         runtime.accepted_plan_epoch(turn)
     await runtime.start()
@@ -173,15 +175,11 @@ async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(lea
     source = AcceptedLearningSource.from_turn(
         "runtime", conversation, turn, now=101, current_only=True
     )
-    learning.authority.register_source(
-        learning.grant, source.receipt_id, source=source
-    )
+    learning.authority.register_source(learning.grant, source.receipt_id, source=source)
     permit = learning.authority.issue_child(
         learning.grant, suppression_binding(source, ("plan",))
     )
-    await learning.service.suppress_learning_categories(
-        source, ("plan",), permit
-    )
+    await learning.service.suppress_learning_categories(source, ("plan",), permit)
     assert runtime.accepted_plan_epoch(turn) == 1
 
     explicit = replace(
@@ -191,11 +189,11 @@ async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(lea
         authority_class=AuthorityClass.OWNER_EXPLICIT,
     )
     await learning.service.reenable_learning_category(
-        "plan", explicit,
+        "plan",
+        explicit,
         learning.authority.authorize_reenable_category("plan"),
     )
     assert runtime.accepted_plan_epoch(turn) == 2
-
 
 
 @pytest.mark.asyncio
@@ -219,7 +217,8 @@ async def test_legacy_plan_correction_invalidates_old_checkpoint_and_epoch(learn
         connection.execute(
             "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
             (
-                "nepal trip", "old-user-turn",
+                "nepal trip",
+                "old-user-turn",
                 "2026-01-01T00:00:00.000000+00:00",
                 '{"title":"Nepal trip"}',
             ),
@@ -239,11 +238,14 @@ async def test_legacy_plan_correction_invalidates_old_checkpoint_and_epoch(learn
         source=owner,
     )
     assert runtime._plan_epoch == 1
-    assert await learning.reader.run(
-        lambda connection: connection.execute(
-            "SELECT count(*) FROM conversation_topic_checkpoint"
-        ).fetchone()[0]
-    ) == 0
+    assert (
+        await learning.reader.run(
+            lambda connection: connection.execute(
+                "SELECT count(*) FROM conversation_topic_checkpoint"
+            ).fetchone()[0]
+        )
+        == 0
+    )
     snapshot = await learning.service.learning_suppression()
     assert snapshot.epochs["plan"] == 1
     assert "plan" not in snapshot.suppressed
