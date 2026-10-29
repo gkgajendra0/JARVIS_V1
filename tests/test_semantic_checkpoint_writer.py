@@ -74,6 +74,7 @@ async def test_authorized_semantic_checkpoint_write_read_and_forget(tmp_path):
         producer=producer,
         authorization_binding=lambda: grant[0] if grant[0] == "valid" else None,
         on_applied=checkpoint,
+        accepted_plan_epoch=lambda _turn: 0,
     )
     pipeline.start()
     try:
@@ -143,6 +144,7 @@ async def test_denied_snapshot_admission_never_creates_checkpoint(tmp_path):
         producer=producer,
         authorization_binding=lambda: "owner-grant",
         on_applied=checkpoint,
+        accepted_plan_epoch=lambda _turn: 0,
     )
     pipeline.start()
     try:
