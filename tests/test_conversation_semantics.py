@@ -47,7 +47,7 @@ def proposal(
 
 
 def apply_epoch(engine, conversation, turn, proposals):
-    return enginapply_epoch(e,
+    return engine.apply(
         conversation, turn, proposals, epoch=engine.epoch
     )
 
