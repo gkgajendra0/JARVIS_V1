@@ -140,3 +140,38 @@ class RoutedSemanticProducer:
                 )
             )
         return patches
+
+
+def build_routed_semantic_producer(
+    *,
+    routing_runtime,
+    model: str,
+    source_clearance: Callable[[ConversationTurn], Sensitivity | None],
+    scope_id: str,
+) -> RoutedSemanticProducer:
+    """Explicit opt-in to the existing Gemini free/paid routed inference path.
+
+    This only constructs an adapter. No external call occurs until the caller
+    supplies a trusted source-clearance policy AND invokes the producer.
+    The existing router chooses credentials/fallbacks and enforces cost gates.
+    """
+    if routing_runtime is None:
+        raise TypeError("approved routing runtime required")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError("approved semantic model is required")
+    if not callable(source_clearance):
+        raise TypeError("independent source clearance is required")
+    from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
+
+    client = RoutedStructuredOutputClient(
+        routing_runtime=routing_runtime,
+        role="memory.extraction",
+        model=model.strip(),
+        max_output_tokens=1024,
+        free_output_tokens=1024,
+    )
+    return RoutedSemanticProducer(
+        client=client,
+        source_clearance=source_clearance,
+        scope_id=scope_id,
+    )
