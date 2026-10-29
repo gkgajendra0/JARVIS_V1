@@ -7,6 +7,7 @@ from pathlib import Path
 from jarvis.machine_config import default_machine_config_path
 from jarvis.security import WindowsDpapiKeyProtector
 
+from .conversation_checkpoint import EncryptedTopicCheckpointStore
 from .database import SqlCipherMemoryDatabaseFactory
 from .lifecycle import MemoryLifecycleService
 from .query import CanonicalMemoryReader
@@ -35,6 +36,10 @@ class MemoryRuntime:
             raise TypeError("service must be a MemoryService")
         self.service = service
         self.retrieval = SemanticRetrievalService(reader)
+        # No separate connection or key: checkpoints share canonical SQLCipher workers.
+        self.topic_checkpoints = EncryptedTopicCheckpointStore(
+            writer=writer, reader=reader
+        )
         self._writer = writer
         self._reader = reader
         self._started = False
