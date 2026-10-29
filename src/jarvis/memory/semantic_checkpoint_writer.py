@@ -63,12 +63,21 @@ class SemanticCheckpointWriter:
                 raise PermissionError("forget cannot accompany another mutation")
             if before is None or after is not None:
                 raise PermissionError("forget must target one existing active topic")
-            await self._store.forget(
+            forgotten = await self._store.forget(
                 self._conversation,
                 turn,
                 title=before.title,
                 authorize_forget=lambda: self._forget(turn),
             )
+            if not forgotten:
+                # No checkpoint may be a valid no-op, but an older forget may
+                # have raced a newer saved checkpoint. Never report that as
+                # a successful durable deletion.
+                surviving_revision = await self._store.current_fingerprint(
+                    before.title
+                )
+                if surviving_revision is not None:
+                    raise PermissionError("newer checkpoint survived forget")
             return
         if after is None:
             return
