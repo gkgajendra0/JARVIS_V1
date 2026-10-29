@@ -262,17 +262,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     )
                 from jarvis.voice.semantic_context_bridge import (
                     attach_semantic_voice_context,
+                    resolve_session_commit_callback,
                 )
 
                 # A checkpoint writer binds to ONE canonical ConversationSession.
-                # Construct a new callback for each realtime voice session.
-                applied = (
-                    semantic_on_applied_factory(bridge.conversation)
-                    if semantic_on_applied_factory is not None
-                    else semantic_on_applied
+                applied = resolve_session_commit_callback(
+                    bridge.conversation,
+                    direct=semantic_on_applied,
+                    factory=semantic_on_applied_factory,
                 )
-                if applied is not None and not callable(applied):
-                    raise TypeError("semantic commit factory returned no callback")
                 self._semantic_context_attachment = attach_semantic_voice_context(
                     bridge,
                     producer=semantic_producer,
