@@ -491,8 +491,7 @@ class EncryptedTopicCheckpointStore:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 connection.execute(
-                    "DELETE FROM conversation_topic_checkpoint WHERE source_at<=?",
-                    (timestamp,),
+                    "DELETE FROM conversation_topic_checkpoint"
                 )
                 connection.execute(
                     "INSERT INTO conversation_topic_tombstone "
