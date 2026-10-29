@@ -607,6 +607,9 @@ class PersonalContextSession:
 
             try:
                 current_turn = self._latest_turn()
+                revision_before = await self._topic_checkpoints.current_fingerprint(
+                    title
+                )
                 snapshot = await self._topic_checkpoints.read_named_snapshot(
                     self._conversation,
                     current_turn,
@@ -634,7 +637,7 @@ class PersonalContextSession:
                     self._conversation, current_turn, snapshot
                 )
                 revision = await self._topic_checkpoints.current_fingerprint(title)
-                if revision is None:
+                if revision is None or revision != revision_before:
                     self.close()
                     return {"status": "denied"}
                 self._topic_revision = (title, revision)
