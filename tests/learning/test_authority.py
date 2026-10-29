@@ -203,3 +203,22 @@ def test_close_revokes_session_permission(authority, clock):
     clock.advance(86400)
     authority.close()
     assert authority.validate(grant).status == "revoked"
+
+
+def test_second_revoke_after_controller_closes_broker_is_harmless(
+    authority, authority_parts, tmp_path
+):
+    from jarvis.authority.audit import SqliteAuditEventStore
+
+    authority_parts.broker._audit = SqliteAuditEventStore(
+        tmp_path / "authority.sqlite3"
+    )
+    grant = opened(authority)
+    authority.close()
+    authority_parts.broker.close()
+    authority.revoke(grant)
+    state = authority.validate(grant)
+    assert state.status == "revoked"
+    assert state.reason == "runtime_closed"
+    with pytest.raises(PermissionError):
+        authority.register_source(grant, "late-source")

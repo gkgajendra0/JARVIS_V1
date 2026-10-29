@@ -300,7 +300,7 @@ class PersonalLearningAuthority:
     def revoke(self, grant, reason="manual_clear"):
         with self._broker._lock:
             record = self._grants.get(grant)
-            if record is not None:
+            if record is not None and not record.revoked:
                 record.revoked = reason
                 record.sources.clear()
                 record.source_objects.clear()
