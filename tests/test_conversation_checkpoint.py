@@ -68,7 +68,9 @@ async def new_store(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_encrypted_worker_checkpoint_survives_new_reader_and_named_resume(tmp_path):
+async def test_encrypted_worker_checkpoint_survives_new_reader_and_named_resume(
+    tmp_path,
+):
     store, writer, reader = await new_store(tmp_path)
     try:
         first = ConversationSession()
@@ -121,14 +123,18 @@ async def test_protected_checkpoint_requires_named_topic_and_fresh_permit(tmp_pa
         no_topic = accepted(conversation, 2, "Hey Jarvis, continue")
         with pytest.raises(CheckpointRejected, match="does not name"):
             await store.read_named(
-                conversation, no_topic,
-                title="Nepal trip", authorize_read=lambda: True,
+                conversation,
+                no_topic,
+                title="Nepal trip",
+                authorize_read=lambda: True,
             )
         named = accepted(conversation, 3, "Continue Nepal trip")
         with pytest.raises(CheckpointRejected, match="permit denied"):
             await store.read_named(
-                conversation, named,
-                title="Nepal trip", authorize_read=lambda: False,
+                conversation,
+                named,
+                title="Nepal trip",
+                authorize_read=lambda: False,
             )
         assert await store.read_named(
             conversation, named,
@@ -146,19 +152,28 @@ async def test_named_forget_tombstones_stale_save_and_allows_newer_plan(tmp_path
         conversation = ConversationSession()
         original = accepted(conversation, 1, "Nepal trip")
         await store.save(
-            conversation, original, checkpoint(original),
+            conversation,
+            original,
+            checkpoint(original),
             authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         forget = accepted(conversation, 3, "Forget Nepal trip")
         assert await store.forget(
-            conversation, forget, title="Nepal trip",
+            conversation,
+            forget,
+            title="Nepal trip",
             authorize_forget=lambda: True,
         )
         query = accepted(conversation, 4, "Resume Nepal trip")
-        assert await store.read_named(
-            conversation, query, title="Nepal trip",
-            authorize_read=lambda: True,
-        ) is None
+        assert (
+            await store.read_named(
+                conversation,
+                query,
+                title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+            is None
+        )
         # New accepted turn but stale speech timestamp: must not resurrect.
         stale = accepted(conversation, 2, "Nepal trip")
         with pytest.raises(CheckpointRejected, match="older than forget"):
@@ -168,12 +183,16 @@ async def test_named_forget_tombstones_stale_save_and_allows_newer_plan(tmp_path
             )
         newer = accepted(conversation, 5, "New Nepal trip plan")
         assert await store.save(
-            conversation, newer, checkpoint(newer, budget="flexible"),
+            conversation,
+            newer,
+            checkpoint(newer, budget="flexible"),
             authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         named = accepted(conversation, 6, "Continue Nepal trip")
         result = await store.read_named(
-            conversation, named, title="Nepal trip",
+            conversation,
+            named,
+            title="Nepal trip",
             authorize_read=lambda: True,
         )
         assert result["constraints"]["budget"] == "flexible"
@@ -183,13 +202,17 @@ async def test_named_forget_tombstones_stale_save_and_allows_newer_plan(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_suppression_purges_old_checkpoints_and_reenable_cannot_resurrect(tmp_path):
+async def test_suppression_purges_old_checkpoints_and_reenable_cannot_resurrect(
+    tmp_path,
+):
     store, writer, reader = await new_store(tmp_path)
     try:
         conversation = ConversationSession()
         initial = accepted(conversation, 1, "Nepal trip")
         await store.save(
-            conversation, initial, checkpoint(initial),
+            conversation,
+            initial,
+            checkpoint(initial),
             authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         suppress = accepted(conversation, 2, "Stop remembering my plans")
@@ -203,10 +226,15 @@ async def test_suppression_purges_old_checkpoints_and_reenable_cannot_resurrect(
                 authorize_write=lambda: True, admit_snapshot=lambda *_: True,
             )
         named = accepted(conversation, 3, "Nepal trip")
-        assert await store.read_named(
-            conversation, named,
-            title="Nepal trip", authorize_read=lambda: True,
-        ) is None
+        assert (
+            await store.read_named(
+                conversation,
+                named,
+                title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+            is None
+        )
     finally:
         await writer.close()
         await reader.close()
@@ -225,14 +253,21 @@ async def test_denied_write_and_restricted_payload_never_commit(tmp_path):
             )
         with pytest.raises(CheckpointRejected, match="restricted"):
             await store.save(
-                conversation, source, checkpoint(source, sensitivity=Sensitivity.LOCAL_ONLY),
+                conversation,
+                source,
+                checkpoint(source, sensitivity=Sensitivity.LOCAL_ONLY),
                 authorize_write=lambda: True, admit_snapshot=lambda *_: True,
             )
         request = accepted(conversation, 2, "Continue Nepal trip")
-        assert await store.read_named(
-            conversation, request, title="Nepal trip",
-            authorize_read=lambda: True,
-        ) is None
+        assert (
+            await store.read_named(
+                conversation,
+                request,
+                title="Nepal trip",
+                authorize_read=lambda: True,
+            )
+            is None
+        )
     finally:
         await writer.close()
         await reader.close()
@@ -251,8 +286,10 @@ async def test_negated_forget_is_not_a_delete_request(tmp_path):
         negated = accepted(conversation, 2, "Do not forget Nepal trip")
         with pytest.raises(CheckpointRejected, match="explicit positive"):
             await store.forget(
-                conversation, negated,
-                title="Nepal trip", authorize_forget=lambda: True,
+                conversation,
+                negated,
+                title="Nepal trip",
+                authorize_forget=lambda: True,
             )
         question = accepted(conversation, 3, "Continue Nepal trip")
         assert await store.read_named(
@@ -282,8 +319,10 @@ async def test_write_revoked_inside_transaction_leaves_no_checkpoint(tmp_path):
             )
         request = accepted(conversation, 2, "Continue Nepal trip")
         result = await store.read_named(
-            conversation, request,
-            title="Nepal trip", authorize_read=lambda: True,
+            conversation,
+            request,
+            title="Nepal trip",
+            authorize_read=lambda: True,
         )
         assert result is None
     finally:
@@ -328,18 +367,24 @@ async def test_old_forget_cannot_erase_newer_checkpoint(tmp_path):
         )
         updated = accepted(conversation, 5, "New Nepal trip details")
         await store.save(
-            conversation, updated, checkpoint(updated, budget="flexible"),
+            conversation,
+            updated,
+            checkpoint(updated, budget="flexible"),
             authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         late_forget = accepted(conversation, 3, "Forget Nepal trip")
         assert not await store.forget(
-            conversation, late_forget, title="Nepal trip",
+            conversation,
+            late_forget,
+            title="Nepal trip",
             authorize_forget=lambda: True,
         )
         question = accepted(conversation, 6, "Continue Nepal trip")
         result = await store.read_named(
-            conversation, question,
-            title="Nepal trip", authorize_read=lambda: True,
+            conversation,
+            question,
+            title="Nepal trip",
+            authorize_read=lambda: True,
         )
         assert result["constraints"]["budget"] == "flexible"
     finally:
