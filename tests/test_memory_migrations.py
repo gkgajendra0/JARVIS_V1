@@ -88,8 +88,8 @@ def test_migrations_create_versioned_canonical_and_embedding_schema() -> None:
 
     version = runner.apply(conn)
 
-    assert version == 3
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert version == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     ledger = conn.execute(
         """
         SELECT version, name, length(sha256), applied_at
@@ -101,6 +101,7 @@ def test_migrations_create_versioned_canonical_and_embedding_schema() -> None:
         (1, "0001_initial.sql", 64, "2026-09-05T05:30:00Z"),
         (2, "0002_semantic_retrieval.sql", 64, "2026-09-05T05:30:00Z"),
         (3, "0003_personal_learning.sql", 64, "2026-09-05T05:30:00Z"),
+        (4, "0004_conversation_topic_checkpoint.sql", 64, "2026-09-05T05:30:00Z"),
     ]
     tables = {
         row[0]
@@ -115,6 +116,8 @@ def test_migrations_create_versioned_canonical_and_embedding_schema() -> None:
         "semantic_assertion_fts",
         "semantic_assertion_embedding",
         "current_semantic_assertion",
+        "conversation_topic_checkpoint",
+        "conversation_topic_tombstone",
     } <= tables
 
 
@@ -122,8 +125,8 @@ def test_migration_is_idempotent_and_checksum_protected() -> None:
     conn = connection()
     migrations = discover_memory_migrations()
     runner = MemoryMigrationRunner(migrations)
-    assert runner.apply(conn) == 3
-    assert runner.apply(conn) == 3
+    assert runner.apply(conn) == 4
+    assert runner.apply(conn) == 4
 
     tampered = replace(migrations[0], sha256="0" * 64)
     with pytest.raises(MemoryMigrationIntegrityError, match="checksum"):
