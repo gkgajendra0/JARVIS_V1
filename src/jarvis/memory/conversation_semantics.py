@@ -157,7 +157,10 @@ class SemanticContextEngine:
             raise SemanticRejected("turn not present in canonical conversation")
         if turn.turn_id in self._seen:
             return 0
-        if self._last_applied_at is not None and turn.accepted_at < self._last_applied_at:
+        if (
+            self._last_applied_at is not None
+            and turn.accepted_at < self._last_applied_at
+        ):
             raise SemanticRejected("stale asynchronous turn")
         if len(self._seen) >= 4096:
             raise SemanticRejected("session input budget exhausted")
