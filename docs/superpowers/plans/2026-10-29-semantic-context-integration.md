@@ -203,3 +203,29 @@ semantic checkpoint writer until that safeguard is complete.
 Merge gates: all CI must pass on the exact head, then Windows Hello, live
 voice, correction, forgetting and topic-resume acceptance. Benchmark after
 implementation, before broader owner testing.
+
+## Accepted-turn plan generation (implemented as an opt-in contract)
+
+SemanticTurnPipeline now takes an optional trusted accepted_plan_epoch callback.
+When an on_applied persistence hook is provided, this callback is mandatory.
+It is invoked synchronously at canonical accepted-turn submission, before
+asynchronous model inference; its integer value is queued with the turn.
+SemanticCheckpointWriter passes the original value to the encrypted store.
+The SQLCipher save transaction compares expected_plan_epoch with the current
+personal_learning_suppression('plan').epoch. Any changed generation fails
+closed, even if a stale source has an unexpectedly future timestamp and the
+category has since been re-enabled.
+
+The voice bridge and CanonicalActiveSpeakerRuntimeController pass through this
+callback only with explicit opt-in. The default system does not enable
+checkpoint writes. There is no existing synchronous trusted plan-epoch
+snapshot readily exposed by MemoryRuntime, so the production callback is
+NOT configured yet. It must be sourced from the canonical authority/lifecycle
+and kept in sync with the encrypted DB. Never return a guessed constant.
+
+Tests check pre-inference capture, refusal to enable on_applied without the
+callback, and the database rejecting old source epochs after re-enable.
+
+Remaining: integrate a trusted cached generation source, real source-bound
+owner write capability, and independent semantic privacy clearance at
+production startup. Obtain exact-head CI and Windows owner acceptance.
