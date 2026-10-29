@@ -162,3 +162,17 @@ async async def test_no_new_topic_tool_unless_explicitly_configured():
     session._topic_checkpoints = None
     assert not session.supports_topic_resume
     session.close()
+
+
+@pytest.mark.asyncio
+async def test_revision_changed_during_read_rejects_stale_snapshot():
+    authority = OwnerAuthority()
+    store = TopicStore()
+    store.revoke_on_read = lambda: setattr(store, "revision", "new-version")
+    personal, closed = personal_session(authority, store)
+    try:
+        result = await personal.resume_topic("Nepal trip")
+        assert result == {"status": "denied"}
+        assert closed
+    finally:
+        personal.close()
