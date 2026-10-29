@@ -303,12 +303,14 @@ class SemanticContextEngine:
             raise SemanticRejected("proposal does not match exact user evidence")
         if len(proposal.value) > 500 or len(proposal.key) > 160:
             raise SemanticRejected("proposal too long")
-        if proposal.action not in (
-            SemanticAction.FORGET_TOPIC,
-            SemanticAction.COMPLETE_STEP,
+        if (
+            proposal.action not in (
+                SemanticAction.FORGET_TOPIC,
+                SemanticAction.COMPLETE_STEP,
+            )
+            and not proposal.value.strip()
         ):
-            if not proposal.value.strip():
-                raise SemanticRejected("missing semantic value")
+            raise SemanticRejected("missing semantic value")
         if (
             proposal.action
             in (
