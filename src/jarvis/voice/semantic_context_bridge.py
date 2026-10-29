@@ -21,6 +21,23 @@ from jarvis.memory.semantic_pipeline import (
 )
 
 
+def resolve_session_commit_callback(
+    conversation: ConversationSession,
+    *,
+    direct: AppliedStateCallback | None,
+    factory: Callable[[ConversationSession], AppliedStateCallback] | None,
+) -> AppliedStateCallback | None:
+    """Bind checkpoint mutations to the current canonical voice session."""
+    if not isinstance(conversation, ConversationSession):
+        raise TypeError("canonical conversation required")
+    if direct is not None and factory is not None:
+        raise ValueError("semantic callback and factory cannot both be active")
+    callback = factory(conversation) if factory is not None else direct
+    if callback is not None and not callable(callback):
+        raise TypeError("semantic commit factory returned no callback")
+    return callback
+
+
 class SemanticVoiceAttachment:
     """One canonical voice session owns one transient semantic state epoch."""
 
