@@ -133,3 +133,54 @@ def test_attachment_requires_explicit_trusted_inputs():
         attach_semantic_voice_context(
             bridge, producer=None, authorization_binding=lambda: "owner"
         )
+
+
+def test_per_voice_session_writer_factory_never_reuses_canonical_conversation():
+    from jarvis.voice.semantic_context_bridge import (
+        resolve_session_commit_callback,
+    )
+
+    conversations = []
+    writers = []
+
+    def writer_factory(conversation):
+        conversations.append(conversation)
+
+        async def record(turn, proposals, before, after, source_plan_epoch):
+            assert conversation is not None
+
+        writers.append(record)
+        return record
+
+    first = BridgeFixture()
+    second = BridgeFixture()
+    writer_one = resolve_session_commit_callback(
+        first.conversation, direct=None, factory=writer_factory
+    )
+    writer_two = resolve_session_commit_callback(
+        second.conversation, direct=None, factory=writer_factory
+    )
+    assert writer_one is writers[0]
+    assert writer_two is writers[1]
+    assert writer_one is not writer_two
+    assert conversations == [first.conversation, second.conversation]
+
+
+def test_invalid_or_ambiguous_commit_callback_factory_is_rejected():
+    from jarvis.voice.semantic_context_bridge import (
+        resolve_session_commit_callback,
+    )
+
+    bridge = BridgeFixture()
+
+    async def recorder(*args):
+        pass
+
+    with pytest.raises(ValueError, match="cannot both"):
+        resolve_session_commit_callback(
+            bridge.conversation, direct=recorder, factory=lambda _c: recorder
+        )
+    with pytest.raises(TypeError, match="returned no callback"):
+        resolve_session_commit_callback(
+            bridge.conversation, direct=None, factory=lambda _c: None
+        )
