@@ -478,3 +478,35 @@ def test_forget_cannot_be_batched_with_topic_creation():
             ],
         )
     assert e.snapshot("Nepal trip") is not None
+
+
+def test_vehicle_question_cannot_be_promoted_as_owner_statement():
+    c = ConversationSession()
+    e = SemanticContextEngine()
+    apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
+    turn = utterance(c, 2, "Which vehicle am I taking?")
+    with pytest.raises(SemanticRejected, match="question"):
+        apply_epoch(
+            e, c, turn,
+            [proposal(
+                turn.text, SemanticAction.CONSTRAINT,
+                key="vehicle", value="vehicle",
+            )],
+        )
+    assert e.snapshot().constraints == ()
+
+
+def test_already_planned_route_cannot_be_added_as_pending_work():
+    c = ConversationSession()
+    e = SemanticContextEngine()
+    apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
+    turn = utterance(c, 2, "The route is planned")
+    with pytest.raises(SemanticRejected, match="completed work"):
+        apply_epoch(
+            e, c, turn,
+            [proposal(
+                turn.text, SemanticAction.PENDING_STEP,
+                key="route", value="route",
+            )],
+        )
+    assert e.snapshot().steps == ()
