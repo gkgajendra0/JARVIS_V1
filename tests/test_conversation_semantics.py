@@ -47,9 +47,7 @@ def proposal(
 
 
 def apply_epoch(engine, conversation, turn, proposals):
-    return engine.apply(
-        conversation, turn, proposals, epoch=engine.epoch
-    )
+    return engine.apply(conversation, turn, proposals, epoch=engine.epoch)
 
 
 def apply(engine, session, index, text, action, **kwargs):
@@ -177,7 +175,8 @@ def test_other_topic_cannot_be_modified_implicitly():
     apply(e, c, 2, "Interview prep", SemanticAction.TOPIC, value="Interview prep")
     t = utterance(c, 3, "Budget unlimited")
     with pytest.raises(SemanticRejected, match="inactive topic"):
-        apply_epoch(e,
+        apply_epoch(
+            e,
             c,
             t,
             [
@@ -197,11 +196,14 @@ def test_assistant_and_foreign_turns_cannot_create_context():
     e = SemanticContextEngine()
     t = utterance(c, 1, "Nepal trip", ConversationRole.ASSISTANT)
     with pytest.raises(SemanticRejected, match="USER"):
-        apply_epoch(e,c, t, [proposal(t.text, SemanticAction.TOPIC, value="Nepal trip")])
+        apply_epoch(
+            e, c, t, [proposal(t.text, SemanticAction.TOPIC, value="Nepal trip")]
+        )
     other = ConversationSession()
     fake = utterance(other, 2, "Nepal trip")
     with pytest.raises(SemanticRejected, match="canonical"):
-        apply_epoch(e,
+        apply_epoch(
+            e,
             c,
             fake,
             [proposal(fake.text, SemanticAction.TOPIC, value="Nepal trip")],
@@ -215,7 +217,7 @@ def test_forged_quote_and_batch_failure_are_atomic():
     valid = proposal(t.text, SemanticAction.TOPIC, value="Nepal")
     invalid = replace(valid, quote="France")
     with pytest.raises(SemanticRejected, match="exact user evidence"):
-        apply_epoch(e,c, t, [valid, invalid])
+        apply_epoch(e, c, t, [valid, invalid])
     assert e.snapshot() is None
 
 
@@ -225,7 +227,8 @@ def test_invented_date_rejected_and_other_updates_not_applied():
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     t = utterance(c, 2, "My documents are sorted")
     with pytest.raises(SemanticRejected, match="unquoted numerical"):
-        apply_epoch(e,
+        apply_epoch(
+            e,
             c,
             t,
             [
@@ -244,8 +247,10 @@ def test_forget_and_late_proposal_cannot_resurrect():
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     apply(e, c, 5, "Forget Nepal trip", SemanticAction.FORGET_TOPIC)
     old = utterance(c, 3, "Nepal trip")
-    with pytest.raises(SemanticRejected, match="stale topic"):
-        apply_epoch(e,c, old, [proposal(old.text, SemanticAction.TOPIC, value="Nepal trip")])
+    with pytest.raises(SemanticRejected, match="stale asynchronous turn"):
+        apply_epoch(
+            e, c, old, [proposal(old.text, SemanticAction.TOPIC, value="Nepal trip")]
+        )
     assert e.snapshot("Nepal trip") is None
     apply(e, c, 6, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     assert e.snapshot("Nepal trip") is not None
@@ -258,7 +263,8 @@ def test_reject_secret_and_unrelated_completion():
     e = SemanticContextEngine()
     t = utterance(c, 1, "Remember my password")
     with pytest.raises(SemanticRejected, match="secret"):
-        apply_epoch(e,
+        apply_epoch(
+            e,
             c,
             t,
             [
@@ -282,7 +288,9 @@ def test_reject_secret_and_unrelated_completion():
     )
     t = utterance(c, 4, "The documents are ready")
     with pytest.raises(SemanticRejected, match="name the pending step"):
-        apply_epoch(e,c, t, [proposal(t.text, SemanticAction.COMPLETE_STEP, key="route")])
+        apply_epoch(
+            e, c, t, [proposal(t.text, SemanticAction.COMPLETE_STEP, key="route")]
+        )
 
 
 def test_unknown_step_cannot_be_completed():
@@ -291,7 +299,9 @@ def test_unknown_step_cannot_be_completed():
     apply(e, c, 1, "Nepal trip", SemanticAction.TOPIC, value="Nepal trip")
     t = utterance(c, 2, "The route is complete")
     with pytest.raises(SemanticRejected, match="matching pending step"):
-        apply_epoch(e,c, t, [proposal(t.text, SemanticAction.COMPLETE_STEP, key="route")])
+        apply_epoch(
+            e, c, t, [proposal(t.text, SemanticAction.COMPLETE_STEP, key="route")]
+        )
 
 
 def test_duplicate_turn_replayed_only_once():
@@ -299,8 +309,8 @@ def test_duplicate_turn_replayed_only_once():
     e = SemanticContextEngine()
     t = utterance(c, 1, "Nepal trip")
     p = proposal(t.text, SemanticAction.TOPIC, value="Nepal trip")
-    assert apply_epoch(e,c, t, [p]) == 1
-    assert apply_epoch(e,c, t, [p]) == 0
+    assert apply_epoch(e, c, t, [p]) == 1
+    assert apply_epoch(e, c, t, [p]) == 0
 
 
 def test_hindi_and_hinglish_evidence_without_losing_source():
@@ -326,7 +336,9 @@ def test_hallucinated_topic_is_not_admitted():
     e = SemanticContextEngine()
     t = utterance(c, 1, "Good morning")
     with pytest.raises(SemanticRejected, match="named"):
-        apply_epoch(e,c, t, [proposal(t.text, SemanticAction.TOPIC, value="Nepal trip")])
+        apply_epoch(
+            e, c, t, [proposal(t.text, SemanticAction.TOPIC, value="Nepal trip")]
+        )
 
 
 def test_stale_correction_cannot_override_newer_value():
@@ -375,7 +387,9 @@ def test_late_topic_switch_cannot_change_active_topic():
     old = utterance(c, 5, "Interview prep")
     with pytest.raises(SemanticRejected, match="stale asynchronous turn"):
         apply_epoch(
-            e, c, old,
+            e,
+            c,
+            old,
             [proposal(old.text, SemanticAction.TOPIC, value="Interview prep")],
         )
     assert e.active_topic == "Nepal trip"
