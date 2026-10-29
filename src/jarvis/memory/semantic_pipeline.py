@@ -190,16 +190,39 @@ class SemanticTurnPipeline:
         """Test/integration flush; never call on the synchronous voice path."""
         await self._queue.join()
 
-    async def close(self) -> None:
+    def request_close(self) -> None:
+        """Synchronously revoke and cancel work from a voice close observer."""
+        if self._closed:
+            return
         self._closed = True
         self.invalidate()
+        if self._worker is not None:
+            self._worker.cancel()
+
+    async def close(self) -> None:
+        self.request_close()
         task, self._worker = self._worker, None
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        if task is None:
+            return
+        # A routed model producer may ignore cancellation temporarily.
+        # Voice retirement must not wait forever for third-party I/O.
+        done, pending = await asyncio.wait({task}, timeout=1.0)
+        if pending:
+            LOGGER.warning(
+                "Semantic inference did not cancel promptly; context remains revoked"
+            )
+            task.add_done_callback(self._consume_closed_worker)
+            return
+        self._consume_closed_worker(task)
+
+    @staticmethod
+    def _consume_closed_worker(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception:
+            LOGGER.exception("Semantic worker failed during shutdown")
 
     def _current_binding(self) -> str | None:
         try:
