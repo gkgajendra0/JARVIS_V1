@@ -302,3 +302,34 @@ def test_persistence_hook_without_accepted_epoch_is_rejected():
             authorization_binding=lambda: "owner",
             on_applied=persist,
         )
+
+
+@pytest.mark.asyncio
+async def test_failed_persisted_semantic_update_revokes_working_state():
+    conversation = ConversationSession()
+    conversation.start()
+    state = SemanticContextEngine()
+
+    async def producer(turn):
+        return topic_proposal(turn.text)
+
+    async def reject_save(_turn, _proposals, _before, _after, _epoch):
+        raise PermissionError("durable write was revoked")
+
+    pipeline = SemanticTurnPipeline(
+        conversation=conversation,
+        state=state,
+        producer=producer,
+        authorization_binding=lambda: "owner-grant",
+        on_applied=reject_save,
+        accepted_plan_epoch=lambda _turn: 0,
+    )
+    pipeline.start()
+    try:
+        turn = conversation.accept_turn(ConversationRole.USER, "Nepal trip")
+        assert pipeline.submit(turn)
+        await pipeline.drain()
+        assert state.snapshot() is None
+        assert pipeline.status.failures == 1
+    finally:
+        await pipeline.close()
