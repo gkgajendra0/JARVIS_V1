@@ -57,6 +57,71 @@ _COMPLETION_UNCERTAIN = re.compile(
 )
 
 
+def _semantic_tokens(text: str) -> set[str]:
+    return set(re.findall(r"\w+", unicodedata.normalize("NFKC", text).casefold()))
+
+
+def _budget_unrestricted_paraphrase(
+    proposal: SemanticProposal, quote: str
+) -> bool:
+    if (
+        proposal.action not in {SemanticAction.CONSTRAINT, SemanticAction.CORRECT}
+        or proposal.key.casefold() != "budget"
+        or proposal.value.casefold() != "unrestricted"
+    ):
+        return False
+    lowered = quote.casefold()
+    if "budget" not in _semantic_tokens(quote):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:not|no|isn't|isnt|is\s+not)\b.{0,25}"
+            r"\b(?:constraint|issue|limit)\b",
+            lowered,
+        )
+        or re.search(r"\bissue\b.{0,25}\b(?:nahi|nahin)\b", lowered)
+    )
+
+
+def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> None:
+    """Conservative lexical entailment boundary for untrusted model proposals.
+
+    Unknown paraphrases stay transient raw speech; they are not silently
+    promoted to a structured constraint or task. This is not an ASR verifier.
+    """
+    if proposal.action not in {
+        SemanticAction.GOAL,
+        SemanticAction.CONSTRAINT,
+        SemanticAction.CORRECT,
+        SemanticAction.PENDING_STEP,
+    }:
+        return
+    quoted = _semantic_tokens(quote)
+    budget_exception = _budget_unrestricted_paraphrase(proposal, quote)
+    if proposal.key:
+        keys = _semantic_tokens(proposal.key)
+        aliases = {"docs": {"documents"}}
+        for key in keys:
+            if key not in quoted and not (
+                key in aliases and aliases[key] & quoted
+            ):
+                raise SemanticRejected("unsupported semantic field key")
+    values = _semantic_tokens(proposal.value)
+    if not budget_exception and not values.issubset(quoted):
+        raise SemanticRejected("unsupported semantic interpretation")
+    lowered = quote.casefold()
+    negation = re.search(
+        r"\b(?:not|no|never|don't|dont|isn't|isnt|nahi|nahin)\b|"
+        r"नहीं|मत ",
+        lowered,
+    )
+    if negation and not budget_exception and not (
+        _semantic_tokens(proposal.value)
+        & {"not", "no", "never", "nahi", "nahin"}
+    ):
+        raise SemanticRejected("ambiguous negated semantic interpretation")
+
+
 class SemanticRejected(ValueError):
     """Untrusted semantic proposal or canonical source does not pass admission."""
 
@@ -385,3 +450,4 @@ class SemanticContextEngine:
         numbers = set(re.findall(r"\d+(?:[.,]\d+)*", quote))
         if not set(re.findall(r"\d+(?:[.,]\d+)*", proposal.value)).issubset(numbers):
             raise SemanticRejected("unquoted numerical claim")
+        _validate_interpreted_meaning(proposal, quote)
