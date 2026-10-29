@@ -350,8 +350,7 @@ class SemanticContextEngine:
         ):
             raise SemanticRejected("forget needs explicit positive owner instruction")
         if proposal.action is SemanticAction.COMPLETE_STEP and (
-            _COMPLETION_CUE.search(quote) is None
-            or _COMPLETION_UNCERTAIN.search(quote)
+            _COMPLETION_CUE.search(quote) is None or _COMPLETION_UNCERTAIN.search(quote)
         ):
             raise SemanticRejected("completion needs explicit confirmed state")
         if len(proposal.value) > 500 or len(proposal.key) > 160:
