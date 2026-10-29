@@ -40,6 +40,17 @@ async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learn
             ("nepal trip", "old-turn", old_time, '{"title":"Nepal trip"}'),
         )
     )
+    # Even a checkpoint carrying a later source timestamp must be erased
+    # when the owner disables all plan learning.
+    future_time = (turn.accepted_at + timedelta(seconds=5)).astimezone(
+        UTC
+    ).isoformat(timespec="microseconds")
+    await learning.writer.run(
+        lambda conn: conn.execute(
+            "INSERT INTO conversation_topic_checkpoint VALUES (?,?,?,?)",
+            ("nepal hotel", "queued-future-turn", future_time, '{"title":"Nepal hotel"}'),
+        )
+    )
     categories = ("plan",)
     permit = learning.authority.issue_child(
         learning.grant, suppression_binding(source, categories)
