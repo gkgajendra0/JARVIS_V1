@@ -96,6 +96,14 @@ def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> Non
         SemanticAction.PENDING_STEP,
     }:
         return
+    if "?" in quote or "？" in quote:
+        raise SemanticRejected("question is not an owner factual statement")
+    if (
+        proposal.action is SemanticAction.PENDING_STEP
+        and _COMPLETION_CUE.search(quote)
+        and not _COMPLETION_UNCERTAIN.search(quote)
+    ):
+        raise SemanticRejected("completed work cannot be pending")
     quoted = _semantic_tokens(quote)
     budget_exception = _budget_unrestricted_paraphrase(proposal, quote)
     if proposal.key:
