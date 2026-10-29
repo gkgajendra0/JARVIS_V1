@@ -12,6 +12,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from time import monotonic
 
 from jarvis.conversation import (
     ConversationRole,
@@ -265,6 +266,7 @@ class SemanticTurnPipeline:
         while True:
             turn, binding, epoch, plan_epoch = await self._queue.get()
             stage = "producer"
+            started = monotonic()
             try:
                 if not self._still_authorized(binding, epoch):
                     self._dropped += 1
@@ -316,9 +318,12 @@ class SemanticTurnPipeline:
                 else:
                     reason = "invalid_value"
                 LOGGER.warning(
-                    "Semantic update rejected | stage=%s | reason=%s",
+                    "Semantic update rejected | stage=%s | reason=%s | "
+                    "elapsed_ms=%.1f | deadline_s=%.1f",
                     stage,
                     reason,
+                    (monotonic() - started) * 1000,
+                    self._timeout_seconds,
                 )
             except Exception:
                 self._failures += 1

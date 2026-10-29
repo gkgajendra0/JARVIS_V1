@@ -36,6 +36,37 @@ class BridgeFixture:
             callback()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deadline, succeeds", [(0.02, False), (0.2, True)])
+async def test_explicit_extraction_deadline_allows_slow_async_result_without_blocking_voice(
+    deadline, succeeds
+):
+    bridge = BridgeFixture()
+    release = asyncio.Event()
+
+    async def slow(turn):
+        await release.wait()
+        return [topic(turn)]
+
+    attachment = attach_semantic_voice_context(
+        bridge,
+        producer=slow,
+        authorization_binding=lambda: "grant",
+        timeout_seconds=deadline,
+    )
+    try:
+        bridge.user("Nepal trip")
+        assert attachment.state.snapshot() is None
+        await asyncio.sleep(0.06)
+        release.set()
+        await attachment.pipeline.drain()
+        assert attachment.state.active_topic == ("Nepal trip" if succeeds else None)
+        assert attachment.pipeline.status.failures == (0 if succeeds else 1)
+    finally:
+        bridge.close()
+        await attachment.wait_closed()
+
+
 def topic(turn):
     return SemanticProposal(
         action=SemanticAction.TOPIC,

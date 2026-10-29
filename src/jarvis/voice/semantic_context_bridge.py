@@ -31,8 +31,15 @@ class SemanticSessionComponents:
     authorization_binding: AuthorizationBinding
     on_applied: AppliedStateCallback | None = None
     accepted_plan_epoch: AcceptedPlanEpoch | None = None
+    timeout_seconds: float = 5.0
 
     def __post_init__(self):
+        if (
+            isinstance(self.timeout_seconds, bool)
+            or not isinstance(self.timeout_seconds, int | float)
+            or not 0 < self.timeout_seconds <= 20
+        ):
+            raise ValueError("semantic extraction timeout must be in (0, 20]")
         if not isinstance(self.conversation, ConversationSession):
             raise TypeError("canonical conversation required")
         if not callable(self.producer) or not callable(self.authorization_binding):
@@ -93,6 +100,7 @@ class SemanticVoiceAttachment:
         authorization_binding: AuthorizationBinding,
         on_applied: AppliedStateCallback | None = None,
         accepted_plan_epoch: AcceptedPlanEpoch | None = None,
+        timeout_seconds: float = 5.0,
     ) -> None:
         if not callable(add_turn_observer) or not callable(add_close_observer):
             raise TypeError("canonical bridge observers required")
@@ -104,6 +112,7 @@ class SemanticVoiceAttachment:
             authorization_binding=authorization_binding,
             on_applied=on_applied,
             accepted_plan_epoch=accepted_plan_epoch,
+            timeout_seconds=timeout_seconds,
         )
         self._closed = False
         self._closing: asyncio.Task[None] | None = None
@@ -137,6 +146,7 @@ def attach_semantic_voice_context(
     authorization_binding: AuthorizationBinding,
     on_applied: AppliedStateCallback | None = None,
     accepted_plan_epoch: AcceptedPlanEpoch | None = None,
+    timeout_seconds: float = 5.0,
 ) -> SemanticVoiceAttachment:
     """Attach only to a bridge exposing the canonical accepted-turn contract.
 
@@ -155,4 +165,5 @@ def attach_semantic_voice_context(
         authorization_binding=authorization_binding,
         on_applied=on_applied,
         accepted_plan_epoch=accepted_plan_epoch,
+        timeout_seconds=timeout_seconds,
     )

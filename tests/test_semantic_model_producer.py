@@ -61,6 +61,72 @@ async def test_model_producer_preserves_quoted_hinglish_evidence():
 
 
 @pytest.mark.asyncio
+async def test_single_explicit_topic_precedes_dependent_goal_in_model_batch():
+    from jarvis.memory.conversation_semantics import SemanticContextEngine
+
+    conversation = ConversationSession()
+    conversation.start()
+    text = "I am planning a Nepal trip"
+    source = conversation.accept_turn(ConversationRole.USER, text)
+    client = FakeModel(
+        {
+            "proposals": [
+                {
+                    "action": "goal",
+                    "quote": text,
+                    "value": "planning a Nepal trip",
+                    "topic": "Nepal trip",
+                },
+                {"action": "topic", "quote": text, "value": "Nepal trip"},
+            ]
+        }
+    )
+    producer = RoutedSemanticProducer(
+        client=client,
+        source_clearance=lambda _: Sensitivity.STANDARD,
+        scope_id=conversation.session_id,
+    )
+    patches = await producer(source)
+    state = SemanticContextEngine()
+    assert state.apply(conversation, source, patches, epoch=state.epoch) == 2
+    assert state.snapshot().title == "Nepal trip"
+    assert state.snapshot().goal.value == "planning a Nepal trip"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", ["", "Other trip"])
+async def test_topic_order_repair_never_guesses_implicit_or_foreign_target(target):
+    from jarvis.memory.conversation_semantics import SemanticContextEngine
+
+    conversation = ConversationSession()
+    conversation.start()
+    text = "I am planning a Nepal trip"
+    source = conversation.accept_turn(ConversationRole.USER, text)
+    producer = RoutedSemanticProducer(
+        client=FakeModel(
+            {
+                "proposals": [
+                    {
+                        "action": "goal",
+                        "quote": text,
+                        "value": "planning a Nepal trip",
+                        "topic": target,
+                    },
+                    {"action": "topic", "quote": text, "value": "Nepal trip"},
+                ]
+            }
+        ),
+        source_clearance=lambda _: Sensitivity.STANDARD,
+        scope_id=conversation.session_id,
+    )
+    state = SemanticContextEngine()
+    patches = await producer(source)
+    with pytest.raises(SemanticRejected):
+        state.apply(conversation, source, patches, epoch=state.epoch)
+    assert state.snapshot() is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "clearance",
     (None, Sensitivity.PRIVATE, Sensitivity.LOCAL_ONLY, Sensitivity.SECRET_PROHIBITED),

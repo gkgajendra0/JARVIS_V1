@@ -12,13 +12,14 @@ from jarvis.memory.types import Sensitivity
 
 SMOKE_UTTERANCES = (
     "I am planning a Nepal trip",
-    "I will travel in my Jimny",
+    "My vehicle is a Jimny",
     "The permits are already sorted",
     "Budget is unrestricted",
     "We still need to plan the route",
-    "Correction, we will leave on 10 November",
+    "Departure is 9 November",
+    "Correction, departure is 10 November",
     "The route is already planned",
-    "Nepal trip ka budget fixed nahi hai",
+    "Budget ka issue nahi hai",
 )
 
 
@@ -96,4 +97,5 @@ def build_smoke_session_components(
         authorization_binding=binding,
         on_applied=observe_applied,
         accepted_plan_epoch=accepted_plan_epoch,
+        timeout_seconds=20.0,
     )

@@ -291,6 +291,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     binding = components.authorization_binding
                     applied = components.on_applied
                     plan_epoch = components.accepted_plan_epoch
+                    semantic_timeout = components.timeout_seconds
                 else:
                     producer = semantic_producer
                     binding = semantic_authorization_binding
@@ -300,12 +301,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         factory=semantic_on_applied_factory,
                     )
                     plan_epoch = semantic_accepted_plan_epoch
+                    semantic_timeout = 5.0
                 self._semantic_context_attachment = attach_semantic_voice_context(
                     bridge,
                     producer=producer,
                     authorization_binding=binding,
                     on_applied=applied,
                     accepted_plan_epoch=plan_epoch,
+                    timeout_seconds=semantic_timeout,
                 )
             else:
                 self._semantic_context_attachment = None

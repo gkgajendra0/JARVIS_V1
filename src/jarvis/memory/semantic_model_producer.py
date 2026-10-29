@@ -61,6 +61,15 @@ Most utterances are ordinary conversation: return an empty list when no update
 is clearly warranted. Do not extract credentials, medical, financial-account
 or third-party private information. Proposals never authorize memory writes,
 model-visible context, tool execution, or deletion. Quote original text only.
+
+Reducer contract: values must use words present in the quote; do not turn
+'planning' into 'plan', invent field labels, or paraphrase completed work as a
+pending task. A field key must be a word in its quote (for example 'vehicle'
+requires the user to actually say 'vehicle'). When a batch introduces a topic,
+emit its topic proposal first and set any dependent proposal's topic to that
+exact title. Never emit a correction as a new fact: its named field must have
+an earlier value, checked by the application. Use the smallest supported batch;
+a planning statement naming a trip can simply establish that topic.
 """
 
 
@@ -139,6 +148,18 @@ class RoutedSemanticProducer:
                     sensitivity=patch.sensitivity,
                 )
             )
+        # A model can serialize a dependent before its topic. Normalize an explicit
+        # dependency on one topic introduced by this batch; never guess where
+        # an unbound or differently bound proposal belongs.
+        topics = [p for p in patches if p.action is SemanticAction.TOPIC]
+        if len(topics) == 1 and all(
+            p.action is SemanticAction.TOPIC
+            or p.topic.strip().casefold() == topics[0].value.strip().casefold()
+            for p in patches
+        ):
+            patches = topics + [
+                p for p in patches if p.action is not SemanticAction.TOPIC
+            ]
         return patches
 
 

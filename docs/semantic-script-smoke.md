@@ -17,15 +17,20 @@ Camera, speaker-shadow, active-speaker and Pocket3 tracking observers are disabl
 After owner approval, wake Jarvis and say each sentence separately, waiting for the response and inference log:
 
 1. I am planning a Nepal trip
-2. I will travel in my Jimny
+2. My vehicle is a Jimny
 3. The permits are already sorted
 4. Budget is unrestricted
 5. We still need to plan the route
-6. Correction, we will leave on 10 November
-7. The route is already planned
-8. Nepal trip ka budget fixed nahi hai
+6. Departure is 9 November
+7. Correction, departure is 10 November
+8. The route is already planned
+9. Budget ka issue nahi hai
 
 Only exact reviewed utterances with case/terminal punctuation variation enter semantic extraction. An ASR paraphrase is denied. Normal Gemini Live microphone audio remains the usual provider channel; this gate does not filter that audio. Speak synthetic test information only.
+
+The cloud lab uses a 20-second cancellation deadline per asynchronous extraction, rather than the original attachment's five-second default. A client that suppresses cancellation can take longer to return. Voice callbacks do not wait for extraction. Closing the bridge still immediately revokes state and requests bounded worker cleanup; authorization is rechecked at dispatch, response and apply. This diagnostic setting is not a demonstrated latency target. Ordinary opt-in attachments retain the five-second default.
+
+The script explicitly names field labels and establishes an original departure before correcting it. These constraints follow the current conservative evidence validator; this lab does not demonstrate unrestricted natural-language semantics. The producer may move one introduced topic before dependent proposals only when every dependent explicitly names that same topic; unbound or foreign proposals are never reassigned. Atomic reducer validation remains authoritative.
 
 Look for `Semantic script smoke inference` and `Semantic script smoke applied`. The latter reports only aggregate topic/constraint/step counts, with `checkpoint_write=False`; it does not log source text or authorization tokens. Save `profile/smoke.jsonl` and the console output. Missing applied events or zero proposals are findings, not a pass. These aggregate diagnostics require manual inspection and do not prove the semantic content is correct.
 
