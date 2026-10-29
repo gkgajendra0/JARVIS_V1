@@ -184,6 +184,16 @@ def test_invalid_or_ambiguous_commit_callback_factory_is_rejected():
         resolve_session_commit_callback(
             bridge.conversation, direct=None, factory=lambda _c: None
         )
+    with pytest.raises(TypeError, match="returned no callback"):
+        resolve_session_commit_callback(
+            bridge.conversation, direct=None, factory=lambda _c: "not-a-function"
+        )
+    assert (
+        resolve_session_commit_callback(
+            bridge.conversation, direct=None, factory=None
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
