@@ -84,6 +84,19 @@ def test_smoke_refuses_other_provider():
         smoke_config(JarvisConfig(ai_provider="openai"))
 
 
+@pytest.mark.parametrize("original, expected", [(3.0, 30.0), (45.0, 45.0)])
+def test_lab_inactivity_window_outlasts_cloud_extraction(original, expected):
+    config = smoke_config(
+        JarvisConfig(
+            ai_provider="gemini",
+            follow_up_timeout_seconds=original,
+            initial_request_timeout_seconds=original,
+        )
+    )
+    assert config.follow_up_timeout_seconds == expected
+    assert config.initial_request_timeout_seconds == expected
+
+
 def test_launcher_main_loads_isolated_config_before_voice(tmp_path, monkeypatch):
     import os
     import sys

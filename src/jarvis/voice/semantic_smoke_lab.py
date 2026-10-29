@@ -61,6 +61,12 @@ def smoke_config(config: JarvisConfig) -> JarvisConfig:
         work_orchestration_enabled=False,
         github_promotion_enabled=False,
         show_transcript=False,
+        # Keep the test wake alive long enough to observe cloud extraction.
+        # Explicit standby/close still cancels immediately.
+        initial_request_timeout_seconds=max(
+            config.initial_request_timeout_seconds, 30.0
+        ),
+        follow_up_timeout_seconds=max(config.follow_up_timeout_seconds, 30.0),
         chatgpt_plan_enabled=False,
         vision_enabled=False,
         speaker_shadow_enabled=False,

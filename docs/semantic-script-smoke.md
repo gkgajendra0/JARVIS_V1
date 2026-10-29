@@ -12,6 +12,8 @@ The existing owner-operated memory-session approval is intentionally broader in 
 
 Camera, speaker-shadow, active-speaker and Pocket3 tracking observers are disabled in this microphone lab to avoid opening the installed biometric store. This lab does not qualify camera-based identity diagnostics.
 
+The lab's initial and follow-up inactivity windows are at least 30 seconds so an otherwise idle wake does not close before extraction's 20-second cancellation deadline. Longer configured windows are preserved. Explicit standby and Ctrl+C still close immediately.
+
 ## Script
 
 After owner approval, wake Jarvis and say each sentence separately, waiting for the response and inference log:
