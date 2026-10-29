@@ -74,7 +74,9 @@ class SemanticVoiceAttachment:
         if self._closed:
             return
         self._closed = True
-        self.pipeline.invalidate()
+        # Revoke and cancel now: do not defer cancellation until the new
+        # cleanup task gets scheduled behind a blocked producer.
+        self.pipeline.request_close()
         self._closing = asyncio.create_task(
             self.pipeline.close(), name="jarvis-semantic-voice-close"
         )
