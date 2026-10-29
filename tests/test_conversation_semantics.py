@@ -373,7 +373,8 @@ def test_revocation_epoch_blocks_inflight_proposal():
     e.clear()
     with pytest.raises(SemanticRejected, match="generation"):
         e.apply(
-            c, turn,
+            c,
+            turn,
             [proposal(turn.text, SemanticAction.TOPIC, value="Nepal trip")],
             epoch=old_epoch,
         )
