@@ -34,23 +34,23 @@ class EvidenceStrength(StrEnum):
 
 
 _FORGET_CUE = re.compile(
-    r"\\b(?:forget|delete|erase|remove|stop remembering|do not remember|"
-    r"don't remember|dont remember|bhool|yaad mat)\\b|भूल|याद मत|मिटा|हटा",
+    r"\b(?:forget|delete|erase|remove|stop remembering|do not remember|"
+    r"don't remember|dont remember|bhool|yaad mat)\b|भूल|याद मत|मिटा|हटा",
     flags=re.IGNORECASE,
 )
 _FORGET_NEGATION = re.compile(
-    r"\\b(?:don't|dont|do not|never|mat|nahi|nahin)\\s+forget\\b|मत भूल",
+    r"\b(?:don't|dont|do not|never|mat|nahi|nahin)\s+forget\b|मत भूल",
     flags=re.IGNORECASE,
 )
 _COMPLETION_CUE = re.compile(
-    r"\\b(?:done|complete|completed|finished|finalized|finalised|"
-    r"already planned|is planned|has been planned|sorted)\\b|"
+    r"\b(?:done|complete|completed|finished|finalized|finalised|"
+    r"already planned|is planned|has been planned|sorted)\b|"
     r"हो गया|पूरा हो गया|तैयार है",
     flags=re.IGNORECASE,
 )
 _COMPLETION_UNCERTAIN = re.compile(
-    r"[?？]|\\b(?:not|isn't|isnt|hasn't|hasnt|haven't|havent|"
-    r"should|could|would|can|will|need to|planning to|nahi|nahin)\\b|नहीं",
+    r"[?？]|\b(?:not|isn't|isnt|hasn't|hasnt|haven't|havent|"
+    r"should|could|would|can|will|need to|planning to|nahi|nahin)\b|नहीं",
     flags=re.IGNORECASE,
 )
 
