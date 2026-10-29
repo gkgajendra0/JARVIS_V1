@@ -74,7 +74,7 @@ async def test_encrypted_worker_checkpoint_survives_new_reader_and_named_resume(
         first = ConversationSession()
         source = accepted(first, 1, "Let's plan Nepal trip")
         assert await store.save(
-            first, source, checkpoint(source), authorize_write=lambda: True
+            first, source, checkpoint(source), authorize_write=lambda: True, admit_snapshot=lambda *_: True
         )
         await writer.close()
         await reader.close()
@@ -116,7 +116,7 @@ async def test_protected_checkpoint_requires_named_topic_and_fresh_permit(tmp_pa
         conversation = ConversationSession()
         source = accepted(conversation, 1, "Nepal trip")
         assert await store.save(
-            conversation, source, checkpoint(source), authorize_write=lambda: True
+            conversation, source, checkpoint(source), authorize_write=lambda: True, admit_snapshot=lambda *_: True
         )
         no_topic = accepted(conversation, 2, "Hey Jarvis, continue")
         with pytest.raises(CheckpointRejected, match="does not name"):
@@ -147,7 +147,7 @@ async def test_named_forget_tombstones_stale_save_and_allows_newer_plan(tmp_path
         original = accepted(conversation, 1, "Nepal trip")
         await store.save(
             conversation, original, checkpoint(original),
-            authorize_write=lambda: True,
+            authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         forget = accepted(conversation, 3, "Forget Nepal trip")
         assert await store.forget(
@@ -164,12 +164,12 @@ async def test_named_forget_tombstones_stale_save_and_allows_newer_plan(tmp_path
         with pytest.raises(CheckpointRejected, match="older than forget"):
             await store.save(
                 conversation, stale, checkpoint(stale),
-                authorize_write=lambda: True,
+                authorize_write=lambda: True, admit_snapshot=lambda *_: True,
             )
         newer = accepted(conversation, 5, "New Nepal trip plan")
         assert await store.save(
             conversation, newer, checkpoint(newer, budget="flexible"),
-            authorize_write=lambda: True,
+            authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         named = accepted(conversation, 6, "Continue Nepal trip")
         result = await store.read_named(
@@ -190,7 +190,7 @@ async def test_suppression_purges_old_checkpoints_and_reenable_cannot_resurrect(
         initial = accepted(conversation, 1, "Nepal trip")
         await store.save(
             conversation, initial, checkpoint(initial),
-            authorize_write=lambda: True,
+            authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         suppress = accepted(conversation, 2, "Stop remembering my plans")
         await store.purge_for_suppression(
@@ -200,7 +200,7 @@ async def test_suppression_purges_old_checkpoints_and_reenable_cannot_resurrect(
         with pytest.raises(CheckpointRejected, match="older than forget"):
             await store.save(
                 conversation, stale, checkpoint(stale),
-                authorize_write=lambda: True,
+                authorize_write=lambda: True, admit_snapshot=lambda *_: True,
             )
         named = accepted(conversation, 3, "Nepal trip")
         assert await store.read_named(
@@ -221,12 +221,12 @@ async def test_denied_write_and_restricted_payload_never_commit(tmp_path):
         with pytest.raises(CheckpointRejected, match="permit denied"):
             await store.save(
                 conversation, source, checkpoint(source),
-                authorize_write=lambda: False,
+                authorize_write=lambda: False, admit_snapshot=lambda *_: True,
             )
         with pytest.raises(CheckpointRejected, match="restricted"):
             await store.save(
                 conversation, source, checkpoint(source, sensitivity=Sensitivity.LOCAL_ONLY),
-                authorize_write=lambda: True,
+                authorize_write=lambda: True, admit_snapshot=lambda *_: True,
             )
         request = accepted(conversation, 2, "Continue Nepal trip")
         assert await store.read_named(
@@ -246,7 +246,7 @@ async def test_negated_forget_is_not_a_delete_request(tmp_path):
         source = accepted(conversation, 1, "Nepal trip")
         await store.save(
             conversation, source, checkpoint(source),
-            authorize_write=lambda: True,
+            authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         negated = accepted(conversation, 2, "Do not forget Nepal trip")
         with pytest.raises(CheckpointRejected, match="explicit positive"):
@@ -278,7 +278,7 @@ async def test_write_revoked_inside_transaction_leaves_no_checkpoint(tmp_path):
 
         with pytest.raises(CheckpointRejected, match="permit denied"):
             await store.save(
-                conversation, source, checkpoint(source), authorize_write=permit
+                conversation, source, checkpoint(source), authorize_write=permit, admit_snapshot=lambda *_: True
             )
         request = accepted(conversation, 2, "Continue Nepal trip")
         result = await store.read_named(
@@ -299,7 +299,7 @@ async def test_read_revoked_after_database_fetch_releases_no_payload(tmp_path):
         source = accepted(conversation, 1, "Nepal trip")
         await store.save(
             conversation, source, checkpoint(source),
-            authorize_write=lambda: True,
+            authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         question = accepted(conversation, 2, "Continue Nepal trip")
         calls = [0]
@@ -324,12 +324,12 @@ async def test_old_forget_cannot_erase_newer_checkpoint(tmp_path):
         conversation = ConversationSession()
         first = accepted(conversation, 1, "Nepal trip")
         await store.save(
-            conversation, first, checkpoint(first), authorize_write=lambda: True
+            conversation, first, checkpoint(first), authorize_write=lambda: True, admit_snapshot=lambda *_: True
         )
         updated = accepted(conversation, 5, "New Nepal trip details")
         await store.save(
             conversation, updated, checkpoint(updated, budget="flexible"),
-            authorize_write=lambda: True,
+            authorize_write=lambda: True, admit_snapshot=lambda *_: True,
         )
         late_forget = accepted(conversation, 3, "Forget Nepal trip")
         assert not await store.forget(
