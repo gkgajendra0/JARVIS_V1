@@ -67,7 +67,8 @@ try {
             "tests/test_memory_database.py",
             "tests/test_memory_runtime.py"
         )
-        & $python -m pytest -q @checks
+        # Stop at the first failure and emit useful stack traces if a test hangs.
+        & $python -m pytest -x -vv --tb=short -o faulthandler_timeout=20 @checks
         if ($LASTEXITCODE -ne 0) {
             throw "Focused semantic/memory tests failed."
         }
