@@ -13,10 +13,18 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
-from jarvis.conversation import ConversationRole, ConversationSession, ConversationStatus
-from jarvis.conversation import ConversationTurn
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+    ConversationTurn,
+)
 
-from .conversation_semantics import SemanticContextEngine, SemanticProposal, SemanticRejected
+from .conversation_semantics import (
+    SemanticContextEngine,
+    SemanticProposal,
+    SemanticRejected,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,9 +67,11 @@ class SemanticTurnPipeline:
             raise TypeError("producer and authorization_binding must be callable")
         if type(max_pending) is not int or not 1 <= max_pending <= 128:
             raise ValueError("max_pending must be between 1 and 128")
-        if isinstance(timeout_seconds, bool) or not isinstance(
-            timeout_seconds, int | float
-        ) or not 0 < float(timeout_seconds) <= 20:
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, int | float)
+            or not 0 < float(timeout_seconds) <= 20
+        ):
             raise ValueError("timeout_seconds must be in (0, 20]")
         self._conversation = conversation
         self.state = state
@@ -176,9 +186,7 @@ class SemanticTurnPipeline:
                     continue
                 if not isinstance(proposals, (tuple, list)):
                     raise SemanticRejected("producer must return a proposal sequence")
-                self.state.apply(
-                    self._conversation, turn, proposals, epoch=epoch
-                )
+                self.state.apply(self._conversation, turn, proposals, epoch=epoch)
                 self._applied += 1
             except asyncio.CancelledError:
                 raise
