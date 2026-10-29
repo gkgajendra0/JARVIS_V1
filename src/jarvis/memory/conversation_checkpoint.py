@@ -253,6 +253,47 @@ class EncryptedTopicCheckpointStore:
 
         return await self._reader.run(fetch)
 
+    async def resolve_named_topic(
+        self,
+        conversation: ConversationSession,
+        request: ConversationTurn,
+        *,
+        topic_hint: str,
+        authorize_read: Callable[[], bool],
+    ) -> str | None:
+        """Return a *unique* explicitly mentioned topic; never list other topics.
+
+        The hint must occur in the canonical owner's current question. All
+        candidate titles are evaluated within the encrypted reader worker only
+        after consent. Ambiguous matches fail closed rather than guessing.
+        """
+        _canonical(conversation, request)
+        if not _explicit_topic(request.text, topic_hint):
+            raise CheckpointRejected("topic hint is absent from current question")
+        _permit(authorize_read)
+
+        def resolve(connection):
+            _canonical(conversation, request)
+            _permit(authorize_read)
+            rows = connection.execute(
+                "SELECT topic_key,source_turn_id,source_at "
+                "FROM conversation_topic_checkpoint ORDER BY topic_key LIMIT 33"
+            ).fetchall()
+            if len(rows) > 32:
+                raise CheckpointRejected("too many stored topics for safe matching")
+            matches = [
+                key
+                for key, _source_turn_id, _source_at in rows
+                if _explicit_topic(request.text, key)
+            ]
+            _permit(authorize_read)
+            _canonical(conversation, request)
+            if len(matches) > 1:
+                raise CheckpointRejected("ambiguous named topic")
+            return matches[0] if matches else None
+
+        return await self._reader.run(resolve)
+
     async def current_fingerprint(self, title: str) -> str | None:
         """Internal revision check for protected-response retirement.
 
