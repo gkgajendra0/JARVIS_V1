@@ -58,6 +58,11 @@ try {
             "tests/test_semantic_action_evidence.py",
             "tests/test_semantic_pipeline.py",
             "tests/test_semantic_model_producer.py",
+            "tests/test_semantic_session_producer.py",
+            "tests/test_semantic_session_components.py",
+            "tests/test_semantic_session_controller.py",
+            "tests/test_semantic_script_smoke.py",
+            "tests/test_semantic_smoke_lab.py",
             "tests/test_semantic_voice_attachment.py",
             "tests/test_conversation_checkpoint.py",
             "tests/test_semantic_checkpoint_flow.py",
@@ -93,6 +98,8 @@ try {
                 "src/jarvis/memory/service.py",
                 "src/jarvis/memory/lifecycle.py",
                 "src/jarvis/voice/semantic_context_bridge.py",
+                "src/jarvis/voice/semantic_script_smoke.py",
+                "src/jarvis/voice/semantic_smoke_lab.py",
                 "tests/test_conversation_checkpoint.py"
             )
             & $ruff format --check @files

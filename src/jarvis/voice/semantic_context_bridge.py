@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from jarvis.conversation import ConversationSession
 from jarvis.memory.conversation_semantics import SemanticContextEngine
@@ -19,6 +20,45 @@ from jarvis.memory.semantic_pipeline import (
     ProposalProducer,
     SemanticTurnPipeline,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticSessionComponents:
+    """Trusted dependencies constructed afresh for one canonical conversation."""
+
+    conversation: ConversationSession
+    producer: ProposalProducer
+    authorization_binding: AuthorizationBinding
+    on_applied: AppliedStateCallback | None = None
+    accepted_plan_epoch: AcceptedPlanEpoch | None = None
+
+    def __post_init__(self):
+        if not isinstance(self.conversation, ConversationSession):
+            raise TypeError("canonical conversation required")
+        if not callable(self.producer) or not callable(self.authorization_binding):
+            raise TypeError("semantic producer and owner binding must be callable")
+        if self.on_applied is not None and not callable(self.on_applied):
+            raise TypeError("semantic checkpoint callback must be callable")
+        if self.accepted_plan_epoch is not None and not callable(
+            self.accepted_plan_epoch
+        ):
+            raise TypeError("accepted plan epoch must be callable")
+        if self.on_applied is not None and self.accepted_plan_epoch is None:
+            raise TypeError("checkpoint persistence requires accepted plan epoch")
+
+
+def resolve_session_components(conversation: ConversationSession, *, factory):
+    """Reject ambiguous factory output before any observer or worker is attached."""
+    if not isinstance(conversation, ConversationSession) or not callable(factory):
+        raise TypeError("canonical conversation and semantic session factory required")
+    components = factory(conversation)
+    if not isinstance(components, SemanticSessionComponents):
+        raise TypeError(
+            "semantic session factory must return SemanticSessionComponents"
+        )
+    if components.conversation is not conversation:
+        raise ValueError("semantic components belong to another conversation")
+    return components
 
 
 def resolve_session_commit_callback(

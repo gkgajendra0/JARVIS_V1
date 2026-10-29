@@ -124,6 +124,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         capability_runtime: CapabilityRuntime | None = None,
         work_runtime: WorkRuntime | None = None,
         routing_runtime=None,
+        semantic_session_factory=None,
         semantic_producer=None,
         semantic_authorization_binding=None,
         semantic_on_applied=None,
@@ -144,6 +145,24 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._learning_grant = None
         self._learning_start_attempted = False
         self._semantic_context_attachment = None
+        if semantic_session_factory is not None:
+            if not callable(semantic_session_factory):
+                raise TypeError("semantic_session_factory must be callable")
+            if any(
+                value is not None
+                for value in (
+                    semantic_producer,
+                    semantic_authorization_binding,
+                    semantic_on_applied,
+                    semantic_on_applied_factory,
+                    semantic_accepted_plan_epoch,
+                )
+            ):
+                raise ValueError("choose semantic session factory or direct components")
+            if memory_runtime is None or capability_runtime is None:
+                raise ValueError(
+                    "Semantic voice requires canonical memory and authority"
+                )
         if type(semantic_topic_resume_enabled) is not bool:
             raise TypeError("semantic_topic_resume_enabled must be a bool")
         if semantic_topic_resume_enabled and (
@@ -253,7 +272,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             # Explicit opt-in only. No model dispatch, memory persistence, or
             # model-visible release without a separately provided, trusted gate.
             # The bridge closes and invalidates this state on session retirement.
-            if semantic_producer is not None:
+            if semantic_producer is not None or semantic_session_factory is not None:
                 if config.personal_context_mode != "apply":
                     raise PermissionError(
                         "Semantic voice requires protected personal context APPLY"
@@ -261,20 +280,32 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 from jarvis.voice.semantic_context_bridge import (
                     attach_semantic_voice_context,
                     resolve_session_commit_callback,
+                    resolve_session_components,
                 )
 
-                # A checkpoint writer binds to ONE canonical ConversationSession.
-                applied = resolve_session_commit_callback(
-                    bridge.conversation,
-                    direct=semantic_on_applied,
-                    factory=semantic_on_applied_factory,
-                )
+                if semantic_session_factory is not None:
+                    components = resolve_session_components(
+                        bridge.conversation, factory=semantic_session_factory
+                    )
+                    producer = components.producer
+                    binding = components.authorization_binding
+                    applied = components.on_applied
+                    plan_epoch = components.accepted_plan_epoch
+                else:
+                    producer = semantic_producer
+                    binding = semantic_authorization_binding
+                    applied = resolve_session_commit_callback(
+                        bridge.conversation,
+                        direct=semantic_on_applied,
+                        factory=semantic_on_applied_factory,
+                    )
+                    plan_epoch = semantic_accepted_plan_epoch
                 self._semantic_context_attachment = attach_semantic_voice_context(
                     bridge,
-                    producer=semantic_producer,
-                    authorization_binding=semantic_authorization_binding,
+                    producer=producer,
+                    authorization_binding=binding,
                     on_applied=applied,
-                    accepted_plan_epoch=semantic_accepted_plan_epoch,
+                    accepted_plan_epoch=plan_epoch,
                 )
             else:
                 self._semantic_context_attachment = None

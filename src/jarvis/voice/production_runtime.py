@@ -163,6 +163,7 @@ def build_production_voice_runtime(
     provider_lifecycle_trigger: asyncio.Event | None = None,
     provider_migration_rollback_trigger: asyncio.Event | None = None,
     gemini_live_diagnostic_plan=None,
+    semantic_session_factory=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime."""
     if config.wake_model_path is None:
@@ -666,6 +667,11 @@ def build_production_voice_runtime(
         work_runtime=work_runtime,
         routing_runtime=routing_runtime,
         session_factory=production_session_factory,
+        **(
+            {"semantic_session_factory": semantic_session_factory}
+            if semantic_session_factory is not None
+            else {}
+        ),
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(
             tracking_observer.wait_for_startup_lock

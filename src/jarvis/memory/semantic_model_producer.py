@@ -175,3 +175,65 @@ def build_routed_semantic_producer(
         source_clearance=source_clearance,
         scope_id=scope_id,
     )
+
+
+def build_session_semantic_producer(
+    *,
+    conversation,
+    client: SemanticStructuredClient,
+    authorization_binding: Callable[[], str | None],
+    source_clearance: Callable[[ConversationTurn], Sensitivity | None],
+):
+    """Bind dispatch to one canonical conversation and one live grant generation.
+
+    The caller still supplies independent privacy admission and genuine owner
+    authority. This adapter issues neither. Capture authority per invocation so
+    concurrent proposals cannot replace each other's dispatch guard.
+    """
+    from jarvis.conversation import ConversationSession, ConversationStatus
+
+    if not isinstance(conversation, ConversationSession):
+        raise TypeError("canonical conversation required")
+    if not callable(authorization_binding) or not callable(source_clearance):
+        raise TypeError("live owner binding and independent source clearance required")
+    if not callable(getattr(client, "parse", None)):
+        raise TypeError("semantic client must support structured parse")
+
+    def current_binding():
+        try:
+            binding = authorization_binding()
+        except Exception as exc:
+            raise SemanticRejected("owner authority unavailable") from exc
+        if not isinstance(binding, str) or not binding.strip():
+            raise SemanticRejected("owner authority unavailable")
+        return binding
+
+    async def produce(turn: ConversationTurn) -> list[SemanticProposal]:
+        expected_binding = current_binding()
+
+        def validate_source():
+            if (
+                conversation.status is not ConversationStatus.ACTIVE
+                or not isinstance(turn, ConversationTurn)
+                or turn.role is not ConversationRole.USER
+                or not any(accepted is turn for accepted in conversation.turns)
+                or current_binding() != expected_binding
+            ):
+                raise SemanticRejected("canonical source or owner authority changed")
+
+        def clearance(source):
+            if source is not turn:
+                raise SemanticRejected("canonical source changed")
+            validate_source()
+            decision = source_clearance(source)
+            validate_source()
+            return decision
+
+        producer = RoutedSemanticProducer(
+            client=client,
+            source_clearance=clearance,
+            scope_id=conversation.session_id,
+        )
+        return await producer(turn)
+
+    return produce
