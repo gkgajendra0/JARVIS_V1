@@ -15,6 +15,7 @@ from jarvis.memory.conversation_semantics import (
 )
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.semantic_pipeline import SemanticTurnPipeline
+from jarvis.memory.semantic_projection import SemanticContextProjector
 from jarvis.memory.worker import SerialConnectionWorker
 
 
@@ -129,6 +130,18 @@ async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
             "permits": "sorted",
         }
         assert checkpoint["steps"]["route"]["completed"] is False
+
+        restored = await storage.read_named_snapshot(
+            resumed, named,
+            title="Nepal trip", authorize_read=lambda: True,
+        )
+        assert restored is not None
+        assert dict(restored.constraints)["budget"].value == "unrestricted"
+        assert dict(restored.steps)["route"].completed is False
+        projector = SemanticContextProjector(validate_release=lambda *_: True)
+        packet = projector.assemble_named(resumed, named, restored)
+        assert any("unrestricted" in item.text for item in packet.items)
+        assert any("plan Nepal route" in item.text for item in packet.items)
 
         forgotten = resumed.accept_turn(ConversationRole.USER, "Forget Nepal trip")
         assert await storage.forget(
