@@ -83,7 +83,7 @@ async def test_close_discards_inflight_semantic_inference():
     await asyncio.wait_for(started.wait(), timeout=2)
     bridge.close()
     proceed.set()
-    await attachment.wait_closed()
+    await asyncio.wait_for(attachment.wait_closed(), timeout=3)
     assert attachment.state.snapshot() is None
 
 
@@ -184,3 +184,37 @@ def test_invalid_or_ambiguous_commit_callback_factory_is_rejected():
         resolve_session_commit_callback(
             bridge.conversation, direct=None, factory=lambda _c: None
         )
+
+
+@pytest.mark.asyncio
+async def test_shutdown_remains_bounded_if_model_ignores_first_cancellation():
+    bridge = BridgeFixture()
+    started = asyncio.Event()
+    finally_release = asyncio.Event()
+
+    async def stubborn_producer(turn):
+        started.set()
+        try:
+            await finally_release.wait()
+        except asyncio.CancelledError:
+            # A third-party network client may swallow one cancellation.
+            await finally_release.wait()
+        return [topic(turn)]
+
+    attachment = attach_semantic_voice_context(
+        bridge,
+        producer=stubborn_producer,
+        authorization_binding=lambda: "trusted-owner-session",
+    )
+    bridge.user("Nepal trip")
+    await asyncio.wait_for(started.wait(), timeout=2)
+    bridge.close()
+    try:
+        await asyncio.wait_for(attachment.wait_closed(), timeout=3)
+        assert attachment.state.snapshot() is None
+    finally:
+        # Release the stubborn task too: never leave it behind in pytest.
+        finally_release.set()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+    assert attachment.state.snapshot() is None
