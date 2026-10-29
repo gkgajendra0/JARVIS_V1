@@ -172,7 +172,8 @@ def test_other_topic_cannot_be_modified_implicitly():
     t = utterance(c, 3, "Budget unlimited")
     with pytest.raises(SemanticRejected, match="inactive topic"):
         e.apply(
-            c, t,
+            c,
+            t,
             [
                 proposal(
                     t.text,
@@ -219,7 +220,8 @@ def test_invented_date_rejected_and_other_updates_not_applied():
     t = utterance(c, 2, "My documents are sorted")
     with pytest.raises(SemanticRejected, match="unquoted numerical"):
         e.apply(
-            c, t,
+            c,
+            t,
             [
                 proposal(t.text, SemanticAction.CONSTRAINT, key="docs", value="sorted"),
                 proposal(
@@ -251,7 +253,8 @@ def test_reject_secret_and_unrelated_completion():
     t = utterance(c, 1, "Remember my password")
     with pytest.raises(SemanticRejected, match="secret"):
         e.apply(
-            c, t,
+            c,
+            t,
             [
                 proposal(
                     t.text,
