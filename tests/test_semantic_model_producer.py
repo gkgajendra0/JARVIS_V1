@@ -122,3 +122,56 @@ async def test_normal_chatter_can_yield_no_context_update():
         scope_id="current-owner-runtime",
     )
     assert await producer(turn) == []
+
+
+@pytest.mark.asyncio
+async def test_routed_semantic_factory_uses_approved_free_paid_router(monkeypatch):
+    from jarvis.hands import provider_adapters
+    from jarvis.memory.semantic_model_producer import (
+        build_routed_semantic_producer,
+    )
+
+    constructed = []
+
+    class FakeRouted:
+        def __init__(self, **kwargs):
+            constructed.append(kwargs)
+
+        async def parse(self, **kwargs):
+            kwargs["before_dispatch"]()
+            return {"proposals": []}
+
+    monkeypatch.setattr(
+        provider_adapters, "RoutedStructuredOutputClient", FakeRouted
+    )
+    runtime = object()
+    producer = build_routed_semantic_producer(
+        routing_runtime=runtime,
+        model="test-model",
+        source_clearance=lambda _turn: Sensitivity.STANDARD,
+        scope_id="owner-voice-session",
+    )
+    assert await producer(user_turn("Nepal trip")) == []
+    assert constructed == [
+        {
+            "routing_runtime": runtime,
+            "role": "memory.extraction",
+            "model": "test-model",
+            "max_output_tokens": 1024,
+            "free_output_tokens": 1024,
+        }
+    ]
+
+
+def test_routed_semantics_require_explicit_source_clearance():
+    from jarvis.memory.semantic_model_producer import (
+        build_routed_semantic_producer,
+    )
+
+    with pytest.raises(TypeError, match="independent source clearance"):
+        build_routed_semantic_producer(
+            routing_runtime=object(),
+            model="test-model",
+            source_clearance=None,
+            scope_id="owner-voice-session",
+        )
