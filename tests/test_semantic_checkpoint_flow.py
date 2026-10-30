@@ -23,7 +23,7 @@ from jarvis.memory.worker import SerialConnectionWorker
 async def test_nepal_state_restarts_resumes_only_on_topic_and_forgets(tmp_path):
     location = tmp_path / "encrypted-worker-fixture.sqlite"
     with sqlite3.connect(location) as setup:
-        assert MemoryMigrationRunner().apply(setup) == 4
+        assert MemoryMigrationRunner().apply(setup) == 5
 
     writer = SerialConnectionWorker(
         lambda: sqlite3.connect(location), thread_name="checkpoint-flow-writer"

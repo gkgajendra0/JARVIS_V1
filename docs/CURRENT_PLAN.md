@@ -30,7 +30,7 @@ The pinned native Gemini adapter can start generation before final transcription
 
 ## Current foundation verification
 
-- 397 scoped learning, authority, archive, transport, memory/migration and voice-bridge tests passed; repository Ruff check passed.
+- 397 scoped learning, authority, archive, transport, memory/migration and voice-bridge tests passed; four additional semantic-checkpoint compatibility tests passed after updating their migration-5 expectations. Repository Ruff check passed.
 - Independent foundation review found two recorder concurrency/retry defects. Both were reproduced with failing tests and repaired; reviewer independently reran all four recorder tests successfully.
 - Local SQL transaction tests use SQLite fixtures. Windows SQLCipher CI and real-provider, microphone, playback and native owner acceptance are separate evidence; no new pass is implied.
 - No real provider request or paid inference was made. The previously rejected full local suite was not rerun or bypassed.

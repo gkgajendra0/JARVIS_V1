@@ -47,7 +47,7 @@ def proposals_for(turn):
 async def test_authorized_semantic_checkpoint_write_read_and_forget(tmp_path):
     path = tmp_path / "semantic-checkpoint.db"
     with sqlite3.connect(path) as conn:
-        assert MemoryMigrationRunner().apply(conn) == 4
+        assert MemoryMigrationRunner().apply(conn) == 5
     writer = SerialConnectionWorker(
         lambda: sqlite3.connect(path), thread_name="semantic-write-flow"
     )
@@ -119,7 +119,7 @@ async def test_authorized_semantic_checkpoint_write_read_and_forget(tmp_path):
 async def test_denied_snapshot_admission_never_creates_checkpoint(tmp_path):
     path = tmp_path / "denied-checkpoint.db"
     with sqlite3.connect(path) as conn:
-        assert MemoryMigrationRunner().apply(conn) == 4
+        assert MemoryMigrationRunner().apply(conn) == 5
     writer = SerialConnectionWorker(
         lambda: sqlite3.connect(path), thread_name="semantic-denied-write"
     )
@@ -180,7 +180,7 @@ async def test_stale_forget_hook_must_not_claim_newer_checkpoint_was_deleted(tmp
 
     path = tmp_path / "forget-race.db"
     with sqlite3.connect(path) as connection:
-        assert MemoryMigrationRunner().apply(connection) == 4
+        assert MemoryMigrationRunner().apply(connection) == 5
     writer = SerialConnectionWorker(
         lambda: sqlite3.connect(path), thread_name="forget-race-writer"
     )
