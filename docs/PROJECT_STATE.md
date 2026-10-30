@@ -1,5 +1,7 @@
 # JARVIS V1 Project State
 
+**Active branch evidence update — 31 October 2026:** the owner selected [project conversations and personal memory](PROJECT_CONVERSATION_MEMORY.md). Git/documentation cleanup is the current pass; replacement product implementation has NOT STARTED. Existing PR #303 baseline `7800e984780b36ee18dd5e4be61a85b899bc7def` passed 624 focused tests and hosted Code Quality/SQLCipher verification, but the owner’s native Nepal-status trace restored empty details. Connected-conversation acceptance FAILED. The prior candidate is not a full archive or an accepted solution. This branch record does not change accepted main/runtime milestones below.
+
 **Gemini Free/Paid candidate (23 October 2026):** existing routers and one
 cumulative INR350 governor support bounded Work/Hands/memory fallback. The
 controlled public Live adapter and normal handoff are implemented and software

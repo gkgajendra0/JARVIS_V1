@@ -1,5 +1,7 @@
 # PR 303 scripted transient voice lab
 
+**HISTORICAL extraction-only diagnostic.** This does not test the new project-history contract or establish owner acceptance. Read [Project conversations and personal memory](PROJECT_CONVERSATION_MEMORY.md) for current goals and the next build.
+
 This is a transport/semantic-observer smoke test, not full conversational-intelligence acceptance. Normal startup has no semantic factory and remains unchanged.
 
 ## Preconditions

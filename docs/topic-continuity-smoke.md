@@ -1,5 +1,7 @@
 # Native topic continuity acceptance
 
+**HISTORICAL candidate guide — not current acceptance.** The owner’s 30 October run restored the Nepal topic with empty details and failed the desired connected-conversation behavior. This launcher remains diagnostic evidence, not a command to activate the replacement. Read the [current contract](PROJECT_CONVERSATION_MEMORY.md) and [build plan](superpowers/plans/2026-10-31-project-conversation-memory.md).
+
 This mode tests saved topic state in the **spoken response path**. The older
 `semantic_smoke_lab` only tests transient extraction; its applied event never
 established connected replies.

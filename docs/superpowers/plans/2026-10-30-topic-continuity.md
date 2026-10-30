@@ -1,5 +1,7 @@
 # Topic Continuity Implementation Plan
 
+**HISTORICAL implemented candidate; native acceptance FAILED.** The old field-checkpoint path below remains code/test evidence. Two exact-head hosted runs passed at `7800e984780b36ee18dd5e4be61a85b899bc7def`, but the 30 October owner trace returned empty Nepal details. It does not preserve complete conversations. The [31 October contract](../../PROJECT_CONVERSATION_MEMORY.md) and [current build plan](2026-10-31-project-conversation-memory.md) own the replacement. Historical checklist/status wording below is not replacement completion.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Connect accepted topic updates, encrypted persistence and model-visible tool results across sleep and restart.
