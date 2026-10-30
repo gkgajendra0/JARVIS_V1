@@ -131,6 +131,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         semantic_on_applied_factory=None,
         semantic_accepted_plan_epoch=None,
         semantic_topic_resume_enabled=False,
+        topic_continuity_factory=None,
         **kwargs: Any,
     ) -> None:
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
@@ -145,6 +146,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._learning_grant = None
         self._learning_start_attempted = False
         self._semantic_context_attachment = None
+        if topic_continuity_factory is not None and (
+            not callable(topic_continuity_factory)
+            or memory_runtime is None
+            or capability_runtime is None
+        ):
+            raise ValueError(
+                "topic continuity requires canonical memory, authority and factory"
+            )
         if semantic_session_factory is not None:
             if not callable(semantic_session_factory):
                 raise TypeError("semantic_session_factory must be callable")
@@ -206,6 +215,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             )
 
         def capture_session(config: JarvisConfig):
+            continuity = (
+                topic_continuity_factory()
+                if topic_continuity_factory is not None
+                else None
+            )
+            if continuity is not None and (
+                config.personal_context_mode != "apply"
+                or continuity.store is not memory_runtime.topic_checkpoints
+            ):
+                raise PermissionError(
+                    "topic continuity requires canonical protected memory"
+                )
             session, bridge = original_session_factory(config)
             self._live_session = session
             self._session_conversation = bridge.conversation
@@ -246,16 +267,22 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     retire=retire_personal,
                     busy_changed=personal_busy,
                     learning_authority=(
-                        capability_runtime.personal_learning_authority
-                        if config.personal_learning_mode == "apply"
+                        continuity.authority
+                        if continuity is not None
+                        else capability_runtime.personal_learning_authority
+                        if continuity is not None
+                        or config.personal_learning_mode == "apply"
                         else None
                     ),
-                    learning_grant=self._learning_grant,
+                    learning_grant=continuity.grant
+                    if continuity is not None
+                    else self._learning_grant,
                     topic_checkpoints=(
                         memory_runtime.topic_checkpoints
-                        if semantic_topic_resume_enabled
+                        if semantic_topic_resume_enabled or continuity is not None
                         else None
                     ),
+                    topic_continuity=continuity,
                 )
                 self._personal_context = personal
                 bridge.add_accepted_turn_observer(personal.observe_turn)

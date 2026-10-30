@@ -12,6 +12,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
@@ -34,6 +35,16 @@ from .types import Sensitivity
 from .worker import SerialConnectionWorker
 
 _SCOPE_OWNER = "owner"
+_ANY_REVISION = object()
+
+
+def _fingerprint(row):
+    material = json.dumps(list(row), ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(material).hexdigest()
+
+
 _GENERIC_TOPIC_WORDS = frozenset(
     {"the", "my", "our", "plan", "planning", "trip", "road", "project", "discussion"}
 )
@@ -183,6 +194,8 @@ class EncryptedTopicCheckpointStore:
         authorize_write: Callable[[], bool],
         admit_snapshot: Callable[[TopicSnapshot, ConversationTurn], bool],
         expected_plan_epoch: int,
+        commit_scope=nullcontext,
+        expected_revision=_ANY_REVISION,
     ) -> bool:
         if type(expected_plan_epoch) is not int or expected_plan_epoch < 0:
             raise CheckpointRejected("accepted-turn plan epoch is required")
@@ -215,11 +228,17 @@ class EncryptedTopicCheckpointStore:
                 if row is not None and source_at <= row[0]:
                     raise CheckpointRejected("checkpoint is older than forget")
                 previous = connection.execute(
-                    "SELECT source_at, state_json FROM conversation_topic_checkpoint "
+                    "SELECT source_turn_id, source_at, state_json FROM conversation_topic_checkpoint "
                     "WHERE topic_key=?",
                     (key,),
                 ).fetchone()
-                if previous is not None and source_at <= previous[0]:
+                if (
+                    expected_revision is not _ANY_REVISION
+                    and (_fingerprint(previous) if previous is not None else None)
+                    != expected_revision
+                ):
+                    raise CheckpointRejected("topic changed before checkpoint commit")
+                if previous is not None and source_at <= previous[1]:
                     connection.rollback()
                     return False
                 connection.execute(
@@ -239,7 +258,11 @@ class EncryptedTopicCheckpointStore:
                 connection.rollback()
                 raise
 
-        return await self._writer.run(write)
+        def guarded_write(connection):
+            with commit_scope():
+                return write(connection)
+
+        return await self._writer.run(guarded_write)
 
     async def read_named(
         self,
@@ -252,6 +275,12 @@ class EncryptedTopicCheckpointStore:
         _canonical(conversation, request)
         if not _explicit_topic(request.text, title):
             raise CheckpointRejected("resume request does not name the topic")
+        return await self._read_record(
+            conversation, request, title=title, authorize_read=authorize_read
+        )
+
+    async def _read_record(self, conversation, request, *, title, authorize_read):
+        _canonical(conversation, request)
         _permit(authorize_read)
         key = _key(title)
 
@@ -349,10 +378,7 @@ class EncryptedTopicCheckpointStore:
             ).fetchone()
             if row is None:
                 return None
-            material = json.dumps(
-                list(row), ensure_ascii=False, separators=(",", ":")
-            ).encode("utf-8")
-            return hashlib.sha256(material).hexdigest()
+            return _fingerprint(row)
 
         return await self._reader.run(query)
 
@@ -372,6 +398,29 @@ class EncryptedTopicCheckpointStore:
         record = await self.read_named(
             conversation, request, title=title, authorize_read=authorize_read
         )
+        return self._decode_snapshot(
+            record, conversation, request, title=title, authorize_read=authorize_read
+        )
+
+    async def read_continuation_snapshot(
+        self, conversation, request, *, title, authorize_read, authorize_continuation
+    ) -> TopicSnapshot | None:
+        """An independently authorized owner-bound continuation, never auto-resume."""
+
+        def allowed():
+            _permit(authorize_read)
+            _permit(authorize_continuation)
+            return True
+
+        record = await self._read_record(
+            conversation, request, title=title, authorize_read=allowed
+        )
+        return self._decode_snapshot(
+            record, conversation, request, title=title, authorize_read=allowed
+        )
+
+    @staticmethod
+    def _decode_snapshot(record, conversation, request, *, title, authorize_read):
         if record is None:
             return None
         expected = {"title", "goal", "constraints", "steps", "_checkpoint_meta"}
@@ -447,6 +496,8 @@ class EncryptedTopicCheckpointStore:
         *,
         title: str,
         authorize_forget: Callable[[], bool],
+        commit_scope=nullcontext,
+        expected_revision=_ANY_REVISION,
     ) -> bool:
         _canonical(conversation, turn, require_latest=False)
         key = _key(title)
@@ -465,11 +516,17 @@ class EncryptedTopicCheckpointStore:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 row = connection.execute(
-                    "SELECT source_at FROM conversation_topic_checkpoint "
+                    "SELECT source_turn_id,source_at,state_json FROM conversation_topic_checkpoint "
                     "WHERE topic_key=?",
                     (key,),
                 ).fetchone()
-                if row is not None and row[0] > timestamp:
+                if (
+                    expected_revision is not _ANY_REVISION
+                    and (_fingerprint(row) if row is not None else None)
+                    != expected_revision
+                ):
+                    raise CheckpointRejected("topic changed before forget commit")
+                if row is not None and row[1] > timestamp:
                     connection.rollback()
                     return False
                 connection.execute(
@@ -493,7 +550,11 @@ class EncryptedTopicCheckpointStore:
                 connection.rollback()
                 raise
 
-        return await self._writer.run(erase)
+        def guarded_erase(connection):
+            with commit_scope():
+                return erase(connection)
+
+        return await self._writer.run(guarded_erase)
 
     async def purge_for_suppression(
         self,

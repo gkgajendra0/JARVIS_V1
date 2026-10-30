@@ -94,7 +94,15 @@ def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> Non
         SemanticAction.PENDING_STEP,
     }:
         return
-    if "?" in quote or "？" in quote:
+    if (
+        "?" in quote
+        or "？" in quote
+        or re.match(
+            r"\s*(?:is|are|does|do|did|can|could|would|should|will|was|were|has|have)\b",
+            quote,
+            re.IGNORECASE,
+        )
+    ):
         raise SemanticRejected("question is not an owner factual statement")
     if (
         proposal.action is SemanticAction.PENDING_STEP
@@ -102,6 +110,12 @@ def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> Non
         and not _COMPLETION_UNCERTAIN.search(quote)
     ):
         raise SemanticRejected("completed work cannot be pending")
+    if re.search(
+        r"\b(?:maybe|perhaps|probably|possibly|suppose|hypothetical|if|might|not sure|I wonder)\b",
+        quote,
+        re.IGNORECASE,
+    ):
+        raise SemanticRejected("uncertain source is not a confirmed state claim")
     quoted = _semantic_tokens(quote)
     budget_exception = _budget_unrestricted_paraphrase(proposal, quote)
     if proposal.key:
@@ -115,7 +129,7 @@ def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> Non
         raise SemanticRejected("unsupported semantic interpretation")
     lowered = quote.casefold()
     negation = re.search(
-        r"\b(?:not|no|never|don't|dont|isn't|isnt|nahi|nahin)\b|"
+        r"\b(?:not|no|never|don't|dont|isn't|isnt|cannot|can't|cant|nahi|nahin)\b|"
         r"नहीं|मत ",
         lowered,
     )
@@ -228,6 +242,34 @@ class SemanticContextEngine:
             constraints=tuple(sorted(state.constraints.items())),
             steps=tuple(sorted(state.pending_steps.items())),
         )
+
+    def restore(
+        self, snapshot: TopicSnapshot, *, epoch: int, authorize_restore
+    ) -> None:
+        """Install one trusted stored snapshot into a fresh session engine.
+
+        The caller must authorize the read first. Stored field provenance is
+        preserved; the current request is never fabricated as its evidence.
+        """
+        if not callable(authorize_restore) or authorize_restore() is not True:
+            raise PermissionError("topic restore denied")
+        if epoch != self._epoch or self._topics or self._seen:
+            raise SemanticRejected("restore requires fresh semantic state")
+        if not isinstance(snapshot, TopicSnapshot):
+            raise TypeError("trusted topic snapshot required")
+        if (
+            len(snapshot.constraints) > self.max_fields
+            or len(snapshot.steps) > self.max_fields
+        ):
+            raise SemanticRejected("restored field capacity exceeded")
+        key = self._key(snapshot.title)
+        self._topics[key] = _Topic(
+            snapshot.title,
+            snapshot.goal,
+            dict(snapshot.constraints),
+            dict(snapshot.steps),
+        )
+        self._active = key
 
     def apply(
         self,
@@ -486,3 +528,20 @@ class SemanticContextEngine:
         if not set(re.findall(r"\d+(?:[.,]\d+)*", proposal.value)).issubset(numbers):
             raise SemanticRejected("unquoted numerical claim")
         _validate_interpreted_meaning(proposal, quote)
+        # A model may choose an excerpt that omits a question mark, negation or
+        # uncertainty. Full canonical context must support the assertion too.
+        _validate_interpreted_meaning(proposal, turn.text)
+        if proposal.action is SemanticAction.COMPLETE_STEP and (
+            _COMPLETION_UNCERTAIN.search(turn.text)
+            or re.match(
+                r"\s*(?:is|are|does|do|did|can|could|would|should|will|was|were|has|have)\b",
+                turn.text,
+                re.IGNORECASE,
+            )
+            or re.search(
+                r"\b(?:cannot|can't|cant|maybe|perhaps|probably|possibly|if|might)\b",
+                turn.text,
+                re.IGNORECASE,
+            )
+        ):
+            raise SemanticRejected("completion needs an unconditional canonical claim")

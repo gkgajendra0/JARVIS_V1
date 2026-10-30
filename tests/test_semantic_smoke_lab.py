@@ -263,3 +263,84 @@ async def test_denied_hello_never_starts_voice_and_closes_constructed_resources(
             runtime_builder=lambda *args, **kwargs: runtime,
         )
     assert closed == {"memory", "routing", "capabilities"}
+
+
+def test_only_marked_isolated_continuity_profile_can_be_reopened(tmp_path):
+    from jarvis.voice.semantic_smoke_lab import resume_continuity_profile
+
+    source = tmp_path / "production" / "machine.json"
+    source.parent.mkdir()
+    save_machine_settings({}, source)
+    lab = tmp_path / "continuity"
+    profile = prepare_smoke_profile(source, lab, tool_paths={})
+    with pytest.raises(ValueError):
+        resume_continuity_profile(source, lab)
+    (lab / "topic-continuity.marker").write_text(
+        "jarvis-topic-continuity-v1", encoding="utf-8"
+    )
+    assert resume_continuity_profile(source, lab) == profile
+    with pytest.raises(ValueError):
+        resume_continuity_profile(source, source.parent)
+
+
+def test_resumed_profile_cannot_redirect_back_to_production(tmp_path):
+    from jarvis.voice.semantic_smoke_lab import resume_continuity_profile
+
+    source = tmp_path / "production" / "machine.json"
+    source.parent.mkdir()
+    save_machine_settings({}, source)
+    lab = tmp_path / "continuity"
+    lab.mkdir()
+    (lab / "topic-continuity.marker").write_text(
+        "jarvis-topic-continuity-v1", encoding="utf-8"
+    )
+    try:
+        (lab / "machine.json").symlink_to(source)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+    with pytest.raises(ValueError):
+        resume_continuity_profile(source, lab)
+
+
+@pytest.mark.asyncio
+async def test_continuity_mode_uses_canonical_store_without_extraction_model():
+    from types import SimpleNamespace
+
+    from jarvis.voice.semantic_smoke_lab import run_smoke_runtime
+
+    grant = object()
+    store = object()
+    events = []
+    authority = SimpleNamespace(validate=lambda _: SimpleNamespace(status="active"))
+
+    class Runtime:
+        _memory_runtime = SimpleNamespace(
+            topic_checkpoints=store, accepted_plan_epoch=lambda _: 0
+        )
+        _capability_runtime = SimpleNamespace(
+            personal_learning_authority=authority,
+            open_personal_learning=lambda *args: grant,
+            close_personal_learning=lambda handle: events.append("revoked"),
+        )
+
+        async def run(self):
+            service = self.factory()
+            assert service.store is store
+            assert service.grant is grant
+            assert service.authority is authority
+            assert self.factory() is service
+            events.append("voice")
+
+    runtime = Runtime()
+
+    def builder(config, *, topic_continuity_factory):
+        runtime.factory = topic_continuity_factory
+        return runtime
+
+    await run_smoke_runtime(
+        JarvisConfig(ai_provider="gemini"),
+        model="",
+        continuity=True,
+        runtime_builder=builder,
+    )
+    assert events == ["voice", "revoked"]

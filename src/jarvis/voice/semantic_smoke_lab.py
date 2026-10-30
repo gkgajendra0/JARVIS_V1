@@ -76,7 +76,25 @@ def smoke_config(config: JarvisConfig) -> JarvisConfig:
     )
 
 
-async def run_smoke_runtime(config, *, model: str, runtime_builder=None):
+def resume_continuity_profile(source: Path, lab: Path) -> Path:
+    source, lab = source.resolve(strict=True), lab.resolve(strict=True)
+    if lab == source.parent or source.parent.is_relative_to(lab):
+        raise ValueError("continuity profile must be isolated from production")
+    marker = lab / "topic-continuity.marker"
+    if (
+        not marker.is_file()
+        or marker.read_text(encoding="utf-8") != "jarvis-topic-continuity-v1"
+    ):
+        raise ValueError("only an existing isolated continuity profile can be resumed")
+    profile = (lab / "machine.json").resolve(strict=True)
+    if profile.parent != lab:
+        raise ValueError("continuity profile cannot redirect outside the isolated root")
+    return profile
+
+
+async def run_smoke_runtime(
+    config, *, model: str, runtime_builder=None, continuity=False
+):
     """Run normal voice transport with an explicit grant and transient observer.
 
     Private controller fields are read only here in the lab adapter; production
@@ -88,7 +106,7 @@ async def run_smoke_runtime(config, *, model: str, runtime_builder=None):
     from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
     from jarvis.voice.semantic_script_smoke import build_smoke_session_components
 
-    if not isinstance(model, str) or not model.strip():
+    if not continuity and (not isinstance(model, str) or not model.strip()):
         raise ValueError("An explicit routed semantic model is required")
     config = smoke_config(config)
     if runtime_builder is None:
@@ -96,6 +114,28 @@ async def run_smoke_runtime(config, *, model: str, runtime_builder=None):
 
         runtime_builder = build_production_voice_runtime
     grant = None
+    topic_service = None
+
+    def continuity_factory():
+        nonlocal topic_service
+        if grant is None:
+            raise PermissionError("owner approval required before topic continuity")
+        if topic_service is None:
+            from jarvis.memory.topic_continuity import TopicContinuity
+            from jarvis.memory.topic_continuity_policy import (
+                standard_plan_snapshot,
+                standard_plan_source,
+            )
+
+            topic_service = TopicContinuity(
+                store=runtime._memory_runtime.topic_checkpoints,
+                authority=runtime._capability_runtime.personal_learning_authority,
+                grant=grant,
+                accepted_plan_epoch=runtime._memory_runtime.accepted_plan_epoch,
+                admit_source=standard_plan_source,
+                admit_snapshot=standard_plan_snapshot,
+            )
+        return topic_service
 
     def factory(conversation):
         return build_smoke_session_components(
@@ -112,7 +152,14 @@ async def run_smoke_runtime(config, *, model: str, runtime_builder=None):
             accepted_plan_epoch=runtime._memory_runtime.accepted_plan_epoch,
         )
 
-    runtime = runtime_builder(config, semantic_session_factory=factory)
+    runtime = runtime_builder(
+        config,
+        **(
+            {"topic_continuity_factory": continuity_factory}
+            if continuity
+            else {"semantic_session_factory": factory}
+        ),
+    )
     completed = False
     try:
         grant = await asyncio.to_thread(
@@ -137,7 +184,7 @@ async def run_smoke_runtime(config, *, model: str, runtime_builder=None):
                 cleanup.push_async_callback(runtime._memory_runtime.close)
 
 
-def main():
+def main(*, continuity_default=False):
     import argparse
     import asyncio
 
@@ -153,12 +200,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", type=Path, default=default_machine_config_path())
     parser.add_argument("--lab-root", type=Path, required=True)
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--model", default="")
+    parser.add_argument("--continuity", action="store_true", default=continuity_default)
+    parser.add_argument("--resume-lab", action="store_true")
     args = parser.parse_args()
     if os.name != "nt":
         parser.error("Real voice smoke requires Windows, SQLCipher, DPAPI and Hello")
-    if not args.model.strip():
+    if not args.continuity and not args.model.strip():
         parser.error("An explicit semantic model is required")
+    if args.resume_lab and not args.continuity:
+        parser.error("--resume-lab requires continuity mode")
     settings = load_machine_settings(args.profile)
     tool_paths = {
         "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
@@ -166,21 +217,54 @@ def main():
             machine_settings=settings
         ).resolve(),
     }
-    profile = prepare_smoke_profile(args.profile, args.lab_root, tool_paths=tool_paths)
+    profile = (
+        resume_continuity_profile(args.profile, args.lab_root)
+        if args.resume_lab
+        else prepare_smoke_profile(args.profile, args.lab_root, tool_paths=tool_paths)
+    )
+    if args.continuity and not args.resume_lab:
+        (profile.parent / "topic-continuity.marker").write_text(
+            "jarvis-topic-continuity-v1", encoding="utf-8"
+        )
     with smoke_environment(profile):
         config = smoke_config(JarvisConfig.from_environment())
         configure_logging(config.log_level, jsonl_path=profile.parent / "smoke.jsonl")
         require_startup_preflight(config)
-        print("Scripted transient observation only; no checkpoint writes or resume.")
-        print(
-            "Normal Gemini Live audio is still sent to Gemini. Use synthetic speech only."
-        )
+        if args.continuity:
+            print(
+                "Topic continuity: accepted plan updates are saved to this isolated encrypted profile."
+            )
+            print(
+                "Sleep retains committed topics. A short authorized continuation can reuse the selected topic."
+            )
+            print(
+                "After restart or ten minutes, name the topic to resume. Confirm uncertain names/dates."
+            )
+            print(
+                "The live model uses a blocking topic tool; no separate extraction-model request."
+            )
+        else:
+            print(
+                "Scripted transient observation only; no checkpoint writes or resume."
+            )
+            print(
+                "Normal Gemini Live audio is still sent to Gemini. Use synthetic speech only."
+            )
         print(f"Test profile: {profile}")
-        print("After Hello approval, wake Jarvis and say each line separately:")
-        for utterance in SMOKE_UTTERANCES:
-            print(f"  {utterance}")
-        print("Ctrl+C stops the lab. A new wake starts with empty semantic state.")
-        asyncio.run(run_smoke_runtime(config, model=args.model))
+        if args.continuity:
+            print(
+                "After Hello: discuss a Nepal trip and a Jimny, sleep/wake, then ask about that trip."
+            )
+            print(
+                "Use --resume-lab with this same --lab-root after restarting. Ctrl+C stops voice."
+            )
+            asyncio.run(run_smoke_runtime(config, model=args.model, continuity=True))
+        else:
+            print("After Hello approval, wake Jarvis and say each line separately:")
+            for utterance in SMOKE_UTTERANCES:
+                print(f"  {utterance}")
+            print("Ctrl+C stops the lab. A new wake starts with empty semantic state.")
+            asyncio.run(run_smoke_runtime(config, model=args.model))
 
 
 if __name__ == "__main__":

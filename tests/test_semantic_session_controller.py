@@ -113,3 +113,28 @@ def test_controller_requires_canonical_authority_for_factory():
             SimpleNamespace(output=None),
             semantic_session_factory=lambda _: None,
         )
+
+
+@pytest.mark.asyncio
+async def test_continuity_factory_binds_real_store_and_grant_to_each_voice_session():
+    from jarvis.voice.personal_context import PersonalContextAgentTools
+
+    store = object()
+    issuer, grant = object(), object()
+    continuity = SimpleNamespace(store=store, authority=issuer, grant=grant)
+    controller = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(personal_context_mode="apply"),
+        SimpleNamespace(output=None),
+        session_factory=lambda config: _session_pair(),
+        memory_runtime=SimpleNamespace(retrieval=object(), topic_checkpoints=store),
+        capability_runtime=_runtime(),
+        topic_continuity_factory=lambda: continuity,
+    )
+    for _ in range(2):
+        controller._session_factory(controller.config)
+        session = controller._personal_context
+        assert "prepare_conversation_topic" in {
+            tool.id for tool in PersonalContextAgentTools(session).tools
+        }
+        assert session._learning_authority is issuer
+        assert session._learning_grant is grant
