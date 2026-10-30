@@ -237,6 +237,18 @@ class CapabilityRuntime:
             self._personal_learning_authority = issuer
         return issuer
 
+    @property
+    def conversation_history_authority(self):
+        from jarvis.authority.conversation_history import ConversationHistoryAuthority
+
+        issuer = getattr(self, "_conversation_history_authority", None)
+        if issuer is None:
+            if not isinstance(self._authority, CapabilityAuthorityBroker):
+                raise CapabilityAuthorizationError("history authority is unavailable")
+            issuer = ConversationHistoryAuthority(self._authority)
+            self._conversation_history_authority = issuer
+        return issuer
+
     def open_personal_learning(self, runtime_id: str, provider: str):
         return self.personal_learning_authority.open(runtime_id, provider)
 
@@ -479,6 +491,9 @@ class CapabilityRuntime:
             issuer = getattr(self, "_personal_learning_authority", None)
             if issuer is not None:
                 issuer.close()
+            history = getattr(self, "_conversation_history_authority", None)
+            if history is not None:
+                history.close()
             for callback in self._close_callbacks:
                 try:
                     callback()

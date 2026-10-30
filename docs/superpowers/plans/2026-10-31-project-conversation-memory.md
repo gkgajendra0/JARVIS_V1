@@ -1,6 +1,6 @@
 # Project Conversation Memory — build plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement task-by-task. Current pass is documentation only; implementation awaits the owner's next instruction.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement task-by-task. The owner has authorized inline implementation; current evidence and remaining work are recorded below.
 
 **Goal:** preserve named project conversations and relevant personal context across sleep, restart and project switches, without adding a separate memory-model request by default.
 
@@ -37,8 +37,8 @@
 
 **Interface:** `dispatch(prepared_reply: PreparedProjectReply)` must expose a request ID and context revision. Task 1 defines the production packet type; use a fixture type here until then.
 
-- [ ] Add a failing ordered-event test requiring `transcript_accepted -> archive_committed -> context_delivered -> generation_started -> audio_released`, plus transport recreation, interruption and switch invalidation. Buffering already-generated uninformed speech fails this contract.
-- [ ] Run `python -m pytest tests/test_project_memory_transport.py -q -o addopts=''`; distinguish the current reproduced failure from missing test infrastructure.
+- [x] Add a failing ordered-event test requiring `transcript_accepted -> archive_committed -> context_delivered -> generation_started -> audio_released`, plus transport recreation, interruption and switch invalidation. Buffering already-generated uninformed speech fails this contract.
+- [x] Run `python -m pytest tests/test_project_memory_transport.py -q -o addopts=''`; distinguish the current reproduced failure from missing test infrastructure.
 - [ ] Inspect pinned native capabilities and record one qualified path. Use the spec's controlled speech/text/TTS fallback only if the native path cannot pass. Record credential/SDK limitations precisely; do not resolve them by silent model/account upgrades.
 - [ ] Commit the contract/seam and findings. No declaration of live qualification from fake transport output.
 
@@ -100,4 +100,8 @@
 
 ## Status and handoff
 
-Documentation-only cleanup is complete when these documents, navigation, preserved research and PR scope agree and are committed/published. No build checkbox is complete yet. The owner's next instruction starts Task 0 inline in the isolated worktree. Do not reopen provider/backend/model selection without recording a concrete blocker against this contract.
+Documentation cleanup was published before implementation. The owner then authorized building. Tasks 0–1 now have a tested local foundation, not an end-to-end feature. See [Current Plan](../../CURRENT_PLAN.md) for the next step.
+
+Implemented files include `voice/project_memory_transport.py`, `memory/project_conversations.py`, `memory/project_conversation_store.py`, `memory/project_conversation_recording.py` and `authority/conversation_history.py`. Task 1 tests live in `tests/learning/` to reuse the real canonical authority fixtures with fake Windows/Hello boundaries. The runtime owns the store; its issuer remains unbound/fail-closed until explicit history authorization. The existing personal-learning scope and grants are not silently widened. Migration tests include a real schema-4 fixture upgraded to 5, repeated event text, duplicate callbacks, exact source/permit binding, stale revisions, injected storage failure and revocation during a transaction. Recorder review found and fixed overlapping duplicate lease release and retry rejection after a failed optimistic write.
+
+Remaining Task 0 qualification: production provider payload, speech input/output integration and actual service timing. Remaining Task 1 integration: controlled coordinator capture and canonical tool callback adapter. Do not mark later task goals complete based on these component tests. No separate cloud extraction request or new account/model/dependency was added. Do not reopen provider/backend/model selection without recording a concrete blocker against this contract.

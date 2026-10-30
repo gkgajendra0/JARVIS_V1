@@ -11,6 +11,7 @@ from jarvis.security import WindowsDpapiKeyProtector
 from .conversation_checkpoint import EncryptedTopicCheckpointStore
 from .database import SqlCipherMemoryDatabaseFactory
 from .lifecycle import MemoryLifecycleService
+from .project_conversation_store import ProjectConversationStore
 from .query import CanonicalMemoryReader
 from .retrieval import SemanticRetrievalService
 from .service import MemoryService
@@ -41,6 +42,9 @@ class MemoryRuntime:
         self.topic_checkpoints = EncryptedTopicCheckpointStore(
             writer=writer, reader=reader
         )
+        self.project_conversations = ProjectConversationStore(
+            writer=writer, reader=reader
+        )
         self._writer = writer
         self._reader = reader
         # None means fail closed; no voice callback may guess a generation.
@@ -51,6 +55,9 @@ class MemoryRuntime:
 
     def bind_learning_authority(self, authority):
         self.service.bind_learning_authority(authority)
+
+    def bind_conversation_history_authority(self, authority):
+        self.project_conversations.bind_authority(authority)
 
     def accepted_plan_epoch(self, turn: ConversationTurn) -> int:
         """Synchronous O(1) epoch capture for an accepted canonical USER turn."""

@@ -57,7 +57,7 @@ def checkpoint(turn, *, budget="unrestricted", sensitivity=Sensitivity.STANDARD)
 async def new_store(tmp_path):
     path = tmp_path / "checkpoint.db"
     with sqlite3.connect(path) as connection:
-        assert MemoryMigrationRunner().apply(connection) == 4
+        assert MemoryMigrationRunner().apply(connection) == 5
     writer = SerialConnectionWorker(
         lambda: sqlite3.connect(path), thread_name="checkpoint-test-write"
     )

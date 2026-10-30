@@ -1,7 +1,7 @@
 # Project conversations and personal memory — implementation contract
 
 **Decision date:** 31 October 2026, Asia/Kolkata.
-**Status:** owner-selected architecture; detailed build contract documented; replacement implementation NOT STARTED.
+**Status:** implementation authorized and started; local transport/storage/authority/recorder foundation exists. Project routing, retrieval/context integration, controls and live acceptance remain open. See [Current Plan](CURRENT_PLAN.md).
 **Priority:** complete reliable conversation continuity before adding another memory framework or local model.
 **Execution:** [build plan](superpowers/plans/2026-10-31-project-conversation-memory.md).
 **Authority:** scoped feature design subordinate to [Product](PRODUCT.md), [North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md), [Quality Gates](QUALITY_GATES.md) and [Current Plan](CURRENT_PLAN.md). This is not another master plan or a statement of accepted production behavior.
@@ -158,6 +158,6 @@ Completion requires recorded evidence for the actual implementation, including f
 - Replaced the stale active-priority plan; preserved its complete prior text at [31 October plan snapshot](archive/operations/CURRENT_PLAN_SNAPSHOT_2026-10-31.md).
 - Preserved earlier candidate code, tests, plans and research with explicit historical/deferred/superseded banners. No force-push, history rewrite, branch deletion or removal of another worktree's unique work is part of cleanup.
 - Attached the isolated previously detached documentation worktree to `docs/workspace-memory-goals-20261031`. Existing feature branch/worktree is retained.
-- This pass changes documentation only. No dependency install, paid inference, account change, model download, product implementation, main merge or owner-machine activation occurs.
+- The completed cleanup pass changed documentation only. The subsequent owner-authorized implementation adds the initial product foundation; no paid inference, account change, model download, main merge or owner-machine activation has occurred.
 
-Documentation verification: fresh builder review reported no important findings. Local checks verified the documentation-only scope, 96 relative links and byte-for-byte preservation of the previous Current Plan. Product tests were not rerun for this documentation-only change; no new runtime acceptance is claimed.
+Historical documentation verification (before implementation): fresh builder review reported no important findings. Local checks verified the documentation-only scope, 96 relative links and byte-for-byte preservation of the previous Current Plan. Product tests were not rerun for this documentation-only change; no new runtime acceptance is claimed.

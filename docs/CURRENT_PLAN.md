@@ -8,23 +8,32 @@ Read the [implementation contract](PROJECT_CONVERSATION_MEMORY.md) first, then t
 
 The owner selected: existing Gemini for understanding/search requests/answers; automatic local conversation recording; persistent named projects/threads; existing encrypted personal memory and local retrieval; context delivered before the substantive answer. Reuse successful components. No paid hosted agent, new memory framework, local LLM or training pipeline is selected for the initial delivery. API cost is an explicit constraint.
 
-## Current step: documentation before implementation
+## Current step: implementation in the isolated checkout
 
-The owner requested Git cleanup and durable detailed documentation first, then building. This pass preserves existing work, names the isolated worktree branch, consolidates this direction, and marks competing options historical/deferred. Product code, dependencies, model/provider settings, installed checkout and activation are unchanged.
+The owner authorized implementation. The first increment adds an awaited reply-dispatch boundary, immutable archive contracts, an explicit original-history authority scope, migration 5, an event store and a required recorder. The runtime owns the archive through its existing encrypted workers. The normal voice path is not connected to these components yet.
 
-**Next implementation task, after the owner's instruction:** Task 0 in the build plan: establish the pinned transport contract for accepted transcript -> durable archive commit -> selected context delivered -> answer generation -> guarded audio. Do not treat buffered uninformed speech as satisfying the contract. Use the predeclared controlled speech/text/TTS fallback only for a demonstrated native capability blocker.
+The pinned native Gemini adapter can start generation before final transcription; the installed-handler characterization reproduces that ordering without a network request. See the [transport contract and limitations](research/PROJECT_MEMORY_TRANSPORT_CONTRACT.md). The controlled text dispatch seam is tested locally. The pinned Google Cloud Speech STT requires credentials distinct from a Gemini API key, so no new speech service/account is silently enabled.
+
+**Next implementation work:** complete Task 1 integration, then Task 2 persistent project routing and authenticated local reads. Tool events have storage support but still need their canonical capture adapter. Connect the recorder to the controlled reply coordinator in Task 3; do not attach it as a best-effort transcript observer or treat native voice as qualified.
 
 ## Delivery sequence
 
 | Stage | Deliverable | Status |
 |---|---|---|
-| Documentation cleanup | One current contract, goals, build plan and historical evidence links | Documented in this pass; publication verification recorded in Git/PR |
-| Task 0 | Pinned voice ordering contract and supported integration seam | NOT STARTED |
-| Task 1 | Automatic encrypted original-event archive and durable receipts | NOT STARTED |
+| Documentation cleanup | One current contract, goals, build plan and historical evidence links | Complete; published before implementation |
+| Task 0 | Pinned voice ordering contract and supported integration seam | Local boundary implemented/tested; live transport qualification OPEN |
+| Task 1 | Automatic encrypted original-event archive and durable receipts | Storage/authority/recorder implemented; runtime/tool capture integration OPEN |
 | Task 2 | Persistent project/thread selection and local search/read tools | NOT STARTED |
 | Task 3 | Source-aware project/personal context delivered before answers | NOT STARTED |
 | Task 4 | Inspect/correct/forget controls and isolated Windows entrypoint | NOT STARTED |
 | Task 5 | End-to-end integrity, actual-model, cost/latency and native acceptance | NOT STARTED |
+
+## Current foundation verification
+
+- 397 scoped learning, authority, archive, transport, memory/migration and voice-bridge tests passed; repository Ruff check passed.
+- Independent foundation review found two recorder concurrency/retry defects. Both were reproduced with failing tests and repaired; reviewer independently reran all four recorder tests successfully.
+- Local SQL transaction tests use SQLite fixtures. Windows SQLCipher CI and real-provider, microphone, playback and native owner acceptance are separate evidence; no new pass is implied.
+- No real provider request or paid inference was made. The previously rejected full local suite was not rerun or bypassed.
 
 ## First user-visible outcome
 

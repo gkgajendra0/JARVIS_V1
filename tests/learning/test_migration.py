@@ -13,7 +13,7 @@ def test_schema_two_upgrades_atomically_without_changing_prior_migration_hashes(
     prior = c.execute(
         "SELECT version,sha256 FROM jarvis_schema_migration ORDER BY version"
     ).fetchall()
-    assert MemoryMigrationRunner().apply(c) == 4
+    assert MemoryMigrationRunner().apply(c) == 5
     assert (
         c.execute(
             "SELECT version,sha256 FROM jarvis_schema_migration WHERE version<=2 ORDER BY version"

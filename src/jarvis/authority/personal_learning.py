@@ -90,6 +90,14 @@ class _Child:
 class PersonalLearningAuthority:
     """One issuer per runtime; handles have identity, never serialized authority."""
 
+    CAPABILITY = "memory:personal_learning"
+    POLICY_DIGEST = POLICY_DIGEST
+    POLICY_VERSION = POLICY_VERSION
+    CATEGORIES = CATEGORIES
+    SUPPRESSION_KEYS = SUPPRESSION_KEYS
+    BINDING_TYPE = LearningActionBinding
+    SESSION_SUMMARY = "Open an owner-operated memory session for this Jarvis runtime and the same unlocked Windows session, including idle periods. Windows lock, user/session change or Jarvis shutdown ends permission. Automatically read and learn standard owned items, preferences, background/work, relationships relevant to the user, current activities, dated experiences and future plans with stated time, place and reasons. No per-fact prompt; later speaker identity is not verified. No sensitive facts/actions."
+
     def __init__(self, broker):
         self._broker = broker
         self._grants: dict[LearningGrantHandle, _Grant] = {}
@@ -99,25 +107,18 @@ class PersonalLearningAuthority:
     def open(self, runtime_id: str, provider: str) -> LearningGrantHandle:
         if not runtime_id or provider not in {"gemini", "openai"}:
             raise ValueError("invalid learning runtime/provider")
-        parameters = {"policy_sha256": POLICY_DIGEST, "provider": provider}
+        parameters = {"policy_sha256": self.POLICY_DIGEST, "provider": provider}
         prepared = PreparedCapability(
             CapabilityRequest(
                 runtime_id,
-                "memory:personal_learning",
+                self.CAPABILITY,
                 "open",
                 parameters,
                 ActionOrigin.DIRECT_USER,
             ),
             {"subject_scope": "personal", "subject": "owner"},
             parameters,
-            "Open an owner-operated memory session for this Jarvis runtime and "
-            "the same unlocked Windows session, including idle periods. Windows "
-            "lock, user/session change or Jarvis shutdown ends permission. "
-            "Automatically read and learn standard owned items, "
-            "preferences, background/work, relationships relevant to the user, "
-            "current activities, dated experiences and future plans with stated "
-            "time, place and reasons. No per-fact prompt; "
-            "later speaker identity is not verified. No sensitive facts/actions.",
+            self.SESSION_SUMMARY,
             ActionAttributes(security_or_permission_change=True),
             {},
         )
@@ -136,13 +137,13 @@ class PersonalLearningAuthority:
             return handle
 
     def authorize_reenable_category(self, category):
-        if category not in SUPPRESSION_KEYS:
+        if category not in self.SUPPRESSION_KEYS:
             raise PermissionError("unknown learning category")
-        parameters = {"category": category, "policy_sha256": POLICY_DIGEST}
+        parameters = {"category": category, "policy_sha256": self.POLICY_DIGEST}
         prepared = PreparedCapability(
             CapabilityRequest(
                 str(uuid4()),
-                "memory:personal_learning",
+                self.CAPABILITY,
                 "reenable",
                 parameters,
                 ActionOrigin.DIRECT_USER,
@@ -314,15 +315,15 @@ class PersonalLearningAuthority:
         record = self._grants[grant]
         p = proposal.parameters()
         if (
-            proposal.capability != "memory:personal_learning"
+            proposal.capability != self.CAPABILITY
             or proposal.operation not in {"read", "admit", "suppress"}
             or proposal.origin is not ActionOrigin.SYSTEM
             or proposal.session_id != record.parent.context.session_id
-            or p.get("policy_sha256") != POLICY_DIGEST
+            or p.get("policy_sha256") != self.POLICY_DIGEST
             or p.get("parent_delegation_id") != grant.token
             or self._broker._clock()
             >= record.sources.get(p.get("source_receipt_id"), 0)
-            or not set(p.get("categories", ())) <= CATEGORIES
+            or not set(p.get("categories", ())) <= self.CATEGORIES
             or not p.get("categories")
         ):
             raise ApprovalError("delegation scope mismatch")
@@ -332,11 +333,11 @@ class PersonalLearningAuthority:
         with self._broker._lock:
             record = self._require(grant)
             if (
-                not isinstance(binding, LearningActionBinding)
+                not isinstance(binding, self.BINDING_TYPE)
                 or binding.operation not in {"read", "admit", "suppress"}
-                or binding.policy_version != POLICY_VERSION
+                or binding.policy_version != self.POLICY_VERSION
                 or not binding.categories
-                or not set(binding.categories) <= CATEGORIES
+                or not set(binding.categories) <= self.CATEGORIES
                 or len(binding.payload_sha256) != 64
                 or any(c not in "0123456789abcdef" for c in binding.payload_sha256)
                 or self._broker._clock()
@@ -345,7 +346,7 @@ class PersonalLearningAuthority:
                 raise PermissionError("invalid learning child binding")
             parameters = {
                 "parent_delegation_id": grant.token,
-                "policy_sha256": POLICY_DIGEST,
+                "policy_sha256": self.POLICY_DIGEST,
                 "source_receipt_id": binding.source_receipt_id,
                 "payload_sha256": binding.payload_sha256,
                 "categories": list(binding.categories),
@@ -354,7 +355,7 @@ class PersonalLearningAuthority:
             }
             proposal = ActionProposal.create(
                 session_id=record.parent.context.session_id,
-                capability="memory:personal_learning",
+                capability=self.CAPABILITY,
                 operation=binding.operation,
                 target={"subject_scope": "personal", "subject": "owner"},
                 parameters=parameters,
