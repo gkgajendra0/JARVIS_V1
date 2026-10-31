@@ -487,6 +487,55 @@ class MemoryLifecycleService:
             now = self._clock_utc()
             self._ensure_source(connection, source)
             current = self._require_current(connection, assertion_id)
+            if reason_code == "explicit_owner_correction":
+                # Existing legacy plan facts may also appear as conversational
+                # checkpoint fields. Without field-level provenance, erase all
+                # checkpoints atomically rather than serving the old value.
+                from jarvis.personal_learning_scope import LEGACY_FACETS
+
+                receipt = connection.execute(
+                    "SELECT 1 FROM personal_learning_receipt "
+                    "WHERE target_id=? AND category='plan' LIMIT 1",
+                    (assertion_id,),
+                ).fetchone()
+                old_value = connection.execute(
+                    "SELECT value_json FROM semantic_assertion WHERE assertion_id=?",
+                    (assertion_id,),
+                ).fetchone()
+                structured_plan = False
+                if old_value is not None:
+                    import json
+
+                    parsed = json.loads(old_value[0])
+                    structured_plan = (
+                        isinstance(parsed, dict)
+                        and parsed.get("schema") == "personal-learning-v1"
+                        and parsed.get("category") == "plan"
+                    )
+                if (
+                    receipt is not None
+                    or structured_plan
+                    or LEGACY_FACETS.get(current.predicate) == "plan"
+                ):
+                    connection.execute("DELETE FROM conversation_topic_checkpoint")
+                    stamp = now.astimezone(UTC).isoformat(timespec="microseconds")
+                    connection.execute(
+                        "INSERT INTO conversation_topic_tombstone "
+                        "(topic_key,forgotten_at,source_turn_id) VALUES ('*',?,?) "
+                        "ON CONFLICT(topic_key) DO UPDATE SET "
+                        "forgotten_at=excluded.forgotten_at, "
+                        "source_turn_id=excluded.source_turn_id "
+                        "WHERE excluded.forgotten_at > forgotten_at",
+                        (stamp, source.source_id),
+                    )
+                    connection.execute(
+                        "INSERT INTO personal_learning_suppression "
+                        "(category,epoch,suppressed,updated_at) "
+                        "VALUES ('plan',1,0,?) ON CONFLICT(category) "
+                        "DO UPDATE SET epoch=epoch+1, "
+                        "updated_at=excluded.updated_at",
+                        (_db_time(now),),
+                    )
             replacement_id = self._fresh_assertion_id()
             connection.execute(
                 """
@@ -709,6 +758,27 @@ class MemoryLifecycleService:
                         "INSERT INTO personal_learning_suppression VALUES (?,1,1,?) ON CONFLICT(category) DO UPDATE SET epoch=epoch+1,suppressed=1,updated_at=excluded.updated_at",
                         (category, _db_time(self._clock_utc())),
                     )
+                if "plan" in categories:
+                    # Same transaction as plan suppression: previously saved
+                    # conversational checkpoints cannot reappear on re-enable.
+                    # The global tombstone also rejects in-flight stale saves.
+                    source_time = (
+                        source.turns[-1]
+                        .accepted_at.astimezone(UTC)
+                        .isoformat(timespec="microseconds")
+                    )
+                    # Category suppression is universal, not time-scoped.
+                    # A queued newer checkpoint must not survive re-enable.
+                    connection.execute("DELETE FROM conversation_topic_checkpoint")
+                    connection.execute(
+                        "INSERT INTO conversation_topic_tombstone "
+                        "(topic_key,forgotten_at,source_turn_id) "
+                        "VALUES ('*',?,?) ON CONFLICT(topic_key) DO UPDATE SET "
+                        "forgotten_at=excluded.forgotten_at, "
+                        "source_turn_id=excluded.source_turn_id "
+                        "WHERE excluded.forgotten_at > forgotten_at",
+                        (source_time, source.turn_id),
+                    )
 
             with authority.commit_scope(permit):
                 return self._transaction(connection, mutation, guard)
@@ -764,6 +834,24 @@ class MemoryLifecycleService:
         if target.predicate in LEGACY_FACETS:
             categories.add(LEGACY_FACETS[target.predicate])
         from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+
+        if "plan" in categories:
+            # A legacy plan facet and a conversational checkpoint have no
+            # trustworthy one-to-one linkage yet. Purge all checkpoints in
+            # this exact forget transaction, rather than resurrecting a
+            # deleted plan through topic recall. The category suppression
+            # below also blocks stale writes until explicit re-enable.
+            connection.execute("DELETE FROM conversation_topic_checkpoint")
+            stamp = now.astimezone(UTC).isoformat(timespec="microseconds")
+            connection.execute(
+                "INSERT INTO conversation_topic_tombstone "
+                "(topic_key,forgotten_at,source_turn_id) VALUES ('*',?,?) "
+                "ON CONFLICT(topic_key) DO UPDATE SET "
+                "forgotten_at=excluded.forgotten_at, "
+                "source_turn_id=excluded.source_turn_id "
+                "WHERE excluded.forgotten_at > forgotten_at",
+                (stamp, source.source_id),
+            )
 
         for category in categories & SUPPRESSION_KEYS:
             connection.execute(

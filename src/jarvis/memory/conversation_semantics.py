@@ -1,0 +1,547 @@
+"""Grounded, process-local semantic conversation state.
+
+This is a proposal/reconciliation boundary, NOT a memory write path. A model may
+propose typed changes, but only accepted canonical USER turns can supply evidence.
+An owner-authorized caller must explicitly decide whether to expose a snapshot.
+Nothing in this module reads or writes persistent storage or calls an LLM.
+"""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import StrEnum
+
+from jarvis.conversation import ConversationRole, ConversationSession, ConversationTurn
+from jarvis.memory.types import Sensitivity
+
+
+class SemanticAction(StrEnum):
+    TOPIC = "topic"
+    GOAL = "goal"
+    CONSTRAINT = "constraint"
+    PENDING_STEP = "pending_step"
+    COMPLETE_STEP = "complete_step"
+    CORRECT = "correct"
+    FORGET_TOPIC = "forget_topic"
+
+
+class EvidenceStrength(StrEnum):
+    LITERAL = "literal"
+    INTERPRETED = "interpreted"
+
+
+_FORGET_CUE = re.compile(
+    r"\b(?:forget|delete|erase|remove|stop remembering|do not remember|"
+    r"don't remember|dont remember|bhool|yaad mat)\b|भूल|याद मत|मिटा|हटा",
+    flags=re.IGNORECASE,
+)
+_FORGET_NEGATION = re.compile(
+    r"[?？]|\b(?:don't|dont|do not|never|mat|nahi|nahin)\s+"
+    r"(?:forget|delete|erase|remove|bhool)\b|"
+    r"\b(?:bhool|bhoolna)\s+mat\b|मत भूल|नहीं हटाना|नहीं मिटाना",
+    flags=re.IGNORECASE,
+)
+_COMPLETION_CUE = re.compile(
+    r"\b(?:done|complete|completed|finished|finalized|finalised|"
+    r"already planned|is planned|has been planned|sorted)\b|"
+    r"हो गया|पूरा हो गया|तैयार है",
+    flags=re.IGNORECASE,
+)
+_COMPLETION_UNCERTAIN = re.compile(
+    r"[?？]|\b(?:not|isn't|isnt|hasn't|hasnt|haven't|havent|"
+    r"should|could|would|can|will|need to|planning to|nahi|nahin)\b|नहीं",
+    flags=re.IGNORECASE,
+)
+
+
+def _semantic_tokens(text: str) -> set[str]:
+    return set(re.findall(r"\w+", unicodedata.normalize("NFKC", text).casefold()))
+
+
+def _budget_unrestricted_paraphrase(proposal: SemanticProposal, quote: str) -> bool:
+    if (
+        proposal.action not in {SemanticAction.CONSTRAINT, SemanticAction.CORRECT}
+        or proposal.key.casefold() != "budget"
+        or proposal.value.casefold() != "unrestricted"
+    ):
+        return False
+    lowered = quote.casefold()
+    if "budget" not in _semantic_tokens(quote):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:not|no|isn't|isnt|is\s+not)\b.{0,25}"
+            r"\b(?:constraint|issue|limit)\b",
+            lowered,
+        )
+        or re.search(r"\bissue\b.{0,25}\b(?:nahi|nahin)\b", lowered)
+    )
+
+
+def _validate_interpreted_meaning(proposal: SemanticProposal, quote: str) -> None:
+    """Conservative lexical entailment boundary for untrusted model proposals.
+
+    Unknown paraphrases stay transient raw speech; they are not silently
+    promoted to a structured constraint or task. This is not an ASR verifier.
+    """
+    if proposal.action not in {
+        SemanticAction.GOAL,
+        SemanticAction.CONSTRAINT,
+        SemanticAction.CORRECT,
+        SemanticAction.PENDING_STEP,
+    }:
+        return
+    if (
+        "?" in quote
+        or "？" in quote
+        or re.match(
+            r"\s*(?:is|are|does|do|did|can|could|would|should|will|was|were|has|have)\b",
+            quote,
+            re.IGNORECASE,
+        )
+    ):
+        raise SemanticRejected("question is not an owner factual statement")
+    if (
+        proposal.action is SemanticAction.PENDING_STEP
+        and _COMPLETION_CUE.search(quote)
+        and not _COMPLETION_UNCERTAIN.search(quote)
+    ):
+        raise SemanticRejected("completed work cannot be pending")
+    if re.search(
+        r"\b(?:maybe|perhaps|probably|possibly|suppose|hypothetical|if|might|not sure|I wonder)\b",
+        quote,
+        re.IGNORECASE,
+    ):
+        raise SemanticRejected("uncertain source is not a confirmed state claim")
+    quoted = _semantic_tokens(quote)
+    budget_exception = _budget_unrestricted_paraphrase(proposal, quote)
+    if proposal.key:
+        keys = _semantic_tokens(proposal.key)
+        aliases = {"docs": {"documents"}}
+        for key in keys:
+            if key not in quoted and not (key in aliases and aliases[key] & quoted):
+                raise SemanticRejected("unsupported semantic field key")
+    values = _semantic_tokens(proposal.value)
+    if not budget_exception and not values.issubset(quoted):
+        raise SemanticRejected("unsupported semantic interpretation")
+    lowered = quote.casefold()
+    negation = re.search(
+        r"\b(?:not|no|never|don't|dont|isn't|isnt|cannot|can't|cant|nahi|nahin)\b|"
+        r"नहीं|मत ",
+        lowered,
+    )
+    if (
+        negation
+        and not budget_exception
+        and not (
+            _semantic_tokens(proposal.value) & {"not", "no", "never", "nahi", "nahin"}
+        )
+    ):
+        raise SemanticRejected("ambiguous negated semantic interpretation")
+
+
+class SemanticRejected(ValueError):
+    """Untrusted semantic proposal or canonical source does not pass admission."""
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticProposal:
+    action: SemanticAction
+    quote: str
+    start: int
+    end: int
+    value: str = ""
+    key: str = ""
+    topic: str = ""
+    sensitivity: Sensitivity = Sensitivity.STANDARD
+
+
+@dataclass(frozen=True, slots=True)
+class GroundedStateValue:
+    value: str
+    evidence: str
+    source_turn_id: str
+    accepted_at: datetime
+    sensitivity: Sensitivity
+    evidence_strength: EvidenceStrength
+    completed: bool = False
+
+
+@dataclass(slots=True)
+class _Topic:
+    title: str
+    goal: GroundedStateValue | None = None
+    constraints: dict[str, GroundedStateValue] = field(default_factory=dict)
+    pending_steps: dict[str, GroundedStateValue] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class TopicSnapshot:
+    title: str
+    goal: GroundedStateValue | None
+    constraints: tuple[tuple[str, GroundedStateValue], ...]
+    steps: tuple[tuple[str, GroundedStateValue], ...]
+
+
+class SemanticContextEngine:
+    """Bounded transient topics. Does not persist or release protected context.
+
+    Extractors provide *proposals*, not authority. Each proposed change has to
+    quote an exact span of an accepted canonical user turn. Untrusted proposals
+    cannot switch topics implicitly, rewrite older values, or resurrect forgotten
+    topics from older turns. The caller owns authentication and redaction.
+    """
+
+    def __init__(self, *, max_topics: int = 8, max_fields: int = 20) -> None:
+        if type(max_topics) is not int or not 1 <= max_topics <= 32:
+            raise ValueError("max_topics must be an integer between 1 and 32")
+        if type(max_fields) is not int or not 1 <= max_fields <= 64:
+            raise ValueError("max_fields must be an integer between 1 and 64")
+        self.max_topics = max_topics
+        self.max_fields = max_fields
+        self._topics: dict[str, _Topic] = {}
+        self._active: str | None = None
+        self._seen: set[str] = set()
+        self._cutoffs: dict[str, datetime] = {}
+        self._epoch = 0
+        self._last_applied_at: datetime | None = None
+        self._last_turn_generation = 0
+
+    @property
+    def epoch(self) -> int:
+        """Invalidate all outstanding asynchronous proposals when clear() runs."""
+        return self._epoch
+
+    @property
+    def active_topic(self) -> str | None:
+        topic = self._topics.get(self._active or "")
+        return topic.title if topic else None
+
+    def clear(self) -> None:
+        """On lock, revoke, or protected-session retirement: clear everything."""
+        self._topics.clear()
+        self._active = None
+        self._seen.clear()
+        self._cutoffs.clear()
+        self._last_applied_at = None
+        self._last_turn_generation = 0
+        self._epoch += 1
+
+    def snapshot(self, topic: str | None = None) -> TopicSnapshot | None:
+        """Returns a local snapshot only. The caller must check release authority."""
+        key = self._key(topic) if topic is not None else self._active
+        state = self._topics.get(key or "")
+        if state is None:
+            return None
+        return TopicSnapshot(
+            title=state.title,
+            goal=state.goal,
+            constraints=tuple(sorted(state.constraints.items())),
+            steps=tuple(sorted(state.pending_steps.items())),
+        )
+
+    def restore(
+        self, snapshot: TopicSnapshot, *, epoch: int, authorize_restore
+    ) -> None:
+        """Install one trusted stored snapshot into a fresh session engine.
+
+        The caller must authorize the read first. Stored field provenance is
+        preserved; the current request is never fabricated as its evidence.
+        """
+        if not callable(authorize_restore) or authorize_restore() is not True:
+            raise PermissionError("topic restore denied")
+        if epoch != self._epoch or self._topics or self._seen:
+            raise SemanticRejected("restore requires fresh semantic state")
+        if not isinstance(snapshot, TopicSnapshot):
+            raise TypeError("trusted topic snapshot required")
+        if (
+            len(snapshot.constraints) > self.max_fields
+            or len(snapshot.steps) > self.max_fields
+        ):
+            raise SemanticRejected("restored field capacity exceeded")
+        key = self._key(snapshot.title)
+        self._topics[key] = _Topic(
+            snapshot.title,
+            snapshot.goal,
+            dict(snapshot.constraints),
+            dict(snapshot.steps),
+        )
+        self._active = key
+
+    def apply(
+        self,
+        conversation: ConversationSession,
+        turn: ConversationTurn,
+        proposals: tuple[SemanticProposal, ...] | list[SemanticProposal],
+        *,
+        epoch: int,
+    ) -> int:
+        """Validate and apply one ordered canonical user turn atomically.
+
+        All source and proposal checks run before mutation. No AI-produced
+        instruction or assistant turn is treated as owner evidence.
+        """
+        if type(epoch) is not int or epoch != self._epoch:
+            raise SemanticRejected("stale semantic context generation")
+        if not isinstance(conversation, ConversationSession):
+            raise SemanticRejected("invalid canonical conversation")
+        if (
+            not isinstance(turn, ConversationTurn)
+            or turn.role is not ConversationRole.USER
+        ):
+            raise SemanticRejected("only accepted USER turns are eligible")
+        if not any(original is turn for original in conversation.turns):
+            raise SemanticRejected("turn not present in canonical conversation")
+        if turn.turn_id in self._seen:
+            return 0
+        if (
+            self._last_applied_at is not None
+            and turn.accepted_at < self._last_applied_at
+        ) or (
+            turn.user_utterance_generation is not None
+            and turn.user_utterance_generation < self._last_turn_generation
+        ):
+            raise SemanticRejected("stale asynchronous turn")
+        if len(self._seen) >= 4096:
+            raise SemanticRejected("session input budget exhausted")
+        if not isinstance(proposals, (tuple, list)) or len(proposals) > 12:
+            raise SemanticRejected("invalid proposal batch")
+        if len(proposals) > 1 and any(
+            p.action is SemanticAction.FORGET_TOPIC for p in proposals
+        ):
+            raise SemanticRejected("forget cannot be mixed with other state changes")
+        if not proposals:
+            self._seen.add(turn.turn_id)
+            self._last_applied_at = turn.accepted_at
+            self._last_turn_generation = (
+                turn.user_utterance_generation or self._last_turn_generation
+            )
+            return 0
+        for proposal in proposals:
+            self._validate_proposal(turn, proposal)
+
+        # Work on a detached copy: no partial changes on an invalid proposal.
+        topics = {
+            key: _Topic(
+                value.title,
+                value.goal,
+                dict(value.constraints),
+                dict(value.pending_steps),
+            )
+            for key, value in self._topics.items()
+        }
+        active = self._active
+        cutoffs = dict(self._cutoffs)
+        changed = 0
+        for proposal in proposals:
+            key = self._key(proposal.topic) if proposal.topic else active
+            if proposal.action is SemanticAction.TOPIC:
+                key = self._key(proposal.value)
+                if key not in self._key(proposal.quote):
+                    raise SemanticRejected("topic must be named in the user evidence")
+                cutoff = cutoffs.get(key)
+                if cutoff is not None and turn.accepted_at <= cutoff:
+                    raise SemanticRejected("stale topic after forget")
+                if key not in topics and len(topics) >= self.max_topics:
+                    raise SemanticRejected("topic capacity exceeded")
+                if key not in topics:
+                    topics[key] = _Topic(proposal.value.strip())
+                active = key
+                changed += 1
+                continue
+            if key is None:
+                raise SemanticRejected("no active topic; explicit topic required")
+            if proposal.topic and key != active:
+                raise SemanticRejected("cannot modify inactive topic implicitly")
+            cutoff = cutoffs.get(key)
+            if cutoff is not None and turn.accepted_at <= cutoff:
+                raise SemanticRejected("stale turn after forget")
+            if proposal.action is SemanticAction.FORGET_TOPIC:
+                title = topics.get(key).title if key in topics else ""
+                if title and self._key(title) not in self._key(proposal.quote):
+                    raise SemanticRejected("forget must name the active topic")
+                topics.pop(key, None)
+                cutoffs[key] = turn.accepted_at
+                if active == key:
+                    active = None
+                changed += 1
+                continue
+            state = topics.get(key)
+            if state is None:
+                raise SemanticRejected("unknown topic")
+            fact = GroundedStateValue(
+                value=proposal.value.strip(),
+                evidence=proposal.quote,
+                source_turn_id=turn.turn_id,
+                accepted_at=turn.accepted_at,
+                sensitivity=proposal.sensitivity,
+                evidence_strength=(
+                    EvidenceStrength.LITERAL
+                    if proposal.value.strip().casefold() in proposal.quote.casefold()
+                    else EvidenceStrength.INTERPRETED
+                ),
+            )
+            if proposal.action is SemanticAction.GOAL:
+                if self._newer(state.goal, turn, conversation):
+                    state.goal = fact
+                    changed += 1
+            elif proposal.action in (SemanticAction.CONSTRAINT, SemanticAction.CORRECT):
+                field_key = self._key(proposal.key)
+                if (
+                    proposal.action is SemanticAction.CORRECT
+                    and field_key not in state.constraints
+                ):
+                    raise SemanticRejected("correction has no target")
+                if (
+                    field_key not in state.constraints
+                    and len(state.constraints) >= self.max_fields
+                ):
+                    raise SemanticRejected("constraint capacity exceeded")
+                if self._newer(state.constraints.get(field_key), turn, conversation):
+                    state.constraints[field_key] = fact
+                    changed += 1
+            elif proposal.action is SemanticAction.PENDING_STEP:
+                field_key = self._key(proposal.key)
+                if (
+                    field_key not in state.pending_steps
+                    and len(state.pending_steps) >= self.max_fields
+                ):
+                    raise SemanticRejected("step capacity exceeded")
+                if self._newer(state.pending_steps.get(field_key), turn, conversation):
+                    state.pending_steps[field_key] = fact
+                    changed += 1
+            elif proposal.action is SemanticAction.COMPLETE_STEP:
+                field_key = self._key(proposal.key)
+                if field_key not in self._key(proposal.quote):
+                    raise SemanticRejected("completion must name the pending step")
+                old = state.pending_steps.get(field_key)
+                if old is None:
+                    raise SemanticRejected("completion has no matching pending step")
+                if self._newer(old, turn, conversation):
+                    state.pending_steps[field_key] = GroundedStateValue(
+                        value=old.value,
+                        evidence=proposal.quote,
+                        source_turn_id=turn.turn_id,
+                        accepted_at=turn.accepted_at,
+                        sensitivity=old.sensitivity,
+                        evidence_strength=EvidenceStrength.INTERPRETED,
+                        completed=True,
+                    )
+                    changed += 1
+            else:
+                raise SemanticRejected("unsupported action")
+        self._topics = topics
+        self._active = active
+        self._cutoffs = cutoffs
+        self._seen.add(turn.turn_id)
+        self._last_applied_at = turn.accepted_at
+        self._last_turn_generation = (
+            turn.user_utterance_generation or self._last_turn_generation
+        )
+        return changed
+
+    @staticmethod
+    def _key(text: str) -> str:
+        if not isinstance(text, str) or not text.strip() or len(text) > 160:
+            raise SemanticRejected("invalid topic or field key")
+        return unicodedata.normalize("NFKC", text).strip().casefold()
+
+    @staticmethod
+    def _newer(
+        previous: GroundedStateValue | None,
+        turn: ConversationTurn,
+        conversation: ConversationSession,
+    ) -> bool:
+        if previous is None:
+            return True
+        if turn.accepted_at != previous.accepted_at:
+            return turn.accepted_at > previous.accepted_at
+        # Windows can give two accepted turns the same clock timestamp.
+        # Their canonical accepted-user generation is the ordering authority
+        # for that tie; never choose arbitrary turn IDs or a model ordering.
+        if turn.user_utterance_generation is None:
+            return False
+        return any(
+            old.turn_id == previous.source_turn_id
+            and old.user_utterance_generation is not None
+            and old.user_utterance_generation < turn.user_utterance_generation
+            for old in conversation.turns
+        )
+
+    @staticmethod
+    def _validate_proposal(turn: ConversationTurn, proposal: SemanticProposal) -> None:
+        if not isinstance(proposal, SemanticProposal):
+            raise SemanticRejected("invalid proposal")
+        if not isinstance(proposal.action, SemanticAction):
+            raise SemanticRejected("unknown semantic action")
+        if proposal.sensitivity is Sensitivity.SECRET_PROHIBITED:
+            raise SemanticRejected("secret prohibited from working state")
+        if not isinstance(proposal.sensitivity, Sensitivity):
+            raise SemanticRejected("invalid sensitivity")
+        if (
+            type(proposal.start) is not int
+            or type(proposal.end) is not int
+            or proposal.start < 0
+            or proposal.end <= proposal.start
+            or proposal.end > len(turn.text)
+        ):
+            raise SemanticRejected("invalid evidence span")
+        quote = turn.text[proposal.start : proposal.end]
+        if not proposal.quote or quote != proposal.quote or len(quote) > 1000:
+            raise SemanticRejected("proposal does not match exact user evidence")
+        if proposal.action is SemanticAction.FORGET_TOPIC and (
+            _FORGET_CUE.search(quote) is None or _FORGET_NEGATION.search(quote)
+        ):
+            raise SemanticRejected("forget needs explicit positive owner instruction")
+        if proposal.action is SemanticAction.COMPLETE_STEP and (
+            _COMPLETION_CUE.search(quote) is None or _COMPLETION_UNCERTAIN.search(quote)
+        ):
+            raise SemanticRejected("completion needs explicit confirmed state")
+        if len(proposal.value) > 500 or len(proposal.key) > 160:
+            raise SemanticRejected("proposal too long")
+        if (
+            proposal.action
+            not in (
+                SemanticAction.FORGET_TOPIC,
+                SemanticAction.COMPLETE_STEP,
+            )
+            and not proposal.value.strip()
+        ):
+            raise SemanticRejected("missing semantic value")
+        if (
+            proposal.action
+            in (
+                SemanticAction.CONSTRAINT,
+                SemanticAction.CORRECT,
+                SemanticAction.PENDING_STEP,
+                SemanticAction.COMPLETE_STEP,
+            )
+            and not proposal.key.strip()
+        ):
+            raise SemanticRejected("missing field key")
+        # Reject invented numbers, dates, quantities and currency amounts.
+        # Linguistic paraphrase is permitted in the *transient* context only.
+        numbers = set(re.findall(r"\d+(?:[.,]\d+)*", quote))
+        if not set(re.findall(r"\d+(?:[.,]\d+)*", proposal.value)).issubset(numbers):
+            raise SemanticRejected("unquoted numerical claim")
+        _validate_interpreted_meaning(proposal, quote)
+        # A model may choose an excerpt that omits a question mark, negation or
+        # uncertainty. Full canonical context must support the assertion too.
+        _validate_interpreted_meaning(proposal, turn.text)
+        if proposal.action is SemanticAction.COMPLETE_STEP and (
+            _COMPLETION_UNCERTAIN.search(turn.text)
+            or re.match(
+                r"\s*(?:is|are|does|do|did|can|could|would|should|will|was|were|has|have)\b",
+                turn.text,
+                re.IGNORECASE,
+            )
+            or re.search(
+                r"\b(?:cannot|can't|cant|maybe|perhaps|probably|possibly|if|might)\b",
+                turn.text,
+                re.IGNORECASE,
+            )
+        ):
+            raise SemanticRejected("completion needs an unconditional canonical claim")

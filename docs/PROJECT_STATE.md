@@ -1,5 +1,29 @@
 # JARVIS V1 Project State
 
+**Active branch implementation update — 31 October 2026:** controlled-text project
+conversation memory is implemented on draft PR #303; normal voice remains unchanged.
+Reviewed runtime `6fe868455478345c53c78692e50fabe596550497` passed Code Quality
+`41189722071` and Windows SQLCipher `41189722075`, with 408 scoped software tests.
+Owner tests at `94550e78` passed short recall/correction/project separation/sleep/restart,
+but new-thread recall failed during repeated personal-tool selection. The later
+6fe86845 owner rerun passed bounded new-thread/correction/separation/sleep/restart
+and older-archive search scenarios. Retrieved facts came from assistant echoes;
+original-user retrieval, efficiency and authorization usability need follow-up.
+The [acceptance record](project-memory-acceptance.md) retains each failure and repair.
+Task 5's new offline console-log analyzer prepares metadata accounting only: no new
+provider request, model quality score, native acceptance, activation or merge follows.
+The frozen 100 model questions and full system acceptance remain OPEN.
+
+Existing PR #303 baseline `7800e984780b36ee18dd5e4be61a85b899bc7def` passed 624 focused tests and hosted Code Quality/SQLCipher verification, but the owner's native Nepal-status trace restored empty details. Historical native connected-conversation acceptance remains FAILED. Historical CI results do not qualify the controlled-text replacement. This branch record does not change accepted main/runtime milestones below.
+
+**Owner text acceptance update — 31 October:**52ee3790 passed the narrow seeded
+original-user versus conflicting-assistant recall scenario, active-session explicit
+Hello renewal, pause/resume/omission and deletion (50 sources, empty catalog).
+Both exact-head hosted gates succeeded. It still used3 model calls and11,581 tokens
+for the conflict question. The next efficiency candidate changes context wire
+encoding and project-first guidance; software success does not establish its actual
+model savings or complete memory/native acceptance. See the acceptance record.
+
 **Gemini Free/Paid candidate (23 October 2026):** existing routers and one
 cumulative INR350 governor support bounded Work/Hands/memory fallback. The
 controlled public Live adapter and normal handoff are implemented and software

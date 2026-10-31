@@ -1,0 +1,649 @@
+# Project conversation memory acceptance
+
+Status: controlled **text** implementation; several owner-machine scenarios passed
+at `6fe86845`; full-system and representative actual-model acceptance remain OPEN. The first Windows text run at `7b6c6ede` FAILED during routing. At
+`d8504526`, routing/capture and recall after sleep passed on the owner machine,
+but generation intermittently FAILED with `ValueError`; the probe later confirmed
+a mixed answer/source-read response. The schema repair passed short owner testing,
+but the subsequent new-thread test failed during repeated personal-tool selection;
+the owner subsequently passed the bounded scenarios recorded below.
+This is not a normal-app activation or a native voice pass.
+
+The [contract](PROJECT_CONVERSATION_MEMORY.md) owns G1–G8 and acceptance targets.
+The [plan](superpowers/plans/2026-10-31-project-conversation-memory.md) owns work.
+
+## What the candidate connects
+
+Accepted eligible canonical turn → persisted selection → encrypted event receipt →
+bounded selected-thread context → existing Gemini answer/tool cycle → final release
+validation → actual delivered assistant event. Model-selected save proposals are
+not required. Original history is authoritative even without a compact-state update.
+
+Projects survive source-transport replacement and profile reopen. New conversations
+get new thread IDs inside the project; searches and explicit source reads span
+that project's threads. Names/aliases are exact. A named question can select an
+existing project; vague/fuzzy matches do not. `Select project <owned-id> thread
+<owned-thread-id>` resolves duplicate names using IDs shown by `/projects`.
+
+Existing personal facts use `PersonalContextSession` and exact current-owner read
+consent. The new read-only question-query opt-in does not enable learning writes.
+The isolated profile starts with its own empty personal memory; production facts
+are not copied implicitly. Software tests seed fictional canonical facts.
+
+Local tools get one archive search and one deeper source read per request; one
+personal query is allowed. The answer/tool loop has at most four provider steps.
+All requests use the existing routed client. The lab restricts targets to the
+configured Free credential lane: it cannot reset/expand the cumulative Paid
+fallback allowance. A lane name is not a promise about the account's actual bill.
+Actual request/usage observation is printed with each response; unavailable usage
+is marked unobserved. No standalone extraction, summary or query-planning call.
+
+The 6,000 external-context ceiling uses a deliberately conservative UTF-8 wire-byte
+upper estimate, following the existing routing exposure bound. It is **not** a
+calibrated tokenizer or measured usage. This reduces usable context capacity;
+provider usage calibration remains open. Oversized/uncovered sources and excluded
+turns produce explicit coverage metadata. Retrieval no-match, partial, unavailable
+and not-requested states are distinct. History never proves a real-world action
+executed merely because an assistant suggested it.
+
+## Local software evidence
+
+- Required recorder, transactional store, migration-4→5 reopen, duplicate callback,
+  repeated-text, original roles, source/permit binding, storage failure and
+  revocation tests run on real SQLite transactions with fake OS/Hello boundaries.
+- The replay freezes 200 original events / 10 projects / 30 segments. All 200
+  commit and reconcile after reopen; 200 repeated callbacks add no events.
+- Delivery tests assert selected source IDs, scope and context at the production
+  Gemini adapter's serialized request boundary. No real provider is contacted.
+- Real canonical personal-fact fixtures exercise the existing owner-consent path;
+  revocation immediately before the async provider-dispatch guard blocks disclosure.
+- Inspection, pause, omission coverage, current-request invalidation, all-thread
+  deletion approval, immutable redacted deletion identities and late-callback
+  source routing have regression coverage. Private history is not added to UI feeds.
+- Independent review found four Important gaps: lab personal reads disabled;
+  older threads inaccessible; assistant omission coverage absent; stale personal
+  facts passing the dispatch guard. Each was reproduced RED→GREEN. The review's
+  status-reporting minor was treated as Important and fixed with a payload test.
+- The old Windows smoke gate hardcoded schema 4. Its actual Windows logs showed
+  encryption/reopen/FTS/DPAPI/plaintext-block/leak checks passing, but schema and
+  ledger checks failing after migration 5. The gate now checks packaged migrations;
+  a local regression fails against the old assumptions and passes the new gate.
+
+None of these is an actual-model quality score or Windows spoken acceptance.
+The earlier rejected full-local-suite telemetry command was not rerun/bypassed.
+
+Prior connected-candidate local scoped run: **484 passed**; repository Ruff check passed. A synthetic
+Linux SQLite/fake-OS run measured archive p95 **3.63 ms** (200 samples) and local
+snapshot/context p95 **1.48 ms** (10 samples), with zero model requests. These are
+not SQLCipher/Windows, real-authentication, provider or speech latency measurements.
+
+## Windows routing failure and policy repair (31 October)
+
+The owner launched exact commit `7b6c6ede` successfully, but the first Nepal turn
+failed during routing before project selection, capture or Gemini dispatch. Python
+recognized `memory:conversation_history` delegation; production Rego recognized
+only `memory:personal_learning`. The history catalog read therefore hit the generic
+SYSTEM private-read rule and its attention/actor requirements. The initial strong
+owner grant could not authorize that child read.
+
+The repair adds a dedicated history-delegation policy branch for read/admit/suppress.
+It requires SYSTEM origin, delegated-policy approval and a nonempty string parent
+ID. Python still verifies the registered live grant, exact source/payload/scope,
+revocation and one-use permits. Unrelated private reads keep their existing rules.
+The isolated lab pins the reviewed source policy for its process and restores any
+inherited override on exit; installed policy/settings are not edited.
+
+Earlier tests used a simplified policy fixture, so their green results missed this
+production-policy mismatch. Fixture descriptions are corrected. A real OPA + real
+authority/store integration regression reproduces the routing denial and exercises
+capture/recall with a fake provider. Linux CI now provisions checksum-pinned OPA
+and requires that regression, including malformed/missing delegation and unrelated
+private-read controls. Fake provider answers remain software evidence only.
+
+Unaffected scoped verification after this repair: **375 passed**, excluding the
+real-OPA module. A broader local run was stopped by automatic approval review for
+possible external OPA telemetry with unknown payload; it was not retried. Hosted
+CI must qualify the final policy/test matrix separately. Independent review found
+no Critical/Important issue. Actual owner-machine/Gemini acceptance remains OPEN.
+
+Exit the old lab with `/quit`. Keep its profile for diagnosis. Its failed first
+turn was not captured. Start a new isolated profile with the repaired exact commit;
+do not resume the old profile with a different pinned source revision.
+
+## Owner rerun at d8504526: partial pass, generation failure unresolved
+
+The owner machine committed the first Nepal user/assistant pair and the Jimny /
+permit-pending pair. The first status request committed its user event (sequence 5),
+then failed in stage `generating` with exact exception type `ValueError`; no assistant
+event was fabricated. After `/sleep`, the same named status query correctly recalled
+Jimny and permit pending. `/inspect` showed seven original events, the same project
+and thread, and zero omissions. This is actual Windows/Hello/SQLCipher/Gemini evidence
+for this short sequence, including recall after sleep, not process-restart, all goals
+or full reliability acceptance. Failed-call usage is not present in the pasted trace;
+do not count it as zero.
+
+The exact generation failure is UNKNOWN because the lab catch handler printed only
+exception type. Two coordinator checks can raise a plain ValueError in this stage:
+a response mixing an answer and tool request (or multiple tools), and an empty
+answer without tools. The provider/invoker may also raise ValueError. A network-free
+fixture reproduces the mixed-response path and identical stage, but does not prove
+that it caused this owner's failed call. No speculative retry or relaxed tool/scope
+validation is applied.
+
+`tools/project_memory_failure_probe.py` is a diagnostic companion, extracted outside
+the reviewed checkout. Run it with the existing lab's `source/src` on PYTHONPATH and
+the same `--source-commit`, `--lab-root <existing-lab>/profile`, `--model`, and
+`--resume-lab`. Exit the old process first to release its profile lock. The original
+lab main still verifies source cleanliness, pinned commit and profile marker, renews
+Hello consent and takes its exclusive lock. Existing history is retained.
+
+The probe reports only response presence/counts and code locations (module/function/
+line), exception class and two allowlisted reason codes. No arbitrary exception
+message, frame locals, prompt, raw model text, credential or full filesystem path
+is printed by the probe. Ordinary lab answers and explicit inspection keep their
+existing behavior. It neither retries nor changes authority, fallback, storage or
+provider inputs. Unit tests verify same-result/same-exception behavior, one dispatch,
+method restoration and redaction; a real coordinator/store fixture verifies that
+the failed user's event remains committed without a fake assistant event.
+The diagnostic change passed 381 scoped tests (real-OPA module excluded), repository
+Ruff and formatting checks. Independent review found no Critical/Important issue;
+its diagnostic-output-failure minor was reproduced and fixed without changing
+normal results or original exceptions.
+
+The owner-only next step is to reproduce a generation failure under this probe,
+using the retained Nepal project. A successful probe query alone does not diagnose
+the earlier intermittent error. Share only `PROJECT_PROBE_STEP`,
+`PROJECT_PROBE_FAILURE` and `NOT COMPLETED` lines when a failure occurs.
+
+## Confirmed mixed answer/read failure and schema repair
+
+Owner probe output in `Pasted text(20261031-085108).txt` confirms the failure while
+processing “My interview is on Monday.”: answer present, no search, one source ID,
+no personal request; `mixed_answer_or_tools` at `project_conversation.respond` line
+310. Gemini returned an answer and a source-read request together. This establishes
+the cause of this captured failure; the earlier uninstrumented failure cannot be
+retrospectively attributed with certainty.
+
+The same owner trace passed a permit correction (pending → approved), switched to
+a distinct interview project/thread and restored Nepal with Jimny/approved, without
+the Monday interview detail. Inspection retained original and corrected statements
+through Nepal sequence 20, with zero omissions. The interview turn failed to produce
+a reply, so full project-conversation reliability remains unaccepted.
+
+### Repair design and rationale
+
+The old wire object had four independent optional fields. It accepted answer plus
+source IDs, although the coordinator rejects that combination. Prompt-only warnings
+did not enforce the same contract as the application. Ignoring IDs or releasing a
+draft answer would discard the model's requested evidence read; adding automatic
+repair requests would increase API calls without fixing the permissive schema.
+
+The repair uses a required `response` object with four closed alternatives: answer,
+archive search, source read, or personal query. Every alternative has one required
+nonempty field and forbids additional fields. Pydantic emits nested `anyOf` with
+closed object definitions, matching the union pattern documented for the existing
+Interactions structured-output endpoint in [Google's official guide](https://ai.google.dev/gemini-api/docs/structured-output#content-moderation).
+Properties expose the same coordinator interface; dispatch/release authorization,
+search-hit read allowlist, per-request tool budgets, original recording and model
+routing stay unchanged. The prompt distinguishes read source IDs from citations.
+
+A failing regression first demonstrated that the old parser accepted the owner's
+answer/read mixture and empty objects. The replacement parser rejects mixed, missing
+and empty variants. Tests exercise the actual Gemini SDK adapter's request arguments
+and response parser with a fake HTTP endpoint; no inference is performed. A defensive
+coordinator regression bypasses parsing deliberately and continues to reject a mixed
+object before any tool read or assistant delivery. Updated policy/delivery fixtures
+use the new wire envelope. No extra extraction, repair or retry request is added.
+
+Existing labs remain pinned to their exact source commit. Keep the owner lab and
+its saved originals; do not edit its marker or replace its source in place. Use a
+fresh isolated root for the reviewed repair, then test the captured interview
+sequence followed by correction/project isolation. Actual model acceptance of the
+new wire format remains OPEN until that rerun.
+
+Repair verification: 399 scoped tests passed with real-OPA tests excluded,
+repository Ruff/format and relative-link checks passed, and independent review
+found no Critical/Important issue. Google supports the closed object alternatives;
+string nonemptiness/length is also validated locally because provider decoding does
+not enforce every string constraint. No live provider request ran here.
+
+## New-thread retrieval failure and request-local tool availability repair
+
+At `94550e78`, owner trace `Pasted text(20261031-092206).txt` created a new Nepal
+thread and asked for the previously chosen vehicle and permit status. Both requests
+failed at `tool_personal` with PermissionError. Inspection still showed the original
+Jimny/pending statement in the older Nepal thread. The failure was not lost storage:
+one personal-tool intent/result was recorded, followed by another personal intent
+and no second result. The coordinator denied that second request at its one-query
+limit. The first personal result's precise status is not present in the pasted log.
+
+Two application gaps led to this path. The initial context snapshot covered only the
+active thread, despite the project being the persistent workspace. The static wire
+schema offered personal reads repeatedly, and even offered source reads before any
+request-local search hits existed. Prompts alone did not describe/enforce the actual
+remaining tool state. Earlier tests manually exercised archive reads across threads;
+they did not verify that the first generation in a new thread received project
+evidence or that the provider schema excluded exhausted tools.
+
+### Repair design
+
+Initial context now uses the existing authorized project-wide snapshot, with at most
+32 recent originals and the unchanged 5,600 selection / 6,000 total wire-byte upper
+bounds. Sources retain original thread, role, time and event IDs. Active-thread
+revision/sequence metadata still describe the selected recording thread; the global
+store revision invalidates replies if any covered archive data change. Different
+projects are excluded by the existing SQL scope and permit binding. This is bounded
+recent project context, not an unlimited transcript upload or a complete archive scan.
+
+Each provider call receives server-owned tool availability, derived from the current
+request's actual search/read usage, personal-query usage and remaining answer steps.
+A dynamic closed response schema removes unavailable/exhausted choices. Source reads
+are offered only for request-local search-hit IDs using a string enum; no global
+schema cache retains those IDs. The final fourth step permits only an answer. The
+coordinator independently checks availability before recording tool intent, and the
+existing read allowlist, one-use permits, revision guards and personal consent checks
+remain enforced. No tool limit, grant capacity, paid allowance or continuation budget
+is increased. No extraction, planner, repair or automatic retry request is introduced.
+
+The prompt distinguishes canonical personal facts from project conversation history
+and tells the model to use archive search when project evidence is missing. Recent
+project evidence can now answer directly without a retrieval-planning model call.
+Older material beyond the bounded recent window remains searchable/readable through
+the existing ordinary answer/tool cycle. Actual model decisions still need testing.
+
+### Evidence and remaining limits
+
+A RED test showed that the old first-generation payload in a new thread lacked the
+previous Jimny user source. It now contains that source and permit statement, with
+its original thread ID, while excluding the interview's Tuesday detail. Wire tests
+verify exhausted personal/search choices, premature/foreign source IDs and final-step
+tool requests are rejected. A longer-history fixture pushes Jimny beyond 32 recent
+events: the actual adapter with a fake endpoint runs personal → archive search →
+source read → answer in four calls, with exactly one personal query and no extra
+repair request. This proves software dataflow and budget enforcement, not live model
+answer quality. The final recent window excludes Jimny until the archive tool retrieves it.
+
+The original forty-turn fixture setup exhausted the existing delegated child-permit
+cap. It was changed to seed history with real source-bound append permits, without
+raising production limits. Long-running grant renewal remains a separate acceptance
+concern; this repair does not claim unlimited uninterrupted conversation.
+
+A longer-history budget regression also reproduced a pre-existing assembler error:
+32 medium-length sources could fill the text budget before omitted-source IDs were
+appended, pushing metadata beyond the final cap. The assembler now reserves all
+candidate omission IDs before selecting text, removing an ID only when its complete
+source fits. Source preference/order and the 5,600/6,000 bounds are unchanged;
+selected and omitted IDs remain disjoint and exhaustive. The regression failed on
+the old assembler and passes with the repair. Follow-up review found no
+Critical/Important issue.
+
+Final repair verification: **408 scoped tests passed**; repository Ruff/format and
+relative-link checks passed. Independent review found no Critical/Important issue.
+Real OPA/full local suite
+telemetry restrictions remain in force; production-policy integration is hosted CI.
+The owner lab at `94550e78` is retained as evidence; use a fresh isolated exact-source
+root to qualify the repaired new-thread path after CI. Full acceptance remains OPEN.
+
+## Offline console-log accounting (Task 5 preparation)
+
+`tools/project_memory_log_report.py` is a standalone standard-library tool. It reads
+existing saved text-lab console logs and produces JSON metadata; it imports no Jarvis
+runtime, opens no memory database, calls no provider and enables no new transcript
+logging. The runtime being qualified stays at `6fe86845`, with its owner rerun still
+pending. Extract the tool from a reviewed tool commit if using it outside a checkout.
+
+```powershell
+& "E:\Jarvis\App\.venv\Scripts\python.exe" "$env:TEMP\project_memory_log_report.py" `
+    "C:\path\existing-lab-console.log" `
+    --output "$env:TEMP\new-memory-evidence-report.json"
+```
+
+The tool accepts UTF-8 (with or without BOM) and BOM-marked UTF-16 Windows logs.
+Inputs use the lab's one-line JSON receipt records and `NOT COMPLETED` diagnostics.
+It does not interpret free-form answers or inspection source text. Reports include
+validated metadata identities, failure stage/error categories, reported provider
+steps, known per-metric token sums/sample counts and nearest-rank p50/p95 latency
+samples. Unknown stage/error labels collapse to `other`; raw messages are omitted.
+Existing output files are never overwritten, including an input selected as output.
+
+Repeated complete log dumps are deduplicated by request ID and normalized record.
+Conflicting same-request records are flagged and excluded from token/latency and
+failure-category accounting. A completed request needs a committed user receipt and
+a committed or explicitly omitted assistant receipt. Omitted assistant originals
+are counted separately rather than claimed saved. Pairs must belong to one thread,
+use different event IDs and advance sequence/revision; tool-event gaps are valid. Reuse of event IDs
+across different requests is flagged. This validates console metadata structure,
+not the authenticity/durability of a database commit. Failed requests can retain
+user/tool archive events that the completed-response console record does not expose.
+
+Absent/null/empty usage leaves unknown telemetry; a present object, string, number
+or boolean in place of the usage list is invalid evidence and returns exit 2.
+Failed-request usage remains unknown. Missing/unobserved token metrics are not
+fabricated as zero, and metric sums do not double-count total alongside input/output.
+`reported_provider_steps` is not a complete API attempt count: retries/fallbacks or
+failed-call usage can be absent from console telemetry. `billing_complete` always
+remains false; currency/bill estimates are not produced. Latencies describe reported
+provider steps, not archive/context timing or end-of-speech-to-audio. Small sample
+percentiles are not an acceptance result.
+
+Exit 0 means a report was produced without contradictory/invalid metadata; it is
+NOT a model/system pass, and ordinary captured request failures still appear in it.
+Exit 2 means input/output error, no usable request evidence, invalid usage/metadata,
+conflicts or failure lines without a request ID. Reports retain safe diagnostic
+counts when possible. `answer_quality` stays `not_evaluated`: human/source-grounded
+review and the frozen model questions are still required. No owner outcome is
+inferred merely from compiling this helper or its fixture tests.
+
+Software verification: 442 scoped tests passed with real-OPA tests excluded locally,
+including 33 analyzer cases and the real coordinator/store omission-receipt path.
+Repository Ruff/format and changed-document relative links passed. Windows/real-policy
+checks are hosted CI; the earlier local telemetry restrictions remain in force.
+No new provider call, answer-quality score or owner runtime acceptance was produced.
+Independent review found one Important wrong-type usage-container classification;
+five CLI cases reproduced it RED and pass GREEN after the fix. No Critical or
+Minor issue was raised. The final full scoped run, not a second review, verifies
+the correction; hosted checks qualify the published tool commit separately.
+
+## Frozen actual-model questions: UNRUN
+
+`tests/project_memory/fixtures/questions-v1.json` has 60 development and 40 held-out
+source-labelled questions. Its normalized UTF-8/LF SHA-256 is
+`0ea667daadbf7de34c409598e6a7e62355fe53f1896d0533f867c03a6fedf7a0`.
+The 200 source events are frozen separately in `events-v1.json`.
+
+No inference or tuning on these questions has run. The target remains ≥95% correct
+on each split and zero critical scope/authority/currentness failures. Do not
+substitute the deterministic replay or fake answers for these results. No new paid
+benchmark allowance follows from freezing fixtures. Real provider input/output,
+request count, retries, continuation and unknown usage must be recorded.
+
+## Windows text run
+
+Requirements: existing Python/dependencies, SQLCipher 4.17, DPAPI, OPA, Hello helper
+and configured Gemini Free credential lane on the owner's Windows machine. No
+package installation, SDK/model upgrade or microphone access is performed.
+
+Use `tools/windows/Start-JarvisProjectMemoryLab.ps1` **from the reviewed exact
+commit**. Parameters:
+
+```powershell
+-RepoRoot "E:\Jarvis\App" -Commit "<reviewed-40-character-sha>" `
+-Model "gemini-3.5-flash-lite" -LabRoot "$env:TEMP\jarvis-project-memory-acceptance"
+```
+
+Fetch the branch explicitly before extracting the launcher; the launcher does not
+fetch/retry network access implicitly. It creates an isolated detached checkout.
+The lab verifies exact clean source and a marked profile, then takes an OS-backed
+exclusive profile lock. It resolves existing authority tools before changing the
+profile environment. Installed checkout/settings are not reset or activated.
+
+Type this sequence with fictional details:
+
+1. `Let's plan my Nepal trip`
+2. `We will take the Jimny. The permit is pending.`
+3. `What is the status of my Nepal trip?`
+4. `/inspect` — confirm original USER sources, timestamps, roles and commit sequence.
+5. `/sleep`, then ask the Nepal status again.
+6. `Switch to interview preparation`, then `My interview is on Monday.`
+7. `Which vehicle did I choose for my Nepal trip?` — restore Nepal without interview history.
+8. `Correction: the permit is now sorted.` Then ask status and inspect dated sources.
+9. `New conversation in Nepal trip`, then ask for the previously chosen vehicle.
+   Older project-thread evidence must be available through the local search tool.
+10. `/quit`. Restart the **same command and root with `-ResumeLab`**, retaining the
+    exact same commit. Hello permission is renewed; IDs/history must remain.
+11. `/projects` and `/inspect`. Confirm selection announcement and source provenance.
+12. `/pause`; a further statement must retain only omission metadata and send no
+    dependent generation. `/resume` changes the retention epoch; do not backfill
+    previously excluded text as if it were recorded.
+13. `/forget` requires a separate explicit owner approval. Reopen the same profile,
+    select Nepal again, and confirm deleted details do not reappear. Minimal IDs
+    remain redacted to reject delayed writes; this is not forensic backup erasure.
+
+`/inspect` is an authenticated console operation and intentionally displays its
+selected private sources. Ordinary failure output includes stage and correlated
+IDs rather than asking the owner to reconstruct missing speech. Do not publish
+raw private console output as general logs.
+
+A source exclusion or storage failure blocks the dependent answer and reports
+failure/omission. Assistant delivery receipts describe the actual printed prefix;
+a late callback is tied to its original project, never to the latest selection.
+Legacy topic checkpoints are not imported as fabricated original conversations.
+
+## Remaining owner-only gates
+
+Real Windows lab execution, actual Hello/SQLCipher integration at the published
+head, real Gemini answer/usefulness/cost/latency and the frozen model questions
+remain unrun here. The implementation host has no access to the owner's microphone,
+Windows session or configured provider credentials.
+
+Native speech remains a separate blocker. The pinned Google native adapter can
+generate before final transcription. The installed Google Cloud Speech STT adapter
+requires credentials distinct from the Gemini API key. No separate service,
+account, model download or billable speech integration is silently enabled.
+Qualify compatible controlled STT → Gemini → existing TTS before claiming spoken
+continuity, interruptible playback or end-of-speech latency. First-audio p95 ≤3 s
+has not been measured or accepted. Keep PR draft; merging and installed activation
+remain separate owner decisions.
+
+
+## Owner 6fe86845 rerun and evidence-quality follow-up
+
+Owner logs on 31 October passed original text capture, new-thread recall inside Nepal,
+permit pending → approved correction, project separation, sleep and full process
+restart (Nepal Jimny/approved and interview Tuesday). These are bounded scenario
+passes, not the frozen 100-question score or native voice qualification.
+
+The later trace `Pasted text(20261031-130417).txt` contains 17 checkpoint exchanges
+(34 user/assistant events) followed by process restart and a vehicle/permit query.
+All checkpoint replies were OK. The last prior fact-bearing reply was sequence14;
+the question was49. Search intent50 and result51 returned older sources8–14 plus
+the current question49, then assistant52 answered Jimny/approved correctly. This
+confirms actual older-archive search, but the returned facts came from assistant
+recollections rather than the original vehicle/permit user statements. Zero
+omissions were reported. Console inspection is owner evidence, not an independent
+database integrity audit.
+
+The query reported two provider steps, 8,353 total tokens, and 3,797 ms summed provider
+latency; this excludes local/authorization time and is not full billing evidence.
+The opening request reported three provider steps and 4,220 total tokens. API
+cost/efficiency remains an acceptance concern; no currency estimate is inferred.
+
+A separate authorizing-stage failure after a gap repeated the last successful
+request ID. Source inspection shows authorization is checked before assigning a
+new request. Restart/Hello restored access. Windows continuity revocation is a
+possible explanation; its exact trigger is not captured, so expiry/child exhaustion
+is not asserted and grants are not bypassed or automatically renewed.
+
+### Follow-up implementation (not yet owner-qualified)
+
+Search remains project-scoped and bounded to8 hits. Matching user originals and
+assistant discussion are interleaved by per-role recency before the limit; one
+role can fill unused capacity. Tool journal metadata and the current request are
+excluded from search. Explicit source reads/inspection remain unchanged. Selection
+is lexical and can still miss a correction whose wording does not match the query;
+role is provenance, not a guarantee of truth. This does not solve semantic ranking
+or prove complete historical recall. Query/exclusion are included in the authorized
+read material, and existing grants, revocation and request-local read allowlists stay.
+
+When fitting retrieved sources into context, user originals are considered before
+assistant matches, so echoes cannot consume the entire available text budget.
+Final presentation remains chronological with roles, dates and original thread IDs.
+Oversized sources still produce explicit omissions. Context JSON removes formatting
+spaces in both selection estimates and final serialization. No field/source text is
+abbreviated, no new summary/extraction call is added, and the5600/6000 byte caps stay.
+Actual token/cost savings require provider measurement; no percentage is claimed.
+
+Every attempted accepted turn now invalidates the previous packet and gets fresh
+request-local diagnostics before the authorization check. An early denial has no
+stale project/thread attribution and cannot leave the old answer releasable. It
+still blocks recording/generation and requires explicit owner recovery; in-process
+Hello reauthorization and detailed continuity-reason diagnostics remain open.
+
+Regressions reproduced assistant crowd-out, stale denied-request IDs and verbose
+context overhead RED→GREEN. A budget regression also reproduced assistant matches
+crowding original user evidence out during packet assembly and passes after the
+priority repair. Tests with only user or only assistant matches retain the full
+8-hit capacity. No inference, live profile modification or paid allowance occurred.
+Preserve the owner's exact6fe lab; do not edit its source/marker in place. A later
+exact-source lab will qualify this follow-up after hosted checks and review.
+
+Follow-up software verification: 448 scoped tests passed, excluding real OPA locally;
+repository Ruff and changed-file formatting passed. Full Windows/real-policy gates
+must qualify the published follow-up separately. The former tool head1226cd68 now
+has both hosted checks successful (Code Quality41197953278, SQLCipher41197953280).
+
+
+## Seeded original-evidence lab and explicit reauthorization
+
+The text launcher now supports `-SeedAcceptance` / Python `--seed-acceptance` for a
+**new isolated exact-source lab only**. Combining it with resume is rejected before
+creating a profile/worktree. The seeder rejects an occupied active archive and uses
+the normal history authority, exact source-bound append permits, transactional store
+and process-owned lab lock. A seed failure aborts startup and retains partial files;
+there is no retry or successful-seed claim. Do not reuse a partial seed as acceptance.
+
+The fixed fictional `Nepal acceptance` project contains43 original events: a user
+Jimny/permit-pending statement, a user correction to approved, a later contradictory
+assistant Scorpio/pending reply, and40 local filler events. The current project is
+selected. These are synthetic test sources, not observations or newly learned facts
+about the owner. Seeding makes zero provider calls and does not reset/expand Paid
+fallback. A metadata-only `acceptance-fixture.json` records source identities locally.
+The original6fe owner lab is neither edited nor imported.
+
+For the first question, ask: `Which vehicle did we choose and what is the latest
+permit status?` Expected answer: Jimny/approved, supported by user statements rather
+than the later assistant error. Startup seeding replaces the17 API-powered filler
+exchanges. No original decision is in the32-event recent snapshot before the first
+question. The regular governed Gemini answer/tool cycle still pays for whatever
+provider steps it actually uses; no automated benchmark loop or new allowance exists.
+
+After a delivered reply, `FIXTURE_EVIDENCE` reports request identity, whether this
+was the first seeded-thread trial, expected/selected original-source counts,
+conflicting-assistant presence and tool status/provider-step counts. It does not
+print source text or set a model/system PASS. `answer_quality` is always
+`not_evaluated`. The ordinary receipt/usage JSON remains compatible with the offline
+analyzer. Manually review answer and source evidence together. Later questions can
+see prior assistant answers, so a repeat with `fresh_fixture_trial:false` is not an
+independent older-history result. New threads or modified fixture history also do
+not qualify as the original frozen first trial.
+
+The explicit `/reauthorize` command works before any protected catalog read. It
+invalidates pending replies and revokes the old grant, then requests fresh Windows
+Hello approval. On success it constructs a new coordinator/access handle on the
+same store; personal reads keep separate consent. On denial the prior grant remains
+revoked, no question is retried, no history is deleted and retention pause survives.
+Use `/reauthorize` again to request approval or `/quit` to exit. This is controlled
+text-lab recovery only, not automatic permission renewal or native voice activation.
+The exact earlier Windows continuity trigger and the shared child-permit capacity
+remain unresolved; a new grant is not claimed to remove that capacity limit.
+
+Software tests use real SQLite/history authority/store with fake Windows/Hello and
+fake provider boundaries. They prove source selection/dispatch flow, explicit fresh
+approval/denial, pause preservation and seed/resume rejection, not real Gemini
+correctness, real Windows Hello recovery or PowerShell execution. Those require
+exact-head hosted and owner qualification. Full100-question/model/voice acceptance
+remains OPEN. No inference was run during this implementation.
+
+Seed/recovery software verification:456 scoped tests passed (real OPA excluded
+locally); repository Ruff, changed-file formatting and changed-document links passed.
+No actual provider test or owner Windows recovery result is inferred.
+
+
+Final review found an Important first-trial reporting gap: returning to the original
+thread after another thread's answer could still have original sequence44. That is
+not a clean project-wide first trial. The regression reproduced it RED. A one-request
+provider observer now checks the authorized project catalog before first dispatch:
+there must be exactly one project thread, the original selection and precisely the
+seeded archive revision plus the current user event. Request-currentness guards run
+before/after this local read and again in the ordinary provider dispatch. The flag
+is bound to that request; without an observer it stays false. This adds one local
+protected catalog read per fixture request, zero extra provider calls. The original
+thread-return regression and the full456-test scoped suite pass after the fix.
+Real Windows/PowerShell/Hello/SQLCipher/OPA, Gemini quality, owner outcomes and hosted
+checks remain external gates; review did not independently qualify them. No deferred
+Minor findings were raised.
+
+
+## Owner52ee controls and efficiency follow-up
+
+Both exact52ee hosted runs succeeded: Code Quality41205833799 and
+SQLCipher41205833776. The owner seeded the fictional43-event lab on Windows and
+asked its first question. `fresh_fixture_trial:true`, both original sources and the
+conflicting assistant source reached final context. Gemini correctly chose
+Jimny/approved over the later assistant Scorpio/pending claim. This is one actual
+original-evidence conflict pass; the frozen100-question and native gates stay OPEN.
+
+The owner request used3 reported provider steps: personal/no_match, then
+search/complete, then answer. Reported usage totaled11,581 tokens; summed provider
+latency4,008.1119ms excludes local/auth overhead and is not complete billing evidence.
+Explicit `/reauthorize` reported fresh approval, preserved project/thread and
+archive revision49, and did not replay the question. This tested deliberate renewal
+while active, not an actual lock/revocation recovery or cancellation on the owner PC.
+
+Pause blocked the cedar-481 note with stage retention_paused. Inspection after resume
+showed active retention, one omission and no cedar-481 source text. `/forget` returned
+50 deleted sources; `/projects` returned empty entries/current null. These are bounded
+owner control passes, not an independent audit of physical erasure or every derived
+store. The fixture was fictional; the earlier6fe owner lab was not modified.
+
+### Efficiency candidate (software verified, actual-model effect unrun)
+
+ProjectAnswerProvider now decodes its prepared context once and passes it as an
+object in the existing outer JSON payload, eliminating a nested JSON string and
+its extra escaping. It preserves every selected source value/role/identity,
+coverage/omission field, personal context, context revision and request-local tool
+availability. Malformed/non-object context fails before dispatch. The underlying
+prepared-context hash and5600/6000 byte caps are unchanged; personal authorization,
+currentness and final dispatch guards remain. No source filtering, summary or new
+model request is introduced.
+
+The prompt is shorter and explicitly distinguishes past project choices/status
+(search the project archive first when evidence is missing) from relevant established
+global ownership/preferences/background (personal facts with consent). Sufficient
+supplied evidence should be answered directly; a source read is optional because
+search already returns source text. Personal tools remain available; the code does
+not impose a new NLP classifier, mandatory archive lookup for every personal question,
+or a tool-budget change. This guidance is probabilistic: an unnecessary personal
+query is not claimed eliminated until an actual-model comparison supports it.
+
+A no-inference comparison used the real Gemini SDK adapter with a fake endpoint,
+identical12-source multilingual/quoted/backslash evidence and identical availability.
+Baseline52ee input:4040 UTF-8 bytes; candidate:3809 (5.72% smaller). System prompt:
+2188→2031 bytes. Serialized SDK argument objects:8797→7961 bytes (9.50% smaller).
+Both observations used one fake response; neither executed a real model request.
+These are one synthetic wire-size measurement, not a representative token percentage,
+latency result or provider bill. The new regression verifies parsed context equality
+and smaller encoding; source preservation is checked at the actual adapter boundary.
+Actual request counts, observed usage and answer correctness still require the same
+fresh seeded first-question test. No checkpoint conversations need to be repeated.
+
+Software verification:461 scoped tests passed with real OPA excluded locally,
+including five new SDK-wire/invalid-context cases that failed RED before the change.
+Existing personal source/consent/revocation, project separation, older-source,
+conflict and controls tests remain green. Full local/OPA telemetry restrictions are
+unchanged. Independent review and hosted qualification apply to this candidate
+separately; no current-head model/Windows pass is inherited from52ee.
+
+
+## Efficiency CI wire-assertion correction
+
+Head640461b0 failed hosted Code Quality41212666571 in
+`test_production_policy_allows_authorized_project_routing_recording_and_recall`.
+The real policy allowed the scenario through routing, capture and three responses;
+the final assertion still searched for Jimny in a context string. Context is now a
+mapping, so Python checked mapping keys and failed. This is a stale test contract,
+not evidence of a policy denial. The original failure remains recorded.
+
+The assertion now requires a mapping and finds the exact original user text and
+recording-thread identity in its sources. No runtime, Rego or workflow gate was
+changed or skipped. A separate wire smoke calls the same scenario using the explicit
+simplified fixture authority, reproducing the assertion RED and passing GREEN after
+the correction without starting OPA locally. It is labelled fixture-policy evidence,
+not production-policy qualification. Hosted CI must still run the original scenario
+with real OPA and all four other production-policy cases. This also brings that
+scenario's wire assertions into future local scoped verification without bypassing
+the earlier OPA/full-local-suite telemetry restriction.
+
+After this test-only correction,462 scoped tests passed; repository Ruff, changed
+formatting and diff checks passed. Actual production-policy qualification remains a
+hosted gate, not inferred from the fixture-authority smoke.
