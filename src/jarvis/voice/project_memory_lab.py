@@ -107,7 +107,26 @@ def build_project_personal_session(conversation, memory, capability):
     )
 
 
-async def run_text_lab(config, root: Path, *, model: str):
+async def reauthorize_lab_history(access, coordinator, *, personal_factory=None):
+    """Explicit owner command only; denial never restores the old grant."""
+    import asyncio
+    from uuid import uuid4
+
+    from jarvis.memory.project_access import ProjectArchiveAccess
+    from jarvis.voice.project_conversation import ProjectConversationCoordinator
+
+    coordinator.invalidate("owner_reauthorization")
+    access.authority.revoke(access.grant, "owner_reauthorization")
+    grant = await asyncio.to_thread(access.authority.open, str(uuid4()), "gemini")
+    fresh = ProjectArchiveAccess(access.store, authority=access.authority, grant=grant)
+    return fresh, ProjectConversationCoordinator(
+        fresh,
+        source_clearance=standard_history_source,
+        personal_factory=personal_factory,
+    )
+
+
+async def run_text_lab(config, root: Path, *, model: str, seed_acceptance=False):
     import asyncio
     import msvcrt
     from uuid import uuid4
@@ -181,11 +200,25 @@ async def run_text_lab(config, root: Path, *, model: str):
             access, source_clearance=standard_history_source, personal_factory=personal
         )
         controls = ProjectControls(access)
+        manifest_path = root / "acceptance-fixture.json"
+        if seed_acceptance:
+            from jarvis.voice.project_memory_acceptance import seed_acceptance_fixture
+
+            manifest = await seed_acceptance_fixture(access)
+            with manifest_path.open("x", encoding="utf-8") as stream:
+                json.dump(manifest, stream)
+            print(
+                "SYNTHETIC FIXTURE: 43 local fictional events seeded; zero provider calls. User facts conflict with an assistant reply. Selected Nepal acceptance."
+            )
+        elif manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        else:
+            manifest = None
         print(
             "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; personal reads/deletion keep their own approvals."
         )
         print(
-            "Commands: /projects /inspect /pause /resume /forget /sleep /quit. Normal text selects explicit projects and asks questions."
+            "Commands: /projects /inspect /pause /resume /forget /sleep /reauthorize /quit. Normal text selects explicit projects and asks questions."
         )
         while True:
             text = await asyncio.to_thread(input, "Jarvis> ")
@@ -194,6 +227,20 @@ async def run_text_lab(config, root: Path, *, model: str):
             if not text.strip():
                 continue
             try:
+                if text == "/reauthorize":
+                    try:
+                        access, coordinator = await reauthorize_lab_history(
+                            access, coordinator, personal_factory=personal
+                        )
+                        controls = ProjectControls(access)
+                        print(
+                            "History authorization renewed with fresh owner approval. No question was retried."
+                        )
+                    except (PermissionError, ValueError, RuntimeError, OSError):
+                        print(
+                            "History reauthorization failed; prior grant remains revoked. Use /reauthorize to request fresh owner approval, or /quit."
+                        )
+                    continue
                 if text == "/sleep":
                     coordinator.invalidate("sleep")
                     print("Listening segment closed; project selection retained.")
@@ -236,8 +283,18 @@ async def run_text_lab(config, root: Path, *, model: str):
                 conversation = ConversationSession()
                 conversation.start()
                 turn = conversation.accept_turn(ConversationRole.USER, text)
+                observer = None
+                if manifest:
+                    from jarvis.voice.project_memory_acceptance import (
+                        FixtureEvidenceProvider,
+                    )
+
+                    observer = FixtureEvidenceProvider(provider, access, manifest)
                 result = await coordinator.respond(
-                    conversation, turn, provider=provider, authorize=access.current
+                    conversation,
+                    turn,
+                    provider=observer or provider,
+                    authorize=access.current,
                 )
                 await coordinator.validate_for_release(result)
                 if not coordinator.validate_current(result.packet):
@@ -247,6 +304,12 @@ async def run_text_lab(config, root: Path, *, model: str):
                 receipt = await coordinator.record_assistant(
                     conversation, result, delivered_text=result.answer
                 )
+                if manifest:
+                    from jarvis.voice.project_memory_acceptance import fixture_evidence
+
+                    evidence = fixture_evidence(manifest, result, observer=observer)
+                    if evidence is not None:
+                        print("FIXTURE_EVIDENCE " + json.dumps(evidence))
                 print(
                     json.dumps(
                         {
@@ -288,7 +351,12 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--resume-lab", action="store_true")
+    parser.add_argument("--seed-acceptance", action="store_true")
     args = parser.parse_args()
+    if args.seed_acceptance and args.resume_lab:
+        parser.error(
+            "acceptance seeding requires a new isolated lab, never --resume-lab"
+        )
     if os.name != "nt":
         parser.error(
             "requires Windows SQLCipher, DPAPI and Hello; this is a text lab, not native voice acceptance"
@@ -323,7 +391,14 @@ def main():
         config = JarvisConfig.from_environment()
         if config.ai_provider != "gemini":
             parser.error("existing Gemini configuration required")
-        asyncio.run(run_text_lab(config, profile.parent, model=args.model))
+        asyncio.run(
+            run_text_lab(
+                config,
+                profile.parent,
+                model=args.model,
+                seed_acceptance=args.seed_acceptance,
+            )
+        )
 
 
 if __name__ == "__main__":

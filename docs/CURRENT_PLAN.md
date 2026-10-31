@@ -42,6 +42,14 @@ The runtime under test remains `6fe86845`; this tool does not require another la
 Local scoped verification including the analyzer: 442 tests passed. Live model
 questions and current-head owner acceptance are still unrun.
 
+The next owner test uses the opt-in seeded fictional `Nepal acceptance` lab:43
+locally appended events replace API-powered filler conversations. Its first actual
+question tests original user decisions against a later conflicting assistant reply;
+metadata reports coverage without grading the answer. Explicit `/reauthorize` adds
+fresh Hello recovery without replaying failed questions or clearing retention pause.
+This harness/recovery path needs its own hosted and owner qualification; preserve
+existing labs. See the acceptance guide for first-trial limits.
+
 | Stage | Software status | Outstanding evidence |
 |---|---|---|
 | Task 0 | Native ordering characterized; awaited controlled dispatch and serialized payload tested | Native speech/STT/TTS qualification |

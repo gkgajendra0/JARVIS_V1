@@ -6,10 +6,12 @@ param(
     [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][string]$Model,
     [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][string]$LabRoot,
     [string]$MachineProfile = "",
-    [switch]$ResumeLab
+    [switch]$ResumeLab,
+    [switch]$SeedAcceptance
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ($SeedAcceptance -and $ResumeLab) { throw "Acceptance seeding requires a new isolated lab." }
 $git = (Get-Command git -ErrorAction Stop).Source
 $python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $python -PathType Leaf)) { throw "Existing Python unavailable; nothing installed." }
@@ -34,6 +36,7 @@ try {
     $arguments = @("-X", "utf8", "-m", "jarvis.voice.project_memory_lab", "--lab-root", $profile, "--model", $Model, "--source-commit", $Commit)
     if ($MachineProfile) { $arguments += @("--profile", $MachineProfile) }
     if ($ResumeLab) { $arguments += "--resume-lab" }
+    if ($SeedAcceptance) { $arguments += "--seed-acceptance" }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }

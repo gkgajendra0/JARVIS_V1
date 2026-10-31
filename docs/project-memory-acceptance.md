@@ -491,3 +491,74 @@ Follow-up software verification: 448 scoped tests passed, excluding real OPA loc
 repository Ruff and changed-file formatting passed. Full Windows/real-policy gates
 must qualify the published follow-up separately. The former tool head1226cd68 now
 has both hosted checks successful (Code Quality41197953278, SQLCipher41197953280).
+
+
+## Seeded original-evidence lab and explicit reauthorization
+
+The text launcher now supports `-SeedAcceptance` / Python `--seed-acceptance` for a
+**new isolated exact-source lab only**. Combining it with resume is rejected before
+creating a profile/worktree. The seeder rejects an occupied active archive and uses
+the normal history authority, exact source-bound append permits, transactional store
+and process-owned lab lock. A seed failure aborts startup and retains partial files;
+there is no retry or successful-seed claim. Do not reuse a partial seed as acceptance.
+
+The fixed fictional `Nepal acceptance` project contains43 original events: a user
+Jimny/permit-pending statement, a user correction to approved, a later contradictory
+assistant Scorpio/pending reply, and40 local filler events. The current project is
+selected. These are synthetic test sources, not observations or newly learned facts
+about the owner. Seeding makes zero provider calls and does not reset/expand Paid
+fallback. A metadata-only `acceptance-fixture.json` records source identities locally.
+The original6fe owner lab is neither edited nor imported.
+
+For the first question, ask: `Which vehicle did we choose and what is the latest
+permit status?` Expected answer: Jimny/approved, supported by user statements rather
+than the later assistant error. Startup seeding replaces the17 API-powered filler
+exchanges. No original decision is in the32-event recent snapshot before the first
+question. The regular governed Gemini answer/tool cycle still pays for whatever
+provider steps it actually uses; no automated benchmark loop or new allowance exists.
+
+After a delivered reply, `FIXTURE_EVIDENCE` reports request identity, whether this
+was the first seeded-thread trial, expected/selected original-source counts,
+conflicting-assistant presence and tool status/provider-step counts. It does not
+print source text or set a model/system PASS. `answer_quality` is always
+`not_evaluated`. The ordinary receipt/usage JSON remains compatible with the offline
+analyzer. Manually review answer and source evidence together. Later questions can
+see prior assistant answers, so a repeat with `fresh_fixture_trial:false` is not an
+independent older-history result. New threads or modified fixture history also do
+not qualify as the original frozen first trial.
+
+The explicit `/reauthorize` command works before any protected catalog read. It
+invalidates pending replies and revokes the old grant, then requests fresh Windows
+Hello approval. On success it constructs a new coordinator/access handle on the
+same store; personal reads keep separate consent. On denial the prior grant remains
+revoked, no question is retried, no history is deleted and retention pause survives.
+Use `/reauthorize` again to request approval or `/quit` to exit. This is controlled
+text-lab recovery only, not automatic permission renewal or native voice activation.
+The exact earlier Windows continuity trigger and the shared child-permit capacity
+remain unresolved; a new grant is not claimed to remove that capacity limit.
+
+Software tests use real SQLite/history authority/store with fake Windows/Hello and
+fake provider boundaries. They prove source selection/dispatch flow, explicit fresh
+approval/denial, pause preservation and seed/resume rejection, not real Gemini
+correctness, real Windows Hello recovery or PowerShell execution. Those require
+exact-head hosted and owner qualification. Full100-question/model/voice acceptance
+remains OPEN. No inference was run during this implementation.
+
+Seed/recovery software verification:456 scoped tests passed (real OPA excluded
+locally); repository Ruff, changed-file formatting and changed-document links passed.
+No actual provider test or owner Windows recovery result is inferred.
+
+
+Final review found an Important first-trial reporting gap: returning to the original
+thread after another thread's answer could still have original sequence44. That is
+not a clean project-wide first trial. The regression reproduced it RED. A one-request
+provider observer now checks the authorized project catalog before first dispatch:
+there must be exactly one project thread, the original selection and precisely the
+seeded archive revision plus the current user event. Request-currentness guards run
+before/after this local read and again in the ordinary provider dispatch. The flag
+is bound to that request; without an observer it stays false. This adds one local
+protected catalog read per fixture request, zero extra provider calls. The original
+thread-return regression and the full456-test scoped suite pass after the fix.
+Real Windows/PowerShell/Hello/SQLCipher/OPA, Gemini quality, owner outcomes and hosted
+checks remain external gates; review did not independently qualify them. No deferred
+Minor findings were raised.
