@@ -37,7 +37,11 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
     base["omitted_source_ids"] = list(candidates)
     selected = []
     # Search-selected originals are useful even when beyond the recent window.
-    preferred = [*reversed(extra_sources), *reversed(snapshot.sources)]
+    preferred = [
+        *(s for s in reversed(extra_sources) if s.event.role == "user"),
+        *(s for s in reversed(extra_sources) if s.event.role != "user"),
+        *reversed(snapshot.sources),
+    ]
     seen = set()
     for source in preferred:
         event = source.event
@@ -63,14 +67,19 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
             "sources": [*selected, row],
             "omitted_source_ids": remaining_ids,
         }
-        if conservative_token_bound(json.dumps(trial, ensure_ascii=False)) <= 5600:
+        if (
+            conservative_token_bound(
+                json.dumps(trial, ensure_ascii=False, separators=(",", ":"))
+            )
+            <= 5600
+        ):
             selected.append(row)
             base["omitted_source_ids"] = remaining_ids
     selected.sort(key=lambda s: (s["accepted_at"], s["thread_id"], s["sequence"]))
     base["sources"] = selected
     if len(selected) < len(candidates):
         base["coverage"] = "partial"
-    text = json.dumps(base, ensure_ascii=False, sort_keys=True)
+    text = json.dumps(base, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     if conservative_token_bound(text) > 6000:
         # Never truncate personal values or source text invisibly.
         raise ValueError("personal/context metadata exceeds external budget")

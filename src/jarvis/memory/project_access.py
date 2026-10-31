@@ -205,7 +205,14 @@ class ProjectArchiveAccess:
         )
 
     async def snapshot(
-        self, selection, *, limit=32, query=None, source_ids=None, project_wide=False
+        self,
+        selection,
+        *,
+        limit=32,
+        query=None,
+        source_ids=None,
+        project_wide=False,
+        exclude_request_id=None,
     ):
         if type(project_wide) is not bool:
             raise ValueError("explicit project scope required")
@@ -215,6 +222,12 @@ class ProjectArchiveAccess:
             not isinstance(query, str) or not 1 <= len(query.strip()) <= 512
         ):
             raise ValueError("bounded search text required")
+        if exclude_request_id is not None and (
+            query is None
+            or not isinstance(exclude_request_id, str)
+            or not 1 <= len(exclude_request_id) <= 128
+        ):
+            raise ValueError("bounded search request exclusion required")
         if source_ids is not None and (
             type(source_ids) is not tuple
             or not 1 <= len(source_ids) <= 16
@@ -228,6 +241,7 @@ class ProjectArchiveAccess:
             "query": query,
             "source_ids": source_ids,
             "project_wide": project_wide,
+            "exclude_request_id": exclude_request_id,
         }
 
         def read(conn):
@@ -261,28 +275,51 @@ class ProjectArchiveAccess:
                     + ")"
                 )
                 parameters += terms
+                filters += " AND role IN ('user','assistant')"
+                if exclude_request_id is not None:
+                    filters += " AND request_id<>?"
+                    parameters.append(exclude_request_id)
             if source_ids is not None:
                 filters += (
                     " AND event_id IN (" + ",".join("?" for _ in source_ids) + ")"
                 )
                 parameters += list(source_ids)
-            rows = conn.execute(
-                "SELECT event_id,sequence,revision,segment_id,request_id,role,text,accepted_at,delivery,thread_id "
-                "FROM conversation_event WHERE "
-                + filters
-                + (
-                    " ORDER BY accepted_at DESC,event_id DESC LIMIT ?"
-                    if project_wide
-                    else " ORDER BY sequence DESC LIMIT ?"
-                ),
-                (*parameters, limit + 1),
-            ).fetchall()
+            columns = "event_id,sequence,revision,segment_id,request_id,role,text,accepted_at,delivery,thread_id"
+            if query is not None:
+                # Interleave newest user originals and assistant discussion so
+                # repeated assistant echoes cannot consume every search slot.
+                sql = (
+                    "SELECT "
+                    + columns
+                    + " FROM (SELECT "
+                    + columns
+                    + ", ROW_NUMBER() OVER (PARTITION BY role ORDER BY accepted_at DESC,event_id DESC) AS role_rank"
+                    + " FROM conversation_event WHERE "
+                    + filters
+                    + ")"
+                    + " ORDER BY role_rank,CASE role WHEN 'user' THEN 0 ELSE 1 END LIMIT ?"
+                )
+            else:
+                sql = (
+                    "SELECT "
+                    + columns
+                    + " FROM conversation_event WHERE "
+                    + filters
+                    + (
+                        " ORDER BY accepted_at DESC,event_id DESC LIMIT ?"
+                        if project_wide
+                        else " ORDER BY sequence DESC LIMIT ?"
+                    )
+                )
+            rows = conn.execute(sql, (*parameters, limit + 1)).fetchall()
             total = conn.execute(
                 "SELECT count(*) FROM conversation_event WHERE " + scope_sql,
                 scope_parameters,
             ).fetchone()[0]
             truncated = len(rows) > limit
             rows = rows[:limit]
+            if query is not None:
+                rows.sort(key=lambda r: (r[7], r[0]), reverse=True)
             status = (
                 "partial"
                 if truncated

@@ -140,11 +140,13 @@ class ProjectConversationCoordinator:
     async def prepare_reply(
         self, conversation, turn, *, routing_receipt=None, authorize
     ):
+        self.invalidate("new_request")
+        self._request = str(uuid4())
+        self._decision = None
+        self._authorize = lambda: False
         self.stage = "authorizing"
         if not callable(authorize) or authorize() is not True:
             raise PermissionError("current release authorization required")
-        self.invalidate("new_request")
-        self._request = str(uuid4())
         self._authorize = authorize
         request_id, activity = self._request, self._activity
         self.stage = "routing"

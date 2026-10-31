@@ -787,3 +787,43 @@ async def test_offline_report_accepts_real_omission_receipt_without_transcript(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_denied_next_request_invalidates_previous_packet_and_diagnostics(
+    tmp_path, authority_parts
+):
+    _, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    c = ConversationSession()
+    c.start()
+    wire = WireBoundary()
+    try:
+        previous = await coordinator.respond(
+            c,
+            c.accept_turn(ConversationRole.USER, "Continue my Nepal trip"),
+            provider=ProjectAnswerProvider(wire),
+            authorize=lambda: True,
+        )
+        with pytest.raises(PermissionError):
+            await coordinator.respond(
+                c,
+                c.accept_turn(ConversationRole.USER, "Checkpoint 01"),
+                provider=ProjectAnswerProvider(wire),
+                authorize=lambda: False,
+            )
+        diagnostic = coordinator.diagnostics()
+        assert diagnostic["request_id"] != previous.packet.request_id
+        assert diagnostic["request_id"] is not None
+        assert diagnostic["stage"] == "authorizing"
+        assert diagnostic["project_id"] is None and diagnostic["thread_id"] is None
+        assert not coordinator.validate_current(previous.packet)
+        assert len(wire.calls) == 1
+    finally:
+        await reader.close()
+        await writer.close()

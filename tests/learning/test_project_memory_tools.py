@@ -21,7 +21,10 @@ def test_memory_tools_scope_budget_and_source_allowlist(tmp_path, authority_part
             expected_revision=0,
         )
         tools = ProjectMemoryTools(
-            access, selection=selection, request_id="request-1", is_current=lambda: True
+            access,
+            selection=selection,
+            request_id="next-request",
+            is_current=lambda: True,
         )
         try:
             with pytest.raises(PermissionError):
@@ -97,3 +100,103 @@ def test_project_tools_and_inspection_reach_older_threads_in_same_project(
             await writer.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.asyncio
+async def test_search_balances_original_users_with_repeated_assistant_matches(
+    tmp_path, authority_parts
+):
+    from dataclasses import replace
+    from datetime import UTC, datetime, timedelta
+
+    _, store, selection, permit, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    values = [
+        event("user-choice", text="The permit for our Jimny is pending."),
+        event("user-correction", text="The permit is now approved."),
+        *[
+            event(f"echo-{i}", text="The Jimny permit is approved.", role="assistant")
+            for i in range(12)
+        ],
+        event("current-question", text="What is the permit status?"),
+        event("journal", text='{"tool":"search","query":"permit"}', role="tool"),
+    ]
+    try:
+        for revision, value in enumerate(values):
+            value = replace(
+                value,
+                request_id="current"
+                if value.event_id == "current-question"
+                else value.event_id,
+                accepted_at=datetime(2026, 10, 31, tzinfo=UTC)
+                + timedelta(seconds=revision),
+            )
+            await store.append_event(
+                selection,
+                value,
+                permit=permit(
+                    "admit", store.append_material(selection, value, revision), value
+                ),
+                expected_revision=revision,
+            )
+        tools = ProjectMemoryTools(
+            access, selection=selection, request_id="current", is_current=lambda: True
+        )
+        found = await tools.search_conversation_memory(selection.project_id, "permit")
+        ids = {s.event.event_id for s in found.sources}
+        assert {"user-choice", "user-correction"} <= ids
+        assert "current-question" not in ids and "journal" not in ids
+        assert len(found.sources) == 8 and found.status == "partial"
+        assert any(s.event.role == "assistant" for s in found.sources)
+        assert [s.event.accepted_at for s in found.sources] == sorted(
+            s.event.accepted_at for s in found.sources
+        )
+        read = await tools.read_conversation_sources(("user-correction",))
+        assert read.sources[0].event.text == "The permit is now approved."
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["user", "assistant"])
+async def test_search_uses_full_budget_when_only_one_role_matches(
+    tmp_path, authority_parts, role
+):
+    from dataclasses import replace
+    from datetime import UTC, datetime, timedelta
+
+    _, store, selection, permit, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    try:
+        for i in range(10):
+            value = replace(
+                event(f"only-{i}", text="permit note", role=role),
+                accepted_at=datetime(2026, 10, 31, tzinfo=UTC) + timedelta(seconds=i),
+            )
+            await store.append_event(
+                selection,
+                value,
+                permit=permit(
+                    "admit", store.append_material(selection, value, i), value
+                ),
+                expected_revision=i,
+            )
+        result = await access.snapshot(
+            selection, query="permit", project_wide=True, limit=8
+        )
+        assert [s.event.event_id for s in result.sources] == [
+            f"only-{i}" for i in range(2, 10)
+        ]
+        assert result.status == "partial"
+        no_match = await access.snapshot(
+            selection, query="nonexistent", project_wide=True, limit=8
+        )
+        assert no_match.status == "no_match" and not no_match.sources
+    finally:
+        await reader.close()
+        await writer.close()

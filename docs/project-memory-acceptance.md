@@ -1,12 +1,12 @@
 # Project conversation memory acceptance
 
-Status: controlled **text** implementation; owner-machine and real-model acceptance
-OPEN. The first Windows text run at `7b6c6ede` FAILED during routing. At
+Status: controlled **text** implementation; several owner-machine scenarios passed
+at `6fe86845`; full-system and representative actual-model acceptance remain OPEN. The first Windows text run at `7b6c6ede` FAILED during routing. At
 `d8504526`, routing/capture and recall after sleep passed on the owner machine,
 but generation intermittently FAILED with `ValueError`; the probe later confirmed
 a mixed answer/source-read response. The schema repair passed short owner testing,
 but the subsequent new-thread test failed during repeated personal-tool selection;
-the retrieval repair below still needs exact-head owner acceptance.
+the owner subsequently passed the bounded scenarios recorded below.
 This is not a normal-app activation or a native voice pass.
 
 The [contract](PROJECT_CONVERSATION_MEMORY.md) owns G1–G8 and acceptance targets.
@@ -424,3 +424,70 @@ Qualify compatible controlled STT → Gemini → existing TTS before claiming sp
 continuity, interruptible playback or end-of-speech latency. First-audio p95 ≤3 s
 has not been measured or accepted. Keep PR draft; merging and installed activation
 remain separate owner decisions.
+
+
+## Owner 6fe86845 rerun and evidence-quality follow-up
+
+Owner logs on 31 October passed original text capture, new-thread recall inside Nepal,
+permit pending → approved correction, project separation, sleep and full process
+restart (Nepal Jimny/approved and interview Tuesday). These are bounded scenario
+passes, not the frozen 100-question score or native voice qualification.
+
+The later trace `Pasted text(20261031-130417).txt` contains 17 checkpoint exchanges
+(34 user/assistant events) followed by process restart and a vehicle/permit query.
+All checkpoint replies were OK. The last prior fact-bearing reply was sequence14;
+the question was49. Search intent50 and result51 returned older sources8–14 plus
+the current question49, then assistant52 answered Jimny/approved correctly. This
+confirms actual older-archive search, but the returned facts came from assistant
+recollections rather than the original vehicle/permit user statements. Zero
+omissions were reported. Console inspection is owner evidence, not an independent
+database integrity audit.
+
+The query reported two provider steps, 8,353 total tokens, and 3,797 ms summed provider
+latency; this excludes local/authorization time and is not full billing evidence.
+The opening request reported three provider steps and 4,220 total tokens. API
+cost/efficiency remains an acceptance concern; no currency estimate is inferred.
+
+A separate authorizing-stage failure after a gap repeated the last successful
+request ID. Source inspection shows authorization is checked before assigning a
+new request. Restart/Hello restored access. Windows continuity revocation is a
+possible explanation; its exact trigger is not captured, so expiry/child exhaustion
+is not asserted and grants are not bypassed or automatically renewed.
+
+### Follow-up implementation (not yet owner-qualified)
+
+Search remains project-scoped and bounded to8 hits. Matching user originals and
+assistant discussion are interleaved by per-role recency before the limit; one
+role can fill unused capacity. Tool journal metadata and the current request are
+excluded from search. Explicit source reads/inspection remain unchanged. Selection
+is lexical and can still miss a correction whose wording does not match the query;
+role is provenance, not a guarantee of truth. This does not solve semantic ranking
+or prove complete historical recall. Query/exclusion are included in the authorized
+read material, and existing grants, revocation and request-local read allowlists stay.
+
+When fitting retrieved sources into context, user originals are considered before
+assistant matches, so echoes cannot consume the entire available text budget.
+Final presentation remains chronological with roles, dates and original thread IDs.
+Oversized sources still produce explicit omissions. Context JSON removes formatting
+spaces in both selection estimates and final serialization. No field/source text is
+abbreviated, no new summary/extraction call is added, and the5600/6000 byte caps stay.
+Actual token/cost savings require provider measurement; no percentage is claimed.
+
+Every attempted accepted turn now invalidates the previous packet and gets fresh
+request-local diagnostics before the authorization check. An early denial has no
+stale project/thread attribution and cannot leave the old answer releasable. It
+still blocks recording/generation and requires explicit owner recovery; in-process
+Hello reauthorization and detailed continuity-reason diagnostics remain open.
+
+Regressions reproduced assistant crowd-out, stale denied-request IDs and verbose
+context overhead RED→GREEN. A budget regression also reproduced assistant matches
+crowding original user evidence out during packet assembly and passes after the
+priority repair. Tests with only user or only assistant matches retain the full
+8-hit capacity. No inference, live profile modification or paid allowance occurred.
+Preserve the owner's exact6fe lab; do not edit its source/marker in place. A later
+exact-source lab will qualify this follow-up after hosted checks and review.
+
+Follow-up software verification: 448 scoped tests passed, excluding real OPA locally;
+repository Ruff and changed-file formatting passed. Full Windows/real-policy gates
+must qualify the published follow-up separately. The former tool head1226cd68 now
+has both hosted checks successful (Code Quality41197953278, SQLCipher41197953280).

@@ -34,7 +34,11 @@ class ProjectMemoryTools:
             raise PermissionError("archive search budget exhausted")
         self._searched = True
         result = await self.access.snapshot(
-            self.selection, query=query, limit=8, project_wide=True
+            self.selection,
+            query=query,
+            limit=8,
+            project_wide=True,
+            exclude_request_id=self.request_id,
         )
         self._check()
         self._allowed.update(s.event.event_id for s in result.sources)

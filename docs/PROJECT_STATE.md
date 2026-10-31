@@ -6,7 +6,9 @@ Reviewed runtime `6fe868455478345c53c78692e50fabe596550497` passed Code Quality
 `41189722071` and Windows SQLCipher `41189722075`, with 408 scoped software tests.
 Owner tests at `94550e78` passed short recall/correction/project separation/sleep/restart,
 but new-thread recall failed during repeated personal-tool selection. The later
-project-context/tool-availability repair has NOT yet passed that owner rerun.
+6fe86845 owner rerun passed bounded new-thread/correction/separation/sleep/restart
+and older-archive search scenarios. Retrieved facts came from assistant echoes;
+original-user retrieval, efficiency and authorization usability need follow-up.
 The [acceptance record](project-memory-acceptance.md) retains each failure and repair.
 Task 5's new offline console-log analyzer prepares metadata accounting only: no new
 provider request, model quality score, native acceptance, activation or merge follows.

@@ -23,7 +23,12 @@ guide retains the earlier routing, mixed-response and repeated-personal-tool fai
 
 Owner testing at `94550e78` passed short replies, corrections, project separation,
 sleep and process restart, then FAILED new-thread retrieval. The owner's rerun of
-`6fe86845` is still pending. Do not reclassify that gate from software test results.
+`6fe86845` passed short/new-thread recall, corrections, separation, sleep/restart and
+an older-archive search after34 checkpoint events. Original-user evidence selection
+was not established: hits favored assistant echoes. The follow-up balances user and
+assistant hits, excludes current-question/tool noise, prioritizes retrieved originals
+within the packet, compacts JSON and resets diagnostics before authorization.
+These changes require their own exact-source owner qualification.
 Native microphone/STT/TTS qualification, larger-history/model scoring, personal facts,
 controls and long-running grant renewal remain open. No rollout/merge is claimed.
 
