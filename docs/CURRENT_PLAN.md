@@ -26,7 +26,13 @@ status request failed with `ValueError` during generation. The subsequent owner 
 combination the application rejects. A closed single-response union repairs the
 contract without added model calls or weaker source guards. Preserve the old lab;
 qualify the repair at a new exact-source isolated root after CI. The original
-uninstrumented failure remains unattributed; full acceptance is still OPEN. No general rollout/merge is claimed.
+uninstrumented failure remains unattributed. Owner testing at `94550e78` passed
+short replies, correction, project separation, sleep and full restart. New-thread
+retrieval then FAILED: the model repeated personal queries instead of using the
+older project archive. The repair supplies bounded recent project-wide context
+and request-local tool schemas that exclude used/unavailable operations and restrict
+reads to actual search hits. Preserve the failed lab; qualify this repair in a new
+exact-source root. Full acceptance remains OPEN. No general rollout/merge is claimed.
 
 | Stage | Software status | Outstanding evidence |
 |---|---|---|

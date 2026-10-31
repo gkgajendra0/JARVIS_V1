@@ -547,3 +547,185 @@ async def test_failure_probe_observes_real_mixed_step_without_losing_saved_user(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_new_thread_receives_prior_project_sources_before_first_generation(
+    tmp_path, authority_parts
+):
+    import json
+
+    _, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    c = ConversationSession()
+    c.start()
+    try:
+        old = None
+        for text in (
+            "Continue my Nepal trip",
+            "We will take the Jimny. The permit is pending.",
+            "Switch to interview preparation",
+            "My interview is on Tuesday.",
+            "New conversation in Nepal trip",
+        ):
+            turn = c.accept_turn(ConversationRole.USER, text)
+            packet = await coordinator.prepare_reply(c, turn, authorize=access.current)
+            if "Jimny" in text:
+                old = packet.selection.thread_id
+        assert packet.selection.thread_id != old
+        wire = WireBoundary()
+        turn = c.accept_turn(
+            ConversationRole.USER, "Which vehicle did I choose for my Nepal trip?"
+        )
+        result = await coordinator.respond(
+            c, turn, provider=ProjectAnswerProvider(wire), authorize=access.current
+        )
+        rows = json.loads(wire.calls[0]["context"])["sources"]
+        assert any(
+            s["thread_id"] == old and s["role"] == "user" and "Jimny" in s["text"]
+            for s in rows
+        )
+        assert "permit is pending" in wire.calls[0]["context"]
+        assert "Tuesday" not in wire.calls[0]["context"]
+        assert len(result.usage) == 1
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_empty_personal_query_cannot_loop_and_older_archive_remains_retrievable(
+    tmp_path, authority_parts
+):
+    import json
+    from dataclasses import replace
+    from datetime import UTC, datetime
+
+    from test_project_conversation_store import event
+
+    from jarvis.hands.provider_adapters import GeminiStructuredOutputClient
+
+    _, store, _, permit, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    c = ConversationSession()
+    c.start()
+    try:
+        for text in (
+            "Continue my Nepal trip",
+            "We will take the Jimny. The permit is pending.",
+        ):
+            packet = await coordinator.prepare_reply(
+                c, c.accept_turn(ConversationRole.USER, text), authorize=access.current
+            )
+        source = next(
+            s
+            for s in (await access.snapshot(packet.selection)).sources
+            if "Jimny" in s.event.text
+        )
+        revision = (await access.snapshot(packet.selection)).archive_revision
+        for i in range(40):
+            value = replace(
+                event(f"noise-{i}", text=f"Unrelated planning note {i}"),
+                accepted_at=datetime.now(UTC),
+            )
+            material = store.append_material(packet.selection, value, revision)
+            await store.append_event(
+                packet.selection,
+                value,
+                permit=permit("admit", material, value),
+                expected_revision=revision,
+            )
+            revision += 1
+        await coordinator.prepare_reply(
+            c,
+            c.accept_turn(ConversationRole.USER, "New conversation in Nepal trip"),
+            authorize=access.current,
+        )
+
+        class EmptyPersonal:
+            calls = 0
+
+            async def query_for_question(self, requests):
+                self.calls += 1
+                return {"status": "no_match", "facts": []}
+
+            def close(self):
+                pass
+
+        personal = EmptyPersonal()
+        coordinator.personal_factory = lambda _: personal
+        wires = []
+
+        class Endpoint:
+            async def create(self, **kwargs):
+                payload = json.loads(kwargs["input"])
+                wires.append(payload)
+                responses = [
+                    {"personal_requests": [{"scope_key": "owned_item.vehicle"}]},
+                    {"search_query": "Jimny"},
+                    {"source_ids": [source.event.event_id]},
+                    {"answer": "You chose the Jimny; the permit is pending."},
+                ]
+                return SimpleNamespace(
+                    output_text=json.dumps({"response": responses[len(wires) - 1]}),
+                    usage={},
+                )
+
+        sdk = GeminiStructuredOutputClient(
+            client=SimpleNamespace(aio=SimpleNamespace(interactions=Endpoint())),
+            model="configured-model",
+        )
+
+        class RouterBoundary:
+            async def parse_with_telemetry(self, **kwargs):
+                await kwargs["before_dispatch"]()
+                return await sdk.parse_with_telemetry(
+                    **{
+                        k: kwargs[k]
+                        for k in ("system_prompt", "input_payload", "response_model")
+                    }
+                )
+
+        result = await coordinator.respond(
+            c,
+            c.accept_turn(
+                ConversationRole.USER, "Which vehicle did I choose for my Nepal trip?"
+            ),
+            provider=ProjectAnswerProvider(RouterBoundary()),
+            authorize=access.current,
+        )
+        assert result.answer == "You chose the Jimny; the permit is pending."
+        assert len(wires) == 4 and personal.calls == 1
+        assert "Jimny" not in wires[0]["context"]
+        assert wires[0]["available_tools"]["personal_available"]
+        assert not wires[1]["available_tools"]["personal_available"]
+        assert wires[1]["available_tools"]["search_available"]
+        assert wires[2]["available_tools"]["read_source_ids"] == [source.event.event_id]
+        assert "Jimny" in wires[-1]["context"]
+        assert wires[-1]["available_tools"] == {
+            "search_available": False,
+            "personal_available": False,
+            "read_source_ids": [],
+            "remaining_steps": 1,
+        }
+        assert [u["operation"] for u in result.usage] == [
+            "reply-0",
+            "reply-1",
+            "reply-2",
+            "reply-3",
+        ]
+        await coordinator.validate_for_release(result)
+    finally:
+        coordinator.invalidate("test_done")
+        await reader.close()
+        await writer.close()

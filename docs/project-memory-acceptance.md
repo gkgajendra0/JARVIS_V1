@@ -4,7 +4,9 @@ Status: controlled **text** implementation; owner-machine and real-model accepta
 OPEN. The first Windows text run at `7b6c6ede` FAILED during routing. At
 `d8504526`, routing/capture and recall after sleep passed on the owner machine,
 but generation intermittently FAILED with `ValueError`; the probe later confirmed
-a mixed answer/source-read response. The schema repair requires a new exact-head rerun.
+a mixed answer/source-read response. The schema repair passed short owner testing,
+but the subsequent new-thread test failed during repeated personal-tool selection;
+the retrieval repair below still needs exact-head owner acceptance.
 This is not a normal-app activation or a native voice pass.
 
 The [contract](PROJECT_CONVERSATION_MEMORY.md) owns G1–G8 and acceptance targets.
@@ -204,6 +206,74 @@ repository Ruff/format and relative-link checks passed, and independent review
 found no Critical/Important issue. Google supports the closed object alternatives;
 string nonemptiness/length is also validated locally because provider decoding does
 not enforce every string constraint. No live provider request ran here.
+
+## New-thread retrieval failure and request-local tool availability repair
+
+At `94550e78`, owner trace `Pasted text(20261031-092206).txt` created a new Nepal
+thread and asked for the previously chosen vehicle and permit status. Both requests
+failed at `tool_personal` with PermissionError. Inspection still showed the original
+Jimny/pending statement in the older Nepal thread. The failure was not lost storage:
+one personal-tool intent/result was recorded, followed by another personal intent
+and no second result. The coordinator denied that second request at its one-query
+limit. The first personal result's precise status is not present in the pasted log.
+
+Two application gaps led to this path. The initial context snapshot covered only the
+active thread, despite the project being the persistent workspace. The static wire
+schema offered personal reads repeatedly, and even offered source reads before any
+request-local search hits existed. Prompts alone did not describe/enforce the actual
+remaining tool state. Earlier tests manually exercised archive reads across threads;
+they did not verify that the first generation in a new thread received project
+evidence or that the provider schema excluded exhausted tools.
+
+### Repair design
+
+Initial context now uses the existing authorized project-wide snapshot, with at most
+32 recent originals and the unchanged 5,600 selection / 6,000 total wire-byte upper
+bounds. Sources retain original thread, role, time and event IDs. Active-thread
+revision/sequence metadata still describe the selected recording thread; the global
+store revision invalidates replies if any covered archive data change. Different
+projects are excluded by the existing SQL scope and permit binding. This is bounded
+recent project context, not an unlimited transcript upload or a complete archive scan.
+
+Each provider call receives server-owned tool availability, derived from the current
+request's actual search/read usage, personal-query usage and remaining answer steps.
+A dynamic closed response schema removes unavailable/exhausted choices. Source reads
+are offered only for request-local search-hit IDs using a string enum; no global
+schema cache retains those IDs. The final fourth step permits only an answer. The
+coordinator independently checks availability before recording tool intent, and the
+existing read allowlist, one-use permits, revision guards and personal consent checks
+remain enforced. No tool limit, grant capacity, paid allowance or continuation budget
+is increased. No extraction, planner, repair or automatic retry request is introduced.
+
+The prompt distinguishes canonical personal facts from project conversation history
+and tells the model to use archive search when project evidence is missing. Recent
+project evidence can now answer directly without a retrieval-planning model call.
+Older material beyond the bounded recent window remains searchable/readable through
+the existing ordinary answer/tool cycle. Actual model decisions still need testing.
+
+### Evidence and remaining limits
+
+A RED test showed that the old first-generation payload in a new thread lacked the
+previous Jimny user source. It now contains that source and permit statement, with
+its original thread ID, while excluding the interview's Tuesday detail. Wire tests
+verify exhausted personal/search choices, premature/foreign source IDs and final-step
+tool requests are rejected. A longer-history fixture pushes Jimny beyond 32 recent
+events: the actual adapter with a fake endpoint runs personal → archive search →
+source read → answer in four calls, with exactly one personal query and no extra
+repair request. This proves software dataflow and budget enforcement, not live model
+answer quality. The final recent window excludes Jimny until the archive tool retrieves it.
+
+The original forty-turn fixture setup exhausted the existing delegated child-permit
+cap. It was changed to seed history with real source-bound append permits, without
+raising production limits. Long-running grant renewal remains a separate acceptance
+concern; this repair does not claim unlimited uninterrupted conversation.
+
+Final repair verification: **407 scoped tests passed**; repository Ruff/format and
+relative-link checks passed. Independent review found no Critical/Important issue.
+Real OPA/full local suite
+telemetry restrictions remain in force; production-policy integration is hosted CI.
+The owner lab at `94550e78` is retained as evidence; use a fresh isolated exact-source
+root to qualify the repaired new-thread path after CI. Full acceptance remains OPEN.
 
 ## Frozen actual-model questions: UNRUN
 

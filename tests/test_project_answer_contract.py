@@ -89,7 +89,16 @@ async def test_real_gemini_adapter_receives_closed_variant_schema_and_parses_rep
         request_id="request", revision="revision", context="saved context"
     )
     result = await ProjectAnswerProvider(Router()).step(
-        packet, question="When?", check=lambda: True, operation_id="reply-0"
+        packet,
+        question="When?",
+        check=lambda: True,
+        operation_id="reply-0",
+        available_tools={
+            "search_available": True,
+            "read_source_ids": ["saved-turn"],
+            "personal_available": True,
+            "remaining_steps": 4,
+        },
     )
     assert result.parsed.answer == "Monday."
     assert len(requests) == 1
@@ -142,3 +151,79 @@ async def test_real_adapter_rejects_observed_mixture_without_retry(payload):
             system_prompt="answer", input_payload={}, response_model=ProjectAnswerStep
         )
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    "state,rejected",
+    [
+        (
+            {
+                "search_available": True,
+                "personal_available": False,
+                "read_source_ids": [],
+                "remaining_steps": 3,
+            },
+            {"personal_requests": [{"scope_key": "owned_item.vehicle"}]},
+        ),
+        (
+            {
+                "search_available": False,
+                "personal_available": True,
+                "read_source_ids": [],
+                "remaining_steps": 3,
+            },
+            {"search_query": "again"},
+        ),
+        (
+            {
+                "search_available": True,
+                "personal_available": True,
+                "read_source_ids": [],
+                "remaining_steps": 4,
+            },
+            {"source_ids": ["unreturned-source"]},
+        ),
+        (
+            {
+                "search_available": False,
+                "personal_available": False,
+                "read_source_ids": ["owned-hit"],
+                "remaining_steps": 2,
+            },
+            {"source_ids": ["other-project-source"]},
+        ),
+        (
+            {
+                "search_available": True,
+                "personal_available": True,
+                "read_source_ids": ["owned-hit"],
+                "remaining_steps": 1,
+            },
+            {"search_query": "one-more-request"},
+        ),
+    ],
+)
+def test_wire_contract_excludes_unavailable_or_exhausted_tools(state, rejected):
+    from jarvis.voice.project_answer_provider import response_model_for_tools
+
+    model = response_model_for_tools(state)
+    with pytest.raises(ValidationError):
+        model.model_validate_json(json.dumps({"response": rejected}))
+    assert model.model_validate_json(
+        '{"response":{"answer":"Available evidence is limited."}}'
+    ).answer
+
+
+def test_wire_read_variant_allows_only_current_search_hit_ids():
+    from jarvis.voice.project_answer_provider import response_model_for_tools
+
+    model = response_model_for_tools(
+        {
+            "search_available": False,
+            "personal_available": False,
+            "read_source_ids": ["hit-1", "hit-2"],
+            "remaining_steps": 2,
+        }
+    )
+    step = model.model_validate_json('{"response":{"source_ids":["hit-2"]}}')
+    assert step.source_ids == ["hit-2"] and type(step.source_ids[0]) is str

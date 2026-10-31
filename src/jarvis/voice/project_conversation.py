@@ -114,7 +114,9 @@ class ProjectConversationCoordinator:
         self, selection, *, request_id, extra_sources=(), personal=None, retrieval=()
     ):
         before = (self.access.local_revision, self.access.store.change_revision)
-        snapshot = await self.access.snapshot(selection)
+        # A project is the durable context boundary; a new thread must not hide
+        # its recent originals. The same authorized scope and wire budget apply.
+        snapshot = await self.access.snapshot(selection, project_wide=True)
         if before != (self.access.local_revision, self.access.store.change_revision):
             raise PermissionError("archive changed during context preparation")
         context, ids, tokens = build_project_context(
@@ -286,11 +288,16 @@ class ProjectConversationCoordinator:
                 self._check(packet)
 
             self.stage = "generating"
+            available = tools.availability(
+                personal_available=self._personal is not None and not personal_read,
+                remaining_steps=4 - index,
+            )
             telemetry = await provider.step(
                 packet,
                 question=turn.text,
                 check=dispatch_check,
                 operation_id=f"reply-{index}",
+                available_tools=available,
             )
             usage.append(
                 {
@@ -318,6 +325,12 @@ class ProjectConversationCoordinator:
                     else "personal"
                 )
                 self.stage = "tool_" + name
+                if not {
+                    "search": available["search_available"],
+                    "read": bool(available["read_source_ids"]),
+                    "personal": available["personal_available"],
+                }[name]:
+                    raise PermissionError("memory tool unavailable for this request")
                 await self._capture_tool(conversation, packet, name, "intent")
                 if step.search_query:
                     result = await tools.search_conversation_memory(
