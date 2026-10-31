@@ -43,6 +43,16 @@ def marker_leaks(paths: list[Path]) -> list[str]:
     ]
 
 
+def migration_checks(user_version, migration_count):
+    from jarvis.memory.migration_runner import discover_memory_migrations
+
+    migrations = discover_memory_migrations()
+    return {
+        "migration_version": user_version == migrations[-1].version,
+        "migration_ledger_complete": migration_count == len(migrations),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -185,8 +195,7 @@ def main() -> None:
         "cipher_status": int(first_cipher_status or 0) == 1,
         "cipher_version": str(first_cipher_version).startswith("4.17.0"),
         "sqlite_version": first_sqlite_version == "3.53.3",
-        "migration_version": first_user_version == 4,
-        "migration_ledger_complete": migration_count == 4,
+        **migration_checks(first_user_version, migration_count),
         "semantic_retrieval_schema": embedding_schema_count == 1,
         "fts_first_open": first_fts_hits == 1,
         "reopen_current_assertion": reopened_count == 1,
