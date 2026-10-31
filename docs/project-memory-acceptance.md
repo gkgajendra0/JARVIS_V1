@@ -1,8 +1,9 @@
 # Project conversation memory acceptance
 
 Status: controlled **text** implementation; owner-machine and real-model acceptance
-OPEN. The first Windows text run at `7b6c6ede` FAILED during routing with
-`PermissionError`; the repair below requires a fresh exact-head owner rerun.
+OPEN. The first Windows text run at `7b6c6ede` FAILED during routing. At
+`d8504526`, routing/capture and recall after sleep passed on the owner machine,
+but one status request FAILED during generation with `ValueError`.
 This is not a normal-app activation or a native voice pass.
 
 The [contract](PROJECT_CONVERSATION_MEMORY.md) owns G1–G8 and acceptance targets.
@@ -105,6 +106,51 @@ no Critical/Important issue. Actual owner-machine/Gemini acceptance remains OPEN
 Exit the old lab with `/quit`. Keep its profile for diagnosis. Its failed first
 turn was not captured. Start a new isolated profile with the repaired exact commit;
 do not resume the old profile with a different pinned source revision.
+
+## Owner rerun at d8504526: partial pass, generation failure unresolved
+
+The owner machine committed the first Nepal user/assistant pair and the Jimny /
+permit-pending pair. The first status request committed its user event (sequence 5),
+then failed in stage `generating` with exact exception type `ValueError`; no assistant
+event was fabricated. After `/sleep`, the same named status query correctly recalled
+Jimny and permit pending. `/inspect` showed seven original events, the same project
+and thread, and zero omissions. This is actual Windows/Hello/SQLCipher/Gemini evidence
+for this short sequence, including recall after sleep, not process-restart, all goals
+or full reliability acceptance. Failed-call usage is not present in the pasted trace;
+do not count it as zero.
+
+The exact generation failure is UNKNOWN because the lab catch handler printed only
+exception type. Two coordinator checks can raise a plain ValueError in this stage:
+a response mixing an answer and tool request (or multiple tools), and an empty
+answer without tools. The provider/invoker may also raise ValueError. A network-free
+fixture reproduces the mixed-response path and identical stage, but does not prove
+that it caused this owner's failed call. No speculative retry or relaxed tool/scope
+validation is applied.
+
+`tools/project_memory_failure_probe.py` is a diagnostic companion, extracted outside
+the reviewed checkout. Run it with the existing lab's `source/src` on PYTHONPATH and
+the same `--source-commit`, `--lab-root <existing-lab>/profile`, `--model`, and
+`--resume-lab`. Exit the old process first to release its profile lock. The original
+lab main still verifies source cleanliness, pinned commit and profile marker, renews
+Hello consent and takes its exclusive lock. Existing history is retained.
+
+The probe reports only response presence/counts and code locations (module/function/
+line), exception class and two allowlisted reason codes. No arbitrary exception
+message, frame locals, prompt, raw model text, credential or full filesystem path
+is printed by the probe. Ordinary lab answers and explicit inspection keep their
+existing behavior. It neither retries nor changes authority, fallback, storage or
+provider inputs. Unit tests verify same-result/same-exception behavior, one dispatch,
+method restoration and redaction; a real coordinator/store fixture verifies that
+the failed user's event remains committed without a fake assistant event.
+The diagnostic change passed 381 scoped tests (real-OPA module excluded), repository
+Ruff and formatting checks. Independent review found no Critical/Important issue;
+its diagnostic-output-failure minor was reproduced and fixed without changing
+normal results or original exceptions.
+
+The owner-only next step is to reproduce a generation failure under this probe,
+using the retained Nepal project. A successful probe query alone does not diagnose
+the earlier intermittent error. Share only `PROJECT_PROBE_STEP`,
+`PROJECT_PROBE_FAILURE` and `NOT COMPLETED` lines when a failure occurs.
 
 ## Frozen actual-model questions: UNRUN
 

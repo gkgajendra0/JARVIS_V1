@@ -19,7 +19,11 @@ The normal voice path remains unchanged. Pinned native Gemini generation can pre
 final transcription; a compatible controlled STT path is still unqualified. The first owner Windows text attempt at `7b6c6ede` failed during routing because
 production Rego lacked conversation-history delegation. The repair adds the narrow
 policy branch and a mandatory real-OPA CI regression. The next owner dependency is
-a fresh isolated Windows/Hello/SQLCipher and Gemini rerun after exact-head checks. No general rollout/merge is claimed.
+a generation-failure reproduction in the retained lab: the owner rerun at
+`d8504526` saved original turns and recalled Jimny/permit after sleep, but one
+status request failed with `ValueError` during generation. Exception detail was
+discarded; use the redacted failure probe with the same pinned source/profile.
+Do not restart with empty history or claim full acceptance. No general rollout/merge is claimed.
 
 | Stage | Software status | Outstanding evidence |
 |---|---|---|

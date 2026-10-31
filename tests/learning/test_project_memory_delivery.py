@@ -478,3 +478,65 @@ def test_existing_gemini_adapter_serializes_the_prepared_context_in_actual_wire_
             await writer.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.asyncio
+async def test_failure_probe_observes_real_mixed_step_without_losing_saved_user(
+    tmp_path, authority_parts
+):
+    import json
+    import runpy
+    from pathlib import Path
+
+    probe = runpy.run_path(
+        str(Path(__file__).parents[2] / "tools/project_memory_failure_probe.py")
+    )
+    _, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    rows = []
+
+    class MixedWire(WireBoundary):
+        async def parse_with_telemetry(self, **kwargs):
+            await kwargs["before_dispatch"]()
+            self.calls.append(kwargs["input_payload"])
+            return SimpleNamespace(
+                parsed=kwargs["response_model"](
+                    answer="PRIVATE_MODEL_ANSWER", search_query="PRIVATE_QUERY"
+                ),
+                usage={},
+                usage_observed=False,
+                latency_ms=1,
+            )
+
+    wire = MixedWire()
+    c = ConversationSession()
+    c.start()
+    turn = c.accept_turn(ConversationRole.USER, "What is the status of my Nepal trip?")
+    try:
+        with (
+            probe["trace_calls"](
+                ProjectAnswerProvider, ProjectConversationCoordinator, emit=rows.append
+            ),
+            pytest.raises(ValueError, match="one memory tool or answer"),
+        ):
+            await coordinator.respond(
+                c, turn, provider=ProjectAnswerProvider(wire), authorize=access.current
+            )
+        assert len(wire.calls) == 1
+        error = json.loads(rows[-1].split(" ", 1)[1])
+        assert error["reason"] == "mixed_answer_or_tools"
+        assert error["frames"][-1]["module"] == "jarvis.voice.project_conversation"
+        assert coordinator.stage == "generating"
+        catalog = await access.catalog()
+        snapshot = await access.snapshot(catalog.current)
+        assert [s.event.role for s in snapshot.sources] == ["user"]
+        assert snapshot.sources[0].event.text == turn.text
+        assert "PRIVATE_" not in "\n".join(rows)
+    finally:
+        await reader.close()
+        await writer.close()
