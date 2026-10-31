@@ -50,6 +50,14 @@ fresh Hello recovery without replaying failed questions or clearing retention pa
 This harness/recovery path needs its own hosted and owner qualification; preserve
 existing labs. See the acceptance guide for first-trial limits.
 
+Owner52ee first-trial original-evidence conflict, explicit active-session Hello
+renewal, pause/resume/omission and50-source deletion scenarios passed. Both52ee
+hosted gates succeeded. Efficiency follow-up removes nested context JSON encoding
+and clarifies archive-first project recall while preserving personal tools/consent.
+One synthetic SDK measurement reduced input bytes4040→3809 without dropping evidence;
+real tokens/calls/latency improvement is not yet measured.461 scoped tests pass.
+Broader/model/voice qualification and revoked-session owner recovery remain open.
+
 | Stage | Software status | Outstanding evidence |
 |---|---|---|
 | Task 0 | Native ordering characterized; awaited controlled dispatch and serialized payload tested | Native speech/STT/TTS qualification |

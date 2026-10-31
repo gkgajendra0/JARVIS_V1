@@ -16,6 +16,14 @@ The frozen 100 model questions and full system acceptance remain OPEN.
 
 Existing PR #303 baseline `7800e984780b36ee18dd5e4be61a85b899bc7def` passed 624 focused tests and hosted Code Quality/SQLCipher verification, but the owner's native Nepal-status trace restored empty details. Historical native connected-conversation acceptance remains FAILED. Historical CI results do not qualify the controlled-text replacement. This branch record does not change accepted main/runtime milestones below.
 
+**Owner text acceptance update — 31 October:**52ee3790 passed the narrow seeded
+original-user versus conflicting-assistant recall scenario, active-session explicit
+Hello renewal, pause/resume/omission and deletion (50 sources, empty catalog).
+Both exact-head hosted gates succeeded. It still used3 model calls and11,581 tokens
+for the conflict question. The next efficiency candidate changes context wire
+encoding and project-first guidance; software success does not establish its actual
+model savings or complete memory/native acceptance. See the acceptance record.
+
 **Gemini Free/Paid candidate (23 October 2026):** existing routers and one
 cumulative INR350 governor support bounded Work/Hands/memory fallback. The
 controlled public Live adapter and normal handoff are implemented and software

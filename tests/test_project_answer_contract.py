@@ -86,7 +86,7 @@ async def test_real_gemini_adapter_receives_closed_variant_schema_and_parses_rep
             )
 
     packet = SimpleNamespace(
-        request_id="request", revision="revision", context="saved context"
+        request_id="request", revision="revision", context='{"sources":[]}'
     )
     result = await ProjectAnswerProvider(Router()).step(
         packet,

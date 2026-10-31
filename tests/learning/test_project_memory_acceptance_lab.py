@@ -97,7 +97,7 @@ async def test_original_source_report_observes_real_search_to_generation(empty_a
     class Wire:
         async def parse_with_telemetry(self, **kwargs):
             await kwargs["before_dispatch"]()
-            payloads.append(json.loads(kwargs["input_payload"]["context"]))
+            payloads.append(kwargs["input_payload"]["context"])
             response = (
                 {"search_query": "vehicle permit"}
                 if len(payloads) == 1

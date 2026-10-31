@@ -562,3 +562,64 @@ thread-return regression and the full456-test scoped suite pass after the fix.
 Real Windows/PowerShell/Hello/SQLCipher/OPA, Gemini quality, owner outcomes and hosted
 checks remain external gates; review did not independently qualify them. No deferred
 Minor findings were raised.
+
+
+## Owner52ee controls and efficiency follow-up
+
+Both exact52ee hosted runs succeeded: Code Quality41205833799 and
+SQLCipher41205833776. The owner seeded the fictional43-event lab on Windows and
+asked its first question. `fresh_fixture_trial:true`, both original sources and the
+conflicting assistant source reached final context. Gemini correctly chose
+Jimny/approved over the later assistant Scorpio/pending claim. This is one actual
+original-evidence conflict pass; the frozen100-question and native gates stay OPEN.
+
+The owner request used3 reported provider steps: personal/no_match, then
+search/complete, then answer. Reported usage totaled11,581 tokens; summed provider
+latency4,008.1119ms excludes local/auth overhead and is not complete billing evidence.
+Explicit `/reauthorize` reported fresh approval, preserved project/thread and
+archive revision49, and did not replay the question. This tested deliberate renewal
+while active, not an actual lock/revocation recovery or cancellation on the owner PC.
+
+Pause blocked the cedar-481 note with stage retention_paused. Inspection after resume
+showed active retention, one omission and no cedar-481 source text. `/forget` returned
+50 deleted sources; `/projects` returned empty entries/current null. These are bounded
+owner control passes, not an independent audit of physical erasure or every derived
+store. The fixture was fictional; the earlier6fe owner lab was not modified.
+
+### Efficiency candidate (software verified, actual-model effect unrun)
+
+ProjectAnswerProvider now decodes its prepared context once and passes it as an
+object in the existing outer JSON payload, eliminating a nested JSON string and
+its extra escaping. It preserves every selected source value/role/identity,
+coverage/omission field, personal context, context revision and request-local tool
+availability. Malformed/non-object context fails before dispatch. The underlying
+prepared-context hash and5600/6000 byte caps are unchanged; personal authorization,
+currentness and final dispatch guards remain. No source filtering, summary or new
+model request is introduced.
+
+The prompt is shorter and explicitly distinguishes past project choices/status
+(search the project archive first when evidence is missing) from relevant established
+global ownership/preferences/background (personal facts with consent). Sufficient
+supplied evidence should be answered directly; a source read is optional because
+search already returns source text. Personal tools remain available; the code does
+not impose a new NLP classifier, mandatory archive lookup for every personal question,
+or a tool-budget change. This guidance is probabilistic: an unnecessary personal
+query is not claimed eliminated until an actual-model comparison supports it.
+
+A no-inference comparison used the real Gemini SDK adapter with a fake endpoint,
+identical12-source multilingual/quoted/backslash evidence and identical availability.
+Baseline52ee input:4040 UTF-8 bytes; candidate:3809 (5.72% smaller). System prompt:
+2188→2031 bytes. Serialized SDK argument objects:8797→7961 bytes (9.50% smaller).
+Both observations used one fake response; neither executed a real model request.
+These are one synthetic wire-size measurement, not a representative token percentage,
+latency result or provider bill. The new regression verifies parsed context equality
+and smaller encoding; source preservation is checked at the actual adapter boundary.
+Actual request counts, observed usage and answer correctness still require the same
+fresh seeded first-question test. No checkpoint conversations need to be repeated.
+
+Software verification:461 scoped tests passed with real OPA excluded locally,
+including five new SDK-wire/invalid-context cases that failed RED before the change.
+Existing personal source/consent/revocation, project separation, older-source,
+conflict and controls tests remain green. Full local/OPA telemetry restrictions are
+unchanged. Independent review and hosted qualification apply to this candidate
+separately; no current-head model/Windows pass is inherited from52ee.

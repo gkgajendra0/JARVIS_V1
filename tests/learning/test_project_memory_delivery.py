@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -59,11 +60,10 @@ def test_connected_project_history_reaches_generation_without_save_proposals(
                     conversation, turn, provider=provider, authorize=lambda: True
                 )
             payload = provider.client.calls[-1]
-            assert (
-                "Jimny" in payload["context"]
-                and "permit is pending" in payload["context"]
-            )
-            assert "interview is on Monday" not in payload["context"]
+            assert "Jimny" in json.dumps(
+                payload["context"]
+            ) and "permit is pending" in json.dumps(payload["context"])
+            assert "interview is on Monday" not in json.dumps(payload["context"])
             assert result.packet.source_ids
             old = result.packet
             coordinator.invalidate("sleep")
@@ -79,7 +79,7 @@ def test_connected_project_history_reaches_generation_without_save_proposals(
             await resumed.respond(
                 next_segment, turn, provider=provider, authorize=lambda: True
             )
-            assert "Jimny" in provider.client.calls[-1]["context"]
+            assert "Jimny" in json.dumps(provider.client.calls[-1]["context"])
         finally:
             await reader.close()
             await writer.close()
@@ -313,7 +313,6 @@ def test_archive_search_outcome_is_explicit_in_actual_next_generation_payload(
 ):
     async def scenario():
         import inspect
-        import json
 
         _, store, _, _, writer, reader, issuer, grant = await setup_store(
             tmp_path, authority_parts
@@ -351,7 +350,7 @@ def test_archive_search_outcome_is_explicit_in_actual_next_generation_payload(
             await coordinator.respond(
                 c, turn, provider=ProjectAnswerProvider(wire), authorize=lambda: True
             )
-            context = json.loads(wire.calls[-1]["context"])
+            context = wire.calls[-1]["context"]
             assert (
                 "retrieval" in context
                 and context["retrieval"][0]["status"] == "no_match"
@@ -472,7 +471,7 @@ def test_existing_gemini_adapter_serializes_the_prepared_context_in_actual_wire_
                 authorize=lambda: True,
             )
             sent = json.loads(wire[0]["input"])
-            assert sent["context"] == response.packet.context
+            assert sent["context"] == json.loads(response.packet.context)
             assert sent["context_revision"] == response.packet.revision
             assert sent["request_id"] == response.packet.request_id
             assert wire[0]["store"] is False
@@ -585,13 +584,13 @@ async def test_new_thread_receives_prior_project_sources_before_first_generation
         result = await coordinator.respond(
             c, turn, provider=ProjectAnswerProvider(wire), authorize=access.current
         )
-        rows = json.loads(wire.calls[0]["context"])["sources"]
+        rows = wire.calls[0]["context"]["sources"]
         assert any(
             s["thread_id"] == old and s["role"] == "user" and "Jimny" in s["text"]
             for s in rows
         )
-        assert "permit is pending" in wire.calls[0]["context"]
-        assert "Tuesday" not in wire.calls[0]["context"]
+        assert "permit is pending" in json.dumps(wire.calls[0]["context"])
+        assert "Tuesday" not in json.dumps(wire.calls[0]["context"])
         assert len(result.usage) == 1
     finally:
         await reader.close()
@@ -706,12 +705,12 @@ async def test_empty_personal_query_cannot_loop_and_older_archive_remains_retrie
         )
         assert result.answer == "You chose the Jimny; the permit is pending."
         assert len(wires) == 4 and personal.calls == 1
-        assert "Jimny" not in wires[0]["context"]
+        assert "Jimny" not in json.dumps(wires[0]["context"])
         assert wires[0]["available_tools"]["personal_available"]
         assert not wires[1]["available_tools"]["personal_available"]
         assert wires[1]["available_tools"]["search_available"]
         assert wires[2]["available_tools"]["read_source_ids"] == [source.event.event_id]
-        assert "Jimny" in wires[-1]["context"]
+        assert "Jimny" in json.dumps(wires[-1]["context"])
         assert wires[-1]["available_tools"] == {
             "search_available": False,
             "personal_available": False,
