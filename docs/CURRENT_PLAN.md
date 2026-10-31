@@ -16,9 +16,10 @@ Existing canonical personal reads use exact owner consent; no new learning write
 or standalone extraction call is enabled. See the [acceptance/evidence guide](project-memory-acceptance.md).
 
 The normal voice path remains unchanged. Pinned native Gemini generation can precede
-final transcription; a compatible controlled STT path is still unqualified. The next
-owner dependency is actual Windows/Hello/SQLCipher and Gemini testing of the isolated
-text path after exact-head hosted checks. No general rollout/merge is claimed.
+final transcription; a compatible controlled STT path is still unqualified. The first owner Windows text attempt at `7b6c6ede` failed during routing because
+production Rego lacked conversation-history delegation. The repair adds the narrow
+policy branch and a mandatory real-OPA CI regression. The next owner dependency is
+a fresh isolated Windows/Hello/SQLCipher and Gemini rerun after exact-head checks. No general rollout/merge is claimed.
 
 | Stage | Software status | Outstanding evidence |
 |---|---|---|
@@ -31,12 +32,17 @@ text path after exact-head hosted checks. No general rollout/merge is claimed.
 
 ## Verification and unresolved limits
 
-Local scoped verification: 484 tests passed, repository Ruff passed, and 93 relative
+Prior connected-candidate local scoped verification: 484 tests passed, repository Ruff passed, and 93 relative
 links in seven changed Markdown files resolve. Exact-head CI is recorded alongside
 the published candidate, separately from historical results. The replay reconciles all 200 events,
 10 projects and 30 segments after reopen; 200 duplicate callbacks do not add events.
 The four Important review findings were reproduced and repaired. Search outcome
 metadata and late assistant delivery also have payload/source regressions.
+
+Policy-repair unaffected scoped verification: 375 passed; real-OPA final matrix
+requires hosted CI after local automatic review stopped possible OPA telemetry.
+The old simplified-policy fixtures missed the owner failure; see the acceptance
+guide for the cause and repair. Owner acceptance remains OPEN.
 
 The 100 frozen actual-model questions are UNRUN. No real provider request, microphone
 or native playback test ran here. Tests use SQLite fixtures and fake OS/Hello;

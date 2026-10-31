@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from contextlib import contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -19,6 +20,22 @@ from jarvis.memory.topic_continuity_policy import _RESTRICTED
 from jarvis.voice.semantic_smoke_lab import prepare_smoke_profile, smoke_environment
 
 MARKER = "jarvis-project-memory-text-v1"
+
+
+@contextmanager
+def project_lab_environment(profile: Path, repo: Path):
+    """Use this exact-source candidate's policy only within the isolated lab."""
+    policy = (repo / "policies" / "step3_authority.rego").resolve(strict=True)
+    previous = os.environ.get("JARVIS_STEP3_POLICY_PATH")
+    with smoke_environment(profile):
+        os.environ["JARVIS_STEP3_POLICY_PATH"] = str(policy)
+        try:
+            yield
+        finally:
+            if previous is None:
+                os.environ.pop("JARVIS_STEP3_POLICY_PATH", None)
+            else:
+                os.environ["JARVIS_STEP3_POLICY_PATH"] = previous
 
 
 def standard_history_source(turn):
@@ -302,7 +319,7 @@ def main():
         commit=args.source_commit,
         tool_paths=tool_paths,
     )
-    with smoke_environment(profile):
+    with project_lab_environment(profile, repo):
         config = JarvisConfig.from_environment()
         if config.ai_provider != "gemini":
             parser.error("existing Gemini configuration required")

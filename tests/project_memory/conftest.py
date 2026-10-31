@@ -1,4 +1,4 @@
-"""Reuse canonical approval fixtures; only Windows/Hello are simulated."""
+"""Reuse registry fixtures with simplified policy/OS/Hello; real OPA has its own gate."""
 
 import importlib.util
 from pathlib import Path

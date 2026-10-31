@@ -1,4 +1,7 @@
-"""Fictional inputs and real canonical authority, with fake OS/Hello only."""
+"""Fictional inputs with real registries and simplified policy/OS/Hello fixtures.
+
+Production Rego is exercised separately by test_project_history_real_policy.
+"""
 
 from dataclasses import replace
 from types import SimpleNamespace

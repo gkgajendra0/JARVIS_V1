@@ -74,3 +74,27 @@ async def test_text_lab_reads_real_canonical_personal_facts_with_exact_owner_con
         assert len(authority_parts.hello.calls) == 2
     finally:
         session.close()
+
+
+def test_project_lab_pins_reviewed_policy_and_restores_inherited_environment(
+    tmp_path, monkeypatch
+):
+    import os
+
+    from jarvis.voice.project_memory_lab import project_lab_environment
+
+    profile = tmp_path / "lab" / "machine.json"
+    policy = tmp_path / "source" / "policies" / "step3_authority.rego"
+    policy.parent.mkdir(parents=True)
+    policy.write_text("package jarvis.authority")
+    monkeypatch.setenv("JARVIS_STEP3_POLICY_PATH", "old-installed-policy.rego")
+    monkeypatch.setenv("JARVIS_MACHINE_CONFIG", "original-machine.json")
+    with (
+        pytest.raises(RuntimeError, match="exit probe"),
+        project_lab_environment(profile, policy.parent.parent),
+    ):
+        assert os.environ["JARVIS_STEP3_POLICY_PATH"] == str(policy.resolve())
+        assert os.environ["JARVIS_MACHINE_CONFIG"] == str(profile.resolve())
+        raise RuntimeError("exit probe")
+    assert os.environ["JARVIS_STEP3_POLICY_PATH"] == "old-installed-policy.rego"
+    assert os.environ["JARVIS_MACHINE_CONFIG"] == "original-machine.json"

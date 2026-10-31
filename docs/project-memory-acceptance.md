@@ -1,7 +1,9 @@
 # Project conversation memory acceptance
 
 Status: controlled **text** implementation; owner-machine and real-model acceptance
-OPEN. This is not a normal-app activation or a native voice pass.
+OPEN. The first Windows text run at `7b6c6ede` FAILED during routing with
+`PermissionError`; the repair below requires a fresh exact-head owner rerun.
+This is not a normal-app activation or a native voice pass.
 
 The [contract](PROJECT_CONVERSATION_MEMORY.md) owns G1–G8 and acceptance targets.
 The [plan](superpowers/plans/2026-10-31-project-conversation-memory.md) owns work.
@@ -66,10 +68,43 @@ executed merely because an assistant suggested it.
 None of these is an actual-model quality score or Windows spoken acceptance.
 The earlier rejected full-local-suite telemetry command was not rerun/bypassed.
 
-Latest local scoped run: **484 passed**; repository Ruff check passed. A synthetic
+Prior connected-candidate local scoped run: **484 passed**; repository Ruff check passed. A synthetic
 Linux SQLite/fake-OS run measured archive p95 **3.63 ms** (200 samples) and local
 snapshot/context p95 **1.48 ms** (10 samples), with zero model requests. These are
 not SQLCipher/Windows, real-authentication, provider or speech latency measurements.
+
+## Windows routing failure and policy repair (31 October)
+
+The owner launched exact commit `7b6c6ede` successfully, but the first Nepal turn
+failed during routing before project selection, capture or Gemini dispatch. Python
+recognized `memory:conversation_history` delegation; production Rego recognized
+only `memory:personal_learning`. The history catalog read therefore hit the generic
+SYSTEM private-read rule and its attention/actor requirements. The initial strong
+owner grant could not authorize that child read.
+
+The repair adds a dedicated history-delegation policy branch for read/admit/suppress.
+It requires SYSTEM origin, delegated-policy approval and a nonempty string parent
+ID. Python still verifies the registered live grant, exact source/payload/scope,
+revocation and one-use permits. Unrelated private reads keep their existing rules.
+The isolated lab pins the reviewed source policy for its process and restores any
+inherited override on exit; installed policy/settings are not edited.
+
+Earlier tests used a simplified policy fixture, so their green results missed this
+production-policy mismatch. Fixture descriptions are corrected. A real OPA + real
+authority/store integration regression reproduces the routing denial and exercises
+capture/recall with a fake provider. Linux CI now provisions checksum-pinned OPA
+and requires that regression, including malformed/missing delegation and unrelated
+private-read controls. Fake provider answers remain software evidence only.
+
+Unaffected scoped verification after this repair: **375 passed**, excluding the
+real-OPA module. A broader local run was stopped by automatic approval review for
+possible external OPA telemetry with unknown payload; it was not retried. Hosted
+CI must qualify the final policy/test matrix separately. Independent review found
+no Critical/Important issue. Actual owner-machine/Gemini acceptance remains OPEN.
+
+Exit the old lab with `/quit`. Keep its profile for diagnosis. Its failed first
+turn was not captured. Start a new isolated profile with the repaired exact commit;
+do not resume the old profile with a different pinned source revision.
 
 ## Frozen actual-model questions: UNRUN
 
