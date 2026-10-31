@@ -85,9 +85,13 @@ async def test_production_policy_allows_authorized_project_routing_recording_and
             await coordinator.record_assistant(
                 conversation, response, delivered_text=response.answer
             )
-        assert (
-            "Jimny" in wire.inputs[-1]["context"]
-            and "permit is pending" in wire.inputs[-1]["context"]
+        context = wire.inputs[-1]["context"]
+        assert isinstance(context, dict)
+        assert any(
+            source["role"] == "user"
+            and source["text"] == "We will take the Jimny. The permit is pending."
+            and source["thread_id"] == response.packet.selection.thread_id
+            for source in context["sources"]
         )
         assert len(production_policy.hello.calls) == 1
         issuer.revoke(grant)

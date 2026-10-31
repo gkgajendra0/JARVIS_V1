@@ -623,3 +623,27 @@ Existing personal source/consent/revocation, project separation, older-source,
 conflict and controls tests remain green. Full local/OPA telemetry restrictions are
 unchanged. Independent review and hosted qualification apply to this candidate
 separately; no current-head model/Windows pass is inherited from52ee.
+
+
+## Efficiency CI wire-assertion correction
+
+Head640461b0 failed hosted Code Quality41212666571 in
+`test_production_policy_allows_authorized_project_routing_recording_and_recall`.
+The real policy allowed the scenario through routing, capture and three responses;
+the final assertion still searched for Jimny in a context string. Context is now a
+mapping, so Python checked mapping keys and failed. This is a stale test contract,
+not evidence of a policy denial. The original failure remains recorded.
+
+The assertion now requires a mapping and finds the exact original user text and
+recording-thread identity in its sources. No runtime, Rego or workflow gate was
+changed or skipped. A separate wire smoke calls the same scenario using the explicit
+simplified fixture authority, reproducing the assertion RED and passing GREEN after
+the correction without starting OPA locally. It is labelled fixture-policy evidence,
+not production-policy qualification. Hosted CI must still run the original scenario
+with real OPA and all four other production-policy cases. This also brings that
+scenario's wire assertions into future local scoped verification without bypassing
+the earlier OPA/full-local-suite telemetry restriction.
+
+After this test-only correction,462 scoped tests passed; repository Ruff, changed
+formatting and diff checks passed. Actual production-policy qualification remains a
+hosted gate, not inferred from the fixture-authority smoke.
