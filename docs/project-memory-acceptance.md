@@ -268,7 +268,16 @@ cap. It was changed to seed history with real source-bound append permits, witho
 raising production limits. Long-running grant renewal remains a separate acceptance
 concern; this repair does not claim unlimited uninterrupted conversation.
 
-Final repair verification: **407 scoped tests passed**; repository Ruff/format and
+A longer-history budget regression also reproduced a pre-existing assembler error:
+32 medium-length sources could fill the text budget before omitted-source IDs were
+appended, pushing metadata beyond the final cap. The assembler now reserves all
+candidate omission IDs before selecting text, removing an ID only when its complete
+source fits. Source preference/order and the 5,600/6,000 bounds are unchanged;
+selected and omitted IDs remain disjoint and exhaustive. The regression failed on
+the old assembler and passes with the repair. Follow-up review found no
+Critical/Important issue.
+
+Final repair verification: **408 scoped tests passed**; repository Ruff/format and
 relative-link checks passed. Independent review found no Critical/Important issue.
 Real OPA/full local suite
 telemetry restrictions remain in force; production-policy integration is hosted CI.

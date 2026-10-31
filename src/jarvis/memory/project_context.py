@@ -32,6 +32,9 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
     }
     # Recent uncovered discussion is independent of model-selected state patches.
     candidates = {s.event.event_id: s for s in (*snapshot.sources, *extra_sources)}
+    # Reserve coverage metadata before selecting text. Appending omitted IDs only
+    # after filling the text budget can itself overflow a long project's packet.
+    base["omitted_source_ids"] = list(candidates)
     selected = []
     # Search-selected originals are useful even when beyond the recent window.
     preferred = [*reversed(extra_sources), *reversed(snapshot.sources)]
@@ -50,11 +53,19 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
             "delivery": event.delivery,
             "text": event.text,
         }
-        trial = {**base, "sources": [*selected, row]}
+        remaining_ids = [
+            identity
+            for identity in base["omitted_source_ids"]
+            if identity != event.event_id
+        ]
+        trial = {
+            **base,
+            "sources": [*selected, row],
+            "omitted_source_ids": remaining_ids,
+        }
         if conservative_token_bound(json.dumps(trial, ensure_ascii=False)) <= 5600:
             selected.append(row)
-        else:
-            base["omitted_source_ids"].append(event.event_id)
+            base["omitted_source_ids"] = remaining_ids
     selected.sort(key=lambda s: (s["accepted_at"], s["thread_id"], s["sequence"]))
     base["sources"] = selected
     if len(selected) < len(candidates):
