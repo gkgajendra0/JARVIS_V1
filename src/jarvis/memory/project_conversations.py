@@ -92,3 +92,21 @@ class ConversationEvent:
             or self.accepted_at.utcoffset() is None
         ):
             raise ValueError("aware accepted timestamp required")
+
+
+def is_omission_event(event):
+    import json
+
+    if event.role != "tool" or event.delivery != "failed":
+        return False
+    try:
+        value = json.loads(event.text)
+    except (ValueError, TypeError):
+        return False
+    return (
+        type(value) is dict
+        and set(value) == {"capture", "reason", "source_role"}
+        and value["capture"] == "omitted"
+        and value["reason"] in {"source_not_eligible", "retention_paused"}
+        and value["source_role"] in {"user", "assistant"}
+    )

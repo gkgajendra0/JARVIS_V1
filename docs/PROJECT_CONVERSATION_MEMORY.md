@@ -1,7 +1,7 @@
 # Project conversations and personal memory — implementation contract
 
 **Decision date:** 31 October 2026, Asia/Kolkata.
-**Status:** implementation authorized and started; local transport/storage/authority/recorder foundation exists. Project routing, retrieval/context integration, controls and live acceptance remain open. See [Current Plan](CURRENT_PLAN.md).
+**Status:** implementation authorized and started; controlled text capture/routing/retrieval/context/controls are implemented and under software verification. Actual model/Windows/native acceptance remain open. See [Current Plan](CURRENT_PLAN.md).
 **Priority:** complete reliable conversation continuity before adding another memory framework or local model.
 **Execution:** [build plan](superpowers/plans/2026-10-31-project-conversation-memory.md).
 **Authority:** scoped feature design subordinate to [Product](PRODUCT.md), [North Star](AUTONOMOUS_SELF_MANAGEMENT_MASTER_PLAN.md), [Quality Gates](QUALITY_GATES.md) and [Current Plan](CURRENT_PLAN.md). This is not another master plan or a statement of accepted production behavior.

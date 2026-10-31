@@ -18,6 +18,7 @@ from .project_conversations import (
     ConversationEvent,
     ConversationReceipt,
     ProjectSelection,
+    is_omission_event,
 )
 from .worker import SerialConnectionWorker
 
@@ -48,6 +49,7 @@ class ProjectConversationStore:
             raise TypeError("canonical encrypted memory workers required")
         self._writer, self._reader = writer, reader
         self._authority = None
+        self.change_revision = 0
         if authority is not None:
             self.bind_authority(authority)
 
@@ -143,6 +145,7 @@ class ProjectConversationStore:
                         raise PermissionError("thread belongs to a different project")
                     self._validate(permit, selection, material)
                     connection.commit()
+                    self.change_revision += 1
                 except BaseException:
                     connection.rollback()
                     raise
@@ -178,7 +181,7 @@ class ProjectConversationStore:
                     if (
                         row is None
                         or row[0] != selection.revision
-                        or row[1]
+                        or (row[1] and not is_omission_event(event))
                         or row[2] is not None
                     ):
                         raise PermissionError(
@@ -234,9 +237,75 @@ class ProjectConversationStore:
                         )
                     self._validate(permit, selection, material, source=event)
                     connection.commit()
+                    self.change_revision += 1
                     return receipt
                 except BaseException:
                     connection.rollback()
                     raise
 
         return await self._writer.run(append)
+
+    async def _bound_read(self, selection, material, *, permit, read):
+        """Private typed-store implementation hook, never exposed as a model tool."""
+        issuer = self._issuer()
+
+        def fetch(connection):
+            with issuer.read_scope(permit):
+
+                def check():
+                    issuer.validate_read(permit)
+                    binding = issuer.child_binding(permit)
+                    if binding.payload_sha256 != archive_digest(
+                        material
+                    ) or binding.targets != (
+                        ("project", selection.project_id),
+                        ("thread", selection.thread_id),
+                    ):
+                        raise PermissionError("history read binding changed")
+
+                connection.execute("BEGIN")
+                try:
+                    check()
+                    result = read(connection)
+                    check()
+                    return result
+                finally:
+                    connection.rollback()
+
+        return await self._reader.run(fetch)
+
+    async def _bound_write(
+        self, selection, material, *, permit, write, operation="admit"
+    ):
+        issuer = self._issuer()
+
+        def mutate(connection):
+            with issuer.commit_scope(permit):
+                connection.execute("BEGIN IMMEDIATE")
+                try:
+
+                    def check():
+                        issuer.validate_write(permit)
+                        binding = issuer.child_binding(permit)
+                        if (
+                            binding.operation != operation
+                            or binding.payload_sha256 != archive_digest(material)
+                            or binding.targets
+                            != (
+                                ("project", selection.project_id),
+                                ("thread", selection.thread_id),
+                            )
+                        ):
+                            raise PermissionError("history mutation binding changed")
+
+                    check()
+                    result = write(connection)
+                    check()
+                    connection.commit()
+                    self.change_revision += 1
+                    return result
+                except BaseException:
+                    connection.rollback()
+                    raise
+
+        return await self._writer.run(mutate)

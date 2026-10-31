@@ -100,8 +100,31 @@
 
 ## Status and handoff
 
-Documentation cleanup was published before implementation. The owner then authorized building. Tasks 0–1 now have a tested local foundation, not an end-to-end feature. See [Current Plan](../../CURRENT_PLAN.md) for the next step.
+The owner authorized continuous inline implementation. The controlled text candidate
+now connects Tasks 1–4 and has Task 5 deterministic replay plus frozen evaluation
+fixtures. See [Current Plan](../../CURRENT_PLAN.md) and the
+[acceptance/evidence guide](../../project-memory-acceptance.md) for current status.
 
-Implemented files include `voice/project_memory_transport.py`, `memory/project_conversations.py`, `memory/project_conversation_store.py`, `memory/project_conversation_recording.py` and `authority/conversation_history.py`. Task 1 tests live in `tests/learning/` to reuse the real canonical authority fixtures with fake Windows/Hello boundaries. The runtime owns the store; its issuer remains unbound/fail-closed until explicit history authorization. The existing personal-learning scope and grants are not silently widened. Migration tests include a real schema-4 fixture upgraded to 5, repeated event text, duplicate callbacks, exact source/permit binding, stale revisions, injected storage failure and revocation during a transaction. Recorder review found and fixed overlapping duplicate lease release and retry rejection after a failed optimistic write.
+Task 0 does not have a native speech pass: pinned adapter ordering is incompatible
+with a transcript-observer guarantee. The controlled text fallback is deliberate;
+no new STT service/account/model was enabled. The precise remaining owner dependency
+is Windows/Hello/SQLCipher and configured Gemini testing, then controlled speech
+credential/capability qualification. Do not mark the unchecked actual-model/native
+acceptance gates complete based on fixture/provider-boundary tests.
 
-Remaining Task 0 qualification: production provider payload, speech input/output integration and actual service timing. Remaining Task 1 integration: controlled coordinator capture and canonical tool callback adapter. Do not mark later task goals complete based on these component tests. No separate cloud extraction request or new account/model/dependency was added. Do not reopen provider/backend/model selection without recording a concrete blocker against this contract.
+Implementation tests for Tasks 1–4 live in `tests/learning/` to reuse canonical
+authority fixtures with fake OS/Hello boundaries. `tests/project_memory/` owns the
+200-event replay and frozen 60-development/40-held-out questions (inference UNRUN).
+No schema or content-policy validity claim is based on a model's self-report.
+
+Review: four Important findings (personal read opt-in, older threads, assistant
+omissions, async personal dispatch validation) were reproduced and repaired. Tool
+status reporting was regraded Important and fixed because missing coverage can
+produce misleading recall. Snapshot-after-forget, all-thread deletion binding,
+source-title privacy and late delivery have additional RED→GREEN regressions.
+
+Rulings: reuse conservative existing routing wire-byte bounds until actual token
+calibration; preserve minimal redacted deletion IDs to block resurrection; use
+metadata/source references for local memory-tool journal events; limit the isolated
+lab to the configured Free credential lane so a new profile cannot reset a Paid
+allowance. These constrain first-delivery scope and do not qualify native voice.

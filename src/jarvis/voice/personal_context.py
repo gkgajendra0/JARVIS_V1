@@ -60,9 +60,13 @@ class PersonalContextSession:
         learning_grant=None,
         topic_checkpoints=None,
         topic_continuity=None,
+        explicit_question_queries: bool = False,
     ):
         if learning_authority is None and learning_grant is not None:
             raise ValueError("learning issuer and grant must be supplied together")
+        if type(explicit_question_queries) is not bool:
+            raise TypeError("explicit question-query opt-in must be boolean")
+        self._explicit_question_queries = explicit_question_queries
         self._learning_authority = learning_authority
         self._learning_grant = learning_grant
         self._learning_source = None
@@ -264,7 +268,7 @@ class PersonalContextSession:
 
     @property
     def supports_question_query(self):
-        return self._learning_authority is not None
+        return self._learning_authority is not None or self._explicit_question_queries
 
     @property
     def supports_topic_resume(self):

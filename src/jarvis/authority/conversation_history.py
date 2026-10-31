@@ -63,3 +63,68 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
 
     def authorize_reenable_category(self, category):
         raise PermissionError("history retention requires project lifecycle controls")
+
+    def read_scope(self, permit):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def scope():
+            with self._broker._lock:
+                self.consume_read(permit)
+                self.validate_read(permit)
+                yield
+                self.validate_read(permit)
+
+        return scope()
+
+    def authorize_project_deletion(self, material):
+        from uuid import uuid4
+
+        from jarvis.authority.personal_learning import LearningPermitHandle
+        from jarvis.authority.types import ActionAttributes, ActionOrigin
+        from jarvis.capabilities.execution import PreparedCapability
+        from jarvis.capabilities.models import CapabilityRequest
+        from jarvis.memory.project_conversation_store import archive_digest
+
+        digest = archive_digest(material)
+        prepared = PreparedCapability(
+            CapabilityRequest(
+                str(uuid4()),
+                self.CAPABILITY,
+                "forget",
+                {"payload_sha256": digest},
+                ActionOrigin.DIRECT_USER,
+            ),
+            {"project_id": material["project_id"]},
+            {"payload_sha256": digest},
+            "Forget this project's retained conversation content and derived state; preserve minimal deletion identities to block late writes.",
+            ActionAttributes(persistent_write=True, destructive=True),
+            {},
+        )
+        with self._broker._lock:
+            authorized = self._broker.authorize_fresh_owner(prepared)
+            if not hasattr(self, "_deletions"):
+                self._deletions = {}
+            if len(self._deletions) >= 32:
+                raise PermissionError("deletion approval limit")
+            handle = LearningPermitHandle(str(uuid4()))
+            self._deletions[handle] = (digest, authorized)
+            return handle
+
+    def deletion_scope(self, permit, material):
+        from contextlib import contextmanager
+
+        from jarvis.memory.project_conversation_store import archive_digest
+
+        @contextmanager
+        def scope():
+            with self._broker._lock:
+                record = getattr(self, "_deletions", {}).pop(permit, None)
+                if record is None or record[0] != archive_digest(material):
+                    raise PermissionError("exact project deletion approval required")
+                self._broker.validate_binding(record[1])
+                self._broker.consume(record[1])
+                yield lambda: self._broker.validate_binding(record[1])
+                self._broker.validate_binding(record[1])
+
+        return scope()

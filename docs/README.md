@@ -1,6 +1,6 @@
 # JARVIS Documentation — Start Here
 
-**Read first for the active memory workstream — 31 October 2026:** [Project conversations and personal memory](PROJECT_CONVERSATION_MEMORY.md) is the current scoped contract; its [build plan](superpowers/plans/2026-10-31-project-conversation-memory.md) owns tasks. Gemini plus existing local encrypted memory is selected. Earlier hosted/local-model/vendor alternatives are research, not competing build directions. Replacement implementation has started with the transport/archive foundation; routing, context integration and live acceptance remain open.
+**Read first for the active memory workstream — 31 October 2026:** [Project conversations and personal memory](PROJECT_CONVERSATION_MEMORY.md) is the current scoped contract; its [build plan](superpowers/plans/2026-10-31-project-conversation-memory.md) owns tasks. Gemini plus existing local encrypted memory is selected. Earlier hosted/local-model/vendor alternatives are research, not competing build directions. The controlled text candidate is implemented; [acceptance and evidence](project-memory-acceptance.md) records the remaining actual-model/Windows/native gates.
 
 **Gemini Free/Paid candidate (23 October 2026):** existing routers and one
 cumulative INR350 governor support bounded Work/Hands/memory fallback. The

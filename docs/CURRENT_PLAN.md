@@ -8,32 +8,44 @@ Read the [implementation contract](PROJECT_CONVERSATION_MEMORY.md) first, then t
 
 The owner selected: existing Gemini for understanding/search requests/answers; automatic local conversation recording; persistent named projects/threads; existing encrypted personal memory and local retrieval; context delivered before the substantive answer. Reuse successful components. No paid hosted agent, new memory framework, local LLM or training pipeline is selected for the initial delivery. API cost is an explicit constraint.
 
-## Current step: implementation in the isolated checkout
+## Current step: connected controlled-text candidate
 
-The owner authorized implementation. The first increment adds an awaited reply-dispatch boundary, immutable archive contracts, an explicit original-history authority scope, migration 5, an event store and a required recorder. The runtime owns the archive through its existing encrypted workers. The normal voice path is not connected to these components yet.
+The isolated implementation now connects required capture, persistent projects/threads,
+authorized local tools, bounded context and the existing Gemini answer/tool cycle.
+Existing canonical personal reads use exact owner consent; no new learning write scope
+or standalone extraction call is enabled. See the [acceptance/evidence guide](project-memory-acceptance.md).
 
-The pinned native Gemini adapter can start generation before final transcription; the installed-handler characterization reproduces that ordering without a network request. See the [transport contract and limitations](research/PROJECT_MEMORY_TRANSPORT_CONTRACT.md). The controlled text dispatch seam is tested locally. The pinned Google Cloud Speech STT requires credentials distinct from a Gemini API key, so no new speech service/account is silently enabled.
+The normal voice path remains unchanged. Pinned native Gemini generation can precede
+final transcription; a compatible controlled STT path is still unqualified. The next
+owner dependency is actual Windows/Hello/SQLCipher and Gemini testing of the isolated
+text path after exact-head hosted checks. No general rollout/merge is claimed.
 
-**Next implementation work:** complete Task 1 integration, then Task 2 persistent project routing and authenticated local reads. Tool events have storage support but still need their canonical capture adapter. Connect the recorder to the controlled reply coordinator in Task 3; do not attach it as a best-effort transcript observer or treat native voice as qualified.
-
-## Delivery sequence
-
-| Stage | Deliverable | Status |
+| Stage | Software status | Outstanding evidence |
 |---|---|---|
-| Documentation cleanup | One current contract, goals, build plan and historical evidence links | Complete; published before implementation |
-| Task 0 | Pinned voice ordering contract and supported integration seam | Local boundary implemented/tested; live transport qualification OPEN |
-| Task 1 | Automatic encrypted original-event archive and durable receipts | Storage/authority/recorder implemented; runtime/tool capture integration OPEN |
-| Task 2 | Persistent project/thread selection and local search/read tools | NOT STARTED |
-| Task 3 | Source-aware project/personal context delivered before answers | NOT STARTED |
-| Task 4 | Inspect/correct/forget controls and isolated Windows entrypoint | NOT STARTED |
-| Task 5 | End-to-end integrity, actual-model, cost/latency and native acceptance | NOT STARTED |
+| Task 0 | Native ordering characterized; awaited controlled dispatch and serialized payload tested | Native speech/STT/TTS qualification |
+| Task 1 | Required user/assistant/tool metadata capture, receipts, omissions and migration 5 connected | Actual owner-machine operation |
+| Task 2 | Persistent routing, exact aliases, duplicate clarification, thread selection, project-wide bounded search/read | Natural-language/model usefulness |
+| Task 3 | Project/personal evidence, source/revision guards and ordinary answer/tool cycle connected | Actual Gemini answer quality and cost |
+| Task 4 | Authenticated console controls, explicit deletion and isolated exact-source launcher | Windows launcher/Hello execution |
+| Task 5 | 200-event replay; frozen 60+40 questions; independent review/fixes | Actual-model questions and owner acceptance |
 
-## Current foundation verification
+## Verification and unresolved limits
 
-- 397 scoped learning, authority, archive, transport, memory/migration and voice-bridge tests passed; four additional semantic-checkpoint compatibility tests passed after updating their migration-5 expectations. Repository Ruff check passed.
-- Independent foundation review found two recorder concurrency/retry defects. Both were reproduced with failing tests and repaired; reviewer independently reran all four recorder tests successfully.
-- Local SQL transaction tests use SQLite fixtures. Windows SQLCipher CI and real-provider, microphone, playback and native owner acceptance are separate evidence; no new pass is implied.
-- No real provider request or paid inference was made. The previously rejected full local suite was not rerun or bypassed.
+Local scoped verification: 484 tests passed, repository Ruff passed, and 93 relative
+links in seven changed Markdown files resolve. Exact-head CI is recorded alongside
+the published candidate, separately from historical results. The replay reconciles all 200 events,
+10 projects and 30 segments after reopen; 200 duplicate callbacks do not add events.
+The four Important review findings were reproduced and repaired. Search outcome
+metadata and late assistant delivery also have payload/source regressions.
+
+The 100 frozen actual-model questions are UNRUN. No real provider request, microphone
+or native playback test ran here. Tests use SQLite fixtures and fake OS/Hello;
+provider-boundary fixtures do not count as generated-answer quality. The conservative
+6,000 wire-byte upper estimate is not calibrated provider token usage.
+
+The earlier full local pytest telemetry rejection remains in force. Use scoped tests
+and hosted CI, without rerunning/bypassing that command. Installed settings/checkout
+and protected main remain unchanged.
 
 ## First user-visible outcome
 

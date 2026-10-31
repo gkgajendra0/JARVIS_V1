@@ -131,3 +131,69 @@ class RequiredConversationRecorder:
             )
         finally:
             self._authority.release_source(self._grant, event.event_id)
+
+    async def record_omission(self, conversation, turn, routing_receipt, *, reason):
+        async with self._record_lock:
+            return await self._record_omission(
+                conversation, turn, routing_receipt, reason=reason
+            )
+
+    async def _record_omission(self, conversation, turn, routing_receipt, *, reason):
+        import json
+
+        if reason not in {"source_not_eligible", "retention_paused"}:
+            raise ValueError("fixed omission reason required")
+        if not any(item is turn for item in conversation.turns):
+            raise PermissionError("accepted omission source required")
+        event = ConversationEvent(
+            turn.turn_id,
+            conversation.session_id,
+            routing_receipt.request_id,
+            "tool",
+            json.dumps(
+                {
+                    "capture": "omitted",
+                    "reason": reason,
+                    "source_role": turn.role.value,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            turn.accepted_at,
+            delivery="failed",
+        )
+        material = self._store.append_material(
+            routing_receipt.selection, event, routing_receipt.expected_revision
+        )
+        self._authority.register_source(self._grant, event.event_id, source=event)
+        try:
+            permit = self._authority.issue_child(
+                self._grant,
+                HistoryActionBinding(
+                    "admit",
+                    event.event_id,
+                    archive_digest(material),
+                    targets=(
+                        ("project", routing_receipt.selection.project_id),
+                        ("thread", routing_receipt.selection.thread_id),
+                    ),
+                ),
+            )
+            from dataclasses import replace
+
+            receipt = await self._store.append_event(
+                routing_receipt.selection,
+                event,
+                permit=permit,
+                expected_revision=routing_receipt.expected_revision,
+            )
+            return replace(receipt, status="omitted")
+        finally:
+            self._authority.release_source(self._grant, event.event_id)
+
+    def clear_project(self, project_id):
+        self._sources = {
+            key: value
+            for key, value in self._sources.items()
+            if value[1].selection.project_id != project_id
+        }
