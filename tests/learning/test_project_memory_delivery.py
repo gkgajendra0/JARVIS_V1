@@ -22,7 +22,7 @@ class WireBoundary:
             await check
         self.calls.append(kwargs["input_payload"])
         response = kwargs["response_model"](
-            answer="Your Jimny trip has a pending permit."
+            response={"answer": "Your Jimny trip has a pending permit."}
         )
         return SimpleNamespace(
             parsed=response,
@@ -277,11 +277,15 @@ async def test_personal_revocation_at_final_dispatch_guard_prevents_wire_disclos
                 await check
             if self.calls == 1:
                 step = kwargs["response_model"](
-                    personal_requests=[{"scope_key": "owned_item.vehicle"}]
+                    response={
+                        "personal_requests": [{"scope_key": "owned_item.vehicle"}]
+                    }
                 )
             else:
                 self.disclosed.append(kwargs["input_payload"])
-                step = kwargs["response_model"](answer="You can use your City.")
+                step = kwargs["response_model"](
+                    response={"answer": "You can use your City."}
+                )
             return SimpleNamespace(
                 parsed=step, usage={}, usage_observed=False, latency_ms=1
             )
@@ -329,10 +333,10 @@ def test_archive_search_outcome_is_explicit_in_actual_next_generation_payload(
                     await checked
                 self.calls.append(kwargs["input_payload"])
                 step = (
-                    kwargs["response_model"](search_query="unobtainium")
+                    kwargs["response_model"](response={"search_query": "unobtainium"})
                     if len(self.calls) == 1
                     else kwargs["response_model"](
-                        answer="That was not found in saved context."
+                        response={"answer": "That was not found in saved context."}
                     )
                 )
                 return SimpleNamespace(
@@ -431,7 +435,7 @@ def test_existing_gemini_adapter_serializes_the_prepared_context_in_actual_wire_
                 wire.append(kwargs)
                 return SimpleNamespace(
                     output_text=json.dumps(
-                        {"answer": "Saved project sources are available."}
+                        {"response": {"answer": "Saved project sources are available."}}
                     ),
                     usage={"total_input_tokens": 10, "total_output_tokens": 4},
                 )
@@ -505,8 +509,11 @@ async def test_failure_probe_observes_real_mixed_step_without_losing_saved_user(
             await kwargs["before_dispatch"]()
             self.calls.append(kwargs["input_payload"])
             return SimpleNamespace(
-                parsed=kwargs["response_model"](
-                    answer="PRIVATE_MODEL_ANSWER", search_query="PRIVATE_QUERY"
+                parsed=SimpleNamespace(
+                    answer="PRIVATE_MODEL_ANSWER",
+                    search_query=None,
+                    source_ids=["PRIVATE_SOURCE"],
+                    personal_requests=[],
                 ),
                 usage={},
                 usage_observed=False,

@@ -21,9 +21,12 @@ production Rego lacked conversation-history delegation. The repair adds the narr
 policy branch and a mandatory real-OPA CI regression. The next owner dependency is
 a generation-failure reproduction in the retained lab: the owner rerun at
 `d8504526` saved original turns and recalled Jimny/permit after sleep, but one
-status request failed with `ValueError` during generation. Exception detail was
-discarded; use the redacted failure probe with the same pinned source/profile.
-Do not restart with empty history or claim full acceptance. No general rollout/merge is claimed.
+status request failed with `ValueError` during generation. The subsequent owner probe captured an answer plus one source-read request:
+`mixed_answer_or_tools` at coordinator line 310. The wire schema permitted a
+combination the application rejects. A closed single-response union repairs the
+contract without added model calls or weaker source guards. Preserve the old lab;
+qualify the repair at a new exact-source isolated root after CI. The original
+uninstrumented failure remains unattributed; full acceptance is still OPEN. No general rollout/merge is claimed.
 
 | Stage | Software status | Outstanding evidence |
 |---|---|---|

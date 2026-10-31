@@ -3,7 +3,8 @@
 Status: controlled **text** implementation; owner-machine and real-model acceptance
 OPEN. The first Windows text run at `7b6c6ede` FAILED during routing. At
 `d8504526`, routing/capture and recall after sleep passed on the owner machine,
-but one status request FAILED during generation with `ValueError`.
+but generation intermittently FAILED with `ValueError`; the probe later confirmed
+a mixed answer/source-read response. The schema repair requires a new exact-head rerun.
 This is not a normal-app activation or a native voice pass.
 
 The [contract](PROJECT_CONVERSATION_MEMORY.md) owns G1–G8 and acceptance targets.
@@ -151,6 +152,58 @@ The owner-only next step is to reproduce a generation failure under this probe,
 using the retained Nepal project. A successful probe query alone does not diagnose
 the earlier intermittent error. Share only `PROJECT_PROBE_STEP`,
 `PROJECT_PROBE_FAILURE` and `NOT COMPLETED` lines when a failure occurs.
+
+## Confirmed mixed answer/read failure and schema repair
+
+Owner probe output in `Pasted text(20261031-085108).txt` confirms the failure while
+processing “My interview is on Monday.”: answer present, no search, one source ID,
+no personal request; `mixed_answer_or_tools` at `project_conversation.respond` line
+310. Gemini returned an answer and a source-read request together. This establishes
+the cause of this captured failure; the earlier uninstrumented failure cannot be
+retrospectively attributed with certainty.
+
+The same owner trace passed a permit correction (pending → approved), switched to
+a distinct interview project/thread and restored Nepal with Jimny/approved, without
+the Monday interview detail. Inspection retained original and corrected statements
+through Nepal sequence 20, with zero omissions. The interview turn failed to produce
+a reply, so full project-conversation reliability remains unaccepted.
+
+### Repair design and rationale
+
+The old wire object had four independent optional fields. It accepted answer plus
+source IDs, although the coordinator rejects that combination. Prompt-only warnings
+did not enforce the same contract as the application. Ignoring IDs or releasing a
+draft answer would discard the model's requested evidence read; adding automatic
+repair requests would increase API calls without fixing the permissive schema.
+
+The repair uses a required `response` object with four closed alternatives: answer,
+archive search, source read, or personal query. Every alternative has one required
+nonempty field and forbids additional fields. Pydantic emits nested `anyOf` with
+closed object definitions, matching the union pattern documented for the existing
+Interactions structured-output endpoint in [Google's official guide](https://ai.google.dev/gemini-api/docs/structured-output#content-moderation).
+Properties expose the same coordinator interface; dispatch/release authorization,
+search-hit read allowlist, per-request tool budgets, original recording and model
+routing stay unchanged. The prompt distinguishes read source IDs from citations.
+
+A failing regression first demonstrated that the old parser accepted the owner's
+answer/read mixture and empty objects. The replacement parser rejects mixed, missing
+and empty variants. Tests exercise the actual Gemini SDK adapter's request arguments
+and response parser with a fake HTTP endpoint; no inference is performed. A defensive
+coordinator regression bypasses parsing deliberately and continues to reject a mixed
+object before any tool read or assistant delivery. Updated policy/delivery fixtures
+use the new wire envelope. No extra extraction, repair or retry request is added.
+
+Existing labs remain pinned to their exact source commit. Keep the owner lab and
+its saved originals; do not edit its marker or replace its source in place. Use a
+fresh isolated root for the reviewed repair, then test the captured interview
+sequence followed by correction/project isolation. Actual model acceptance of the
+new wire format remains OPEN until that rerun.
+
+Repair verification: 399 scoped tests passed with real-OPA tests excluded,
+repository Ruff/format and relative-link checks passed, and independent review
+found no Critical/Important issue. Google supports the closed object alternatives;
+string nonemptiness/length is also validated locally because provider decoding does
+not enforce every string constraint. No live provider request ran here.
 
 ## Frozen actual-model questions: UNRUN
 

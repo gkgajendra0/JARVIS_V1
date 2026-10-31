@@ -55,7 +55,9 @@ async def test_production_policy_allows_authorized_project_routing_recording_and
             await kwargs["before_dispatch"]()
             self.inputs.append(kwargs["input_payload"])
             return SimpleNamespace(
-                parsed=kwargs["response_model"](answer="Project context received."),
+                parsed=kwargs["response_model"](
+                    response={"answer": "Project context received."}
+                ),
                 usage={},
                 usage_observed=False,
                 latency_ms=0,
