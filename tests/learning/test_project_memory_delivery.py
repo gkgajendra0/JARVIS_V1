@@ -729,3 +729,61 @@ async def test_empty_personal_query_cannot_loop_and_older_archive_remains_retrie
         coordinator.invalidate("test_done")
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_offline_report_accepts_real_omission_receipt_without_transcript(
+    tmp_path, authority_parts
+):
+    import json
+    import runpy
+    from dataclasses import asdict
+    from pathlib import Path
+
+    report_tool = runpy.run_path(
+        str(Path(__file__).parents[2] / "tools/project_memory_log_report.py")
+    )
+    _, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda t: t.role is ConversationRole.USER
+    )
+    c = ConversationSession()
+    c.start()
+    try:
+        result = await coordinator.respond(
+            c,
+            c.accept_turn(ConversationRole.USER, "Plan my report integration trip"),
+            provider=ProjectAnswerProvider(WireBoundary()),
+            authorize=access.current,
+        )
+        receipt = await coordinator.record_assistant(
+            c, result, delivered_text=result.answer
+        )
+        analyzer = report_tool["AcceptanceLog"]()
+        analyzer.feed(
+            json.dumps(
+                {
+                    "request_id": result.packet.request_id,
+                    "context_revision": result.packet.revision,
+                    "user_receipt": asdict(result.receipt),
+                    "assistant_receipt": asdict(receipt),
+                    "usage": result.usage,
+                }
+            )
+        )
+        summary = analyzer.summary()
+        assert (
+            summary["completed_requests"] == 1
+            and summary["requests_with_assistant_omission"] == 1
+        )
+        assert (
+            summary["invalid_metadata_records"] == 0
+            and summary["reported_provider_steps"] == 1
+        )
+        assert result.answer not in json.dumps(summary)
+    finally:
+        await reader.close()
+        await writer.close()

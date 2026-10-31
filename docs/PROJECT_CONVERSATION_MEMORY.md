@@ -50,7 +50,7 @@ Storage, permission and source-accounting guarantees are distinct from probabili
 | Active project | Application router, informed by current request/Gemini proposal | Stable validated ID; no silent ambiguous switch |
 | Semantic interpretation | Existing Gemini model | Propose decisions, facts, tasks, queries and clarification; do not grant itself permission |
 | What becomes a personal fact | Canonical learning admission/lifecycle | Source-supported proposal, existing eligibility/authority; rental consideration is not ownership |
-| What to search | Gemini tool request; active-thread context supplied automatically | Search words express intent; application imposes allowed project/personal scope |
+| What to search | Gemini tool request; bounded recent selected-project context supplied automatically | Search words express intent; application imposes allowed project/personal scope |
 | How matches are found | Existing local retrieval plus an archive adapter | Metadata filtering first; keyword/semantic ranking where available |
 | Durable writes and corrections | Canonical store/lifecycle | Exact source and expected revision; a model's statement that it saved something is not a receipt |
 | Answer generation and speech | Gemini plus existing protected response controller | Evidence must reach the generation path; stale/revoked scope cannot continue speaking |
@@ -94,7 +94,7 @@ Interrupted assistant text remains partial, not fully delivered. A planned actio
 
 **Interpret:** the existing Gemini response/tool turn may propose a grounded project update or request a search. There is no second always-on extraction model. Invalid or omitted proposals cannot erase the source conversation.
 
-**Retrieve:** supply bounded recent selected-thread context automatically. Gemini requests older detail through a typed local tool, conceptually:
+**Retrieve:** supply bounded recent selected-project context automatically, preserving each source's original thread ID. New threads retain access to the same project's prior discussion. Gemini requests older detail through a typed local tool, conceptually:
 
 ```json
 {"tool":"search_conversation_memory","project_id":"validated-local-id","query":"latest vehicle decision and permit status"}

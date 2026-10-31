@@ -1,8 +1,18 @@
 # JARVIS V1 Project State
 
-**Active branch implementation update — 31 October 2026:** the owner authorized continuous implementation of [project conversation memory](PROJECT_CONVERSATION_MEMORY.md). The isolated controlled-text candidate connects canonical source capture, encrypted receipts, persistent projects/threads, project-wide local tools, bounded context, the existing Gemini answer/tool cycle, exact-consent personal reads and authenticated console controls. Four Important review findings were reproduced and repaired. The deterministic 200-event/10-project/30-segment replay and request-boundary tests are software evidence only. See [acceptance and remaining gates](project-memory-acceptance.md). Actual-model questions, Windows owner execution, native speech and real latency/cost remain unaccepted. Normal app activation/main merge have not occurred.
+**Active branch implementation update — 31 October 2026:** controlled-text project
+conversation memory is implemented on draft PR #303; normal voice remains unchanged.
+Reviewed runtime `6fe868455478345c53c78692e50fabe596550497` passed Code Quality
+`41189722071` and Windows SQLCipher `41189722075`, with 408 scoped software tests.
+Owner tests at `94550e78` passed short recall/correction/project separation/sleep/restart,
+but new-thread recall failed during repeated personal-tool selection. The later
+project-context/tool-availability repair has NOT yet passed that owner rerun.
+The [acceptance record](project-memory-acceptance.md) retains each failure and repair.
+Task 5's new offline console-log analyzer prepares metadata accounting only: no new
+provider request, model quality score, native acceptance, activation or merge follows.
+The frozen 100 model questions and full system acceptance remain OPEN.
 
-Existing PR #303 baseline `7800e984780b36ee18dd5e4be61a85b899bc7def` passed 624 focused tests and hosted Code Quality/SQLCipher verification, but the owner's native Nepal-status trace restored empty details. Connected-conversation acceptance remains FAILED. Historical CI results do not qualify this new implementation. This branch record does not change accepted main/runtime milestones below.
+Existing PR #303 baseline `7800e984780b36ee18dd5e4be61a85b899bc7def` passed 624 focused tests and hosted Code Quality/SQLCipher verification, but the owner's native Nepal-status trace restored empty details. Historical native connected-conversation acceptance remains FAILED. Historical CI results do not qualify the controlled-text replacement. This branch record does not change accepted main/runtime milestones below.
 
 **Gemini Free/Paid candidate (23 October 2026):** existing routers and one
 cumulative INR350 governor support bounded Work/Hands/memory fallback. The

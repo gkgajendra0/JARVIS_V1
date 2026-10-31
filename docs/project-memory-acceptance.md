@@ -284,6 +284,66 @@ telemetry restrictions remain in force; production-policy integration is hosted 
 The owner lab at `94550e78` is retained as evidence; use a fresh isolated exact-source
 root to qualify the repaired new-thread path after CI. Full acceptance remains OPEN.
 
+## Offline console-log accounting (Task 5 preparation)
+
+`tools/project_memory_log_report.py` is a standalone standard-library tool. It reads
+existing saved text-lab console logs and produces JSON metadata; it imports no Jarvis
+runtime, opens no memory database, calls no provider and enables no new transcript
+logging. The runtime being qualified stays at `6fe86845`, with its owner rerun still
+pending. Extract the tool from a reviewed tool commit if using it outside a checkout.
+
+```powershell
+& "E:\Jarvis\App\.venv\Scripts\python.exe" "$env:TEMP\project_memory_log_report.py" `
+    "C:\path\existing-lab-console.log" `
+    --output "$env:TEMP\new-memory-evidence-report.json"
+```
+
+The tool accepts UTF-8 (with or without BOM) and BOM-marked UTF-16 Windows logs.
+Inputs use the lab's one-line JSON receipt records and `NOT COMPLETED` diagnostics.
+It does not interpret free-form answers or inspection source text. Reports include
+validated metadata identities, failure stage/error categories, reported provider
+steps, known per-metric token sums/sample counts and nearest-rank p50/p95 latency
+samples. Unknown stage/error labels collapse to `other`; raw messages are omitted.
+Existing output files are never overwritten, including an input selected as output.
+
+Repeated complete log dumps are deduplicated by request ID and normalized record.
+Conflicting same-request records are flagged and excluded from token/latency and
+failure-category accounting. A completed request needs a committed user receipt and
+a committed or explicitly omitted assistant receipt. Omitted assistant originals
+are counted separately rather than claimed saved. Pairs must belong to one thread,
+use different event IDs and advance sequence/revision; tool-event gaps are valid. Reuse of event IDs
+across different requests is flagged. This validates console metadata structure,
+not the authenticity/durability of a database commit. Failed requests can retain
+user/tool archive events that the completed-response console record does not expose.
+
+Absent/null/empty usage leaves unknown telemetry; a present object, string, number
+or boolean in place of the usage list is invalid evidence and returns exit 2.
+Failed-request usage remains unknown. Missing/unobserved token metrics are not
+fabricated as zero, and metric sums do not double-count total alongside input/output.
+`reported_provider_steps` is not a complete API attempt count: retries/fallbacks or
+failed-call usage can be absent from console telemetry. `billing_complete` always
+remains false; currency/bill estimates are not produced. Latencies describe reported
+provider steps, not archive/context timing or end-of-speech-to-audio. Small sample
+percentiles are not an acceptance result.
+
+Exit 0 means a report was produced without contradictory/invalid metadata; it is
+NOT a model/system pass, and ordinary captured request failures still appear in it.
+Exit 2 means input/output error, no usable request evidence, invalid usage/metadata,
+conflicts or failure lines without a request ID. Reports retain safe diagnostic
+counts when possible. `answer_quality` stays `not_evaluated`: human/source-grounded
+review and the frozen model questions are still required. No owner outcome is
+inferred merely from compiling this helper or its fixture tests.
+
+Software verification: 442 scoped tests passed with real-OPA tests excluded locally,
+including 33 analyzer cases and the real coordinator/store omission-receipt path.
+Repository Ruff/format and changed-document relative links passed. Windows/real-policy
+checks are hosted CI; the earlier local telemetry restrictions remain in force.
+No new provider call, answer-quality score or owner runtime acceptance was produced.
+Independent review found one Important wrong-type usage-container classification;
+five CLI cases reproduced it RED and pass GREEN after the fix. No Critical or
+Minor issue was raised. The final full scoped run, not a second review, verifies
+the correction; hosted checks qualify the published tool commit separately.
+
 ## Frozen actual-model questions: UNRUN
 
 `tests/project_memory/fixtures/questions-v1.json` has 60 development and 40 held-out

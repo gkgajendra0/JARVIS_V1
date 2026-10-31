@@ -15,24 +15,27 @@ authorized local tools, bounded context and the existing Gemini answer/tool cycl
 Existing canonical personal reads use exact owner consent; no new learning write scope
 or standalone extraction call is enabled. See the [acceptance/evidence guide](project-memory-acceptance.md).
 
-The normal voice path remains unchanged. Pinned native Gemini generation can precede
-final transcription; a compatible controlled STT path is still unqualified. The first owner Windows text attempt at `7b6c6ede` failed during routing because
-production Rego lacked conversation-history delegation. The repair adds the narrow
-policy branch and a mandatory real-OPA CI regression. The next owner dependency is
-a generation-failure reproduction in the retained lab: the owner rerun at
-`d8504526` saved original turns and recalled Jimny/permit after sleep, but one
-status request failed with `ValueError` during generation. The subsequent owner probe captured an answer plus one source-read request:
-`mixed_answer_or_tools` at coordinator line 310. The wire schema permitted a
-combination the application rejects. A closed single-response union repairs the
-contract without added model calls or weaker source guards. Preserve the old lab;
-qualify the repair at a new exact-source isolated root after CI. The original
-uninstrumented failure remains unattributed. Owner testing at `94550e78` passed
-short replies, correction, project separation, sleep and full restart. New-thread
-retrieval then FAILED: the model repeated personal queries instead of using the
-older project archive. The repair supplies bounded recent project-wide context
-and request-local tool schemas that exclude used/unavailable operations and restrict
-reads to actual search hits. Preserve the failed lab; qualify this repair in a new
-exact-source root. Full acceptance remains OPEN. No general rollout/merge is claimed.
+The current reviewed runtime is `6fe868455478345c53c78692e50fabe596550497`.
+Its Code Quality and Windows SQLCipher gates both passed. It supplies bounded recent
+project-wide context, request-local tool availability and source-hit read enums,
+and reserves omission metadata within the existing context bound. The acceptance
+guide retains the earlier routing, mixed-response and repeated-personal-tool failures.
+
+Owner testing at `94550e78` passed short replies, corrections, project separation,
+sleep and process restart, then FAILED new-thread retrieval. The owner's rerun of
+`6fe86845` is still pending. Do not reclassify that gate from software test results.
+Native microphone/STT/TTS qualification, larger-history/model scoring, personal facts,
+controls and long-running grant renewal remain open. No rollout/merge is claimed.
+
+Task 5 preparation now adds a standalone offline console-log analyzer,
+`tools/project_memory_log_report.py`. It deduplicates repeated request records,
+checks receipt pairs and exposes observed token/latency samples and failure stages.
+It preserves unknown usage, excludes conversation/error text and does not grade
+answer quality, authenticate receipts or reconstruct full API billing. It makes no
+provider calls, opens no memory database, and changes no profile/runtime settings.
+The runtime under test remains `6fe86845`; this tool does not require another lab reset.
+Local scoped verification including the analyzer: 442 tests passed. Live model
+questions and current-head owner acceptance are still unrun.
 
 | Stage | Software status | Outstanding evidence |
 |---|---|---|
@@ -74,7 +77,7 @@ The implementation contract defines G1–G8, failure behavior, proposed acceptan
 
 ## Retained candidate evidence and known limits
 
-PR [#303](https://github.com/gkgajendra0/JARVIS_V1/pull/303) remains draft. Its existing code candidate saves model-proposed topic fields, not full conversation history. Baseline product head `7800e984780b36ee18dd5e4be61a85b899bc7def` had 624 focused tests and two exact-head hosted CI passes, but the owner's actual Nepal trace restored empty details. Native connected-conversation acceptance FAILED; replacement implementation is not complete.
+PR [#303](https://github.com/gkgajendra0/JARVIS_V1/pull/303) remains draft. Historical product head `7800e984780b36ee18dd5e4be61a85b899bc7def` saved model-proposed topic fields rather than full conversation history. It had 624 focused tests and two exact-head hosted CI passes, but the owner's actual Nepal trace restored empty details. Historical native connected-conversation acceptance FAILED; the controlled-text replacement has not completed owner acceptance.
 
 Earlier full local pytest was stopped by automatic approval review for an outbound Microsoft telemetry connection with unknown payload; do not retry/bypass it indirectly. An unrelated isolated process-recovery regression also remains recorded. Use appropriate scoped checks and hosted CI. Do not claim the entire local suite passes.
 
