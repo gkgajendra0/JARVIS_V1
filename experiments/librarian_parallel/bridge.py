@@ -79,7 +79,10 @@ class McpStdioClient:
                     },
                 },
             )
-            if not isinstance(reply, dict) or reply.get("protocolVersion") != PROTOCOL_VERSION:
+            if (
+                not isinstance(reply, dict)
+                or reply.get("protocolVersion") != PROTOCOL_VERSION
+            ):
                 raise LibrarianError("Incompatible MCP protocol version")
             self._notify("notifications/initialized")
             return self
