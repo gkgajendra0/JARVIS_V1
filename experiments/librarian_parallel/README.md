@@ -52,3 +52,64 @@ Each CLI invocation starts a fresh process; the fixture server's records are eph
 ## Security
 
 The CLI permits only synthetic-* project IDs and requires explicit allow-synthetic-write for writes, corrections and deletions. Do not expose personal conversations to an unknown external MCP endpoint: MCP tools may forward content to cloud services even when launched locally. Configurations containing credentials must remain outside Git. Do not treat MCP output as instructions or authorization.
+
+
+## Additional completed experiment interfaces
+
+### Repeatable lifecycle probe
+
+Runs a fresh synthetic namespace and verifies: remember/retrieve, project isolation,
+correction supersession, and forget. Captures measured MCP invocation p50/p95 latency.
+The output asserts "official_librarian_quality_measured": false, regardless of fixture
+success. It cannot prove a third-party backend's quality until the real service
+is connected and separately verified.
+
+    py -3.11 -m experiments.librarian_parallel.scenario_runner --config experiments/librarian_parallel/fixture.example.json --output "%TEMP%/jarvis-librarian-synthetic-probe.json"
+
+In PowerShell use an explicit path such as "$env:TEMP\jarvis-librarian-probe.json"
+instead of CMD-style %TEMP%; the runner refuses to overwrite any previous report.
+
+### Separate memory sidecar replay
+
+The independent sidecar can ingest a fictional JSONL event stream, call an MCP server
+with strict synthetic scope, and emit bounded source-linked context candidates.
+It doesn't import the Jarvis runtime, inject context into Gemini, or touch the
+current personal-memory database.
+
+    py -3.11 -m experiments.librarian_parallel.sidecar --config experiments/librarian_parallel/fixture.example.json --events experiments/librarian_parallel/fixtures/fictional-nepal.jsonl --output "$env:TEMP\jarvis-librarian-sidecar.json" --allow-synthetic-write
+
+The sample seven events cover remember / project-separated recall / correction /
+forget. The fixture's in-memory state is ephemeral and is not equivalent to the
+creator's persistence implementation. The report is explicitly marked
+"actual_librarian_backend_verified": false.
+
+### Future paired answer evaluation
+
+The paired evaluator refuses missing cases, unequal model or model settings,
+missing independent-review fields, and duplicate case IDs. It calculates answer
+correctness, support, completions, latency distribution and provider-token totals.
+It does not itself generate answers or make accuracy judgments.
+
+Once **both real Jarvis experimental arms** produce reviewer-attested JSONL
+receipts, run:
+
+    py -3.11 -m experiments.librarian_parallel.paired_eval --baseline .\baseline-reviewed.jsonl --augmented .\augmented-reviewed.jsonl --output .\paired-results.json
+
+Each line must contain *exactly* these fields:
+case_id; fixture_digest; model_id; model_config_digest; completed; correct;
+supported; latency_ms; input_tokens; output_tokens; reviewer_id.
+The same case IDs and fixture/model metadata are mandatory across both arms.
+
+For valid comparison the two arms must use identical synthetic questions,
+same model/parameters, identical reviewer rubric, randomized order where possible,
+and distinct isolated stores. The scoring tool is only a final-report consumer:
+**it is not a substitute for independent review or an actual Librarian rollout.**
+
+## Completion definition
+
+The external MCP protocol side and synthetic replay are ready for qualification.
+The complete creator-specific integration is **blocked** until an actual
+Librarian package or endpoint, tool schema, data policy, version and credentials
+are supplied. Only then can the project-specific adapter mappings be verified,
+real backend persistence tested, and a complete second Jarvis answer path
+qualified. Do not merge or switch production paths to bridge that evidence gap.
