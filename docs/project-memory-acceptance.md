@@ -715,7 +715,7 @@ excluded from latency percentiles, not treated as fast successful answers. Six
 samples cannot establish stable production tail latency. Native voice, held-out
 accuracy, full billing and installed-app activation remain OPEN.
 
-Software verification for this batch:485 scoped tests passed, with real OPA
+Software verification for this batch:486 scoped tests passed, with real OPA
 excluded locally; repository Ruff, changed-file format and whitespace checks
 passed. These include all six sixty-source seed cases, revocation before/during
 seeding, a real coordinator/fake-provider source search, blocked foreign evidence,
@@ -738,3 +738,10 @@ Review boundaries retained: actual-model/Windows/latency qualification requires
 the owner run; failed-dispatch billing remains unknown; existing startup/finalizer
 exception-safety behavior is unchanged; the entire expiry/capacity fault matrix is
 not newly qualified. Deployment and merge remain outside this development test.
+
+After publishing890e5602, a local CRLF-checkout simulation reproduced a test-only
+portability error: the newline test converted already-CRLF bytes again. The test
+now normalizes its input before producing CRLF and exercises both LF and CRLF
+checkouts. The loader, frozen fixtures and runtime are unchanged. The expanded
+scoped suite passed486 tests after this RED→GREEN correction; hosted qualification
+must use the subsequent revision rather than inheriting890e's results.

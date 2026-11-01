@@ -21,22 +21,34 @@ from jarvis.voice.project_memory_development import (
 REPO = Path(__file__).resolve().parents[2]
 
 
-def test_only_six_frozen_development_cases_and_windows_newlines(tmp_path):
-    cases = load_cases(REPO)
+@pytest.mark.parametrize("checkout_newline", ["\n", "\r\n"])
+def test_only_six_frozen_development_cases_and_windows_newlines(
+    tmp_path, checkout_newline
+):
+    checkout = tmp_path / "checkout"
+    originals = checkout / "tests/project_memory/fixtures"
+    originals.mkdir(parents=True)
+    for source in (REPO / "tests/project_memory/fixtures").glob("*-v1.json"):
+        (originals / source.name).write_bytes(
+            source.read_text(encoding="utf-8")
+            .replace("\n", checkout_newline)
+            .encode("utf-8")
+        )
+    cases = load_cases(checkout)
     assert tuple(c.question["id"] for c in cases) == CASE_IDS
     assert all(c.question["split"] == "development" for c in cases)
     assert all(len(c.events) == 60 for c in cases)
-    fixtures = tmp_path / "tests/project_memory/fixtures"
+    fixtures = tmp_path / "converted/tests/project_memory/fixtures"
     fixtures.mkdir(parents=True)
-    for source in (REPO / "tests/project_memory/fixtures").glob("*-v1.json"):
+    for source in originals.glob("*-v1.json"):
         (fixtures / source.name).write_bytes(
-            source.read_bytes().replace(b"\n", b"\r\n")
+            source.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8")
         )
-    assert load_cases(tmp_path) == cases
+    assert load_cases(tmp_path / "converted") == cases
     with (fixtures / "events-v1.json").open("ab") as stream:
         stream.write(b" ")
     with pytest.raises(ValueError, match="frozen"):
-        load_cases(tmp_path)
+        load_cases(tmp_path / "converted")
 
 
 @pytest.mark.asyncio
