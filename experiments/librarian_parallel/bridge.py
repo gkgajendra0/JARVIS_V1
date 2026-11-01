@@ -21,7 +21,8 @@ PROTOCOL_VERSION = "2025-06-18"
 MAX_MCP_LINE_CHARS = 1_048_576
 MAX_ARGUMENT_CHARS = 4096
 SYNTHETIC_SCOPE = re.compile(r"^synthetic-[a-zA-Z0-9_-]{1,64}$")
-WRITE_OPERATIONS = frozenset({"remember", "correct", "forget", "archive", "delete"})
+WRITE_OPERATIONS = frozenset({"remember", "correct", "forget"})
+ALLOWED_OPERATIONS = WRITE_OPERATIONS | {"recall"}
 
 
 class LibrarianError(RuntimeError):
@@ -242,6 +243,8 @@ class ExperimentConfig:
         if not isinstance(ops, dict):
             raise LibrarianError("operations must be a map")
         for key, binding in ops.items():
+            if key not in ALLOWED_OPERATIONS:
+                raise LibrarianError("Unrecognized MCP experiment operation")
             if not isinstance(binding, dict) or not isinstance(
                 binding.get("tool"), str
             ):
@@ -292,6 +295,8 @@ class LibrarianExperiment:
         target: str = "",
         allow_synthetic_write: bool = False,
     ) -> tuple[dict[str, Any], float]:
+        if operation not in ALLOWED_OPERATIONS:
+            raise LibrarianError("Unsupported MCP experiment operation")
         if not SYNTHETIC_SCOPE.fullmatch(project):
             raise LibrarianError("Only synthetic-* project IDs are accepted")
         if operation in WRITE_OPERATIONS and not allow_synthetic_write:
@@ -314,6 +319,12 @@ class LibrarianExperiment:
         advertised = self.client.list_tools().get(binding["tool"])
         if not isinstance(advertised, dict):
             raise LibrarianError("Mapped operation is not an advertised MCP tool")
+        if operation == "recall":
+            annotations = advertised.get("annotations")
+            if not isinstance(annotations, dict) or annotations.get(
+                "readOnlyHint"
+            ) is not True:
+                raise LibrarianError("Recall mapping lacks an MCP read-only hint")
         schema = advertised.get("inputSchema")
         if not isinstance(schema, dict) or schema.get("type") != "object":
             raise LibrarianError("MCP tool requires a valid object input schema")
