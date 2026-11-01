@@ -1,4 +1,5 @@
 """Offline contract tests for experimental MCP adapter (no model, secrets or DB)."""
+
 from __future__ import annotations
 
 import json
@@ -9,23 +10,40 @@ import unittest
 from pathlib import Path
 
 from experiments.librarian_parallel.bridge import (
-    ExperimentConfig, LibrarianError, LibrarianExperiment, McpStdioClient,
+    ExperimentConfig,
+    LibrarianError,
+    LibrarianExperiment,
+    McpStdioClient,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = [sys.executable, "-m", "experiments.librarian_parallel.fixture_mcp_server"]
 OPERATIONS = {
-    "recall": {"tool": "fixture_recall",
-               "arguments": {"project": "{project}", "query": "{query}"}},
-    "remember": {"tool": "fixture_remember",
-                 "arguments": {"project": "{project}", "text": "{text}",
-                               "source": "{source}"}},
-    "correct": {"tool": "fixture_correct",
-                "arguments": {"project": "{project}", "text": "{text}",
-                              "source": "{source}", "target": "{target}"}},
-    "forget": {"tool": "fixture_forget",
-               "arguments": {"project": "{project}", "source": "{source}",
-                             "target": "{target}"}},
+    "recall": {
+        "tool": "fixture_recall",
+        "arguments": {"project": "{project}", "query": "{query}"},
+    },
+    "remember": {
+        "tool": "fixture_remember",
+        "arguments": {"project": "{project}", "text": "{text}", "source": "{source}"},
+    },
+    "correct": {
+        "tool": "fixture_correct",
+        "arguments": {
+            "project": "{project}",
+            "text": "{text}",
+            "source": "{source}",
+            "target": "{target}",
+        },
+    },
+    "forget": {
+        "tool": "fixture_forget",
+        "arguments": {
+            "project": "{project}",
+            "source": "{source}",
+            "target": "{target}",
+        },
+    },
 }
 
 
@@ -67,16 +85,33 @@ class ConfigTests(unittest.TestCase):
 
     def test_requires_scoped_operations(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "project scope"):
-            self._load({"mode": "synthetic-only", "command": SERVER,
-                        "operations": {"recall": {
-                            "tool": "fixture_recall", "arguments": {"query": "{query}"}}}})
+            self._load(
+                {
+                    "mode": "synthetic-only",
+                    "command": SERVER,
+                    "operations": {
+                        "recall": {
+                            "tool": "fixture_recall",
+                            "arguments": {"query": "{query}"},
+                        }
+                    },
+                }
+            )
 
     def test_write_source_must_be_explicit(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "source ID"):
-            self._load({"mode": "synthetic-only", "command": SERVER,
-                        "operations": {"remember": {
+            self._load(
+                {
+                    "mode": "synthetic-only",
+                    "command": SERVER,
+                    "operations": {
+                        "remember": {
                             "tool": "fixture_remember",
-                            "arguments": {"project": "{project}", "text": "{text}"}}}})
+                            "arguments": {"project": "{project}", "text": "{text}"},
+                        }
+                    },
+                }
+            )
 
 
 class ExperimentTests(unittest.TestCase):
@@ -84,46 +119,73 @@ class ExperimentTests(unittest.TestCase):
         self.client = McpStdioClient(SERVER, str(ROOT), timeout=5)
         self.client.__enter__()
         self.adapter = LibrarianExperiment(
-            ExperimentConfig(SERVER, str(ROOT), 5, OPERATIONS), self.client)
+            ExperimentConfig(SERVER, str(ROOT), 5, OPERATIONS), self.client
+        )
 
     def tearDown(self) -> None:
         self.client.close()
 
     def test_synthetic_scoping_and_write_guard(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "opt-in"):
-            self.adapter.invoke("remember", project="synthetic-nepal",
-                                text="Jimny", source="fixture-a")
+            self.adapter.invoke(
+                "remember", project="synthetic-nepal", text="Jimny", source="fixture-a"
+            )
         with self.assertRaisesRegex(LibrarianError, "synthetic"):
             self.adapter.invoke("recall", project="real-person", query="vehicle")
         with self.assertRaisesRegex(LibrarianError, "fixture"):
-            self.adapter.invoke("remember", project="synthetic-nepal",
-                                text="Jimny", source="unverified",
-                                allow_synthetic_write=True)
+            self.adapter.invoke(
+                "remember",
+                project="synthetic-nepal",
+                text="Jimny",
+                source="unverified",
+                allow_synthetic_write=True,
+            )
 
-        self.adapter.invoke("remember", project="synthetic-nepal",
-                            text="vehicle: Jimny", source="fixture-a",
-                            allow_synthetic_write=True)
+        self.adapter.invoke(
+            "remember",
+            project="synthetic-nepal",
+            text="vehicle: Jimny",
+            source="fixture-a",
+            allow_synthetic_write=True,
+        )
         nepal, latency = self.adapter.invoke(
-            "recall", project="synthetic-nepal", query="vehicle")
+            "recall", project="synthetic-nepal", query="vehicle"
+        )
         other, _ = self.adapter.invoke(
-            "recall", project="synthetic-interview", query="vehicle")
+            "recall", project="synthetic-interview", query="vehicle"
+        )
         self.assertEqual(len(fixture_content(nepal)["records"]), 1)
         self.assertEqual(fixture_content(other)["records"], [])
         self.assertGreaterEqual(latency, 0)
 
     def test_correction_and_forgetting_are_isolated(self) -> None:
-        self.adapter.invoke("remember", project="synthetic-nepal",
-                            text="vehicle: first", source="fixture-1",
-                            allow_synthetic_write=True)
-        self.adapter.invoke("correct", project="synthetic-nepal",
-                            text="vehicle: corrected", source="fixture-2",
-                            target="fixture-1", allow_synthetic_write=True)
+        self.adapter.invoke(
+            "remember",
+            project="synthetic-nepal",
+            text="vehicle: first",
+            source="fixture-1",
+            allow_synthetic_write=True,
+        )
+        self.adapter.invoke(
+            "correct",
+            project="synthetic-nepal",
+            text="vehicle: corrected",
+            source="fixture-2",
+            target="fixture-1",
+            allow_synthetic_write=True,
+        )
         result, _ = self.adapter.invoke("recall", project="synthetic-nepal", query="")
-        self.assertEqual(fixture_content(result)["records"],
-                         [{"source": "fixture-2", "text": "vehicle: corrected"}])
-        self.adapter.invoke("forget", project="synthetic-nepal",
-                            source="fixture-3", target="fixture-2",
-                            allow_synthetic_write=True)
+        self.assertEqual(
+            fixture_content(result)["records"],
+            [{"source": "fixture-2", "text": "vehicle: corrected"}],
+        )
+        self.adapter.invoke(
+            "forget",
+            project="synthetic-nepal",
+            source="fixture-3",
+            target="fixture-2",
+            allow_synthetic_write=True,
+        )
         result, _ = self.adapter.invoke("recall", project="synthetic-nepal", query="")
         self.assertEqual(fixture_content(result)["records"], [])
 
@@ -131,10 +193,19 @@ class ExperimentTests(unittest.TestCase):
         with self.assertRaisesRegex(LibrarianError, "not mapped"):
             self.adapter.invoke("search_unconfigured", project="synthetic-nepal")
         bad = LibrarianExperiment(
-            ExperimentConfig(SERVER, str(ROOT), 5, {
-                "recall": {"tool": "fixture_recall",
-                           "arguments": {"project": "{project}", "query": "{missing}"}}}),
-            self.client)
+            ExperimentConfig(
+                SERVER,
+                str(ROOT),
+                5,
+                {
+                    "recall": {
+                        "tool": "fixture_recall",
+                        "arguments": {"project": "{project}", "query": "{missing}"},
+                    }
+                },
+            ),
+            self.client,
+        )
         with self.assertRaisesRegex(LibrarianError, "Unprovided"):
             bad.invoke("recall", project="synthetic-nepal")
 
