@@ -113,3 +113,12 @@ Librarian package or endpoint, tool schema, data policy, version and credentials
 are supplied. Only then can the project-specific adapter mappings be verified,
 real backend persistence tested, and a complete second Jarvis answer path
 qualified. Do not merge or switch production paths to bridge that evidence gap.
+
+## Reproducible evidence fingerprints
+
+The sidecar output includes deterministic SHA-256 digests of the fictional input events,
+configured MCP launcher/mappings and advertised MCP tool schema. The lifecycle probe
+also records the configuration and MCP schema digests (or null if discovery fails).
+These are identity checks, **not** evidence that the unpublished Librarian backend
+is available or that model-answer quality has been measured. No raw credentials or
+owner memory are included in report metadata.
