@@ -80,8 +80,8 @@ def score_pair(
 ) -> dict[str, Any]:
     if set(baseline) != set(augmented):
         raise LibrarianError("A/B cases must match exactly (no silently missing cases)")
-    for case_id in baseline:
-        a, b = baseline[case_id], augmented[case_id]
+    for case_id, a in baseline.items():
+        b = augmented[case_id]
         for field in ("fixture_digest", "model_id", "model_config_digest"):
             if a[field] != b[field]:
                 raise LibrarianError("A/B runs are not comparable: " + field)
