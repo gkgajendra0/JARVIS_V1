@@ -1,4 +1,5 @@
 """Standalone sidecar replay tests; no real memory or model."""
+
 from __future__ import annotations
 
 import json
@@ -63,7 +64,12 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(result["events"][2]["candidate_context"], [])
         self.assertEqual(
             result["events"][4]["candidate_context"],
-            [{"source": "fixture-102", "text": "Corrected fictional vehicle is a test-only SUV."}],
+            [
+                {
+                    "source": "fixture-102",
+                    "text": "Corrected fictional vehicle is a test-only SUV.",
+                }
+            ],
         )
         self.assertEqual(result["events"][6]["candidate_context"], [])
         self.assertFalse(result["actual_librarian_backend_verified"])
@@ -79,10 +85,17 @@ class SidecarTests(unittest.TestCase):
     def test_owner_project_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / "bad.jsonl"
-            file.write_text(json.dumps({
-                "case_id": "a01", "operation": "recall",
-                "project": "my-real-nepal", "query": "vehicle",
-            }), encoding="utf-8")
+            file.write_text(
+                json.dumps(
+                    {
+                        "case_id": "a01",
+                        "operation": "recall",
+                        "project": "my-real-nepal",
+                        "query": "vehicle",
+                    }
+                ),
+                encoding="utf-8",
+            )
             with self.assertRaisesRegex(LibrarianError, "synthetic"):
                 read_synthetic_events(file)
 
@@ -90,8 +103,10 @@ class SidecarTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / "bad.jsonl"
             event = {
-                "case_id": "a01", "operation": "recall",
-                "project": "synthetic-test", "query": "q",
+                "case_id": "a01",
+                "operation": "recall",
+                "project": "synthetic-test",
+                "query": "q",
             }
             file.write_text((json.dumps(event) + "\n") * 101, encoding="utf-8")
             with self.assertRaisesRegex(LibrarianError, "Too many"):
