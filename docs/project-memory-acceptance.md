@@ -847,3 +847,49 @@ duration markers and an incomplete flag; late completion cannot rewrite a saved
 report. Cleanup-only reports retain the coordinator's observations. Execution-
 context identity also prevents unrelated or delayed work being attributed to a
 different case. These changes neither wait for nor cancel authorization workers.
+
+## Owner stage-observed no-match result and next positive gate
+
+Owner p5 at `de379187` completed with a manually reviewed correct unknown answer.
+Unlike the earlier unobserved runs, actual personal status was `no_match`, Hello
+was `verified`, spans were complete, and no reporting errors or foreign fixture
+IDs were observed. Two reported provider steps used6759tokens. Total13.700405s:
+Hello6.758119s, provider-step wrappers4.743513s (including SDK3.061658s), and
+2.198773s outside those non-overlapping spans. Hello includes helper/UI work;
+remaining time is not all retrieval. This establishes authorized no-match
+handling, not successful personal recall, stable savings or overall acceptance.
+
+The next opt-in launcher mode is `-PersonalAcceptance` (CLI
+`--personal-acceptance`). It requires a new isolated root and rejects resume,
+seeded acceptance and development-batch combinations before profile work. It
+does not alter the frozen100 questions. The fixed supplemental sequence is:
+
+1. Print and submit fictional explicit command to remember diet preference
+   vegetarian through MemoryAgentTools, with fresh Hello and transaction guards.
+2. Ask "What is my saved diet preference?" in Travel acceptance and then Study
+   acceptance. No fixture value is seeded in their project conversations.
+3. Print and submit explicit correction to vegan, using the existing target-read
+   and exact-mutation approvals. Ask the same question in a new Travel thread.
+
+There are three model questions, at most the existing four provider steps each,
+zero setup inference calls, Free lane only and no automatic retries. Several
+Hello prompts are expected: history retention, mutations, correction target read
+and requested personal queries retain their existing independent approvals.
+Do not cancel them when testing successful access. Denial stops this sequence.
+
+`profile/personal-results.jsonl` retains mutation receipts and each question's
+answer, usage, timing, actual statuses and personal assertion/payload coverage.
+`profile/personal-summary.json` records completed, failed and unrun phases.
+The final corrected query must select the new assertion and deliver its fact in
+the final personal context; the old assertion/fact must be absent there. Prior
+assistant echoes may still exist in project history, deliberately exercising
+current canonical evidence against older conversation text. Missing evidence
+stops the sequence even when a model guesses the correct word. Every answer
+still needs manual grading; evidence coverage alone never grades wording.
+
+The local tests use real SQLite lifecycle, capability registries, personal
+projection, project coordinator and wire payloads with fake OS/Hello/provider.
+They qualify the harness, not actual Gemini accuracy or Windows operation.
+Actual positive fixture owner execution remains UNRUN until reported. This
+fixture uses explicit writes; automatic learning/admission, process restart,
+native speech, broad development/held-out quality and speed remain OPEN.

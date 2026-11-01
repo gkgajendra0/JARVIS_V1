@@ -9,10 +9,12 @@ param(
     [switch]$ResumeLab,
     [switch]$SeedAcceptance,
     [switch]$DevelopmentBatch,
+    [switch]$PersonalAcceptance,
     [ValidateSet('p0-q0','p1-q1','p2-q2','p3-q3','p4-q4','p5-q5')][string]$DevelopmentCase
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ($PersonalAcceptance -and ($ResumeLab -or $SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase)) { throw "Personal acceptance requires a fresh standalone lab." }
 if ($DevelopmentCase -and -not $DevelopmentBatch) { throw "DevelopmentCase requires DevelopmentBatch." }
 if ($DevelopmentBatch -and ($SeedAcceptance -or $ResumeLab)) { throw "Development batch requires a new isolated lab, without acceptance seeding or resume." }
 if ($SeedAcceptance -and $ResumeLab) { throw "Acceptance seeding requires a new isolated lab." }
@@ -42,6 +44,7 @@ try {
     if ($ResumeLab) { $arguments += "--resume-lab" }
     if ($SeedAcceptance) { $arguments += "--seed-acceptance" }
     if ($DevelopmentBatch) { $arguments += "--development-batch" }
+    if ($PersonalAcceptance) { $arguments += "--personal-acceptance" }
     if ($DevelopmentCase) { $arguments += @("--development-case", $DevelopmentCase) }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }

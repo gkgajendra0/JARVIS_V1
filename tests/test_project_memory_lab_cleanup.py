@@ -15,8 +15,9 @@ from jarvis.voice.project_memory_lab import run_text_lab
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("primary_failure", [True, False, "cancel"])
+@pytest.mark.parametrize("personal_mode", [False, True])
 async def test_lab_preserves_primary_diagnosis_and_closes_remaining_resources(
-    tmp_path, monkeypatch, primary_failure
+    tmp_path, monkeypatch, primary_failure, personal_mode
 ):
     called, locks = [], []
     original_failure = RoutedInferenceFailure(
@@ -71,6 +72,14 @@ async def test_lab_preserves_primary_diagnosis_and_closes_remaining_resources(
         if primary_failure:
             raise original_failure
         return {"case_id": "p5-q5", "status": "completed"}
+
+    async def personal_question(root, **kwargs):
+        return await question(None, None, kwargs["coordinator"])
+
+    monkeypatch.setattr(
+        "jarvis.voice.project_personal_acceptance.run_personal_acceptance",
+        personal_question,
+    )
 
     @contextmanager
     def observe():
@@ -154,7 +163,8 @@ async def test_lab_preserves_primary_diagnosis_and_closes_remaining_resources(
             SimpleNamespace(gemini_fallback=GeminiFallbackConfig()),
             tmp_path,
             model="configured",
-            development_case=object(),
+            development_case=None if personal_mode else object(),
+            personal_acceptance=personal_mode,
         )
     assert called == ["coordinator", "authority", "capability", "routing", "memory"]
     assert locks[0].closed

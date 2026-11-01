@@ -155,7 +155,14 @@ async def _close_lab_resources(
 
 
 async def run_text_lab(
-    config, root: Path, *, model: str, seed_acceptance=False, development_case=None
+    config,
+    root: Path,
+    *,
+    model: str,
+    seed_acceptance=False,
+    development_case=None,
+    personal_acceptance=False,
+    source_commit=None,
 ):
     import asyncio
     import msvcrt
@@ -231,6 +238,27 @@ async def run_text_lab(
         coordinator = ProjectConversationCoordinator(
             access, source_clearance=standard_history_source, personal_factory=personal
         )
+        if personal_acceptance:
+            from jarvis.voice.project_contract_diagnostics import (
+                observe_contract_failures,
+            )
+            from jarvis.voice.project_personal_acceptance import run_personal_acceptance
+
+            print(
+                "PERSONAL FIXTURE: fictional diet, two projects, correction, three questions. Fresh Hello approvals for mutations and personal reads. Free lane only; no setup inference or automatic retry.",
+                flush=True,
+            )
+            with observe_contract_failures() as contract_observations:
+                return await run_personal_acceptance(
+                    root,
+                    memory=memory,
+                    capability=capability,
+                    coordinator=coordinator,
+                    access=access,
+                    provider=provider,
+                    source_commit=source_commit,
+                    model=model,
+                )
         if development_case is not None:
             from jarvis.voice.project_contract_diagnostics import (
                 observe_contract_failures,
@@ -381,7 +409,9 @@ async def run_text_lab(
                 )
     except BaseException as exc:
         terminal_error = exc
-        if development_case is not None and isinstance(exc, Exception):
+        if (development_case is not None or personal_acceptance) and isinstance(
+            exc, Exception
+        ):
             from jarvis.voice.project_contract_diagnostics import DevelopmentCaseFailure
 
             terminal_error = DevelopmentCaseFailure(
@@ -410,7 +440,9 @@ async def run_text_lab(
                 terminal_error.report["cleanup_errors"] = metadata
             elif terminal_error is None:
                 first_error = cleanup[0][1]
-                if development_case is not None and isinstance(first_error, Exception):
+                if (development_case is not None or personal_acceptance) and isinstance(
+                    first_error, Exception
+                ):
                     failure = DevelopmentCaseFailure(
                         first_error, coordinator, contract_observations
                     )
@@ -482,7 +514,15 @@ def main():
     parser.add_argument("--seed-acceptance", action="store_true")
     parser.add_argument("--development-batch", action="store_true")
     parser.add_argument("--development-case", choices=CASE_IDS)
+    parser.add_argument("--personal-acceptance", action="store_true")
     args = parser.parse_args()
+    if args.personal_acceptance and (
+        args.resume_lab
+        or args.seed_acceptance
+        or args.development_batch
+        or args.development_case
+    ):
+        parser.error("personal acceptance requires a fresh standalone lab")
     if args.development_case and not args.development_batch:
         parser.error("--development-case requires --development-batch")
     if args.development_batch and (args.seed_acceptance or args.resume_lab):
@@ -532,14 +572,28 @@ def main():
         config = JarvisConfig.from_environment()
         if config.ai_provider != "gemini":
             parser.error("existing Gemini configuration required")
-        asyncio.run(
-            run_text_lab(
-                config,
-                profile.parent,
-                model=args.model,
-                seed_acceptance=args.seed_acceptance,
+        try:
+            asyncio.run(
+                run_text_lab(
+                    config,
+                    profile.parent,
+                    model=args.model,
+                    seed_acceptance=args.seed_acceptance,
+                    personal_acceptance=args.personal_acceptance,
+                    source_commit=args.source_commit,
+                )
             )
-        )
+        except Exception as exc:
+            from jarvis.voice.project_contract_diagnostics import DevelopmentCaseFailure
+
+            if not args.personal_acceptance or not isinstance(
+                exc, DevelopmentCaseFailure
+            ):
+                raise
+            from jarvis.voice.project_personal_acceptance import record_runtime_failure
+
+            record_runtime_failure(profile.parent, exc.report)
+            raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

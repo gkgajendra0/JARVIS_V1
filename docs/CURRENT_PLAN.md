@@ -10,6 +10,17 @@ The owner selected: existing Gemini for understanding/search requests/answers; a
 
 ## Current step: connected controlled-text candidate
 
+Latest bounded evidence (1 November): `de379187` passed both hosted gates and
+the owner p5 no-match measurement. Personal access was Hello-verified and returned
+`no_match`; the unknown answer was correct.13.70s total included6.76s Hello and
+4.74s provider-step wrappers. This is not a speed pass or successful fact recall.
+The next bounded task is the supplemental personal recall/correction fixture
+described in [its plan](superpowers/plans/2026-11-01-personal-recall-acceptance.md)
+and the [acceptance guide](project-memory-acceptance.md). It uses fresh isolated
+fictional explicit writes and three questions across two projects/new thread;
+it leaves automatic learning and the frozen held-out questions unqualified.
+The older candidate chronology below is retained as historical evidence.
+
 The isolated implementation now connects required capture, persistent projects/threads,
 authorized local tools, bounded context and the existing Gemini answer/tool cycle.
 Existing canonical personal reads use exact owner consent; no new learning write scope
