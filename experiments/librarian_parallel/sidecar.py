@@ -58,9 +58,9 @@ def read_synthetic_events(path: Path) -> list[dict[str, str]]:
             raise LibrarianError("Event project must be synthetic-*")
         if len(event.get("query", "")) > 500 or len(event.get("text", "")) > 2000:
             raise LibrarianError("Event query/text length exceeded")
-        if event["operation"] in WRITE_OPERATIONS and not event.get("source", "").startswith(
-            "fixture-"
-        ):
+        if event["operation"] in WRITE_OPERATIONS and not event.get(
+            "source", ""
+        ).startswith("fixture-"):
             raise LibrarianError("Write event requires fixture-* source")
         events.append(event)
         if len(events) > MAX_EVENTS:
