@@ -202,9 +202,7 @@ class ExperimentTests(unittest.TestCase):
 
     def test_oversized_mcp_argument_is_rejected(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "length limit"):
-            self.adapter.invoke(
-                "recall", project="synthetic-nepal", query="x" * 4097
-            )
+            self.adapter.invoke("recall", project="synthetic-nepal", query="x" * 4097)
 
     def test_advertised_mcp_input_schema_is_enforced(self) -> None:
         bad = LibrarianExperiment(
