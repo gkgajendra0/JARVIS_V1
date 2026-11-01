@@ -118,6 +118,7 @@ def main() -> None:
                     store[args["source"]] = {
                         "source": args["source"],
                         "text": args["text"],
+                        "project": project,
                     }
                     data = {"corrected": old is not None}
                 elif name == "fixture_forget":
