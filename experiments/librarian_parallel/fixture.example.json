@@ -1,0 +1,44 @@
+{
+  "mode": "synthetic-only",
+  "command": [
+    "python",
+    "-m",
+    "experiments.librarian_parallel.fixture_mcp_server"
+  ],
+  "cwd": ".",
+  "timeout": 5,
+  "operations": {
+    "recall": {
+      "tool": "fixture_recall",
+      "arguments": {
+        "project": "{project}",
+        "query": "{query}"
+      }
+    },
+    "remember": {
+      "tool": "fixture_remember",
+      "arguments": {
+        "project": "{project}",
+        "text": "{text}",
+        "source": "{source}"
+      }
+    },
+    "correct": {
+      "tool": "fixture_correct",
+      "arguments": {
+        "project": "{project}",
+        "text": "{text}",
+        "source": "{source}",
+        "target": "{target}"
+      }
+    },
+    "forget": {
+      "tool": "fixture_forget",
+      "arguments": {
+        "project": "{project}",
+        "source": "{source}",
+        "target": "{target}"
+      }
+    }
+  }
+}
