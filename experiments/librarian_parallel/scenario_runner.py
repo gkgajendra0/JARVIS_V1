@@ -80,6 +80,7 @@ def run_probe(
     checks: list[dict[str, Any]] = []
     measurements: list[float] = []
     started = time.time()
+    advertised_digest: str | None = None
 
     def execute(
         adapter: LibrarianExperiment,
@@ -178,7 +179,7 @@ def run_probe(
         "schema": "jarvis.synthetic_mcp_probe.v1",
         "backend_verified": False,
         "config_digest": config_fingerprint(config),
-        "mcp_tool_schema_digest": advertised_digest if "advertised_digest" in locals() else None,
+        "mcp_tool_schema_digest": advertised_digest,
         "official_librarian_quality_measured": False,
         "synthetic_only": True,
         "started_unix": started,
