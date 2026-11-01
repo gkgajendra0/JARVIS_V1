@@ -36,6 +36,7 @@ jobs:
           python -m experiments.librarian_parallel.scenario_runner
           --config experiments/librarian_parallel/fixture.example.json
           --output "${RUNNER_TEMP}/synthetic_librarian_probe.json"
+          --allow-synthetic-write
       - name: Synthetic seven-event sidecar replay
         run: >-
           python -m experiments.librarian_parallel.sidecar
