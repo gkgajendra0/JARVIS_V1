@@ -24,7 +24,9 @@ from .bridge import (
 )
 from .scenario_runner import decode_records
 
-EVENT_KEYS = frozenset({"case_id", "operation", "project", "text", "query", "source", "target"})
+EVENT_KEYS = frozenset(
+    {"case_id", "operation", "project", "text", "query", "source", "target"}
+)
 EVENT_OPERATIONS = frozenset({"recall", "remember", "correct", "forget"})
 CASE_ID = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 MAX_EVENTS = 100
@@ -68,8 +70,10 @@ def read_synthetic_events(path: Path) -> list[dict[str, str]]:
 
 
 def replay(
-    config: ExperimentConfig, events: list[dict[str, str]],
-    *, allow_synthetic_write: bool = False,
+    config: ExperimentConfig,
+    events: list[dict[str, str]],
+    *,
+    allow_synthetic_write: bool = False,
 ) -> dict[str, Any]:
     """Replay a sequence in one external MCP session; never touch the Jarvis DB."""
     outputs: list[dict[str, Any]] = []
@@ -93,7 +97,9 @@ def replay(
                 "operation": op,
                 "project": event["project"],
                 "elapsed_ms": ms,
-                "result_type": "write_receipt" if op in WRITE_OPERATIONS else "retrieval",
+                "result_type": "write_receipt"
+                if op in WRITE_OPERATIONS
+                else "retrieval",
             }
             if op == "recall":
                 records = decode_records(result)
@@ -124,17 +130,29 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = ExperimentConfig.from_file(args.config)
         events = read_synthetic_events(args.events)
-        report = replay(config, events, allow_synthetic_write=args.allow_synthetic_write)
+        report = replay(
+            config, events, allow_synthetic_write=args.allow_synthetic_write
+        )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open("x", encoding="utf-8") as stream:
             json.dump(report, stream, indent=2, ensure_ascii=False)
             stream.write("\n")
-        print(json.dumps({"status": "PASS", "events": len(events),
-                          "synthetic_only": True, "output_written": True}))
+        print(
+            json.dumps(
+                {
+                    "status": "PASS",
+                    "events": len(events),
+                    "synthetic_only": True,
+                    "output_written": True,
+                }
+            )
+        )
         return 0
     except (LibrarianError, OSError, ValueError) as exc:
-        print(json.dumps({"status": "FAIL", "error_type": type(exc).__name__}),
-              file=sys.stderr)
+        print(
+            json.dumps({"status": "FAIL", "error_type": type(exc).__name__}),
+            file=sys.stderr,
+        )
         return 2
 
 
