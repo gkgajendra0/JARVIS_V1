@@ -12,7 +12,11 @@ from .bridge import ExperimentConfig
 def fingerprint(value: Any) -> str:
     """SHA-256 of canonical JSON; callers must supply JSON-compatible data."""
     encoded = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
