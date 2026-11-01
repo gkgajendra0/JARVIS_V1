@@ -12,9 +12,10 @@ import re
 import subprocess
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Self
 
 PROTOCOL_VERSION = "2025-06-18"
 SYNTHETIC_SCOPE = re.compile(r"^synthetic-[a-zA-Z0-9_-]{1,64}$")
@@ -51,7 +52,7 @@ class McpStdioClient:
         self.sequence = 0
         self._tools: dict[str, dict[str, Any]] | None = None
 
-    def __enter__(self) -> "McpStdioClient":
+    def __enter__(self) -> Self:
         self.process = subprocess.Popen(
             self.command,
             cwd=self.cwd,
@@ -215,7 +216,7 @@ class ExperimentConfig:
     operations: dict[str, dict[str, Any]]
 
     @staticmethod
-    def from_file(path: str | Path) -> "ExperimentConfig":
+    def from_file(path: str | Path) -> ExperimentConfig:
         source = Path(path).resolve()
         config = json.loads(source.read_text(encoding="utf-8"))
         if not isinstance(config, dict) or config.get("mode") != "synthetic-only":
