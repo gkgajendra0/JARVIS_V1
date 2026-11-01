@@ -86,16 +86,26 @@ class ScenarioTests(unittest.TestCase):
                 "content": [
                     {
                         "type": "text",
-                        "text": '{"records":[{"source":"fixture-1","text":"hello"}]}',
+                        "text": '{"records":[{"source":"fixture-1","text":"hello","project":"synthetic-test"}]}',
                     }
                 ]
-            }
+            },
+            expected_project="synthetic-test",
         )
-        self.assertEqual(records, [{"source": "fixture-1", "text": "hello"}])
+        self.assertEqual(
+            records,
+            [{"source": "fixture-1", "text": "hello", "project": "synthetic-test"}],
+        )
         with self.assertRaisesRegex(LibrarianError, "verified records"):
-            decode_records({"structuredContent": {"matches": []}})
+            decode_records(
+                {"structuredContent": {"matches": []}},
+                expected_project="synthetic-test",
+            )
         with self.assertRaisesRegex(LibrarianError, "too large"):
-            decode_records({"content": [{"type": "text", "text": "x" * 262145}]})
+            decode_records(
+                {"content": [{"type": "text", "text": "x" * 262145}]},
+                expected_project="synthetic-test",
+            )
 
     def test_percentile_is_deterministic(self) -> None:
         self.assertIsNone(percentile([], 0.5))
