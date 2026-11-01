@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any, Self
 
 PROTOCOL_VERSION = "2025-06-18"
+MAX_MCP_LINE_CHARS = 1_048_576
+MAX_ARGUMENT_CHARS = 4096
 SYNTHETIC_SCOPE = re.compile(r"^synthetic-[a-zA-Z0-9_-]{1,64}$")
 WRITE_OPERATIONS = frozenset({"remember", "correct", "forget", "archive", "delete"})
 
@@ -77,8 +79,8 @@ class McpStdioClient:
                     },
                 },
             )
-            if not isinstance(reply, dict) or "protocolVersion" not in reply:
-                raise LibrarianError("Invalid MCP initialize result")
+            if not isinstance(reply, dict) or reply.get("protocolVersion") != PROTOCOL_VERSION:
+                raise LibrarianError("Incompatible MCP protocol version")
             self._notify("notifications/initialized")
             return self
         except Exception:
@@ -88,7 +90,13 @@ class McpStdioClient:
     def _read_stdout(self) -> None:
         assert self.process is not None and self.process.stdout is not None
         try:
-            for line in self.process.stdout:
+            while True:
+                line = self.process.stdout.readline(MAX_MCP_LINE_CHARS + 1)
+                if not line:
+                    break
+                if len(line) > MAX_MCP_LINE_CHARS or not line.endswith("\\n"):
+                    self.messages.put(LibrarianError("MCP response line exceeds limit"))
+                    break
                 if not line.strip():
                     continue
                 try:
@@ -295,6 +303,8 @@ class LibrarianExperiment:
             "source": source,
             "target": target,
         }
+        if any(len(value) > MAX_ARGUMENT_CHARS for value in values.values()):
+            raise LibrarianError("Synthetic MCP argument exceeds length limit")
         if operation in WRITE_OPERATIONS and not source.startswith("fixture-"):
             raise LibrarianError("Synthetic writes require a fixture-* source ID")
         arguments = _render(binding["arguments"], values)
