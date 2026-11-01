@@ -115,14 +115,18 @@ def run_probe(
                     raise LibrarianError("Missing required operation: " + operation)
 
             execute(
-                adapter, "remember", project=travel,
-                source="fixture-" + nonce + "-1", text="vehicle: Jimny",
+                adapter,
+                "remember",
+                project=travel,
+                source="fixture-" + nonce + "-1",
+                text="vehicle: Jimny",
             )
             initial = execute(adapter, "recall", project=travel, query="vehicle")
             record(
                 "remember_and_recall",
                 len(initial) == 1
-                and initial[0] == {
+                and initial[0]
+                == {
                     "source": "fixture-" + nonce + "-1",
                     "text": "vehicle: Jimny",
                 },
@@ -131,7 +135,9 @@ def run_probe(
             record("cross_project_isolation", separated == [])
 
             execute(
-                adapter, "correct", project=travel,
+                adapter,
+                "correct",
+                project=travel,
                 source="fixture-" + nonce + "-2",
                 target="fixture-" + nonce + "-1",
                 text="vehicle: corrected synthetic 4x4",
@@ -139,14 +145,19 @@ def run_probe(
             corrected = execute(adapter, "recall", project=travel, query="vehicle")
             record(
                 "superseded_fact_absent",
-                corrected == [{
-                    "source": "fixture-" + nonce + "-2",
-                    "text": "vehicle: corrected synthetic 4x4",
-                }],
+                corrected
+                == [
+                    {
+                        "source": "fixture-" + nonce + "-2",
+                        "text": "vehicle: corrected synthetic 4x4",
+                    }
+                ],
             )
 
             execute(
-                adapter, "forget", project=travel,
+                adapter,
+                "forget",
+                project=travel,
                 source="fixture-" + nonce + "-3",
                 target="fixture-" + nonce + "-2",
             )
@@ -154,11 +165,13 @@ def run_probe(
             record("forget_removes_fact", deleted == [])
     except (LibrarianError, OSError, ValueError, TimeoutError) as exc:
         # Never put arbitrary server strings, queries, text, or credentials into report.
-        checks.append({
-            "check": "transport_or_contract",
-            "passed": False,
-            "error_type": type(exc).__name__,
-        })
+        checks.append(
+            {
+                "check": "transport_or_contract",
+                "passed": False,
+                "error_type": type(exc).__name__,
+            }
+        )
     return {
         "schema": "jarvis.synthetic_mcp_probe.v1",
         "backend_verified": False,
@@ -166,15 +179,15 @@ def run_probe(
         "synthetic_only": True,
         "started_unix": started,
         "duration_ms": round((time.time() - started) * 1000, 3),
-        "status": "PASS" if len(checks) == 4 and all(c["passed"] for c in checks)
+        "status": "PASS"
+        if len(checks) == 4 and all(c["passed"] for c in checks)
         else "FAIL",
         "checks": checks,
         "latency_ms": {
             "count": len(measurements),
             "p50": percentile(measurements, 0.5),
             "p95": percentile(measurements, 0.95),
-            "mean": round(statistics.mean(measurements), 3)
-            if measurements else None,
+            "mean": round(statistics.mean(measurements), 3) if measurements else None,
         },
     }
 
@@ -194,17 +207,22 @@ def main(argv: list[str] | None = None) -> int:
         with args.output.open("x", encoding="utf-8") as output:
             json.dump(report, output, indent=2)
             output.write("\n")
-        print(json.dumps({
-            "status": report["status"],
-            "checks_passed": sum(c["passed"] for c in report["checks"]),
-            "checks_total": len(report["checks"]),
-            "report_written": True,
-        }))
+        print(
+            json.dumps(
+                {
+                    "status": report["status"],
+                    "checks_passed": sum(c["passed"] for c in report["checks"]),
+                    "checks_total": len(report["checks"]),
+                    "report_written": True,
+                }
+            )
+        )
         return 0 if report["status"] == "PASS" else 1
     except (LibrarianError, OSError, ValueError) as exc:
-        print(json.dumps({
-            "status": "FAIL", "error_type": type(exc).__name__
-        }), file=sys.stderr)
+        print(
+            json.dumps({"status": "FAIL", "error_type": type(exc).__name__}),
+            file=sys.stderr,
+        )
         return 2
 
 
