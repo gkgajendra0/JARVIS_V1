@@ -317,6 +317,10 @@ def run_development_batch(root, cases, run_case, *, source_commit, model):
                     raise ValueError("invalid development case result")
             # Terminal batch boundary: retain a sanitized failure and stop. Never retry.
             except (Exception, KeyboardInterrupt) as exc:  # noqa: BLE001
+                from jarvis.voice.project_contract_diagnostics import (
+                    DevelopmentCaseFailure,
+                )
+
                 row = {
                     "case_id": ident,
                     "status": "failed",
@@ -325,6 +329,8 @@ def run_development_batch(root, cases, run_case, *, source_commit, model):
                     "answer_quality": "not_evaluated",
                     "usage": None,
                 }
+                if isinstance(exc, DevelopmentCaseFailure):
+                    row = {"case_id": ident, **exc.report}
             row.update(metadata)
             rows.append(row)
             stream.write(json.dumps(row, ensure_ascii=False) + "\n")

@@ -27,8 +27,49 @@ class _Read(_ResponsePayload):
     source_ids: list[str] = Field(min_length=1, max_length=16)
 
 
+class _ProjectPersonalRequest(PersonalContextRequest):
+    """Specialize wire schema; retain the canonical request validator unchanged."""
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        canonical = handler(core_schema)
+        scope = canonical["properties"]["scope_key"]
+        targeted_scope = {
+            **scope,
+            "enum": [
+                s
+                for s in scope["enum"]
+                if s not in {"food_preference", "response_preference"}
+            ],
+        }
+        return {
+            "title": canonical["title"],
+            "anyOf": [
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {"scope_key": scope},
+                    "required": ["scope_key"],
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "scope_key": targeted_scope,
+                        "target_quote": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                        },
+                    },
+                    "required": ["scope_key", "target_quote"],
+                },
+            ],
+        }
+
+
 class _Personal(_ResponsePayload):
-    personal_requests: list[PersonalContextRequest] = Field(min_length=1, max_length=4)
+    personal_requests: list[_ProjectPersonalRequest] = Field(min_length=1, max_length=4)
 
 
 class ProjectAnswerStep(BaseModel):

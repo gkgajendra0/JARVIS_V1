@@ -523,3 +523,108 @@ def test_unavailable_jsonl_stops_before_any_question_and_marks_all_unrun(
         {"channel": "results_jsonl", "error": "OSError", "case_id": None}
     ]
     assert json.loads((root / "summary.json").read_text()) == summary
+
+
+def test_selected_development_case_runs_once_with_its_frozen_history(
+    tmp_path, monkeypatch
+):
+    from contextlib import contextmanager
+
+    from jarvis.voice import project_memory_lab as lab
+
+    calls = []
+
+    def prepare(source, root, **kwargs):
+        assert kwargs["resume"] is False
+        root.mkdir()
+        return root / "machine.json"
+
+    @contextmanager
+    def environment(*args):
+        yield
+
+    async def run(config, root, *, model, development_case):
+        assert len(development_case.events) == 60
+        calls.append(development_case.question["id"])
+        return {"case_id": calls[-1], "status": "completed", "elapsed_ms": 1}
+
+    monkeypatch.setattr(lab, "prepare_project_profile", prepare)
+    monkeypatch.setattr(lab, "project_lab_environment", environment)
+    monkeypatch.setattr(lab, "run_text_lab", run)
+    monkeypatch.setattr(
+        "jarvis.config.JarvisConfig.from_environment",
+        lambda: SimpleNamespace(ai_provider="gemini"),
+    )
+    args = SimpleNamespace(
+        profile=tmp_path / "owner.json",
+        lab_root=tmp_path / "batch",
+        source_commit="a" * 40,
+        model="configured",
+        development_case="p5-q5",
+    )
+    summary = lab.run_development_mode(args, REPO, {})
+    assert calls == ["p5-q5"]
+    assert summary["planned"] == summary["completed"] == 1
+
+
+@pytest.mark.parametrize(
+    "extra,reason",
+    [
+        ([], "requires --development-batch"),
+        (["--development-batch", "--resume-lab"], "development batch requires a new"),
+    ],
+)
+def test_case_mode_guard_precedes_platform_and_profile_operations(
+    monkeypatch, capsys, extra, reason
+):
+    import sys
+
+    from jarvis.voice.project_memory_lab import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "lab",
+            "--lab-root",
+            "unused",
+            "--model",
+            "configured",
+            "--source-commit",
+            "a" * 40,
+            "--development-case",
+            "p5-q5",
+            *extra,
+        ],
+    )
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert reason in capsys.readouterr().err
+
+
+def test_held_out_case_cannot_be_selected(monkeypatch, capsys):
+    import sys
+
+    from jarvis.voice.project_memory_lab import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "lab",
+            "--lab-root",
+            "unused",
+            "--model",
+            "configured",
+            "--source-commit",
+            "a" * 40,
+            "--development-batch",
+            "--development-case",
+            "p0-q9",
+        ],
+    )
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err

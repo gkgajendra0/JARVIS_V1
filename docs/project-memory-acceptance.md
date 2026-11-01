@@ -745,3 +745,71 @@ now normalizes its input before producing CRLF and exercises both LF and CRLF
 checkouts. The loader, frozen fixtures and runtime are unchanged. The expanded
 scoped suite passed486 tests after this RED→GREEN correction; hosted qualification
 must use the subsequent revision rather than inheriting890e's results.
+
+## Owner b989 six-case failure and personal wire repair
+
+The owner completed five questions and failed the sixth (p5-q5, unknown diet).
+All five requested core facts were correct, expected original sources were present
+and no foreign fixture sources were observed. The Nepal answer additionally linked
+Jimny to a rental without an explicit source relationship; this is a grounding
+concern, not an unqualified answer pass. Each successful answer used one reported
+provider step with20 target history events already supplied, so this batch did not
+exercise deeper archive retrieval. Successful turn median8170.062ms and nearest-rank
+p95/max10541.6935ms (n5) do not meet the near-instant goal. Known usage16483 tokens
+(16296input,187output) excludes unknown failed-case usage.
+
+A read-only owner inspection of the failed profile returned one persisted routing
+attempt and health cooldown / response_contract_invalid / consecutive_failures1.
+This identifies a rejected response contract, not a quota/network failure category.
+The adapter discards invalid output before returning telemetry and routing retains
+only its normalized category; the original invalid field is not recoverable from
+this report. Do not claim the original response contained null or a specific tool.
+
+Local reproduction found an independent schema/validator mismatch: nullable
+target_quote and targets for food_preference/response_preference were advertised
+to Gemini, while the canonical validator deliberately rejects them. The project
+wire now specializes only its JSON Schema into closed scope-only and targeted
+variants. All existing scopes can omit a target; only targetable scopes advertise
+a required non-null string target. Canonical validator, UTF-8 byte bound, whitespace,
+exact-question quote binding, consent and revocation checks remain unchanged.
+The canonical model and native voice tool contract are not relaxed.
+
+The schema uses the conditional anyOf object pattern documented in Google's
+[structured-output guide](https://ai.google.dev/gemini-api/docs/structured-output).
+This confirms the documented construct, not an actual3.5-model pass on this head.
+The [repair plan](superpowers/plans/2026-11-01-project-personal-wire-contract.md)
+records its bounded scope and remaining owner test.
+
+Development labs now observe adapter contract failures before routing loses the
+validation cause. DEVELOPMENT_CONTRACT and failed case reports contain closed
+reason/error-type counts, known scope names and target input types only. No raw
+provider output, question/source values, arbitrary field names, exception messages
+or validation paths are emitted. This adds no model call/retry and restores the
+adapter method after each case. Failed rows retain coordinator stage, normalized
+routing failure kind and contract observations; failed usage stays unknown.
+
+Use -DevelopmentBatch -DevelopmentCase p5-q5 on a new root to ask only the failed
+frozen development question. The default remains six cases. Only the six existing
+development IDs are accepted; a case selector without batch mode or with resume
+is rejected before profile/worktree work. Old labs remain pinned and unmodified.
+One selected case means one new history Hello approval, with separate personal-read
+consent still governed normally. The four-step/Free-only bounds remain unchanged.
+
+Local software verification:510 scoped tests passed (real OPA excluded), repository
+Ruff and formatting checks passed. The wire-schema regression failed RED before
+specialization; diagnostic and case-selection tests likewise failed before their
+implementations. Original native/canonical invalid-target tests remain green.
+This repairs a reproduced wire inconsistency and the observability gap; it does
+not prove the original p5 invalid field or qualify its actual-model repair. The
+owner's one-case retest and exact-head hosted gates remain separate requirements.
+
+Final review found one Important finalizer gap: a later SDK-close failure could
+replace the primary sanitized diagnosis and skip memory/lock release. Regressions
+reproduced the primary+cleanup and cleanup-only failures RED before the repair.
+The initialized lab now tries each release independently, retains the primary
+failure with separate component/error-class cleanup metadata, and reports a
+cleanup-only failure as stage cleanup. A cancellation test verifies original
+cancellation identity and remaining resource release. No exception messages are
+added to reports. Early resource-constructor failures before the protected runtime
+block remain outside this bounded repair; installed runtime cleanup is not claimed
+qualified. No new reviewer Minor was deferred.

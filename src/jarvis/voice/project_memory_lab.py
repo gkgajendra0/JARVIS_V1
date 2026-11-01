@@ -7,6 +7,7 @@ Windows Hello are reused; original machine settings are not edited.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import subprocess
@@ -126,6 +127,33 @@ async def reauthorize_lab_history(access, coordinator, *, personal_factory=None)
     )
 
 
+async def _close_lab_resources(
+    *, coordinator, authority, capability, routing, memory, lock, unlock
+):
+    """Try every release; the caller preserves the primary exception afterward."""
+    failures = []
+
+    async def attempt(component, close):
+        try:
+            result = close()
+            if inspect.isawaitable(result):
+                await result
+        except BaseException as exc:  # noqa: BLE001 - caller propagates primary/first failure after all releases
+            # Includes cancellation: release remaining resources before propagating.
+            failures.append((component, exc))
+
+    if coordinator is not None:
+        await attempt("coordinator", lambda: coordinator.invalidate("shutdown"))
+    await attempt("authority", authority.close)
+    await attempt("capability", capability.close)
+    if routing is not None:
+        await attempt("routing", routing.aclose)
+    await attempt("memory", memory.close)
+    await attempt("lock_unlock", lambda: (lock.seek(0), unlock()))
+    await attempt("lock_close", lock.close)
+    return failures
+
+
 async def run_text_lab(
     config, root: Path, *, model: str, seed_acceptance=False, development_case=None
 ):
@@ -167,6 +195,8 @@ async def run_text_lab(
     routing = None
     work_store = None
     coordinator = None
+    contract_observations = []
+    terminal_error = None
     try:
         await memory.start()
         grant = await asyncio.to_thread(authority.open, str(uuid4()), "gemini")
@@ -202,6 +232,9 @@ async def run_text_lab(
             access, source_clearance=standard_history_source, personal_factory=personal
         )
         if development_case is not None:
+            from jarvis.voice.project_contract_diagnostics import (
+                observe_contract_failures,
+            )
             from jarvis.voice.project_memory_development import (
                 run_case_question,
                 seed_development_case,
@@ -216,9 +249,10 @@ async def run_text_lab(
                 "DEVELOPMENT FIXTURE: 60 fictional events / 3 projects seeded locally; zero setup model calls. One question; no automatic retry.",
                 flush=True,
             )
-            return await run_case_question(
-                development_case, manifest, coordinator, access, provider
-            )
+            with observe_contract_failures() as contract_observations:
+                return await run_case_question(
+                    development_case, manifest, coordinator, access, provider
+                )
         controls = ProjectControls(access)
         manifest_path = root / "acceptance-fixture.json"
         if seed_acceptance:
@@ -345,17 +379,44 @@ async def run_text_lab(
                 print(
                     f"NOT COMPLETED: {json.dumps(coordinator.diagnostics())}; error={type(exc).__name__}. Inspect saved sources before retrying; no successful-save claim for failed stage."
                 )
+    except BaseException as exc:
+        terminal_error = exc
+        if development_case is not None and isinstance(exc, Exception):
+            from jarvis.voice.project_contract_diagnostics import DevelopmentCaseFailure
+
+            terminal_error = DevelopmentCaseFailure(
+                exc, coordinator, contract_observations
+            )
+            raise terminal_error from None
+        raise
     finally:
-        if coordinator is not None:
-            coordinator.invalidate("shutdown")
-        authority.close()
-        capability.close()
-        if routing is not None:
-            await routing.aclose()
-        await memory.close()
-        lock.seek(0)
-        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
-        lock.close()
+        cleanup = await _close_lab_resources(
+            coordinator=coordinator,
+            authority=authority,
+            capability=capability,
+            routing=routing,
+            memory=memory,
+            lock=lock,
+            unlock=lambda: msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1),
+        )
+        if cleanup:
+            from jarvis.voice.project_contract_diagnostics import DevelopmentCaseFailure
+
+            metadata = [
+                {"component": component, "error": type(error).__name__}
+                for component, error in cleanup
+            ]
+            if isinstance(terminal_error, DevelopmentCaseFailure):
+                terminal_error.report["cleanup_errors"] = metadata
+            elif terminal_error is None:
+                first_error = cleanup[0][1]
+                if development_case is not None and isinstance(first_error, Exception):
+                    failure = DevelopmentCaseFailure(
+                        first_error, None, contract_observations
+                    )
+                    failure.report.update(stage="cleanup", cleanup_errors=metadata)
+                    raise failure from None
+                raise first_error
 
 
 def run_development_mode(args, repo, tool_paths):
@@ -369,6 +430,11 @@ def run_development_mode(args, repo, tool_paths):
 
     # Validate frozen data before creating profiles or requesting owner approvals.
     cases = load_cases(repo)
+    selected = getattr(args, "development_case", None)
+    if selected is not None:
+        cases = tuple(c for c in cases if c.question["id"] == selected)
+        if not cases:
+            raise ValueError("unknown frozen development case")
 
     def run_case(case, root):
         profile = prepare_project_profile(
@@ -387,7 +453,7 @@ def run_development_mode(args, repo, tool_paths):
             )
 
     print(
-        "DEVELOPMENT BATCH: six questions, six fresh isolated profiles and six Windows Hello approvals. Free credential lane only; no Paid fallback. Stops on first failure. Answers require manual review.",
+        f"DEVELOPMENT BATCH: {len(cases)} question(s), each with a fresh isolated profile and Windows Hello history approval. Free credential lane only; no Paid fallback. Stops on first failure. Answers require manual review.",
         flush=True,
     )
     return run_development_batch(
@@ -405,6 +471,7 @@ def main():
 
     from jarvis.config import JarvisConfig
     from jarvis.machine_config import default_machine_config_path
+    from jarvis.voice.project_memory_development import CASE_IDS
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lab-root", type=Path, required=True)
@@ -414,7 +481,10 @@ def main():
     parser.add_argument("--resume-lab", action="store_true")
     parser.add_argument("--seed-acceptance", action="store_true")
     parser.add_argument("--development-batch", action="store_true")
+    parser.add_argument("--development-case", choices=CASE_IDS)
     args = parser.parse_args()
+    if args.development_case and not args.development_batch:
+        parser.error("--development-case requires --development-batch")
     if args.development_batch and (args.seed_acceptance or args.resume_lab):
         parser.error(
             "development batch requires a new isolated lab, without acceptance seeding or resume"

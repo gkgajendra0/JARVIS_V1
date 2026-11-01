@@ -227,3 +227,118 @@ def test_wire_read_variant_allows_only_current_search_hit_ids():
     )
     step = model.model_validate_json('{"response":{"source_ids":["hit-2"]}}')
     assert step.source_ids == ["hit-2"] and type(step.source_ids[0]) is str
+
+
+def test_personal_wire_schema_does_not_offer_targets_rejected_by_canonical_parser():
+    from jarvis.personal_learning_scope import SUPPRESSION_KEYS
+    from jarvis.voice.project_answer_provider import response_model_for_tools
+
+    schema = response_model_for_tools(
+        {
+            "search_available": True,
+            "personal_available": True,
+            "read_source_ids": [],
+            "remaining_steps": 4,
+        }
+    ).model_json_schema()
+    personal = schema["$defs"]["_Personal"]["properties"]["personal_requests"]["items"]
+    request = schema["$defs"][personal["$ref"].rsplit("/", 1)[-1]]
+    branches = request.get("anyOf", [request])
+    untargeted_scopes, targeted_scopes = set(), set()
+    for branch in branches:
+        assert branch["additionalProperties"] is False
+        scopes = set(branch["properties"]["scope_key"]["enum"])
+        quote = branch["properties"].get("target_quote")
+        if quote is None:
+            assert branch["required"] == ["scope_key"]
+            untargeted_scopes.update(scopes)
+        else:
+            assert quote["type"] == "string" and "anyOf" not in quote
+            assert "target_quote" in branch["required"]
+            assert not {"food_preference", "response_preference"} & scopes
+            targeted_scopes.update(scopes)
+    assert untargeted_scopes == SUPPRESSION_KEYS
+    assert targeted_scopes == SUPPRESSION_KEYS - {
+        "food_preference",
+        "response_preference",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "personal_request",
+    [
+        {"scope_key": "food_preference"},
+        {"scope_key": "response_preference"},
+        {"scope_key": "owned_item.vehicle", "target_quote": "City"},
+    ],
+)
+async def test_personal_wire_specialization_keeps_real_adapter_and_canonical_validation(
+    personal_request,
+):
+    from jarvis.hands.provider_adapters import GeminiStructuredOutputClient
+    from jarvis.memory.personal_context_projection import parse_context_requests
+    from jarvis.voice.project_answer_provider import response_model_for_tools
+
+    calls = []
+
+    class Endpoint:
+        async def create(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(
+                output_text=json.dumps(
+                    {"response": {"personal_requests": [personal_request]}}
+                ),
+                usage={},
+            )
+
+    model = response_model_for_tools(
+        {
+            "search_available": True,
+            "personal_available": True,
+            "read_source_ids": [],
+            "remaining_steps": 4,
+        }
+    )
+    client = GeminiStructuredOutputClient(
+        client=SimpleNamespace(aio=SimpleNamespace(interactions=Endpoint())),
+        model="configured-model",
+    )
+    result = await client.parse_with_telemetry(
+        system_prompt="test", input_payload={}, response_model=model
+    )
+    canonical = parse_context_requests(
+        result.parsed.personal_requests, question="What about City?"
+    )
+    assert canonical[0].model_dump(exclude_unset=True) == personal_request
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "personal_request",
+    [
+        {"scope_key": "food_preference", "target_quote": None},
+        {"scope_key": "goal", "target_quote": None},
+        {"scope_key": "food_preference", "target_quote": "food"},
+        {"scope_key": "response_preference", "target_quote": "short"},
+        {"scope_key": "owned_item.vehicle", "target_quote": " "},
+        {"scope_key": "private_address"},
+    ],
+)
+def test_personal_wire_specialization_does_not_relax_canonical_rejections(
+    personal_request,
+):
+    from jarvis.voice.project_answer_provider import response_model_for_tools
+
+    model = response_model_for_tools(
+        {
+            "search_available": True,
+            "personal_available": True,
+            "read_source_ids": [],
+            "remaining_steps": 4,
+        }
+    )
+    with pytest.raises(ValidationError):
+        model.model_validate_json(
+            json.dumps({"response": {"personal_requests": [personal_request]}})
+        )
