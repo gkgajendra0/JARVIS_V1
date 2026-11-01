@@ -100,10 +100,15 @@ def main() -> None:
                     store[args["source"]] = {
                         "source": args["source"],
                         "text": args["text"],
+                        "project": project,
                     }
                     data = {"committed": True}
                 elif name == "fixture_recall":
                     data = {"records": list(store.values()), "query": args["query"]}
+                    if "--foreign-record" in sys.argv:
+                        data["records"].append(
+                            {"source": "fixture-foreign", "text": "foreign", "project": "synthetic-other"}
+                        )
                 elif name == "fixture_correct":
                     old = store.pop(args["target"], None)
                     store[args["source"]] = {
