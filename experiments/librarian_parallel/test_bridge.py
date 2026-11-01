@@ -289,7 +289,7 @@ class ExperimentTests(unittest.TestCase):
             bad.invoke("recall", project="synthetic-nepal", query="vehicle")
 
     def test_unknown_mapping_and_template_rejected(self) -> None:
-        with self.assertRaisesRegex(LibrarianError, "not mapped"):
+        with self.assertRaisesRegex(LibrarianError, "Unsupported"):
             self.adapter.invoke("search_unconfigured", project="synthetic-nepal")
         bad = LibrarianExperiment(
             ExperimentConfig(
