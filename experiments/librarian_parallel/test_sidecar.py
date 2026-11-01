@@ -59,7 +59,13 @@ class SidecarTests(unittest.TestCase):
         self.assertEqual(len(result["events"]), 7)
         self.assertEqual(
             result["events"][1]["candidate_context"],
-            [{"source": "fixture-101", "text": "The vehicle is a fictional Jimny."}],
+            [
+                {
+                    "source": "fixture-101",
+                    "text": "The vehicle is a fictional Jimny.",
+                    "project": "synthetic-nepal",
+                }
+            ],
         )
         self.assertEqual(result["events"][2]["candidate_context"], [])
         self.assertEqual(
@@ -68,6 +74,7 @@ class SidecarTests(unittest.TestCase):
                 {
                     "source": "fixture-102",
                     "text": "Corrected fictional vehicle is a test-only SUV.",
+                    "project": "synthetic-nepal",
                 }
             ],
         )
