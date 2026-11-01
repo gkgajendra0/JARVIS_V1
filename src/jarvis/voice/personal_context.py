@@ -199,13 +199,15 @@ class PersonalContextSession:
                     issuer.register_source(
                         self._learning_grant, source.receipt_id, source=source
                     )
+                    # The issuer's own binding type: the learning session and the
+                    # read-only personal-context session share this read path.
                     permit = issuer.issue_child(
                         self._learning_grant,
-                        LearningActionBinding(
+                        getattr(issuer, "BINDING_TYPE", LearningActionBinding)(
                             "read",
                             source.receipt_id,
                             source.digest,
-                            tuple(sorted(CATEGORIES)),
+                            tuple(sorted(getattr(issuer, "CATEGORIES", CATEGORIES))),
                         ),
                     )
                     issuer.consume_read(permit)

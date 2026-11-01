@@ -61,6 +61,10 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
             "delivery": event.delivery,
             "text": event.text,
         }
+        if source.project_id and source.project_id != snapshot.selection.project_id:
+            # Soft separation: evidence from another project is labelled, never
+            # presented as part of the selected project's own discussion.
+            row["from_project"] = source.project_title
         remaining_ids = [
             identity
             for identity in base["omitted_source_ids"]

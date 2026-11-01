@@ -18,6 +18,30 @@ def normalize_name(text):
     )
 
 
+_NAME_FILLER = frozenset({"my", "the", "a", "an", "our", "that", "this", "project"})
+
+
+def _name_words(text):
+    return [
+        w for w in re.findall(r"\w+", normalize_name(text)) if w not in _NAME_FILLER
+    ]
+
+
+def _partial_matches(name, entries):
+    """Soft routing: a short name selects a project whose title or alias holds
+    all of its words ("the trip" -> "Nepal trip"). Several matches still need a
+    clarification; no match still creates a project, as before."""
+    words = set(_name_words(name))
+    if not words:
+        return []
+    return [
+        e
+        for e in entries
+        if normalize_name(e.title) != "general"
+        and any(words <= set(_name_words(label)) for label in (e.title, *e.aliases))
+    ]
+
+
 @dataclass(frozen=True)
 class ProjectRoutingDecision:
     status: str
@@ -88,6 +112,13 @@ class ProjectRouter:
                 if normalize_name(name)
                 in {normalize_name(e.title), *(normalize_name(a) for a in e.aliases)}
             ]
+            planning = bool(
+                re.match(r"^(?:let['’]?s\s+plan|plan)\b", text, re.IGNORECASE)
+            )
+            if not matches and not planning:
+                # "Plan ..." asks for a new project; switch/continue/resume/open/
+                # status ask for an existing one, so only they match partially.
+                matches = _partial_matches(name, catalog.entries)
             projects = {e.selection.project_id for e in matches}
             if len(projects) > 1:
                 return ProjectRoutingDecision(

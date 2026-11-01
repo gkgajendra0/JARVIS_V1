@@ -341,8 +341,16 @@ class AuthorityService:
     ) -> None:
         if approval.method is ApprovalMethod.DELEGATED_POLICY and (
             proposal.capability
-            not in {"memory:personal_learning", "memory:conversation_history"}
+            not in {
+                "memory:personal_learning",
+                "memory:conversation_history",
+                "memory:personal_context_session",
+            }
             or proposal.operation not in {"read", "admit", "suppress"}
+            or (
+                proposal.capability == "memory:personal_context_session"
+                and proposal.operation != "read"
+            )
             or proposal.origin is not ActionOrigin.SYSTEM
             or not approval.parent_delegation_id
             or proposal.attributes.destructive

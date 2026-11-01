@@ -96,7 +96,15 @@ def prepare_project_profile(
     return profile
 
 
-def build_project_personal_session(conversation, memory, capability):
+def build_project_personal_session(
+    conversation, memory, capability, *, read_issuer=None, read_grant=None
+):
+    """Personal facts for one request.
+
+    With ``read_issuer``/``read_grant`` the read uses the owner's read-only
+    session grant (one Hello per session). Without them every read asks for a
+    fresh exact-request approval, as before. Writes always ask separately.
+    """
     from jarvis.voice.personal_context import PersonalContextSession
 
     return PersonalContextSession(
@@ -104,8 +112,36 @@ def build_project_personal_session(conversation, memory, capability):
         retrieval=memory.retrieval,
         authority=capability,
         retire=lambda: None,
+        learning_authority=read_issuer,
+        learning_grant=read_grant,
         explicit_question_queries=True,
     )
+
+
+def build_session_personal_factory(memory, capability, *, provider="gemini"):
+    """Factory for the coordinator plus the session it shares across requests."""
+    from jarvis.voice.project_personal_session import (
+        LazyPersonalContext,
+        PersonalReadSession,
+    )
+
+    session = PersonalReadSession(
+        lambda: capability.personal_context_session_authority, provider=provider
+    )
+
+    def factory(conversation):
+        return LazyPersonalContext(
+            lambda issuer, grant: build_project_personal_session(
+                conversation,
+                memory,
+                capability,
+                read_issuer=issuer,
+                read_grant=grant,
+            ),
+            session,
+        )
+
+    return factory, session
 
 
 async def reauthorize_lab_history(access, coordinator, *, personal_factory=None):
@@ -128,7 +164,15 @@ async def reauthorize_lab_history(access, coordinator, *, personal_factory=None)
 
 
 async def _close_lab_resources(
-    *, coordinator, authority, capability, routing, memory, lock, unlock
+    *,
+    coordinator,
+    authority,
+    capability,
+    routing,
+    memory,
+    lock,
+    unlock,
+    personal_session=None,
 ):
     """Try every release; the caller preserves the primary exception afterward."""
     failures = []
@@ -144,6 +188,8 @@ async def _close_lab_resources(
 
     if coordinator is not None:
         await attempt("coordinator", lambda: coordinator.invalidate("shutdown"))
+    if personal_session is not None:
+        await attempt("personal_session", personal_session.close)
     await attempt("authority", authority.close)
     await attempt("capability", capability.close)
     if routing is not None:
@@ -202,6 +248,7 @@ async def run_text_lab(
     routing = None
     work_store = None
     coordinator = None
+    personal_session = None
     contract_observations = []
     terminal_error = None
     try:
@@ -232,8 +279,9 @@ async def run_text_lab(
         )
         provider = ProjectAnswerProvider(client)
 
-        def personal(conversation):
-            return build_project_personal_session(conversation, memory, capability)
+        # One Hello opens a read-only personal-fact session for this lab run
+        # (30 min, 10 min idle, ends on Windows lock); writes ask separately.
+        personal, personal_session = build_session_personal_factory(memory, capability)
 
         coordinator = ProjectConversationCoordinator(
             access, source_clearance=standard_history_source, personal_factory=personal
@@ -245,7 +293,7 @@ async def run_text_lab(
             from jarvis.voice.project_personal_acceptance import run_personal_acceptance
 
             print(
-                "PERSONAL FIXTURE: fictional diet, two projects, correction, three questions. Fresh Hello approvals for mutations and personal reads. Free lane only; no setup inference or automatic retry.",
+                "PERSONAL FIXTURE: fictional diet, two projects, correction, three questions. Fresh Hello approvals for mutations; one Hello opens the personal-read session. Free lane only; no setup inference or automatic retry.",
                 flush=True,
             )
             with observe_contract_failures() as contract_observations:
@@ -297,7 +345,7 @@ async def run_text_lab(
         else:
             manifest = None
         print(
-            "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; personal reads/deletion keep their own approvals."
+            "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; one more Hello opens personal reads for 30 min (10 min idle); corrections/deletion keep their own approvals."
         )
         print(
             "Commands: /projects /inspect /pause /resume /forget /sleep /reauthorize /quit. Normal text selects explicit projects and asks questions."
@@ -310,6 +358,9 @@ async def run_text_lab(
                 continue
             try:
                 if text == "/reauthorize":
+                    # Renewal also ends the personal-read session; the next
+                    # personal question asks for a fresh owner approval.
+                    personal_session.close("owner_reauthorization")
                     try:
                         access, coordinator = await reauthorize_lab_history(
                             access, coordinator, personal_factory=personal
@@ -428,6 +479,7 @@ async def run_text_lab(
             memory=memory,
             lock=lock,
             unlock=lambda: msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1),
+            personal_session=personal_session,
         )
         if cleanup:
             from jarvis.voice.project_contract_diagnostics import DevelopmentCaseFailure

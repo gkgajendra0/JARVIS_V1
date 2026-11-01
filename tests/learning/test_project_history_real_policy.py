@@ -204,3 +204,102 @@ def test_unrelated_system_private_read_keeps_attention_and_actor_requirements(
     with urllib.request.urlopen(request, timeout=2) as response:
         decision = json.loads(response.read())["result"]
     assert decision["require_owner_attentive"] and decision["require_actor_unambiguous"]
+
+
+@pytest.mark.asyncio
+async def test_production_policy_admits_session_reads_and_rejects_session_writes(
+    learning, production_policy
+):
+    from jarvis.authority.personal_context_session import (
+        PersonalContextSessionBinding,
+    )
+    from jarvis.capabilities.discovery import CapabilityResolver
+    from jarvis.capabilities.runtime import CapabilityRuntime
+    from jarvis.memory.retrieval import SemanticRetrievalService
+    from jarvis.voice.project_memory_lab import build_session_personal_factory
+
+    await learning.service.admit_learning(learning.plan, learning.new_permit())
+    capability = CapabilityRuntime(
+        executors=(),
+        resolver=CapabilityResolver((), builtins=()),
+        authority=production_policy.broker,
+    )
+    memory = SimpleNamespace(retrieval=SemanticRetrievalService(learning.reader))
+    factory, session = build_session_personal_factory(memory, capability)
+    before = len(production_policy.hello.calls)
+    try:
+        for text in ("What vehicle do I have?", "Which car needs tyres?"):
+            conversation = ConversationSession()
+            conversation.start()
+            conversation.accept_turn(ConversationRole.USER, text)
+            personal = factory(conversation)
+            try:
+                result = await personal.query_for_question(
+                    [{"scope_key": "owned_item.vehicle"}]
+                )
+            finally:
+                personal.close()
+            assert result["status"] == "selected"
+            assert "City" in str(result["facts"])
+        assert len(production_policy.hello.calls) == before + 1
+        issuer = capability.personal_context_session_authority
+        grant = await session.active_grant()
+        with pytest.raises(PermissionError):
+            issuer.issue_child(
+                grant,
+                PersonalContextSessionBinding(
+                    "admit", "receipt", "0" * 64, ("owned_item",)
+                ),
+            )
+    finally:
+        session.close()
+
+
+@pytest.mark.asyncio
+async def test_production_policy_allows_labelled_other_project_fallback(
+    tmp_path, production_policy
+):
+    from dataclasses import replace
+
+    from test_project_conversation_store import event
+
+    from jarvis.authority.conversation_history import HistoryActionBinding
+    from jarvis.memory.project_conversation_store import archive_digest
+    from jarvis.memory.project_conversations import ProjectSelection
+    from jarvis.voice.project_memory_tools import ProjectMemoryTools
+
+    _, store, selection, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, production_policy
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    foreign = ProjectSelection("project-interview", "thread-interview", 0)
+    try:
+        await access.create_project(foreign, "Interview preparation")
+        value = replace(event("foreign", text="My salary expectation is fixed"))
+        material = store.append_material(foreign, value, 0)
+        issuer.register_source(grant, value.event_id, source=value)
+        permit = issuer.issue_child(
+            grant,
+            HistoryActionBinding(
+                "admit",
+                value.event_id,
+                archive_digest(material),
+                targets=(
+                    ("project", foreign.project_id),
+                    ("thread", foreign.thread_id),
+                ),
+            ),
+        )
+        await store.append_event(foreign, value, permit=permit, expected_revision=0)
+        issuer.release_source(grant, value.event_id)
+        tools = ProjectMemoryTools(
+            access, selection=selection, request_id="question", is_current=lambda: True
+        )
+        found = await tools.search_conversation_memory(selection.project_id, "salary")
+        assert found.status == "other_projects"
+        assert [s.project_title for s in found.sources] == ["Interview preparation"]
+        read = await tools.read_conversation_sources(("foreign",))
+        assert [s.event.event_id for s in read.sources] == ["foreign"]
+    finally:
+        await reader.close()
+        await writer.close()
