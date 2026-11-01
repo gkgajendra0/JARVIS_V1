@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from .bridge import (
+    WRITE_OPERATIONS,
     ExperimentConfig,
     LibrarianError,
     LibrarianExperiment,
     McpStdioClient,
-    WRITE_OPERATIONS,
 )
 from .scenario_runner import decode_records
 
@@ -58,9 +58,10 @@ def read_synthetic_events(path: Path) -> list[dict[str, str]]:
             raise LibrarianError("Event project must be synthetic-*")
         if len(event.get("query", "")) > 500 or len(event.get("text", "")) > 2000:
             raise LibrarianError("Event query/text length exceeded")
-        if event["operation"] in WRITE_OPERATIONS:
-            if not event.get("source", "").startswith("fixture-"):
-                raise LibrarianError("Write event requires fixture-* source")
+        if event["operation"] in WRITE_OPERATIONS and not event.get("source", "").startswith(
+            "fixture-"
+        ):
+            raise LibrarianError("Write event requires fixture-* source")
         events.append(event)
         if len(events) > MAX_EVENTS:
             raise LibrarianError("Too many synthetic events")
