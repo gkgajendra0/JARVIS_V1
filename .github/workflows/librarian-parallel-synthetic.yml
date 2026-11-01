@@ -7,6 +7,10 @@ on:
     paths:
       - experiments/librarian_parallel/**
       - .github/workflows/librarian-parallel-synthetic.yml
+  pull_request:
+    paths:
+      - experiments/librarian_parallel/**
+      - .github/workflows/librarian-parallel-synthetic.yml
   workflow_dispatch:
 
 permissions:
