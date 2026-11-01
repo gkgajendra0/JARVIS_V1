@@ -58,9 +58,9 @@ class TransportTests(unittest.TestCase):
                 client.call_tool("made_up_tool", {})
 
     def test_missing_executable_fails(self) -> None:
-        with self.assertRaises(OSError):
-            with McpStdioClient(["this-command-does-not-exist-for-test-1234"]):
-                pass
+        bogus = McpStdioClient(["no-such-jarvis-executable-xyz"])
+        with self.assertRaises(OSError), bogus:
+            pass
 
     def test_timeout_is_bounded(self) -> None:
         with self.assertRaises(LibrarianError):
