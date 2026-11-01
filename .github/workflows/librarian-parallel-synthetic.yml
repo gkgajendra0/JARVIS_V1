@@ -31,5 +31,17 @@ jobs:
         run: python -m unittest discover -s experiments/librarian_parallel -p 'test_*.py' -v
       - name: MCP fixture server handshake and tool discovery
         run: python -m experiments.librarian_parallel.cli --config experiments/librarian_parallel/fixture.example.json discover
+      - name: Synthetic memory lifecycle and source-isolation probe
+        run: >-
+          python -m experiments.librarian_parallel.scenario_runner
+          --config experiments/librarian_parallel/fixture.example.json
+          --output "${RUNNER_TEMP}/synthetic_librarian_probe.json"
+      - name: Synthetic seven-event sidecar replay
+        run: >-
+          python -m experiments.librarian_parallel.sidecar
+          --config experiments/librarian_parallel/fixture.example.json
+          --events experiments/librarian_parallel/fixtures/fictional-nepal.jsonl
+          --output "${RUNNER_TEMP}/synthetic_librarian_sidecar.json"
+          --allow-synthetic-write
       - name: Synthetic read smoke
         run: python -m experiments.librarian_parallel.cli --config experiments/librarian_parallel/fixture.example.json invoke --operation recall --project synthetic-nepal --query vehicle
