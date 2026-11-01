@@ -6,7 +6,6 @@ No production Jarvis imports, database access, or model calls.
 from __future__ import annotations
 
 import json
-import os
 import queue
 import re
 import subprocess
@@ -34,7 +33,7 @@ class McpStdioClient:
 
     def __init__(self, command: list[str], cwd: str | None = None,
                  timeout: float = 10.0) -> None:
-        if not command or not all(isinstance(x, str) and x for x in command):
+        if not isinstance(command, list) or not command or not all(isinstance(x, str) and x for x in command):
             raise LibrarianError("A nonempty executable/argument list is required")
         if not 0 < timeout <= 120:
             raise LibrarianError("Timeout must be between 0 and 120 seconds")
