@@ -22,6 +22,7 @@ from .bridge import (
     LibrarianExperiment,
     McpStdioClient,
 )
+from .fingerprints import config_fingerprint, fingerprint
 
 
 def decode_records(result: dict[str, Any]) -> list[dict[str, str]]:
@@ -109,6 +110,7 @@ def run_probe(
         if not allow_synthetic_write:
             raise LibrarianError("Synthetic write operations require explicit opt-in")
         with client_factory(config.command, config.cwd, config.timeout) as client:
+            advertised_digest = fingerprint(client.list_tools())
             adapter = LibrarianExperiment(config, client)
             for operation in ("remember", "recall", "correct", "forget"):
                 if operation not in config.operations:
@@ -175,6 +177,8 @@ def run_probe(
     return {
         "schema": "jarvis.synthetic_mcp_probe.v1",
         "backend_verified": False,
+        "config_digest": config_fingerprint(config),
+        "mcp_tool_schema_digest": advertised_digest if "advertised_digest" in locals() else None,
         "official_librarian_quality_measured": False,
         "synthetic_only": True,
         "started_unix": started,
