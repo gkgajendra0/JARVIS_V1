@@ -205,7 +205,7 @@ class ExperimentTests(unittest.TestCase):
         result, _ = self.adapter.invoke("recall", project="synthetic-nepal", query="")
         self.assertEqual(
             fixture_content(result)["records"],
-            [{"source": "fixture-2", "text": "vehicle: corrected"}],
+            [{"source": "fixture-2", "text": "vehicle: corrected", "project": "synthetic-nepal"}],
         )
         self.adapter.invoke(
             "forget",
@@ -246,6 +246,21 @@ class ExperimentTests(unittest.TestCase):
     def test_unknown_operation_rejected_even_with_direct_config(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "Unsupported"):
             self.adapter.invoke("delete", project="synthetic-nepal")
+
+    def test_external_server_cannot_return_foreign_project_memory(self) -> None:
+        from experiments.librarian_parallel.scenario_runner import decode_records
+
+        with McpStdioClient(
+            SERVER + ["--foreign-record"], str(ROOT), timeout=5
+        ) as client:
+            bad = LibrarianExperiment(
+                ExperimentConfig(SERVER, str(ROOT), 5, OPERATIONS), client
+            )
+            result, _ = bad.invoke(
+                "recall", project="synthetic-nepal", query="vehicle"
+            )
+            with self.assertRaisesRegex(LibrarianError, "foreign project"):
+                decode_records(result, expected_project="synthetic-nepal")
 
     def test_advertised_mcp_input_schema_is_enforced(self) -> None:
         bad = LibrarianExperiment(
