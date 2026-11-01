@@ -107,7 +107,11 @@ def main() -> None:
                     data = {"records": list(store.values()), "query": args["query"]}
                     if "--foreign-record" in sys.argv:
                         data["records"].append(
-                            {"source": "fixture-foreign", "text": "foreign", "project": "synthetic-other"}
+                            {
+                                "source": "fixture-foreign",
+                                "text": "foreign",
+                                "project": "synthetic-other",
+                            }
                         )
                 elif name == "fixture_correct":
                     old = store.pop(args["target"], None)
