@@ -205,7 +205,13 @@ class ExperimentTests(unittest.TestCase):
         result, _ = self.adapter.invoke("recall", project="synthetic-nepal", query="")
         self.assertEqual(
             fixture_content(result)["records"],
-            [{"source": "fixture-2", "text": "vehicle: corrected", "project": "synthetic-nepal"}],
+            [
+                {
+                    "source": "fixture-2",
+                    "text": "vehicle: corrected",
+                    "project": "synthetic-nepal",
+                }
+            ],
         )
         self.adapter.invoke(
             "forget",
@@ -256,9 +262,7 @@ class ExperimentTests(unittest.TestCase):
             bad = LibrarianExperiment(
                 ExperimentConfig(SERVER, str(ROOT), 5, OPERATIONS), client
             )
-            result, _ = bad.invoke(
-                "recall", project="synthetic-nepal", query="vehicle"
-            )
+            result, _ = bad.invoke("recall", project="synthetic-nepal", query="vehicle")
             with self.assertRaisesRegex(LibrarianError, "foreign project"):
                 decode_records(result, expected_project="synthetic-nepal")
 
