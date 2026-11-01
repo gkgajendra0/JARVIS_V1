@@ -69,6 +69,8 @@ def percentile(values: list[float], percent: float) -> float | None:
 def run_probe(
     config: ExperimentConfig,
     client_factory: Callable[..., McpStdioClient] = McpStdioClient,
+    *,
+    allow_synthetic_write: bool = False,
 ) -> dict[str, Any]:
     """Run fictional memory operations in a fresh namespace with no side effects on Jarvis."""
     nonce = uuid.uuid4().hex[:12]
@@ -104,6 +106,8 @@ def run_probe(
         checks.append({"check": name, "passed": bool(condition)})
 
     try:
+        if not allow_synthetic_write:
+            raise LibrarianError("Synthetic write operations require explicit opt-in")
         with client_factory(config.command, config.cwd, config.timeout) as client:
             adapter = LibrarianExperiment(config, client)
             for operation in ("remember", "recall", "correct", "forget"):
@@ -179,10 +183,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Synthetic MCP protocol probe")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--allow-synthetic-write", action="store_true")
     args = parser.parse_args(argv)
     try:
         config = ExperimentConfig.from_file(args.config)
-        report = run_probe(config)
+        report = run_probe(config, allow_synthetic_write=args.allow_synthetic_write)
         if args.output.exists():
             raise LibrarianError("Report path already exists (no overwrite)")
         args.output.parent.mkdir(parents=True, exist_ok=True)
