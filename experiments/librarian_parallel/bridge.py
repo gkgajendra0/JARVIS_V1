@@ -94,7 +94,7 @@ class McpStdioClient:
                 line = self.process.stdout.readline(MAX_MCP_LINE_CHARS + 1)
                 if not line:
                     break
-                if len(line) > MAX_MCP_LINE_CHARS or not line.endswith("\\n"):
+                if len(line) > MAX_MCP_LINE_CHARS or not line.endswith("\n"):
                     self.messages.put(LibrarianError("MCP response line exceeds limit"))
                     break
                 if not line.strip():
