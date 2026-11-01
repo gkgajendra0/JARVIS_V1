@@ -63,9 +63,12 @@ class TransportTests(unittest.TestCase):
             pass
 
     def test_oversized_server_output_fails_closed(self) -> None:
-        with McpStdioClient(
-            SERVER + ["--oversized-response"], str(ROOT), timeout=5
-        ) as client, self.assertRaisesRegex(LibrarianError, "exceeds limit"):
+        with (
+            McpStdioClient(
+                SERVER + ["--oversized-response"], str(ROOT), timeout=5
+            ) as client,
+            self.assertRaisesRegex(LibrarianError, "exceeds limit"),
+        ):
             client.list_tools()
 
     def test_missing_executable_fails(self) -> None:
