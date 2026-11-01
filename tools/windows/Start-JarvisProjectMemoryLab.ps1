@@ -7,10 +7,12 @@ param(
     [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][string]$LabRoot,
     [string]$MachineProfile = "",
     [switch]$ResumeLab,
-    [switch]$SeedAcceptance
+    [switch]$SeedAcceptance,
+    [switch]$DevelopmentBatch
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ($DevelopmentBatch -and ($SeedAcceptance -or $ResumeLab)) { throw "Development batch requires a new isolated lab, without acceptance seeding or resume." }
 if ($SeedAcceptance -and $ResumeLab) { throw "Acceptance seeding requires a new isolated lab." }
 $git = (Get-Command git -ErrorAction Stop).Source
 $python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
@@ -37,6 +39,7 @@ try {
     if ($MachineProfile) { $arguments += @("--profile", $MachineProfile) }
     if ($ResumeLab) { $arguments += "--resume-lab" }
     if ($SeedAcceptance) { $arguments += "--seed-acceptance" }
+    if ($DevelopmentBatch) { $arguments += "--development-batch" }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }

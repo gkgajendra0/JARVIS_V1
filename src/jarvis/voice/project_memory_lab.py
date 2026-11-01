@@ -126,7 +126,9 @@ async def reauthorize_lab_history(access, coordinator, *, personal_factory=None)
     )
 
 
-async def run_text_lab(config, root: Path, *, model: str, seed_acceptance=False):
+async def run_text_lab(
+    config, root: Path, *, model: str, seed_acceptance=False, development_case=None
+):
     import asyncio
     import msvcrt
     from uuid import uuid4
@@ -199,6 +201,24 @@ async def run_text_lab(config, root: Path, *, model: str, seed_acceptance=False)
         coordinator = ProjectConversationCoordinator(
             access, source_clearance=standard_history_source, personal_factory=personal
         )
+        if development_case is not None:
+            from jarvis.voice.project_memory_development import (
+                run_case_question,
+                seed_development_case,
+            )
+
+            manifest = await seed_development_case(access, development_case)
+            with (root / "development-fixture.json").open(
+                "x", encoding="utf-8"
+            ) as stream:
+                json.dump(manifest, stream)
+            print(
+                "DEVELOPMENT FIXTURE: 60 fictional events / 3 projects seeded locally; zero setup model calls. One question; no automatic retry.",
+                flush=True,
+            )
+            return await run_case_question(
+                development_case, manifest, coordinator, access, provider
+            )
         controls = ProjectControls(access)
         manifest_path = root / "acceptance-fixture.json"
         if seed_acceptance:
@@ -338,6 +358,47 @@ async def run_text_lab(config, root: Path, *, model: str, seed_acceptance=False)
         lock.close()
 
 
+def run_development_mode(args, repo, tool_paths):
+    import asyncio
+
+    from jarvis.config import JarvisConfig
+    from jarvis.voice.project_memory_development import (
+        load_cases,
+        run_development_batch,
+    )
+
+    # Validate frozen data before creating profiles or requesting owner approvals.
+    cases = load_cases(repo)
+
+    def run_case(case, root):
+        profile = prepare_project_profile(
+            args.profile,
+            root,
+            resume=False,
+            commit=args.source_commit,
+            tool_paths=tool_paths,
+        )
+        with project_lab_environment(profile, repo):
+            config = JarvisConfig.from_environment()
+            if config.ai_provider != "gemini":
+                raise ValueError("existing Gemini configuration required")
+            return asyncio.run(
+                run_text_lab(config, root, model=args.model, development_case=case)
+            )
+
+    print(
+        "DEVELOPMENT BATCH: six questions, six fresh isolated profiles and six Windows Hello approvals. Free credential lane only; no Paid fallback. Stops on first failure. Answers require manual review.",
+        flush=True,
+    )
+    return run_development_batch(
+        args.lab_root,
+        cases,
+        run_case,
+        source_commit=args.source_commit,
+        model=args.model,
+    )
+
+
 def main():
     import argparse
     import asyncio
@@ -352,7 +413,12 @@ def main():
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--resume-lab", action="store_true")
     parser.add_argument("--seed-acceptance", action="store_true")
+    parser.add_argument("--development-batch", action="store_true")
     args = parser.parse_args()
+    if args.development_batch and (args.seed_acceptance or args.resume_lab):
+        parser.error(
+            "development batch requires a new isolated lab, without acceptance seeding or resume"
+        )
     if args.seed_acceptance and args.resume_lab:
         parser.error(
             "acceptance seeding requires a new isolated lab, never --resume-lab"
@@ -380,6 +446,11 @@ def main():
             ).resolve(),
         }
     )
+    if args.development_batch:
+        summary = run_development_mode(args, repo, tool_paths)
+        if summary["failed"] or summary["reporting_errors"]:
+            raise SystemExit(1)
+        return
     profile = prepare_project_profile(
         args.profile,
         args.lab_root,

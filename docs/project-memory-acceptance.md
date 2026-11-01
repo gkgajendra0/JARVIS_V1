@@ -586,7 +586,7 @@ showed active retention, one omission and no cedar-481 source text. `/forget` re
 owner control passes, not an independent audit of physical erasure or every derived
 store. The fixture was fictional; the earlier6fe owner lab was not modified.
 
-### Efficiency candidate (software verified, actual-model effect unrun)
+### Efficiency candidate and one owner comparison
 
 ProjectAnswerProvider now decodes its prepared context once and passes it as an
 object in the existing outer JSON payload, eliminating a nested JSON string and
@@ -647,3 +647,94 @@ the earlier OPA/full-local-suite telemetry restriction.
 After this test-only correction,462 scoped tests passed; repository Ruff, changed
 formatting and diff checks passed. Actual production-policy qualification remains a
 hosted gate, not inferred from the fixture-authority smoke.
+
+Both exact75dd hosted gates subsequently passed: Code Quality41213132937 and
+SQLCipher41213133068. The owner ran a new43-event fixture at75dd and asked the
+same first question as52ee. The answer correctly selected Jimny/approved; the
+fresh-trial report showed both original sources and the conflicting assistant
+source in final context. Two reported provider steps (search→answer) used8253
+tokens versus11581 at52ee:28.7% lower **in this single comparison**. The personal
+no-match detour was absent. Summed provider latency was8741.2083ms versus4008.1119ms:
+this run was slower. This establishes neither representative savings nor a speed
+improvement. The75dd lab was retained at
+`C:\Users\gkgaj\AppData\Local\Temp\jarvis-efficiency-4163dc30506a4380bdfeefa08bb126e6`.
+
+## Six-case development batch
+
+`Start-JarvisProjectMemoryLab.ps1 -DevelopmentBatch` is an opt-in measurement mode.
+It runs exactly p0-q0, p1-q1, p2-q2, p3-q3, p4-q4 and p5-q5 from the frozen
+development split: chosen resource, owner-reported corrected status, corrected
+budget, unestablished rental ownership, no executed external action and unknown
+diet. The fixture files and 60/40 development/held-out split are unchanged. Hashes
+are verified after normalizing checkout line endings. No held-out inference runs.
+
+Each question gets a **new profile and fresh Windows Hello history approval**.
+Personal reads keep their separate existing consent requirements. It seeds
+20 original events in the target project and20 each in two unrelated projects
+through existing source-bound permits. Original evidence IDs, roles, text and times
+are preserved; local project/thread IDs are fresh UUIDs. Setup uses no model calls.
+There are six questions total, no filler conversation, automatic retry, extractor,
+model grader or expanded Paid allowance. The configured Free credential lane and
+existing four-step request/tool/capacity bounds remain. Returned provider steps
+do not count every failed dispatch or lower-layer network attempt.
+
+The expected answers/rubrics are used only by the report. They never enter the
+provider payload. Every provider step checks the selected project/thread and
+rejects known foreign fixture source IDs before dispatch. A final source-presence
+count is diagnostic evidence; it is **not an accuracy PASS**. Read the actual
+answer against its manual rubric, including unknowns, owner-report qualification
+and the distinction between suggestions and executed actions. Six short cases
+are development evidence, not a representative100-question qualification. This
+batch does not replace the older-source/conflicting-assistant acceptance fixture.
+
+Use a new lab root and the reviewed exact40-character commit in `$batchSha`:
+
+```powershell
+$batchLab = Join-Path $env:TEMP ("jarvis-memory-six-" + [guid]::NewGuid().ToString("N"))
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$launcher" `
+    -RepoRoot "$repo" -Commit "$batchSha" -Model "gemini-3.5-flash-lite" `
+    -LabRoot "$batchLab" -DevelopmentBatch
+```
+
+Extract `$launcher` from that same reviewed commit and verify its hosted gates
+before running. Approve each fresh Hello prompt. Questions run automatically, so
+no text needs typing. Resume/acceptance seeding cannot be combined with this mode.
+Existing roots are rejected. A failed setup, Hello denial or question stops the
+batch; completed results remain and later cases are marked unrun. Do not rerun
+the same root. Reports contain fixed fictional source evidence and model answers;
+the original profile and previous labs remain separate.
+
+`$batchLab\profile\results.jsonl` records each result immediately and
+`$batchLab\profile\summary.json` records completion/failure/unrun counts, observed
+tokens and nearest-rank p50/p95 with sample counts. Missing usage stays unknown,
+with partial known totals shown separately. Per-case step telemetry is retained.
+Successful turn time covers accepted question through released output and saved
+assistant receipt; it excludes profile setup, seeding and Hello. Provider time is
+the sum of reported step latencies. Failed cases have unknown usage and are
+excluded from latency percentiles, not treated as fast successful answers. Six
+samples cannot establish stable production tail latency. Native voice, held-out
+accuracy, full billing and installed-app activation remain OPEN.
+
+Software verification for this batch:485 scoped tests passed, with real OPA
+excluded locally; repository Ruff, changed-file format and whitespace checks
+passed. These include all six sixty-source seed cases, revocation before/during
+seeding, a real coordinator/fake-provider source search, blocked foreign evidence,
+single-attempt failure, exclusive roots, partial output and unknown telemetry.
+No actual model or Windows batch ran in the local environment. Hosted checks and
+the owner's six-case results are separate gates.
+
+Independent review found an Important reporting failure: a closed console could
+skip summary creation after saving a case. Three regressions reproduced console,
+JSONL-write and JSONL-flush failures RED; they pass after the repair. Output errors
+now stop further questions and enter the summary when that file remains writable.
+An unpersisted terminal JSONL result is retained in the summary without rerunning
+the question. Opening the result file fails before any question; final console
+failure is also recorded. A reporting error produces a nonzero launcher exit.
+If storage cannot write either file, the process fails without claiming a saved
+summary. More precise failure-stage labels are a deferred Minor: ordinary case
+errors still contain a broad setup_or_turn stage and exception class.
+
+Review boundaries retained: actual-model/Windows/latency qualification requires
+the owner run; failed-dispatch billing remains unknown; existing startup/finalizer
+exception-safety behavior is unchanged; the entire expiry/capacity fault matrix is
+not newly qualified. Deployment and merge remain outside this development test.
