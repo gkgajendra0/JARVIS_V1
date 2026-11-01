@@ -47,7 +47,7 @@ OPS = {
 
 class ScenarioTests(unittest.TestCase):
     def test_synthetic_lifecycle_passes_but_does_not_claim_real_librarian(self) -> None:
-        report = run_probe(ExperimentConfig(SERVER, str(ROOT), 5, OPS))
+        report = run_probe(ExperimentConfig(SERVER, str(ROOT), 5, OPS), allow_synthetic_write=True)
         self.assertEqual(report["status"], "PASS", report)
         self.assertEqual(len(report["checks"]), 4)
         self.assertTrue(all(row["passed"] for row in report["checks"]))
@@ -55,8 +55,13 @@ class ScenarioTests(unittest.TestCase):
         self.assertFalse(report["backend_verified"])
         self.assertFalse(report["official_librarian_quality_measured"])
 
+    def test_writes_disabled_by_default(self) -> None:
+        report = run_probe(ExperimentConfig(SERVER, str(ROOT), 5, OPS))
+        self.assertEqual(report["status"], "FAIL")
+        self.assertFalse(report["checks"][0]["passed"])
+
     def test_missing_mappings_fails_without_fake_success(self) -> None:
-        report = run_probe(ExperimentConfig(SERVER, str(ROOT), 5, {"recall": OPS["recall"]}))
+        report = run_probe(ExperimentConfig(SERVER, str(ROOT), 5, {"recall": OPS["recall"]}), allow_synthetic_write=True)
         self.assertEqual(report["status"], "FAIL")
         self.assertFalse(report["checks"][0]["passed"])
 
@@ -64,7 +69,7 @@ class ScenarioTests(unittest.TestCase):
         config = ExperimentConfig(
             ["no-such-jarvis-executable-xyz"], str(ROOT), 5, OPS
         )
-        report = run_probe(config)
+        report = run_probe(config, allow_synthetic_write=True)
         self.assertEqual(report["status"], "FAIL")
         self.assertNotIn("vehicle: Jimny", json.dumps(report))
 
