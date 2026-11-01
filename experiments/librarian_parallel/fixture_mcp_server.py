@@ -15,6 +15,7 @@ def main() -> None:
         {
             "name": "fixture_recall",
             "description": "Synthetic scope-only recall",
+            "annotations": {"readOnlyHint": True},
             "inputSchema": {
                 "type": "object",
                 "properties": {
