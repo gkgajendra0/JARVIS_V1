@@ -105,7 +105,7 @@ def replay(
                 else "retrieval",
             }
             if op == "recall":
-                records = decode_records(result)
+                records = decode_records(result, expected_project=event["project"])
                 if sum(len(rec["text"]) for rec in records) > MAX_CONTEXT_CHARS:
                     raise LibrarianError("Retrieved context exceeds bounded budget")
                 if len(records) > 20:
