@@ -58,16 +58,15 @@ class TransportTests(unittest.TestCase):
                 client.call_tool("made_up_tool", {})
 
     def test_incompatible_protocol_fails_closed(self) -> None:
-        with self.assertRaisesRegex(LibrarianError, "protocol version"):
-            with McpStdioClient(SERVER + ["--wrong-protocol"], str(ROOT), timeout=5):
-                pass
+        bad = McpStdioClient(SERVER + ["--wrong-protocol"], str(ROOT), timeout=5)
+        with self.assertRaisesRegex(LibrarianError, "protocol version"), bad:
+            pass
 
     def test_oversized_server_output_fails_closed(self) -> None:
         with McpStdioClient(
             SERVER + ["--oversized-response"], str(ROOT), timeout=5
-        ) as client:
-            with self.assertRaisesRegex(LibrarianError, "exceeds limit"):
-                client.list_tools()
+        ) as client, self.assertRaisesRegex(LibrarianError, "exceeds limit"):
+            client.list_tools()
 
     def test_missing_executable_fails(self) -> None:
         bogus = McpStdioClient(["no-such-jarvis-executable-xyz"])
