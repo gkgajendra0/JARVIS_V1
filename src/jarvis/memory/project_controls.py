@@ -158,6 +158,11 @@ class ProjectControls:
                         "UPDATE conversation_event SET text='[forgotten]',role='tool',delivery='failed',payload_sha256=? WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)",
                         ("0" * 64, project_id),
                     )
+                    # Rewrite the derived search index so the forgotten words are
+                    # gone from its segments, not only hidden from queries.
+                    conn.execute(
+                        "INSERT INTO conversation_event_fts(conversation_event_fts) VALUES('optimize')"
+                    )
                     conn.execute(
                         "UPDATE conversation_thread SET state_json=NULL,covered_sequence=0,archive_revision=archive_revision+1 WHERE project_id=?",
                         (project_id,),

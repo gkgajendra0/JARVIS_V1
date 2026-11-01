@@ -19,6 +19,16 @@ from jarvis.voice.project_memory_lab import build_session_personal_factory
 VEHICLE = [{"scope_key": "owned_item.vehicle"}]
 
 
+@pytest.fixture(autouse=True)
+def proposal_clock(monkeypatch, clock):
+    # Proposals default to the real monotonic clock while the broker uses the
+    # fake one. Advancing the fake clock past real uptime (a fresh CI runner)
+    # would otherwise expire every new proposal. Keep both on the fake clock.
+    from jarvis.authority import proposal
+
+    monkeypatch.setattr(proposal, "time", SimpleNamespace(monotonic=clock))
+
+
 async def _setup(learning, authority_parts):
     await learning.service.admit_learning(learning.plan, learning.new_permit())
     capability = CapabilityRuntime(

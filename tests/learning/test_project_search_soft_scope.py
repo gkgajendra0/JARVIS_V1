@@ -117,6 +117,16 @@ def test_forgotten_text_leaves_the_derived_index():
     )
     assert _matches(connection, '"salary"*') == []
     assert not {"salari", "jimni", "negoti"} & terms()
+    # Project forget also optimizes, physically rewriting the index segments.
+    connection.execute(
+        "INSERT INTO conversation_event_fts(conversation_event_fts) VALUES('optimize')"
+    )
+    segments = b"".join(
+        r[0]
+        for r in connection.execute("SELECT block FROM conversation_event_fts_data")
+        if isinstance(r[0], bytes)
+    )
+    assert b"salari" not in segments and b"jimni" not in segments
     connection.execute("DELETE FROM conversation_event")
     assert _matches(connection, '"forgotten"') == []
     assert (
