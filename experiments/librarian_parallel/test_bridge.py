@@ -111,6 +111,21 @@ class ConfigTests(unittest.TestCase):
                 }
             )
 
+    def test_unsupported_operation_rejected_at_configuration(self) -> None:
+        with self.assertRaisesRegex(LibrarianError, "Unrecognized"):
+            self._load(
+                {
+                    "mode": "synthetic-only",
+                    "command": SERVER,
+                    "operations": {
+                        "arbitrary_tool": {
+                            "tool": "fixture_recall",
+                            "arguments": {"project": "{project}"},
+                        }
+                    },
+                }
+            )
+
     def test_write_source_must_be_explicit(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "source ID"):
             self._load(
@@ -205,6 +220,32 @@ class ExperimentTests(unittest.TestCase):
     def test_oversized_mcp_argument_is_rejected(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "length limit"):
             self.adapter.invoke("recall", project="synthetic-nepal", query="x" * 4097)
+
+    def test_readonly_recall_cannot_route_to_write_tool(self) -> None:
+        bad = LibrarianExperiment(
+            ExperimentConfig(
+                SERVER,
+                str(ROOT),
+                5,
+                {
+                    "recall": {
+                        "tool": "fixture_remember",
+                        "arguments": {
+                            "project": "{project}",
+                            "text": "{query}",
+                            "source": "fixture-hidden",
+                        },
+                    }
+                },
+            ),
+            self.client,
+        )
+        with self.assertRaisesRegex(LibrarianError, "read-only hint"):
+            bad.invoke("recall", project="synthetic-nepal", query="attack")
+
+    def test_unknown_operation_rejected_even_with_direct_config(self) -> None:
+        with self.assertRaisesRegex(LibrarianError, "Unsupported"):
+            self.adapter.invoke("delete", project="synthetic-nepal")
 
     def test_advertised_mcp_input_schema_is_enforced(self) -> None:
         bad = LibrarianExperiment(
