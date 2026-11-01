@@ -25,7 +25,9 @@ from .bridge import (
 from .fingerprints import config_fingerprint, fingerprint
 
 
-def decode_records(result: dict[str, Any]) -> list[dict[str, str]]:
+def decode_records(
+    result: dict[str, Any], *, expected_project: str
+) -> list[dict[str, str]]:
     """Narrow fixture result contract, not a claimed universal Librarian schema."""
     if "structuredContent" in result:
         data = result["structuredContent"]
@@ -51,9 +53,18 @@ def decode_records(result: dict[str, Any]) -> list[dict[str, str]]:
             not isinstance(record, dict)
             or not isinstance(record.get("source"), str)
             or not isinstance(record.get("text"), str)
+            or not isinstance(record.get("project"), str)
         ):
             raise LibrarianError("Recall record missing source/text")
-        records.append({"source": record["source"], "text": record["text"]})
+        if record["project"] != expected_project:
+            raise LibrarianError("MCP recall contains a foreign project record")
+        records.append(
+            {
+                "source": record["source"],
+                "text": record["text"],
+                "project": record["project"],
+            }
+        )
     return records
 
 
@@ -102,7 +113,11 @@ def run_probe(
             allow_synthetic_write=True,
         )
         measurements.append(latency_ms)
-        return decode_records(response) if operation == "recall" else []
+        return (
+            decode_records(response, expected_project=project)
+            if operation == "recall"
+            else []
+        )
 
     def record(name: str, condition: bool) -> None:
         checks.append({"check": name, "passed": bool(condition)})
@@ -132,6 +147,7 @@ def run_probe(
                 == {
                     "source": "fixture-" + nonce + "-1",
                     "text": "vehicle: Jimny",
+                    "project": travel,
                 },
             )
             separated = execute(adapter, "recall", project=study, query="vehicle")
@@ -153,6 +169,7 @@ def run_probe(
                     {
                         "source": "fixture-" + nonce + "-2",
                         "text": "vehicle: corrected synthetic 4x4",
+                        "project": travel,
                     }
                 ],
             )
