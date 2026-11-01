@@ -188,6 +188,28 @@ class ExperimentTests(unittest.TestCase):
         result, _ = self.adapter.invoke("recall", project="synthetic-nepal", query="")
         self.assertEqual(fixture_content(result)["records"], [])
 
+    def test_advertised_mcp_input_schema_is_enforced(self) -> None:
+        bad = LibrarianExperiment(
+            ExperimentConfig(
+                SERVER,
+                str(ROOT),
+                5,
+                {
+                    "recall": {
+                        "tool": "fixture_recall",
+                        "arguments": {
+                            "project": "{project}",
+                            "query": "{query}",
+                            "surprise": "unadvertised",
+                        },
+                    }
+                },
+            ),
+            self.client,
+        )
+        with self.assertRaisesRegex(LibrarianError, "unadvertised"):
+            bad.invoke("recall", project="synthetic-nepal", query="vehicle")
+
     def test_unknown_mapping_and_template_rejected(self) -> None:
         with self.assertRaisesRegex(LibrarianError, "not mapped"):
             self.adapter.invoke("search_unconfigured", project="synthetic-nepal")
