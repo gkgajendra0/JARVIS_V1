@@ -298,6 +298,33 @@ class LibrarianExperiment:
         if operation in WRITE_OPERATIONS and not source.startswith("fixture-"):
             raise LibrarianError("Synthetic writes require a fixture-* source ID")
         arguments = _render(binding["arguments"], values)
+        advertised = self.client.list_tools().get(binding["tool"])
+        if not isinstance(advertised, dict):
+            raise LibrarianError("Mapped operation is not an advertised MCP tool")
+        schema = advertised.get("inputSchema")
+        if not isinstance(schema, dict) or schema.get("type") != "object":
+            raise LibrarianError("MCP tool requires a valid object input schema")
+        props = schema.get("properties", {})
+        required = schema.get("required", [])
+        if not isinstance(props, dict) or not isinstance(required, list):
+            raise LibrarianError("Invalid advertised MCP tool input schema")
+        if not all(isinstance(name, str) for name in required):
+            raise LibrarianError("Invalid MCP required fields")
+        if not set(required).issubset(arguments):
+            raise LibrarianError("MCP tool arguments missing required input fields")
+        if not set(arguments).issubset(props):
+            raise LibrarianError("MCP tool mapping contains unadvertised input fields")
+        for name, value in arguments.items():
+            spec = props[name]
+            if not isinstance(spec, dict):
+                raise LibrarianError("Invalid advertised MCP input property")
+            expected = spec.get("type")
+            if expected == "string" and not isinstance(value, str):
+                raise LibrarianError("MCP tool mapping input type mismatch")
+            if expected == "integer" and type(value) is not int:
+                raise LibrarianError("MCP tool mapping input type mismatch")
+            if expected == "boolean" and type(value) is not bool:
+                raise LibrarianError("MCP tool mapping input type mismatch")
         start = time.perf_counter()
         result = self.client.call_tool(binding["tool"], arguments)
         return result, round((time.perf_counter() - start) * 1000, 3)
