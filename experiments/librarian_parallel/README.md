@@ -64,7 +64,7 @@ The output asserts "official_librarian_quality_measured": false, regardless of f
 success. It cannot prove a third-party backend's quality until the real service
 is connected and separately verified.
 
-    py -3.11 -m experiments.librarian_parallel.scenario_runner --config experiments/librarian_parallel/fixture.example.json --output "%TEMP%/jarvis-librarian-synthetic-probe.json"
+    py -3.11 -m experiments.librarian_parallel.scenario_runner --config experiments/librarian_parallel/fixture.example.json --output "$env:TEMP\jarvis-librarian-synthetic-probe.json" --allow-synthetic-write
 
 In PowerShell use an explicit path such as "$env:TEMP\jarvis-librarian-probe.json"
 instead of CMD-style %TEMP%; the runner refuses to overwrite any previous report.
