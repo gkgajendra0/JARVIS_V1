@@ -412,7 +412,7 @@ async def run_text_lab(
                 first_error = cleanup[0][1]
                 if development_case is not None and isinstance(first_error, Exception):
                     failure = DevelopmentCaseFailure(
-                        first_error, None, contract_observations
+                        first_error, coordinator, contract_observations
                     )
                     failure.report.update(stage="cleanup", cleanup_errors=metadata)
                     raise failure from None

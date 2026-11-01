@@ -63,6 +63,9 @@ async def test_lab_preserves_primary_diagnosis_and_closes_remaining_resources(
         return {}
 
     async def question(*args):
+        args[2]._lab_stage_spans = [
+            {"stage": "prepare", "start_ms": 0, "duration_ms": 1, "outcome": "returned"}
+        ]
         if primary_failure == "cancel":
             raise cancellation
         if primary_failure:
@@ -159,6 +162,7 @@ async def test_lab_preserves_primary_diagnosis_and_closes_remaining_resources(
         assert caught.value is cancellation
         return
     report = caught.value.report
+    assert report["stage_spans"][0]["stage"] == "prepare"
     if primary_failure:
         assert report["error"] == "RoutedInferenceFailure"
         assert report["stage"] == "generating"

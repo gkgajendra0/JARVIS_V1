@@ -118,6 +118,15 @@ class DevelopmentCaseFailure(RuntimeError):
             "usage": None,
             "contract_observations": list(observations),
         }
+        spans = getattr(coordinator, "_lab_stage_spans", None)
+        if isinstance(spans, list):
+            self.report["stage_spans"] = [dict(row) for row in list(spans)]
+            self.report["stage_spans_incomplete"] = any(
+                row.get("outcome") == "running" for row in self.report["stage_spans"]
+            )
+            self.report["stage_span_semantics"] = (
+                "Nested spans overlap; do not sum. Failed/canceled spans are not successful latency samples."
+            )
         if isinstance(error, RoutedInferenceFailure) and isinstance(
             error.failure.kind, ProviderFailureKind
         ):

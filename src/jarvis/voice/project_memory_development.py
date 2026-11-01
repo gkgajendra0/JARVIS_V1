@@ -190,6 +190,8 @@ def case_report(case, manifest, result, observer, *, elapsed_ms):
     latencies = [r["latency_ms"] for r in rows if _number(r.get("latency_ms"))]
     unknown = len(rows) - len(known)
     sources = set(result.packet.source_ids)
+    from jarvis.voice.project_stage_observation import tool_outcomes
+
     return {
         "case_id": case.question["id"],
         "split": "development",
@@ -221,18 +223,41 @@ def case_report(case, manifest, result, observer, *, elapsed_ms):
         "unknown_provider_latency_steps": len(rows) - len(latencies),
         "elapsed_ms": elapsed_ms,
         "step_telemetry": rows,
+        **tool_outcomes(getattr(result.packet, "context", None)),
     }
 
 
 async def run_case_question(case, manifest, coordinator, access, provider):
     """One accepted question, release and persisted answer; no retries or input()."""
-    from jarvis.conversation import ConversationRole, ConversationSession
+    from jarvis.conversation import ConversationSession
 
     observer = DevelopmentProvider(provider, manifest)
     conversation = ConversationSession()
     conversation.start()
     print("Jarvis> " + case.question["question"], flush=True)
     started = time.perf_counter()
+    from jarvis.voice.project_stage_observation import lab_stage_targets, observe_stages
+
+    with observe_stages(lab_stage_targets(coordinator, observer)) as stages:
+        coordinator._lab_stage_spans = stages
+        report = await _run_observed_question(
+            case, manifest, coordinator, access, observer, conversation, started
+        )
+    report["stage_spans"] = [dict(row) for row in list(stages)]
+    report["stage_spans_incomplete"] = any(
+        row.get("outcome") == "running" for row in report["stage_spans"]
+    )
+    report["stage_span_semantics"] = (
+        "Nested wall-clock spans overlap; do not sum. Hello includes helper startup, UI interaction and verification, not pure human wait. Provider step includes routing/guards/client work; compare separately with reported SDK time."
+    )
+    return report
+
+
+async def _run_observed_question(
+    case, manifest, coordinator, access, observer, conversation, started
+):
+    from jarvis.conversation import ConversationRole
+
     result = await coordinator.respond(
         conversation,
         conversation.accept_turn(ConversationRole.USER, case.question["question"]),

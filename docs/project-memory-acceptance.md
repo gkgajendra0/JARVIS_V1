@@ -813,3 +813,37 @@ cancellation identity and remaining resource release. No exception messages are
 added to reports. Early resource-constructor failures before the protected runtime
 block remain outside this bounded repair; installed runtime cleanup is not claimed
 qualified. No new reviewer Minor was deferred.
+
+## Stage observation for the controlled development lab
+
+Owner p5 repeats completed at unchanged8bf but took20.28s/10123tokens and
+13.53s/6729tokens respectively. Neither is a production speed pass. Retained
+history of the first repeat located11.723495s between personal intent/result and
+0.069019s between search intent/result. These spans include journal/authorization
+work; they do not isolate human waiting. Exact tool statuses were not retained in
+the old case report, so model claims about denied access are not audit evidence.
+
+The development report now emits actual closed tool/status/source-count metadata
+from the final prepared context, plus nested wall-clock spans for preparation,
+context builds, provider steps, tool journals, personal queries/authorization,
+Hello verification, archive search/read, release validation and assistant commit.
+Hello timing includes helper startup, UI interaction and verification; it is not
+pure human wait. Fresh-owner authorization includes its policy work. SDK/provider
+time remains a separate measurement. Spans overlap and must not be summed.
+
+The observer exists only around a dedicated sequential development question. It
+restores all wrapped methods, preserves results/errors and exposes no arguments,
+source values, arbitrary provider messages, identifiers or paths. Known Hello
+statuses distinguish canceled from verified; only closed authorization reason
+codes are emitted. Failed-case reports keep captured spans separately from
+successful latency samples. No provider request, permission, retry, context,
+retention or Paid-budget behavior changes. This instrumentation is not an
+optimization or a new actual-model/Windows qualification.
+
+Review found two Important failure-path gaps: detached authorization workers could
+finish after the report and cleanup-only failures could lose captured spans. Both
+were reproduced before repair. Reports now freeze snapshots with running/unknown
+duration markers and an incomplete flag; late completion cannot rewrite a saved
+report. Cleanup-only reports retain the coordinator's observations. Execution-
+context identity also prevents unrelated or delayed work being attributed to a
+different case. These changes neither wait for nor cancel authorization workers.
