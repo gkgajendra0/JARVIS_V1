@@ -1,0 +1,7 @@
+{"case_id":"a01","operation":"remember","project":"synthetic-nepal","source":"fixture-101","text":"The vehicle is a fictional Jimny."}
+{"case_id":"a02","operation":"recall","project":"synthetic-nepal","query":"What is the vehicle?"}
+{"case_id":"a03","operation":"recall","project":"synthetic-study","query":"What is the Nepal vehicle?"}
+{"case_id":"a04","operation":"correct","project":"synthetic-nepal","source":"fixture-102","target":"fixture-101","text":"Corrected fictional vehicle is a test-only SUV."}
+{"case_id":"a05","operation":"recall","project":"synthetic-nepal","query":"vehicle"}
+{"case_id":"a06","operation":"forget","project":"synthetic-nepal","source":"fixture-103","target":"fixture-102"}
+{"case_id":"a07","operation":"recall","project":"synthetic-nepal","query":"vehicle"}
