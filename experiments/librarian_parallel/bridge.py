@@ -321,9 +321,10 @@ class LibrarianExperiment:
             raise LibrarianError("Mapped operation is not an advertised MCP tool")
         if operation == "recall":
             annotations = advertised.get("annotations")
-            if not isinstance(annotations, dict) or annotations.get(
-                "readOnlyHint"
-            ) is not True:
+            if (
+                not isinstance(annotations, dict)
+                or annotations.get("readOnlyHint") is not True
+            ):
                 raise LibrarianError("Recall mapping lacks an MCP read-only hint")
         schema = advertised.get("inputSchema")
         if not isinstance(schema, dict) or schema.get("type") != "object":
