@@ -37,6 +37,7 @@ class ArchivedSource:
     sequence: int
     revision: int
     thread_id: str = ""
+    search_priority: int = 0
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ def _sources(rows):
             r[1],
             r[2],
             r[9] if len(r) > 9 else "",
+            r[10] if len(r) > 10 else 0,
         )
         for r in rows
     )
@@ -286,19 +288,31 @@ class ProjectArchiveAccess:
                 parameters += list(source_ids)
             columns = "event_id,sequence,revision,segment_id,request_id,role,text,accepted_at,delivery,thread_id"
             if query is not None:
-                # Interleave newest user originals and assistant discussion so
-                # repeated assistant echoes cannot consume every search slot.
+                # Promote one best lexical match per role alongside its newest
+                # evidence; fill remaining slots by recency so redundant older
+                # full-term matches do not crowd out recent corrections.
+                relevance = "+".join("(instr(lower(text),?)>0)" for _ in terms)
                 sql = (
-                    "SELECT "
+                    "WITH matched AS (SELECT "
                     + columns
-                    + " FROM (SELECT "
-                    + columns
-                    + ", ROW_NUMBER() OVER (PARTITION BY role ORDER BY accepted_at DESC,event_id DESC) AS role_rank"
-                    + " FROM conversation_event WHERE "
+                    + ", ("
+                    + relevance
+                    + ") AS term_matches FROM conversation_event WHERE "
                     + filters
-                    + ")"
+                    + "), ranked AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY role "
+                    "ORDER BY accepted_at DESC,event_id DESC) AS recent_rank,"
+                    "ROW_NUMBER() OVER (PARTITION BY role ORDER BY term_matches DESC,"
+                    "accepted_at DESC,event_id DESC) AS relevance_rank FROM matched),"
+                    " balanced AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY role "
+                    "ORDER BY CASE WHEN recent_rank=1 THEN 0 "
+                    "WHEN relevance_rank=1 THEN 1 ELSE 2 END,accepted_at DESC,event_id DESC) "
+                    "AS role_rank FROM ranked) SELECT "
+                    + columns
+                    + ", CASE WHEN recent_rank=1 THEN 2 WHEN relevance_rank=1 THEN 1 "
+                    "ELSE 0 END AS search_priority FROM balanced"
                     + " ORDER BY role_rank,CASE role WHEN 'user' THEN 0 ELSE 1 END LIMIT ?"
                 )
+                parameters = [*terms, *parameters]
             else:
                 sql = (
                     "SELECT "

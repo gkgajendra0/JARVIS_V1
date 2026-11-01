@@ -36,10 +36,14 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
     # after filling the text budget can itself overflow a long project's packet.
     base["omitted_source_ids"] = list(candidates)
     selected = []
-    # Search-selected originals are useful even when beyond the recent window.
+    # Retain search admission priorities through byte-budget selection. Only the
+    # admitted rows are then presented chronologically; priority is not evidence
+    # of truth and is never serialized as source content.
+    prioritized = list(reversed(extra_sources))
+    prioritized.sort(key=lambda s: s.search_priority, reverse=True)
     preferred = [
-        *(s for s in reversed(extra_sources) if s.event.role == "user"),
-        *(s for s in reversed(extra_sources) if s.event.role != "user"),
+        *(s for s in prioritized if s.event.role == "user"),
+        *(s for s in prioritized if s.event.role != "user"),
         *reversed(snapshot.sources),
     ]
     seen = set()
