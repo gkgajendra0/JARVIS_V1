@@ -57,6 +57,18 @@ class TransportTests(unittest.TestCase):
             with self.assertRaisesRegex(LibrarianError, "not advertised"):
                 client.call_tool("made_up_tool", {})
 
+    def test_incompatible_protocol_fails_closed(self) -> None:
+        with self.assertRaisesRegex(LibrarianError, "protocol version"):
+            with McpStdioClient(SERVER + ["--wrong-protocol"], str(ROOT), timeout=5):
+                pass
+
+    def test_oversized_server_output_fails_closed(self) -> None:
+        with McpStdioClient(
+            SERVER + ["--oversized-response"], str(ROOT), timeout=5
+        ) as client:
+            with self.assertRaisesRegex(LibrarianError, "exceeds limit"):
+                client.list_tools()
+
     def test_missing_executable_fails(self) -> None:
         bogus = McpStdioClient(["no-such-jarvis-executable-xyz"])
         with self.assertRaises(OSError), bogus:
@@ -187,6 +199,12 @@ class ExperimentTests(unittest.TestCase):
         )
         result, _ = self.adapter.invoke("recall", project="synthetic-nepal", query="")
         self.assertEqual(fixture_content(result)["records"], [])
+
+    def test_oversized_mcp_argument_is_rejected(self) -> None:
+        with self.assertRaisesRegex(LibrarianError, "length limit"):
+            self.adapter.invoke(
+                "recall", project="synthetic-nepal", query="x" * 4097
+            )
 
     def test_advertised_mcp_input_schema_is_enforced(self) -> None:
         bad = LibrarianExperiment(
