@@ -1,0 +1,31 @@
+name: Librarian Parallel Adapter (synthetic only)
+
+on:
+  push:
+    branches:
+      - experiment/librarian-parallel-20261101
+    paths:
+      - experiments/librarian_parallel/**
+      - .github/workflows/librarian-parallel-synthetic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-mcp-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Standalone MCP adapter tests (no secrets, no network service)
+        run: python -m unittest discover -s experiments/librarian_parallel -p 'test_*.py' -v
+      - name: MCP fixture server handshake and tool discovery
+        run: python -m experiments.librarian_parallel.cli --config experiments/librarian_parallel/fixture.example.json discover
+      - name: Synthetic read smoke
+        run: python -m experiments.librarian_parallel.cli --config experiments/librarian_parallel/fixture.example.json invoke --operation recall --project synthetic-nepal --query vehicle
