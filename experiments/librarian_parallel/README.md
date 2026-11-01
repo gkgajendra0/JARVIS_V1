@@ -1,4 +1,14 @@
-# Parallel Librarian experiment (not production Jarvis)
+# Parallel Librarian experiment — ARCHIVED (2026-11-01)
+
+**FINAL DECISION: STOPPED. Do not merge, deploy, buy, or continue this experiment without new evidence.**
+
+See **[DECISION_2026-11-01.md](DECISION_2026-11-01.md)** for the full decision record: original goal, verified results, why work stopped, what was and was not tested, and conditions for reopening.
+
+**Conclusion:** The isolated MCP prototype and fictional fixture tests passed; the creator's real Librarian backend was not available for testing, no full-system A/B comparison happened, and there is no evidence of an improvement over the existing Jarvis PR #303. This does **not** prove the creator's software is fake. **Priority returns to PR #303.** Retain this branch strictly as historical research/prototype code.
+
+---
+
+## Historical implementation notes (not an active installation guide)
 
 **Status:** MCP integration boundary implemented, but the creator's Librarian implementation is **not installed or verified**. No confirmed public server package, documented tool names/schemas, or endpoint is available. Do not label synthetic fixture results as Librarian benchmark results.
 
