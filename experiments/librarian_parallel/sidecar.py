@@ -22,6 +22,7 @@ from .bridge import (
     LibrarianExperiment,
     McpStdioClient,
 )
+from .fingerprints import config_fingerprint, fingerprint
 from .scenario_runner import decode_records
 
 EVENT_KEYS = frozenset(
@@ -79,6 +80,7 @@ def replay(
     """Replay a sequence in one external MCP session; never touch the Jarvis DB."""
     outputs: list[dict[str, Any]] = []
     with McpStdioClient(config.command, config.cwd, config.timeout) as client:
+        advertised_tools_digest = fingerprint(client.list_tools())
         adapter = LibrarianExperiment(config, client)
         for event in events:
             op = event["operation"]
@@ -115,6 +117,9 @@ def replay(
         "schema": "jarvis.librarian_sidecar_fixture.v1",
         "run_id": uuid.uuid4().hex,
         "synthetic_only": True,
+        "fixture_digest": fingerprint(events),
+        "config_digest": config_fingerprint(config),
+        "mcp_tool_schema_digest": advertised_tools_digest,
         "actual_librarian_backend_verified": False,
         "jarvis_response_generated": False,
         "events": outputs,
