@@ -122,3 +122,25 @@ also records the configuration and MCP schema digests (or null if discovery fail
 These are identity checks, **not** evidence that the unpublished Librarian backend
 is available or that model-answer quality has been measured. No raw credentials or
 owner memory are included in report metadata.
+
+## Additional fail-closed rules (synthetic adapter)
+
+This adapter only recognizes `recall`, `remember`, `correct` and `forget`.
+Unknown aliases cannot bypass the explicit synthetic-write approval gate.
+The mapped recall tool must advertise MCP `annotations.readOnlyHint=true`.
+**This annotation comes from the server and is advisory, not a security boundary.**
+A malicious server can lie and any installed server command can access resources
+available to its OS process; run real third-party software in an appropriately
+isolated environment with no owner filesystem or secrets.
+
+For the synthetic schema, **every returned record must include its owning project**
+and that project must exactly match the scoped request. Missing or foreign project
+provenance is an error; no unverified record reaches the sidecar candidate output.
+The actual creator's tool schema may use different field names. Do not weaken
+this provenance check to accommodate it: only adapt once the real service and
+its documented scope/security semantics are available.
+
+MCP I/O is bounded (maximum one MiB per response line and 4,096
+characters per supplied argument). The client requires a compatible protocol
+version before tool use. These checks limit malformed-input exposure; they do
+not make an unknown executable trustworthy.
