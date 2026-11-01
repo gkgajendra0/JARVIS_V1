@@ -1,4 +1,5 @@
 """Paired outcome report must not manufacture performance claims."""
+
 from __future__ import annotations
 
 import json
