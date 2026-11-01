@@ -3,6 +3,7 @@
 This is a protocol adapter, NOT the unpublished Librarian server.
 No production Jarvis imports, database access, or model calls.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,9 +32,14 @@ class McpStdioClient:
     Child stderr is discarded rather than logging potentially private data.
     """
 
-    def __init__(self, command: list[str], cwd: str | None = None,
-                 timeout: float = 10.0) -> None:
-        if not isinstance(command, list) or not command or not all(isinstance(x, str) and x for x in command):
+    def __init__(
+        self, command: list[str], cwd: str | None = None, timeout: float = 10.0
+    ) -> None:
+        if (
+            not isinstance(command, list)
+            or not command
+            or not all(isinstance(x, str) and x for x in command)
+        ):
             raise LibrarianError("A nonempty executable/argument list is required")
         if not 0 < timeout <= 120:
             raise LibrarianError("Timeout must be between 0 and 120 seconds")
@@ -47,17 +53,29 @@ class McpStdioClient:
 
     def __enter__(self) -> "McpStdioClient":
         self.process = subprocess.Popen(
-            self.command, cwd=self.cwd, stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            encoding="utf-8", errors="strict", bufsize=1, shell=False,
+            self.command,
+            cwd=self.cwd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            encoding="utf-8",
+            errors="strict",
+            bufsize=1,
+            shell=False,
         )
         threading.Thread(target=self._read_stdout, daemon=True).start()
         try:
-            reply = self._request("initialize", {
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {},
-                "clientInfo": {"name": "jarvis-librarian-parallel", "version": "0.1.0"},
-            })
+            reply = self._request(
+                "initialize",
+                {
+                    "protocolVersion": PROTOCOL_VERSION,
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "jarvis-librarian-parallel",
+                        "version": "0.1.0",
+                    },
+                },
+            )
             if not isinstance(reply, dict) or "protocolVersion" not in reply:
                 raise LibrarianError("Invalid MCP initialize result")
             self._notify("notifications/initialized")
@@ -86,8 +104,11 @@ class McpStdioClient:
             self.messages.put(LibrarianError("MCP server closed stdout"))
 
     def _send(self, message: Mapping[str, Any]) -> None:
-        if (self.process is None or self.process.poll() is not None or
-                self.process.stdin is None):
+        if (
+            self.process is None
+            or self.process.poll() is not None
+            or self.process.stdin is None
+        ):
             raise LibrarianError("MCP server is not running")
         try:
             self.process.stdin.write(json.dumps(message, separators=(",", ":")) + "\n")
@@ -101,8 +122,9 @@ class McpStdioClient:
     def _request(self, method: str, params: dict[str, Any]) -> Any:
         self.sequence += 1
         request_id = self.sequence
-        self._send({"jsonrpc": "2.0", "id": request_id,
-                    "method": method, "params": params})
+        self._send(
+            {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+        )
         deadline = time.monotonic() + self.timeout
         while True:
             remaining = deadline - time.monotonic()
@@ -135,7 +157,9 @@ class McpStdioClient:
         for _ in range(25):
             params = {"cursor": cursor} if cursor else {}
             result = self._request("tools/list", params)
-            if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+            if not isinstance(result, dict) or not isinstance(
+                result.get("tools"), list
+            ):
                 raise LibrarianError("Invalid MCP tools/list response")
             for tool in result["tools"]:
                 if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
@@ -206,13 +230,17 @@ class ExperimentConfig:
         if not isinstance(ops, dict):
             raise LibrarianError("operations must be a map")
         for key, binding in ops.items():
-            if not isinstance(binding, dict) or not isinstance(binding.get("tool"), str):
+            if not isinstance(binding, dict) or not isinstance(
+                binding.get("tool"), str
+            ):
                 raise LibrarianError("Each operation requires an explicit tool name")
             if not isinstance(binding.get("arguments"), dict):
                 raise LibrarianError("Each operation requires an arguments mapping")
             if "{project}" not in json.dumps(binding["arguments"]):
                 raise LibrarianError("Each operation must bind project scope")
-            if key in WRITE_OPERATIONS and "{source}" not in json.dumps(binding["arguments"]):
+            if key in WRITE_OPERATIONS and "{source}" not in json.dumps(
+                binding["arguments"]
+            ):
                 raise LibrarianError("Writes must carry explicit synthetic source ID")
         return ExperimentConfig(command, cwd, float(config.get("timeout", 10)), ops)
 
@@ -241,10 +269,17 @@ class LibrarianExperiment:
         self.config = config
         self.client = client
 
-    def invoke(self, operation: str, *, project: str,
-               query: str = "", text: str = "", source: str = "",
-               target: str = "", allow_synthetic_write: bool = False
-               ) -> tuple[dict[str, Any], float]:
+    def invoke(
+        self,
+        operation: str,
+        *,
+        project: str,
+        query: str = "",
+        text: str = "",
+        source: str = "",
+        target: str = "",
+        allow_synthetic_write: bool = False,
+    ) -> tuple[dict[str, Any], float]:
         if not SYNTHETIC_SCOPE.fullmatch(project):
             raise LibrarianError("Only synthetic-* project IDs are accepted")
         if operation in WRITE_OPERATIONS and not allow_synthetic_write:
@@ -252,8 +287,13 @@ class LibrarianExperiment:
         binding = self.config.operations.get(operation)
         if binding is None:
             raise LibrarianError("Operation is not mapped to a verified server tool")
-        values = {"project": project, "query": query, "text": text,
-                  "source": source, "target": target}
+        values = {
+            "project": project,
+            "query": query,
+            "text": text,
+            "source": source,
+            "target": target,
+        }
         if operation in WRITE_OPERATIONS and not source.startswith("fixture-"):
             raise LibrarianError("Synthetic writes require a fixture-* source ID")
         arguments = _render(binding["arguments"], values)
