@@ -73,12 +73,17 @@ def main() -> None:
         parameters = request.get("params", {})
         if method == "initialize":
             answer = {
-                "protocolVersion": "2025-06-18",
+                "protocolVersion": "2024-11-05"
+                if "--wrong-protocol" in sys.argv
+                else "2025-06-18",
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "synthetic-memory-fixture", "version": "1"},
             }
         elif method == "tools/list":
-            answer = {"tools": tools}
+            if "--oversized-response" in sys.argv:
+                answer = {"tools": tools, "padding": "X" * 1_100_000}
+            else:
+                answer = {"tools": tools}
         elif method == "tools/call":
             name = parameters.get("name", "")
             args = parameters.get("arguments", {})
