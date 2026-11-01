@@ -3,6 +3,7 @@
 Does not execute Jarvis, generate answers, or claim real Librarian results.
 Requires same cases, same model/config and explicit independent judgments.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -14,11 +15,21 @@ from typing import Any
 from .bridge import LibrarianError
 from .scenario_runner import percentile
 
-REQUIRED = frozenset({
-    "case_id", "fixture_digest", "model_id", "model_config_digest",
-    "completed", "correct", "supported", "latency_ms",
-    "input_tokens", "output_tokens", "reviewer_id",
-})
+REQUIRED = frozenset(
+    {
+        "case_id",
+        "fixture_digest",
+        "model_id",
+        "model_config_digest",
+        "completed",
+        "correct",
+        "supported",
+        "latency_ms",
+        "input_tokens",
+        "output_tokens",
+        "reviewer_id",
+    }
+)
 
 
 def load_reviewed_receipts(path: Path) -> dict[str, dict[str, Any]]:
@@ -37,12 +48,19 @@ def load_reviewed_receipts(path: Path) -> dict[str, dict[str, Any]]:
         case_id = row["case_id"]
         if not isinstance(case_id, str) or not case_id or case_id in rows:
             raise LibrarianError("Duplicate or invalid case ID")
-        for field in ("fixture_digest", "model_id", "model_config_digest", "reviewer_id"):
+        for field in (
+            "fixture_digest",
+            "model_id",
+            "model_config_digest",
+            "reviewer_id",
+        ):
             if not isinstance(row[field], str) or not row[field]:
                 raise LibrarianError("Required comparable metadata missing")
         for field in ("completed", "correct", "supported"):
             if type(row[field]) is not bool:
-                raise LibrarianError("Answer judgments must be reviewer-supplied booleans")
+                raise LibrarianError(
+                    "Answer judgments must be reviewer-supplied booleans"
+                )
         if not row["completed"] and (row["correct"] or row["supported"]):
             raise LibrarianError("Incomplete answer cannot be correct or supported")
         for field in ("latency_ms", "input_tokens", "output_tokens"):
@@ -67,6 +85,7 @@ def score_pair(
         for field in ("fixture_digest", "model_id", "model_config_digest"):
             if a[field] != b[field]:
                 raise LibrarianError("A/B runs are not comparable: " + field)
+
     def summarize(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
         ordered = [rows[key] for key in sorted(rows)]
         complete = [r for r in ordered if r["completed"]]
@@ -76,7 +95,9 @@ def score_pair(
             "completed": len(complete),
             "correct": sum(r["completed"] and r["correct"] for r in ordered),
             "supported": sum(r["completed"] and r["supported"] for r in ordered),
-            "incorrect_or_incomplete": sum(not r["completed"] or not r["correct"] for r in ordered),
+            "incorrect_or_incomplete": sum(
+                not r["completed"] or not r["correct"] for r in ordered
+            ),
             "latency_p50_ms": percentile(latencies, 0.5),
             "latency_p95_ms": percentile(latencies, 0.95),
             "input_tokens_total": sum(r["input_tokens"] for r in ordered),
@@ -85,11 +106,13 @@ def score_pair(
 
     a, b = summarize(baseline), summarize(augmented)
     improved = [
-        case_id for case_id in sorted(baseline)
+        case_id
+        for case_id in sorted(baseline)
         if not baseline[case_id]["correct"] and augmented[case_id]["correct"]
     ]
     regressed = [
-        case_id for case_id in sorted(baseline)
+        case_id
+        for case_id in sorted(baseline)
         if baseline[case_id]["correct"] and not augmented[case_id]["correct"]
     ]
     return {
@@ -111,7 +134,9 @@ def score_pair(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Strict independently reviewed A/B receipts")
+    parser = argparse.ArgumentParser(
+        description="Strict independently reviewed A/B receipts"
+    )
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--augmented", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -125,14 +150,21 @@ def main(argv: list[str] | None = None) -> int:
         with args.output.open("x", encoding="utf-8") as output:
             json.dump(report, output, indent=2)
             output.write("\n")
-        print(json.dumps({
-            "status": "SCORED", "cases": report["baseline"]["total"],
-            "actual_librarian_performance_claimed": False,
-        }))
+        print(
+            json.dumps(
+                {
+                    "status": "SCORED",
+                    "cases": report["baseline"]["total"],
+                    "actual_librarian_performance_claimed": False,
+                }
+            )
+        )
         return 0
     except (LibrarianError, OSError, ValueError) as exc:
-        print(json.dumps({"status": "FAILED", "error_type": type(exc).__name__}),
-              file=sys.stderr)
+        print(
+            json.dumps({"status": "FAILED", "error_type": type(exc).__name__}),
+            file=sys.stderr,
+        )
         return 2
 
 
