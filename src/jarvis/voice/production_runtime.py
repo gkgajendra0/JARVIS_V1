@@ -165,8 +165,16 @@ def build_production_voice_runtime(
     gemini_live_diagnostic_plan=None,
     semantic_session_factory=None,
     topic_continuity_factory=None,
+    project_memory_factory=None,
+    voice_session_observer=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
-    """Build the production single-microphone-owner voice/vision runtime."""
+    """Build the production single-microphone-owner voice/vision runtime.
+
+    ``project_memory_factory`` and ``voice_session_observer`` are disabled by
+    default and passed only by the isolated project voice lab.
+    """
+    if project_memory_factory is not None and not config.memory_enabled:
+        raise ValueError("project voice memory requires canonical memory")
     if config.wake_model_path is None:
         raise RuntimeError("wake model is required for Step-2 wake mode")
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
@@ -676,6 +684,20 @@ def build_production_voice_runtime(
         **(
             {"topic_continuity_factory": topic_continuity_factory}
             if topic_continuity_factory is not None
+            else {}
+        ),
+        **(
+            {
+                "project_memory": project_memory_factory(
+                    memory_runtime, capability_runtime
+                )
+            }
+            if project_memory_factory is not None
+            else {}
+        ),
+        **(
+            {"voice_session_observer": voice_session_observer}
+            if voice_session_observer is not None
             else {}
         ),
         local_status_speech=local_status_speech,

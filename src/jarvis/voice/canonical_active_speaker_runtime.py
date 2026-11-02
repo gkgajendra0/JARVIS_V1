@@ -64,7 +64,9 @@ class _SessionToolBundle:
         work_runtime: WorkRuntime | None = None,
         personal_context_getter: Callable[[], PersonalContextSession | None]
         | None = None,
+        project_turns_getter: Callable[[], Any] | None = None,
     ) -> None:
+        self._project_turns_getter = project_turns_getter or (lambda: None)
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
         self._memory_runtime = memory_runtime
@@ -81,6 +83,11 @@ class _SessionToolBundle:
         conversation = self._conversation_getter()
         if conversation is None:
             return tools
+        project_turns = self._project_turns_getter()
+        if project_turns is not None:
+            from jarvis.voice.project_voice import VoiceProjectTools
+
+            tools.extend(VoiceProjectTools(project_turns).tools)
         if self._memory_runtime is not None:
             personal = self._personal_context_getter()
             tools.extend(
@@ -132,8 +139,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         semantic_accepted_plan_epoch=None,
         semantic_topic_resume_enabled=False,
         topic_continuity_factory=None,
+        project_memory=None,
+        voice_session_observer=None,
         **kwargs: Any,
     ) -> None:
+        # Isolated opt-in only (jarvis.voice.project_voice_lab); None in normal Jarvis.
+        if project_memory is not None and (
+            memory_runtime is None or capability_runtime is None
+        ):
+            raise ValueError(
+                "project voice memory requires canonical memory and authority"
+            )
+        if voice_session_observer is not None and not callable(voice_session_observer):
+            raise TypeError("voice_session_observer must be callable")
+        self._project_memory = project_memory
+        self._project_turns = None
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
         self._session_conversation: ConversationSession | None = None
         self._user_is_speaking = False
@@ -229,6 +249,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
             session, bridge = original_session_factory(config)
             self._live_session = session
+            if voice_session_observer is not None:
+                voice_session_observer(session, bridge)
+            if project_memory is not None:
+                project_turns = project_memory.session(bridge.conversation)
+                self._project_turns = project_turns
+                bridge.add_accepted_turn_observer(project_turns.observe_turn)
+                bridge.add_close_observer(project_turns.close)
+            else:
+                project_turns = None
+                self._project_turns = None
             self._session_conversation = bridge.conversation
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
@@ -393,6 +423,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         bridge.conversation.begin_user_activity()
                         if personal is not None:
                             personal.observe_activity()
+                        if project_turns is not None:
+                            project_turns.observe_activity()
                     self._user_is_speaking = True
                     sync_interactive_brain_gate()
                     self._cancel_timeout()
@@ -421,6 +453,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     if personal is not None:
                         personal.close()
                     self._personal_context = None
+                    if project_turns is not None:
+                        project_turns.close()
+                    self._project_turns = None
                     self._live_session = None
                     self._agent_state = "unavailable"
                     self._user_is_speaking = False
@@ -483,6 +518,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
                 personal_context_getter=lambda: self._personal_context,
+                project_turns_getter=lambda: self._project_turns,
             )
 
     async def _validate_gemini_handoff(self, bridge):
@@ -1074,8 +1110,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 name="jarvis-work-delivery",
             )
         try:
+            if self._project_memory is not None:
+                # Inside try: a denied Hello still releases memory below.
+                await self._project_memory.start()
             await super().run()
         finally:
+            if self._project_memory is not None:
+                # Committed replies finish recording before memory closes.
+                await self._project_memory.aclose()
+                self._project_turns = None
             if delivery_task is not None:
                 delivery_task.cancel()
                 await asyncio.gather(delivery_task, return_exceptions=True)

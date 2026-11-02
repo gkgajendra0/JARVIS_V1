@@ -1,0 +1,178 @@
+"""Isolated Windows VOICE lab for project conversation memory (opt-in).
+
+Runs the normal production voice runtime (wake word, barge-in, Gemini Live,
+tools) against an isolated, exact-source project-memory lab profile. The lab
+root is shared with ``jarvis.voice.project_memory_lab`` at the same commit, so
+/projects, /inspect and /forget can be checked in the text lab between voice
+runs (never at the same time: both take the lab's OS lock).
+
+Production memory is never opened or copied: startup refuses unless the memory
+database resolves inside the lab. Paid fallback is disabled. ``--baseline``
+runs the identical runtime with project memory off, for latency/token
+comparison in ``voice-usage.jsonl``.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import replace
+from pathlib import Path
+
+
+def voice_lab_config(config):
+    if config.ai_provider != "gemini":
+        raise ValueError("existing Gemini configuration required")
+    return replace(
+        config,
+        memory_enabled=True,
+        personal_context_mode="off",
+        personal_learning_mode="off",
+        personal_learning_reenable_categories=(),
+        memory_candidate_extraction_enabled=False,
+        memory_semantic_recall_model=None,
+        work_orchestration_enabled=False,
+        github_promotion_enabled=False,
+        chatgpt_plan_enabled=False,
+        show_transcript=False,
+        vision_enabled=False,
+        speaker_shadow_enabled=False,
+        active_speaker_shadow_enabled=False,
+        pocket3_native_tracking_enabled=False,
+        # Free credential lane only: the isolated lab never spends paid budget.
+        gemini_fallback=replace(config.gemini_fallback, enabled=False),
+    )
+
+
+def require_isolated_memory(lab: Path) -> Path:
+    from jarvis.memory.runtime import default_memory_database_path
+
+    database = default_memory_database_path().resolve()
+    if database.parent != lab.resolve():
+        raise RuntimeError("memory database is not inside the isolated lab; refusing")
+    return database
+
+
+def project_memory_factory(memory_runtime, capability_runtime):
+    from jarvis.voice.project_memory_lab import standard_history_source
+    from jarvis.voice.project_voice import VoiceProjectMemory
+
+    return VoiceProjectMemory(
+        memory_runtime, capability_runtime, source_clearance=standard_history_source
+    )
+
+
+async def run_voice_lab(config, lab: Path, *, baseline: bool, runtime_builder=None):
+    from jarvis.voice.voice_usage_meter import VoiceUsageMeter
+
+    if runtime_builder is None:
+        from jarvis.voice.production_runtime import build_production_voice_runtime
+
+        runtime_builder = build_production_voice_runtime
+    meter = VoiceUsageMeter(
+        lab / "voice-usage.jsonl", mode="baseline" if baseline else "project_memory"
+    )
+    runtime = runtime_builder(
+        config,
+        voice_session_observer=meter.attach,
+        **({} if baseline else {"project_memory_factory": project_memory_factory}),
+    )
+    await runtime.run()
+    return runtime
+
+
+def main():
+    import argparse
+    import asyncio
+    import msvcrt
+
+    from jarvis.authority.tooling import (
+        resolve_opa_binary,
+        resolve_windows_hello_helper,
+    )
+    from jarvis.config import JarvisConfig
+    from jarvis.logging_config import configure_logging
+    from jarvis.machine_config import default_machine_config_path, load_machine_settings
+    from jarvis.preflight import require_startup_preflight
+    from jarvis.voice.project_memory_lab import (
+        prepare_project_profile,
+        project_lab_environment,
+        verify_source,
+    )
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--lab-root", type=Path, required=True)
+    parser.add_argument("--profile", type=Path, default=default_machine_config_path())
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--resume-lab", action="store_true")
+    parser.add_argument("--baseline", action="store_true")
+    args = parser.parse_args()
+    if os.name != "nt":
+        parser.error("requires Windows audio, SQLCipher, DPAPI and Hello")
+    repo = Path(__file__).resolve().parents[3]
+    verify_source(repo, args.source_commit)
+    settings = load_machine_settings(args.profile)
+    tool_paths = (
+        {}
+        if args.resume_lab
+        else {
+            "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
+            "JARVIS_WINDOWS_HELLO_HELPER": resolve_windows_hello_helper(
+                machine_settings=settings
+            ).resolve(),
+        }
+    )
+    profile = prepare_project_profile(
+        args.profile,
+        args.lab_root,
+        resume=args.resume_lab,
+        commit=args.source_commit,
+        tool_paths=tool_paths,
+    )
+    lab = profile.parent
+    with project_lab_environment(profile, repo):
+        database = require_isolated_memory(lab)
+        lock = (lab / "project-memory.lock").open("a+b")
+        lock.write(b"0")
+        lock.flush()
+        lock.seek(0)
+        try:
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            lock.close()
+            parser.error("another lab process owns this lab; close it first")
+        try:
+            config = voice_lab_config(JarvisConfig.from_environment())
+            configure_logging(config.log_level, jsonl_path=lab / "voice-lab.jsonl")
+            require_startup_preflight(config)
+            mode = (
+                "BASELINE (project memory off)" if args.baseline else "PROJECT MEMORY"
+            )
+            print(f"VOICE LAB {mode}. Isolated memory: {database}")
+            print(
+                "Normal wake word, barge-in and Gemini Live. Free lane only; no Paid fallback."
+            )
+            if not args.baseline:
+                print(
+                    "Approve Windows Hello for project history. Then wake Jarvis and talk."
+                )
+                print(
+                    "Use the text lab on this same lab root (-ResumeLab) for /projects, /inspect and /forget, after Ctrl+C here."
+                )
+            print(
+                "Measurements: "
+                + str(lab / "voice-usage.jsonl")
+                + ". Ctrl+C stops voice."
+            )
+            asyncio.run(run_voice_lab(config, lab, baseline=args.baseline))
+        except KeyboardInterrupt:
+            print("Voice lab stopped.")
+        finally:
+            lock.seek(0)
+            try:
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            finally:
+                lock.close()
+
+
+if __name__ == "__main__":
+    main()

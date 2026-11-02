@@ -446,6 +446,45 @@ class ProjectConversationCoordinator:
             return response
         raise PermissionError("answer/tool continuation budget exhausted")
 
+    @property
+    def last_decision(self):
+        """The routing decision committed by the most recent prepare_reply."""
+        return self._decision
+
+    async def record_spoken_assistant(self, conversation, packet, turn):
+        """Record an ASSISTANT turn the voice bridge already accepted.
+
+        Native audio generates the reply itself, so there is no issued text
+        answer to compare against. The caller binds ``turn`` to the request
+        whose ``packet`` was given to the model; every packet source becomes
+        the reply's evidence, exactly as in the text path.
+        """
+        if not isinstance(packet, PreparedProjectReply):
+            raise TypeError("prepared project packet required")
+        if turn.role is not ConversationRole.ASSISTANT or not any(
+            item is turn for item in conversation.turns
+        ):
+            raise PermissionError("exact accepted assistant turn required")
+        if not self.access.current():
+            raise PermissionError("project history grant is no longer current")
+        async with self._delivery_lock:
+            snapshot = await self.access.snapshot(packet.selection)
+            route = RecordingRoute(
+                packet.selection, snapshot.archive_revision, packet.request_id
+            )
+            if snapshot.retention_paused or self.recorder._clearance(turn) is not True:
+                return await self.recorder.record_omission(
+                    conversation,
+                    turn,
+                    route,
+                    reason="retention_paused"
+                    if snapshot.retention_paused
+                    else "source_not_eligible",
+                )
+            return await self.recorder.record(
+                conversation, turn, route, evidence=packet.source_ids
+            )
+
     def diagnostics(self):
         selection = self._decision.selection if self._decision else None
         return {
