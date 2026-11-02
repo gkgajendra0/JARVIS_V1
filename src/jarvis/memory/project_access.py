@@ -399,7 +399,9 @@ class ProjectArchiveAccess:
                     + " FROM conversation_event e WHERE "
                     + filters
                     + (
-                        " ORDER BY accepted_at DESC,event_id DESC LIMIT ?"
+                        # Equal timestamps (Windows' ~16 ms clock) keep their
+                        # append order within a thread instead of a random id.
+                        " ORDER BY accepted_at DESC,sequence DESC,event_id DESC LIMIT ?"
                         if project_wide or all_projects
                         else " ORDER BY sequence DESC LIMIT ?"
                     )

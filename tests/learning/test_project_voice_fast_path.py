@@ -309,6 +309,38 @@ async def test_fast_turn_adds_no_archive_reads(lab):
 
 
 @pytest.mark.asyncio
+async def test_turns_with_equal_timestamps_preload_in_spoken_order(lab, monkeypatch):
+    """Windows CI regression: the coarse clock gives quick successive turns the
+    same accepted_at; recent history must still be in the order spoken."""
+    import jarvis.conversation as conversation_module
+
+    real = conversation_module.datetime
+    tick = real.now(conversation_module.UTC)  # one clock tick for every turn
+
+    class Frozen(real):
+        @classmethod
+        def now(cls, tz=None):
+            return Frozen.combine(tick.date(), tick.timetz())
+
+    voice = await nepal(lab)
+    wake = Wake(voice)
+    await wake.ask("create project called Goa", "Created.")
+    monkeypatch.setattr(conversation_module, "datetime", Frozen)
+    spoken = [f"Goa step {n}." for n in range(6)]
+    for text in spoken:
+        wake.speech()
+        wake.transcript(text)
+    await settle(voice)
+    monkeypatch.setattr(conversation_module, "datetime", real)
+    wake.close()
+    wake = FastWake(voice)
+    await wake.preload()
+    (context,) = wake.agent.injected()
+    positions = [context.index(text) for text in spoken]
+    assert positions == sorted(positions)
+
+
+@pytest.mark.asyncio
 async def test_preload_requires_a_current_grant(lab):
     voice = await nepal(lab)
     wake = FastWake(voice)
