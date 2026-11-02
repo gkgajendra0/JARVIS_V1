@@ -97,7 +97,6 @@ async def test_post_forget_question_opens_general_and_reads_nepal_trip(
     assert all("SQL" not in r[1] for r in lab.rows())
 
 
-
 @pytest.mark.asyncio
 async def test_general_automatic_bootstrap_and_reuse_are_silent(router_lab):  # noqa: F811
     access = router_lab.access()
