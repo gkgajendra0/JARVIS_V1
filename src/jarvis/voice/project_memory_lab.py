@@ -478,7 +478,8 @@ async def run_text_lab(
                 await coordinator.validate_for_release(result)
                 if not coordinator.validate_current(result.packet):
                     raise PermissionError("answer invalidated")
-                print(result.announcement)
+                if result.announcement:
+                    print(result.announcement)
                 print(result.answer)
                 receipt = await coordinator.record_assistant(
                     conversation, result, delivered_text=result.answer

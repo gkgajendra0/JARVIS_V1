@@ -36,7 +36,7 @@ def test_project_selection_survives_segments_restart_and_explicit_switch(
             nepal = await routed(router, "Let's plan my Nepal trip")
             follow = await routed(router, "We will take the Jimny")
             assert follow.selection == nepal.selection
-            other = await routed(router, "Switch to interview preparation")
+            other = await routed(router, "create project called interview preparation")
             assert other.selection.project_id != nepal.selection.project_id
             restarted = ProjectRouter(
                 ProjectArchiveAccess(
@@ -46,8 +46,13 @@ def test_project_selection_survives_segments_restart_and_explicit_switch(
             resumed = await routed(restarted, "Where were we?")
             assert resumed.selection == other.selection
             assert "Resuming" in resumed.announcement
-            restored = await routed(restarted, "What is the status of my Nepal trip?")
+            # A question about Nepal reads it as evidence but does not switch.
+            asked = await routed(restarted, "What is the status of my Nepal trip?")
+            assert asked.selection == other.selection
+            assert asked.references == (nepal.selection,)
+            restored = await routed(restarted, "Switch to my Nepal trip")
             assert restored.selection == nepal.selection
+            assert restored.announcement == "Switched to Nepal trip."
             issuer.revoke(grant)
             with pytest.raises(PermissionError):
                 await routed(router, "Continue my Nepal trip")
@@ -78,9 +83,9 @@ def test_duplicate_exact_names_require_clarification_and_cas_prevents_lost_switc
             assert len(ambiguous.candidates) == 2
             with pytest.raises(ValueError):
                 await router.select(ambiguous)
-            c, t = accepted("Switch to coding")
+            c, t = accepted("create project called coding")
             one = await router.resolve(c, t)
-            c, t = accepted("Switch to interviews")
+            c, t = accepted("create project called interviews")
             two = await router.resolve(c, t)
             await router.select(one)
             with pytest.raises(PermissionError, match="selection revision"):
@@ -144,7 +149,7 @@ def test_explicit_owned_project_id_resolves_an_ambiguous_name(
     asyncio.run(scenario())
 
 
-def test_named_question_selects_existing_project_without_fuzzy_topic_guessing(
+def test_named_question_reads_other_project_without_switching(
     tmp_path, authority_parts
 ):
     async def scenario():
@@ -156,15 +161,21 @@ def test_named_question_selects_existing_project_without_fuzzy_topic_guessing(
         )
         try:
             nepal = await routed(router, "Continue my Nepal trip")
-            await routed(router, "Switch to interview preparation")
-            assert (
-                await routed(router, "Which vehicle did I choose for my Nepal trip?")
-            ).selection == nepal.selection
+            interview = await routed(
+                router, "create project called interview preparation"
+            )
+            asked = await routed(
+                router, "Which vehicle did I choose for my Nepal trip?"
+            )
+            assert asked.selection == interview.selection
+            assert asked.references == (nepal.selection,)
+            assert asked.announcement == "" and asked.action == "continued"
             assert (
                 await routed(router, "Do not switch to interview preparation")
-            ).selection == nepal.selection
-            c, t = accepted("Compare Nepal trip and interview preparation?")
-            assert (await router.resolve(c, t)).status == "clarification"
+            ).selection == interview.selection
+            both = await routed(router, "Compare Nepal trip and interview preparation?")
+            assert both.selection == interview.selection
+            assert both.references == (nepal.selection,)
         finally:
             await reader.close()
             await writer.close()

@@ -89,7 +89,7 @@ async def owner_trace(tmp_path, authority_parts):
     )
     await say(coordinator, provider, "Let's plan my Nepal trip")
     await say(coordinator, provider, "We will take the Jimny. The permits are sorted.")
-    await say(coordinator, provider, "Switch to interview preparation")
+    await say(coordinator, provider, "create project called interview preparation")
     await say(coordinator, provider, f"My interview topic is {FACT}.")
     await say(coordinator, provider, "Switch to the trip")
     recalled = await say(coordinator, provider, "What is my interview topic?")
@@ -97,7 +97,7 @@ async def owner_trace(tmp_path, authority_parts):
     catalog = await access.catalog()
     interview = next(e for e in catalog.entries if e.title == "interview preparation")
     nepal = next(e for e in catalog.entries if e.title == "Nepal trip")
-    await say(coordinator, provider, "Switch to interview preparation")
+    await say(coordinator, provider, "create project called interview preparation")
     controls = ProjectControls(access)
     inspected = await controls.inspect_project(interview.selection.project_id)
     receipt = await controls.forget_project(
@@ -272,7 +272,7 @@ async def test_late_reply_built_on_forgotten_evidence_is_refused(
         access, source_clearance=lambda _: True
     )
     try:
-        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, "create project called interview preparation")
         await say(coordinator, provider, f"My interview topic is {FACT}.")
         await say(coordinator, provider, "Switch to the trip")
         conversation = ConversationSession()
@@ -346,11 +346,17 @@ async def test_second_order_quotes_are_also_removed(tmp_path, authority_parts):
     trace = await owner_trace(tmp_path, authority_parts)
     try:
         # Rebuild the chain: fact -> Nepal reply -> reply in a third project.
-        await say(trace.coordinator, trace.provider, "Switch to interview preparation")
+        await say(
+            trace.coordinator,
+            trace.provider,
+            "create project called interview preparation",
+        )
         await say(trace.coordinator, trace.provider, f"My interview topic is {FACT}.")
         await say(trace.coordinator, trace.provider, "Switch to the trip")
         await say(trace.coordinator, trace.provider, "What is my interview topic?")
-        await say(trace.coordinator, trace.provider, "Switch to weekend chores")
+        await say(
+            trace.coordinator, trace.provider, "create project called weekend chores"
+        )
         third = await say(
             trace.coordinator, trace.provider, "What is my interview topic?"
         )
@@ -389,7 +395,7 @@ async def test_untracked_legacy_replies_after_the_project_began_are_removed(
     )
     try:
         await say(coordinator, provider, "Let's plan my Nepal trip")
-        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, "create project called interview preparation")
         await say(coordinator, provider, f"My interview topic is {FACT}.")
         await say(coordinator, provider, "Switch to the trip")
         await say(coordinator, provider, "What is my interview topic?")
@@ -459,7 +465,7 @@ async def test_tracked_reply_chained_to_an_untracked_reply_is_also_removed(
         access, source_clearance=lambda _: True
     )
     try:
-        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, "create project called interview preparation")
         await say(coordinator, provider, f"My interview topic is {FACT}.")
         await say(coordinator, provider, "Switch to the trip")
         await say(coordinator, provider, "What is my interview topic?")
@@ -508,7 +514,7 @@ async def test_approval_is_bound_to_the_derived_replies_it_listed(
     )
     try:
         await say(coordinator, provider, "Let's plan my Nepal trip")
-        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, "create project called interview preparation")
         await say(coordinator, provider, f"My interview topic is {FACT}.")
         await say(coordinator, provider, "Switch to the trip")
         await say(coordinator, provider, "What is my interview topic?")
@@ -577,7 +583,7 @@ async def test_one_cross_project_recall_does_not_taint_later_unrelated_replies(
         access, source_clearance=lambda _: True
     )
     try:
-        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, "create project called interview preparation")
         await say(coordinator, provider, f"My interview topic is {FACT}.")
         await say(coordinator, provider, "Switch to the trip")
         await say(coordinator, provider, "What is my interview topic?")

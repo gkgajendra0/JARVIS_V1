@@ -51,7 +51,7 @@ def test_connected_project_history_reaches_generation_without_save_proposals(
             for text in (
                 "Let's plan my Nepal trip",
                 "We will take the Jimny; the permit is pending",
-                "Switch to interview preparation",
+                "create project called interview preparation",
                 "My interview is on Monday",
                 "What is the status of my Nepal trip?",
             ):
@@ -60,10 +60,19 @@ def test_connected_project_history_reaches_generation_without_save_proposals(
                     conversation, turn, provider=provider, authorize=lambda: True
                 )
             payload = provider.client.calls[-1]
-            assert "Jimny" in json.dumps(
-                payload["context"]
-            ) and "permit is pending" in json.dumps(payload["context"])
-            assert "interview is on Monday" not in json.dumps(payload["context"])
+            # Asked from interview preparation: Nepal is read as labelled
+            # evidence and the selection stays where it was.
+            nepal_rows = [
+                row
+                for row in payload["context"]["sources"]
+                if row.get("from_project") == "Nepal trip"
+            ]
+            assert any("Jimny" in row["text"] for row in nepal_rows)
+            assert any("permit is pending" in row["text"] for row in nepal_rows)
+            assert payload["context"]["project_title"] == "interview preparation"
+            assert payload["context"]["routing"]["referenced_projects"] == [
+                "Nepal trip"
+            ]
             assert result.packet.source_ids
             old = result.packet
             coordinator.invalidate("sleep")
@@ -389,7 +398,7 @@ def test_late_delivered_assistant_is_saved_once_in_original_project(
             other = ConversationSession()
             other.start()
             new = other.accept_turn(
-                ConversationRole.USER, "Switch to interview preparation"
+                ConversationRole.USER, "create project called interview preparation"
             )
             other_packet = await coordinator.prepare_reply(
                 other, new, authorize=lambda: True
@@ -568,7 +577,7 @@ async def test_new_thread_receives_prior_project_sources_before_first_generation
         for text in (
             "Continue my Nepal trip",
             "We will take the Jimny. The permit is pending.",
-            "Switch to interview preparation",
+            "create project called interview preparation",
             "My interview is on Tuesday.",
             "New conversation in Nepal trip",
         ):

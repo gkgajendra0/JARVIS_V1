@@ -121,11 +121,18 @@ class ProjectConversationCoordinator:
         # A project is the durable context boundary; a new thread must not hide
         # its recent originals. The same authorized scope and wire budget apply.
         snapshot = await self.access.snapshot(selection, project_wide=True)
+        # A question that names another existing project reads that project's
+        # recent history as labelled evidence; the selection stays unchanged.
+        referenced = []
+        decision = self._decision
+        for reference in decision.references if decision is not None else ():
+            other = await self.access.snapshot(reference, project_wide=True, limit=12)
+            referenced.extend(other.sources)
         if before != (self.access.local_revision, self.access.store.change_revision):
             raise PermissionError("archive changed during context preparation")
         context, ids, tokens = build_project_context(
             snapshot,
-            extra_sources=extra_sources,
+            extra_sources=(*extra_sources, *referenced),
             personal=personal,
             retrieval=retrieval,
             routing=self._routing_outcome(),
@@ -148,17 +155,10 @@ class ProjectConversationCoordinator:
         decision = self._decision
         if decision is None:
             return None
-        if decision.create:
-            action = "created"
-        elif decision.new_thread:
-            action = "new_thread"
-        elif decision.announcement.startswith("Selected"):
-            action = "selected"
-        elif decision.announcement.startswith("Resuming"):
-            action = "resumed"
-        else:
-            action = "unchanged"
-        return {"action": action, "project_title": decision.title}
+        outcome = {"action": decision.action, "project_title": decision.title}
+        if decision.reference_titles:
+            outcome["referenced_projects"] = list(decision.reference_titles)
+        return outcome
 
     async def prepare_reply(
         self, conversation, turn, *, routing_receipt=None, authorize
@@ -198,6 +198,8 @@ class ProjectConversationCoordinator:
                 catalog.selection_revision,
                 entry.archive_revision if entry else 0,
                 create=entry is None,
+                announcement="Created project General." if entry is None else "",
+                action="created" if entry is None else "continued",
             )
         if decision.status != "ready":
             # Nothing was created or switched: say so deterministically rather
@@ -212,10 +214,13 @@ class ProjectConversationCoordinator:
             )
             self.stage = "clarification"
             raise ProjectClarificationRequired(
-                "Which project do you mean: " + ", ".join(titles) + "?"
-                if titles
-                else "No project was created or switched. Say, for example, "
-                "'create project called Nepal trip' or 'switch to Nepal trip'."
+                decision.question
+                or (
+                    "Which project do you mean: " + ", ".join(titles) + "?"
+                    if titles
+                    else "No project was created or switched. Say, for example, "
+                    "'create project called Nepal trip' or 'switch to Nepal trip'."
+                )
             )
         await self.router.select(decision)
         if not self._request_current(request_id, activity):

@@ -26,18 +26,22 @@ def _name_words(text):
 
 
 def _partial_matches(name, entries):
-    """Soft routing: a short name selects a project whose title or alias holds
-    all of its words ("the trip" -> "Nepal trip"). Several matches still need a
-    clarification; no match still creates a project, as before."""
+    """Similar names, in either direction: every word of one name is in the
+    other ("the trip" -> "Nepal trip", "nepal trip" -> "nepal"). Several
+    matches need a clarification; no match never creates anything."""
     words = set(_name_words(name))
     if not words:
         return []
-    return [
-        e
-        for e in entries
-        if normalize_name(e.title) != "general"
-        and any(words <= set(_name_words(label)) for label in (e.title, *e.aliases))
-    ]
+    matches = []
+    for e in entries:
+        if normalize_name(e.title) == "general":
+            continue
+        for label in (e.title, *e.aliases):
+            label_words = set(_name_words(label))
+            if label_words and (words <= label_words or label_words <= words):
+                matches.append(e)
+                break
+    return matches
 
 
 class ProjectClarificationRequired(ValueError):
@@ -51,7 +55,7 @@ class ProjectClarificationRequired(ValueError):
 
 
 _SELECT_COMMAND = re.compile(
-    r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project|what(?:'s| is) the status of)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
+    r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
     re.IGNORECASE,
 )
 _POLITE = r"^(?:(?:can|could|would|will)\s+you\s+|please\s+)*"
@@ -212,6 +216,15 @@ class ProjectRoutingDecision:
     announcement: str = ""
     candidates: tuple[str, ...] = ()
     new_thread: bool = False
+    # What routing actually commits: created, switched, continued, resumed or
+    # new_thread. Announcements and the model's routing note come from this.
+    action: str = "continued"
+    # Other existing projects a question names. Their history is read as
+    # labelled evidence; the selection itself does not change.
+    references: tuple[ProjectSelection, ...] = ()
+    reference_titles: tuple[str, ...] = ()
+    # Shown to the owner when status is "clarification".
+    question: str = ""
 
     def material(self):
         return {"operation": "select", **asdict(self)}
@@ -258,12 +271,7 @@ class ProjectRouter:
         ):
             # A project command we could not read must not fall through to
             # the current project as if it had succeeded.
-            return ProjectRoutingDecision(
-                "clarification",
-                None,
-                "",
-                catalog.selection_revision,
-            )
+            return self._clarify(catalog, "")
         if proposed_name is not None:
             # Model suggestions only refine an explicit project command. They
             # cannot silently reroute ordinary discussion or invent a label.
@@ -271,137 +279,158 @@ class ProjectRouter:
                 raise PermissionError("project proposal lacks exact explicit source")
             name = proposed_name
         if name:
-            matches = [
-                e
-                for e in catalog.entries
-                if normalize_name(name)
-                in {normalize_name(e.title), *(normalize_name(a) for a in e.aliases)}
-            ]
-            if not matches and kind == "select":
-                # "Plan/create ..." asks for a new project; switch/continue/
-                # resume/open/status ask for an existing one, so only they
-                # match partially.
-                matches = _partial_matches(name, catalog.entries)
-            projects = {e.selection.project_id for e in matches}
-            if len(projects) > 1:
-                return ProjectRoutingDecision(
-                    "clarification",
-                    None,
-                    name,
-                    catalog.selection_revision,
-                    candidates=tuple(sorted(projects)),
-                )
-            if matches:
-                entry = next(
-                    (e for e in matches if e.selection == catalog.current), matches[-1]
-                )
-                if text.casefold().startswith("new conversation in "):
-                    selection = ProjectSelection(
-                        entry.selection.project_id,
-                        str(uuid4()),
-                        entry.selection.revision,
-                    )
-                    return ProjectRoutingDecision(
-                        "ready",
-                        selection,
-                        entry.title,
-                        catalog.selection_revision,
-                        announcement=f"New conversation in {entry.title}.",
-                        new_thread=True,
-                    )
-                return ProjectRoutingDecision(
-                    "ready",
-                    entry.selection,
-                    entry.title,
-                    catalog.selection_revision,
-                    entry.archive_revision,
-                    announcement=f"Selected {entry.title}.",
-                )
+            return self._command(catalog, text, name, kind)
+        # Not a project command: questions and ordinary messages never change
+        # the selection. Existing projects a message names are read as
+        # labelled evidence for this answer only.
+        current = self._current_or_general(catalog)
+        references = self._named_projects(catalog, text, current)
+        if current is None:
             return ProjectRoutingDecision(
                 "ready",
                 ProjectSelection(str(uuid4()), str(uuid4()), 0),
-                name,
+                "General",
                 catalog.selection_revision,
                 create=True,
-                announcement=f"Selected {name}.",
+                announcement="Created project General.",
+                action="created",
+                references=tuple(e.selection for e in references),
+                reference_titles=tuple(e.title for e in references),
             )
-        question = text.endswith(("?", "？")) or bool(
-            re.match(
-                r"^(?:what|which|how|when|where|tell me|status)\b", text, re.IGNORECASE
-            )
+        action = "resumed" if not self._announced and catalog.current else "continued"
+        if catalog.current is None:
+            # First use of an existing General workspace after no selection.
+            action = "switched"
+        return ProjectRoutingDecision(
+            "ready",
+            current.selection,
+            current.title,
+            catalog.selection_revision,
+            current.archive_revision,
+            announcement=self._announce(action, current.title),
+            action=action,
+            references=tuple(e.selection for e in references),
+            reference_titles=tuple(e.title for e in references),
         )
-        negated_switch = bool(
-            re.search(
-                r"(?:do not|don't|मत)\s+(?:switch|select|resume|open)\b",
-                text,
-                re.IGNORECASE,
-            )
+
+    @staticmethod
+    def _announce(action, title):
+        return {
+            "created": f"Created project {title}.",
+            "switched": f"Switched to {title}.",
+            "resumed": f"Resuming {title}.",
+            "new_thread": f"New conversation in {title}.",
+        }.get(action, "")
+
+    def _clarify(self, catalog, question, candidates=()):
+        return ProjectRoutingDecision(
+            "clarification",
+            None,
+            "",
+            catalog.selection_revision,
+            candidates=tuple(sorted({e.selection.project_id for e in candidates})),
+            question=question,
         )
-        if question and not negated_switch:
-            normalized = normalize_name(text)
-            named = [
-                e
-                for e in catalog.entries
-                if normalize_name(e.title) != "general"
-                and any(
-                    re.search(
-                        r"(?<!\w)" + re.escape(normalize_name(label)) + r"(?!\w)",
-                        normalized,
-                    )
-                    for label in (e.title, *e.aliases)
-                )
-            ]
-            project_ids = {e.selection.project_id for e in named}
-            if len(project_ids) > 1:
-                return ProjectRoutingDecision(
-                    "clarification",
-                    None,
-                    "named projects",
-                    catalog.selection_revision,
-                    candidates=tuple(sorted(project_ids)),
-                )
-            if named:
-                entry = next(
-                    (e for e in named if e.selection == catalog.current), named[-1]
-                )
-                return ProjectRoutingDecision(
-                    "ready",
-                    entry.selection,
-                    entry.title,
-                    catalog.selection_revision,
-                    entry.archive_revision,
-                    announcement=f"Selected {entry.title}.",
-                )
+
+    def _current_or_general(self, catalog):
         if catalog.current:
-            entry = next(e for e in catalog.entries if e.selection == catalog.current)
-            return ProjectRoutingDecision(
-                "ready",
-                entry.selection,
-                entry.title,
-                catalog.selection_revision,
-                entry.archive_revision,
-                announcement=f"Resuming {entry.title}." if not self._announced else "",
-            )
+            return next(e for e in catalog.entries if e.selection == catalog.current)
         general = [e for e in catalog.entries if normalize_name(e.title) == "general"]
         if len(general) > 1:
             raise PermissionError("ambiguous General workspace")
-        if general:
-            e = general[0]
+        return general[0] if general else None
+
+    @staticmethod
+    def _named_projects(catalog, text, current):
+        normalized = normalize_name(text)
+        named = {}
+        for e in catalog.entries:
+            if normalize_name(e.title) == "general" or (
+                current is not None
+                and e.selection.project_id == current.selection.project_id
+            ):
+                continue
+            if any(
+                re.search(
+                    r"(?<!\w)" + re.escape(normalize_name(label)) + r"(?!\w)",
+                    normalized,
+                )
+                for label in (e.title, *e.aliases)
+            ):
+                named.setdefault(e.selection.project_id, e)
+        return list(named.values())[:3]
+
+    def _command(self, catalog, text, name, kind):
+        exact = [
+            e
+            for e in catalog.entries
+            if normalize_name(name)
+            in {normalize_name(e.title), *(normalize_name(a) for a in e.aliases)}
+        ]
+        similar = [] if exact else _partial_matches(name, catalog.entries)
+        if len({e.selection.project_id for e in exact}) > 1:
+            return self._clarify(catalog, "", exact)
+        if kind == "create" and not exact:
+            # Explicit creation creates only when the name is not taken.
+            return self._create(catalog, name)
+        if kind == "plan" and not exact:
+            if similar:
+                # "Plan my Nepal trip" while "nepal" exists: ask rather than
+                # silently duplicating it.
+                return self._clarify(catalog, "", similar)
+            return self._create(catalog, name)
+        matches = exact or similar
+        if len({e.selection.project_id for e in matches}) > 1:
+            return self._clarify(catalog, "", matches)
+        if not matches:
+            return self._clarify(
+                catalog,
+                f"No project called '{name}'. Say 'create project called {name}' "
+                "to make one, or /projects to list them.",
+            )
+        entry = next(
+            (e for e in matches if e.selection == catalog.current), matches[-1]
+        )
+        if text.casefold().startswith("new conversation in "):
             return ProjectRoutingDecision(
                 "ready",
-                e.selection,
-                e.title,
+                ProjectSelection(
+                    entry.selection.project_id, str(uuid4()), entry.selection.revision
+                ),
+                entry.title,
                 catalog.selection_revision,
-                e.archive_revision,
-                announcement="Selected General.",
+                announcement=self._announce("new_thread", entry.title),
+                new_thread=True,
+                action="new_thread",
             )
+        already = (
+            catalog.current is not None
+            and entry.selection.project_id == catalog.current.project_id
+        )
+        action = (
+            ("resumed" if not self._announced else "continued")
+            if already
+            else "switched"
+        )
+        return ProjectRoutingDecision(
+            "ready",
+            entry.selection,
+            entry.title,
+            catalog.selection_revision,
+            entry.archive_revision,
+            announcement=self._announce(action, entry.title),
+            action=action,
+        )
+
+    def _create(self, catalog, name):
         return ProjectRoutingDecision(
             "ready",
             ProjectSelection(str(uuid4()), str(uuid4()), 0),
-            "General",
+            name,
             catalog.selection_revision,
             create=True,
-            announcement="Selected General.",
+            announcement=self._announce("created", name),
+            action="created",
         )
 
     async def select(self, decision):

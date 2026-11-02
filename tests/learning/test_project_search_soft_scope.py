@@ -302,10 +302,10 @@ def test_short_names_select_an_existing_project_but_plan_still_creates(
         )
         try:
             nepal = await routed(router, "Continue my Nepal trip")
-            await routed(router, "Switch to interview preparation")
+            await routed(router, "create project called interview preparation")
             back = await routed(router, "Switch to the trip")
             assert back.selection == nepal.selection
-            assert back.announcement == "Selected Nepal trip."
+            assert back.announcement == "Switched to Nepal trip."
             created = await routed(router, "Let's plan a Goa trip")
             assert created.selection.project_id != nepal.selection.project_id
             c, t = accepted("Continue the trip")

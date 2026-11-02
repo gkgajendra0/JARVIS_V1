@@ -70,7 +70,7 @@ def test_create_command_creates_and_announces(tmp_path, authority_parts):
             created = await routed(router, "create a nepal project")
             assert created.create is True and created.title == "nepal"
             assert created.selection.project_id != general.selection.project_id
-            assert created.announcement == "Selected nepal."
+            assert created.announcement == "Created project nepal."
             catalog = await router.access.catalog()
             assert catalog.current == created.selection
             # Creating an exact existing name selects it instead of duplicating.
@@ -133,11 +133,11 @@ async def test_coordinator_grounds_routing_and_never_answers_unparsed_commands(
         await say(coordinator, provider, "Hello")
         assert model.contexts[-1]["routing"]["action"] == "created"
         created = await say(coordinator, provider, "create a nepal project")
-        assert created.announcement == "Selected nepal."
+        assert created.announcement == "Created project nepal."
         routing = model.contexts[-1]["routing"]
         assert routing == {"action": "created", "project_title": "nepal"}
         await say(coordinator, provider, "We will take the Jimny")
-        assert model.contexts[-1]["routing"]["action"] == "unchanged"
+        assert model.contexts[-1]["routing"]["action"] == "continued"
         calls = len(model.contexts)
         from jarvis.conversation import ConversationRole, ConversationSession
 
