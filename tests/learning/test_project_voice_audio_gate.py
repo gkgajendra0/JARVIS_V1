@@ -115,6 +115,9 @@ async def exercise_async_gate(audio_output, capabilities, gate_class, make_frame
             await super().capture_frame(frame)
             self.frames += 1
 
+        def flush(self):
+            super().flush()
+
         def clear_buffer(self):
             pass
 

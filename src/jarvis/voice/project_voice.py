@@ -688,9 +688,15 @@ class VoiceProjectTurns:
             return _Outcome("failed", reason="error")
         decision = coordinator.last_decision
         self._current_title = decision.title
-        if self._fast_enabled:
+        if self._fast_enabled and (
+            self._catalog is None
+            or decision.create
+            or decision.action in {"created", "switched", "new_thread"}
+        ):
+            # The classifier's catalog changes only when a project is created or
+            # the selection moves; ordinary turns cost no extra archive read
+            # (each read takes one of the grant's bounded 30-second leases).
             try:
-                # Fresh names for the fast-path classifier (a project may be new).
                 self._catalog = await access.catalog()
             except Exception:  # noqa: BLE001 - no catalog only disables fast path
                 self._catalog = None

@@ -251,28 +251,35 @@ async def test_late_command_is_announced_and_context_preloaded_again(lab):
     assert wake.turns._fast_selection == wake.turns._committed_selection
     # The next ordinary turn is answered from Goa's context.
     await wake.fast("What should we pack?", "Light clothes.")
-    assert lab.rows()[-1] == ("assistant", "Light clothes.", "complete", "Goa")
+    # rows() orders by per-thread sequence, so compare Goa's thread alone.
+    assert [r for r in lab.rows() if r[3] == "Goa"] == [
+        ("user", "Create project called Goa", "complete", "Goa"),
+        ("user", "What should we pack?", "complete", "Goa"),
+        ("assistant", "Light clothes.", "complete", "Goa"),
+    ]
 
 
 @pytest.mark.asyncio
 async def test_preload_is_bounded_deduplicated_and_isolated(lab):
-    voice = await nepal(lab)
+    await (await nepal(lab)).aclose()
+    voice = await lab.runtime()  # a fresh grant: each grant has a child budget
     wake = Wake(voice)
     await wake.ask("create project called Goa", "Created.")
-    for number in range(25):
+    for number in range(14):
         wake.speech()
         wake.transcript(f"Goa note {number}: " + "beach " * 20)
     wake.speech()
     wake.transcript("Huge note: " + "sand " * 700)  # larger than the whole budget
     await settle(voice)
     wake.close()
-    wake = FastWake(voice)
+    await voice.aclose()
+    wake = FastWake(await lab.runtime())
     await wake.preload()
     (context,) = wake.agent.injected()
     lines = [line for line in context.splitlines() if line.startswith("- ")]
     assert 1 <= len(lines) <= PRELOAD_ROWS
     assert len(context) <= PRELOAD_MAX_CHARS + 300
-    assert "Goa note 24" in context and "Goa note 0:" not in context  # newest
+    assert "Goa note 13" in context and "Goa note 0:" not in context  # newest
     assert "older history exists" in context
     assert "Huge note" not in context  # never shortened, so not preloaded
     # Project isolation: nothing from Nepal trip is preloaded.
@@ -280,6 +287,25 @@ async def test_preload_is_bounded_deduplicated_and_isolated(lab):
     # A second preload in the same Gemini session sends nothing twice.
     await wake.preload()
     assert "- " not in wake.agent.injected()[-1]
+
+
+@pytest.mark.asyncio
+async def test_fast_turn_adds_no_archive_reads(lab):
+    """Each archive read holds one of the grant's bounded leases; a fast
+    ordinary turn uses exactly the reads the tool path's save already did."""
+    voice = await nepal(lab)
+    wake = FastWake(voice)
+    await wake.preload()
+    calls = []
+    real = voice.access.catalog
+
+    async def counted():
+        calls.append(1)
+        return await real()
+
+    voice.access.catalog = counted
+    await wake.fast("Which vehicle?", "The Jimny.")
+    assert len(calls) == 2  # turn preparation + routing, as before the fast path
 
 
 @pytest.mark.asyncio
