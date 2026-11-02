@@ -383,7 +383,8 @@ class ProjectRouter:
             # or resume. Explicit project commands use _command below and
             # retain their spoken announcements.
             announcement=(
-                "" if normalize_name(current.title) == "general"
+                ""
+                if normalize_name(current.title) == "general"
                 else self._announce(action, current.title)
             ),
             action=action,
