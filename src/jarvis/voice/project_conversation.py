@@ -215,7 +215,7 @@ class ProjectConversationCoordinator:
                 "Which project do you mean: " + ", ".join(titles) + "?"
                 if titles
                 else "No project was created or switched. Say, for example, "
-                "'create project Nepal trip' or 'switch to Nepal trip'."
+                "'create project called Nepal trip' or 'switch to Nepal trip'."
             )
         await self.router.select(decision)
         if not self._request_current(request_id, activity):

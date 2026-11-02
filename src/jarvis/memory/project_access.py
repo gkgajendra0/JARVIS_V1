@@ -303,7 +303,21 @@ class ProjectArchiveAccess:
             # Rows removed by forget (in any project) remain only as tombstones
             # and are never context, search or read material. The zero digest
             # is set solely by forget; the column name is unambiguous in joins.
-            live = " AND payload_sha256<>'" + "0" * 64 + "'"
+            live = (
+                " AND e.payload_sha256<>'" + "0" * 64 + "'"
+                # Jarvis replies and tool results generated with another
+                # project's events in context are never fed back as context or
+                # search material. The original sources stay findable with
+                # their own project label, so knowledge is not lost, but a
+                # restatement can never become the next reply's evidence. This
+                # keeps forget's derived set to direct dependants only.
+                " AND (e.role='user' OR NOT EXISTS (SELECT 1 FROM "
+                "conversation_event_dependency d JOIN conversation_event s "
+                "ON s.event_id=d.source_event_id JOIN conversation_thread st "
+                "ON st.thread_id=s.thread_id JOIN conversation_thread et "
+                "ON et.thread_id=e.thread_id WHERE d.event_id=e.event_id "
+                "AND st.project_id<>et.project_id))"
+            )
             if all_projects:
                 # Soft separation: every project the owner has not forgotten.
                 scope_sql = (
@@ -389,7 +403,7 @@ class ProjectArchiveAccess:
                 )
                 rows = conn.execute(sql, (*parameters, limit + 1)).fetchall()
             total = conn.execute(
-                "SELECT count(*) FROM conversation_event WHERE " + scope_sql,
+                "SELECT count(*) FROM conversation_event e WHERE " + scope_sql,
                 scope_parameters,
             ).fetchone()[0]
             truncated = len(rows) > limit
@@ -405,7 +419,7 @@ class ProjectArchiveAccess:
             if not rows and query is not None:
                 status = "no_match"
             omissions = conn.execute(
-                "SELECT count(*) FROM conversation_event WHERE "
+                "SELECT count(*) FROM conversation_event e WHERE "
                 + scope_sql
                 + " AND role='tool' AND delivery='failed' AND instr(text,?)>0",
                 (*scope_parameters, '"capture":"omitted"'),

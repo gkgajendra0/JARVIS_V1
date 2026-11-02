@@ -345,6 +345,13 @@ async def run_text_lab(
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         else:
             manifest = None
+        for kind, affected in await controls.repair_report():
+            if kind == "forgotten_project_derived_replies":
+                print(
+                    f"UPGRADE REPAIR: removed {affected} Jarvis replies/tool results that "
+                    "were saved after a now-forgotten project began and had no recorded "
+                    "evidence. Your own messages were kept."
+                )
         print(
             "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; one more Hello opens personal reads for 30 min (10 min idle); corrections/deletion keep their own approvals."
         )

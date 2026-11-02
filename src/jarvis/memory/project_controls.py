@@ -192,6 +192,29 @@ class ProjectControls:
             raise ValueError("duplicate aliases")
         await self._metadata(project_id, aliases=aliases)
 
+    async def repair_report(self):
+        """Counts recorded by the one-time upgrade repair (no content)."""
+        from .project_access import CATALOG
+
+        material = {"operation": "repair_report"}
+
+        def read(conn):
+            return tuple(
+                conn.execute(
+                    "SELECT kind,affected_events FROM conversation_repair_log "
+                    "WHERE affected_events>0 ORDER BY repair_id"
+                ).fetchall()
+            )
+
+        return await self.access._perform(
+            CATALOG,
+            material,
+            "read",
+            lambda p: self.access.store._bound_read(
+                CATALOG, material, permit=p, read=read
+            ),
+        )
+
     async def preview_forget(self, project_id):
         """What forgetting ``project_id`` would remove elsewhere: counts and
         project titles only, read under the owner's history permit."""

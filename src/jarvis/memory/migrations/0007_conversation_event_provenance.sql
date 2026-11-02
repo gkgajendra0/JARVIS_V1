@@ -17,6 +17,13 @@ CREATE TABLE conversation_event_dependency (
 CREATE INDEX conversation_event_dependency_source
 ON conversation_event_dependency(source_event_id);
 
+-- Owner-visible record of what the one-time repair below removed.
+CREATE TABLE conversation_repair_log (
+    repair_id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL,
+    affected_events INTEGER NOT NULL CHECK (affected_events >= 0)
+);
+
 -- One-time repair for projects forgotten before provenance tracking existed.
 -- Applies the consequence of a forget the owner already approved: Jarvis
 -- replies and tool results in live projects, saved at or after the forgotten
@@ -57,5 +64,9 @@ AND EXISTS (
     JOIN conversation_event fe ON fe.thread_id = ft.thread_id
     WHERE f.forgotten_at IS NOT NULL AND fe.accepted_at <= conversation_event.accepted_at
 );
+
+-- changes() counts only the UPDATE above, not the search-index triggers.
+INSERT INTO conversation_repair_log(kind, affected_events)
+VALUES ('forgotten_project_derived_replies', changes());
 
 INSERT INTO conversation_event_fts(conversation_event_fts) VALUES ('optimize');

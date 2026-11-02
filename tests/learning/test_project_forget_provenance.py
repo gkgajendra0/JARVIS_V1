@@ -562,6 +562,9 @@ async def test_upgrade_repairs_a_project_forgotten_before_this_fix(
             "SELECT archive_revision FROM conversation_thread WHERE thread_id='tn'"
         ).fetchone()[0]
         assert MemoryMigrationRunner().apply(connection) == 7
+        assert connection.execute(
+            "SELECT kind,affected_events FROM conversation_repair_log"
+        ).fetchall() == [("forgotten_project_derived_replies", 2)]
         kept = dict(
             connection.execute(
                 "SELECT event_id,text FROM conversation_event"
@@ -647,6 +650,80 @@ async def test_approval_is_bound_to_the_derived_replies_it_listed(
             trace_path,
             "SELECT 1 FROM conversation_event WHERE text LIKE ?",
             (f"%{FACT}%",),
+        )
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_one_cross_project_recall_does_not_taint_later_unrelated_replies(
+    tmp_path, authority_parts
+):
+    """Reviewer finding: removal must stay at direct dependants."""
+    path, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    model = EchoingModel()
+    provider = ProjectAnswerProvider(model)
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    try:
+        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, f"My interview topic is {FACT}.")
+        await say(coordinator, provider, "Switch to the trip")
+        await say(coordinator, provider, "What is my interview topic?")
+        for index in range(10):
+            await say(coordinator, provider, f"Packing note {index}: bring a jacket.")
+        # The recall reply is never fed back into Nepal's later context.
+        assert all(FACT not in json.dumps(c) for c in model.contexts[-10:])
+        catalog = await access.catalog()
+        interview = next(
+            e for e in catalog.entries if e.title == "interview preparation"
+        )
+        controls = ProjectControls(access)
+        inspected = await controls.inspect_project(interview.selection.project_id)
+        receipt = await controls.forget_project(
+            interview.selection.project_id,
+            expected_revision=inspected.archive_revision,
+        )
+        # Only the recall reply and the search result that listed Interview's
+        # sources are derived.
+        assert receipt.derived_sources == 2
+        replies = rows(
+            path,
+            "SELECT e.text FROM conversation_event e JOIN conversation_thread t "
+            "ON t.thread_id=e.thread_id JOIN conversation_workspace w "
+            "ON w.project_id=t.project_id WHERE w.title='Nepal trip' AND e.role='assistant'",
+        )
+        assert replies.count(("Understood.",)) == 11
+        assert not rows(
+            path, "SELECT 1 FROM conversation_event WHERE text LIKE ?", (f"%{FACT}%",)
+        )
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_upgrade_repair_count_is_reported_without_content(
+    tmp_path, authority_parts
+):
+    path, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    try:
+        assert await ProjectControls(access).repair_report() == ()
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                "INSERT INTO conversation_repair_log(kind,affected_events) VALUES "
+                "('forgotten_project_derived_replies',3)"
+            )
+        assert await ProjectControls(access).repair_report() == (
+            ("forgotten_project_derived_replies", 3),
         )
     finally:
         await reader.close()

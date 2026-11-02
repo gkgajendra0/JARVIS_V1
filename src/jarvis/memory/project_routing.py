@@ -22,9 +22,7 @@ _NAME_FILLER = frozenset({"my", "the", "a", "an", "our", "that", "this", "projec
 
 
 def _name_words(text):
-    return [
-        w for w in re.findall(r"\w+", normalize_name(text)) if w not in _NAME_FILLER
-    ]
+    return [w for w in _words(normalize_name(text)) if w not in _NAME_FILLER]
 
 
 def _partial_matches(name, entries):
@@ -57,34 +55,41 @@ _SELECT_COMMAND = re.compile(
     re.IGNORECASE,
 )
 _POLITE = r"^(?:(?:can|could|would|will)\s+you\s+|please\s+)*"
+_KEYWORD = r"(?P<kw>called|named)\s+"
 _CREATE_COMMANDS = (
     # "create project Nepal", "create a new project called Nepal",
     # "can you create a project for Nepal?"
     re.compile(
         _POLITE + r"(?:create|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
-        r"\s+(?:called\s+|named\s+|for\s+)?(?:my\s+|the\s+)?(.+?)[.?!]*$",
+        r"\s+(?:" + _KEYWORD + r"|for\s+)?(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
         re.IGNORECASE,
     ),
     # "start a project for Goa trip"; start/make need an explicit name keyword
     # so "start a new project at work" is not read as a project named "at work".
     re.compile(
         _POLITE + r"(?:make|start)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
-        r"\s+(?:called|named|for)\s+(?:my\s+|the\s+)?(.+?)[.?!]*$",
+        r"\s+(?:" + _KEYWORD + r"|for\s+)(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
         re.IGNORECASE,
     ),
     # "create a nepal project" (create only: "make progress on my thesis
     # project" and "add this to the project" are not commands)
     re.compile(
         _POLITE
-        + r"create\s+(?:a\s+|an\s+|my\s+|the\s+)?(?:new\s+)?(.+?)\s+project[.?!]*$",
+        + r"create\s+(?:a\s+|an\s+|my\s+|the\s+)?(?:new\s+)?(?P<name>.+?)\s+project[.?!]*$",
         re.IGNORECASE,
     ),
     # "new project called Nepal" ("new project ideas are welcome" is not)
-    re.compile(r"^new\s+project\s+(?:called|named)\s+(.+?)[.?!]*$", re.IGNORECASE),
+    re.compile(
+        r"^new\s+project\s+" + _KEYWORD + r"(?P<name>.+?)[.?!]*$", re.IGNORECASE
+    ),
 )
-# An explicit create-project command with no readable name. Whole-text match,
-# so ordinary sentences ("I want to start a new project at work") still go to
-# the model as conversation.
+# Text that is plainly a create-project command. If its name cannot be read,
+# routing asks instead of letting the turn fall through as conversation.
+_CREATE_PROJECT_PREFIX = re.compile(
+    _POLITE
+    + r"(?:(?:create|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project|new\s+project\s+(?:called|named))\b",
+    re.IGNORECASE,
+)
 _UNPARSED_PROJECT_COMMAND = re.compile(
     _POLITE
     + r"(?:(?:create|start|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project|new\s+project)[.?!]*$",
@@ -93,6 +98,12 @@ _UNPARSED_PROJECT_COMMAND = re.compile(
 # Words that show a captured "name" is really part of a sentence.
 _NOT_A_NAME = frozenset(
     [
+        "a",
+        "an",
+        "the",
+        "my",
+        "new",
+        "for",
         "to",
         "on",
         "with",
@@ -137,13 +148,32 @@ _NOT_A_NAME = frozenset(
 )
 
 
-def _project_name(raw):
-    """A plausible project name: 1-4 words, no sentence words, else None."""
+def _words(text):
+    """Letters, combining marks and digits stay together (Devanagari-safe)."""
+    words, current = [], []
+    for character in unicodedata.normalize("NFKC", text):
+        if unicodedata.category(character)[0] in "LMN":
+            current.append(character)
+        elif current:
+            words.append("".join(current))
+            current = []
+    if current:
+        words.append("".join(current))
+    return [w.casefold() for w in words]
+
+
+def _project_name(raw, *, explicit=False):
+    """A plausible project name, else None.
+
+    After "called"/"named" any 1-8 words are accepted ("Sure Shot", "Trip to
+    Nepal"). Otherwise 1-4 words without sentence words, so "create a timeline
+    for the project" is not read as a project.
+    """
     text = re.sub(r"\s+please$", "", raw.strip(" .?!,"), flags=re.IGNORECASE)
-    words = re.findall(r"\w+", normalize_name(text))
+    words = _words(text)
+    if explicit:
+        return text if 1 <= len(words) <= 8 else None
     if not 1 <= len(words) <= 4 or any(w in _NOT_A_NAME for w in words):
-        return None
-    if not _name_words(text):
         return None
     return text
 
@@ -156,7 +186,8 @@ def parse_project_command(text):
     for pattern in _CREATE_COMMANDS:
         match = pattern.match(text)
         if match:
-            name = _project_name(match.group(1))
+            explicit = bool(match.groupdict().get("kw"))
+            name = _project_name(match.group("name"), explicit=explicit)
             if name:
                 return name, "create"
     match = _SELECT_COMMAND.search(text)
@@ -222,7 +253,9 @@ class ProjectRouter:
                 announcement=f"Selected {entry.title}.",
             )
         name, kind = parse_project_command(text)
-        if name is None and _UNPARSED_PROJECT_COMMAND.match(text):
+        if name is None and (
+            _UNPARSED_PROJECT_COMMAND.match(text) or _CREATE_PROJECT_PREFIX.match(text)
+        ):
             # A project command we could not read must not fall through to
             # the current project as if it had succeeded.
             return ProjectRoutingDecision(

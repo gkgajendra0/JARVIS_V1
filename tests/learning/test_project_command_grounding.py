@@ -42,6 +42,14 @@ from jarvis.voice.project_conversation import ProjectConversationCoordinator
         ("start my day with the project", (None, None)),
         ("new project ideas are welcome", (None, None)),
         ("New project kickoff is tomorrow", (None, None)),
+        ("create a new project.", (None, None)),
+        ("create a timeline for the project", (None, None)),
+        ("create an awesome new project", (None, None)),
+        ("Create project Trip to Nepal", (None, None)),
+        # After "called"/"named" the words are the owner's exact name.
+        ("create a project called Sure Shot", ("Sure Shot", "create")),
+        ("create project called Trip to Nepal", ("Trip to Nepal", "create")),
+        ("create project नेपाल यात्रा", ("नेपाल यात्रा", "create")),
     ],
 )
 def test_project_command_phrases(text, expected):
@@ -85,9 +93,15 @@ def test_unreadable_project_command_is_not_reported_as_done(tmp_path, authority_
         )
         try:
             await routed(router, "Hello")
-            c, t = accepted("please create a project")
-            decision = await router.resolve(c, t)
-            assert decision.status == "clarification"
+            for text in (
+                "please create a project",
+                "create a new project.",
+                "Create project Trip to Nepal",
+                "create a new project for my job interview at Google",
+            ):
+                c, t = accepted(text)
+                decision = await router.resolve(c, t)
+                assert decision.status == "clarification", text
             # Ordinary sentences that mention a project still reach the model.
             for text in (
                 "I want to start a new project at work soon",
