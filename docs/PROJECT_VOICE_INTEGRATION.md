@@ -46,6 +46,8 @@ forget with provenance, routing (questions never switch or create projects).
 | Command after a lead-in ("Okay. Create a project called …", "Hey Jarvis, switch to …") | A closed set of lead-ins is removed at the start only, then the normal anchored command rules apply. |
 | Command after real content ("It went well. Create a project called Goa.") | Clarification: nothing changes until the owner says the command alone. |
 | Owner asks Jarvis to stand by ("go to sleep") | Gemini calls the deterministic `enter_standby` control tool. Its acknowledgement passes the context gate (only `CONTROL_TOOLS`), with no project re-request and no fallback. The turn is still saved. |
+| Question names another project only partly ("…taking to Nepal…" with "Nepal trip") | Exact title or alias first. Otherwise a project is referenced when every distinctive word of its name appears. Generic words ("trip", "plan", "preparation") never name a project alone. A word another project also uses ("Nepal" with "Nepal trip" and "Nepal trek") references neither: the result lists `ambiguous_projects` and Gemini asks which. References are evidence only; the selection never changes. |
+| Ordinary turn with no active project (fresh lab, or after forgetting the active one) | Opens the default General workspace, the existing bootstrap. Acceptance records `info: default_workspace_opened`. It is not a FAIL, but only for General and only when the recorded prior selection is empty. |
 | Question names another project | That project's rows are always resent as labelled evidence, even if delivered earlier in the session, so the answer gets both facts (Jimny and permits), not whatever the model recalls. |
 | Reply claims a create or switch the application did not commit | Detected on the committed reply. It is not saved, and a fixed correction is spoken ("Correction: no project was created or switched. You are in X."). Every result also carries `project_changed` and, if false, a "nothing changed" note. Audio already played cannot be withdrawn; the correction follows immediately. |
 | Wake session ends / shutdown | In-flight saves and committed replies finish before memory closes; grant revoked. |
@@ -170,7 +172,7 @@ FAIL rows.
 | Verdict | Codes |
 | --- | --- |
 | **FAIL** (deterministic contradiction) | `command_misrouted` (a project command routed elsewhere); `unexpected_project_change` (created or switched without a command); `false_project_claim` (the reply claims a change that wasn't committed); `save_mismatch`, `save_failed`, `save_read_back_failed`, `accepted_turn_not_prepared`; `withheld_answer_not_recovered` |
-| **REVIEW** (listen to the audio) | `unmatched_speech:<reason>`; `context_gate_recovered`, `context_gate_fallback`; `correction_spoken`; `clarification_asked`; `embedded_project_command`; `not_saved:<reason>`; `recognition_differs_from_accepted`; `duplicate_events`; `several_transcripts_for_one_utterance` |
+| **REVIEW** (listen to the audio) | `ambiguous_project_reference`; `unmatched_speech:<reason>`; `context_gate_recovered`, `context_gate_fallback`; `correction_spoken`; `clarification_asked`; `embedded_project_command`; `not_saved:<reason>`; `recognition_differs_from_accepted`; `duplicate_events`; `several_transcripts_for_one_utterance` |
 | **Run checks** | `interruption_not_exercised`, `interruption_not_followed_by_answer`, `uncorrelated_events:N` |
 
 The run verdict is FAIL if any utterance fails, REVIEW if anything needs review,

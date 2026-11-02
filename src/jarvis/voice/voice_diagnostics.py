@@ -759,7 +759,7 @@ def assess(data: dict) -> dict:
     previous_interrupted = False
     for session in data["sessions"]:
         for u in session["utterances"]:
-            fail, review = [], []
+            fail, review, info = [], [], []
             accepted = [
                 a["text"] for a in u["accepted"] if not a.get("duplicate_event")
             ]
@@ -803,7 +803,21 @@ def assess(data: dict) -> dict:
                     ):
                         fail.append("command_misrouted")
                     if name is None and action in _CHANGES:
-                        fail.append("unexpected_project_change")
+                        # The only change an ordinary turn may make: opening the
+                        # default General workspace when NO project is active
+                        # (fresh lab, or after the active one was forgotten).
+                        bootstrap = (
+                            "previous_selection" in last
+                            and last["previous_selection"] is None
+                            and _words(last.get("project")) == {"general"}
+                            and action in {"created", "switched"}
+                        )
+                        if bootstrap:
+                            info.append("default_workspace_opened")
+                        else:
+                            fail.append("unexpected_project_change")
+                    if last.get("ambiguous_references"):
+                        review.append("ambiguous_project_reference")
                     if name is None and embedded_project_command(text)[0]:
                         review.append("embedded_project_command")
             for reply in u["assistant"]:
@@ -888,6 +902,7 @@ def assess(data: dict) -> dict:
                     "verdict": verdict,
                     "fail": sorted(set(fail)),
                     "review": sorted(set(review)),
+                    "info": sorted(set(info)),
                     "accepted_transcript": text or None,
                     "action": action,
                     "project": last.get("project") if last else None,

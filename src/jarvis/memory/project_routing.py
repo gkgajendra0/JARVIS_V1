@@ -25,6 +25,23 @@ def _name_words(text):
     return [w for w in _words(normalize_name(text)) if w not in _NAME_FILLER]
 
 
+# Words too generic to identify a project on their own.
+_GENERIC_NAME_WORDS = frozenset(
+    {
+        "trip", "trips", "plan", "plans", "planning", "project", "projects",
+        "preparation", "prep", "notes", "note", "list", "ideas", "idea", "work",
+        "home", "general", "new", "meeting", "meetings", "stuff", "things",
+        "task", "tasks", "travel", "holiday", "vacation",
+    }
+)  # fmt: skip
+
+
+def _distinctive_words(label):
+    return {
+        w for w in _name_words(label) if w not in _GENERIC_NAME_WORDS and len(w) > 2
+    }
+
+
 def _partial_matches(name, entries):
     """Similar names, in either direction: every word of one name is in the
     other ("the trip" -> "Nepal trip", "nepal trip" -> "nepal"). Several
@@ -257,6 +274,9 @@ class ProjectRoutingDecision:
     # labelled evidence; the selection itself does not change.
     references: tuple[ProjectSelection, ...] = ()
     reference_titles: tuple[str, ...] = ()
+    # Existing projects a question names only ambiguously ("Nepal" with both
+    # "Nepal trip" and "Nepal trek"): neither is read; the answer asks which.
+    ambiguous_reference_titles: tuple[str, ...] = ()
     # Shown to the owner when status is "clarification".
     question: str = ""
 
@@ -333,7 +353,7 @@ class ProjectRouter:
         # the selection. Existing projects a message names are read as
         # labelled evidence for this answer only.
         current = self._current_or_general(catalog)
-        references = self._named_projects(catalog, text, current)
+        references, ambiguous = self._named_projects(catalog, text, current)
         if current is None:
             return ProjectRoutingDecision(
                 "ready",
@@ -345,6 +365,7 @@ class ProjectRouter:
                 action="created",
                 references=tuple(e.selection for e in references),
                 reference_titles=tuple(e.title for e in references),
+                ambiguous_reference_titles=ambiguous,
             )
         action = "resumed" if not self._announced and catalog.current else "continued"
         if catalog.current is None:
@@ -360,6 +381,7 @@ class ProjectRouter:
             action=action,
             references=tuple(e.selection for e in references),
             reference_titles=tuple(e.title for e in references),
+            ambiguous_reference_titles=ambiguous,
         )
 
     @staticmethod
@@ -391,14 +413,27 @@ class ProjectRouter:
 
     @staticmethod
     def _named_projects(catalog, text, current):
+        """Other existing projects a message names, read as evidence only.
+
+        Exact title/alias mentions first. Otherwise a project is named when
+        every DISTINCTIVE word of its title/alias appears in the message
+        ("Nepal" -> "Nepal trip"); generic words ("trip", "plan") never name a
+        project on their own. A word that would name several projects names
+        none of them: they are returned as ambiguous, never guessed.
+        """
         normalized = normalize_name(text)
-        named = {}
-        for e in catalog.entries:
-            if normalize_name(e.title) == "general" or (
+        message_words = set(_words(normalized))
+        candidates = [
+            e
+            for e in catalog.entries
+            if normalize_name(e.title) != "general"
+            and not (
                 current is not None
                 and e.selection.project_id == current.selection.project_id
-            ):
-                continue
+            )
+        ]
+        named = {}
+        for e in candidates:
             if any(
                 re.search(
                     r"(?<!\w)" + re.escape(normalize_name(label)) + r"(?!\w)",
@@ -407,7 +442,49 @@ class ProjectRouter:
                 for label in (e.title, *e.aliases)
             ):
                 named.setdefault(e.selection.project_id, e)
-        return list(named.values())[:3]
+        # Words the owner used for a project named exactly belong to it.
+        exact_words = set().union(
+            *(
+                _distinctive_words(label)
+                for e in named.values()
+                for label in (e.title, *e.aliases)
+            )
+        )
+        partial = {}
+        for e in candidates:
+            if e.selection.project_id in named:
+                continue
+            for label in (e.title, *e.aliases):
+                distinctive = _distinctive_words(label)
+                if distinctive and distinctive <= message_words:
+                    if not distinctive & exact_words:
+                        partial[e.selection.project_id] = (e, distinctive)
+                    break
+        # A distinctive word another (not exactly named) project also uses
+        # makes the mention ambiguous: "Nepal" with "Nepal trip" and "Nepal
+        # trek" names neither, even though only the trip fully matches.
+        owners = {}
+        for e in candidates:
+            if e.selection.project_id in named:
+                continue
+            for label in (e.title, *e.aliases):
+                for word in _distinctive_words(label) & message_words:
+                    owners.setdefault(word, {})[e.selection.project_id] = e
+        ambiguous = {}
+        for project_id, (e, distinctive) in partial.items():
+            sharers = {
+                other_id: other
+                for word in distinctive
+                for other_id, other in owners.get(word, {}).items()
+            }
+            if len(sharers) > 1:
+                ambiguous.update(sharers)
+            else:
+                named.setdefault(project_id, e)
+        return (
+            list(named.values())[:3],
+            tuple(sorted({e.title for e in ambiguous.values()}))[:3],
+        )
 
     def _command(self, catalog, text, name, kind):
         exact = [

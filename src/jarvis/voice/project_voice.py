@@ -310,6 +310,12 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
         result["previous_project"] = outcome.previous
     if decision.reference_titles:
         result["referenced_projects"] = list(decision.reference_titles)
+    if decision.ambiguous_reference_titles:
+        result["ambiguous_projects"] = list(decision.ambiguous_reference_titles)
+        result["ambiguity_note"] = (
+            "The owner's words could mean any of these projects; none was read. "
+            "Ask which one they mean before answering about it."
+        )
     return result, tuple(new_ids)
 
 
@@ -505,6 +511,10 @@ class VoiceProjectTurns:
                 project=decision.title,
                 announcement=decision.announcement,
                 references=list(decision.reference_titles),
+                ambiguous_references=list(decision.ambiguous_reference_titles),
+                # The selection before this turn: None means no active project
+                # (e.g. after forget), when the default General bootstrap is legal.
+                previous_selection=outcome.previous,
             )
             if decision.action == "switched" and outcome.previous:
                 fields["previous"] = outcome.previous
