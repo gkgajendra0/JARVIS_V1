@@ -16,9 +16,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class VoiceUsageMeter:
-    def __init__(self, path: Path, *, mode: str) -> None:
+    def __init__(self, path: Path, *, mode: str, allowed_tools=None) -> None:
         if mode not in {"baseline", "project_memory"}:
             raise ValueError("mode must be baseline or project_memory")
+        self._allowed = None if allowed_tools is None else frozenset(allowed_tools)
         self._path = Path(path)
         self._mode = mode
         self._sessions = 0
@@ -39,6 +40,7 @@ class VoiceUsageMeter:
                 "text_in": 0,
             },
             "metric_events": 0,
+            "disallowed_tool_calls": 0,
         }
         user_stopped = {"at": None}
 
@@ -82,6 +84,10 @@ class VoiceUsageMeter:
             for call in getattr(event, "function_calls", ()) or ():
                 name = getattr(call, "name", "unknown")
                 state["tool_calls"][name] = state["tool_calls"].get(name, 0) + 1
+                if self._allowed is not None and name not in self._allowed:
+                    # Cannot happen when restrict_tools holds; recorded loudly if it does.
+                    state["disallowed_tool_calls"] += 1
+                    LOGGER.error("Disallowed tool call in isolated lab | tool=%s", name)
 
         def on_close() -> None:
             latencies = sorted(state["latency_ms"])

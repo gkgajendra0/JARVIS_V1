@@ -104,6 +104,25 @@ class _UpdateApprovalRequest:
     response: asyncio.Future[bool]
 
 
+def restrict_tools(tools: list, allowlist: frozenset[str] | None) -> list:
+    """Keep only allowlisted tools (by declared id); None means unrestricted.
+
+    Enforced in code at the single point where a session's tools are handed to
+    the realtime agent (Gemini handoff copies that agent's tools), so a
+    withheld tool is never declared to, or callable by, the model.
+    """
+    if allowlist is None:
+        return tools
+    kept = [tool for tool in tools if getattr(tool, "id", None) in allowlist]
+    withheld = len(tools) - len(kept)
+    LOGGER.info(
+        "Session tools restricted | exposed=%s | withheld=%s",
+        sorted(getattr(tool, "id", "") for tool in kept),
+        withheld,
+    )
+    return kept
+
+
 class VoiceRuntimeController:
     """Own wake, activation, active-session, recovery, and shutdown truth."""
 
@@ -127,7 +146,16 @@ class VoiceRuntimeController:
         startup_readiness_timeout_seconds: float = 30.0,
         voice_behavior_observer: VoiceBehaviorObserver | None = None,
         conversation_success_observer: ConversationSuccessObserver | None = None,
+        tool_allowlist: frozenset[str] | None = None,
     ) -> None:
+        if tool_allowlist is not None and (
+            not isinstance(tool_allowlist, frozenset)
+            or not all(isinstance(name, str) and name for name in tool_allowlist)
+        ):
+            raise TypeError("tool_allowlist must be a frozenset of tool names")
+        # None keeps normal Jarvis unchanged. Isolated labs pass an exact set:
+        # every other tool is removed before the model can see or call it.
+        self._tool_allowlist = tool_allowlist
         self.config = config
         self.audio = audio
         self._session_factory = session_factory
@@ -1242,6 +1270,7 @@ class VoiceRuntimeController:
             )
             standby_tools = StandbyAgentTools(request_standby)
             tools.extend(standby_tools.tools)
+        tools = restrict_tools(tools, self._tool_allowlist)
         try:
             try:
                 agent = JarvisVoiceAgent(

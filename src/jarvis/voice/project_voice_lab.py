@@ -18,6 +18,17 @@ import os
 from dataclasses import replace
 from pathlib import Path
 
+# The ONLY tools Gemini can see or call in each lab mode, enforced in code by
+# VoiceRuntimeController (restrict_tools). Hands, desktop/file control,
+# capability acquisition, research, work, vision and canonical-memory tools are
+# all withheld; their internal authority services still run for Hello/SQLCipher.
+BASELINE_TOOLS = frozenset({"enter_standby"})
+PROJECT_MEMORY_TOOLS = frozenset({"enter_standby", "prepare_project_turn"})
+
+
+def lab_tool_allowlist(*, baseline: bool) -> frozenset[str]:
+    return BASELINE_TOOLS if baseline else PROJECT_MEMORY_TOOLS
+
 
 def voice_lab_config(config):
     if config.ai_provider != "gemini":
@@ -68,12 +79,16 @@ async def run_voice_lab(config, lab: Path, *, baseline: bool, runtime_builder=No
         from jarvis.voice.production_runtime import build_production_voice_runtime
 
         runtime_builder = build_production_voice_runtime
+    allowlist = lab_tool_allowlist(baseline=baseline)
     meter = VoiceUsageMeter(
-        lab / "voice-usage.jsonl", mode="baseline" if baseline else "project_memory"
+        lab / "voice-usage.jsonl",
+        mode="baseline" if baseline else "project_memory",
+        allowed_tools=allowlist,
     )
     runtime = runtime_builder(
         config,
         voice_session_observer=meter.attach,
+        tool_allowlist=allowlist,
         **({} if baseline else {"project_memory_factory": project_memory_factory}),
     )
     await runtime.run()
@@ -148,6 +163,11 @@ def main():
                 "BASELINE (project memory off)" if args.baseline else "PROJECT MEMORY"
             )
             print(f"VOICE LAB {mode}. Isolated memory: {database}")
+            print(
+                "Tools Gemini can call: "
+                + ", ".join(sorted(lab_tool_allowlist(baseline=args.baseline)))
+                + ". Hands, desktop/file control, capability acquisition, research and work are unavailable."
+            )
             print(
                 "Normal wake word, barge-in and Gemini Live. Free lane only; no Paid fallback."
             )

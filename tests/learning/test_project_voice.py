@@ -518,9 +518,9 @@ async def test_voice_lab_baseline_passes_no_project_memory(tmp_path):
     await run_voice_lab(object(), tmp_path, baseline=True, runtime_builder=builder)
     await run_voice_lab(object(), tmp_path, baseline=False, runtime_builder=builder)
     assert calls == [
-        ["voice_session_observer"],
+        ["tool_allowlist", "voice_session_observer"],
         "run",
-        ["project_memory_factory", "voice_session_observer"],
+        ["project_memory_factory", "tool_allowlist", "voice_session_observer"],
         "run",
     ]
     assert callable(project_memory_factory)
