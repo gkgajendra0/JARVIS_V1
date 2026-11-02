@@ -15,7 +15,9 @@ def conservative_token_bound(text: str) -> int:
     return len(text.encode("utf-8")) + 32
 
 
-def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieval=()):
+def build_project_context(
+    snapshot, *, extra_sources=(), personal=None, retrieval=(), routing=None
+):
     personal = personal or {"status": "not_requested", "facts": []}
     base = {
         "project_id": snapshot.selection.project_id,
@@ -28,6 +30,7 @@ def build_project_context(snapshot, *, extra_sources=(), personal=None, retrieva
         "personal": personal,
         "retrieval": list(retrieval),
         "sources": [],
+        **({"routing": dict(routing)} if routing is not None else {}),
         "omitted_source_ids": [],
     }
     # Recent uncovered discussion is independent of model-selected state patches.

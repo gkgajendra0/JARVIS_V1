@@ -222,6 +222,7 @@ async def run_text_lab(
     from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
     from jarvis.memory.project_access import ProjectArchiveAccess
     from jarvis.memory.project_controls import ProjectControls
+    from jarvis.memory.project_routing import ProjectClarificationRequired
     from jarvis.memory.runtime import build_default_memory_runtime
     from jarvis.model_routing.runtime import build_routing_runtime
     from jarvis.voice.project_answer_provider import ProjectAnswerProvider
@@ -454,6 +455,8 @@ async def run_text_lab(
                         }
                     )
                 )
+            except ProjectClarificationRequired as exc:
+                print(exc.question)
             except (PermissionError, ValueError, RuntimeError, OSError) as exc:
                 print(
                     f"NOT COMPLETED: {json.dumps(coordinator.diagnostics())}; error={type(exc).__name__}. Inspect saved sources before retrying; no successful-save claim for failed stage."

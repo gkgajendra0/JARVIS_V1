@@ -129,6 +129,14 @@ If the current transport cannot satisfy the contract, record the exact unsupport
 
 Corrections append source history and supersede relevant current state; historical queries may intentionally report older values with dates. Any cached/derived packet must be invalidated by correction. Forget removes the selected retained content and derived/index copies through one lifecycle, advances its generation, and prevents delayed work from recreating it. Preserve personal facts with independent surviving sources; remove or mark unsupported those derived solely from deleted content. Never infer that deleting one project deletes all independently sourced personal facts.
 
+**Derived replies (implemented 2 Nov 2026, migration 0007).** Every saved Jarvis reply and tool result records the archived event IDs that were in its context packet (`conversation_event_dependency`); owner turns record none. Forgetting a project redacts its own events and every non-user event, in any project, whose recorded evidence reaches them directly or through another reply. Late replies citing forgotten evidence are refused at save time, and redacted rows are excluded from context, search and source reads. A model restatement is never treated as independent evidence. Limits:
+
+- Removal is conservative: a reply is removed if forgotten evidence was in its context, even if the reply did not use it. Owner-authored turns are always kept.
+- Facts the owner states again independently, in any project, are new owner evidence and are not removed.
+- Replies saved before migration 0007 have no recorded evidence. Forget removes such replies and tool results in other projects saved after the forgotten project began. Start a fresh lab to avoid relying on this rule.
+- Text already sent to the model provider, printed to a console or copied elsewhere cannot be recalled. Encrypted free pages and backups are not forensically erased.
+- Personal facts in canonical memory are a separate store: the text lab does not learn them from project turns, so they need their own explicit forget.
+
 Authenticated local inspection is sufficient for the first delivery: active project, chronological sources, state coverage, last committed sequence and pending/error status. Voice controls can invoke the same inspector. Do not add owner transcripts to the existing UI's general snapshot/events feed; its loopback Host check is not private-history authentication. Full UI expansion is deferred.
 
 Observability reports request/event IDs and stages `accepted`, `committed`, `selected`, `retrieved`, `dispatched`, `answered`, or a concrete failure stage. Do not log unredacted personal transcripts by default. Explicit diagnostics may show policy-cleared excerpts. Logical deletion is not represented as forensic erasure of all backup/free-page copies.

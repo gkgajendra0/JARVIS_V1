@@ -32,7 +32,39 @@ def _event_material(event: ConversationEvent) -> dict:
     material["accepted_at"] = event.accepted_at.astimezone(UTC).isoformat(
         timespec="microseconds"
     )
+    # Bound evidence into the permit digest; omitted when empty so digests of
+    # events recorded before provenance tracking stay identical.
+    if event.evidence:
+        material["evidence"] = sorted(event.evidence)
+    else:
+        material.pop("evidence", None)
     return material
+
+
+REDACTED_TEXT = "[forgotten]"
+# Rows removed by forget stay as tombstones (role tool, delivery failed).
+REDACTED_ROW_SQL = "NOT (role='tool' AND text='[forgotten]')"
+
+
+def _require_live_evidence(connection, evidence) -> None:
+    """Refuse a derived event whose evidence is missing or was forgotten.
+
+    This closes the window where a reply was prepared before a forget and is
+    delivered after it, and blocks any later attempt to re-save restated
+    forgotten content with forgotten evidence attached.
+    """
+    if not evidence:
+        return
+    placeholders = ",".join("?" for _ in evidence)
+    live = connection.execute(
+        "SELECT count(*) FROM conversation_event e JOIN conversation_thread t "
+        "ON t.thread_id=e.thread_id JOIN conversation_workspace w "
+        "ON w.project_id=t.project_id WHERE w.forgotten_at IS NULL AND NOT "
+        f"(e.role='tool' AND e.text='{REDACTED_TEXT}') AND e.event_id IN ({placeholders})",
+        tuple(evidence),
+    ).fetchone()[0]
+    if live != len(evidence):
+        raise PermissionError("reply evidence was forgotten or is missing")
 
 
 class ProjectConversationStore:
@@ -206,10 +238,12 @@ class ProjectConversationStore:
                     else:
                         if row[3] != expected_revision:
                             raise PermissionError("archive revision changed")
+                        _require_live_evidence(connection, event.evidence)
                         sequence, revision = row[4] + 1, row[3] + 1
                         connection.execute(
                             "INSERT INTO conversation_event(event_id,thread_id,sequence,revision,segment_id,request_id,"
-                            "role,text,accepted_at,delivery,payload_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            "role,text,accepted_at,delivery,payload_sha256,provenance_tracked) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
                             (
                                 event.event_id,
                                 selection.thread_id,
@@ -223,6 +257,10 @@ class ProjectConversationStore:
                                 event.delivery,
                                 digest,
                             ),
+                        )
+                        connection.executemany(
+                            "INSERT INTO conversation_event_dependency(event_id,source_event_id) VALUES (?,?)",
+                            [(event.event_id, source) for source in event.evidence],
                         )
                         connection.execute(
                             "UPDATE conversation_thread SET archive_revision=?,last_sequence=? WHERE thread_id=?",

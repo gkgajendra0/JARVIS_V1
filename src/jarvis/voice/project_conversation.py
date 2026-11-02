@@ -27,7 +27,11 @@ from jarvis.memory.project_conversations import (
     PreparedProjectReply,
     ProjectSelection,
 )
-from jarvis.memory.project_routing import ProjectRouter, ProjectRoutingDecision
+from jarvis.memory.project_routing import (
+    ProjectClarificationRequired,
+    ProjectRouter,
+    ProjectRoutingDecision,
+)
 from jarvis.voice.project_memory_tools import ProjectMemoryTools
 
 
@@ -124,6 +128,7 @@ class ProjectConversationCoordinator:
             extra_sources=extra_sources,
             personal=personal,
             retrieval=retrieval,
+            routing=self._routing_outcome(),
         )
         digest = hashlib.sha256(context.encode()).hexdigest()
         packet = PreparedProjectReply(
@@ -136,6 +141,24 @@ class ProjectConversationCoordinator:
         self._packet_activity = self._activity
         self._check(packet)
         return packet
+
+    def _routing_outcome(self):
+        """What routing actually committed for this request, from the decision
+        object, so the model never has to guess whether a project changed."""
+        decision = self._decision
+        if decision is None:
+            return None
+        if decision.create:
+            action = "created"
+        elif decision.new_thread:
+            action = "new_thread"
+        elif decision.announcement.startswith("Selected"):
+            action = "selected"
+        elif decision.announcement.startswith("Resuming"):
+            action = "resumed"
+        else:
+            action = "unchanged"
+        return {"action": action, "project_title": decision.title}
 
     async def prepare_reply(
         self, conversation, turn, *, routing_receipt=None, authorize
@@ -177,8 +200,22 @@ class ProjectConversationCoordinator:
                 create=entry is None,
             )
         if decision.status != "ready":
-            raise ValueError(
-                "project clarification required: " + ", ".join(decision.candidates)
+            # Nothing was created or switched: say so deterministically rather
+            # than letting the model describe a project action that never ran.
+            catalog = await self.access.catalog()
+            titles = sorted(
+                {
+                    e.title
+                    for e in catalog.entries
+                    if e.selection.project_id in decision.candidates
+                }
+            )
+            self.stage = "clarification"
+            raise ProjectClarificationRequired(
+                "Which project do you mean: " + ", ".join(titles) + "?"
+                if titles
+                else "No project was created or switched. Say, for example, "
+                "'create project Nepal trip' or 'switch to Nepal trip'."
             )
         await self.router.select(decision)
         if not self._request_current(request_id, activity):
@@ -221,6 +258,7 @@ class ProjectConversationCoordinator:
             "tool",
             json.dumps({"tool": name, "phase": phase, "source_ids": list(source_ids)}),
             datetime.now(UTC),
+            evidence=tuple(dict.fromkeys(source_ids)),
         )
         material = self.access.store.append_material(
             packet.selection, event, snapshot.archive_revision
@@ -480,4 +518,9 @@ class ProjectConversationCoordinator:
                 if snapshot.retention_paused
                 else "source_not_eligible",
             )
-        return await self.recorder.record(conversation, turn, route)
+        # The reply may restate anything that was in its context packet, so
+        # every packet source is recorded as its evidence. Forgetting any of
+        # them later removes this reply too (see ProjectControls.forget_project).
+        return await self.recorder.record(
+            conversation, turn, route, evidence=response.packet.source_ids
+        )

@@ -71,10 +71,24 @@ class ConversationEvent:
     text: str
     accepted_at: datetime
     delivery: str = "complete"
+    # Archived event IDs that were in the context this event was generated
+    # from. Owner turns carry none; Jarvis replies and tool results carry the
+    # evidence they may restate, so forgetting can follow it.
+    evidence: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("event_id", "segment_id", "request_id"):
             _identifier(getattr(self, name), name)
+        if type(self.evidence) is not tuple or len(self.evidence) > 256:
+            raise ValueError("bounded immutable evidence required")
+        for source_id in self.evidence:
+            _identifier(source_id, "evidence source")
+        if len(set(self.evidence)) != len(self.evidence) or (
+            self.event_id in self.evidence
+        ):
+            raise ValueError("evidence must be distinct prior events")
+        if self.role == "user" and self.evidence:
+            raise ValueError("owner turns are not derived evidence")
         if self.role not in {"user", "assistant", "tool"}:
             raise ValueError("invalid history role")
         if self.delivery not in {"complete", "partial", "failed"}:

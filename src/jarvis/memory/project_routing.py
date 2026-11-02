@@ -42,6 +42,59 @@ def _partial_matches(name, entries):
     ]
 
 
+class ProjectClarificationRequired(ValueError):
+    """No project was created or switched; the owner must say which one."""
+
+    def __init__(self, question):
+        super().__init__("project clarification required: " + question)
+        self.question = question
+
+
+_SELECT_COMMAND = re.compile(
+    r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project|what(?:'s| is) the status of)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
+    re.IGNORECASE,
+)
+_CREATE_COMMANDS = (
+    # "create a new project called Nepal", "start project for Goa trip"
+    re.compile(
+        r"^(?:please\s+)?(?:create|make|start|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
+        r"\s+(?:called\s+|named\s+|for\s+)?(?:my\s+|the\s+)?(.+?)[.?!]*$",
+        re.IGNORECASE,
+    ),
+    # "create a nepal project", "make my Goa trip project"
+    re.compile(
+        r"^(?:please\s+)?(?:create|make|start|add)\s+(?:a\s+|an\s+|my\s+|the\s+)?(?:new\s+)?"
+        r"(.+?)\s+project[.?!]*$",
+        re.IGNORECASE,
+    ),
+    # "new project Nepal", "new project called Nepal"
+    re.compile(r"^new\s+project\s+(?:called\s+|named\s+)?(.+?)[.?!]*$", re.IGNORECASE),
+)
+_UNPARSED_PROJECT_COMMAND = re.compile(
+    r"\b(?:create|make|start|add|new|switch|open)\b.*\bproject\b", re.IGNORECASE
+)
+
+
+def parse_project_command(text):
+    """Return (name, kind) for an explicit project command, else (None, None).
+
+    kind is "create" or "plan" (asks for a new project) or "select".
+    """
+    for pattern in _CREATE_COMMANDS:
+        match = pattern.match(text)
+        if match and _name_words(match.group(1).strip(" .?!")):
+            return match.group(1).strip(" .?!"), "create"
+    match = _SELECT_COMMAND.search(text)
+    if match:
+        kind = (
+            "plan"
+            if re.match(r"^(?:let['’]?s\s+plan|plan)\b", text, re.IGNORECASE)
+            else "select"
+        )
+        return match.group(1).strip(" .?!"), kind
+    return None, None
+
+
 @dataclass(frozen=True)
 class ProjectRoutingDecision:
     status: str
@@ -93,12 +146,16 @@ class ProjectRouter:
                 entry.archive_revision,
                 announcement=f"Selected {entry.title}.",
             )
-        match = re.search(
-            r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project|what(?:'s| is) the status of)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
-            text,
-            re.IGNORECASE,
-        )
-        name = match.group(1).strip(" .?!") if match else None
+        name, kind = parse_project_command(text)
+        if name is None and _UNPARSED_PROJECT_COMMAND.search(text):
+            # A project command we could not read must not fall through to
+            # the current project as if it had succeeded.
+            return ProjectRoutingDecision(
+                "clarification",
+                None,
+                "",
+                catalog.selection_revision,
+            )
         if proposed_name is not None:
             # Model suggestions only refine an explicit project command. They
             # cannot silently reroute ordinary discussion or invent a label.
@@ -112,12 +169,10 @@ class ProjectRouter:
                 if normalize_name(name)
                 in {normalize_name(e.title), *(normalize_name(a) for a in e.aliases)}
             ]
-            planning = bool(
-                re.match(r"^(?:let['’]?s\s+plan|plan)\b", text, re.IGNORECASE)
-            )
-            if not matches and not planning:
-                # "Plan ..." asks for a new project; switch/continue/resume/open/
-                # status ask for an existing one, so only they match partially.
+            if not matches and kind == "select":
+                # "Plan/create ..." asks for a new project; switch/continue/
+                # resume/open/status ask for an existing one, so only they
+                # match partially.
                 matches = _partial_matches(name, catalog.entries)
             projects = {e.selection.project_id for e in matches}
             if len(projects) > 1:

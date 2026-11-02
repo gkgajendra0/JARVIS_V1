@@ -40,7 +40,7 @@ async def setup_store(tmp_path, parts):
     # Prove upgrading an actual version-4 database rather than only fresh creation.
     with sqlite3.connect(path) as conn:
         MemoryMigrationRunner(discover_memory_migrations()[:4]).apply(conn)
-        assert MemoryMigrationRunner().apply(conn) == 6
+        assert MemoryMigrationRunner().apply(conn) == 7
     writer = SerialConnectionWorker(
         lambda: sqlite3.connect(path), thread_name="history-write"
     )
@@ -115,7 +115,7 @@ def test_archive_idempotency_preserves_identical_text_and_reopens(
             assert conn.execute(
                 "SELECT sequence, text FROM conversation_event ORDER BY sequence"
             ).fetchall() == [(1, first.text), (2, first.text)]
-            assert conn.execute("PRAGMA user_version").fetchone() == (6,)
+            assert conn.execute("PRAGMA user_version").fetchone() == (7,)
 
     asyncio.run(scenario())
 

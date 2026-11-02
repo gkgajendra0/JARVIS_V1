@@ -300,6 +300,10 @@ class ProjectArchiveAccess:
             ).fetchone()
             if row is None or row[1] != selection.revision:
                 raise PermissionError("project deleted or epoch changed")
+            # Rows removed by forget (in any project) remain only as tombstones
+            # and are never context, search or read material. The zero digest
+            # is set solely by forget; the column name is unambiguous in joins.
+            live = " AND payload_sha256<>'" + "0" * 64 + "'"
             if all_projects:
                 # Soft separation: every project the owner has not forgotten.
                 scope_sql = (
@@ -314,6 +318,7 @@ class ProjectArchiveAccess:
             else:
                 scope_sql = "thread_id=?"
                 scope_parameters = (selection.thread_id,)
+            scope_sql = "(" + scope_sql + ")" + live
             parameters = list(scope_parameters)
             filters = scope_sql
             if query is not None:

@@ -59,17 +59,23 @@ class RequiredConversationRecorder:
         conversation: ConversationSession,
         turn: ConversationTurn,
         routing_receipt: RecordingRoute,
+        *,
+        evidence: tuple[str, ...] = (),
     ) -> ConversationReceipt:
         # Source leases are shared by event identity. A duplicate callback must
         # never release the lease still needed by an overlapping write.
         async with self._record_lock:
-            return await self._record(conversation, turn, routing_receipt)
+            return await self._record(
+                conversation, turn, routing_receipt, evidence=evidence
+            )
 
     async def _record(
         self,
         conversation: ConversationSession,
         turn: ConversationTurn,
         routing_receipt: RecordingRoute,
+        *,
+        evidence: tuple[str, ...] = (),
     ) -> ConversationReceipt:
         if (
             not isinstance(conversation, ConversationSession)
@@ -87,6 +93,7 @@ class RequiredConversationRecorder:
                 existing[0] is not turn
                 or existing[1].selection != routing_receipt.selection
                 or existing[1].request_id != routing_receipt.request_id
+                or existing[2].evidence != tuple(evidence)
             ):
                 raise PermissionError("accepted turn source or routing changed")
             event = existing[2]
@@ -104,6 +111,7 @@ class RequiredConversationRecorder:
                 delivery="partial"
                 if turn.role is ConversationRole.ASSISTANT and turn.interrupted
                 else "complete",
+                evidence=tuple(evidence),
             )
             self._sources[turn.turn_id] = (turn, routing_receipt, event)
         material = self._store.append_material(
