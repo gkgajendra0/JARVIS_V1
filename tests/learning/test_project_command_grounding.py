@@ -29,6 +29,9 @@ from jarvis.voice.project_conversation import ProjectConversationCoordinator
         ("Let's plan my Nepal trip", ("Nepal trip", "plan")),
         ("Switch to the trip", ("trip", "select")),
         ("We will take the Jimny", (None, None)),
+        ("I want to start a new project at work soon", (None, None)),
+        ("make sure the project is ready", (None, None)),
+        ("start a new project at work", (None, None)),
     ],
 )
 def test_project_command_phrases(text, expected):
@@ -75,6 +78,13 @@ def test_unreadable_project_command_is_not_reported_as_done(tmp_path, authority_
             c, t = accepted("please create a project")
             decision = await router.resolve(c, t)
             assert decision.status == "clarification"
+            # Ordinary sentences that mention a project still reach the model.
+            for text in (
+                "I want to start a new project at work soon",
+                "make sure the project is ready",
+            ):
+                c, t = accepted(text)
+                assert (await router.resolve(c, t)).status == "ready"
         finally:
             await reader.close()
             await writer.close()

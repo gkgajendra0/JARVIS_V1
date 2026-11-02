@@ -55,10 +55,17 @@ _SELECT_COMMAND = re.compile(
     re.IGNORECASE,
 )
 _CREATE_COMMANDS = (
-    # "create a new project called Nepal", "start project for Goa trip"
+    # "create project Nepal", "create a new project called Nepal"
     re.compile(
-        r"^(?:please\s+)?(?:create|make|start|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
+        r"^(?:please\s+)?(?:create|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
         r"\s+(?:called\s+|named\s+|for\s+)?(?:my\s+|the\s+)?(.+?)[.?!]*$",
+        re.IGNORECASE,
+    ),
+    # "start a project for Goa trip"; start/make need an explicit name keyword
+    # so "start a new project at work" is not read as a project named "at work".
+    re.compile(
+        r"^(?:please\s+)?(?:make|start)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
+        r"\s+(?:called|named|for)\s+(?:my\s+|the\s+)?(.+?)[.?!]*$",
         re.IGNORECASE,
     ),
     # "create a nepal project", "make my Goa trip project"
@@ -70,8 +77,12 @@ _CREATE_COMMANDS = (
     # "new project Nepal", "new project called Nepal"
     re.compile(r"^new\s+project\s+(?:called\s+|named\s+)?(.+?)[.?!]*$", re.IGNORECASE),
 )
+# An explicit create-project command whose name could not be read. Anchored at
+# the start so ordinary sentences ("I want to start a new project at work")
+# still go to the model as conversation.
 _UNPARSED_PROJECT_COMMAND = re.compile(
-    r"\b(?:create|make|start|add|new|switch|open)\b.*\bproject\b", re.IGNORECASE
+    r"^(?:please\s+)?(?:(?:create|start|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project|new\s+project)\b",
+    re.IGNORECASE,
 )
 
 
@@ -147,7 +158,7 @@ class ProjectRouter:
                 announcement=f"Selected {entry.title}.",
             )
         name, kind = parse_project_command(text)
-        if name is None and _UNPARSED_PROJECT_COMMAND.search(text):
+        if name is None and _UNPARSED_PROJECT_COMMAND.match(text):
             # A project command we could not read must not fall through to
             # the current project as if it had succeeded.
             return ProjectRoutingDecision(
