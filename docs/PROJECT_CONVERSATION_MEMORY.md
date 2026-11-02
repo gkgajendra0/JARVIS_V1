@@ -141,6 +141,9 @@ Limits:
 
 - Facts the owner states again independently, in any project, are new owner evidence and are not removed.
 - A reply is removed if forgotten evidence was in its context, even if it did not use it.
+- "Direct dependants only" is exact for rows saved after migration 0007; untracked older chains are followed further.
+- Replies built from another project's evidence are also hidden from `/inspect`, so inspection under-counts saved Jarvis replies.
+- Migration 0007 must not be edited after a lab applies it (checksum); later repairs ship as new migrations.
 - Text already sent to the model provider, printed to a console or copied elsewhere cannot be recalled. Encrypted free pages and backups are not forensically erased.
 - Personal facts in canonical memory are a separate store: the text lab does not learn them from project turns, so they need their own explicit forget.
 
