@@ -8,7 +8,13 @@ param(
     [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][string]$LabRoot,
     [string]$MachineProfile = "",
     [switch]$ResumeLab,
-    [switch]$Baseline
+    [switch]$Baseline,
+    # Lab only: keep DPAPI-sealed post-wake audio + per-turn records in this lab.
+    [switch]$RecordDiagnostics,
+    # Decrypt the latest diagnostics run into a local HTML report (no voice run).
+    [switch]$DiagnosticsReport,
+    # Delete all diagnostics recordings, records and reports of this lab.
+    [switch]$CleanupDiagnostics
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -20,6 +26,20 @@ if ($LASTEXITCODE -ne 0) { throw "Exact commit is not local. Fetch it explicitly
 $resolvedLab = [IO.Path]::GetFullPath($LabRoot)
 $source = Join-Path $resolvedLab "source"
 $profile = Join-Path $resolvedLab "profile"
+if ($DiagnosticsReport -or $CleanupDiagnostics) {
+    if ($DiagnosticsReport -and $CleanupDiagnostics) { throw "Choose one diagnostics action." }
+    if (-not (Test-Path (Join-Path $profile "project-memory.marker") -PathType Leaf)) { throw "Marked profile unavailable." }
+    $action = if ($DiagnosticsReport) { "report" } else { "cleanup" }
+    $oldPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = Join-Path $source "src"
+        $out = & $python -X utf8 -m jarvis.voice.voice_diagnostics $action --lab-root $profile
+        if ($LASTEXITCODE -ne 0) { throw "Diagnostics $action failed." }
+        Write-Host $out
+        if ($DiagnosticsReport) { Start-Process $out }
+    } finally { $env:PYTHONPATH = $oldPath }
+    return
+}
 if ($ResumeLab) {
     if (-not (Test-Path (Join-Path $profile "project-memory.marker") -PathType Leaf)) { throw "Marked profile unavailable." }
 } else {
@@ -37,6 +57,7 @@ try {
     if ($MachineProfile) { $arguments += @("--profile", $MachineProfile) }
     if ($ResumeLab) { $arguments += "--resume-lab" }
     if ($Baseline) { $arguments += "--baseline" }
+    if ($RecordDiagnostics) { $arguments += "--record-diagnostics" }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Voice lab failed; retain its files." } }
     finally { Pop-Location }

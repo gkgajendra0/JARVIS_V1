@@ -108,7 +108,53 @@ of tool results, 78% less, and every later prompt shrinks with it.
 - `assistant_recorded`, `assistant_skipped`
 - `prepare_ms`, `packet_bytes`, `delivered_bytes`
 
-## 5. Windows acceptance (isolated; production untouched)
+## 5. Voice diagnostics (lab only, explicitly enabled)
+
+`-RecordDiagnostics` on the voice lab launcher records each owner utterance end
+to end, so acceptance no longer depends on remembering what was said. Without
+the switch nothing extra is recorded, and normal Jarvis has no path to it.
+
+| Per utterance (one correlation ID `run/session/utterance`) | Source |
+| --- | --- |
+| Microphone audio, replayable: what Jarvis forwarded to Gemini after the wake word, plus 0.5 s pre-roll | the session audio tap (`ObservedSessionAudioInput`) |
+| Speech start and end, including speech that never became a transcript | LiveKit local VAD `user_state_changed` |
+| Raw recognition, partial and final | Gemini `user_input_transcribed` |
+| Accepted canonical transcript, matched by activity epoch | `LiveKitConversationBridge` accepted USER turn |
+| Routing: status, action, project, previous project, references, announcement, clarification | `VoiceProjectTurns` |
+| Saved text, read back from the encrypted store, and its receipt (event, sequence, revision) | `ProjectArchiveAccess.snapshot` |
+| Delivery to the model, played or withheld answer, repair, fallback | `VoiceProjectTurns` and the audio gate |
+| Jarvis's reply text, complete or interrupted; tool calls; latency; errors | bridge and session events |
+
+**Flags** in the report:
+- `no_accepted_transcript` (speech without a transcript)
+- `final_recognition_differs_from_accepted`
+- `SAVED_TEXT_DIFFERS`
+- `duplicate_recognition_event` and `duplicate_turn_event`
+- `several_transcripts_for_one_utterance`
+- `project_created: X` and `project_switched: X`
+- `audio_not_kept_run_limit`
+
+Events that cannot be tied to an utterance are kept as "unmatched" and counted.
+
+**Recognition is not ground truth.** The report labels recognised and accepted
+text as Gemini's recognition. The audio next to it is the reference.
+
+**Privacy and storage**
+- Every file is DPAPI-sealed for the current Windows user (purpose
+  `jarvis-voice-diagnostics-v1`). They are stored inside the isolated lab, under
+  `profile\voice-diagnostics\runs\<run>`.
+- No new provider: the audio is what Gemini Live already receives, and nothing
+  is uploaded.
+- Retention: runs older than 7 days, and all but the last 5, are deleted at
+  each lab start.
+- Bounds: 30 s of audio per utterance, 150 MB per run, 300 utterances per run.
+- `-DiagnosticsReport` decrypts the latest run into a local `report.html` and
+  opens it. The audio is embedded in the page. This plaintext copy is deleted at
+  the next lab start.
+- `-CleanupDiagnostics` deletes all diagnostics and reports for the lab.
+- The memory database, its key and the history authority are unchanged.
+
+## 6. Windows acceptance (isolated; production untouched)
 
 Use a **new** lab root. Existing lab folders, including your owner test lab
 and its saved history, are not reused or changed. Use fictional details only.
@@ -118,12 +164,23 @@ them runs at a time, because both take the lab lock.
 ```powershell
 git -C E:\Jarvis\App fetch origin feat/voice-project-memory-integration
 $Commit = "<commit under test>"
-$Lab = "$env:TEMP\jarvis-voice-project-3"   # must not exist yet
+$Lab = "$env:TEMP\jarvis-voice-project-4"   # must not exist yet
 git -C E:\Jarvis\App show "${Commit}:tools/windows/Start-JarvisProjectVoiceLab.ps1" | Set-Content "$env:TEMP\Start-VoiceLab.ps1"
 git -C E:\Jarvis\App show "${Commit}:tools/windows/Start-JarvisProjectMemoryLab.ps1" | Set-Content "$env:TEMP\Start-TextLab.ps1"
 $Log = "$Lab\profile\voice-lab.jsonl"; $Usage = "$Lab\profile\voice-usage.jsonl"
 function Summary { (Select-String $Log -Pattern "Voice project memory summary" | Select-Object -Last 1).Line }
+function Voice([switch]$Baseline, [switch]$Fresh) {
+  $a = @{ Commit = $Commit; LabRoot = $Lab; RecordDiagnostics = $true }
+  if ($Baseline) { $a.Baseline = $true }; if (-not $Fresh) { $a.ResumeLab = $true }
+  & "$env:TEMP\Start-VoiceLab.ps1" @a
+}
+function Report { & "$env:TEMP\Start-VoiceLab.ps1" -Commit $Commit -LabRoot $Lab -DiagnosticsReport }
 ```
+
+After **every** voice run below, run `Report`. It opens that run's report:
+one row per utterance, with the audio player, recognised text, accepted
+transcript, routing, saved text and receipt, Jarvis's reply, tools, latency and
+flags. Check each row by listening, rather than from memory.
 
 **Neutral script N** (both modes; for the latency and token comparison):
 
@@ -143,21 +200,23 @@ function Summary { (Select-String $Log -Pattern "Voice project memory summary" |
 6. "Switch to Nepal trip."
 7. Ask "Tell me everything we planned for the trip", and interrupt the answer by speaking: "Stop. Which vehicle?"
 
-**A. Baseline.** `& "$env:TEMP\Start-VoiceLab.ps1" -Commit $Commit -LabRoot $Lab -Baseline`.
+**A. Baseline.** `Voice -Baseline -Fresh`.
 
 At startup, expect:
 - `Isolated memory: …\profile\memory.db` inside `$Lab`
 - `Tools Gemini can call: enter_standby`
 - no project-history Hello
+- `DIAGNOSTICS ON: …`
 
-Say script N, then press Ctrl+C. Check:
+Say script N, then press Ctrl+C, then run `Report`. Each row's audio should match
+its recognised text, and there are no project columns. Then check:
 
 ```powershell
 Select-String $Log -Pattern "use_computer|computer_action|Hands|make_directory"   # expect no output
 Get-Content $Usage | Select-Object -Last 1   # disallowed_tool_calls 0
 ```
 
-**B. Project memory.** `& "$env:TEMP\Start-VoiceLab.ps1" -Commit $Commit -LabRoot $Lab -ResumeLab`.
+**B. Project memory.** `Voice`.
 Expect `Tools Gemini can call: enter_standby, prepare_project_turn`. Approve
 Hello. Say script N, then script P. Expect:
 - **N1:** "Created project General." This is the default workspace for ordinary conversation. No other N line has an announcement.
@@ -168,7 +227,23 @@ Hello. Say script N, then script P. Expect:
 - **P7:** Jarvis stops at once and answers "Jimny".
 - **Throughout:** one spoken answer per utterance, and never a silent turn. If Jarvis says "couldn't load the project memory", note it: that is the fallback.
 
-Press Ctrl+C, then check:
+Press Ctrl+C, then run `Report`. For each utterance:
+- **Audio against recognised text:** a misheard project name, for example
+  "Naples" for "Nepal", is visible here.
+- **Accepted against saved text:** they must match. `SAVED_TEXT_DIFFERS` must
+  never appear.
+- **Routing:**
+  - only P1, P3 and P6 carry `project_created` or `project_switched`
+  - P5 shows `continued · interview preparation · refs ['Nepal trip']`
+  - P6 shows `(from interview preparation)`
+- **P2:** two utterances, each with its own saved text.
+- **P7:** the reply is marked `[interrupted]`, then the next row answers "Jimny".
+- **Withheld or fallback:** rows show `withheld, played` and `repair_requested`
+  or `fallback` if Gemini skipped the tool.
+- **No transcript:** rows flagged `no_accepted_transcript` show speech that never
+  became a transcript. Listen to them.
+
+Then:
 
 ```powershell
 Select-String $Log -Pattern "use_computer|computer_action|Hands|make_directory"   # expect no output
@@ -177,7 +252,7 @@ Summary   # saved_user_turns == user_turns minus clarifications/not_saved;
 Get-Content $Usage | Select-Object -Last 1   # disallowed_tool_calls 0; input_per_response; tool_calls
 ```
 
-**C. Restart.** Run the step B command again. Approve Hello.
+**C. Restart.** `Voice`. Approve Hello.
 - "Where were we?" → "Resuming Nepal trip."
 - "Which vehicle are we taking, and are the permits sorted?" → Jimny; sorted. This confirms the step-P2 turns survived the restart.
 - "What is my interview topic?" → SQL window functions, attributed to interview preparation.
@@ -191,11 +266,11 @@ Press Ctrl+C.
 - `switch to interview preparation` → `/forget` (approve Hello). The preview names derived Nepal trip replies, including the step C answer that mentioned it.
 - `/quit`.
 
-**E. Voice after forget.** Run the step B command again.
+**E. Voice after forget.** `Voice`.
 - "What is my interview topic?" → Jarvis does not know it.
 - "Which vehicle are we taking?" → Jimny.
 
-Press Ctrl+C.
+Press Ctrl+C. Run `Report` after each of C and E as well.
 
 **F. Report.**
 - **Baseline against step B, script N:** median and max latency; per-response input (`input_per_response.first` and `peak`); `input_audio` against `input_text`.
@@ -205,8 +280,14 @@ Press Ctrl+C.
   - got no answer
   - got the fallback
 - **The Hands search:** confirm it returned nothing in every step.
+- **From the diagnostics reports:**
+  - any row whose audio and recognised text disagree
+  - any `no_accepted_transcript` or `SAVED_TEXT_DIFFERS` row
+  - any unexpected `project_created` or `project_switched`
+- **When finished:** `& "$env:TEMP\Start-VoiceLab.ps1" -Commit $Commit -LabRoot $Lab -CleanupDiagnostics`
+  deletes the recordings, or leave them to expire after 7 days.
 
-## 6. Known limitations (milestone 1)
+## 7. Known limitations (milestone 1)
 
 - **The answer's content is still the model's.** The integration guarantees that
   every eligible turn is saved, and that no answer is heard without that turn's

@@ -147,7 +147,12 @@ class VoiceRuntimeController:
         voice_behavior_observer: VoiceBehaviorObserver | None = None,
         conversation_success_observer: ConversationSuccessObserver | None = None,
         tool_allowlist: frozenset[str] | None = None,
+        session_audio_tap: Callable | None = None,
     ) -> None:
+        if session_audio_tap is not None and not callable(session_audio_tap):
+            raise TypeError("session_audio_tap must be callable")
+        # Isolated lab diagnostics only; None (normal Jarvis) adds no audio observer.
+        self._session_audio_tap = session_audio_tap
         if tool_allowlist is not None and (
             not isinstance(tool_allowlist, frozenset)
             or not all(isinstance(name, str) and name for name in tool_allowlist)
@@ -974,11 +979,18 @@ class VoiceRuntimeController:
             paired_turn_capture.clear()
         shadow_tasks: set[asyncio.Task[None]] = set()
         exit_in_progress = False
+        audio_tap = (
+            self._session_audio_tap(bridge)
+            if self._session_audio_tap is not None
+            else None
+        )
 
         def on_audio_frame(
             frame,
             observed_at_monotonic: float,
         ) -> None:
+            if audio_tap is not None:
+                audio_tap(frame, observed_at_monotonic)
             if turn_capture is None:
                 return
 
@@ -992,7 +1004,7 @@ class VoiceRuntimeController:
 
         session_input = (
             ObservedSessionAudioInput(on_audio_frame)
-            if turn_capture is not None
+            if turn_capture is not None or audio_tap is not None
             else SessionAudioInput()
         )
         session.input.audio = session_input

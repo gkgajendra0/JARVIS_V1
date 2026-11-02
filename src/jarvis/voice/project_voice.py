@@ -138,9 +138,12 @@ class VoiceProjectMemory:
         *,
         source_clearance: Callable[[object], bool],
         provider: str = "gemini",
+        diagnostics=None,
     ) -> None:
         if not callable(source_clearance):
             raise TypeError("original-history source clearance required")
+        # Lab-only VoiceDiagnostics (explicit --record-diagnostics), else None.
+        self.diagnostics = diagnostics
         self._memory = memory_runtime
         self._capability = capability_runtime
         self._clearance = source_clearance
@@ -391,13 +394,68 @@ class VoiceProjectTurns:
             if not future.done():
                 future.set_result(_Outcome("failed", reason="cancelled"))
             raise
+        elapsed = round((monotonic() - started) * 1000, 1)
         if outcome.status == "ready":
             owner.metrics.saved_user_turns += 1
             owner.metrics.prepared += 1
-            owner.metrics.prepare_ms.append(round((monotonic() - started) * 1000, 1))
+            owner.metrics.prepare_ms.append(elapsed)
             owner.metrics.packet_bytes.append(len(outcome.packet.context.encode()))
         if not future.done():
             future.set_result(outcome)
+        if owner.diagnostics is not None:
+            await self._diagnose_prepared(turn, outcome, elapsed)
+
+    async def _diagnose_prepared(self, turn, outcome, elapsed) -> None:
+        """Lab diagnostics: routing decision, receipt and the text read back."""
+        fields = {
+            "epoch": turn.user_activity_epoch,
+            "turn_id": turn.turn_id,
+            "status": outcome.status,
+            "prepare_ms": elapsed,
+        }
+        if outcome.question:
+            fields["question"] = outcome.question
+        if outcome.reason:
+            fields["reason"] = outcome.reason
+        decision = outcome.decision
+        if decision is not None:
+            fields.update(
+                action=decision.action,
+                project=decision.title,
+                announcement=decision.announcement,
+                references=list(decision.reference_titles),
+            )
+            if decision.action == "switched" and outcome.previous:
+                fields["previous"] = outcome.previous
+        if outcome.packet is not None:
+            fields["request_id"] = outcome.packet.request_id
+            receipt = self._owner.coordinator.receipt_for(outcome.packet.request_id)
+            if receipt is not None:
+                fields["receipt"] = {
+                    "event_id": receipt.event_id,
+                    "sequence": receipt.sequence,
+                    "revision": receipt.revision,
+                    "status": receipt.status,
+                }
+            try:
+                # Read the durable row back: what memory actually holds.
+                stored = await self._owner.access.snapshot(
+                    outcome.packet.selection, source_ids=(turn.turn_id,)
+                )
+                texts = [s.event.text for s in stored.sources]
+                fields["saved_text"] = texts[0] if texts else None
+            except Exception as exc:  # noqa: BLE001 - diagnostics never affect voice
+                fields["read_back_error"] = type(exc).__name__
+        self._diag("prepared", **fields)
+
+    def _diag(self, kind, **fields) -> None:
+        diagnostics = self._owner.diagnostics
+        if diagnostics is None:
+            return
+        try:
+            diagnostics.project_event(self._conversation, kind, **fields)
+        except Exception:  # noqa: BLE001 - diagnostics never affect voice
+            LOGGER.warning("Voice diagnostics hook failed")
 
     async def _run_prepare(self, turn) -> _Outcome:
         coordinator = self._owner.coordinator
@@ -504,6 +562,7 @@ class VoiceProjectTurns:
         self._delivered = _Delivered(source, outcome, result)
         self._delivered_turns.add(source.turn_id)
         self._mark_delivered(activity, source)
+        self._diag("delivered_to_model", epoch=activity, status=result["status"])
         self.metrics.delivered += 1
         self.metrics.delivered_bytes.append(
             len(json.dumps(result, ensure_ascii=False).encode())
@@ -531,6 +590,13 @@ class VoiceProjectTurns:
         return turn_id in self._delivered_turns
 
     def allow_response_audio(self) -> bool:
+        trailing = self._speech is not None and self._speech is self._blocked_speech
+        allowed = self._decide_response_audio()
+        if not trailing:
+            self._diag("response_played" if allowed else "response_withheld")
+        return allowed
+
+    def _decide_response_audio(self) -> bool:
         """Decide one response segment: play only a context-informed answer."""
         epoch = self._conversation.user_activity_epoch
         if epoch == 0 or self._closed:
@@ -591,6 +657,7 @@ class VoiceProjectTurns:
                 self._fallback(key, NO_TRANSCRIPT_INSTRUCTIONS)
             elif attempts == 0:
                 self.metrics.repairs += 1
+                self._diag("repair_requested", epoch=epoch)
                 LOGGER.info(
                     "Project voice: model answered without context; re-requesting"
                 )
@@ -605,6 +672,11 @@ class VoiceProjectTurns:
 
     def _fallback(self, key, instructions) -> None:
         self.metrics.fallbacks += 1
+        self._diag(
+            "fallback",
+            epoch=key[0],
+            reason="no_transcript" if key[1] is None else "model_skipped_tool_twice",
+        )
         self._fallback_key = key
         LOGGER.warning("Project voice: speaking fallback without project context")
         self._generate(instructions)

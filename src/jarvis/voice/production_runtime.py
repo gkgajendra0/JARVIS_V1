@@ -168,12 +168,13 @@ def build_production_voice_runtime(
     project_memory_factory=None,
     voice_session_observer=None,
     tool_allowlist=None,
+    session_audio_tap=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime.
 
-    ``project_memory_factory``, ``voice_session_observer`` and
-    ``tool_allowlist`` are disabled by default and passed only by the isolated
-    project voice lab.
+    ``project_memory_factory``, ``voice_session_observer``, ``tool_allowlist``
+    and ``session_audio_tap`` are disabled by default and passed only by the
+    isolated project voice lab.
     """
     if project_memory_factory is not None and not config.memory_enabled:
         raise ValueError("project voice memory requires canonical memory")
@@ -703,6 +704,11 @@ def build_production_voice_runtime(
             else {}
         ),
         **({"tool_allowlist": tool_allowlist} if tool_allowlist is not None else {}),
+        **(
+            {"session_audio_tap": session_audio_tap}
+            if session_audio_tap is not None
+            else {}
+        ),
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(
             tracking_observer.wait_for_startup_lock

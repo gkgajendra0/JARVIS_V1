@@ -63,16 +63,22 @@ def require_isolated_memory(lab: Path) -> Path:
     return database
 
 
-def project_memory_factory(memory_runtime, capability_runtime):
+def project_memory_factory(memory_runtime, capability_runtime, diagnostics=None):
     from jarvis.voice.project_memory_lab import standard_history_source
     from jarvis.voice.project_voice import VoiceProjectMemory
 
     return VoiceProjectMemory(
-        memory_runtime, capability_runtime, source_clearance=standard_history_source
+        memory_runtime,
+        capability_runtime,
+        source_clearance=standard_history_source,
+        diagnostics=diagnostics,
     )
 
 
-async def run_voice_lab(config, lab: Path, *, baseline: bool, runtime_builder=None):
+async def run_voice_lab(
+    config, lab: Path, *, baseline: bool, runtime_builder=None, diagnostics=None
+):
+    """``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics."""
     from jarvis.voice.voice_usage_meter import VoiceUsageMeter
 
     if runtime_builder is None:
@@ -85,13 +91,33 @@ async def run_voice_lab(config, lab: Path, *, baseline: bool, runtime_builder=No
         mode="baseline" if baseline else "project_memory",
         allowed_tools=allowlist,
     )
+
+    def observe_session(session, bridge):
+        meter.attach(session, bridge)
+        if diagnostics is not None:
+            diagnostics.attach(session, bridge)
+
+    def memory_factory(memory_runtime, capability_runtime):
+        return project_memory_factory(
+            memory_runtime, capability_runtime, diagnostics=diagnostics
+        )
+
     runtime = runtime_builder(
         config,
-        voice_session_observer=meter.attach,
+        voice_session_observer=observe_session,
         tool_allowlist=allowlist,
-        **({} if baseline else {"project_memory_factory": project_memory_factory}),
+        **({} if baseline else {"project_memory_factory": memory_factory}),
+        **(
+            {"session_audio_tap": diagnostics.audio_tap}
+            if diagnostics is not None
+            else {}
+        ),
     )
-    await runtime.run()
+    try:
+        await runtime.run()
+    finally:
+        if diagnostics is not None:
+            await diagnostics.aclose()
     return runtime
 
 
@@ -120,6 +146,12 @@ def main():
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--resume-lab", action="store_true")
     parser.add_argument("--baseline", action="store_true")
+    parser.add_argument(
+        "--record-diagnostics",
+        action="store_true",
+        help="Lab only: keep DPAPI-sealed utterance audio and per-turn records "
+        "in this lab (7-day / 5-run retention).",
+    )
     args = parser.parse_args()
     if os.name != "nt":
         parser.error("requires Windows audio, SQLCipher, DPAPI and Hello")
@@ -183,7 +215,30 @@ def main():
                 + str(lab / "voice-usage.jsonl")
                 + ". Ctrl+C stops voice."
             )
-            asyncio.run(run_voice_lab(config, lab, baseline=args.baseline))
+            diagnostics = None
+            if args.record_diagnostics:
+                from jarvis.security.dpapi import WindowsDpapiKeyProtector
+                from jarvis.voice.voice_diagnostics import VoiceDiagnostics
+
+                diagnostics = VoiceDiagnostics(
+                    lab, protector=WindowsDpapiKeyProtector()
+                )
+                print(
+                    "DIAGNOSTICS ON: your post-wake microphone audio and per-turn records are "
+                    f"kept DPAPI-encrypted in {diagnostics.run_dir} (7 days, last 5 runs). "
+                    "Nothing is uploaded beyond normal Gemini Live audio. After Ctrl+C, "
+                    "run this launcher again with -DiagnosticsReport."
+                )
+            asyncio.run(
+                run_voice_lab(
+                    config, lab, baseline=args.baseline, diagnostics=diagnostics
+                )
+            )
+            if diagnostics is not None:
+                print(
+                    "Report: python -m jarvis.voice.voice_diagnostics report --lab-root "
+                    + str(lab)
+                )
         except KeyboardInterrupt:
             print("Voice lab stopped.")
         finally:

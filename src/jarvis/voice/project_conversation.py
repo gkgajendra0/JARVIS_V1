@@ -446,6 +446,10 @@ class ProjectConversationCoordinator:
             return response
         raise PermissionError("answer/tool continuation budget exhausted")
 
+    def receipt_for(self, request_id):
+        """The durable receipt of the USER turn recorded for ``request_id``."""
+        return self._receipts.get(request_id)
+
     @property
     def last_decision(self):
         """The routing decision committed by the most recent prepare_reply."""
