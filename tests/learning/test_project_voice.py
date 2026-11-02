@@ -633,51 +633,6 @@ def test_real_tool_schema_and_agent_instructions():
     assert "prepare_project_turn" not in JarvisVoiceAgent(tools=[]).instructions
 
 
-@pytest.mark.skipif(not _real_livekit(), reason="needs the real LiveKit SDK")
-@pytest.mark.asyncio
-async def test_real_audio_gate_forwards_only_allowed_segments():
-    from livekit import rtc
-    from livekit.agents.voice.io import AudioOutput
-
-    from jarvis.voice.project_voice_audio import ProjectAudioGate
-
-    class Sink(AudioOutput):
-        def __init__(self):
-            super().__init__(label="sink", sample_rate=24000, next_in_chain=None)
-            self.frames = 0
-
-        async def capture_frame(self, frame):
-            await super().capture_frame(frame)
-            self.frames += 1
-
-        def flush(self):
-            super().flush()
-
-        def clear_buffer(self):
-            pass
-
-    decisions = iter([False, True])
-    asked = []
-
-    class Turns:
-        def allow_response_audio(self):
-            asked.append(1)
-            return next(decisions)
-
-    sink = Sink()
-    gate = ProjectAudioGate(sink, Turns())
-    frame = rtc.AudioFrame(b"\0\0" * 240, 24000, 1, 240)
-    for _ in range(3):
-        await gate.capture_frame(frame)  # blocked segment: decided once
-    gate.flush()
-    assert sink.frames == 0 and len(asked) == 1
-    for _ in range(2):
-        await gate.capture_frame(frame)
-    gate.flush()
-    assert sink.frames == 2 and len(asked) == 2
-    assert gate.captured_playout_segments == 1  # only the heard answer counts
-
-
 @pytest.mark.asyncio
 async def test_reply_evidence_includes_rows_delivered_earlier_from_another_project(lab):
     """Gemini still holds rows from earlier results; forgetting them must

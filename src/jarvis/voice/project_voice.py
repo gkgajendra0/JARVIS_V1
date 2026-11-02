@@ -187,12 +187,10 @@ class VoiceProjectMemory:
         model may keep speaking (or answer) before the tool result arrives.
         Fails closed: a model that cannot be made blocking is not used.
         """
-        update = getattr(llm, "update_options", None)
-        if not callable(update):
-            raise TypeError("project voice memory requires a blocking-tool model")
-        from google.genai import types
+        # Provider SDK use stays inside the approved LiveKit/Gemini adapter.
+        from jarvis.voice.livekit_session import require_blocking_realtime_tools
 
-        update(tool_behavior=types.Behavior.BLOCKING)
+        require_blocking_realtime_tools(llm)
 
     def session(self, conversation) -> VoiceProjectTurns:
         if self.coordinator is None or self._closed:

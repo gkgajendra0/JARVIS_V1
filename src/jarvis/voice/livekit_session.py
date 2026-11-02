@@ -202,6 +202,21 @@ def _create_realtime_model(config: JarvisConfig, *, target=None, transport_state
     )
 
 
+def require_blocking_realtime_tools(llm) -> None:
+    """Make a realtime model wait for tool results before continuing a turn.
+
+    LiveKit declares Gemini 3.8 Live tools NON_BLOCKING by default, so the
+    model may keep speaking, or answer, before a tool result arrives. Only the
+    isolated project voice lab calls this (via VoiceProjectMemory); normal
+    voice keeps its existing behaviour. Fails closed for a model that cannot
+    be configured, rather than silently staying non-blocking.
+    """
+    update = getattr(llm, "update_options", None)
+    if not callable(update):
+        raise TypeError("project voice memory requires a blocking-tool model")
+    update(tool_behavior=google_types.Behavior.BLOCKING)
+
+
 class LiveKitConversationBridge:
     """Translate final LiveKit USER transcripts and committed items into JARVIS turns."""
 
