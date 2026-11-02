@@ -66,6 +66,9 @@ NO_TRANSCRIPT_INSTRUCTIONS = (
 _GUIDANCE = (
     "Answer from this project context and from project history already given in "
     "this conversation. If 'announcement' is non-empty, say it first, exactly. "
+    "For the General project, an empty announcement means silent default routing, "
+    "even when action is created, switched or resumed: do not mention opening, "
+    "creating or selecting General; just answer the owner's question. "
     "'action' is what just happened: created, switched (from 'previous_project'), "
     "resumed, continued or new_thread. Never say the owner was already in a "
     "project they were just switched to. History rows with 'from_project' come "
