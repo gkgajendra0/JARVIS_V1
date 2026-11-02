@@ -29,8 +29,10 @@ _USAGE_FIELDS = {
 
 class VoiceUsageMeter:
     def __init__(self, path: Path, *, mode: str, allowed_tools=None) -> None:
-        if mode not in {"baseline", "project_memory"}:
-            raise ValueError("mode must be baseline or project_memory")
+        if mode not in {"baseline", "project_memory", "project_memory_tool_only"}:
+            raise ValueError(
+                "mode must be baseline, project_memory or project_memory_tool_only"
+            )
         self._allowed = None if allowed_tools is None else frozenset(allowed_tools)
         self._path = Path(path)
         self._mode = mode

@@ -18,6 +18,20 @@ integration enforces "capture → context → answer" itself:
 | 4 | `ProjectAudioGate` (session audio output) | Decided once per response segment. A segment plays only if Gemini received this utterance's result. Otherwise it is interrupted before any audio is heard, and Gemini is asked once to call the tool. If that also fails, one fixed fallback is spoken: "couldn't load the project memory; please say it again". Each utterance gets exactly one spoken answer. |
 | 5 | Bridge accepted ASSISTANT turn → `observe_turn` | Recorded only for a delivered request. Its evidence is **every source delivered in this Gemini session**, since the model may restate any of them; forget therefore removes it too. |
 
+**Fast path (default since the performance pass).** Steps 3 and 4 have a second,
+deterministic way to be satisfied for ordinary speech:
+
+| Step | Where | What happens |
+| --- | --- | --- |
+| 0 | `VoiceProjectTurns.preload` (once per wake session) | The current project's recent history (≤12 rows, ≤3,000 characters, whole rows only, newest first) goes into Gemini's context as one user-role message labelled "Project memory from Jarvis, not speech from the owner". It is read through `ProjectConversationCoordinator.session_context`: the same grant, current-project scope and archive filters as a packet (forgotten, quarantined and cross-project-derived rows excluded; a retention-paused project releases nothing). The bridge registers the item id, so it is never accepted as a spoken turn. Its rows count as delivered, so the tool never resends them. |
+| 4′ | `ProjectAudioGate` → `response_audio_allowed` | For an utterance the tool did not deliver, the gate classifies Gemini's streaming recognition (waiting up to 350 ms for it) with `needs_project_routing`, the router's own rules. **Ordinary speech in the current project plays at once: one Gemini generation, no tool call.** A project command (also after a lead-in, embedded or unreadable), a mention of another project (exact, partial or ambiguous), the once-per-runtime "Resuming X." announcement, a stale preload, or no recognition at all keep the tool path: the answer is withheld and re-requested exactly as before. |
+| 5′ | Fast-path reply | Recorded after its question's outcome, in conversational order (`not_before`), with every source delivered to this session plus the question's packet as evidence. |
+| — | Final transcript needed routing after all | Recognition was incomplete when the answer began. A committed project change is announced deterministically ("Created project Goa.") and the new project's context is preloaded before the next fast answer; a late reference or clarification is flagged `late_project_routing` (REVIEW). |
+
+Step 2 is unchanged on both paths: every accepted turn is saved by the
+application before, and independent of, anything the model does.
+`--tool-only-memory` (`-ToolOnlyMemory`) disables steps 0/4′ for A/B runs.
+
 Nothing here produces an answer in parallel with the model. The only model
 request the integration makes is the bounded re-request or fallback for a
 withheld response.
@@ -114,6 +128,60 @@ of tool results, 78% less, and every later prompt shrinks with it.
 - `clarifications`, `not_saved`, `failed`
 - `assistant_recorded`, `assistant_skipped`
 - `prepare_ms`, `packet_bytes`, `delivered_bytes`
+
+### 4.1 Performance pass: where the extra latency and tokens came from
+
+Measured by the owner (small sample, not an exact causal estimate): baseline
+median 890 ms vs project 1,859 ms to first audio; 5,744 vs 14,073 input
+tokens per turn; `prepare_project_turn` on every memory turn.
+
+Root cause, from the code path and the stage timeline:
+
+| Stage (speech end → first audio) | Tool path (before) | Fast path (now) |
+| --- | --- | --- |
+| Recognition / final transcript | Gemini, streamed | same |
+| Gemini decides to call the tool | 1st generation (full prompt) | — |
+| Wait for the committed transcript | ≤ final-transcript delay | — (save runs in parallel) |
+| Local save + routing + packet | `save_prepare_ms` (local, typically tens of ms) | same, off the critical path |
+| Tool result delivered | result JSON appended to context | — (preloaded once per session) |
+| Answer generation | 2nd generation (full prompt again) | the only generation |
+
+So an ordinary memory turn cost **two full Gemini generations**, each counting
+the whole ~5.6k-token system prompt plus the session context. That alone
+roughly doubles input tokens per turn and adds one model round trip, consistent
+with the measured +969 ms / +8.3k tokens. Fixed per-response additions were
+small by comparison: project instructions 1,059 chars, the tool schema ~435,
+and 724 chars of guidance in every tool result.
+
+Changes:
+- **One generation for ordinary turns** (fast path above).
+- **Bounded, deduplicated context:** preload ≤12 whole rows / 3,000 chars,
+  once per session; rows already given or heard live are never resent; tool
+  results still send only new rows (referenced projects excepted, see 2).
+- **Fixed prompt trimmed:** instructions 1,059 → 605 chars; tool description
+  ~300 → 224; per-result guidance 724 → 374. Enforced by
+  `test_fixed_project_mode_prompt_and_schema_stay_small`.
+
+Expected for a neutral conversation (estimate; verify with an A/B run):
+additional input per response ≈ instructions + schema (~240 tokens) + the
+preload once (≤ ~750 tokens, usually far less), i.e. well under 30% of the
+5,744 baseline, instead of ~145%. Additional latency ≈ the gate's decision
+(normally 0 ms, since recognition precedes the answer; at most 350 ms) plus
+any difference in prompt size, instead of a full extra generation. Commands
+and cross-project questions keep the tool path and its cost.
+
+New counters in the shutdown summary: `fast_path_turns`, `tool_path_turns`,
+`late_routing`, `preloads`, `preload_bytes`. New timeline stage:
+`fast_path_decided`; acceptance `info: answered_from_preloaded_context`.
+
+**A/B procedure (Windows, isolated labs only).** Three fresh lab roots, same
+commit, the same neutral script (5–10 ordinary questions, no project names),
+each with `-RecordDiagnostics`:
+1. `-Baseline`; 2. project memory with `-ToolOnlyMemory`; 3. project memory
+(default fast path). Compare `voice-usage.jsonl` (`latency_ms`,
+`input_per_response`) and `acceptance.json` `latency_summary_ms`
+(`fast_path_decided`, `tool_called`, `context_delivered`, `answer_released`,
+`first_audio_ms`). Never point these at the existing owner lab.
 
 ## 5. Voice diagnostics (lab only, explicitly enabled)
 
@@ -401,6 +469,20 @@ Press Ctrl+C. Run `Report` after each of C and E as well.
 
 ## 7. Known limitations (milestone 1)
 
+- **Fast path depends on streaming recognition at answer time.** If Gemini's
+  partial transcript looked ordinary but the final one was a command, the
+  answer has already started: the committed change is then announced and the
+  context reloaded, but the first answer was given without the tool. If the
+  final one named another project, that answer lacked the other project's
+  rows (REVIEW `late_project_routing`). Gemini is instructed to call the tool
+  for these, and recognition normally completes before the answer starts.
+- **Preload coverage is recent history only** (≤12 rows / 3,000 chars).
+  Older facts need the tool; Gemini is told when older history exists, but
+  calling it is the model's choice. Rows longer than the whole budget are
+  never shortened, so they are not preloaded.
+- **Preloaded context lives in Gemini's session.** Forgetting a project
+  between voice runs (text lab) is honoured at the next wake; a later session
+  never receives forgotten rows.
 - **The answer's content is still the model's.** The integration guarantees that
   every eligible turn is saved, and that no answer is heard without that turn's
   context. It cannot make Gemini call the tool; when Gemini refuses twice, the

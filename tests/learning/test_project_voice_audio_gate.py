@@ -98,3 +98,69 @@ async def test_real_audio_gate_forwards_only_allowed_segments():
         return rtc.AudioFrame(b"\0\0" * 240, 24000, 1, 240)
 
     await exercise_gate(AudioOutput, AudioOutputCapabilities, ProjectAudioGate, frame)
+
+
+async def exercise_async_gate(audio_output, capabilities, gate_class, make_frame):
+    """The fast path's async decision: frames wait for it, none are lost; a
+    segment cleared (barge-in) while deciding forwards nothing."""
+
+    class Sink(audio_output):
+        def __init__(self):
+            super().__init__(
+                label="sink", capabilities=capabilities(pause=False), sample_rate=24000
+            )
+            self.frames = 0
+
+        async def capture_frame(self, frame):
+            await super().capture_frame(frame)
+            self.frames += 1
+
+        def clear_buffer(self):
+            pass
+
+    release = asyncio.Event()
+    asked = []
+
+    class Turns:
+        async def response_audio_allowed(self):
+            asked.append(1)
+            await release.wait()
+            return True
+
+        def allow_response_audio(self):  # never used when the async one exists
+            raise AssertionError("sync decision used")
+
+    sink = Sink()
+    gate = gate_class(sink, Turns())
+    first = asyncio.ensure_future(gate.capture_frame(make_frame()))
+    await asyncio.sleep(0)
+    assert sink.frames == 0 and not first.done()  # waiting for the decision
+    release.set()
+    await first
+    await gate.capture_frame(make_frame())
+    assert sink.frames == 2 and len(asked) == 1  # delayed, not dropped
+    gate.flush()
+
+    release.clear()
+    pending = asyncio.ensure_future(gate.capture_frame(make_frame()))
+    await asyncio.sleep(0)
+    gate.clear_buffer()  # barge-in while deciding
+    release.set()
+    await pending
+    assert sink.frames == 2  # the cleared segment forwarded nothing
+
+
+@pytest.mark.skipif(not _real_livekit(), reason="needs the real LiveKit SDK")
+@pytest.mark.asyncio
+async def test_real_audio_gate_waits_for_an_async_decision():
+    from livekit import rtc
+    from livekit.agents.voice.io import AudioOutput, AudioOutputCapabilities
+
+    from jarvis.voice.project_voice_audio import ProjectAudioGate
+
+    def frame():
+        return rtc.AudioFrame(b"\0\0" * 240, 24000, 1, 240)
+
+    await exercise_async_gate(
+        AudioOutput, AudioOutputCapabilities, ProjectAudioGate, frame
+    )

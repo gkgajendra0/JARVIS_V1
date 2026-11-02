@@ -446,6 +446,30 @@ class ProjectConversationCoordinator:
             return response
         raise PermissionError("answer/tool continuation budget exhausted")
 
+    async def session_context(self, *, limit=12):
+        """Recent history of the current project for a new live model session.
+
+        The same grant, scope and release rules as a prepared packet: the
+        current grant is required, only the current project's live rows are
+        read (forgotten, quarantined and cross-project-derived rows are
+        excluded by the archive), and a retention-paused project releases no
+        history. Returns ``(entry or None, sources)``; nothing is recorded.
+        """
+        if not self.access.current():
+            raise PermissionError("project history grant is no longer current")
+        catalog = await self.access.catalog()
+        entry = next(
+            (e for e in catalog.entries if e.selection == catalog.current), None
+        )
+        if entry is None:
+            return catalog, None, ()
+        snapshot = await self.access.snapshot(
+            entry.selection, project_wide=True, limit=limit
+        )
+        if snapshot.retention_paused:
+            return catalog, entry, ()
+        return catalog, entry, tuple(snapshot.sources)
+
     def receipt_for(self, request_id):
         """The durable receipt of the USER turn recorded for ``request_id``."""
         return self._receipts.get(request_id)
@@ -456,7 +480,7 @@ class ProjectConversationCoordinator:
         return self._decision
 
     async def record_spoken_assistant(
-        self, conversation, packet, turn, *, evidence=None
+        self, conversation, packet, turn, *, evidence=None, not_before=None
     ):
         """Record an ASSISTANT turn the voice bridge already accepted.
 
@@ -492,7 +516,7 @@ class ProjectConversationCoordinator:
                     else "source_not_eligible",
                 )
             return await self.recorder.record(
-                conversation, turn, route, evidence=evidence
+                conversation, turn, route, evidence=evidence, not_before=not_before
             )
 
     def diagnostics(self):

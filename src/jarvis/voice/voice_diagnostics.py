@@ -714,6 +714,7 @@ def _latency(u) -> dict:
         "first_recognition": first(u["asr"]),
         "final_recognition": first(finals),
         "transcript_accepted": first(u["accepted"]),
+        "fast_path_decided": first(project, "fast_path"),
         "tool_called": first(project, "tool_called"),
         "turn_saved": first(project, "prepared"),
         "context_delivered": first(project, "delivered_to_model"),
@@ -758,6 +759,11 @@ def assess(data: dict) -> dict:
     interruption_followed = False
     previous_interrupted = False
     for session in data["sessions"]:
+        # What the session preload gave the model (before any owner speech).
+        for event in session["unmatched"]:
+            if event.get("kind") == "context_preloaded":
+                for row in event.get("history", ()):
+                    known_words |= _content_words(row.get("text"))
         for u in session["utterances"]:
             fail, review, info = [], [], []
             accepted = [
@@ -876,7 +882,17 @@ def assess(data: dict) -> dict:
             if accepted and seconds >= 1.5 and len(text.split()) / seconds < 1.2:
                 review.append("transcript_may_be_incomplete")
                 capture.append("few_words_for_speech_duration")
-            delivered = [p for p in u["project"] if p["kind"] == "delivered_to_model"]
+            if "fast_path" in kinds and "tool_called" not in kinds:
+                info.append("answered_from_preloaded_context")
+            if "late_routing" in kinds:
+                # Recognition looked ordinary when the answer started; the final
+                # transcript needed routing (announced / re-preloaded / review).
+                review.append("late_project_routing")
+            delivered = [
+                p
+                for p in u["project"]
+                if p["kind"] in {"delivered_to_model", "context_preloaded"}
+            ]
             for item in delivered:
                 for row in item.get("history", ()):
                     known_words |= _content_words(row.get("text"))

@@ -632,7 +632,9 @@ def test_real_tool_schema_and_agent_instructions():
     tools = VoiceProjectTools(object()).tools
     assert [t.id for t in tools] == ["prepare_project_turn"]
     agent = JarvisVoiceAgent(tools=tools)
-    assert "call prepare_project_turn first" in agent.instructions
+    flat = " ".join(agent.instructions.split())
+    assert "Call prepare_project_turn first, with no spoken preamble" in flat
+    assert "[Project memory" in flat  # the preloaded context is named
     assert "prepare_project_turn" not in JarvisVoiceAgent(tools=[]).instructions
 
 

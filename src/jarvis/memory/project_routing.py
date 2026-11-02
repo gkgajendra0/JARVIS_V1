@@ -256,6 +256,34 @@ def parse_project_command(text):
     return None, None
 
 
+_SELECT_BY_ID = re.compile(r"select project (\S+)(?: thread (\S+))?", re.IGNORECASE)
+
+
+def needs_project_routing(text: str, catalog) -> bool:
+    """Whether an utterance must go through full project routing first.
+
+    True for anything that could change or widen the project context: a
+    project command (also after a lead-in, or unreadable), a command in a later
+    sentence, or a mention (exact, partial or ambiguous) of another project.
+    False only for ordinary speech in the current project, whose context the
+    voice path may already have delivered. Uses the same rules as
+    :class:`ProjectRouter`; never changes anything.
+    """
+    text = (text or "").strip()
+    if not text:
+        return True  # nothing to classify yet: not safe to skip routing
+    if _SELECT_BY_ID.fullmatch(text) or parse_project_command(text)[0] is not None:
+        return True
+    lead = strip_lead_in(text)
+    if _UNPARSED_PROJECT_COMMAND.match(lead) or _CREATE_PROJECT_PREFIX.match(lead):
+        return True
+    if embedded_project_command(text)[0] is not None:
+        return True
+    current = next((e for e in catalog.entries if e.selection == catalog.current), None)
+    named, ambiguous = ProjectRouter._named_projects(catalog, text, current)
+    return bool(named or ambiguous)
+
+
 @dataclass(frozen=True)
 class ProjectRoutingDecision:
     status: str
@@ -296,9 +324,7 @@ class ProjectRouter:
             raise PermissionError("accepted user routing source required")
         catalog = await self.access.catalog()
         text = turn.text.strip()
-        explicit_id = re.fullmatch(
-            r"select project (\S+)(?: thread (\S+))?", text, re.IGNORECASE
-        )
+        explicit_id = _SELECT_BY_ID.fullmatch(text)
         if explicit_id:
             owned = [
                 e
@@ -392,6 +418,16 @@ class ProjectRouter:
             reference_titles=tuple(e.title for e in references),
             ambiguous_reference_titles=ambiguous,
         )
+
+    def announces_next_turn(self, catalog) -> bool:
+        """Whether the next ordinary turn carries a spoken announcement
+        ("Resuming X." once per router), so it must not skip the tool."""
+        if self._announced or catalog.current is None:
+            return False
+        entry = next(
+            (e for e in catalog.entries if e.selection == catalog.current), None
+        )
+        return entry is not None and normalize_name(entry.title) != "general"
 
     @staticmethod
     def _announce(action, title):

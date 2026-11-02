@@ -63,7 +63,9 @@ def require_isolated_memory(lab: Path) -> Path:
     return database
 
 
-def project_memory_factory(memory_runtime, capability_runtime, diagnostics=None):
+def project_memory_factory(
+    memory_runtime, capability_runtime, diagnostics=None, *, fast_path=True
+):
     from jarvis.voice.project_memory_lab import standard_history_source
     from jarvis.voice.project_voice import VoiceProjectMemory
 
@@ -72,13 +74,24 @@ def project_memory_factory(memory_runtime, capability_runtime, diagnostics=None)
         capability_runtime,
         source_clearance=standard_history_source,
         diagnostics=diagnostics,
+        fast_path=fast_path,
     )
 
 
 async def run_voice_lab(
-    config, lab: Path, *, baseline: bool, runtime_builder=None, diagnostics=None
+    config,
+    lab: Path,
+    *,
+    baseline: bool,
+    runtime_builder=None,
+    diagnostics=None,
+    fast_path: bool = True,
 ):
-    """``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics."""
+    """``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics.
+
+    ``fast_path=False`` (--tool-only-memory) keeps the earlier behaviour: every
+    request goes through prepare_project_turn. For A/B latency comparisons.
+    """
     from jarvis.voice.voice_usage_meter import VoiceUsageMeter
 
     if runtime_builder is None:
@@ -88,7 +101,11 @@ async def run_voice_lab(
     allowlist = lab_tool_allowlist(baseline=baseline)
     meter = VoiceUsageMeter(
         lab / "voice-usage.jsonl",
-        mode="baseline" if baseline else "project_memory",
+        mode="baseline"
+        if baseline
+        else "project_memory"
+        if fast_path
+        else "project_memory_tool_only",
         allowed_tools=allowlist,
     )
 
@@ -99,7 +116,10 @@ async def run_voice_lab(
 
     def memory_factory(memory_runtime, capability_runtime):
         return project_memory_factory(
-            memory_runtime, capability_runtime, diagnostics=diagnostics
+            memory_runtime,
+            capability_runtime,
+            diagnostics=diagnostics,
+            fast_path=fast_path,
         )
 
     runtime = runtime_builder(
@@ -146,6 +166,12 @@ def main():
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--resume-lab", action="store_true")
     parser.add_argument("--baseline", action="store_true")
+    parser.add_argument(
+        "--tool-only-memory",
+        action="store_true",
+        help="Project memory without the session preload: every request calls "
+        "prepare_project_turn (the earlier behaviour, for A/B comparison).",
+    )
     parser.add_argument(
         "--record-diagnostics",
         action="store_true",
@@ -231,7 +257,11 @@ def main():
                 )
             asyncio.run(
                 run_voice_lab(
-                    config, lab, baseline=args.baseline, diagnostics=diagnostics
+                    config,
+                    lab,
+                    baseline=args.baseline,
+                    diagnostics=diagnostics,
+                    fast_path=not args.tool_only_memory,
                 )
             )
             if diagnostics is not None:

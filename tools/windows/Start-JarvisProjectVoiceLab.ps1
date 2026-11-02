@@ -11,6 +11,8 @@ param(
     [switch]$Baseline,
     # Lab only: keep DPAPI-sealed post-wake audio + per-turn records in this lab.
     [switch]$RecordDiagnostics,
+    # A/B only: no session preload; every request calls prepare_project_turn.
+    [switch]$ToolOnlyMemory,
     # Decrypt the latest diagnostics run into a local HTML report (no voice run).
     [switch]$DiagnosticsReport,
     # Delete all diagnostics recordings, records and reports of this lab.
@@ -63,6 +65,7 @@ try {
     if ($ResumeLab) { $arguments += "--resume-lab" }
     if ($Baseline) { $arguments += "--baseline" }
     if ($RecordDiagnostics) { $arguments += "--record-diagnostics" }
+    if ($ToolOnlyMemory) { $arguments += "--tool-only-memory" }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Voice lab failed; retain its files." } }
     finally { Pop-Location }

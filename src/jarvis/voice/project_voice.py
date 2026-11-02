@@ -31,18 +31,29 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import timedelta
 from time import monotonic
 from uuid import uuid4
 
 from livekit.agents import function_tool
 
 from jarvis.conversation import ConversationRole, ConversationStatus
-from jarvis.memory.project_routing import ProjectClarificationRequired
+from jarvis.memory.project_routing import (
+    ProjectClarificationRequired,
+    needs_project_routing,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 _SOURCE_WAIT_SECONDS = 3.0
 _REPAIR_WAIT_SECONDS = 10.0
+# Fast path: how long the first response frame may wait for streaming
+# recognition before the utterance is treated as needing the tool path.
+_FAST_PATH_TEXT_WAIT_SECONDS = 0.35
+# Session preload bounds: recent current-project rows given once per wake.
+PRELOAD_ROWS = 12
+PRELOAD_MAX_CHARS = 3000
+_FAST_REPLY_WAIT_SECONDS = 15.0
 
 # Conversation-control tools whose acknowledgement needs no project context.
 CONTROL_TOOLS = frozenset({"enter_standby"})
@@ -64,16 +75,12 @@ NO_TRANSCRIPT_INSTRUCTIONS = (
 )
 
 _GUIDANCE = (
-    "Answer from this project context and from project history already given in "
-    "this conversation. If 'announcement' is non-empty, say it first, exactly. "
-    "For the General project, an empty announcement means silent default routing, "
-    "even when action is created, switched or resumed: do not mention opening, "
-    "creating or selecting General; just answer the owner's question. "
-    "'action' is what just happened: created, switched (from 'previous_project'), "
-    "resumed, continued or new_thread. Never say the owner was already in a "
-    "project they were just switched to. History rows with 'from_project' come "
-    "from that other project: say so. Only the selected and referenced projects "
-    "exist. If the history lacks the answer, say you don't have it."
+    "Say a non-empty 'announcement' first, exactly. An empty one means do not "
+    "mention opening, creating or selecting any project; just answer. 'action' "
+    "is what just happened; after 'switched' the owner came from "
+    "'previous_project', never say they were already there. Rows with "
+    "'from_project' come from that project: say so. If the history lacks the "
+    "answer, say you don't have it."
 )
 
 
@@ -91,6 +98,11 @@ class VoiceProjectMetrics:
     duplicate_calls: int = 0
     false_claims: int = 0
     corrections: int = 0
+    fast_path_turns: int = 0
+    tool_path_turns: int = 0
+    late_routing: int = 0
+    preloads: int = 0
+    preload_bytes: list[int] = field(default_factory=list)
     undelivered_user_turns: int = 0
     unprepared_responses_blocked: int = 0
     repairs: int = 0
@@ -114,7 +126,7 @@ class VoiceProjectMetrics:
                 "sum": round(sum(ordered), 1),
             }
 
-        series = {"prepare_ms", "packet_bytes", "delivered_bytes"}
+        series = {"prepare_ms", "packet_bytes", "delivered_bytes", "preload_bytes"}
         data = {k: v for k, v in self.__dict__.items() if k not in series}
         for name in series:
             data[name] = stats(getattr(self, name))
@@ -151,11 +163,14 @@ class VoiceProjectMemory:
         source_clearance: Callable[[object], bool],
         provider: str = "gemini",
         diagnostics=None,
+        fast_path: bool = True,
     ) -> None:
         if not callable(source_clearance):
             raise TypeError("original-history source clearance required")
         # Lab-only VoiceDiagnostics (explicit --record-diagnostics), else None.
         self.diagnostics = diagnostics
+        # Ordinary turns answered from preloaded context (no tool round trip).
+        self.fast_path = bool(fast_path)
         self._memory = memory_runtime
         self._capability = capability_runtime
         self._clearance = source_clearance
@@ -322,6 +337,60 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
     return result, tuple(new_ids)
 
 
+def _preload_rows(sources, *, exclude) -> list:
+    """Newest-first selection of whole rows within the preload budget.
+
+    Rows are never truncated (a shortened row would be marked as delivered and
+    then never resent). Rows already given to this Gemini session, or spoken
+    in it (Gemini heard those itself), are skipped: no context is sent twice.
+    """
+    chosen, total = [], 0
+    for source in reversed(tuple(sources)):
+        event = source.event
+        if event.event_id in exclude:
+            continue
+        size = len(event.text) + 24
+        if size > PRELOAD_MAX_CHARS:
+            continue  # can never fit whole; the tool can still give it
+        if total + size > PRELOAD_MAX_CHARS:
+            break
+        total += size
+        chosen.append(source)
+    chosen.reverse()
+    return chosen
+
+
+def _preload_message(title, rows, sources) -> str:
+    """Compact, clearly labelled evidence: one line per saved row."""
+    if title is None:
+        return ""
+    lines = [
+        "[Project memory from Jarvis, not speech from the owner. Do not reply "
+        "to this message.] Current project: " + title + "."
+    ]
+    if rows:
+        older = len(tuple(sources)) > len(rows)
+        lines.append(
+            "Recent saved history, oldest first"
+            + (
+                "; older history exists, call prepare_project_turn if needed"
+                if older
+                else ""
+            )
+            + ":"
+        )
+        for source in rows:
+            event = source.event
+            who = "owner" if event.role == "user" else "Jarvis"
+            mark = " (interrupted)" if event.delivery == "partial" else ""
+            lines.append(
+                f"- {event.accepted_at.date().isoformat()} {who}: {event.text}{mark}"
+            )
+    else:
+        lines.append("No new saved history to show.")
+    return "\n".join(lines)
+
+
 class VoiceProjectTurns:
     """One wake session (one Gemini Live session) of project voice turns."""
 
@@ -347,6 +416,18 @@ class VoiceProjectTurns:
         self._blocked_speech = None
         self._session = None
         self._closed = False
+        # Fast path state (ordinary turns answered from preloaded context).
+        self._catalog = None
+        self._fast_enabled = False
+        self._fast_ready = False
+        self._fast_selection = None  # the project Gemini holds context for
+        self._committed_selection = None
+        self._partials: dict[int, str] = {}
+        self._partial_event = asyncio.Event()
+        self._fast_epochs: dict[int, str] = {}
+        self._preload_task = None
+        self._response_epoch = None  # activity epoch of the last played response
+        self._tool_epochs: set[int] = set()
 
     @property
     def metrics(self) -> VoiceProjectMetrics:
@@ -360,6 +441,7 @@ class VoiceProjectTurns:
         on = getattr(session, "on", None)
         if callable(on):
             on("function_tools_executed", self.observe_tools_executed)
+            on("user_input_transcribed", self.observe_transcription)
 
     def observe_tools_executed(self, event) -> None:
         """A deterministic conversation-control tool ran (e.g. standby).
@@ -386,6 +468,9 @@ class VoiceProjectTurns:
                 return
             self._seen_user.add(turn.turn_id)
             self.metrics.user_turns += 1
+            if turn.user_activity_epoch in self._fast_epochs:
+                # Answered on the fast path from context Gemini already held.
+                self._delivered_turns.add(turn.turn_id)
             # Durable capture does not wait for, or depend on, the model.
             self._outcome_future(turn)
             self._turn_ready.set()
@@ -395,6 +480,17 @@ class VoiceProjectTurns:
         if turn.turn_id in self._recorded_assistant:
             return
         delivered = self._delivered
+        epoch = self._response_epoch
+        if epoch in self._fast_epochs and (
+            delivered is None or delivered.turn.user_activity_epoch != epoch
+        ):
+            # A played fast-path answer: recorded after its question is saved.
+            self._recorded_assistant.add(turn.turn_id)
+            self._owner.spawn(
+                self._record_fast_reply(turn, epoch),
+                name="jarvis-project-voice-fast-reply",
+            )
+            return
         if delivered is None or self._latest_user_before(turn) is not delivered.turn:
             # Gated/unheard reply, preamble, or reply to an undelivered turn.
             self.metrics.assistant_skipped += 1
@@ -490,10 +586,14 @@ class VoiceProjectTurns:
             owner.metrics.prepared += 1
             owner.metrics.prepare_ms.append(elapsed)
             owner.metrics.packet_bytes.append(len(outcome.packet.context.encode()))
+        if outcome.status == "ready":
+            self._committed_selection = outcome.packet.selection
         if not future.done():
             future.set_result(outcome)
         if owner.diagnostics is not None:
             await self._diagnose_prepared(turn, outcome, elapsed)
+        if turn.user_activity_epoch in self._fast_epochs and not self._closed:
+            await self._after_fast_outcome(turn, outcome)
 
     async def _diagnose_prepared(self, turn, outcome, elapsed) -> None:
         """Lab diagnostics: routing decision, receipt and the text read back."""
@@ -588,6 +688,12 @@ class VoiceProjectTurns:
             return _Outcome("failed", reason="error")
         decision = coordinator.last_decision
         self._current_title = decision.title
+        if self._fast_enabled:
+            try:
+                # Fresh names for the fast-path classifier (a project may be new).
+                self._catalog = await access.catalog()
+            except Exception:  # noqa: BLE001 - no catalog only disables fast path
+                self._catalog = None
         LOGGER.info(
             "Project voice turn saved | action=%s | references=%s | sources=%s",
             decision.action,
@@ -636,6 +742,7 @@ class VoiceProjectTurns:
 
     async def prepare(self) -> dict:
         activity = self._conversation.user_activity_epoch
+        self._tool_epochs.add(activity)
         self._diag("tool_called", epoch=activity)
         try:
             source = await asyncio.wait_for(
@@ -658,6 +765,10 @@ class VoiceProjectTurns:
             self._delivered_ids[identity] = None
         self._delivered = _Delivered(source, outcome, result)
         self._delivered_turns.add(source.turn_id)
+        self.metrics.tool_path_turns += 1
+        if outcome.status == "ready":
+            # Gemini now holds this project's context (from the tool result).
+            self._fast_selection = outcome.packet.selection
         self._mark_delivered(activity, source)
         self._diag(
             "delivered_to_model",
@@ -701,6 +812,8 @@ class VoiceProjectTurns:
     def allow_response_audio(self) -> bool:
         trailing = self._speech is not None and self._speech is self._blocked_speech
         allowed = self._decide_response_audio()
+        if allowed and not trailing:
+            self._response_epoch = self._conversation.user_activity_epoch
         if not trailing:
             self._diag("response_played" if allowed else "response_withheld")
         return allowed
@@ -715,6 +828,8 @@ class VoiceProjectTurns:
             return True  # acknowledgement of an executed control tool
         key = self._key(epoch)
         if key == self._fallback_key or self._is_delivered(key):
+            return True
+        if self._fast_path_allows(epoch):
             return True
         # Includes a newer utterance in the same activity (local VAD missed
         # its start): it was never given to the model, so it is gated too.
@@ -804,6 +919,259 @@ class VoiceProjectTurns:
                 "Project voice re-request failed | error=%s", type(exc).__name__
             )
 
+    # -- fast path: preloaded context, no tool call for ordinary turns ---------
+    #
+    # Invariant kept by the gate: a response plays only if Gemini holds the
+    # context this utterance needs. Ordinary speech in the current project
+    # needs that project's recent history (preloaded once per session) plus
+    # the live conversation Gemini heard itself. Speech that could change or
+    # widen the context (a project command, another project named) is
+    # classified deterministically with the router's own rules and must go
+    # through prepare_project_turn. Every accepted turn is still saved by the
+    # application, exactly as on the tool path.
+
+    def bind_injection_registry(self, register) -> None:
+        """Bridge hook so preloaded context is never taken for a spoken turn."""
+        self._register_injected = register
+
+    def start_preload(self) -> None:
+        """Begin the one-time session preload (runs once the agent is attached)."""
+        if not self._owner.fast_path:
+            return  # tool-only mode: every request goes through the tool
+        if self._preload_task is None and self._session is not None:
+            try:
+                self._preload_task = self._owner.spawn(
+                    self._preload_when_agent_ready(), name="jarvis-project-preload"
+                )
+            except RuntimeError:  # no running loop: the tool path still works
+                LOGGER.warning("Project voice preload not started")
+
+    async def _preload_when_agent_ready(self) -> None:
+        agent = None
+        for _ in range(250):  # up to ~5 s for session.start to attach the agent
+            if self._closed:
+                return
+            try:
+                agent = self._session.current_agent
+                break
+            except Exception:  # noqa: BLE001 - not running yet
+                await asyncio.sleep(0.02)
+        if agent is None:
+            LOGGER.warning("Project voice preload skipped: no running agent")
+            return
+        await self._safe_preload(agent)
+
+    async def _safe_preload(self, agent) -> None:
+        try:
+            await self.preload(agent)
+        except Exception as exc:  # noqa: BLE001 - the tool path still works
+            self._fast_ready = False
+            LOGGER.warning(
+                "Project voice preload failed | error=%s", type(exc).__name__
+            )
+
+    async def preload(self, agent) -> None:
+        """Give Gemini the current project's bounded recent history once."""
+        self._fast_enabled = True
+        self._fast_ready = False
+        started = monotonic()
+        live = {t.turn_id for t in self._conversation.turns}
+        async with self._owner.prepare_lock:
+            # One extra row tells whether older history exists.
+            catalog, entry, sources = await self._owner.coordinator.session_context(
+                limit=PRELOAD_ROWS + 1
+            )
+            selection = entry.selection if entry else None
+            # Truth at this instant: every prepare holds the same lock and
+            # records its committed selection as soon as it releases it.
+            self._committed_selection = selection
+        rows = _preload_rows(
+            sources[-PRELOAD_ROWS:], exclude=set(self._delivered_ids) | live
+        )
+        text = _preload_message(entry.title if entry else None, rows, sources)
+        if text:
+            from livekit.agents.llm import ChatContext, ChatMessage
+
+            message = ChatMessage(
+                id="jarvis:project-context:" + uuid4().hex[:12],
+                role="user",
+                content=[text],
+            )
+            if self._register_injected is not None:
+                self._register_injected(ChatContext(items=[message]))
+            context = agent.chat_ctx.copy()
+            context.items.append(message)
+            await agent.update_chat_ctx(context)
+        for row in rows:
+            self._delivered_ids[row.event.event_id] = None
+        self._catalog = catalog
+        # Fast answers resume only if nothing was committed meanwhile.
+        self._fast_selection = selection
+        self._fast_ready = self._active()
+        size = len(text.encode()) if text else 0
+        self.metrics.preloads += 1
+        self.metrics.preload_bytes.append(size)
+        self._diag(
+            "context_preloaded",
+            epoch=self._conversation.user_activity_epoch,
+            project=entry.title if entry else None,
+            rows=len(rows),
+            bytes=size,
+            preload_ms=round((monotonic() - started) * 1000, 1),
+            # Sealed lab diagnostics only: what the model was actually given.
+            history=[{"role": r.event.role, "text": r.event.text} for r in rows],
+        )
+
+    _register_injected = None
+
+    def observe_transcription(self, event) -> None:
+        """Streaming recognition (cumulative partials, then the final)."""
+        text = (getattr(event, "transcript", "") or "").strip()
+        if text:
+            self._partials[self._conversation.user_activity_epoch] = text
+            self._partial_event.set()
+
+    def _provisional_text(self, epoch) -> str | None:
+        for turn in reversed(self._user_turns()):
+            if turn.user_activity_epoch == (epoch or None):
+                return turn.text
+        return self._partials.get(epoch)
+
+    def _fast_path_allows(self, epoch) -> bool:
+        if (
+            not self._fast_ready
+            or self._catalog is None
+            or self._fast_selection != self._committed_selection
+        ):
+            return False
+        text = self._provisional_text(epoch)
+        if not text:
+            return False
+        router = self._owner.coordinator.router
+        if needs_project_routing(text, self._catalog) or router.announces_next_turn(
+            self._catalog
+        ):
+            self._diag("fast_path_declined", epoch=epoch, provisional=text)
+            return False
+        if epoch not in self._fast_epochs:
+            self._fast_epochs[epoch] = text
+            self.metrics.fast_path_turns += 1
+            self._diag("fast_path", epoch=epoch, provisional=text)
+            for turn in self._user_turns():
+                if turn.user_activity_epoch == epoch:
+                    self._delivered_turns.add(turn.turn_id)
+        return True
+
+    async def response_audio_allowed(self) -> bool:
+        """Async gate entry: lets streaming recognition catch up briefly
+        before deciding, rather than withholding an ordinary answer."""
+        epoch = self._conversation.user_activity_epoch
+        if (
+            epoch
+            and self._fast_ready
+            and not self._is_delivered(self._key(epoch))
+            and not self._provisional_text(epoch)
+        ):
+            self._partial_event.clear()
+            try:
+                await asyncio.wait_for(
+                    self._partial_event.wait(), _FAST_PATH_TEXT_WAIT_SECONDS
+                )
+            except TimeoutError:
+                pass
+        return self.allow_response_audio()
+
+    def _user_turn_for_epoch(self, epoch):
+        for turn in reversed(self._user_turns()):
+            if turn.user_activity_epoch == (epoch or None):
+                return turn
+        return None
+
+    async def _record_fast_reply(self, reply, epoch) -> None:
+        """Record a fast-path reply after its question, in conversational order."""
+        deadline = monotonic() + _FAST_REPLY_WAIT_SECONDS
+        user_turn = self._user_turn_for_epoch(epoch)
+        while user_turn is None and monotonic() < deadline and not self._owner._closed:
+            # The final transcript can commit just after the reply.
+            self._turn_ready.clear()
+            try:
+                await asyncio.wait_for(self._turn_ready.wait(), 0.25)
+            except TimeoutError:
+                pass
+            user_turn = self._user_turn_for_epoch(epoch)
+        if user_turn is None:
+            self.metrics.assistant_skipped += 1
+            return  # never attributed to a question that was not saved
+        outcome = await asyncio.shield(self._outcome_future(user_turn))
+        if self._correct_false_claim(_Delivered(user_turn, outcome, {}), reply):
+            return
+        if outcome.status != "ready":
+            return
+        evidence = tuple(
+            dict.fromkeys((*self._delivered_ids, *outcome.packet.source_ids))
+        )
+        try:
+            await self._owner.coordinator.record_spoken_assistant(
+                self._conversation,
+                outcome.packet,
+                reply,
+                evidence=evidence,
+                not_before=user_turn.accepted_at + timedelta(microseconds=1),
+            )
+            self.metrics.assistant_recorded += 1
+        except Exception as exc:  # noqa: BLE001 - recording failure must not stop voice
+            self.metrics.record_failures += 1
+            LOGGER.warning(
+                "Project voice fast reply not recorded | error=%s", type(exc).__name__
+            )
+
+    async def _after_fast_outcome(self, turn, outcome) -> None:
+        """The final transcript of a fast-path utterance needed routing after
+        all (recognition was incomplete when the answer started)."""
+        for _ in range(3):
+            await asyncio.sleep(0)  # let a waiting tool call take its result
+        if turn.user_activity_epoch in self._tool_epochs:
+            return  # Gemini called the tool for it: the tool path delivered it
+        if outcome.status == "clarification":
+            self.metrics.late_routing += 1
+            self._diag(
+                "late_routing", epoch=turn.user_activity_epoch, action="clarification"
+            )
+            self._generate("Say only this, exactly: '" + outcome.question + "'")
+            return
+        if outcome.status != "ready":
+            return
+        decision = outcome.decision
+        moved = outcome.packet.selection != self._fast_selection
+        if decision.references or decision.ambiguous_reference_titles:
+            self.metrics.late_routing += 1
+            self._diag(
+                "late_routing",
+                epoch=turn.user_activity_epoch,
+                action=decision.action,
+                references=list(decision.reference_titles),
+            )
+        if not moved:
+            return
+        if decision.announcement:
+            self.metrics.late_routing += 1
+            self._diag(
+                "late_routing",
+                epoch=turn.user_activity_epoch,
+                action=decision.action,
+                announcement=decision.announcement,
+            )
+            # A committed project change is never left unannounced.
+            self._generate("Say only this, exactly: '" + decision.announcement + "'")
+        # Gemini needs the new project's context before the next fast answer.
+        agent = None
+        try:
+            agent = self._session.current_agent if self._session else None
+        except Exception:  # noqa: BLE001 - session already gone
+            agent = None
+        if agent is not None and self._active():
+            await self._safe_preload(agent)
+
     # -- recording ------------------------------------------------------------
 
     async def _record_assistant(self, outcome: _Outcome, turn, evidence) -> None:
@@ -823,11 +1191,10 @@ class VoiceProjectTurns:
 
 
 _TOOL_DESCRIPTION = (
-    "Call this FIRST, before answering, for every owner request while project "
-    "memory is on. It takes no arguments: it returns the project context the "
-    "application already prepared and saved from the owner's exact words. "
-    "Only explicit project commands select or create a project. Then answer "
-    "from the result."
+    "Returns the application's saved routing and project history for the "
+    "owner's current request. No arguments. Call before answering a project "
+    "command, a mention of another project, or when the history you have lacks "
+    "the answer."
 )
 
 

@@ -256,10 +256,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 project_memory.configure_realtime_model(session.llm)
                 project_turns = project_memory.session(bridge.conversation)
                 project_turns.bind_session(session)
+                project_turns.bind_injection_registry(bridge.register_restored_context)
                 session.on("speech_created", project_turns.observe_speech)
                 self._project_turns = project_turns
                 bridge.add_accepted_turn_observer(project_turns.observe_turn)
                 bridge.add_close_observer(project_turns.close)
+                # Current project's recent history, once per wake session.
+                project_turns.start_preload()
             else:
                 project_turns = None
                 self._project_turns = None
