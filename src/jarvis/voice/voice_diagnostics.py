@@ -244,7 +244,9 @@ class _SessionDiagnostics:
             if (
                 current is not None
                 and self._gap_started is not None
-                and now - self._gap_started <= self._owner.group_gap_seconds
+                # Exclusive: Windows' monotonic clock ticks every ~15.6 ms, so
+                # two quick events can share a timestamp; gap 0 must never group.
+                and now - self._gap_started < self._owner.group_gap_seconds
             ):
                 self._cancel_gap_timer()
                 self._gap_started = None

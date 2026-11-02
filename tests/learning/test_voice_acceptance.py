@@ -240,3 +240,19 @@ async def test_a_clean_run_with_an_interruption_passes(lab, labdir):
     )
     vd.prune(labdir / "voice-diagnostics", retention_days=7, keep_runs=5)
     assert not (path.parent / "acceptance.json").exists()  # transient like the HTML
+
+
+@pytest.mark.asyncio
+async def test_grouping_is_exclusive_even_with_a_coarse_clock(labdir, monkeypatch):
+    """Windows CI regression: monotonic() returns the same value for quick
+    successive events (~15.6 ms resolution); gap 0 must still separate."""
+    monkeypatch.setattr(vd.time, "monotonic", lambda: 1000.0)  # frozen clock
+    diagnostics = vd.VoiceDiagnostics(
+        labdir, protector=FakeProtector(), group_gap_seconds=0.0
+    )
+    run = VoiceRun(diagnostics)
+    await segment(run, value=3)
+    await segment(run, value=4)
+    run.close()
+    data, _ = await report(diagnostics, labdir)
+    assert len(data["sessions"][0]["utterances"]) == 2
