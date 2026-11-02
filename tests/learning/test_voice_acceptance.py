@@ -210,6 +210,7 @@ async def test_a_clean_run_with_an_interruption_passes(lab, labdir):
     await run.say(
         "Okay, create project called Nepal trip", "Created project Nepal trip."
     )
+    await run.say("We will take the Jimny.", "Noted, the Jimny.")
     await run.speak()
     run.recognise("Tell me everything we planned.")
     run.accept("Tell me everything we planned.")
@@ -224,7 +225,12 @@ async def test_a_clean_run_with_an_interruption_passes(lab, labdir):
     data, _ = await report(diagnostics, labdir)
     verdicts = vd.assess(data)
     assert verdicts["run_review"] == []
-    assert [r["verdict"] for r in verdicts["results"]] == ["PASS", "PASS", "PASS"]
+    assert [r["verdict"] for r in verdicts["results"]] == ["PASS"] * 4
+    assert verdicts["not_tested"] == [] and verdicts["capture_anomalies"] == 0
+    assert all(
+        r["capture"] == "not_verified_listen_to_audio" for r in verdicts["results"]
+    )
+    assert "does NOT verify" in verdicts["note"]
     assert verdicts["verdict"] == "PASS"
     path = vd.write_report(labdir, FakeProtector())
     machine = (path.parent / "acceptance.json").read_text(encoding="utf-8")

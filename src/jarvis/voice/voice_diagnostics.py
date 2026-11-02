@@ -397,7 +397,10 @@ class _SessionDiagnostics:
             entry["duplicate"] = True
         self._seen_asr.add(key)
         target = self._current or self._latest()
-        (target["asr"] if target is not None else self.unmatched).append(entry)
+        if target is None:
+            self._unmatched("recognition_without_utterance", entry)
+        else:
+            target["asr"].append(entry)
 
     def observe_turn(self, turn) -> None:
         role = turn.role.value
@@ -414,7 +417,7 @@ class _SessionDiagnostics:
                 entry["duplicate_event"] = True
             target = self._utterance_for_epoch(turn.user_activity_epoch)
             if target is None:
-                self.unmatched.append({"kind": "accepted_without_speech", **entry})
+                self._unmatched("accepted_without_speech", entry)
             else:
                 target["accepted"].append(entry)
         elif role == "assistant":
@@ -426,10 +429,20 @@ class _SessionDiagnostics:
             }
             if duplicate:
                 entry["duplicate_event"] = True
-            target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
-            (target["assistant"] if target is not None else self.unmatched).append(
-                entry
-            )
+            epoch = self._conversation.user_activity_epoch
+            target = self._utterance_for_epoch(epoch)
+            if target is None:
+                # Epoch 0: Jarvis spoke before any owner speech in this session
+                # (wake acknowledgement / proactive prompt), so there is no
+                # utterance it could answer.
+                self._unmatched(
+                    "assistant_before_any_owner_speech"
+                    if epoch == 0
+                    else "assistant_reply_without_utterance",
+                    entry,
+                )
+            else:
+                target["assistant"].append(entry)
 
     # -- responses ------------------------------------------------------------
 
@@ -448,7 +461,10 @@ class _SessionDiagnostics:
         target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
         for call in getattr(event, "function_calls", ()) or ():
             entry = {"at": _now(), "name": getattr(call, "name", "unknown")}
-            (target["tools"] if target is not None else self.unmatched).append(entry)
+            if target is None:
+                self._unmatched("tool_without_utterance", entry)
+            else:
+                target["tools"].append(entry)
 
     def on_error(self, event) -> None:
         error = getattr(event, "error", None)
@@ -458,7 +474,10 @@ class _SessionDiagnostics:
             "recoverable": bool(getattr(error, "recoverable", False)),
         }
         target = self._latest()
-        (target["errors"] if target is not None else self.unmatched).append(entry)
+        if target is None:
+            self._unmatched("error_without_utterance", entry)
+        else:
+            target["errors"].append(entry)
 
     def project_event(self, kind: str, fields: dict) -> None:
         epoch = fields.pop("epoch", self._conversation.user_activity_epoch)
@@ -469,9 +488,25 @@ class _SessionDiagnostics:
         else:
             bucket = "project"
         if target is None:
-            self.unmatched.append(entry)
+            self._unmatched(
+                "project_event_before_any_owner_speech"
+                if epoch == 0
+                else "project_event_without_utterance",
+                entry,
+            )
         else:
             target[bucket].append(entry)
+
+    def _unmatched(self, kind: str, entry: dict) -> None:
+        """Keep an event no utterance can own, with a reason (never dropped)."""
+        self.unmatched.append(
+            {
+                "unmatched_kind": kind,
+                "session": self.number,
+                "epoch": self._conversation.user_activity_epoch,
+                **entry,
+            }
+        )
 
     # -- close ----------------------------------------------------------------
 
@@ -565,6 +600,133 @@ def load_run(run_dir: Path, protector) -> dict:
 
 
 _CHANGES = {"created", "switched", "new_thread"}
+_STOP = frozenset(
+    [
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "but",
+        "to",
+        "of",
+        "in",
+        "on",
+        "at",
+        "for",
+        "with",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "we",
+        "i",
+        "you",
+        "it",
+        "this",
+        "that",
+        "my",
+        "your",
+        "our",
+        "me",
+        "us",
+        "will",
+        "can",
+        "do",
+        "does",
+        "did",
+        "have",
+        "has",
+        "had",
+        "not",
+        "no",
+        "yes",
+        "okay",
+        "ok",
+        "so",
+        "then",
+        "now",
+        "what",
+        "which",
+        "who",
+        "how",
+        "when",
+        "where",
+        "why",
+        "please",
+        "just",
+    ]
+)
+_BENIGN_UNMATCHED = frozenset(
+    {"assistant_before_any_owner_speech", "project_event_before_any_owner_speech"}
+)
+
+
+def _content_words(text) -> set[str]:
+    import re
+
+    return {
+        w
+        for w in re.findall(r"[^\W\d_]+", (text or "").casefold())
+        if len(w) > 2 and w not in _STOP
+    }
+
+
+def _named_words(text) -> set[str]:
+    """Capitalised words that are not sentence-initial (names like 'Jimny')."""
+    import re
+
+    names = set()
+    for sentence in re.split(r"(?<=[.!?])\s+", text or ""):
+        for word in re.findall(r"[^\W\d_][\w'’-]*", sentence)[1:]:
+            if word[0].isupper() and word.casefold() not in _STOP and len(word) > 2:
+                names.add(word.casefold())
+    return names
+
+
+def _ms_between(start, end):
+    if not start or not end:
+        return None
+    try:
+        delta = datetime.fromisoformat(end) - datetime.fromisoformat(start)
+    except ValueError:
+        return None
+    return round(delta.total_seconds() * 1000)
+
+
+def _latency(u) -> dict:
+    """Where the time went, relative to the end of the owner's speech."""
+    base = u.get("speech_ended_at")
+    project = u["project"]
+
+    def first(items, kind=None):
+        for item in items:
+            if kind is None or item.get("kind") == kind:
+                return item.get("at")
+        return None
+
+    finals = [a for a in u["asr"] if a["final"]]
+    stages = {
+        "first_recognition": first(u["asr"]),
+        "final_recognition": first(finals),
+        "transcript_accepted": first(u["accepted"]),
+        "tool_called": first(project, "tool_called"),
+        "turn_saved": first(project, "prepared"),
+        "context_delivered": first(project, "delivered_to_model"),
+        "first_answer_withheld": first(u["responses"], "response_withheld"),
+        "repair_requested": first(project, "repair_requested"),
+        "fallback": first(project, "fallback"),
+        "answer_released": first(u["responses"], "response_played"),
+        "reply_committed": first(u["assistant"]),
+    }
+    breakdown = {k: _ms_between(base, v) for k, v in stages.items() if v}
+    breakdown["first_audio_ms"] = u.get("latency_ms")
+    prepared = next((p for p in project if p.get("kind") == "prepared"), None)
+    if prepared is not None:
+        breakdown["save_prepare_ms"] = prepared.get("prepare_ms")
+    return breakdown
 
 
 def _words(name) -> set[str]:
@@ -589,6 +751,7 @@ def assess(data: dict) -> dict:
     from jarvis.voice.project_claims import false_project_claims
 
     results = []
+    known_words: set[str] = set()  # what the owner said or Jarvis was given
     interrupted_seen = False
     interruption_followed = False
     previous_interrupted = False
@@ -672,6 +835,50 @@ def assess(data: dict) -> dict:
                     review.append("recognition_differs_from_accepted")
             if len(accepted) > 1:
                 review.append("several_transcripts_for_one_utterance")
+            # -- capture: was what the owner SAID kept? (persistence != capture)
+            capture = []
+            saved_words = (
+                set().union(*(_content_words(t) for t in accepted))
+                if accepted
+                else set()
+            )
+            first_accept = u["accepted"][0]["at"] if u["accepted"] else None
+            late = set()
+            for asr in u["asr"]:
+                if (
+                    first_accept
+                    and asr["at"] > first_accept
+                    and not asr.get("duplicate")
+                ):
+                    late |= _content_words(asr["text"]) - saved_words
+            if late:
+                # Gemini finalises the transcript when it calls a tool; words
+                # recognised afterwards were heard but are not in the saved turn.
+                fail.append("recognised_words_not_saved:" + ",".join(sorted(late)))
+                capture.append("late_recognition")
+            seconds = u.get("speech_seconds") or 0
+            if accepted and seconds >= 1.5 and len(text.split()) / seconds < 1.2:
+                review.append("transcript_may_be_incomplete")
+                capture.append("few_words_for_speech_duration")
+            delivered = [p for p in u["project"] if p["kind"] == "delivered_to_model"]
+            for item in delivered:
+                for row in item.get("history", ()):
+                    known_words |= _content_words(row.get("text"))
+                    known_words |= _content_words(row.get("from_project"))
+            known_words |= saved_words
+            for p in prepared:
+                known_words |= _content_words(p.get("project"))
+                known_words |= _content_words(p.get("previous"))
+            unsupported = set()
+            for reply in u["assistant"]:
+                unsupported |= _named_words(reply["text"]) - known_words
+            if unsupported:
+                # The model knew something the saved record does not contain:
+                # it heard the audio itself (see late_recognition), or invented it.
+                review.append(
+                    "reply_uses_unsaved_names:" + ",".join(sorted(unsupported))
+                )
+                capture.append("reply_beyond_saved_record")
             verdict = "FAIL" if fail else "REVIEW" if review else "PASS"
             results.append(
                 {
@@ -683,16 +890,46 @@ def assess(data: dict) -> dict:
                     "action": action,
                     "project": last.get("project") if last else None,
                     "segments": len(u.get("segments", ())),
+                    "capture": "anomaly" if capture else "not_verified_listen_to_audio",
+                    "capture_signals": capture,
+                    "latency_ms": _latency(u),
                 }
             )
     run_review = []
+    not_tested = []
     if not interrupted_seen:
+        not_tested.append("interruption")
         run_review.append("interruption_not_exercised")
     elif not interruption_followed:
         run_review.append("interruption_not_followed_by_answer")
-    unmatched_events = sum(len(s["unmatched"]) for s in data["sessions"])
-    if unmatched_events:
-        run_review.append(f"uncorrelated_events:{unmatched_events}")
+    uncorrelated = [
+        {
+            "kind": e.get("unmatched_kind", e.get("kind", "unknown")),
+            "session": e.get("session"),
+            "epoch": e.get("epoch"),
+            "at": e.get("at"),
+            "event": e.get("kind") if "unmatched_kind" in e else None,
+            "benign": e.get("unmatched_kind") in _BENIGN_UNMATCHED,
+        }
+        for s in data["sessions"]
+        for e in s["unmatched"]
+    ]
+    unexplained = [e for e in uncorrelated if not e["benign"]]
+    if unexplained:
+        run_review.append(f"uncorrelated_events:{len(unexplained)}")
+    stages = {}
+    for r in results:
+        for stage, value in r["latency_ms"].items():
+            if isinstance(value, int | float):
+                stages.setdefault(stage, []).append(value)
+    latency_summary = {
+        stage: {
+            "median": sorted(v)[len(v) // 2],
+            "max": max(v),
+            "count": len(v),
+        }
+        for stage, v in stages.items()
+    }
     counts = {
         v: sum(r["verdict"] == v for r in results) for v in ("PASS", "FAIL", "REVIEW")
     }
@@ -712,8 +949,19 @@ def assess(data: dict) -> dict:
         "utterances": len(results),
         "accepted_turns": sum(r["accepted_transcript"] is not None for r in results),
         "run_review": run_review,
+        "not_tested": not_tested,
+        "uncorrelated_events": uncorrelated,
+        "capture_anomalies": sum(r["capture"] == "anomaly" for r in results),
+        "capture_verified_automatically": False,
+        "latency_summary_ms": latency_summary,
         "results": results,
-        "note": "Recognised text is Gemini speech recognition, not ground truth.",
+        "note": (
+            "PASS means the pipeline was internally consistent: routing, saving and "
+            "replies agree with each other. It does NOT verify that the saved text "
+            "is what the owner said; recognition accuracy is measured only by "
+            "listening to the audio. Recognised text is Gemini speech recognition, "
+            "not ground truth."
+        ),
     }
 
 
@@ -807,7 +1055,12 @@ def render_report(data: dict, verdicts: dict | None = None) -> str:
                 flags.append("reason: " + u["unmatched_reason"])
             if len(u.get("segments", ())) > 1:
                 flags.append(f"{len(u['segments'])} speech segments, one utterance")
-            verdict = by_id.get(u["id"], {"verdict": "", "fail": [], "review": []})
+            verdict = by_id.get(
+                u["id"], {"verdict": "", "fail": [], "review": [], "latency_ms": {}}
+            )
+            timeline = ", ".join(
+                f"{k} {v}" for k, v in verdict["latency_ms"].items() if v is not None
+            )
             rows.append(
                 "<tr>"
                 f"<td><b class='{verdict['verdict']}'>{_cell(verdict['verdict'])}</b><br>"
@@ -820,7 +1073,7 @@ def render_report(data: dict, verdicts: dict | None = None) -> str:
                 f"<td>{_cell(saved[-1] if saved else '')}<br><small>{receipts}</small></td>"
                 f"<td>{replies}<br><small>{_cell(responses)}</small></td>"
                 f"<td>{_cell(', '.join(t['name'] for t in u['tools']))}<br>"
-                f"<small>{_cell(u['latency_ms'])} ms</small></td>"
+                f"<small>{_cell(u['latency_ms'])} ms<br>{_cell(timeline)}</small></td>"
                 f"<td>{'<br>'.join(_cell(f) for f in flags)}"
                 f"{'<br>'.join(_cell(e['error']) for e in u['errors'])}</td>"
                 "</tr>"
@@ -845,6 +1098,11 @@ PASS {verdicts["counts"]["PASS"]} · REVIEW {verdicts["counts"]["REVIEW"]} · FA
 {verdicts["counts"]["FAIL"]} · speech segments {verdicts["speech_segments"]} in
 {verdicts["utterances"]} utterances · run checks: {_cell(", ".join(verdicts["run_review"]) or "none")}.
 Machine-readable: <code>acceptance.json</code> next to this file.</p>
+<p class="note"><b>PASS ≠ heard correctly.</b> PASS means routing, saving and replies are
+consistent with each other. It does not verify that the saved text is what you said: listen to
+each row. Capture anomalies: {verdicts["capture_anomalies"]}.
+<b>Not tested in this run:</b> {_cell(", ".join(verdicts["not_tested"]) or "nothing")}.
+Uncorrelated events: {_cell("; ".join(f"{e['kind']} (session {e['session']}, {e['at']})" for e in verdicts["uncorrelated_events"]) or "none")}.</p>
 <table><tr><th>Verdict</th><th>Utterance</th><th>Audio</th><th>Recognised (partials … final)</th>
 <th>Accepted transcript</th><th>Routing / project</th><th>Saved text (read back) / receipt</th>
 <th>Jarvis reply</th><th>Tools / latency</th><th>Flags</th></tr>

@@ -45,6 +45,8 @@ forget with provenance, routing (questions never switch or create projects).
 | Project switch | Result says `action: switched` and `previous_project`, so the model cannot claim the owner was already there. |
 | Command after a lead-in ("Okay. Create a project called …", "Hey Jarvis, switch to …") | A closed set of lead-ins is removed at the start only, then the normal anchored command rules apply. |
 | Command after real content ("It went well. Create a project called Goa.") | Clarification: nothing changes until the owner says the command alone. |
+| Owner asks Jarvis to stand by ("go to sleep") | Gemini calls the deterministic `enter_standby` control tool. Its acknowledgement passes the context gate (only `CONTROL_TOOLS`), with no project re-request and no fallback. The turn is still saved. |
+| Question names another project | That project's rows are always resent as labelled evidence, even if delivered earlier in the session, so the answer gets both facts (Jimny and permits), not whatever the model recalls. |
 | Reply claims a create or switch the application did not commit | Detected on the committed reply. It is not saved, and a fixed correction is spoken ("Correction: no project was created or switched. You are in X."). Every result also carries `project_changed` and, if false, a "nothing changed" note. Audio already played cannot be withdrawn; the correction follows immediately. |
 | Wake session ends / shutdown | In-flight saves and committed replies finish before memory closes; grant revoked. |
 | Restart | New Hello grant; first turn says "Resuming X."; everything saved is available. |
@@ -174,6 +176,46 @@ FAIL rows.
 The run verdict is FAIL if any utterance fails, REVIEW if anything needs review,
 otherwise PASS.
 
+**PASS is not "heard correctly".** PASS means routing, saving and replies are
+consistent with each other. A transcript saved exactly and read back exactly
+can still differ from what was said, and recognition accuracy is never
+inferred from the database. Each row therefore also carries
+`capture: not_verified_listen_to_audio`, or `anomaly` with signals:
+
+| Signal | Verdict | Meaning |
+| --- | --- | --- |
+| `recognised_words_not_saved:<words>` | FAIL | Gemini recognised words after the accepted transcript that no saved turn contains. |
+| `reply_uses_unsaved_names:<names>` | REVIEW | Jarvis's reply names something that is neither in the owner's saved words nor in history Jarvis was given. Gemini heard the audio itself, or invented it. |
+| `transcript_may_be_incomplete` | REVIEW | Under 1.2 words per second of detected speech, for 1.5 s or more. |
+
+The run also reports:
+- `not_tested`: for example `interruption`. These are shown as **not tested**,
+  never as passed.
+- `uncorrelated_events`: each with its kind. `assistant_before_any_owner_speech`,
+  typically the wake acknowledgement, is identified as benign.
+- `latency_summary_ms`: median and max per stage, from the end of owner speech:
+  - first and final recognition
+  - transcript accepted
+  - tool called
+  - turn saved
+  - context delivered
+  - answer withheld, repair requested, fallback
+  - answer released
+  - reply committed
+
+**Why a saved turn can lack spoken words (run `7ab7ad` u2).** LiveKit's Gemini
+plugin (`livekit-plugins-google` 1.8.3, `_handle_tool_calls` →
+`_mark_current_generation_done`) finalises the user transcript the moment Gemini
+emits a tool call. Gemini's input transcription can still lag the audio, so the
+committed and saved text can stop at "We will take". Later words start a new
+generation and arrive at best as a later transcript.
+
+Gemini answers from the audio itself, which is how it knew "Jimny" without a
+saved source. The acceptance report now flags this as FAIL or REVIEW instead
+of PASS. Preventing it means deferring transcript finalisation past the tool
+call inside the plugin adapter, a change to the shared voice adapter that is
+not made in this lab-only step.
+
 **Recognition is not ground truth.** The report labels recognised and accepted
 text as Gemini's recognition. The audio next to it is the reference.
 
@@ -202,7 +244,7 @@ them runs at a time, because both take the lab lock.
 ```powershell
 git -C E:\Jarvis\App fetch origin feat/voice-project-memory-integration
 $Commit = "<commit under test>"
-$Lab = "$env:TEMP\jarvis-voice-project-5"   # must not exist yet
+$Lab = "$env:TEMP\jarvis-voice-project-6"   # must not exist yet
 git -C E:\Jarvis\App show "${Commit}:tools/windows/Start-JarvisProjectVoiceLab.ps1" | Set-Content "$env:TEMP\Start-VoiceLab.ps1"
 git -C E:\Jarvis\App show "${Commit}:tools/windows/Start-JarvisProjectMemoryLab.ps1" | Set-Content "$env:TEMP\Start-TextLab.ps1"
 $Log = "$Lab\profile\voice-lab.jsonl"; $Usage = "$Lab\profile\voice-usage.jsonl"
@@ -237,7 +279,12 @@ flags. Check each row by listening, rather than from memory.
 4. "My interview topic is SQL window functions."
 5. "What's the status of my Nepal trip?"
 6. "Switch to Nepal trip."
-7. Ask "Tell me everything we planned for the trip", and interrupt the answer by speaking: "Stop. Which vehicle?"
+7. **Interruption (required):** ask "Tell me everything we planned for the trip,
+   in detail". While Jarvis is still speaking, say "Stop. Which vehicle?". The
+   report must show an `[interrupted]` reply followed by an answered row. If
+   `not_tested` lists `interruption`, repeat this step.
+8. "Okay Jarvis, go to sleep." Expect a brief acknowledgement. Jarvis must not
+   say "couldn't load the project memory".
 
 **A. Baseline.** `Voice -Baseline -Fresh`.
 
@@ -266,9 +313,21 @@ Hello. Say script N, then script P. Expect:
 - **P7:** Jarvis stops at once and answers "Jimny".
 - **Throughout:** one spoken answer per utterance, and never a silent turn. If Jarvis says "couldn't load the project memory", note it: that is the fallback.
 
-Press Ctrl+C, then run `Report`. **Expected acceptance:** no FAIL rows, and the
-run verdict PASS or REVIEW. REVIEW is expected for any unmatched-speech or
-recovered-gate rows; listen to each. Then for each utterance:
+Press Ctrl+C, then run `Report`. **Expected acceptance:**
+- no FAIL rows
+- `not_tested` empty
+- the run verdict PASS or REVIEW
+
+REVIEW is expected for unmatched-speech or recovered-gate rows; listen to each.
+Every row's capture is unverified until you have listened to it.
+
+For each utterance:
+- **Play the audio first**, then read the recognised and saved text. Note any
+  word that differs, for example "What we call" for "Which vehicle". The report
+  cannot detect misrecognition; only listening can.
+- **Capture signals:** `recognised_words_not_saved:*` (FAIL) and
+  `reply_uses_unsaved_names:*` mean what you said was not fully saved. Report
+  the row ID.
 - **Audio against recognised text:** a misheard project name, for example
   "Naples" for "Nepal", is visible here.
 - **Accepted against saved text:** they must match. `SAVED_TEXT_DIFFERS` must
@@ -331,6 +390,10 @@ Press Ctrl+C. Run `Report` after each of C and E as well.
   - any row whose audio and recognised text disagree
   - any `no_accepted_transcript` or `SAVED_TEXT_DIFFERS` row
   - any unexpected `project_created` or `project_switched`
+- **From `acceptance.json`:**
+  - `latency_summary_ms`: which stage dominates the median and the peak
+  - `uncorrelated_events`, with their kinds
+  - `capture_anomalies`
 - **When finished:** `& "$env:TEMP\Start-VoiceLab.ps1" -Commit $Commit -LabRoot $Lab -CleanupDiagnostics`
   deletes the recordings, or leave them to expire after 7 days.
 
@@ -347,6 +410,11 @@ Press Ctrl+C. Run `Report` after each of C and E as well.
   "switch to tokyo" when no such project exists.
 - **No project controls by voice yet.** /projects, /inspect, /pause, /forget and
   /repair work only in the text lab, between voice runs.
+- **Saved transcripts can omit spoken words.** The Gemini plugin finalises the
+  transcript at the tool call; see section 5. This is detected and reported,
+  not yet prevented.
+- **Recognition accuracy is only measured by listening.** A misrecognised word
+  ("What we call" for "Which vehicle") is saved as recognised.
 - **A false claim cannot be unspoken.** If Gemini claims a project change that
   wasn't committed, the claim is heard; it is corrected immediately, never
   saved, and reported as FAIL `false_project_claim`.

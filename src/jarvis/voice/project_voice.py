@@ -44,6 +44,9 @@ LOGGER = logging.getLogger(__name__)
 _SOURCE_WAIT_SECONDS = 3.0
 _REPAIR_WAIT_SECONDS = 10.0
 
+# Conversation-control tools whose acknowledgement needs no project context.
+CONTROL_TOOLS = frozenset({"enter_standby"})
+
 REPAIR_INSTRUCTIONS = (
     "Before answering the owner's last request you must call prepare_project_turn. "
     "Call it now, without speaking first, then answer from its result."
@@ -269,7 +272,10 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
     decision = outcome.decision
     fresh, new_ids, already = [], [], 0
     for row in context.get("sources", ()):
-        if row["source_id"] in delivered_ids:
+        # Rows from a project the question names are targeted evidence for
+        # THIS answer: always resent, even if given earlier in the session
+        # (acceptance run 7ab7ad answered only half of a cross-project status).
+        if row["source_id"] in delivered_ids and not row.get("from_project"):
             already += 1
             continue
         new_ids.append(row["source_id"])
@@ -327,6 +333,7 @@ class VoiceProjectTurns:
         self._repairing: set[tuple] = set()
         self._speech = None
         self._corrected: set[str] = set()
+        self._control_epochs: set[int] = set()
         self._current_title: str | None = None
         self._blocked_speech = None
         self._session = None
@@ -341,6 +348,23 @@ class VoiceProjectTurns:
     def bind_session(self, session) -> None:
         """The AgentSession, used only to interrupt/re-request a gated reply."""
         self._session = session
+        on = getattr(session, "on", None)
+        if callable(on):
+            on("function_tools_executed", self.observe_tools_executed)
+
+    def observe_tools_executed(self, event) -> None:
+        """A deterministic conversation-control tool ran (e.g. standby).
+
+        Its brief acknowledgement is not a project answer, so the context gate
+        lets it through instead of re-requesting project memory. The accepted
+        turn itself is still saved like any other.
+        """
+        names = {getattr(c, "name", "") for c in getattr(event, "function_calls", ())}
+        control = names & CONTROL_TOOLS
+        if control:
+            epoch = self._conversation.user_activity_epoch
+            self._control_epochs.add(epoch)
+            self._diag("control_tool", epoch=epoch, tools=sorted(control))
 
     def observe_speech(self, event) -> None:
         self._speech = getattr(event, "speech_handle", None)
@@ -599,6 +623,7 @@ class VoiceProjectTurns:
 
     async def prepare(self) -> dict:
         activity = self._conversation.user_activity_epoch
+        self._diag("tool_called", epoch=activity)
         try:
             source = await asyncio.wait_for(
                 self._wait_source(activity), timeout=_SOURCE_WAIT_SECONDS
@@ -621,7 +646,19 @@ class VoiceProjectTurns:
         self._delivered = _Delivered(source, outcome, result)
         self._delivered_turns.add(source.turn_id)
         self._mark_delivered(activity, source)
-        self._diag("delivered_to_model", epoch=activity, status=result["status"])
+        self._diag(
+            "delivered_to_model",
+            epoch=activity,
+            status=result["status"],
+            new_rows=len(result.get("history", ())),
+            already_provided=result.get("earlier_history_already_provided", 0),
+            referenced_projects=result.get("referenced_projects", []),
+            # Sealed lab diagnostics only: what the model was actually given.
+            history=[
+                {k: r[k] for k in ("role", "text", "from_project") if k in r}
+                for r in result.get("history", ())
+            ],
+        )
         self.metrics.delivered += 1
         self.metrics.delivered_bytes.append(
             len(json.dumps(result, ensure_ascii=False).encode())
@@ -661,6 +698,8 @@ class VoiceProjectTurns:
         if epoch == 0 or self._closed:
             # Before any owner speech (wake acknowledgement), nothing to prepare.
             return True
+        if epoch in self._control_epochs:
+            return True  # acknowledgement of an executed control tool
         key = self._key(epoch)
         if key == self._fallback_key or self._is_delivered(key):
             return True

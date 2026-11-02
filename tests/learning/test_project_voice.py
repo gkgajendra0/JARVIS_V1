@@ -405,14 +405,17 @@ async def test_question_about_another_project_reads_it_and_stays(lab):
     wake = Wake(await lab.runtime())
     await wake.ask("create project called Nepal", "Done.")
     await wake.ask("We will take the Jimny.", "Okay.")
+    await wake.ask("The permits are sorted.", "Good.")
     await wake.ask("create project called Interview", "Done.")
     asked = await wake.ask("What's the status of my Nepal trip?", "The Jimny.")
     assert asked["project"] == "Interview" and asked["announcement"] == ""
     assert asked["referenced_projects"] == ["Nepal"]
-    # Jimny was already delivered earlier in this session, so it is counted,
-    # not resent; on a fresh session it arrives labelled from_project.
+    # Regression 7ab7ad: rows of the named project are resent even though they
+    # were delivered earlier in this session (both facts, not only the Jimny).
+    labelled = {r["text"] for r in asked["history"] if r.get("from_project") == "Nepal"}
+    assert {"We will take the Jimny.", "The permits are sorted."} <= labelled
     assert lab.titles() == ["Interview", "Nepal"]
-    assert lab.rows()[-1] == ("assistant", "The Jimny.", "complete", "Interview")
+    assert ("assistant", "The Jimny.", "complete", "Interview") in lab.rows()
     fresh = Wake(wake.voice)
     again = await fresh.ask("What's the status of my Nepal trip?")
     labelled = [r for r in again["history"] if r.get("from_project") == "Nepal"]
