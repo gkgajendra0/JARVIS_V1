@@ -361,7 +361,9 @@ class ProjectRouter:
                 "General",
                 catalog.selection_revision,
                 create=True,
-                announcement="Created project General.",
+                # Implicit default workspace is internal routing, not a spoken
+                # project-create request. Keep the committed action for audit.
+                announcement="",
                 action="created",
                 references=tuple(e.selection for e in references),
                 reference_titles=tuple(e.title for e in references),
@@ -377,7 +379,13 @@ class ProjectRouter:
             current.title,
             catalog.selection_revision,
             current.archive_revision,
-            announcement=self._announce(action, current.title),
+            # Ordinary speech must not announce an implicit General switch
+            # or resume. Explicit project commands use _command below and
+            # retain their spoken announcements.
+            announcement=(
+                "" if normalize_name(current.title) == "general"
+                else self._announce(action, current.title)
+            ),
             action=action,
             references=tuple(e.selection for e in references),
             reference_titles=tuple(e.title for e in references),
