@@ -43,6 +43,9 @@ forget with provenance, routing (questions never switch or create projects).
 | Excluded content (e.g. salary) | `not_saved`; omission marker only; no history given. |
 | Clarification ("switch to tokyo") | Question returned verbatim; nothing created; reply not attributed. |
 | Project switch | Result says `action: switched` and `previous_project`, so the model cannot claim the owner was already there. |
+| Command after a lead-in ("Okay. Create a project called …", "Hey Jarvis, switch to …") | A closed set of lead-ins is removed at the start only, then the normal anchored command rules apply. |
+| Command after real content ("It went well. Create a project called Goa.") | Clarification: nothing changes until the owner says the command alone. |
+| Reply claims a create or switch the application did not commit | Detected on the committed reply. It is not saved, and a fixed correction is spoken ("Correction: no project was created or switched. You are in X."). Every result also carries `project_changed` and, if false, a "nothing changed" note. Audio already played cannot be withdrawn; the correction follows immediately. |
 | Wake session ends / shutdown | In-flight saves and committed replies finish before memory closes; grant revoked. |
 | Restart | New Hello grant; first turn says "Resuming X."; everything saved is available. |
 
@@ -136,6 +139,41 @@ the switch nothing extra is recorded, and normal Jarvis has no path to it.
 
 Events that cannot be tied to an utterance are kept as "unmatched" and counted.
 
+**Utterances, not VAD segments.** LiveKit's local VAD ends a segment after
+about 0.55 s of silence, while Gemini ends a user turn only after 800 ms. A
+short pause mid-request ("Okay. … Create a project called …") therefore gave
+two VAD segments but one transcript. At `73b1b4d6` that transcript attached to
+the second segment only: the first looked like a dropped request, and the
+recording missed the beginning. That is the likely cause of the
+15-segments / 11-turns gap in run `3edaf5`, to be confirmed against that
+report with this build.
+
+Now a segment starting within **1.2 s** of the previous one ends, with no Jarvis
+reply in between, belongs to the same **utterance**. Its audio is recorded
+continuously across the pause, plus a short tail, and a transcript matches
+any of the utterance's activity epochs. The report shows
+"N speech segments, one utterance".
+
+Speech that still has no transcript is classified from evidence and never
+called "dropped":
+- `recognised_but_not_accepted`: Gemini produced text, but no turn was accepted
+- `during_jarvis_reply_echo_or_barge_in`
+- `very_short_segment`: under 0.4 s
+- `no_recognition_listen_to_audio`
+
+**Automated acceptance.** `-DiagnosticsReport` also writes `acceptance.json`
+(schema `jarvis-voice-acceptance-v1`) and prints the overall verdict and any
+FAIL rows.
+
+| Verdict | Codes |
+| --- | --- |
+| **FAIL** (deterministic contradiction) | `command_misrouted` (a project command routed elsewhere); `unexpected_project_change` (created or switched without a command); `false_project_claim` (the reply claims a change that wasn't committed); `save_mismatch`, `save_failed`, `save_read_back_failed`, `accepted_turn_not_prepared`; `withheld_answer_not_recovered` |
+| **REVIEW** (listen to the audio) | `unmatched_speech:<reason>`; `context_gate_recovered`, `context_gate_fallback`; `correction_spoken`; `clarification_asked`; `embedded_project_command`; `not_saved:<reason>`; `recognition_differs_from_accepted`; `duplicate_events`; `several_transcripts_for_one_utterance` |
+| **Run checks** | `interruption_not_exercised`, `interruption_not_followed_by_answer`, `uncorrelated_events:N` |
+
+The run verdict is FAIL if any utterance fails, REVIEW if anything needs review,
+otherwise PASS.
+
 **Recognition is not ground truth.** The report labels recognised and accepted
 text as Gemini's recognition. The audio next to it is the reference.
 
@@ -164,7 +202,7 @@ them runs at a time, because both take the lab lock.
 ```powershell
 git -C E:\Jarvis\App fetch origin feat/voice-project-memory-integration
 $Commit = "<commit under test>"
-$Lab = "$env:TEMP\jarvis-voice-project-4"   # must not exist yet
+$Lab = "$env:TEMP\jarvis-voice-project-5"   # must not exist yet
 git -C E:\Jarvis\App show "${Commit}:tools/windows/Start-JarvisProjectVoiceLab.ps1" | Set-Content "$env:TEMP\Start-VoiceLab.ps1"
 git -C E:\Jarvis\App show "${Commit}:tools/windows/Start-JarvisProjectMemoryLab.ps1" | Set-Content "$env:TEMP\Start-TextLab.ps1"
 $Log = "$Lab\profile\voice-lab.jsonl"; $Usage = "$Lab\profile\voice-usage.jsonl"
@@ -177,7 +215,8 @@ function Voice([switch]$Baseline, [switch]$Fresh) {
 function Report { & "$env:TEMP\Start-VoiceLab.ps1" -Commit $Commit -LabRoot $Lab -DiagnosticsReport }
 ```
 
-After **every** voice run below, run `Report`. It opens that run's report:
+After **every** voice run below, run `Report`. It prints the acceptance verdict
+and any FAIL rows, writes `acceptance.json`, and opens that run's report:
 one row per utterance, with the audio player, recognised text, accepted
 transcript, routing, saved text and receipt, Jarvis's reply, tools, latency and
 flags. Check each row by listening, rather than from memory.
@@ -192,9 +231,9 @@ flags. Check each row by listening, rather than from memory.
 
 **Project script P** (project memory only):
 
-1. "Create project called Nepal trip."
+1. "Okay. Create project called Nepal trip." (deliberate lead-in)
 2. "We will take the Jimny." — then **immediately**, without waiting for the reply: "And the permits are sorted." (consecutive turns)
-3. "Create project called interview preparation."
+3. "So, create project called interview preparation." Pause briefly after "So," to exercise a two-segment utterance.
 4. "My interview topic is SQL window functions."
 5. "What's the status of my Nepal trip?"
 6. "Switch to Nepal trip."
@@ -227,11 +266,15 @@ Hello. Say script N, then script P. Expect:
 - **P7:** Jarvis stops at once and answers "Jimny".
 - **Throughout:** one spoken answer per utterance, and never a silent turn. If Jarvis says "couldn't load the project memory", note it: that is the fallback.
 
-Press Ctrl+C, then run `Report`. For each utterance:
+Press Ctrl+C, then run `Report`. **Expected acceptance:** no FAIL rows, and the
+run verdict PASS or REVIEW. REVIEW is expected for any unmatched-speech or
+recovered-gate rows; listen to each. Then for each utterance:
 - **Audio against recognised text:** a misheard project name, for example
   "Naples" for "Nepal", is visible here.
 - **Accepted against saved text:** they must match. `SAVED_TEXT_DIFFERS` must
   never appear.
+- **P1 and P3:** despite "Okay." and "So, …", show `project_created`; P3 may show
+  "2 speech segments, one utterance". P4 is saved under interview preparation.
 - **Routing:**
   - only P1, P3 and P6 carry `project_created` or `project_switched`
   - P5 shows `continued · interview preparation · refs ['Nepal trip']`
@@ -281,6 +324,10 @@ Press Ctrl+C. Run `Report` after each of C and E as well.
   - got the fallback
 - **The Hands search:** confirm it returned nothing in every step.
 - **From the diagnostics reports:**
+  - the printed acceptance verdict and `acceptance.json` for each run
+  - any FAIL row, with its codes
+  - each REVIEW reason, especially `unmatched_speech:*`
+  - whether "speech segments" and "utterances" now differ only where pauses were grouped
   - any row whose audio and recognised text disagree
   - any `no_accepted_transcript` or `SAVED_TEXT_DIFFERS` row
   - any unexpected `project_created` or `project_switched`
@@ -300,6 +347,13 @@ Press Ctrl+C. Run `Report` after each of C and E as well.
   "switch to tokyo" when no such project exists.
 - **No project controls by voice yet.** /projects, /inspect, /pause, /forget and
   /repair work only in the text lab, between voice runs.
+- **A false claim cannot be unspoken.** If Gemini claims a project change that
+  wasn't committed, the claim is heard; it is corrected immediately, never
+  saved, and reported as FAIL `false_project_claim`.
+- **Diagnostics grouping is heuristic.** It groups segments separated by up to
+  1.2 s with no Jarvis reply in between. Two separate requests spoken within
+  1.2 s of each other appear as one utterance with two transcripts
+  (`several_transcripts_for_one_utterance`, REVIEW).
 - **Personal facts are not combined with project memory in voice.** The lab runs
   with personal context off.
 - **Stored replies are Gemini's output transcription**, not the audio itself.

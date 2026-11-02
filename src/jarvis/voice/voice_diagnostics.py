@@ -41,6 +41,7 @@ LOGGER = logging.getLogger(__name__)
 PURPOSE = "jarvis-voice-diagnostics-v1"
 _DIRECTORY = "voice-diagnostics"
 _REPORT = "report.html"
+_ACCEPTANCE = "acceptance.json"
 _NO_TRANSCRIPT_GRACE_SECONDS = 4.0
 
 
@@ -69,6 +70,7 @@ class VoiceDiagnostics:
         protector,
         max_utterance_seconds: float = 30.0,
         pre_roll_seconds: float = 0.5,
+        group_gap_seconds: float = 1.2,
         max_run_audio_bytes: int = 150_000_000,
         max_utterances: int = 300,
         retention_days: float = 7.0,
@@ -78,6 +80,7 @@ class VoiceDiagnostics:
         self._protector = protector
         self.max_utterance_seconds = max_utterance_seconds
         self.pre_roll_seconds = pre_roll_seconds
+        self.group_gap_seconds = group_gap_seconds
         self._max_run_audio_bytes = max_run_audio_bytes
         self._max_utterances = max_utterances
         prune(self.root, retention_days=retention_days, keep_runs=keep_runs)
@@ -189,6 +192,9 @@ class _SessionDiagnostics:
         self._seen_asr: set = set()
         self._seen_turns: set = set()
         self._speech_ended: float | None = None
+        self._gap_started: float | None = None
+        self._gap_timer = None
+        self._agent_speaking = False
         self._closed = False
 
     # -- audio ----------------------------------------------------------------
@@ -221,11 +227,29 @@ class _SessionDiagnostics:
             self._pre_roll_seconds -= old
 
     # -- speech detection -----------------------------------------------------
+    #
+    # LiveKit's local VAD ends a segment after a short silence (~0.55 s), while
+    # Gemini ends a user turn only after 800 ms. One spoken request therefore
+    # often arrives as two VAD segments but one transcript. Segments that start
+    # within GROUP_GAP of the previous one, with no Jarvis reply in between,
+    # form one utterance: its audio is recorded continuously across the pause
+    # (plus a short tail), and a transcript matches any of its activity epochs.
 
     def on_user_state(self, event) -> None:
         if self._closed:
             return
+        now = time.monotonic()
         if event.new_state == "speaking":
+            current = self._current
+            if (
+                current is not None
+                and self._gap_started is not None
+                and now - self._gap_started <= self._owner.group_gap_seconds
+            ):
+                self._cancel_gap_timer()
+                self._gap_started = None
+                self._open_segment(current, now)
+                return
             self._finish_utterance()
             if self._owner.utterance_count >= self._owner._max_utterances:
                 return
@@ -237,7 +261,10 @@ class _SessionDiagnostics:
                 "index": index,
                 "speech_started_at": _now(),
                 "speech_ended_at": None,
-                "epoch": None,
+                "epochs": [],
+                "segments": [],
+                "speech_seconds": 0.0,
+                "overlapped_reply": self._agent_speaking,
                 "audio": None,
                 "audio_truncated": False,
                 "asr": [],
@@ -251,37 +278,74 @@ class _SessionDiagnostics:
                 "flags": [],
             }
             self.utterances.append(self._current)
-            self._assign_epoch_after_runtime(self._current)
             self._chunks = [chunk for chunk, _ in self._pre_roll]
             self._chunk_seconds = self._pre_roll_seconds
+            self._open_segment(self._current, now)
         elif event.new_state == "listening" and event.old_state == "speaking":
             current = self._current
-            if current is None:
+            if current is None or not current["segments"]:
                 return
-            current["speech_ended_at"] = _now()
-            if current["epoch"] is None:
-                current["epoch"] = self._conversation.user_activity_epoch
-            self._speech_ended = time.monotonic()
-            self._finish_utterance()
+            segment = current["segments"][-1]
+            if segment.get("ended_at") is None:
+                segment["ended_at"] = _now()
+                current["speech_seconds"] = round(
+                    current["speech_seconds"] + now - segment["_t0"], 2
+                )
+            current["speech_ended_at"] = segment["ended_at"]
+            self._speech_ended = now
+            self._gap_started = now
+            self._schedule_gap_close()
 
-    def _assign_epoch_after_runtime(self, utterance) -> None:
-        """The runtime's own speech-start handler advances the activity epoch;
-        read it once that handler has run (same event-loop turn)."""
+    def _open_segment(self, utterance, now) -> None:
+        segment = {"started_at": _now(), "ended_at": None, "_t0": now}
+        utterance["segments"].append(segment)
+        if self._agent_speaking:
+            utterance["overlapped_reply"] = True
+        # The runtime's own speech-start handler advances the activity epoch;
+        # read it once that handler has run (same event-loop turn).
 
         def assign():
-            if utterance["epoch"] is None:
-                utterance["epoch"] = self._conversation.user_activity_epoch
+            epoch = self._conversation.user_activity_epoch
+            segment["epoch"] = epoch
+            if epoch not in utterance["epochs"]:
+                utterance["epochs"].append(epoch)
 
         try:
             asyncio.get_running_loop().call_soon(assign)
         except RuntimeError:
             assign()
 
+    def _schedule_gap_close(self) -> None:
+        self._cancel_gap_timer()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        current = self._current
+
+        def close_if_still_open():
+            self._gap_timer = None
+            if self._current is current and self._gap_started is not None:
+                self._finish_utterance()
+
+        self._gap_timer = loop.call_later(
+            self._owner.group_gap_seconds, close_if_still_open
+        )
+
+    def _cancel_gap_timer(self) -> None:
+        if self._gap_timer is not None:
+            self._gap_timer.cancel()
+            self._gap_timer = None
+
     def _finish_utterance(self) -> None:
         current = self._current
+        self._cancel_gap_timer()
+        self._gap_started = None
         if current is None:
             return
         self._current = None
+        for segment in current["segments"]:
+            segment.pop("_t0", None)
         if self._chunks and self._format is not None:
             sample_rate, channels = self._format
             audio = _wav(self._chunks, sample_rate, channels)
@@ -294,6 +358,7 @@ class _SessionDiagnostics:
                     "sample_rate": sample_rate,
                     "channels": channels,
                     "includes_pre_roll_seconds": round(self._pre_roll_seconds, 2),
+                    "covers_segments": len(current["segments"]),
                 }
             else:
                 current["flags"].append("audio_not_kept_run_limit")
@@ -304,10 +369,11 @@ class _SessionDiagnostics:
 
     def _utterance_for_epoch(self, epoch):
         for utterance in reversed(self.utterances):
-            if utterance["epoch"] == epoch or (
-                utterance["epoch"] is None and utterance is self._current
-            ):
+            if epoch in utterance["epochs"]:
                 return utterance
+        current = self._current
+        if current is not None and not current["epochs"]:
+            return current  # epoch not assigned yet (same event-loop turn)
         return None
 
     def _latest(self):
@@ -368,8 +434,12 @@ class _SessionDiagnostics:
     # -- responses ------------------------------------------------------------
 
     def on_agent_state(self, event) -> None:
+        self._agent_speaking = event.new_state == "speaking"
         if event.new_state != "speaking":
             return
+        if self._current is not None and self._gap_started is not None:
+            # Jarvis is answering: the utterance before it is complete.
+            self._finish_utterance()
         target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
         if target is not None and target["latency_ms"] is None and self._speech_ended:
             target["latency_ms"] = round((time.monotonic() - self._speech_ended) * 1000)
@@ -413,6 +483,7 @@ class _SessionDiagnostics:
         for utterance in self.utterances:
             if not utterance["accepted"]:
                 utterance["flags"].append("no_accepted_transcript")
+                utterance["unmatched_reason"] = classify_unmatched(utterance)
             if len(utterance["accepted"]) > 1:
                 utterance["flags"].append("several_transcripts_for_one_utterance")
         self._owner.write(
@@ -426,6 +497,17 @@ class _SessionDiagnostics:
                 "unmatched": self.unmatched,
             },
         )
+
+
+def classify_unmatched(utterance) -> str:
+    """Why speech has no accepted transcript. Evidence only, never "dropped"."""
+    if any(not a.get("duplicate") for a in utterance["asr"]):
+        return "recognised_but_not_accepted"
+    if utterance.get("overlapped_reply"):
+        return "during_jarvis_reply_echo_or_barge_in"
+    if utterance.get("speech_seconds", 0) < 0.4:
+        return "very_short_segment"
+    return "no_recognition_listen_to_audio"
 
 
 # -- retention, cleanup and the human-readable report -------------------------
@@ -445,9 +527,10 @@ def prune(root: Path, *, retention_days: float, keep_runs: int) -> list[str]:
             shutil.rmtree(run, ignore_errors=True)
             removed.append(run.name)
         else:
-            report = run / _REPORT
-            if report.exists():
-                report.unlink()  # plaintext reports never outlive one lab start
+            for name in (_REPORT, _ACCEPTANCE):
+                report = run / name
+                if report.exists():
+                    report.unlink()  # plaintext reports never outlive one lab start
     return removed
 
 
@@ -481,11 +564,166 @@ def load_run(run_dir: Path, protector) -> dict:
     }
 
 
+_CHANGES = {"created", "switched", "new_thread"}
+
+
+def _words(name) -> set[str]:
+    from jarvis.memory.project_routing import normalize_name
+
+    return set(normalize_name(name or "").split())
+
+
+def assess(data: dict) -> dict:
+    """Machine-readable PASS / FAIL / REVIEW for one diagnostics run.
+
+    FAIL: a deterministic contradiction (misrouting, an unexpected project
+    change, a false success claim, a save mismatch, an unrecovered withheld
+    answer). REVIEW: needs a human with the audio (speech without transcript,
+    recovered gate, fallback, clarification, duplicates, an interruption test
+    that did not happen). Recognised text is never treated as what was said.
+    """
+    from jarvis.memory.project_routing import (
+        embedded_project_command,
+        parse_project_command,
+    )
+    from jarvis.voice.project_claims import false_project_claims
+
+    results = []
+    interrupted_seen = False
+    interruption_followed = False
+    previous_interrupted = False
+    for session in data["sessions"]:
+        for u in session["utterances"]:
+            fail, review = [], []
+            accepted = [
+                a["text"] for a in u["accepted"] if not a.get("duplicate_event")
+            ]
+            prepared = [p for p in u["project"] if p["kind"] == "prepared"]
+            kinds = [p["kind"] for p in u["project"]]
+            responses = [r["kind"] for r in u["responses"]]
+            if previous_interrupted and accepted:
+                interruption_followed = "response_played" in responses or bool(
+                    u["assistant"]
+                )
+            previous_interrupted = False
+            if not accepted:
+                review.append(
+                    "unmatched_speech:" + (u.get("unmatched_reason") or "unknown")
+                )
+            text = accepted[-1] if accepted else ""
+            name = parse_project_command(text)[0] if text else None
+            last = prepared[-1] if prepared else None
+            action = last.get("action") if last else None
+            if accepted and last is None:
+                fail.append("accepted_turn_not_prepared")
+            if last is not None:
+                status = last.get("status")
+                if status == "failed":
+                    fail.append("save_failed")
+                elif status == "not_saved":
+                    review.append("not_saved:" + str(last.get("reason")))
+                elif status == "clarification":
+                    review.append("clarification_asked")
+                if status == "ready":
+                    saved = last.get("saved_text")
+                    if last.get("read_back_error"):
+                        fail.append("save_read_back_failed")
+                    elif saved != text:
+                        fail.append("save_mismatch")
+                    # A command must land in the project it names (exact or
+                    # the one similar name routing accepted), never elsewhere.
+                    target = _words(last.get("project"))
+                    if name is not None and not (
+                        _words(name) <= target or target <= _words(name)
+                    ):
+                        fail.append("command_misrouted")
+                    if name is None and action in _CHANGES:
+                        fail.append("unexpected_project_change")
+                    if name is None and embedded_project_command(text)[0]:
+                        review.append("embedded_project_command")
+            for reply in u["assistant"]:
+                if false_project_claims(
+                    reply["text"],
+                    action if last and last.get("status") == "ready" else None,
+                ):
+                    fail.append("false_project_claim")
+                if reply.get("interrupted"):
+                    interrupted_seen = True
+                    previous_interrupted = True
+            if "correction_spoken" in kinds:
+                review.append("correction_spoken")
+            if "response_withheld" in responses:
+                if (
+                    "response_played"
+                    not in responses[responses.index("response_withheld") :]
+                ):
+                    fail.append("withheld_answer_not_recovered")
+                elif "fallback" in kinds:
+                    review.append("context_gate_fallback")
+                else:
+                    review.append("context_gate_recovered")
+            if any(a.get("duplicate") for a in u["asr"]) or any(
+                a.get("duplicate_event") for a in u["accepted"] + u["assistant"]
+            ):
+                review.append("duplicate_events")
+            if accepted and u["asr"]:
+                finals = [a["text"] for a in u["asr"] if a["final"]]
+                if finals and finals[-1].strip() != text:
+                    review.append("recognition_differs_from_accepted")
+            if len(accepted) > 1:
+                review.append("several_transcripts_for_one_utterance")
+            verdict = "FAIL" if fail else "REVIEW" if review else "PASS"
+            results.append(
+                {
+                    "id": u["id"],
+                    "verdict": verdict,
+                    "fail": sorted(set(fail)),
+                    "review": sorted(set(review)),
+                    "accepted_transcript": text or None,
+                    "action": action,
+                    "project": last.get("project") if last else None,
+                    "segments": len(u.get("segments", ())),
+                }
+            )
+    run_review = []
+    if not interrupted_seen:
+        run_review.append("interruption_not_exercised")
+    elif not interruption_followed:
+        run_review.append("interruption_not_followed_by_answer")
+    unmatched_events = sum(len(s["unmatched"]) for s in data["sessions"])
+    if unmatched_events:
+        run_review.append(f"uncorrelated_events:{unmatched_events}")
+    counts = {
+        v: sum(r["verdict"] == v for r in results) for v in ("PASS", "FAIL", "REVIEW")
+    }
+    overall = (
+        "FAIL"
+        if counts["FAIL"]
+        else "REVIEW"
+        if counts["REVIEW"] or run_review
+        else "PASS"
+    )
+    return {
+        "schema": "jarvis-voice-acceptance-v1",
+        "run_id": data["run"]["run_id"],
+        "verdict": overall,
+        "counts": counts,
+        "speech_segments": sum(r["segments"] for r in results),
+        "utterances": len(results),
+        "accepted_turns": sum(r["accepted_transcript"] is not None for r in results),
+        "run_review": run_review,
+        "results": results,
+        "note": "Recognised text is Gemini speech recognition, not ground truth.",
+    }
+
+
 def _cell(value) -> str:
     return html.escape("" if value is None else str(value))
 
 
-def render_report(data: dict) -> str:
+def render_report(data: dict, verdicts: dict | None = None) -> str:
+    verdicts = verdicts or assess(data)
+    by_id = {r["id"]: r for r in verdicts["results"]}
     rows = []
     totals = {"utterances": 0, "no_transcript": 0, "saved": 0, "withheld": 0}
     for session in data["sessions"]:
@@ -565,8 +803,15 @@ def render_report(data: dict) -> str:
                 "withheld" if r["kind"] == "response_withheld" else "played"
                 for r in u["responses"]
             )
+            if u.get("unmatched_reason"):
+                flags.append("reason: " + u["unmatched_reason"])
+            if len(u.get("segments", ())) > 1:
+                flags.append(f"{len(u['segments'])} speech segments, one utterance")
+            verdict = by_id.get(u["id"], {"verdict": "", "fail": [], "review": []})
             rows.append(
                 "<tr>"
+                f"<td><b class='{verdict['verdict']}'>{_cell(verdict['verdict'])}</b><br>"
+                f"<small>{_cell(' '.join(verdict['fail'] + verdict['review']))}</small></td>"
                 f"<td>{_cell(u['id'])}<br><small>{_cell(u['speech_started_at'])}</small></td>"
                 f"<td>{player}<br><small>{_cell((u.get('audio') or {}).get('seconds'))} s</small></td>"
                 f"<td><small>{_cell(' … '.join(partials[-3:]))}</small><br>{_cell(finals[-1] if finals else '')}</td>"
@@ -586,7 +831,8 @@ def render_report(data: dict) -> str:
 <title>Jarvis voice diagnostics {_cell(run["run_id"])}</title>
 <style>body{{font:14px system-ui;margin:16px}}table{{border-collapse:collapse;width:100%}}
 td,th{{border:1px solid #ccc;padding:6px;vertical-align:top}}th{{background:#f3f3f3}}
-.note{{background:#fff7d6;padding:8px;border:1px solid #e6d27a}}</style></head><body>
+.note{{background:#fff7d6;padding:8px;border:1px solid #e6d27a}}
+.FAIL{{color:#b00020}}.REVIEW{{color:#a15c00}}.PASS{{color:#1b6e20}}</style></head><body>
 <h1>Voice diagnostics — run {_cell(run["run_id"])}</h1>
 <p class="note"><b>Recognition is not ground truth.</b> “Recognised” and “Accepted” columns are
 Gemini's speech recognition, not what you said. Play the audio to compare. The audio is
@@ -594,7 +840,12 @@ what Jarvis forwarded to Gemini after the wake word, plus a short pre-roll.
 This file is a plaintext copy of encrypted lab diagnostics; it is deleted at the next lab
 start, or with <code>-CleanupDiagnostics</code>.</p>
 <p>Utterances detected: {totals["utterances"]} · without accepted transcript: {totals["no_transcript"]} · saved to project memory: {totals["saved"]} · with a withheld answer: {totals["withheld"]} · unmatched events: {unmatched}</p>
-<table><tr><th>Utterance</th><th>Audio</th><th>Recognised (partials … final)</th>
+<p><b>Acceptance: <span class="{verdicts["verdict"]}">{verdicts["verdict"]}</span></b> ·
+PASS {verdicts["counts"]["PASS"]} · REVIEW {verdicts["counts"]["REVIEW"]} · FAIL
+{verdicts["counts"]["FAIL"]} · speech segments {verdicts["speech_segments"]} in
+{verdicts["utterances"]} utterances · run checks: {_cell(", ".join(verdicts["run_review"]) or "none")}.
+Machine-readable: <code>acceptance.json</code> next to this file.</p>
+<table><tr><th>Verdict</th><th>Utterance</th><th>Audio</th><th>Recognised (partials … final)</th>
 <th>Accepted transcript</th><th>Routing / project</th><th>Saved text (read back) / receipt</th>
 <th>Jarvis reply</th><th>Tools / latency</th><th>Flags</th></tr>
 {"".join(rows)}</table></body></html>"""
@@ -610,8 +861,13 @@ def write_report(lab: Path, protector, run_id: str | None = None) -> Path:
     if not runs:
         raise FileNotFoundError("no voice diagnostics run in this lab")
     run_dir = runs[-1]
+    data = load_run(run_dir, protector)
+    verdicts = assess(data)
+    (run_dir / _ACCEPTANCE).write_text(
+        json.dumps(verdicts, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     path = run_dir / _REPORT
-    path.write_text(render_report(load_run(run_dir, protector)), encoding="utf-8")
+    path.write_text(render_report(data, verdicts), encoding="utf-8")
     return path
 
 

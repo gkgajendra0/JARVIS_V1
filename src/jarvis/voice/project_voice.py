@@ -52,6 +52,10 @@ FALLBACK_INSTRUCTIONS = (
     "Say only this, briefly: 'Sorry, I couldn't load the project memory for that. "
     "Please say it again.' Do not answer the request itself."
 )
+CORRECTION_INSTRUCTIONS = (
+    "Say only this, briefly: 'Correction: {what} You are in {project}.' "
+    "Do not add anything else."
+)
 NO_TRANSCRIPT_INSTRUCTIONS = (
     "Say only this, briefly: 'Sorry, I didn't catch that. Please say it again.'"
 )
@@ -79,6 +83,8 @@ class VoiceProjectMetrics:
     not_saved: int = 0
     failed: int = 0
     duplicate_calls: int = 0
+    false_claims: int = 0
+    corrections: int = 0
     undelivered_user_turns: int = 0
     unprepared_responses_blocked: int = 0
     repairs: int = 0
@@ -277,16 +283,23 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
         if row.get("delivery") == "partial":
             item["interrupted"] = True
         fresh.append(item)
+    changed = decision.action in {"created", "switched", "new_thread"}
     result = {
         "status": "ready",
         "project": decision.title,
         "action": decision.action,
+        "project_changed": changed,
         "announcement": decision.announcement,
         "history": fresh,
         "earlier_history_already_provided": already,
         "coverage": context.get("coverage"),
         "guidance": _GUIDANCE,
     }
+    if not changed:
+        result["note"] = (
+            "No project was created or switched for this request. Do not say "
+            "that one was; the owner is still in '" + decision.title + "'."
+        )
     if decision.action == "switched" and outcome.previous:
         result["previous_project"] = outcome.previous
     if decision.reference_titles:
@@ -313,6 +326,8 @@ class VoiceProjectTurns:
         self._repair_attempts: dict[tuple, int] = {}
         self._repairing: set[tuple] = set()
         self._speech = None
+        self._corrected: set[str] = set()
+        self._current_title: str | None = None
         self._blocked_speech = None
         self._session = None
         self._closed = False
@@ -352,11 +367,53 @@ class VoiceProjectTurns:
             self.metrics.assistant_skipped += 1
             return
         self._recorded_assistant.add(turn.turn_id)
+        if self._correct_false_claim(delivered, turn):
+            return  # misinformation is never saved as project history
         evidence = tuple(self._delivered_ids)
         self._owner.spawn(
             self._record_assistant(delivered.outcome, turn, evidence),
             name="jarvis-project-voice-reply",
         )
+
+    def _correct_false_claim(self, delivered: _Delivered, turn) -> bool:
+        """A reply may only claim a project change the application committed.
+
+        Spoken audio cannot be retracted, so a false claim is corrected at
+        once with fixed wording and is not recorded as project history.
+        """
+        from jarvis.voice.project_claims import false_project_claims
+
+        outcome = delivered.outcome
+        action = outcome.decision.action if outcome.status == "ready" else None
+        false = false_project_claims(turn.text, action)
+        if not false:
+            return False
+        self.metrics.false_claims += 1
+        epoch = delivered.turn.user_activity_epoch
+        self._diag(
+            "false_project_claim", epoch=epoch, claims=sorted(false), action=action
+        )
+        LOGGER.warning(
+            "Project voice: reply claimed %s but committed action was %s; correcting",
+            sorted(false),
+            action,
+        )
+        if delivered.turn.turn_id not in self._corrected:
+            self._corrected.add(delivered.turn.turn_id)
+            project = (
+                outcome.decision.title
+                if outcome.status == "ready"
+                else self._current_title or "your current project"
+            )
+            what = (
+                "no project was created or switched."
+                if action not in {"created", "switched"}
+                else f"the project was {action}, nothing else changed."
+            )
+            self.metrics.corrections += 1
+            self._diag("correction_spoken", epoch=epoch)
+            self._generate(CORRECTION_INSTRUCTIONS.format(what=what, project=project))
+        return True
 
     def observe_activity(self) -> None:
         """New user speech: wake any waiting tool so it can re-check currentness."""
@@ -466,6 +523,7 @@ class VoiceProjectTurns:
                 (e.title for e in catalog.entries if e.selection == catalog.current),
                 None,
             )
+            self._current_title = previous
             # Durability: an accepted turn is saved even if a newer utterance or
             # the end of the wake session arrives meanwhile. The coordinator
             # still requires a current history grant.
@@ -492,6 +550,7 @@ class VoiceProjectTurns:
             )
             return _Outcome("failed", reason="error")
         decision = coordinator.last_decision
+        self._current_title = decision.title
         LOGGER.info(
             "Project voice turn saved | action=%s | references=%s | sources=%s",
             decision.action,

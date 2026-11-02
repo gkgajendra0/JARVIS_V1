@@ -36,7 +36,12 @@ if ($DiagnosticsReport -or $CleanupDiagnostics) {
         $out = & $python -X utf8 -m jarvis.voice.voice_diagnostics $action --lab-root $profile
         if ($LASTEXITCODE -ne 0) { throw "Diagnostics $action failed." }
         Write-Host $out
-        if ($DiagnosticsReport) { Start-Process $out }
+        if ($DiagnosticsReport) {
+            $acceptance = Get-Content (Join-Path (Split-Path $out) "acceptance.json") -Raw | ConvertFrom-Json
+            Write-Host ("Acceptance: {0}  (PASS {1} / REVIEW {2} / FAIL {3}; run checks: {4})" -f $acceptance.verdict, $acceptance.counts.PASS, $acceptance.counts.REVIEW, $acceptance.counts.FAIL, ($acceptance.run_review -join ", "))
+            foreach ($r in $acceptance.results) { if ($r.verdict -eq "FAIL") { Write-Host ("  FAIL {0}: {1}" -f $r.id, ($r.fail -join ", ")) } }
+            Start-Process $out
+        }
     } finally { $env:PYTHONPATH = $oldPath }
     return
 }

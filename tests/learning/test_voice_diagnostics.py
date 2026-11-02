@@ -185,7 +185,8 @@ async def test_missing_transcript_is_tracked_with_its_audio(labdir):
     assert (
         utterance["accepted"] == [] and "no_accepted_transcript" in utterance["flags"]
     )
-    assert utterance["epoch"] == 1
+    assert utterance["epochs"] == [1]
+    assert utterance["unmatched_reason"] == "very_short_segment"  # instant in tests
     with wave.open(io.BytesIO(data["audio"][utterance["id"]])) as audio:
         assert audio.getframerate() == 16000
         frames = audio.readframes(audio.getnframes())
@@ -341,6 +342,7 @@ async def test_audio_is_bounded_per_utterance_and_per_run(labdir):
         protector=FakeProtector(),
         max_utterance_seconds=0.05,
         max_run_audio_bytes=2_000,
+        group_gap_seconds=0.0,  # two separate utterances
     )
     run = VoiceRun(diagnostics)
     await run.speak(frames=20)  # 0.2 s > 0.05 s limit

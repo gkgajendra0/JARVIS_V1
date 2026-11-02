@@ -58,7 +58,40 @@ _SELECT_COMMAND = re.compile(
     r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
     re.IGNORECASE,
 )
-_POLITE = r"^(?:(?:can|could|would|will)\s+you\s+|please\s+)*"
+_POLITE = (
+    r"^(?:(?:can|could|would|will)\s+(?:you|we)\s+|please\s+|let['’]?s\s+"
+    r"|i\s+(?:want|would\s+like|['’]d\s+like|wanna)\s+to\s+|go\s+ahead\s+and\s+)*"
+)
+# Spoken commands often open with a discourse marker ("Okay. Create a project
+# called X", "Hey Jarvis, switch to Y"). Only this closed set of lead-ins is
+# removed, and only at the very start, so a command still has to be the whole
+# remaining sentence: "I told him to create a project" is never a command.
+_LEAD_IN = re.compile(
+    r"^(?:(?:okay|ok|alright|all\s+right|right|so|well|um+|uh+|hmm+|hey|hi|hello"
+    r"|jarvis|yes|yeah|yep|now|and|then|great|cool|fine|sure|thanks|thank\s+you|oh"
+    r"|actually|acha|accha|achha|theek\s+hai|thik\s+hai|haan|chalo)"
+    r"(?=$|[\s,.!;:\u2014-])[\s,.!;:\u2014-]*){1,4}",
+    re.IGNORECASE,
+)
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+def strip_lead_in(text: str) -> str:
+    """Remove a short conversational lead-in, e.g. "Okay." or "Hey Jarvis,"."""
+    return _LEAD_IN.sub("", text.strip(), count=1).strip()
+
+
+def embedded_project_command(text: str):
+    """A project command in a later sentence, e.g. "It went well. Create a
+    project called Goa." Routing asks rather than guessing either way."""
+    sentences = _SENTENCE_BREAK.split(text.strip())
+    for sentence in sentences[1:]:
+        name, kind = parse_project_command(sentence)
+        if name is not None:
+            return name, kind
+    return None, None
+
+
 _KEYWORD = r"(?P<kw>called|named)\s+"
 _CREATE_COMMANDS = (
     # "create project Nepal", "create a new project called Nepal",
@@ -187,6 +220,7 @@ def parse_project_command(text):
 
     kind is "create" or "plan" (asks for a new project) or "select".
     """
+    text = strip_lead_in(text)
     for pattern in _CREATE_COMMANDS:
         match = pattern.match(text)
         if match:
@@ -266,12 +300,27 @@ class ProjectRouter:
                 announcement=f"Selected {entry.title}.",
             )
         name, kind = parse_project_command(text)
+        command_text = strip_lead_in(text)
         if name is None and (
-            _UNPARSED_PROJECT_COMMAND.match(text) or _CREATE_PROJECT_PREFIX.match(text)
+            _UNPARSED_PROJECT_COMMAND.match(command_text)
+            or _CREATE_PROJECT_PREFIX.match(command_text)
         ):
             # A project command we could not read must not fall through to
             # the current project as if it had succeeded.
             return self._clarify(catalog, "")
+        if name is None:
+            embedded, embedded_kind = embedded_project_command(text)
+            if embedded is not None:
+                verb = (
+                    "switch to"
+                    if embedded_kind == "select"
+                    else "create project called"
+                )
+                return self._clarify(
+                    catalog,
+                    f"Nothing was changed. If you want a project change, say just: "
+                    f"'{verb} {embedded}'.",
+                )
         if proposed_name is not None:
             # Model suggestions only refine an explicit project command. They
             # cannot silently reroute ordinary discussion or invent a label.
@@ -391,7 +440,7 @@ class ProjectRouter:
         entry = next(
             (e for e in matches if e.selection == catalog.current), matches[-1]
         )
-        if text.casefold().startswith("new conversation in "):
+        if strip_lead_in(text).casefold().startswith("new conversation in "):
             return ProjectRoutingDecision(
                 "ready",
                 ProjectSelection(
