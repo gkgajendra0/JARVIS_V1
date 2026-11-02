@@ -68,6 +68,7 @@ async def test_post_forget_question_opens_general_and_reads_nepal_trip(
     first = next(p for p in us[0]["project"] if p["kind"] == "prepared")
     assert (first["action"], first["project"]) == ("created", "General")
     assert first["previous_selection"] is None
+    assert first["announcement"] == ""  # silent General bootstrap, audited as created
     # 3. The forgotten topic is not given to the model, from anywhere.
     delivered = [
         p for u in us for p in u["project"] if p["kind"] == "delivered_to_model"
@@ -94,6 +95,55 @@ async def test_post_forget_question_opens_general_and_reads_nepal_trip(
     nepal_rows = [r for r in lab.rows() if r[3] == "Nepal trip"]
     assert ("user", "The permits are sorted.", "complete", "Nepal trip") in nepal_rows
     assert all("SQL" not in r[1] for r in lab.rows())
+
+
+
+@pytest.mark.asyncio
+async def test_general_automatic_bootstrap_and_reuse_are_silent(router_lab):  # noqa: F811
+    access = router_lab.access()
+    router = ProjectRouter(access)
+
+    # First normal question: General is created but not announced.
+    created = await routed(router, "What is my interview preparation topic?")
+    assert created.title == "General"
+    assert created.create and created.action == "created"
+    assert created.announcement == ""
+
+    # Explicit commands still announce their outcomes.
+    named = await routed(router, "create project called interview preparation")
+    assert named.announcement == "Created project interview preparation."
+    explicit_switch = await routed(router, "switch to General")
+    assert explicit_switch.action == "switched"
+    assert explicit_switch.announcement == "Switched to General."
+
+    # A new voice process resumes existing General silently for normal speech.
+    restarted = ProjectRouter(access)
+    resumed = await routed(restarted, "Can you help me?")
+    assert resumed.title == "General" and resumed.action == "resumed"
+    assert resumed.announcement == ""
+
+    # After forgetting a selected project, an existing General is reused
+    # silently rather than speaking "Switched to General".
+    await routed(restarted, "switch to interview preparation")
+    await forget(access, "interview preparation")
+    reopened = await routed(restarted, "What is my interview preparation topic?")
+    assert reopened.title == "General" and reopened.action == "switched"
+    assert reopened.announcement == ""
+    assert (await access.catalog()).current == created.selection
+
+
+@pytest.mark.asyncio
+async def test_voice_tool_does_not_announce_automatic_general(lab):
+    voice = await lab.runtime()
+    wake = project_voice_tests.Wake(voice)
+    result = await wake.ask("What is my interview preparation topic?")
+    assert result["project"] == "General"
+    assert result["action"] == "created"
+    assert result["project_changed"] is True  # internally committed
+    assert result["announcement"] == ""
+    assert "do not mention opening" in result["guidance"]
+    wake.close()
+    await voice.aclose()
 
 
 def test_named_project_created_without_a_command_still_fails():
