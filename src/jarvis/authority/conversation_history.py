@@ -97,7 +97,10 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
             ),
             {"project_id": material["project_id"]},
             {"payload_sha256": digest},
-            "Forget this project's retained conversation content and derived state, including Jarvis replies in other projects that used it; preserve minimal deletion identities to block late writes.",
+            "Forget this project's retained conversation content and derived state, including "
+            f"{int(material.get('derived_count', 0))} Jarvis replies or tool results in other projects "
+            "that were generated with it in context; your own messages elsewhere are kept. "
+            "Minimal deletion identities are preserved to block late writes.",
             ActionAttributes(persistent_write=True, destructive=True),
             {},
         )

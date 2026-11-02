@@ -46,7 +46,9 @@ class ProjectClarificationRequired(ValueError):
     """No project was created or switched; the owner must say which one."""
 
     def __init__(self, question):
-        super().__init__("project clarification required: " + question)
+        # The owner-facing question can name projects; keep it off the
+        # exception text that generic handlers may log.
+        super().__init__("project clarification required")
         self.question = question
 
 
@@ -54,36 +56,96 @@ _SELECT_COMMAND = re.compile(
     r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project|what(?:'s| is) the status of)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
     re.IGNORECASE,
 )
+_POLITE = r"^(?:(?:can|could|would|will)\s+you\s+|please\s+)*"
 _CREATE_COMMANDS = (
-    # "create project Nepal", "create a new project called Nepal"
+    # "create project Nepal", "create a new project called Nepal",
+    # "can you create a project for Nepal?"
     re.compile(
-        r"^(?:please\s+)?(?:create|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
+        _POLITE + r"(?:create|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
         r"\s+(?:called\s+|named\s+|for\s+)?(?:my\s+|the\s+)?(.+?)[.?!]*$",
         re.IGNORECASE,
     ),
     # "start a project for Goa trip"; start/make need an explicit name keyword
     # so "start a new project at work" is not read as a project named "at work".
     re.compile(
-        r"^(?:please\s+)?(?:make|start)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
+        _POLITE + r"(?:make|start)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
         r"\s+(?:called|named|for)\s+(?:my\s+|the\s+)?(.+?)[.?!]*$",
         re.IGNORECASE,
     ),
-    # "create a nepal project", "make my Goa trip project"
+    # "create a nepal project" (create only: "make progress on my thesis
+    # project" and "add this to the project" are not commands)
     re.compile(
-        r"^(?:please\s+)?(?:create|make|start|add)\s+(?:a\s+|an\s+|my\s+|the\s+)?(?:new\s+)?"
-        r"(.+?)\s+project[.?!]*$",
+        _POLITE
+        + r"create\s+(?:a\s+|an\s+|my\s+|the\s+)?(?:new\s+)?(.+?)\s+project[.?!]*$",
         re.IGNORECASE,
     ),
-    # "new project Nepal", "new project called Nepal"
-    re.compile(r"^new\s+project\s+(?:called\s+|named\s+)?(.+?)[.?!]*$", re.IGNORECASE),
+    # "new project called Nepal" ("new project ideas are welcome" is not)
+    re.compile(r"^new\s+project\s+(?:called|named)\s+(.+?)[.?!]*$", re.IGNORECASE),
 )
-# An explicit create-project command whose name could not be read. Anchored at
-# the start so ordinary sentences ("I want to start a new project at work")
-# still go to the model as conversation.
+# An explicit create-project command with no readable name. Whole-text match,
+# so ordinary sentences ("I want to start a new project at work") still go to
+# the model as conversation.
 _UNPARSED_PROJECT_COMMAND = re.compile(
-    r"^(?:please\s+)?(?:(?:create|start|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project|new\s+project)\b",
+    _POLITE
+    + r"(?:(?:create|start|add)\s+(?:a\s+|an\s+)?(?:new\s+)?project|new\s+project)[.?!]*$",
     re.IGNORECASE,
 )
+# Words that show a captured "name" is really part of a sentence.
+_NOT_A_NAME = frozenset(
+    [
+        "to",
+        "on",
+        "with",
+        "of",
+        "at",
+        "in",
+        "into",
+        "from",
+        "about",
+        "by",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "and",
+        "or",
+        "but",
+        "so",
+        "if",
+        "when",
+        "then",
+        "will",
+        "would",
+        "can",
+        "could",
+        "should",
+        "sure",
+        "please",
+        "me",
+        "you",
+        "we",
+        "i",
+    ]
+)
+
+
+def _project_name(raw):
+    """A plausible project name: 1-4 words, no sentence words, else None."""
+    text = re.sub(r"\s+please$", "", raw.strip(" .?!,"), flags=re.IGNORECASE)
+    words = re.findall(r"\w+", normalize_name(text))
+    if not 1 <= len(words) <= 4 or any(w in _NOT_A_NAME for w in words):
+        return None
+    if not _name_words(text):
+        return None
+    return text
 
 
 def parse_project_command(text):
@@ -93,8 +155,10 @@ def parse_project_command(text):
     """
     for pattern in _CREATE_COMMANDS:
         match = pattern.match(text)
-        if match and _name_words(match.group(1).strip(" .?!")):
-            return match.group(1).strip(" .?!"), "create"
+        if match:
+            name = _project_name(match.group(1))
+            if name:
+                return name, "create"
     match = _SELECT_COMMAND.search(text)
     if match:
         kind = (

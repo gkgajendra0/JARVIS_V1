@@ -23,15 +23,25 @@ from jarvis.voice.project_conversation import ProjectConversationCoordinator
     [
         ("create a nepal project", ("nepal", "create")),
         ("Create a new project called Goa trip.", ("Goa trip", "create")),
-        ("make my Goa trip project", ("Goa trip", "create")),
         ("start project for interview prep", ("interview prep", "create")),
-        ("new project Nepal", ("Nepal", "create")),
+        ("new project called Nepal", ("Nepal", "create")),
+        ("Can you create a project for Nepal?", ("Nepal", "create")),
+        ("create a project for nepal please", ("nepal", "create")),
         ("Let's plan my Nepal trip", ("Nepal trip", "plan")),
         ("Switch to the trip", ("trip", "select")),
         ("We will take the Jimny", (None, None)),
         ("I want to start a new project at work soon", (None, None)),
         ("make sure the project is ready", (None, None)),
         ("start a new project at work", (None, None)),
+        # Reviewer-found false positives that used to create junk projects.
+        ("add this to the project", (None, None)),
+        ("add a note to the project", (None, None)),
+        ("start working on the project", (None, None)),
+        ("make progress on my thesis project", (None, None)),
+        ("make it a project", (None, None)),
+        ("start my day with the project", (None, None)),
+        ("new project ideas are welcome", (None, None)),
+        ("New project kickoff is tomorrow", (None, None)),
     ],
 )
 def test_project_command_phrases(text, expected):

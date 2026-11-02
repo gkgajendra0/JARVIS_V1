@@ -41,9 +41,9 @@ def _event_material(event: ConversationEvent) -> dict:
     return material
 
 
-REDACTED_TEXT = "[forgotten]"
-# Rows removed by forget stay as tombstones (role tool, delivery failed).
-REDACTED_ROW_SQL = "NOT (role='tool' AND text='[forgotten]')"
+# Forget leaves tombstones whose payload digest is all zeros (no real SHA-256
+# value can be); every read path excludes them by this marker.
+REDACTED_DIGEST = "0" * 64
 
 
 def _require_live_evidence(connection, evidence) -> None:
@@ -59,9 +59,9 @@ def _require_live_evidence(connection, evidence) -> None:
     live = connection.execute(
         "SELECT count(*) FROM conversation_event e JOIN conversation_thread t "
         "ON t.thread_id=e.thread_id JOIN conversation_workspace w "
-        "ON w.project_id=t.project_id WHERE w.forgotten_at IS NULL AND NOT "
-        f"(e.role='tool' AND e.text='{REDACTED_TEXT}') AND e.event_id IN ({placeholders})",
-        tuple(evidence),
+        "ON w.project_id=t.project_id WHERE w.forgotten_at IS NULL "
+        f"AND e.payload_sha256<>? AND e.event_id IN ({placeholders})",
+        (REDACTED_DIGEST, *evidence),
     ).fetchone()[0]
     if live != len(evidence):
         raise PermissionError("reply evidence was forgotten or is missing")

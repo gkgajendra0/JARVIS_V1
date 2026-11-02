@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from .project_conversation_store import REDACTED_DIGEST
 from .project_routing import normalize_name
 
 
@@ -20,13 +21,38 @@ class DeletionReceipt:
     derived_sources: int = 0
 
 
-# Every archived event of the forgotten project, plus every non-user event
-# anywhere whose recorded evidence reaches one of them (transitively). Owner
-# turns are never derived, so they stop the walk.
-_TAINTED_EVENTS_SQL = """
+# Jarvis replies and tool results saved before provenance tracking (migration
+# 0007) have no evidence edges. One saved in another live project after the
+# forgotten project began may have quoted it and nothing proves otherwise, so it
+# is treated as derived. Owner turns, omission markers and earlier events are
+# kept.
+_LEGACY_SUSPECTS = """
+SELECT e.event_id FROM conversation_event e
+JOIN conversation_thread t ON t.thread_id = e.thread_id
+JOIN conversation_workspace w ON w.project_id = t.project_id
+WHERE t.project_id <> :project AND w.forgotten_at IS NULL
+AND e.provenance_tracked = 0 AND e.role <> 'user'
+AND e.payload_sha256 <> :redacted
+AND instr(e.text, '"capture":"omitted"') = 0
+AND e.accepted_at >= (
+    SELECT min(accepted_at) FROM conversation_event
+    WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=:project)
+)
+"""
+
+# Starting from the forgotten project's events and the legacy suspects, walk
+# evidence edges to every non-user event that was generated with them in its
+# context, directly or through another such reply. Owner turns carry no
+# evidence and so are never reached.
+_TAINTED_EVENTS = (
+    """
 WITH RECURSIVE tainted(event_id) AS (
     SELECT event_id FROM conversation_event
-    WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)
+    WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=:project)
+    UNION
+"""
+    + _LEGACY_SUSPECTS
+    + """
     UNION
     SELECT d.event_id FROM conversation_event_dependency d
     JOIN tainted ON tainted.event_id = d.source_event_id
@@ -35,21 +61,49 @@ WITH RECURSIVE tainted(event_id) AS (
 )
 SELECT event_id FROM tainted
 """
-
-# Events saved before provenance tracking have no evidence edges. A Jarvis reply
-# or tool result of that kind, saved in another project after the forgotten
-# project began, may have quoted it; there is no way to prove otherwise, so it
-# is removed too. Owner turns and earlier replies are kept.
-_LEGACY_SUSPECT_SQL = """
-SELECT e.event_id FROM conversation_event e
-JOIN conversation_thread t ON t.thread_id = e.thread_id
-WHERE t.project_id <> ? AND e.provenance_tracked = 0 AND e.role <> 'user'
-AND NOT (e.role = 'tool' AND e.text = '[forgotten]')
-AND e.accepted_at >= (
-    SELECT min(accepted_at) FROM conversation_event
-    WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)
 )
-"""
+
+
+def derived_events(conn, project_id):
+    """IDs of events outside ``project_id`` that forgetting it must remove, and
+    the current revision of each thread holding them."""
+    parameters = {"project": project_id, "redacted": REDACTED_DIGEST}
+    tainted = {r[0] for r in conn.execute(_TAINTED_EVENTS, parameters)}
+    own = {
+        r[0]
+        for r in conn.execute(
+            "SELECT event_id FROM conversation_event WHERE thread_id IN "
+            "(SELECT thread_id FROM conversation_thread WHERE project_id=?)",
+            (project_id,),
+        )
+    }
+    derived = sorted(tainted - own)
+    threads = {}
+    for start in range(0, len(derived), 256):
+        chunk = derived[start : start + 256]
+        marks = ",".join("?" for _ in chunk)
+        for thread_id, revision in conn.execute(
+            "SELECT t.thread_id,t.archive_revision FROM conversation_thread t WHERE t.thread_id IN "
+            f"(SELECT thread_id FROM conversation_event WHERE event_id IN ({marks}))",
+            chunk,
+        ):
+            threads[thread_id] = revision
+    return tuple(derived), tuple(sorted(threads.items())), tuple(sorted(tainted))
+
+
+def _derived_digest(derived, threads):
+    import hashlib
+
+    return hashlib.sha256(
+        json.dumps([list(derived), [list(t) for t in threads]]).encode()
+    ).hexdigest()
+
+
+@dataclass(frozen=True)
+class ForgetPreview:
+    derived_sources: int
+    affected_projects: tuple[str, ...]
+    digest: str
 
 
 class ProjectControls:
@@ -138,6 +192,40 @@ class ProjectControls:
             raise ValueError("duplicate aliases")
         await self._metadata(project_id, aliases=aliases)
 
+    async def preview_forget(self, project_id):
+        """What forgetting ``project_id`` would remove elsewhere: counts and
+        project titles only, read under the owner's history permit."""
+        await self._entry(project_id)
+        from .project_access import CATALOG
+
+        material = {"operation": "preview_forget", "project_id": project_id}
+
+        def read(conn):
+            derived, threads, _ = derived_events(conn, project_id)
+            titles = sorted(
+                {
+                    r[0]
+                    for thread_id, _ in threads
+                    for r in conn.execute(
+                        "SELECT w.title FROM conversation_thread t JOIN conversation_workspace w "
+                        "ON w.project_id=t.project_id WHERE t.thread_id=?",
+                        (thread_id,),
+                    )
+                }
+            )
+            return ForgetPreview(
+                len(derived), tuple(titles), _derived_digest(derived, threads)
+            )
+
+        return await self.access._perform(
+            CATALOG,
+            material,
+            "read",
+            lambda p: self.access.store._bound_read(
+                CATALOG, material, permit=p, read=read
+            ),
+        )
+
     async def forget_project(self, project_id, *, expected_revision, permit=None):
         if type(expected_revision) is not int or expected_revision < 0:
             raise ValueError("exact archive revision required")
@@ -151,12 +239,15 @@ class ProjectControls:
                 if e.selection.project_id == project_id
             )
         )
+        preview = await self.preview_forget(project_id)
         material = {
             "operation": "forget_project",
             "thread_versions": thread_versions,
             "project_id": project_id,
             "epoch": s.revision,
             "expected_revision": expected_revision,
+            "derived_count": preview.derived_sources,
+            "derived_digest": preview.digest,
         }
         issuer = self.access.authority
         if permit is None:
@@ -187,51 +278,33 @@ class ProjectControls:
                         "SELECT count(*) FROM conversation_event WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)",
                         (project_id,),
                     ).fetchone()[0]
-                    # Find derived replies elsewhere before redacting, while the
-                    # forgotten project's events are still identifiable.
-                    tainted = {
-                        r[0] for r in conn.execute(_TAINTED_EVENTS_SQL, (project_id,))
-                    }
-                    tainted |= {
-                        r[0]
-                        for r in conn.execute(
-                            _LEGACY_SUSPECT_SQL, (project_id, project_id)
-                        )
-                    }
-                    own = {
-                        r[0]
-                        for r in conn.execute(
-                            "SELECT event_id FROM conversation_event WHERE thread_id IN "
-                            "(SELECT thread_id FROM conversation_thread WHERE project_id=?)",
-                            (project_id,),
-                        )
-                    }
-                    derived = sorted(tainted - own)
+                    # Derived replies elsewhere, found before redaction and
+                    # bound to the owner's approval: if they changed since the
+                    # approval was shown, nothing is deleted.
+                    derived, derived_threads, tainted_list = derived_events(
+                        conn, project_id
+                    )
+                    if (
+                        _derived_digest(derived, derived_threads)
+                        != material["derived_digest"]
+                    ):
+                        raise PermissionError("derived history changed before deletion")
                     # Redact payloads, preserve only immutable tombstone identities.
                     # Reusing a deleted event ID in any project is then rejected.
                     conn.execute(
                         "UPDATE conversation_event SET text='[forgotten]',role='tool',delivery='failed',payload_sha256=? WHERE thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)",
                         ("0" * 64, project_id),
                     )
-                    derived_threads = set()
                     for start in range(0, len(derived), 256):
                         chunk = derived[start : start + 256]
                         marks = ",".join("?" for _ in chunk)
-                        derived_threads |= {
-                            r[0]
-                            for r in conn.execute(
-                                f"SELECT DISTINCT thread_id FROM conversation_event WHERE event_id IN ({marks})",
-                                chunk,
-                            )
-                        }
                         conn.execute(
                             "UPDATE conversation_event SET text='[forgotten]',role='tool',delivery='failed',"
                             f"payload_sha256=? WHERE event_id IN ({marks})",
-                            ("0" * 64, *chunk),
+                            (REDACTED_DIGEST, *chunk),
                         )
                     # The evidence links of redacted events are themselves
                     # provenance about the forgotten content; drop them.
-                    tainted_list = sorted(tainted)
                     for start in range(0, len(tainted_list), 256):
                         chunk = tainted_list[start : start + 256]
                         marks = ",".join("?" for _ in chunk)
@@ -241,7 +314,7 @@ class ProjectControls:
                         )
                     # Content of other threads changed: stale packets and appends
                     # built on the old revision must fail rather than reuse it.
-                    for thread_id in sorted(derived_threads):
+                    for thread_id, _ in derived_threads:
                         conn.execute(
                             "UPDATE conversation_thread SET archive_revision=archive_revision+1 WHERE thread_id=?",
                             (thread_id,),

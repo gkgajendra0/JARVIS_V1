@@ -443,3 +443,211 @@ def test_owner_turns_cannot_carry_evidence_and_evidence_is_bound():
     cited = ConversationEvent("a", "s", "r", "assistant", "hi", now, evidence=("x",))
     assert "evidence" not in _event_material(plain)
     assert _event_material(cited)["evidence"] == ["x"]
+
+
+@pytest.mark.asyncio
+async def test_tracked_reply_chained_to_an_untracked_reply_is_also_removed(
+    tmp_path, authority_parts
+):
+    """Reviewer finding: legacy R0 quotes the fact; new R1 cites R0."""
+    path, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    provider = ProjectAnswerProvider(EchoingModel())
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    try:
+        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, f"My interview topic is {FACT}.")
+        await say(coordinator, provider, "Switch to the trip")
+        await say(coordinator, provider, "What is my interview topic?")
+        with sqlite3.connect(path) as connection:
+            connection.execute("UPDATE conversation_event SET provenance_tracked=0")
+            connection.execute("DELETE FROM conversation_event_dependency")
+        # After the upgrade: a tracked reply whose evidence is the legacy reply.
+        chained = await say(coordinator, provider, "Remind me of my interview topic?")
+        assert FACT in chained.answer
+        catalog = await access.catalog()
+        interview = next(
+            e for e in catalog.entries if e.title == "interview preparation"
+        )
+        controls = ProjectControls(access)
+        inspected = await controls.inspect_project(interview.selection.project_id)
+        await controls.forget_project(
+            interview.selection.project_id,
+            expected_revision=inspected.archive_revision,
+        )
+        assert not rows(
+            path, "SELECT 1 FROM conversation_event WHERE text LIKE ?", (f"%{FACT}%",)
+        )
+        assert not rows(
+            path,
+            "SELECT 1 FROM conversation_event_dependency d JOIN conversation_event e "
+            "ON e.event_id=d.event_id WHERE e.payload_sha256=?",
+            ("0" * 64,),
+        )
+    finally:
+        await reader.close()
+        await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_upgrade_repairs_a_project_forgotten_before_this_fix(
+    tmp_path, authority_parts
+):
+    """The owner's existing lab: Interview already forgotten at schema 6."""
+    from jarvis.memory.migration_runner import (
+        MemoryMigrationRunner,
+        discover_memory_migrations,
+    )
+
+    path = tmp_path / "legacy.db"
+    with sqlite3.connect(path) as connection:
+        MemoryMigrationRunner(discover_memory_migrations()[:6]).apply(connection)
+        connection.executescript(
+            """
+            INSERT INTO conversation_workspace(project_id,title) VALUES ('nepal','Nepal trip');
+            INSERT INTO conversation_thread(thread_id,project_id) VALUES ('tn','nepal');
+            INSERT INTO conversation_workspace(project_id,title,forgotten_at)
+                VALUES ('interview','[forgotten]','2026-11-02T04:00:00+00:00');
+            INSERT INTO conversation_thread(thread_id,project_id) VALUES ('ti','interview');
+            """
+        )
+        events = [
+            ("n1", "tn", 1, "user", "We will take the Jimny", "complete", "01:00"),
+            ("n2", "tn", 2, "assistant", "Understood.", "complete", "01:01"),
+            ("i1", "ti", 1, "tool", "[forgotten]", "failed", "02:00"),
+            ("n3", "tn", 3, "user", "What is my interview topic?", "complete", "03:00"),
+            (
+                "n4",
+                "tn",
+                4,
+                "assistant",
+                f"Your interview topic is {FACT}.",
+                "complete",
+                "03:01",
+            ),
+            (
+                "n5",
+                "tn",
+                5,
+                "tool",
+                '{"capture":"omitted","reason":"retention_paused","source_role":"user"}',
+                "failed",
+                "03:02",
+            ),
+            ("n6", "tn", 6, "assistant", f"It is {FACT}.", "complete", "05:00"),
+        ]
+        for event_id, thread, seq, role, text, delivery, at in events:
+            digest = "0" * 64 if event_id == "i1" else "a" * 64
+            connection.execute(
+                "INSERT INTO conversation_event(event_id,thread_id,sequence,revision,segment_id,"
+                "request_id,role,text,accepted_at,delivery,payload_sha256) VALUES "
+                "(?,?,?,?,'s','r',?,?,?,?,?)",
+                (
+                    event_id,
+                    thread,
+                    seq,
+                    seq,
+                    role,
+                    text,
+                    f"2026-11-02T{at}:00.000000+00:00",
+                    delivery,
+                    digest,
+                ),
+            )
+        before = connection.execute(
+            "SELECT archive_revision FROM conversation_thread WHERE thread_id='tn'"
+        ).fetchone()[0]
+        assert MemoryMigrationRunner().apply(connection) == 7
+        kept = dict(
+            connection.execute(
+                "SELECT event_id,text FROM conversation_event"
+            ).fetchall()
+        )
+        assert kept["n1"] == "We will take the Jimny"
+        assert kept["n2"] == "Understood."  # saved before Interview existed
+        assert kept["n3"] == "What is my interview topic?"
+        assert kept["n4"] == kept["n6"] == "[forgotten]"
+        assert "capture" in kept["n5"]  # omission markers stay
+        assert not connection.execute(
+            "SELECT rowid FROM conversation_event_fts WHERE conversation_event_fts MATCH ?",
+            ('"window"*',),
+        ).fetchall()
+        assert (
+            connection.execute(
+                "SELECT archive_revision FROM conversation_thread WHERE thread_id='tn'"
+            ).fetchone()[0]
+            == before + 1
+        )
+
+
+@pytest.mark.asyncio
+async def test_approval_is_bound_to_the_derived_replies_it_listed(
+    tmp_path, authority_parts
+):
+    """If the derived set changes while Hello is open, nothing is deleted."""
+    trace_path, store, _, _, writer, reader, issuer, grant = await setup_store(
+        tmp_path, authority_parts
+    )
+    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
+    provider = ProjectAnswerProvider(EchoingModel())
+    coordinator = ProjectConversationCoordinator(
+        access, source_clearance=lambda _: True
+    )
+    try:
+        await say(coordinator, provider, "Let's plan my Nepal trip")
+        await say(coordinator, provider, "Switch to interview preparation")
+        await say(coordinator, provider, f"My interview topic is {FACT}.")
+        await say(coordinator, provider, "Switch to the trip")
+        await say(coordinator, provider, "What is my interview topic?")
+        catalog = await access.catalog()
+        interview = next(
+            e for e in catalog.entries if e.title == "interview preparation"
+        )
+        controls = ProjectControls(access)
+        preview = await controls.preview_forget(interview.selection.project_id)
+        assert preview.derived_sources >= 1
+        assert preview.affected_projects == ("Nepal trip",)
+        original = issuer.authorize_project_deletion
+        seen = {}
+
+        def approve_while_history_changes(material):
+            seen.update(material)
+            handle = original(material)
+            # A previously unrelated Nepal reply gains evidence from Interview.
+            with sqlite3.connect(trace_path) as connection:
+                unrelated = connection.execute(
+                    "SELECT e.event_id FROM conversation_event e JOIN conversation_thread t "
+                    "ON t.thread_id=e.thread_id WHERE t.project_id=? AND e.role='assistant' "
+                    "ORDER BY e.sequence LIMIT 1",
+                    (catalog.current.project_id,),
+                ).fetchone()[0]
+                source = connection.execute(
+                    "SELECT event_id FROM conversation_event WHERE thread_id=? LIMIT 1",
+                    (interview.selection.thread_id,),
+                ).fetchone()[0]
+                connection.execute(
+                    "INSERT INTO conversation_event_dependency VALUES (?,?)",
+                    (unrelated, source),
+                )
+            return handle
+
+        issuer.authorize_project_deletion = approve_while_history_changes
+        inspected = await controls.inspect_project(interview.selection.project_id)
+        with pytest.raises(PermissionError, match="derived history changed"):
+            await controls.forget_project(
+                interview.selection.project_id,
+                expected_revision=inspected.archive_revision,
+            )
+        assert seen["derived_count"] == preview.derived_sources
+        assert rows(
+            trace_path,
+            "SELECT 1 FROM conversation_event WHERE text LIKE ?",
+            (f"%{FACT}%",),
+        )
+    finally:
+        await reader.close()
+        await writer.close()

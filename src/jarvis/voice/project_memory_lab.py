@@ -407,6 +407,14 @@ async def run_text_lab(
                         continue
                     if text == "/forget":
                         inspected = await controls.inspect_project(project_id)
+                        preview = await controls.preview_forget(project_id)
+                        if preview.derived_sources:
+                            print(
+                                f"Forgetting also removes {preview.derived_sources} Jarvis "
+                                "replies/tool results generated with this project's content in: "
+                                + ", ".join(preview.affected_projects)
+                                + ". Your own messages there are kept."
+                            )
                         coordinator.invalidate("forget")
                         result = await controls.forget_project(
                             project_id, expected_revision=inspected.archive_revision
