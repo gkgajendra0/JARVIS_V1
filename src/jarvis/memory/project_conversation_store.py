@@ -60,7 +60,9 @@ def _require_live_evidence(connection, evidence) -> None:
         "SELECT count(*) FROM conversation_event e JOIN conversation_thread t "
         "ON t.thread_id=e.thread_id JOIN conversation_workspace w "
         "ON w.project_id=t.project_id WHERE w.forgotten_at IS NULL "
-        f"AND e.payload_sha256<>? AND e.event_id IN ({placeholders})",
+        "AND e.payload_sha256<>? AND NOT EXISTS (SELECT 1 FROM "
+        "conversation_event_quarantine q WHERE q.event_id=e.event_id) "
+        f"AND e.event_id IN ({placeholders})",
         (REDACTED_DIGEST, *evidence),
     ).fetchone()[0]
     if live != len(evidence):

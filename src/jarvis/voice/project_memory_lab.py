@@ -345,18 +345,20 @@ async def run_text_lab(
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         else:
             manifest = None
-        for kind, affected in await controls.repair_report():
-            if kind == "forgotten_project_derived_replies":
-                print(
-                    f"UPGRADE REPAIR: removed {affected} Jarvis replies/tool results that "
-                    "were saved after a now-forgotten project began and had no recorded "
-                    "evidence. Your own messages were kept."
-                )
+        quarantine = await controls.quarantine_report()
+        if quarantine.count:
+            where = ", ".join(f"{t} ({n})" for t, n in quarantine.projects)
+            print(
+                f"UPGRADE CHECK: {quarantine.count} older Jarvis replies/tool results may "
+                f"repeat a project you forgot: {where}. Nothing was deleted; they are "
+                "hidden from Jarvis until you decide. /repair inspect shows them; "
+                "/repair delete or /repair restore asks for Windows Hello."
+            )
         print(
             "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; one more Hello opens personal reads for 30 min (10 min idle); corrections/deletion keep their own approvals."
         )
         print(
-            "Commands: /projects /inspect /pause /resume /forget /sleep /reauthorize /quit. Normal text selects explicit projects and asks questions."
+            "Commands: /projects /inspect /pause /resume /forget /sleep /reauthorize /repair /quit. Normal text selects explicit projects and asks questions."
         )
         while True:
             text = await asyncio.to_thread(input, "Jarvis> ")
@@ -385,6 +387,34 @@ async def run_text_lab(
                 if text == "/sleep":
                     coordinator.invalidate("sleep")
                     print("Listening segment closed; project selection retained.")
+                    continue
+                if text.startswith("/repair"):
+                    action = text.removeprefix("/repair").strip() or "status"
+                    if action == "status":
+                        report = await controls.quarantine_report()
+                        print(json.dumps(asdict(report), ensure_ascii=False))
+                    elif action == "inspect":
+                        for (
+                            title,
+                            at,
+                            role,
+                            body,
+                        ) in await controls.inspect_quarantine():
+                            print(
+                                json.dumps([title, at, role, body], ensure_ascii=False)
+                            )
+                    elif action in {"delete", "restore"}:
+                        coordinator.invalidate("quarantine_" + action)
+                        report = await controls.resolve_quarantine(action)
+                        print(
+                            f"Upgrade quarantine {action}d: {report.count} messages."
+                            if report.count
+                            else "Nothing is quarantined."
+                        )
+                    else:
+                        raise ValueError(
+                            "use /repair, /repair inspect, delete or restore"
+                        )
                     continue
                 if text.startswith("/"):
                     catalog = await access.catalog()

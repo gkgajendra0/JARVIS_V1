@@ -305,6 +305,9 @@ class ProjectArchiveAccess:
             # is set solely by forget; the column name is unambiguous in joins.
             live = (
                 " AND e.payload_sha256<>'" + "0" * 64 + "'"
+                # Upgrade quarantine: kept for the owner's decision, never used.
+                " AND NOT EXISTS (SELECT 1 FROM conversation_event_quarantine q "
+                "WHERE q.event_id=e.event_id)"
                 # Jarvis replies and tool results generated with another
                 # project's events in context are never fed back as context or
                 # search material. The original sources stay findable with

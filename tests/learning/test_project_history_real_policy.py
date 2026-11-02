@@ -303,3 +303,30 @@ async def test_production_policy_allows_labelled_other_project_fallback(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_production_policy_allows_owner_approved_quarantine_resolution(
+    tmp_path, production_policy
+):
+    from test_project_upgrade_quarantine import open_lab, text_of
+
+    for action in ("restore", "delete"):
+        root = tmp_path / action
+        root.mkdir()
+        path, _, controls, _, _, writer, reader = await open_lab(
+            root, production_policy
+        )
+        try:
+            report = await controls.resolve_quarantine(action)
+            assert report.count == 3
+            assert (await controls.quarantine_report()).count == 0
+            expected = (
+                "[forgotten]"
+                if action == "delete"
+                else "Your interview topic is SQL window functions."
+            )
+            assert text_of(path, "n4") == expected
+        finally:
+            await reader.close()
+            await writer.close()

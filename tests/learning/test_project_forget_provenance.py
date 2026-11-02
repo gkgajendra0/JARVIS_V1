@@ -494,100 +494,6 @@ async def test_tracked_reply_chained_to_an_untracked_reply_is_also_removed(
 
 
 @pytest.mark.asyncio
-async def test_upgrade_repairs_a_project_forgotten_before_this_fix(
-    tmp_path, authority_parts
-):
-    """The owner's existing lab: Interview already forgotten at schema 6."""
-    from jarvis.memory.migration_runner import (
-        MemoryMigrationRunner,
-        discover_memory_migrations,
-    )
-
-    path = tmp_path / "legacy.db"
-    with sqlite3.connect(path) as connection:
-        MemoryMigrationRunner(discover_memory_migrations()[:6]).apply(connection)
-        connection.executescript(
-            """
-            INSERT INTO conversation_workspace(project_id,title) VALUES ('nepal','Nepal trip');
-            INSERT INTO conversation_thread(thread_id,project_id) VALUES ('tn','nepal');
-            INSERT INTO conversation_workspace(project_id,title,forgotten_at)
-                VALUES ('interview','[forgotten]','2026-11-02T04:00:00+00:00');
-            INSERT INTO conversation_thread(thread_id,project_id) VALUES ('ti','interview');
-            """
-        )
-        events = [
-            ("n1", "tn", 1, "user", "We will take the Jimny", "complete", "01:00"),
-            ("n2", "tn", 2, "assistant", "Understood.", "complete", "01:01"),
-            ("i1", "ti", 1, "tool", "[forgotten]", "failed", "02:00"),
-            ("n3", "tn", 3, "user", "What is my interview topic?", "complete", "03:00"),
-            (
-                "n4",
-                "tn",
-                4,
-                "assistant",
-                f"Your interview topic is {FACT}.",
-                "complete",
-                "03:01",
-            ),
-            (
-                "n5",
-                "tn",
-                5,
-                "tool",
-                '{"capture":"omitted","reason":"retention_paused","source_role":"user"}',
-                "failed",
-                "03:02",
-            ),
-            ("n6", "tn", 6, "assistant", f"It is {FACT}.", "complete", "05:00"),
-        ]
-        for event_id, thread, seq, role, text, delivery, at in events:
-            digest = "0" * 64 if event_id == "i1" else "a" * 64
-            connection.execute(
-                "INSERT INTO conversation_event(event_id,thread_id,sequence,revision,segment_id,"
-                "request_id,role,text,accepted_at,delivery,payload_sha256) VALUES "
-                "(?,?,?,?,'s','r',?,?,?,?,?)",
-                (
-                    event_id,
-                    thread,
-                    seq,
-                    seq,
-                    role,
-                    text,
-                    f"2026-11-02T{at}:00.000000+00:00",
-                    delivery,
-                    digest,
-                ),
-            )
-        before = connection.execute(
-            "SELECT archive_revision FROM conversation_thread WHERE thread_id='tn'"
-        ).fetchone()[0]
-        assert MemoryMigrationRunner().apply(connection) == 7
-        assert connection.execute(
-            "SELECT kind,affected_events FROM conversation_repair_log"
-        ).fetchall() == [("forgotten_project_derived_replies", 2)]
-        kept = dict(
-            connection.execute(
-                "SELECT event_id,text FROM conversation_event"
-            ).fetchall()
-        )
-        assert kept["n1"] == "We will take the Jimny"
-        assert kept["n2"] == "Understood."  # saved before Interview existed
-        assert kept["n3"] == "What is my interview topic?"
-        assert kept["n4"] == kept["n6"] == "[forgotten]"
-        assert "capture" in kept["n5"]  # omission markers stay
-        assert not connection.execute(
-            "SELECT rowid FROM conversation_event_fts WHERE conversation_event_fts MATCH ?",
-            ('"window"*',),
-        ).fetchall()
-        assert (
-            connection.execute(
-                "SELECT archive_revision FROM conversation_thread WHERE thread_id='tn'"
-            ).fetchone()[0]
-            == before + 1
-        )
-
-
-@pytest.mark.asyncio
 async def test_approval_is_bound_to_the_derived_replies_it_listed(
     tmp_path, authority_parts
 ):
@@ -701,29 +607,6 @@ async def test_one_cross_project_recall_does_not_taint_later_unrelated_replies(
         assert replies.count(("Understood.",)) == 11
         assert not rows(
             path, "SELECT 1 FROM conversation_event WHERE text LIKE ?", (f"%{FACT}%",)
-        )
-    finally:
-        await reader.close()
-        await writer.close()
-
-
-@pytest.mark.asyncio
-async def test_upgrade_repair_count_is_reported_without_content(
-    tmp_path, authority_parts
-):
-    path, store, _, _, writer, reader, issuer, grant = await setup_store(
-        tmp_path, authority_parts
-    )
-    access = ProjectArchiveAccess(store, authority=issuer, grant=grant)
-    try:
-        assert await ProjectControls(access).repair_report() == ()
-        with sqlite3.connect(path) as connection:
-            connection.execute(
-                "INSERT INTO conversation_repair_log(kind,affected_events) VALUES "
-                "('forgotten_project_derived_replies',3)"
-            )
-        assert await ProjectControls(access).repair_report() == (
-            ("forgotten_project_derived_replies", 3),
         )
     finally:
         await reader.close()

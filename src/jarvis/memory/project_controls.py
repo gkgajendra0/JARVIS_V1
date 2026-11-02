@@ -100,6 +100,36 @@ def _derived_digest(derived, threads):
 
 
 @dataclass(frozen=True)
+class QuarantineReport:
+    count: int
+    projects: tuple[tuple[str, int], ...]
+    digest: str
+
+
+def _quarantine_state(conn):
+    import hashlib
+
+    ids = [
+        r[0]
+        for r in conn.execute(
+            "SELECT event_id FROM conversation_event_quarantine ORDER BY event_id"
+        )
+    ]
+    projects = tuple(
+        (title, count)
+        for title, count in conn.execute(
+            "SELECT w.title,count(*) FROM conversation_event_quarantine q "
+            "JOIN conversation_event e ON e.event_id=q.event_id "
+            "JOIN conversation_thread t ON t.thread_id=e.thread_id "
+            "JOIN conversation_workspace w ON w.project_id=t.project_id "
+            "GROUP BY w.project_id ORDER BY w.title"
+        )
+    )
+    digest = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+    return QuarantineReport(len(ids), projects, digest)
+
+
+@dataclass(frozen=True)
 class ForgetPreview:
     derived_sources: int
     affected_projects: tuple[str, ...]
@@ -192,19 +222,8 @@ class ProjectControls:
             raise ValueError("duplicate aliases")
         await self._metadata(project_id, aliases=aliases)
 
-    async def repair_report(self):
-        """Counts recorded by the one-time upgrade repair (no content)."""
+    async def _catalog_read(self, material, read):
         from .project_access import CATALOG
-
-        material = {"operation": "repair_report"}
-
-        def read(conn):
-            return tuple(
-                conn.execute(
-                    "SELECT kind,affected_events FROM conversation_repair_log "
-                    "WHERE affected_events>0 ORDER BY repair_id"
-                ).fetchall()
-            )
 
         return await self.access._perform(
             CATALOG,
@@ -214,6 +233,120 @@ class ProjectControls:
                 CATALOG, material, permit=p, read=read
             ),
         )
+
+    async def quarantine_report(self):
+        """Upgrade quarantine: messages per project, plus a digest of the set.
+
+        Counts and titles only; text is shown only by ``inspect_quarantine``.
+        """
+
+        def read(conn):
+            return _quarantine_state(conn)
+
+        return await self._catalog_read({"operation": "quarantine_report"}, read)
+
+    async def inspect_quarantine(self, *, authorize=None):
+        """The quarantined messages themselves, for the owner's local review."""
+        if authorize is not None and authorize() is not True:
+            raise PermissionError("inspection denied")
+
+        def read(conn):
+            return tuple(
+                conn.execute(
+                    "SELECT w.title,e.accepted_at,e.role,e.text FROM conversation_event_quarantine q "
+                    "JOIN conversation_event e ON e.event_id=q.event_id "
+                    "JOIN conversation_thread t ON t.thread_id=e.thread_id "
+                    "JOIN conversation_workspace w ON w.project_id=t.project_id "
+                    "ORDER BY w.title,e.accepted_at,e.event_id"
+                ).fetchall()
+            )
+
+        return await self._catalog_read({"operation": "inspect_quarantine"}, read)
+
+    async def resolve_quarantine(self, action, *, permit=None):
+        """Owner-approved end of the upgrade quarantine.
+
+        ``delete`` turns every quarantined message into a tombstone (the same
+        redaction forget uses) and rewrites the search index; ``restore``
+        returns them to normal use. The approval binds the exact set shown in
+        the report; if it changed, nothing happens.
+        """
+        if action not in {"delete", "restore"}:
+            raise ValueError("quarantine action must be delete or restore")
+        report = await self.quarantine_report()
+        if not report.count:
+            return report
+        material = {
+            "operation": "resolve_quarantine",
+            "action": action,
+            "count": report.count,
+            "projects": list(report.projects),
+            "digest": report.digest,
+        }
+        issuer = self.access.authority
+        if permit is None:
+            permit = await asyncio.to_thread(
+                issuer.authorize_quarantine_resolution, material
+            )
+
+        def resolve(conn):
+            with issuer.deletion_scope(permit, material) as validate:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    state = _quarantine_state(conn)
+                    if state.digest != material["digest"]:
+                        raise PermissionError("quarantine changed before approval")
+                    ids = [
+                        r[0]
+                        for r in conn.execute(
+                            "SELECT event_id FROM conversation_event_quarantine ORDER BY event_id"
+                        )
+                    ]
+                    threads = set()
+                    for start in range(0, len(ids), 256):
+                        chunk = ids[start : start + 256]
+                        marks = ",".join("?" for _ in chunk)
+                        threads |= {
+                            r[0]
+                            for r in conn.execute(
+                                f"SELECT DISTINCT thread_id FROM conversation_event WHERE event_id IN ({marks})",
+                                chunk,
+                            )
+                        }
+                        if action == "delete":
+                            conn.execute(
+                                "UPDATE conversation_event SET text='[forgotten]',role='tool',"
+                                f"delivery='failed',payload_sha256=? WHERE event_id IN ({marks})",
+                                (REDACTED_DIGEST, *chunk),
+                            )
+                            conn.execute(
+                                f"DELETE FROM conversation_event_dependency WHERE event_id IN ({marks})",
+                                chunk,
+                            )
+                    conn.execute("DELETE FROM conversation_event_quarantine")
+                    if action == "delete":
+                        conn.execute(
+                            "INSERT INTO conversation_event_fts(conversation_event_fts) VALUES('optimize')"
+                        )
+                    # Context available to these threads changed.
+                    for thread_id in sorted(threads):
+                        conn.execute(
+                            "UPDATE conversation_thread SET archive_revision=archive_revision+1 WHERE thread_id=?",
+                            (thread_id,),
+                        )
+                    validate()
+                    conn.commit()
+                    self.access.store.change_revision += 1
+                    return state
+                except BaseException:
+                    conn.rollback()
+                    raise
+
+        result = await self.access.store._writer.run(resolve)
+        self.access.local_revision += 1
+        for callback in self.access._invalidators:
+            callback("quarantine_" + action, None)
+        return result
 
     async def preview_forget(self, project_id):
         """What forgetting ``project_id`` would remove elsewhere: counts and
@@ -325,6 +458,14 @@ class ProjectControls:
                             "UPDATE conversation_event SET text='[forgotten]',role='tool',delivery='failed',"
                             f"payload_sha256=? WHERE event_id IN ({marks})",
                             (REDACTED_DIGEST, *chunk),
+                        )
+                    # Redacted events need no further owner review.
+                    for start in range(0, len(tainted_list), 256):
+                        chunk = tainted_list[start : start + 256]
+                        marks = ",".join("?" for _ in chunk)
+                        conn.execute(
+                            f"DELETE FROM conversation_event_quarantine WHERE event_id IN ({marks})",
+                            chunk,
                         )
                     # The evidence links of redacted events are themselves
                     # provenance about the forgotten content; drop them.
