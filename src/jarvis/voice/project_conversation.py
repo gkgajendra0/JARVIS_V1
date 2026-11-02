@@ -451,14 +451,20 @@ class ProjectConversationCoordinator:
         """The routing decision committed by the most recent prepare_reply."""
         return self._decision
 
-    async def record_spoken_assistant(self, conversation, packet, turn):
+    async def record_spoken_assistant(
+        self, conversation, packet, turn, *, evidence=None
+    ):
         """Record an ASSISTANT turn the voice bridge already accepted.
 
         Native audio generates the reply itself, so there is no issued text
         answer to compare against. The caller binds ``turn`` to the request
-        whose ``packet`` was given to the model; every packet source becomes
-        the reply's evidence, exactly as in the text path.
+        whose ``packet`` was given to the model. Evidence defaults to every
+        packet source, as in the text path; a live session passes every source
+        it has delivered so far, since the reply may restate any of them.
         """
+        evidence = packet.source_ids if evidence is None else tuple(evidence)
+        if not set(packet.source_ids) <= set(evidence):
+            raise ValueError("reply evidence must include its own packet")
         if not isinstance(packet, PreparedProjectReply):
             raise TypeError("prepared project packet required")
         if turn.role is not ConversationRole.ASSISTANT or not any(
@@ -482,7 +488,7 @@ class ProjectConversationCoordinator:
                     else "source_not_eligible",
                 )
             return await self.recorder.record(
-                conversation, turn, route, evidence=packet.source_ids
+                conversation, turn, route, evidence=evidence
             )
 
     def diagnostics(self):

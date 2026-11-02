@@ -252,7 +252,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if voice_session_observer is not None:
                 voice_session_observer(session, bridge)
             if project_memory is not None:
+                # Blocking tool behaviour first: fails closed before any audio.
+                project_memory.configure_realtime_model(session.llm)
                 project_turns = project_memory.session(bridge.conversation)
+                project_turns.bind_session(session)
+                session.on("speech_created", project_turns.observe_speech)
                 self._project_turns = project_turns
                 bridge.add_accepted_turn_observer(project_turns.observe_turn)
                 bridge.add_close_observer(project_turns.close)
@@ -543,8 +547,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
     def _session_audio_output(self, bridge, output):
         personal = self._personal_context
+        inner_detach = None
         if personal is not None and bridge.conversation is self._session_conversation:
-            return PersonalContextAudioOutput(output, personal)
+            output = PersonalContextAudioOutput(output, personal)
+            inner_detach = output.detach
+        project_turns = self._project_turns
+        if (
+            project_turns is not None
+            and bridge.conversation is self._session_conversation
+        ):
+            from jarvis.voice.project_voice_audio import ProjectAudioGate
+
+            output = ProjectAudioGate(output, project_turns, inner_detach=inner_detach)
         return output
 
     @staticmethod

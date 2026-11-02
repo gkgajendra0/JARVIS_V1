@@ -1,8 +1,9 @@
 """Content-free per-response voice measurements for lab comparisons.
 
 Records, per wake session: response latency (end of owner speech -> Jarvis
-starts speaking), Gemini Live response count, token usage reported by the
-realtime model, and tool calls. No transcript or tool payload is written.
+starts speaking), Gemini Live response count, per-response token usage from
+LiveKit's ``session_usage_updated`` (the deprecated ``metrics_collected`` is not
+used), and tool calls. No transcript or tool payload is written.
 """
 
 from __future__ import annotations
@@ -13,6 +14,17 @@ from pathlib import Path
 from time import monotonic
 
 LOGGER = logging.getLogger(__name__)
+
+# Our name -> LLMModelUsage attribute (livekit.agents.metrics.usage, 1.8.x).
+_USAGE_FIELDS = {
+    "input": "input_tokens",
+    "input_cached": "input_cached_tokens",
+    "input_audio": "input_audio_tokens",
+    "input_text": "input_text_tokens",
+    "output": "output_tokens",
+    "output_audio": "output_audio_tokens",
+    "output_text": "output_text_tokens",
+}
 
 
 class VoiceUsageMeter:
@@ -32,14 +44,9 @@ class VoiceUsageMeter:
             "responses": 0,
             "latency_ms": [],
             "tool_calls": {},
-            "tokens": {
-                "input": 0,
-                "output": 0,
-                "total": 0,
-                "audio_in": 0,
-                "text_in": 0,
-            },
-            "metric_events": 0,
+            "tokens": dict.fromkeys(_USAGE_FIELDS, 0),
+            "per_response_input": [],
+            "usage_updates": 0,
             "disallowed_tool_calls": 0,
         }
         user_stopped = {"at": None}
@@ -60,25 +67,34 @@ class VoiceUsageMeter:
                 )
                 user_stopped["at"] = None
 
-        def on_metrics(event) -> None:
-            metric = getattr(event, "metrics", None)
-            if getattr(metric, "type", None) != "realtime_model_metrics":
-                return
-            state["metric_events"] += 1
-            tokens = state["tokens"]
-            for key, name in (
-                ("input", "input_tokens"),
-                ("output", "output_tokens"),
-                ("total", "total_tokens"),
-            ):
-                value = getattr(metric, name, None)
-                if isinstance(value, int):
-                    tokens[key] += value
-            details = getattr(metric, "input_token_details", None)
-            for key, name in (("audio_in", "audio_tokens"), ("text_in", "text_tokens")):
-                value = getattr(details, name, None)
-                if isinstance(value, int):
-                    tokens[key] += value
+        previous: dict[tuple, dict[str, int]] = {}
+
+        def on_usage(event) -> None:
+            """LiveKit 1.8 ``session_usage_updated``: cumulative per model.
+
+            Gemini Live reports each response's prompt as the WHOLE session
+            context so far, so the cumulative input grows ~quadratically with
+            turns. The per-response deltas show that growth; their sum is input
+            processed across responses, not unique text and not a billing claim.
+            """
+            usage = getattr(event, "usage", None)
+            for model in getattr(usage, "model_usage", ()) or ():
+                if getattr(model, "type", None) != "llm_usage":
+                    continue
+                key = (getattr(model, "provider", ""), getattr(model, "model", ""))
+                current = {
+                    name: getattr(model, attr, 0) or 0
+                    for name, attr in _USAGE_FIELDS.items()
+                }
+                before = previous.get(key, dict.fromkeys(_USAGE_FIELDS, 0))
+                delta = {name: current[name] - before[name] for name in _USAGE_FIELDS}
+                previous[key] = current
+                if not any(delta.values()):
+                    continue
+                state["usage_updates"] += 1
+                for name, value in delta.items():
+                    state["tokens"][name] += value
+                state["per_response_input"].append(delta["input"])
 
         def on_tools(event) -> None:
             for call in getattr(event, "function_calls", ()) or ():
@@ -95,6 +111,12 @@ class VoiceUsageMeter:
             row["user_turns"] = sum(
                 1 for t in bridge.conversation.turns if t.role.value == "user"
             )
+            inputs = row.pop("per_response_input")
+            row["input_per_response"] = {
+                "values": inputs,
+                "first": inputs[0] if inputs else None,
+                "peak": max(inputs) if inputs else None,
+            }
             row["latency_ms"] = {
                 "count": len(latencies),
                 "median": latencies[len(latencies) // 2] if latencies else None,
@@ -110,6 +132,6 @@ class VoiceUsageMeter:
 
         session.on("user_state_changed", on_user_state)
         session.on("agent_state_changed", on_agent_state)
-        session.on("metrics_collected", on_metrics)
+        session.on("session_usage_updated", on_usage)
         session.on("function_tools_executed", on_tools)
         bridge.add_close_observer(on_close)
