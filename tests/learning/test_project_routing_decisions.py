@@ -9,6 +9,7 @@ import json
 import sqlite3
 
 import pytest
+import pytest_asyncio
 from test_project_forget_provenance import EchoingModel, say
 from test_project_routing import accepted, routed
 
@@ -23,7 +24,7 @@ from jarvis.voice.project_answer_provider import ProjectAnswerProvider
 from jarvis.voice.project_conversation import ProjectConversationCoordinator
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def lab(tmp_path, authority_parts):
     """An empty project archive, like a fresh text lab (no seeded projects)."""
     path = tmp_path / "history.db"
