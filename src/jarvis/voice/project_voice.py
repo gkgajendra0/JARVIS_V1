@@ -98,6 +98,7 @@ class VoiceProjectMetrics:
     duplicate_calls: int = 0
     false_claims: int = 0
     corrections: int = 0
+    paused_sessions: int = 0
     fast_path_turns: int = 0
     tool_path_turns: int = 0
     late_routing: int = 0
@@ -164,6 +165,7 @@ class VoiceProjectMemory:
         provider: str = "gemini",
         diagnostics=None,
         fast_path: bool = True,
+        required: bool = True,
     ) -> None:
         if not callable(source_clearance):
             raise TypeError("original-history source clearance required")
@@ -171,6 +173,10 @@ class VoiceProjectMemory:
         self.diagnostics = diagnostics
         # Ordinary turns answered from preloaded context (no tool round trip).
         self.fast_path = bool(fast_path)
+        # The lab stops if Windows Hello is denied (required). Production voice
+        # continues as ordinary Jarvis without project memory instead.
+        self.required = bool(required)
+        self._paused_logged = False
         self._memory = memory_runtime
         self._capability = capability_runtime
         self._clearance = source_clearance
@@ -221,6 +227,31 @@ class VoiceProjectMemory:
         from jarvis.voice.livekit_session import require_blocking_realtime_tools
 
         require_blocking_realtime_tools(llm)
+
+    def available(self) -> bool:
+        """Whether a new wake session can use project memory.
+
+        The history grant ends when Windows session continuity changes (lock,
+        user switch). Like personal learning, it is never reopened silently:
+        later wake sessions run as ordinary voice until Jarvis restarts and the
+        owner approves Windows Hello again.
+        """
+        current = False
+        if self.access is not None and not self._closed:
+            try:
+                current = bool(self.access.current())
+            except Exception:  # noqa: BLE001 - unavailable OS evidence fails closed
+                current = False
+        if not current and self.access is not None and not self._paused_logged:
+            self._paused_logged = True
+            self.metrics.paused_sessions += 1
+            LOGGER.warning(
+                "Voice project memory paused: history grant no longer current; "
+                "restart Jarvis and approve Windows Hello to resume"
+            )
+        elif not current and self.access is not None:
+            self.metrics.paused_sessions += 1
+        return current
 
     def session(self, conversation) -> VoiceProjectTurns:
         if self.coordinator is None or self._closed:

@@ -371,8 +371,9 @@ def test_fixed_project_mode_prompt_and_schema_stay_small():
     """Fixed tokens added to EVERY Gemini response in project-memory mode."""
     from jarvis.voice.agent import PROJECT_MEMORY_INSTRUCTIONS
 
-    # Roughly 4 characters per token. Before this change: 1,059 + 435 + 724.
-    assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 720
+    # Roughly 4 characters per token. Before the performance pass: 1,059 +
+    # 435 + 724. The instructions include the voice grounding rules (#303).
+    assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 1000
     assert len(project_voice._TOOL_DESCRIPTION) <= 260
     assert len(project_voice._GUIDANCE) <= 460
 

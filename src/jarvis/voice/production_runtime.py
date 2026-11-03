@@ -174,8 +174,18 @@ def build_production_voice_runtime(
 
     ``project_memory_factory``, ``voice_session_observer``, ``tool_allowlist``
     and ``session_audio_tap`` are disabled by default and passed only by the
-    isolated project voice lab.
+    isolated project voice lab. Normal Jarvis builds project memory only when
+    the owner sets ``JARVIS_PROJECT_MEMORY_MODE=voice``
+    (:mod:`jarvis.voice.project_voice_production`).
     """
+    if project_memory_factory is None:
+        # Owner-activated normal-voice project memory; None while the flag is
+        # off (default), which leaves the runtime exactly as before.
+        from jarvis.voice.project_voice_production import (
+            production_project_memory_factory,
+        )
+
+        project_memory_factory = production_project_memory_factory(config)
     if project_memory_factory is not None and not config.memory_enabled:
         raise ValueError("project voice memory requires canonical memory")
     if config.wake_model_path is None:

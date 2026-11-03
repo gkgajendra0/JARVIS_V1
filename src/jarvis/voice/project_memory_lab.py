@@ -15,9 +15,9 @@ from contextlib import contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 
-from jarvis.conversation import ConversationTurn
-from jarvis.memory.explicit import MemorySecretRejectedError, reject_prohibited_secret
-from jarvis.memory.topic_continuity_policy import _RESTRICTED
+from jarvis.memory.project_history_source import (
+    standard_history_source,
+)
 from jarvis.voice.semantic_smoke_lab import prepare_smoke_profile, smoke_environment
 
 MARKER = "jarvis-project-memory-text-v1"
@@ -37,20 +37,6 @@ def project_lab_environment(profile: Path, repo: Path):
                 os.environ.pop("JARVIS_STEP3_POLICY_PATH", None)
             else:
                 os.environ["JARVIS_STEP3_POLICY_PATH"] = previous
-
-
-def standard_history_source(turn):
-    if (
-        not isinstance(turn, ConversationTurn)
-        or len(turn.text.encode("utf-8")) > 8000
-        or _RESTRICTED.search(turn.text)
-    ):
-        return False
-    try:
-        reject_prohibited_secret(predicate="", value=turn.text)
-    except MemorySecretRejectedError:
-        return False
-    return True
 
 
 def verify_source(repo: Path, expected: str):

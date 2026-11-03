@@ -164,6 +164,9 @@ class VoiceRuntimeController:
         self.config = config
         self.audio = audio
         self._session_factory = session_factory
+        # "conversation" for owner wake/proactive sessions; "system" while a
+        # one-off system utterance or update-approval session is created.
+        self._session_purpose = "conversation"
         self._vision_service = vision_service
         self._owner_context_state = owner_context_state
         self._active_speaker_visual_buffer = active_speaker_visual_buffer
@@ -324,7 +327,7 @@ class VoiceRuntimeController:
     ) -> None:
         """Speak one system message through the normal realtime model/voice lane."""
 
-        session, bridge = self._session_factory(self.config)
+        session, bridge = self._system_session()
         session.output.audio = output
         try:
             session.input.set_audio_enabled(False)
@@ -828,7 +831,7 @@ class VoiceRuntimeController:
         self._active_end = active_end
         decision = asyncio.get_running_loop().create_future()
         accepting_decision = False
-        session, bridge = self._session_factory(self.config)
+        session, bridge = self._system_session()
         session_input = SessionAudioInput()
         session.input.audio = session_input
 
@@ -939,6 +942,14 @@ class VoiceRuntimeController:
 
     def _session_audio_output(self, bridge, output):
         return output
+
+    def _system_session(self):
+        """A session for a system utterance or decision, not owner conversation."""
+        self._session_purpose = "system"
+        try:
+            return self._session_factory(self.config)
+        finally:
+            self._session_purpose = "conversation"
 
     async def _validate_gemini_handoff(self, bridge):
         return (

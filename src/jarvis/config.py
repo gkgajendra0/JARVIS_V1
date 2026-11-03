@@ -159,6 +159,9 @@ class JarvisConfig:
     personal_context_mode: str = "off"
     personal_learning_mode: str = "off"
     personal_learning_reenable_categories: tuple[str, ...] = ()
+    # Project conversation memory in normal voice. "off" (default) leaves
+    # Jarvis exactly as before; "voice" is activated only by the owner.
+    project_memory_mode: str = "off"
     memory_candidate_extraction_enabled: bool = False
     memory_candidate_extraction_model: str | None = None
     memory_semantic_recall_model: str | None = None
@@ -198,6 +201,8 @@ class JarvisConfig:
             raise ValueError("personal_context_mode must be off or apply")
         if self.personal_context_mode == "apply":
             object.__setattr__(self, "memory_enabled", True)
+        if self.project_memory_mode not in {"off", "voice"}:
+            raise ValueError("project_memory_mode must be off or voice")
         if not isinstance(self.gemini_fallback, GeminiFallbackConfig):
             raise TypeError("gemini_fallback must be GeminiFallbackConfig")
         normalized = str(self.log_level).strip().upper()
@@ -574,6 +579,11 @@ class JarvisConfig:
             personal_learning_mode=_configured_required_text(
                 "JARVIS_PERSONAL_LEARNING_MODE", "off", machine
             ),
+            project_memory_mode=_configured_required_text(
+                "JARVIS_PROJECT_MEMORY_MODE", "off", machine
+            )
+            .strip()
+            .casefold(),
             memory_candidate_extraction_enabled=_configured_bool(
                 "JARVIS_MEMORY_CANDIDATE_EXTRACTION_ENABLED", False, machine
             ),

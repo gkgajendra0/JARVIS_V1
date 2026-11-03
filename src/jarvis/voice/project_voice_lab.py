@@ -92,7 +92,13 @@ async def run_voice_lab(
     ``fast_path=False`` (--tool-only-memory) keeps the earlier behaviour: every
     request goes through prepare_project_turn. For A/B latency comparisons.
     """
+    from dataclasses import replace
+
     from jarvis.voice.voice_usage_meter import VoiceUsageMeter
+
+    # The lab decides memory itself: a production flag in the machine profile
+    # must never add project memory to a -Baseline run.
+    config = replace(config, project_memory_mode="off")
 
     if runtime_builder is None:
         from jarvis.voice.production_runtime import build_production_voice_runtime

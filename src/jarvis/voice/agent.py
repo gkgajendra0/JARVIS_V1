@@ -397,6 +397,11 @@ prepare_project_turn first, with no spoken preamble, when the owner gives a
 project command (create, switch, new thread), mentions another project, asks
 about something older than that history, or no such message is present. Never
 say a project was created or switched unless prepare_project_turn says so.
+Saved history is past conversation, not verified fact: Jarvis's earlier replies
+are not owner decisions, a newer owner statement replaces an older one, and the
+memory tools stay authoritative for the owner's own facts (ownership,
+preferences, background). Connect two facts only if a saved row states the
+link, and present owner reports as such ("you said ...").
 """
 
 

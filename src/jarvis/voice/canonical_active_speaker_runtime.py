@@ -251,7 +251,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             self._live_session = session
             if voice_session_observer is not None:
                 voice_session_observer(session, bridge)
-            if project_memory is not None:
+            # Only owner conversation sessions use project memory. System
+            # sessions (startup/status/work-delivery speech, update approval)
+            # never save turns to, or receive context from, project history.
+            project_memory = self._project_memory
+            if (
+                project_memory is not None
+                and self._session_purpose == "conversation"
+                and project_memory.available()
+            ):
                 # Blocking tool behaviour first: fails closed before any audio.
                 project_memory.configure_realtime_model(session.llm)
                 project_turns = project_memory.session(bridge.conversation)
@@ -1129,7 +1137,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         try:
             if self._project_memory is not None:
                 # Inside try: a denied Hello still releases memory below.
-                await self._project_memory.start()
+                try:
+                    await self._project_memory.start()
+                except Exception as exc:
+                    if self._project_memory.required:
+                        raise  # isolated lab: stop rather than run without it
+                    LOGGER.error(
+                        "Voice project memory unavailable; continuing as ordinary "
+                        "voice | error=%s",
+                        type(exc).__name__,
+                    )
+                    await self._project_memory.aclose()
+                    self._project_memory = None
             await super().run()
         finally:
             if self._project_memory is not None:
