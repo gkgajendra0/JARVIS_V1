@@ -90,6 +90,7 @@ async def run_voice_lab(
     runtime_builder=None,
     diagnostics=None,
     fast_path: bool = True,
+    qualification: bool = False,
 ):
     """``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics.
 
@@ -109,7 +110,11 @@ async def run_voice_lab(
         from jarvis.voice.production_runtime import build_production_voice_runtime
 
         runtime_builder = build_production_voice_runtime
-    allowlist = lab_tool_allowlist(baseline=baseline)
+    if qualification and (baseline or diagnostics is None):
+        raise ValueError("qualification needs project memory and diagnostics")
+    # Qualification exposes the normal tool set (Hands, research, canonical
+    # memory), as the production flag would; the isolated profile is kept.
+    allowlist = None if qualification else lab_tool_allowlist(baseline=baseline)
     meter = VoiceUsageMeter(
         lab / "voice-usage.jsonl",
         mode="baseline"
@@ -136,7 +141,7 @@ async def run_voice_lab(
     runtime = runtime_builder(
         config,
         voice_session_observer=observe_session,
-        tool_allowlist=allowlist,
+        **({} if allowlist is None else {"tool_allowlist": allowlist}),
         **({} if baseline else {"project_memory_factory": memory_factory}),
         **(
             {"session_audio_tap": diagnostics.audio_tap}
@@ -184,12 +189,20 @@ def main():
         "prepare_project_turn (the earlier behaviour, for A/B comparison).",
     )
     parser.add_argument(
+        "--qualification",
+        action="store_true",
+        help="One focused live qualification: normal tools (Hands, research, "
+        "canonical memory) with project memory; requires --record-diagnostics.",
+    )
+    parser.add_argument(
         "--record-diagnostics",
         action="store_true",
         help="Lab only: keep DPAPI-sealed utterance audio and per-turn records "
         "in this lab (7-day / 5-run retention).",
     )
     args = parser.parse_args()
+    if args.qualification and (args.baseline or not args.record_diagnostics):
+        parser.error("--qualification needs project memory and --record-diagnostics")
     if os.name != "nt":
         parser.error("requires Windows audio, SQLCipher, DPAPI and Hello")
     repo = Path(__file__).resolve().parents[3]
@@ -232,11 +245,17 @@ def main():
                 "BASELINE (project memory off)" if args.baseline else "PROJECT MEMORY"
             )
             print(f"VOICE LAB {mode}. Isolated memory: {database}")
-            print(
-                "Tools Gemini can call: "
-                + ", ".join(sorted(lab_tool_allowlist(baseline=args.baseline)))
-                + ". Hands, desktop/file control, capability acquisition, research and work are unavailable."
-            )
+            if args.qualification:
+                print(
+                    "QUALIFICATION: normal tools available, including Hands (real "
+                    "desktop actions) and web research. Use only safe actions."
+                )
+            else:
+                print(
+                    "Tools Gemini can call: "
+                    + ", ".join(sorted(lab_tool_allowlist(baseline=args.baseline)))
+                    + ". Hands, desktop/file control, capability acquisition, research and work are unavailable."
+                )
             print(
                 "Normal wake word, barge-in and Gemini Live. Free lane only; no Paid fallback."
             )
@@ -273,12 +292,18 @@ def main():
                     baseline=args.baseline,
                     diagnostics=diagnostics,
                     fast_path=not args.tool_only_memory,
+                    qualification=args.qualification,
                 )
             )
             if diagnostics is not None:
                 print(
                     "Report: python -m jarvis.voice.voice_diagnostics report --lab-root "
                     + str(lab)
+                )
+            if args.qualification:
+                print(
+                    "Grade: python -m jarvis.voice.project_voice_qualification "
+                    "--lab-root " + str(lab)
                 )
         except KeyboardInterrupt:
             print("Voice lab stopped.")

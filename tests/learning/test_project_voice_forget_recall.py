@@ -351,3 +351,96 @@ async def test_renewal_after_shutdown_never_attaches(lab, authority_parts):
     await voice.aclose()  # drains the renewal; the new grant is revoked
     assert voice.available() is False
     await asyncio.sleep(0)
+
+
+# -- D1: bounded Hello wait on the first wake after lock/unlock ---------------
+
+
+@pytest.mark.asyncio
+async def test_first_wake_after_unlock_waits_for_hello_and_uses_memory(
+    lab, authority_parts
+):
+    voice = await nepal(lab)
+    authority_parts.windows.lock_unlock()
+    assert await voice.prepare_wake(timeout=5) is None  # approved in time
+    assert voice.available() is True and voice.metrics.renewals == 1
+    wake = Wake(voice)  # this same wake saves turns again
+    await wake.ask("We will also take a stove.", "Noted.")
+    assert "We will also take a stove." in texts(lab)
+
+
+@pytest.mark.asyncio
+async def test_denied_hello_on_wake_says_memory_is_paused_once(lab, authority_parts):
+    voice = await nepal(lab)
+    authority_parts.windows.lock_unlock()
+    authority_parts.hello.denied = True
+    notice = await voice.prepare_wake(timeout=5)
+    assert notice == project_voice.PAUSED_NOTICE_INSTRUCTIONS
+    assert voice.available() is False
+    calls = len(authority_parts.hello.calls)
+    # Within the 5-minute cooldown: no wait, no new prompt, no repeated notice.
+    assert await voice.prepare_wake(timeout=5) is None
+    assert len(authority_parts.hello.calls) == calls
+
+
+@pytest.mark.asyncio
+async def test_slow_hello_never_blocks_the_wake_beyond_the_bound(lab, authority_parts):
+    import threading
+
+    voice = await nepal(lab)
+    authority_parts.windows.lock_unlock()
+    release = threading.Event()
+    real = voice._opener
+
+    def slow_opener():
+        release.wait(5)
+        return real()
+
+    voice._opener = slow_opener
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    notice = await voice.prepare_wake(timeout=0.1)
+    assert loop.time() - started < 2
+    assert notice == project_voice.PAUSED_NOTICE_INSTRUCTIONS
+    release.set()  # the owner approves a moment later
+    await voice.drain()
+    assert await voice.prepare_wake(timeout=0.1) is None
+    assert voice.available() is True
+
+
+@pytest.mark.asyncio
+async def test_current_grant_needs_no_wait(lab, authority_parts):
+    voice = await nepal(lab)
+    calls = len(authority_parts.hello.calls)
+    assert await voice.prepare_wake(timeout=0.01) is None
+    assert len(authority_parts.hello.calls) == calls
+
+
+def test_wake_notice_is_spoken_as_the_sessions_first_prompt():
+    import inspect
+
+    from jarvis.voice.runtime import VoiceRuntimeController
+
+    source = inspect.getsource(VoiceRuntimeController._run_one_session_owned)
+    hook = source.index("notice = await self._before_conversation_session()")
+    assert hook < source.index("session, bridge = self._session_factory(self.config)")
+    assert "initial_instructions = notice" in source
+
+
+@pytest.mark.asyncio
+async def test_renewal_events_reach_diagnostics(lab, authority_parts, tmp_path):
+    from test_voice_diagnostics import FakeProtector
+
+    from jarvis.voice import voice_diagnostics as vd
+
+    root = tmp_path / "profile"
+    root.mkdir()
+    diagnostics = vd.VoiceDiagnostics(root, protector=FakeProtector())
+    voice = await nepal(lab)
+    voice.diagnostics = diagnostics
+    authority_parts.windows.lock_unlock()
+    await voice.prepare_wake(timeout=5)
+    await diagnostics.aclose()
+    data = vd.load_run(diagnostics.run_dir, FakeProtector())
+    kinds = [e["kind"] for e in data["runtime_events"]]
+    assert kinds == ["renewal_requested", "renewal_succeeded", "renewal_ready_for_wake"]

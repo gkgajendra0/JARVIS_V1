@@ -57,6 +57,13 @@ PRELOAD_MAX_CHARS = 3000
 _FAST_REPLY_WAIT_SECONDS = 15.0
 # After a denied or timed-out renewal, do not ask again for this long.
 RENEWAL_COOLDOWN_SECONDS = 300.0
+# First wake after a lock/unlock waits this long for the fresh Hello approval
+# before continuing as ordinary voice (the renewal itself may finish later).
+RENEWAL_WAIT_SECONDS = 20.0
+PAUSED_NOTICE_INSTRUCTIONS = (
+    "Say only this, briefly, then listen: 'Project memory is paused, so I won't "
+    "remember this conversation. It resumes after Windows Hello approval.'"
+)
 # Long-term recall: archive searches per utterance, hits and characters given.
 SEARCHES_PER_UTTERANCE = 2
 SEARCH_HITS = 8
@@ -208,6 +215,7 @@ class VoiceProjectMemory:
         self._opener = None
         self._renewing = None
         self._renew_after = 0.0
+        self._paused_notice_due = False
         self._memory = memory_runtime
         self._capability = capability_runtime
         self._clearance = source_clearance
@@ -287,11 +295,15 @@ class VoiceProjectMemory:
                 return
             self._attach(grant)
             self._paused_logged = False
+            self._paused_notice_due = False
             self.metrics.renewals += 1
+            self._runtime_event("renewal_succeeded")
             LOGGER.info("Voice project memory renewed with a fresh Windows Hello grant")
         except Exception as exc:  # noqa: BLE001 - ordinary voice continues
             self.metrics.renewal_failures += 1
             self._renew_after = monotonic() + RENEWAL_COOLDOWN_SECONDS
+            self._paused_notice_due = True
+            self._runtime_event("renewal_failed", error=type(exc).__name__)
             LOGGER.warning(
                 "Voice project memory renewal failed; ordinary voice continues | "
                 "error=%s",
@@ -321,12 +333,7 @@ class VoiceProjectMemory:
         voice while a fresh Windows Hello approval is requested in the
         background (:meth:`request_renewal`); later wakes use the new grant.
         """
-        current = False
-        if self.access is not None and not self._closed:
-            try:
-                current = bool(self.access.current())
-            except Exception:  # noqa: BLE001 - unavailable OS evidence fails closed
-                current = False
+        current = self._grant_current()
         if not current and self.access is not None:
             self.metrics.paused_sessions += 1
             if not self._paused_logged:
@@ -337,6 +344,60 @@ class VoiceProjectMemory:
                 )
             self.request_renewal()
         return current
+
+    def _grant_current(self) -> bool:
+        if self.access is None or self._closed:
+            return False
+        try:
+            return bool(self.access.current())
+        except Exception:  # noqa: BLE001 - unavailable OS evidence fails closed
+            return False
+
+    async def prepare_wake(self, timeout: float | None = None) -> str | None:
+        """Before an owner wake session: renew a lapsed grant, bounded.
+
+        Returns instructions for a spoken notice when project memory stays
+        paused for this wake (once per failed or timed-out renewal attempt),
+        else None. Never waits longer than ``timeout``; a denied renewal is not
+        asked again during RENEWAL_COOLDOWN_SECONDS.
+        """
+        if self.access is None or self._closed or self._grant_current():
+            return None
+        bound = RENEWAL_WAIT_SECONDS if timeout is None else timeout
+        started = monotonic()
+        if self.request_renewal():
+            self._runtime_event("renewal_requested")
+        task = self._renewing
+        if task is not None:
+            try:
+                await asyncio.wait_for(asyncio.shield(task), bound)
+            except TimeoutError:
+                # Keeps running in the background; this wake stays ordinary.
+                self._paused_notice_due = True
+                self._runtime_event(
+                    "renewal_wait_timed_out",
+                    waited_ms=round((monotonic() - started) * 1000),
+                )
+        if self._grant_current():
+            self._runtime_event(
+                "renewal_ready_for_wake",
+                waited_ms=round((monotonic() - started) * 1000),
+            )
+            return None
+        if self._paused_notice_due:
+            self._paused_notice_due = False
+            self._runtime_event("paused_notice_spoken")
+            return PAUSED_NOTICE_INSTRUCTIONS
+        return None
+
+    def _runtime_event(self, kind, **fields) -> None:
+        diagnostics = self.diagnostics
+        event = getattr(diagnostics, "runtime_event", None)
+        if callable(event):
+            try:
+                event(kind, **fields)
+            except Exception:  # noqa: BLE001 - diagnostics never affect voice
+                LOGGER.warning("Voice diagnostics runtime hook failed")
 
     def session(self, conversation) -> VoiceProjectTurns:
         if self.coordinator is None or self._closed:
@@ -1423,6 +1484,7 @@ class VoiceProjectTurns:
         self._diag(
             "history_forgotten",
             epoch=epoch,
+            terms=list(preview.terms),  # sealed lab diagnostics only
             owner_rows=receipt.owner_rows,
             jarvis_rows=receipt.jarvis_rows,
             projects=list(receipt.projects),

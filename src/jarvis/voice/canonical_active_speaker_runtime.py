@@ -545,6 +545,20 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 project_turns_getter=lambda: self._project_turns,
             )
 
+    async def _before_conversation_session(self) -> str | None:
+        # First wake after a Windows lock/unlock: bounded wait for a fresh
+        # Hello grant. On failure this wake is ordinary voice, and says so.
+        memory = self._project_memory
+        if memory is None:
+            return None
+        try:
+            return await memory.prepare_wake()
+        except Exception as exc:  # noqa: BLE001 - never blocks ordinary voice
+            LOGGER.warning(
+                "Project memory wake preparation failed | error=%s", type(exc).__name__
+            )
+            return None
+
     async def _validate_gemini_handoff(self, bridge):
         if (
             not await super()._validate_gemini_handoff(bridge)

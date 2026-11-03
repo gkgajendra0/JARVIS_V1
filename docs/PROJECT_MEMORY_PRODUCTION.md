@@ -184,30 +184,31 @@ needed. Ordinary fast-path turns are unchanged. Local cost is measured as
 `search_ms` / `search_bytes` (tests assert under 500 ms on CI). The added fixed
 prompt is about 70 tokens of instructions plus two short tool schemas.
 
-### Windows Hello renewal
+### Windows Hello renewal (owner decisions D1–D3 applied)
 
-A wake whose grant lapsed (Windows lock, unlock or user switch) does three things:
+The first wake after a lock, unlock or user switch:
 
-1. It runs as ordinary voice.
-2. It revokes the old grant; a revoked grant is never reused.
-3. It requests a fresh grant in the background, which shows a Hello prompt.
+1. Revokes the lapsed grant; a revoked grant is never reused.
+2. Requests a fresh grant, which shows the Hello prompt.
+3. **Waits at most 20 s** (`RENEWAL_WAIT_SECONDS`) before the session starts.
+   - **Approved in time:** this same wake uses project memory and saves its turns.
+   - **Denied, timed out or failing:** this wake is ordinary voice, and Jarvis
+     first says: "Project memory is paused, so I won't remember this
+     conversation. It resumes after Windows Hello approval." The notice is
+     spoken once per failed attempt.
+   - **Too slow:** a renewal still running after 20 s may finish in the
+     background, and then the next wake has memory.
 
-After approval, later wakes use project memory again without a restart. After a
-denial or timeout, voice stays ordinary and Jarvis does not ask again for 5
-minutes (`RENEWAL_COOLDOWN_SECONDS`). New counters: `renewals` and
-`renewal_failures`.
+After a failure, nobody is asked again for 5 minutes (D2,
+`RENEWAL_COOLDOWN_SECONDS`): those wakes are ordinary, with no wait and no
+repeated notice. Speak the request after approving; speech during the Hello
+prompt may not be captured. Counters: `renewals` and `renewal_failures`.
+Diagnostics runtime events: `renewal_requested`, `renewal_succeeded`,
+`renewal_failed`, `renewal_wait_timed_out`, `renewal_ready_for_wake` and
+`paused_notice_spoken`.
 
-### Decisions for the owner
-
-- **D1:** the renewing wake itself is ordinary voice, so its turns are not
-  saved. The alternative is to hold the wake until Hello is answered, which
-  delays the first reply.
-- **D2:** the renewal cooldown after a denial or timeout is 5 minutes.
-- **D3:** forget matches rows containing **all** the given words, across all
-  projects, and removes replies generated from them, even ones that never
-  repeated the words (conservative provenance). Paraphrases without the words
-  (for example "the Suzuki" for "the Jimny") are not found; say them
-  separately.
+Forgetting keeps explicit-word matching, cross-project scope, the deletion
+preview and a fresh Hello approval. There is no semantic deletion (D3).
 
 ### Remaining limits
 
@@ -219,4 +220,41 @@ minutes (`RENEWAL_COOLDOWN_SECONDS`). New counters: `renewals` and
   that choice.
 - The live model effect of search and forget wording is untested; no model
   calls were made.
+
+## 9. Live qualification (one focused owner run)
+
+This run uses an isolated lab profile only; it never touches the real
+database. It exposes the normal tool set with project memory, as the
+production flag would. Hands actions are real, so use a safe one.
+
+```powershell
+$c = "<final 40-char commit>"; $lab = "E:\Jarvis\Labs\qual-$(Get-Date -f yyyyMMdd-HHmm)"
+& "$env:TEMP\Start-VoiceLab.ps1" -Commit $c -LabRoot $lab -Qualification
+```
+
+Approve Windows Hello. Then, in one run:
+
+1. **Setup** (not graded): seed one old fact and push it out of the preload.
+   - Say "Remember that my car is a Jimny."
+   - Say "Our hotel in Kathmandu is Yak and Yeti."
+   - Say 13+ short filler notes ("Packing note one: socks", and so on).
+   - Stop talking, let the wake end, then wake again.
+2. **Q1 recall:** "Which hotel did we book in Kathmandu?" Expect
+   `search_project_history`.
+3. **Q2 forget:** "Forget that my car is a Jimny." Expect `forget_memory`,
+   then `forget_saved_history`, then the Hello prompt. Approve it, let the wake
+   end, wake again, and ask "What car do I have?" It must not be known.
+4. **Q3 tools:**
+   - "Open Notepad." (Hands, then close it yourself.)
+   - "What's the weather in Kathmandu today?" (research)
+5. **Q4 renewal:** lock Windows (Win+L), unlock, wake Jarvis, and approve Hello
+   within 20 s. Then say "Add a stove to the packing list."
+6. Ctrl+C. Grade with `-GradeQualification` (no model call); see the
+   `-DiagnosticsReport` page for audio and transcripts.
+
+The grader writes `qualification.json` next to the sealed run, with PASS, FAIL,
+NOT_RUN or REVIEW per step. Q2 reports `partial_forget:canonical_only` or
+`partial_forget:history_only` whenever only one store was cleared, and
+`resurfaced:<word>` if a later session was given or spoke the word. Listen to
+the audio before accepting the transcripts.
 

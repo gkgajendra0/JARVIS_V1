@@ -13,10 +13,14 @@ param(
     [switch]$RecordDiagnostics,
     # A/B only: no session preload; every request calls prepare_project_turn.
     [switch]$ToolOnlyMemory,
+    # One focused live qualification (normal tools + project memory); implies diagnostics.
+    [switch]$Qualification,
     # Decrypt the latest diagnostics run into a local HTML report (no voice run).
     [switch]$DiagnosticsReport,
     # Delete all diagnostics recordings, records and reports of this lab.
-    [switch]$CleanupDiagnostics
+    [switch]$CleanupDiagnostics,
+    # Grade the latest -Qualification run (no voice run, no model call).
+    [switch]$GradeQualification
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -28,6 +32,16 @@ if ($LASTEXITCODE -ne 0) { throw "Exact commit is not local. Fetch it explicitly
 $resolvedLab = [IO.Path]::GetFullPath($LabRoot)
 $source = Join-Path $resolvedLab "source"
 $profile = Join-Path $resolvedLab "profile"
+if ($GradeQualification) {
+    if (-not (Test-Path (Join-Path $profile "project-memory.marker") -PathType Leaf)) { throw "Marked profile unavailable." }
+    $oldPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = Join-Path $source "src"
+        & $python -X utf8 -m jarvis.voice.project_voice_qualification --lab-root $profile
+        if ($LASTEXITCODE -ne 0) { throw "Qualification grading failed." }
+    } finally { $env:PYTHONPATH = $oldPath }
+    return
+}
 if ($DiagnosticsReport -or $CleanupDiagnostics) {
     if ($DiagnosticsReport -and $CleanupDiagnostics) { throw "Choose one diagnostics action." }
     if (-not (Test-Path (Join-Path $profile "project-memory.marker") -PathType Leaf)) { throw "Marked profile unavailable." }
@@ -66,6 +80,10 @@ try {
     if ($Baseline) { $arguments += "--baseline" }
     if ($RecordDiagnostics) { $arguments += "--record-diagnostics" }
     if ($ToolOnlyMemory) { $arguments += "--tool-only-memory" }
+    if ($Qualification) {
+        $arguments += "--qualification"
+        if (-not $RecordDiagnostics) { $arguments += "--record-diagnostics" }
+    }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Voice lab failed; retain its files." } }
     finally { Pop-Location }

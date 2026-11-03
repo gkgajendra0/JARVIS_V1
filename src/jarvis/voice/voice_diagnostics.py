@@ -92,6 +92,7 @@ class VoiceDiagnostics:
         self.utterance_count = 0
         self.audio_bytes = 0
         self._tasks: set[asyncio.Task] = set()
+        self._runtime_events: list[dict] = []
         self._closed = False
         self._write_now("run.json", {"run_id": self.run_id, "started_at": _now()})
 
@@ -114,6 +115,17 @@ class VoiceDiagnostics:
         """session_audio_tap: frames forwarded to Gemini for this session."""
         diag = self._sessions.get(id(bridge.conversation))
         return None if diag is None else diag.observe_frame
+
+    def runtime_event(self, kind: str, **fields) -> None:
+        """Runtime-level event outside any wake session (e.g. Hello renewal)."""
+        self._runtime_events.append(
+            {"at": _now(), "kind": kind, "session_count": self._session_count, **fields}
+        )
+        # Rare events: written in order, synchronously, so the newest list wins.
+        try:
+            self._write_now("runtime-events.json", list(self._runtime_events))
+        except OSError:
+            LOGGER.warning("Voice diagnostics runtime event write failed")
 
     def project_event(self, conversation, kind: str, **fields) -> None:
         """Hook used by VoiceProjectTurns (lab only)."""
@@ -461,8 +473,16 @@ class _SessionDiagnostics:
 
     def on_tools(self, event) -> None:
         target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
-        for call in getattr(event, "function_calls", ()) or ():
+        outputs = tuple(getattr(event, "function_call_outputs", ()) or ())
+        for index, call in enumerate(getattr(event, "function_calls", ()) or ()):
             entry = {"at": _now(), "name": getattr(call, "name", "unknown")}
+            output = outputs[index] if index < len(outputs) else None
+            if output is not None:
+                # Outcome only: an error flag and the tool's own status word.
+                entry["is_error"] = bool(getattr(output, "is_error", False))
+                status = _tool_status(getattr(output, "output", None))
+                if status is not None:
+                    entry["status"] = status
             if target is None:
                 self._unmatched("tool_without_utterance", entry)
             else:
@@ -536,6 +556,20 @@ class _SessionDiagnostics:
         )
 
 
+def _tool_status(output):
+    if isinstance(output, dict):
+        value = output.get("status", output.get("ok"))
+    else:
+        try:
+            parsed = json.loads(output) if isinstance(output, str) else None
+        except ValueError:
+            return None
+        value = (
+            parsed.get("status", parsed.get("ok")) if isinstance(parsed, dict) else None
+        )
+    return value if isinstance(value, str | bool) else None
+
+
 def classify_unmatched(utterance) -> str:
     """Why speech has no accepted transcript. Evidence only, never "dropped"."""
     if any(not a.get("duplicate") for a in utterance["asr"]):
@@ -594,10 +628,16 @@ def load_run(run_dir: Path, protector) -> dict:
             entry = utterance.get("audio")
             if entry and (run_dir / entry["file"]).exists():
                 audio[utterance["id"]] = read(entry["file"])
+    events = (
+        json.loads(read("runtime-events.json.sealed"))
+        if (run_dir / "runtime-events.json.sealed").exists()
+        else []
+    )
     return {
         "run": json.loads(read("run.json.sealed")),
         "sessions": sessions,
         "audio": audio,
+        "runtime_events": events,
     }
 
 

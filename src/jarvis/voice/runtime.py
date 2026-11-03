@@ -943,6 +943,10 @@ class VoiceRuntimeController:
     def _session_audio_output(self, bridge, output):
         return output
 
+    async def _before_conversation_session(self) -> str | None:
+        """Hook before an owner conversation session; returns a notice to speak."""
+        return None
+
     def _system_session(self):
         """A session for a system utterance or decision, not owner conversation."""
         self._session_purpose = "system"
@@ -977,6 +981,10 @@ class VoiceRuntimeController:
         self._standby_requested = False
         active_end = asyncio.Event()
         self._active_end = active_end
+        notice = await self._before_conversation_session()
+        if notice is not None and initial_instructions is None:
+            initial_instructions = notice
+            initial_prompt_label = "status notice"
         session, bridge = self._session_factory(self.config)
         turn_capture = (
             InMemorySpeakerTurnCapture(
