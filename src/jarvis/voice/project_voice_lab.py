@@ -48,7 +48,7 @@ def voice_lab_config(config):
         work_orchestration_enabled=False,
         github_promotion_enabled=False,
         chatgpt_plan_enabled=False,
-        show_transcript=False,
+        show_transcript=True,
         vision_enabled=False,
         speaker_shadow_enabled=False,
         active_speaker_shadow_enabled=False,
