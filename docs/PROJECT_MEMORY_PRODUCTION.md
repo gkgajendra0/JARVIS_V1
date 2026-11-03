@@ -63,9 +63,9 @@ owner machine (§6, step 7).
 | Retention pause | Honoured: a paused project saves only an omission marker and releases no history (preload included). | OK |
 | Windows Hello | One approval at Jarvis startup (grant per runtime). A WTS session change (lock, unlock, user switch) revokes it, by design. | **Resolved in #308** (§8): renewal at the next wake, without a restart. |
 | Voice sessions | Before this change, every session the factory made got project memory, including system utterances and update approval. The owner's "yes" to an update would have been saved as project history, and history preloaded into a greeting session. | **Fixed:** `VoiceRuntimeController._system_session`; tests cover it. |
-| Gemini fallback / handoff | A handoff builds a new agent from canonical turns only. It drops the preload and tool results, and its new model keeps the default NON_BLOCKING tools. The gate would then believe context was delivered. | **B2:** refused while `gemini_fallback.enabled`. |
+| Gemini fallback / handoff | A handoff builds a new agent from canonical turns only. It drops the preload and tool results, and its new model keeps the default NON_BLOCKING tools. The gate would then believe context was delivered. | **B2: resolved** (PROJECT_MEMORY_COEXISTENCE.md): new models get BLOCKING tools and this session's project context. |
 | OpenAI provider | Blocking Gemini tool behaviour is required. | Refused unless `JARVIS_AI_PROVIDER=gemini`. |
-| Personal context APPLY / learning | It has its own audio gate and session retirement around tool-follow-up handles. The combination has not been qualified with project memory. | **B3:** refused while enabled. |
+| Personal context APPLY / learning | It has its own audio gate and session retirement around tool-follow-up handles. The combination has not been qualified with project memory. | **B3: resolved** (PROJECT_MEMORY_COEXISTENCE.md): a project-withheld response no longer retires the personal session; replies built from released personal facts are not saved to project history. |
 | Model routing (tools) | `require_blocking_realtime_tools` is model-wide. With the flag on, **every** tool is BLOCKING, including Hands, research and work: Gemini waits silently for a result instead of speaking over it. | **B6** qualification item. |
 | Database migrations | Migrations 0004–0007 come from #303/#305. They run on the first start of the merged build **even with the flag off**. Main refuses a newer schema (`MemorySchemaTooNewError`). | **B5:** merge-time rollback hazard; back up first (§6). |
 | Machine profile | Older builds reject unknown keys in `machine.json`. A build without `JARVIS_PROJECT_MEMORY_MODE` in its allowlist will not start while the key is present. | Rollback order in §7. |
@@ -78,8 +78,8 @@ approval) and B5's backup requirement. Activation is blocked as follows.
 | Id | Blocker | What clears it |
 | --- | --- | --- |
 | B1 | **Resolved in #308.** The first wake after a lock/unlock runs as ordinary voice (its turns are not saved) while Hello renews in the background. | Owner decisions D1/D2 (§8). |
-| B2 | Gemini fallback / transport handoff is unsupported. | Run with fallback off, or implement handoff re-preload plus blocking tools on the new model. |
-| B3 | Personal context / learning APPLY is unsupported together with project memory. | Run with them off, or qualify the combined gates. |
+| B2 | **Resolved** in the coexistence PR. | Live check: a real quota or recovery handoff during the activation smoke. |
+| B3 | **Resolved** in the coexistence PR. | Live check: a personal question inside a project during the activation smoke. |
 | B4 | **Resolved in #308.** Matching uses all the owner's words (§8). | Owner decision D3 (§8). |
 | B5 | Schema migrations 4–7 are one-way for older builds. | Back up the database before the first run of the merged build. |
 | B6 | All tools become BLOCKING with the flag on. | Check Hands/research/work replies in the step 7 smoke run. |
@@ -110,9 +110,9 @@ Paths are the installed defaults: app `E:\Jarvis\App`, data
 3. Install the approved merged build into `E:\Jarvis\App` as usual. Leave the
    flag **off** and start Jarvis once: migrations 4–7 run. Confirm normal voice
    works, then stop Jarvis.
-4. Clear B2/B3 if needed: `JARVIS_GEMINI_PAID_FALLBACK_ENABLED` off,
-   `JARVIS_PERSONAL_CONTEXT_MODE=off`, `JARVIS_PERSONAL_LEARNING_MODE=off`.
-   Also required: `JARVIS_MEMORY_ENABLED=true`, `JARVIS_AI_PROVIDER=gemini`.
+4. Keep the existing settings: paid fallback and personal context/learning
+   APPLY are supported (B2/B3 resolved). Required: `JARVIS_MEMORY_ENABLED=true`,
+   `JARVIS_AI_PROVIDER=gemini`.
 5. Add `"JARVIS_PROJECT_MEMORY_MODE": "voice"` to `settings` in
    `machine.json`, then run
    `E:\Jarvis\App\.venv\Scripts\python.exe -m jarvis.voice.project_voice_production --check`.

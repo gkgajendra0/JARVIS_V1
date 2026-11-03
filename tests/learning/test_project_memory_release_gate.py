@@ -240,12 +240,12 @@ async def test_g7_both_projects_survive_restart(lab, clock):
 # -- activation blockers with the owner's INSTALLED settings ----------------------
 
 
-def test_the_installed_profile_cannot_activate_project_memory_yet(
+def test_the_installed_profile_can_activate_project_memory(
     monkeypatch, tmp_path, capsys
 ):
     """E:\\Jarvis\\Data\\LocalState\\machine.json today (read-only check):
-    paid Gemini fallback on, personal context and learning APPLY. Turning the
-    flag on with these keeps Jarvis as ordinary voice and says exactly why."""
+    paid Gemini fallback on, personal context and learning APPLY. With the
+    coexistence change these no longer block the flag (B2/B3 resolved)."""
     import json
 
     from jarvis.config import JarvisConfig
@@ -279,10 +279,7 @@ def test_the_installed_profile_cannot_activate_project_memory_yet(
     ):
         monkeypatch.delenv(name, raising=False)
     config = JarvisConfig.from_environment()
-    blockers = production.activation_blockers(config)
-    assert len(blockers) == 2
-    assert any("fallback" in b for b in blockers)
-    assert any("PERSONAL_CONTEXT_MODE" in b for b in blockers)
-    assert production.production_project_memory_factory(config) is None
-    assert production.main(["--check"]) == 1
-    assert "will NOT activate" in capsys.readouterr().out
+    assert production.activation_blockers(config) == []
+    assert production.production_project_memory_factory(config) is not None
+    assert production.main(["--check"]) == 0
+    assert "will start with Jarvis" in capsys.readouterr().out

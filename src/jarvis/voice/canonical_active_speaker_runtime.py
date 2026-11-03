@@ -117,6 +117,29 @@ class _SessionToolBundle:
         return tools
 
 
+def personal_speech_finished(personal, project_turns, handle, *, provider) -> None:
+    """A speech handle of a personal-context session finished.
+
+    A protected (personal facts released) session retires after its answer
+    was heard, or at once when the owner barged in. A response the PROJECT gate
+    withheld before any audio is neither: the project repair answers the same
+    utterance under the same personal permit, so it must not retire the session.
+    """
+    if project_turns is not None and project_turns.response_withheld(handle):
+        return
+    # Gemini's automatic tool follow-up has a SEPARATE handle.
+    # The completed tool/preamble handle is not the final answer.
+    if provider == "gemini" and any(
+        isinstance(item, FunctionCall) for item in handle.chat_items
+    ):
+        return
+    if handle.interrupted:
+        if personal.protected:
+            personal.close()
+        return
+    personal.response_finished()
+
+
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     """Run CAM++ + LR-ASD shadow analysis on one canonical microphone timeline."""
 
@@ -285,6 +308,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         fallback=project_turns.speak_text,
                     )
                 session.on("speech_created", project_turns.observe_speech)
+                # Gemini paid fallback / free recovery / fresh-session recovery
+                # replace the model mid-wake: the new model gets the same
+                # blocking tools and the project context this session holds.
+                handoff = getattr(bridge, "gemini_handoff", None)
+                if handoff is not None:
+                    handoff.add_model_configurer(
+                        project_memory.configure_realtime_model
+                    )
+                    handoff.add_context_provider(
+                        project_turns.handoff_context_items,
+                        project_turns.observe_transport_switch,
+                    )
                 self._project_turns = project_turns
                 bridge.add_accepted_turn_observer(project_turns.observe_turn)
                 bridge.add_close_observer(project_turns.close)
@@ -349,6 +384,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     topic_continuity=continuity,
                 )
                 self._personal_context = personal
+                if project_turns is not None:
+                    # Replies built from released personal facts are not saved
+                    # to project history (question-bound permit).
+                    personal.add_release_observer(
+                        project_turns.observe_personal_release
+                    )
                 bridge.add_accepted_turn_observer(personal.observe_turn)
                 bridge.add_close_observer(personal.close)
             else:
@@ -503,17 +544,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 def finished(handle):
                     if self._live_session is not session:
                         return
-                    # Gemini's automatic tool follow-up has a SEPARATE handle.
-                    # The completed tool/preamble handle is not the final answer.
-                    if config.ai_provider == "gemini" and any(
-                        isinstance(item, FunctionCall) for item in handle.chat_items
-                    ):
-                        return
-                    if handle.interrupted:
-                        if personal.protected:
-                            personal.close()
-                        return
-                    personal.response_finished()
+                    personal_speech_finished(
+                        personal, project_turns, handle, provider=config.ai_provider
+                    )
 
                 event.speech_handle.add_done_callback(finished)
 

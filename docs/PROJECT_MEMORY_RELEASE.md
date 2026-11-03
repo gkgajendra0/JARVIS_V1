@@ -11,7 +11,7 @@ it differs only in docs and two test fixtures, checked file by file.
 | Question | Answer |
 | --- | --- |
 | Merge with project memory **OFF**? | **Merge-ready after the owner's approval**, subject to the procedure below: backup, migration rehearsal, then merge in stack order. |
-| Activate project memory in production? | **No — blocked.** The installed profile has Gemini paid fallback ON and personal context/learning APPLY. Project memory refuses to start with either (by design, B2/B3), and the owner has said these must not be disabled to simplify. |
+| Activate project memory in production? | **With the coexistence PR (stacked on #308): technically ready, pending owner approval and the first live activation smoke.** B2/B3 are resolved without disabling paid fallback or personal context/learning APPLY (`PROJECT_MEMORY_COEXISTENCE.md`). Without that PR, activation stays blocked. |
 
 ## What merging changes even with the flag OFF
 
@@ -48,7 +48,7 @@ Hello/Windows-session fakes; only Gemini is simulated:
 | Selective forgetting, no unrelated loss, restart | `test_g5_selective_forgetting_keeps_everything_else` | PASS (see note) |
 | Grounding evidence: owner vs Jarvis, tentative vs decided | `test_g6_grounding_evidence_keeps_who_said_it_and_how_sure` | PASS (evidence and instructions; see limits) |
 | Restart persistence, both projects | `test_g7_both_projects_survive_restart` | PASS |
-| Installed profile cannot activate | `test_the_installed_profile_cannot_activate_project_memory_yet` | PASS (exactly 2 blockers) |
+| Installed profile can activate (coexistence PR) | `test_the_installed_profile_can_activate_project_memory` | PASS (no blockers) |
 | Wake-output safety regressions | `test_voice_output_safety.py`, `test_voice_runtime.py` (ack races, transcript paths) | PASS |
 | Flag OFF unchanged | `test_project_voice_production.py` (`test_flag_off_builds_no_project_memory`, `test_no_project_memory_leaves_sessions_untouched`) | PASS |
 | Migration rehearsal tool | `tests/test_memory_migration_rehearsal.py` | PASS |
@@ -69,18 +69,11 @@ a model call. That remains B7, and the first production smoke covers it.
 
 ## Must remain disabled
 
-| Setting | Required value for project memory | Installed today | Why |
-| --- | --- | --- | --- |
-| `JARVIS_PROJECT_MEMORY_MODE` | `off` until activation | absent (off) | the release flag |
-| `JARVIS_GEMINI_PAID_FALLBACK_ENABLED` | `false` | **`true`** | B2: a handoff starts a new model session without the preload or blocking tools; the gate would wrongly think context was delivered |
-| `JARVIS_PERSONAL_CONTEXT_MODE` | `off` | **`apply`** | B3: its response gate and session retirement are not qualified together with project memory's gate |
-| `JARVIS_PERSONAL_LEARNING_MODE` | `off` | **`apply`** | forces personal context `apply` (B3) |
-| `JARVIS_MEMORY_ENABLED`, `JARVIS_AI_PROVIDER` | `true`, `gemini` | `true`, `gemini` | met |
-
-So activation needs either the owner's explicit choice to give up paid fallback
-and personal learning while project memory is on, or a separate coexistence
-change (handoff re-preload plus blocking tools; one combined response gate).
-That separate change is not part of this release.
+Only the release flag, until activation is approved: `JARVIS_PROJECT_MEMORY_MODE`
+stays absent (off). The installed settings stay as they are: paid fallback ON,
+personal context and learning APPLY, memory enabled, Gemini provider. B2 and B3
+are resolved in the coexistence PR (`PROJECT_MEMORY_COEXISTENCE.md`), and
+`--check` with the installed profile reports "will start with Jarvis" (tested).
 
 ## Release procedure (owner-run; nothing here has been executed)
 
@@ -142,19 +135,21 @@ audio.
   deletes them), copies the backup back and prints the code checkout. Memory
   written after the backup is lost on this path.
 
-## Activation (only after B2/B3 are resolved by the owner)
+## Activation (after the coexistence PR is merged and approved)
 
-1. Decide B2/B3: either set fallback off and personal context/learning off,
-   accepting the loss of those features while project memory is on, or wait
-   for the coexistence change.
-2. Add `"JARVIS_PROJECT_MEMORY_MODE": "voice"` to `machine.json` and run
-   `--check`, which must say "will start with Jarvis".
+1. Add `"JARVIS_PROJECT_MEMORY_MODE": "voice"` to `machine.json`. Change no
+   other setting.
+2. Run `--check`; it must say "will start with Jarvis".
 3. Start Jarvis and approve Hello. The log must show `Voice project memory
    active`.
-4. Do the 10-minute smoke from `PROJECT_MEMORY_PRODUCTION.md` §6 step 7, which
-   covers grounding (B7) and blocking tools (B6).
-5. Any problem: remove the key and restart (instant rollback; history stays
-   encrypted and unused).
+4. Smoke test, about 10 minutes:
+   - the `PROJECT_MEMORY_PRODUCTION.md` §6 step 7 items;
+   - one personal question inside a project ("what should I eat on the Nepal
+     trip?"): it is answered, it is not saved as project history, and the next
+     question still works;
+   - if a quota or recovery handoff happens, confirm the log line `Project
+     voice context restored on the new model session`.
+5. Any problem: remove the key and restart (instant rollback).
 
 ## Remaining blockers
 
@@ -163,7 +158,7 @@ audio.
 | Owner approval | merge | required (PRs remain draft) |
 | B5 | merge | handled by the backup and rehearsal (A) |
 | Physical check D | confidence after merge | 5 minutes, flag OFF |
-| B2 paid fallback | activation | unresolved: owner choice or a coexistence change |
-| B3 personal context / learning | activation | unresolved: owner choice or a coexistence change |
+| B2 paid fallback | activation | resolved in the coexistence PR; a live handoff is observed opportunistically |
+| B3 personal context / learning | activation | resolved in the coexistence PR; the activation smoke includes a personal question |
 | B6 all tools blocking, B7 live grounding | activation | first activation smoke |
 | Forget redacts Jarvis replies made with the words in context | none (design) | owner may ask to narrow it |
