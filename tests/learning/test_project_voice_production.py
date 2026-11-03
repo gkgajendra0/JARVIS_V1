@@ -186,7 +186,7 @@ async def run_once(c, monkeypatch):
         ran.append(self._project_memory)
 
     monkeypatch.setattr(VoiceRuntimeController, "run", base_run)
-    c._memory_runtime = SimpleNamespace(start=_async_none)
+    c._memory_runtime = SimpleNamespace(start=_async_none, close=_async_none)
     c._capability_runtime = None
     await c.run()
     return ran
@@ -227,10 +227,26 @@ async def test_lapsed_grant_is_reported_once_and_counted(caplog):
     await asyncio.sleep(0)
 
 
-def test_lab_baseline_ignores_a_production_flag():
-    import inspect
-
+def test_lab_baseline_ignores_a_production_flag(tmp_path):
+    """A machine profile with the flag on never adds memory to -Baseline."""
     from jarvis.voice import project_voice_lab
 
-    source = inspect.getsource(project_voice_lab.run_voice_lab)
-    assert 'replace(config, project_memory_mode="off")' in source
+    seen = {}
+
+    def builder(config, **kwargs):
+        seen["mode"] = config.project_memory_mode
+        seen["kwargs"] = kwargs
+
+        class Runtime:
+            async def run(self):
+                return None
+
+        return Runtime()
+
+    asyncio.run(
+        project_voice_lab.run_voice_lab(
+            QUALIFIED, tmp_path, baseline=True, runtime_builder=builder
+        )
+    )
+    assert seen["mode"] == "off"
+    assert "project_memory_factory" not in seen["kwargs"]
