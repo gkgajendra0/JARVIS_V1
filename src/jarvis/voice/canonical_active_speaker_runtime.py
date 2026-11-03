@@ -274,6 +274,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         self._active_end.set()
 
                 project_turns.bind_retire(retire_after_forget)
+                # A reply Gemini transcribed but never voiced is replayed once
+                # through scripted TTS, only if this gate approves it.
+                recovery = getattr(bridge, "silent_audio_recovery", None)
+                bind_unplayed = getattr(recovery, "bind_unplayed_turn_policy", None)
+                if callable(bind_unplayed):
+                    bind_unplayed(
+                        allow=project_turns.allow_unplayed_reply,
+                        replayed=project_turns.observe_replayed,
+                        fallback=project_turns.speak_text,
+                    )
                 session.on("speech_created", project_turns.observe_speech)
                 self._project_turns = project_turns
                 bridge.add_accepted_turn_observer(project_turns.observe_turn)

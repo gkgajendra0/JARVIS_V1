@@ -296,3 +296,52 @@ answered nothing at all.
 The turn is still saved exactly once by the application; the canonical write
 happens once, in `remember_memory`. New counters: `fast_context_syncs`,
 `repair_deliveries` and `repair_timeouts`.
+
+## 11. Transcribed-but-unvoiced replies (live lab at c55898fb)
+
+**Evidence.** The owner said "Remember that my car is a Suzuki Jimny."
+`remember_memory` committed once and the turn was saved. Gemini's tool
+follow-up "Understood, I've noted that." was committed as a transcript, but:
+- output audio tokens were 0;
+- no playback segment started (no started or finished event);
+- the response gate withheld nothing;
+- silent-audio recovery logged "could not correlate … with completed playback
+  quality".
+
+The session then timed out in silence.
+
+**Root cause.** No PCM for that follow-up ever reached the output: Gemini
+returned the turn as transcript only. Jarvis had no recovery for that case.
+`SilentRealtimeAudioRecovery` only replays completed near-silent segments, and
+it deliberately gives up when no segment exists. So any transcript-only reply
+ended in silence. The project context gate was not involved.
+
+Checked and ruled out:
+- the provider "input_speech_started" that Gemini's automatic follow-up emits
+  cannot start a new user activity (Jarvis runs explicit local VAD);
+- the plugin opens a fresh generation for the follow-up.
+
+Why Gemini voiced nothing is not visible from Jarvis.
+
+Latent defect found alongside: an unplayed reply could be attributed to the
+previous utterance (stale `response_epoch`). Fixed.
+
+**Fix (only when project memory is active; flag-off behaviour unchanged):**
+- **Detecting it:** a committed, uninterrupted assistant turn with no playback
+  segment started within 1.5 s (`started_segment_sequence`) counts as unvoiced.
+- **Replay:** its exact text is replayed **once** through the existing scripted
+  TTS lane, but only if the project response gate approves it, using the same
+  decision as for audio. A reply the gate withheld, or one made stale because
+  the owner spoke again, is never replayed.
+- **Saving:** the replayed reply is saved once.
+- **Nothing repeated:** Gemini is never asked again, so no tool runs twice and
+  nothing is spoken twice.
+- **TTS failure:** if scripted TTS fails, one generated "say exactly" fallback
+  is used.
+- **Diagnostics:** they now record every `speech_created` event (source,
+  user-initiated), so an unvoiced follow-up is visible per utterance. The
+  `unplayed_replays` counter counts replays.
+
+**Remaining:** a Gemini-side cause for transcript-only tool follow-ups is
+outside Jarvis. The replay uses the TTS voice, not Gemini's.
+

@@ -107,6 +107,7 @@ class VoiceDiagnostics:
         session.on("agent_state_changed", diag.on_agent_state)
         session.on("user_input_transcribed", diag.on_transcribed)
         session.on("function_tools_executed", diag.on_tools)
+        session.on("speech_created", diag.on_speech_created)
         session.on("error", diag.on_error)
         bridge.add_accepted_turn_observer(diag.observe_turn)
         bridge.add_close_observer(diag.close)
@@ -471,6 +472,21 @@ class _SessionDiagnostics:
         if target is not None and target["latency_ms"] is None and self._speech_ended:
             target["latency_ms"] = round((time.monotonic() - self._speech_ended) * 1000)
 
+    def on_speech_created(self, event) -> None:
+        """Every response LiveKit schedules, including Gemini's automatic tool
+        follow-up (user_initiated=False), so a reply that never played shows."""
+        entry = {
+            "at": _now(),
+            "kind": "speech_created",
+            "source": str(getattr(event, "source", "")),
+            "user_initiated": bool(getattr(event, "user_initiated", False)),
+        }
+        target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
+        if target is None:
+            self._unmatched("speech_without_utterance", entry)
+        else:
+            target["responses"].append(entry)
+
     def on_tools(self, event) -> None:
         target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
         outputs = tuple(getattr(event, "function_call_outputs", ()) or ())
@@ -702,7 +718,11 @@ _STOP = frozenset(
     ]
 )
 _BENIGN_UNMATCHED = frozenset(
-    {"assistant_before_any_owner_speech", "project_event_before_any_owner_speech"}
+    {
+        "assistant_before_any_owner_speech",
+        "project_event_before_any_owner_speech",
+        "speech_without_utterance",  # e.g. the wake acknowledgement
+    }
 )
 
 
@@ -1121,7 +1141,10 @@ def render_report(data: dict, verdicts: dict | None = None) -> str:
                 for a in u["assistant"]
             )
             responses = ", ".join(
-                "withheld" if r["kind"] == "response_withheld" else "played"
+                {
+                    "response_withheld": "withheld",
+                    "response_played": "played",
+                }.get(r["kind"], "scheduled")
                 for r in u["responses"]
             )
             if u.get("unmatched_reason"):

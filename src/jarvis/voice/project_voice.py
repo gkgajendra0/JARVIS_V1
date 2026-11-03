@@ -147,6 +147,7 @@ class VoiceProjectMetrics:
     repairs: int = 0
     repair_deliveries: int = 0
     repair_timeouts: int = 0
+    unplayed_replays: int = 0
     fast_context_syncs: int = 0
     fallbacks: int = 0
     assistant_recorded: int = 0
@@ -624,6 +625,7 @@ class VoiceProjectTurns:
         self._nudged_epochs: set[int] = set()
         self._retire = None
         self._played = 0  # audible response segments allowed so far
+        self._withheld_keys: set[tuple] = set()
 
     @property
     def metrics(self) -> VoiceProjectMetrics:
@@ -686,6 +688,15 @@ class VoiceProjectTurns:
         if turn.turn_id in self._recorded_assistant:
             return
         epoch = self._response_epoch
+        latest_user = self._latest_user_before(turn)
+        if (
+            epoch is not None
+            and latest_user is not None
+            and (latest_user.user_activity_epoch or 0) > epoch
+        ):
+            # The last audible response belonged to an earlier utterance: this
+            # reply was never played (no gate decision), so it is not attributed.
+            epoch = None
         if epoch in self._forget_epochs or epoch in self._canonical_forget_epochs:
             # A forget confirmation is never saved (it would restate the words).
             self._recorded_assistant.add(turn.turn_id)
@@ -1058,6 +1069,7 @@ class VoiceProjectTurns:
         if handle is not None and handle is self._blocked_speech:
             return False  # trailing frames of a response already blocked
         self._blocked_speech = handle
+        self._withheld_keys.add(key)
         self.metrics.unprepared_responses_blocked += 1
         if handle is not None:
             try:
@@ -1242,6 +1254,49 @@ class VoiceProjectTurns:
                 self._owner.spawn(
                     self._safe_preload(agent), name="jarvis-project-preload-sync"
                 )
+
+    # -- replies Gemini transcribed but never voiced --------------------------
+
+    def allow_unplayed_reply(self, turn) -> bool:
+        """Gate decision for replaying an assistant turn that produced no audio.
+
+        Silent-audio recovery asks this before speaking the turn's text through
+        scripted TTS. It is the same decision the audio gate would have made had
+        audio arrived: a response this utterance's gate withheld is never
+        replayed, and a stale reply (the owner spoke again) is not either.
+        """
+        if self._closed or turn.role is not ConversationRole.ASSISTANT:
+            return False
+        epoch = self._conversation.user_activity_epoch
+        latest = self._latest_user_before(turn)
+        if latest is not None and (latest.user_activity_epoch or 0) != epoch:
+            return False
+        if epoch == 0:
+            allowed = True
+        else:
+            key = self._key(epoch)
+            if key in self._withheld_keys and not self._is_delivered(key):
+                return False
+            allowed = (
+                epoch in self._control_epochs
+                or key == self._fallback_key
+                or self._is_delivered(key)
+                or self._fast_path_allows(epoch)
+            )
+        if allowed:
+            self._response_epoch = epoch
+            self._played += 1
+            self._diag("unplayed_reply_replayed", epoch=epoch)
+            self.metrics.unplayed_replays += 1
+        return allowed
+
+    def observe_replayed(self, turn) -> None:
+        """The replayed reply was heard: record it like any played reply."""
+        self.observe_turn(turn)
+
+    def speak_text(self, text) -> None:
+        """Last resort when scripted TTS cannot replay an unvoiced reply."""
+        self._generate("Say only this, exactly: '" + text.replace("'", "") + "'")
 
     def _still(self, epoch) -> bool:
         return self._active() and self._conversation.user_activity_epoch == epoch
