@@ -491,3 +491,120 @@ def test_tool_outcomes_are_parsed_from_livekits_python_repr():
     assert _tool_status({"ok": True}) is True
     assert _tool_status("not json") is None
     assert _tool_status("{__import__('os').system('x')}") is None  # never evaluated
+
+
+# -- live run at 1b13dfb8 (20261103T115032Z-bc3e16) -------------------------------
+
+
+def hotel_forget_run(later_preload=(), later_reply=None):
+    """Both stores forgot "my hotel in Kathmandu is Yak and Yeti"; the next wake
+    still holds unrelated owner rows mentioning the hotel or Kathmandu."""
+    s2 = session(
+        2,
+        [
+            utterance(
+                2,
+                1,
+                said="Search our older saved project. Conversation history. What "
+                "hotel did I mention in Kathmandu?",
+                project=[{"kind": "history_searched", "hits": 0, "history": []}],
+                replies=["Your hotel in Kathmandu is the Yak and Yeti."],
+            ),
+            utterance(
+                2,
+                2,
+                said="search the web for today's weather in Kathmandu.",
+                tools=[RESEARCH_OK],
+                replies=["Today in Kathmandu, mostly clear and sunny."],
+            ),
+            utterance(
+                2,
+                3,
+                said="Jervis, forget that my hotel in Kathmandu is Yak and Yeti.",
+                tools=FORGET_TOOLS,
+                project=[
+                    {
+                        "kind": "history_forgotten",
+                        "terms": ["and", "hotel", "kathmandu", "yak", "yeti"],
+                        "owner_rows": 2,
+                        "jarvis_rows": 6,
+                        "projects": ["General"],
+                    }
+                ],
+                replies=["The information has been removed from my records."],
+            ),
+        ],
+        preloaded=[
+            "Remember that my hotel in Kathmandu is Yak and Yeti.",
+            "Add a stove to my packing list.",
+        ],
+    )
+    s3 = session(
+        3,
+        [
+            utterance(
+                3,
+                1,
+                said="Which hotel did I tell you about in Kathmandu?",
+                project=[{"kind": "history_searched", "hits": 0, "history": []}],
+                replies=[
+                    later_reply
+                    or "I cannot find any mention of a hotel in Kathmandu in our "
+                    "previous conversations."
+                ],
+            )
+        ],
+        preloaded=[
+            (
+                "Search our older saved project. Conversation history. What hotel "
+                "did I mention in Kathmandu?"
+            ),
+            "search the web for today's weather in Kathmandu.",
+            *later_preload,
+        ],
+    )
+    return run(s2, s3)
+
+
+def test_generic_words_in_surviving_history_are_not_a_leak():
+    """live: Q2 FAIL resurfaced_in_context:hotel,kathmandu was a false FAIL."""
+    result = q.q2_forget(hotel_forget_run())
+    assert result["verdict"] == "PASS", result
+    assert result["distinctive_terms"] == ["yak", "yeti"]
+
+
+def test_a_real_resurfacing_is_still_caught():
+    leaked = hotel_forget_run(later_preload=["We are staying at the Yeti lodge."])
+    assert q.q2_forget(leaked)["reason"] == "resurfaced_in_context:yeti"
+    whole = hotel_forget_run(later_preload=["My hotel in Kathmandu is Yak and Yeti."])
+    assert q.q2_forget(whole)["verdict"] == "FAIL"
+    said = hotel_forget_run(later_reply="It was the Yak and Yeti.")
+    assert q.q2_forget(said)["reason"] == "resurfaced_in_reply:yak,yeti"
+
+
+def test_an_answer_from_the_preload_is_not_an_archive_search():
+    """live: Q1 'search_found_nothing'. The fact was one of 6 saved rows, inside
+    the preload, so search (which never resends preloaded rows) found nothing
+    new: the archive was not tested."""
+    result = q.q1_recall(hotel_forget_run())
+    assert result["verdict"] == "NOT_RUN"
+    assert result["reason"] == "fact_was_in_the_preload_not_an_archive_search"
+    assert result["answered_from_preload"] == ["yak", "yeti"]
+
+
+def test_a_wake_acknowledgement_with_internal_text_fails_capture():
+    """live: '<wake-ack instructions>Standing by.' was the ack's transcript."""
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    data = full_run()
+    data["sessions"][1]["unmatched"].append(
+        {
+            "unmatched_kind": "assistant_before_any_owner_speech",
+            "epoch": 0,
+            "text": _WAKE_ACK_INSTRUCTIONS + "Standing by.",
+        }
+    )
+    fails = q.qualify(data)["steps"]["Q5_capture"]["acceptance_fail"]
+    assert {"id": "s2", "fail": ["internal_text_in_wake_acknowledgement"]} in fails
+    data["sessions"][1]["unmatched"][-1]["text"] = "Standing by."
+    assert q.qualify(data)["steps"]["Q5_capture"]["verdict"] == "PASS"

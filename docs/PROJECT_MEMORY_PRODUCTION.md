@@ -501,3 +501,39 @@ speech, Hands actually opening Notepad/Brave with the managed winapp, and
 whether Gemini still produces text-only system generations after the
 closed-context change. Automated tests cannot show these.
 
+
+## 13. Qualification at 1b13dfb8 (run 20261103T115032Z-bc3e16)
+
+Grades: Q1 FAIL `search_found_nothing`, Q2 FAIL
+`resurfaced_in_context:hotel,kathmandu`, Q3 NOT_RUN (Hands not attempted;
+research PASS), Q4 NOT_RUN (no lock/unlock), Q5 PASS.
+
+- **Q2 was a false FAIL.** Both stores committed (`forget_memory` once,
+  `forget_saved_history` with 2 owner and 6 Jarvis rows). The next wake's
+  search found nothing and the reply said it had no hotel. The forget words
+  were `and, hotel, kathmandu, yak, yeti`. The grader called ANY one of them in
+  later context a leak, but the surviving owner rows legitimately say "hotel"
+  and "Kathmandu" (the earlier question and the weather request). Now a leak
+  is a later row holding all the words, or any *distinctive* word. Words are
+  generic if they are function words or appear in the owner's other
+  utterances of the run that do not restate the fact. A real resurfacing
+  ("Yeti lodge", or a reply saying "Yak and Yeti" unprompted) still fails.
+- **Q1 did not test the archive.** Only six owner rows were saved before the
+  question, so the hotel fact was inside the session preload (≤12 rows). The
+  answer came from the preload, and search, which never resends rows the model
+  already has, correctly found nothing new. Search works as designed; the setup
+  needs 13+ newer owner rows. The grader now reports this as NOT_RUN
+  `fact_was_in_the_preload_not_an_archive_search`. A new end-to-end test
+  pushes a distinctive fact out of the preload, searches the real archive, and
+  grades the real diagnostics record PASS
+  (`test_project_voice_archive_qualification.py`).
+- **Wake acknowledgement transcript.** The ack's transcript was the wake-ack
+  instructions verbatim followed by "Standing by.". The audio was 1.17 s,
+  which is "Standing by." only: the instruction text (about 60 words) was
+  never spoken. Gemini transcribes the generate_reply instructions, which
+  LiveKit sends as model-role text, as the start of its own turn. The bridge
+  now removes any registered instruction text quoted verbatim in an assistant
+  transcript before it becomes a turn, log line, diagnostics record or saved
+  history; a transcript that is only instruction text is dropped. Q5 now fails
+  if a wake acknowledgement's transcript still holds internal text. The prompt
+  registry loads itself, so the standalone grader checks the same texts.

@@ -12,13 +12,17 @@ after the live run at 8155df0d, whose Q2 was a false FAIL and Q3 a false PASS):
 
 Q1 recall    ``search_project_history`` returned rows that were NOT in the
              session preload, and an audible reply uses a distinctive word of
-             one of those rows that the owner's question did not contain.
+             one of those rows that the owner's question did not contain. A
+             search that found nothing new while the answer came from the
+             preload is NOT_RUN (setup left the fact inside the preload).
 Q2 forget    In ONE forget request (utterance): some ``forget_memory`` attempt
              committed (later attempts count; earlier predicate errors do not
              fail it) AND the saved conversation was forgotten. Only one of
              them: FAIL ``partial_forget``. No confirmation may play before
-             both completed. A later wake session never receives the forgotten
-             words in its context, and no reply there says a forgotten word the
+             both completed. A later wake session is never given a row holding
+             all the forget words, or any DISTINCTIVE one (generic words the
+             owner also used about other things, e.g. "hotel", "Kathmandu",
+             are not the fact), and no reply there says a distinctive word the
              owner did not say in that session.
 Q3 tools     Hands: the tool's own result says ``ok`` and ``succeeded`` with a
              verified postcondition (unavailable/failed = FAIL; no verification
@@ -34,8 +38,9 @@ Q4 renewal   The wake whose turns waited for the fresh Windows Hello grant:
              (REVIEW).
 Q5 capture   Every utterance's recognised and accepted transcripts, tool
              outcomes, spoken replies and latency. FAIL: the normal acceptance
-             check fails, an accepted request got no audible reply, or internal
-             text (prompt echo, reasoning trace) was spoken. REVIEW: speech
+             check fails, an accepted request got no audible reply, internal
+             text (prompt echo, reasoning trace) was spoken, or a wake
+             acknowledgement's transcript holds internal text. REVIEW: speech
              with no transcript (listen to the sealed audio).
 
 Verdicts: PASS, FAIL, NOT_RUN (step not attempted), REVIEW (needs a human).
@@ -247,12 +252,25 @@ def q1_recall(data) -> dict:
                     "reason": "reply_does_not_use_found_rows",
                 }
             return {**result, "verdict": "PASS", "reply_uses": used}
-    return {
-        "verdict": "NOT_RUN" if not searched else "FAIL",
-        "reason": "search_project_history_not_called"
-        if not searched
-        else "search_found_nothing",
-    }
+    if not searched:
+        return {"verdict": "NOT_RUN", "reason": "search_project_history_not_called"}
+    # Searched, nothing new found. If the reply came from rows already in the
+    # session preload, the archive was never tested: the setup left the fact
+    # inside the preload window (it needs 13+ newer owner rows).
+    for session, u in _utterances(data):
+        if not any(p["kind"] == "history_searched" for p in u["project"]):
+            continue
+        replies = " ".join(a["text"] for a in u["assistant"])
+        used = _distinctive(replies, excluding=_said(u))
+        preloaded = set().union(set(), *map(_words, _preloaded_texts(session)))
+        if used & preloaded:
+            return {
+                "verdict": "NOT_RUN",
+                "reason": "fact_was_in_the_preload_not_an_archive_search",
+                "utterance": u["id"],
+                "answered_from_preload": sorted(used & preloaded),
+            }
+    return {"verdict": "FAIL", "reason": "search_found_nothing"}
 
 
 def _forget_request(session, u) -> dict | None:
@@ -281,6 +299,22 @@ def _forget_request(session, u) -> dict | None:
         "_both_at": max(done) if len(done) == 2 else None,
         "_u": u,
     }
+
+
+def _generic_terms(data, terms, forget_utterance) -> set[str]:
+    """Forget words that are not evidence of the fact by themselves: function
+    words, and words the owner used in this run about other things (any owner
+    utterance other than the forget request that does not restate the fact,
+    e.g. "the weather in Kathmandu", "which hotel ...?")."""
+    generic = {t for t in terms if t in _STOPWORDS or len(t) < 3}
+    for _, u in _utterances(data):
+        if u["id"] == forget_utterance:
+            continue
+        for text in _said(u):
+            words = _words(text)
+            if not terms <= words:
+                generic |= words & terms
+    return generic
 
 
 def q2_forget(data) -> dict:
@@ -316,20 +350,22 @@ def q2_forget(data) -> dict:
     if not later:
         return dict(result, verdict="REVIEW", reason="no_new_session_after_forget")
     terms = set(result["terms"])
-    in_context = sorted(
-        {
-            t
-            for s in later
-            for text in _given_to_model(s)
-            for t in terms
-            if t in _words(text)
-        }
-    )
-    if in_context:
+    distinctive = terms - _generic_terms(data, terms, result["utterance"])
+    result["distinctive_terms"] = sorted(distinctive)
+    # A surviving row that holds ALL the words is exactly what forgetting
+    # removes; one holding any distinctive word carries the forgotten fact.
+    # Generic words alone ("hotel", "Kathmandu") are not the fact.
+    whole, partial = False, set()
+    for s in later:
+        for text in _given_to_model(s):
+            words = _words(text)
+            whole = whole or terms <= words
+            partial |= words & distinctive
+    if whole or partial:
         return dict(
             result,
             verdict="FAIL",
-            reason="resurfaced_in_context:" + ",".join(in_context),
+            reason="resurfaced_in_context:" + ",".join(sorted(partial or terms)),
         )
     spoken = set()
     for s in later:
@@ -338,7 +374,7 @@ def q2_forget(data) -> dict:
         )
         for v in s["utterances"]:
             for a in v["assistant"]:
-                spoken |= (_words(a["text"]) & terms) - owner
+                spoken |= (_words(a["text"]) & distinctive) - owner
     if spoken:
         return dict(
             result,
@@ -530,6 +566,17 @@ def q5_capture(data, acceptance) -> dict:
         del session
     for session in data["sessions"]:
         for e in session.get("unmatched", ()):
+            # Wake acknowledgements and other system turns before owner speech.
+            if (
+                e.get("unmatched_kind") == "assistant_before_any_owner_speech"
+                and non_user_facing_reason(e.get("text", "")) is not None
+            ):
+                fail.append(
+                    {
+                        "id": f"s{session['session']}",
+                        "fail": ["internal_text_in_wake_acknowledgement"],
+                    }
+                )
             if e.get("kind") == "unplayed_reply_replayed" and e.get("epoch", 0) == 0:
                 fail.append(
                     {"id": f"s{session['session']}", "fail": ["system_turn_replayed"]}

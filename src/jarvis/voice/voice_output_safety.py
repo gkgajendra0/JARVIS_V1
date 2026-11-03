@@ -21,6 +21,7 @@ It is deliberately structural, not a single phrase match:
 
 from __future__ import annotations
 
+import logging
 import re
 import threading
 
@@ -66,6 +67,53 @@ def _shingles(words: list[str]) -> frozenset[tuple[str, ...]]:
     )
 
 
+# Modules whose prompt/instruction text is registered at import. Loaded on the
+# first check, so a standalone user (the qualification grader) sees the same
+# registry as the running voice runtime.
+_SOURCES = ("jarvis.voice.agent", "jarvis.voice.runtime", "jarvis.voice.project_voice")
+_sources_loaded = False
+
+
+def _load_sources() -> None:
+    global _sources_loaded
+    if _sources_loaded:
+        return
+    _sources_loaded = True
+    import importlib
+
+    for name in _SOURCES:
+        try:
+            importlib.import_module(name)
+        except Exception:  # noqa: BLE001 - a missing optional module registers nothing
+            logging.getLogger(__name__).debug("Prompt source %s unavailable", name)
+
+
+def _normalized(text: str) -> str:
+    return " ".join((text or "").split())
+
+
+def strip_internal_text(text: str) -> str:
+    """``text`` without any registered instruction quoted in it verbatim.
+
+    Gemini's output transcription can begin with the generate_reply
+    instructions it was given (LiveKit sends them as MODEL-role text), followed
+    by what was actually spoken, e.g. "<wake-ack instructions>Standing by."
+    (live qualification at 1b13dfb8, 1.17 s of audio). Only the spoken part is
+    a reply. Whitespace differences are tolerated; nothing else is rewritten.
+    """
+    _load_sources()
+    cleaned = _normalized(text)
+    if not cleaned:
+        return ""
+    with _lock:
+        registered = sorted(_registered, key=len, reverse=True)
+    for instruction in registered:
+        quoted = _normalized(instruction)
+        if quoted and quoted in cleaned:
+            cleaned = cleaned.replace(quoted, " ")
+    return _normalized(cleaned)
+
+
 def register_internal_text(*texts: str) -> None:
     """Instruction/prompt text that must never be spoken back to the owner."""
     with _lock:
@@ -76,6 +124,7 @@ def register_internal_text(*texts: str) -> None:
 
 def non_user_facing_reason(text: str) -> str | None:
     """Why ``text`` must not be replayed or saved as a reply, else None."""
+    _load_sources()
     stripped = (text or "").strip()
     if not stripped:
         return "empty"

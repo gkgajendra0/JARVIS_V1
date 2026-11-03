@@ -194,3 +194,17 @@ async def test_an_utterance_answered_audibly_is_never_replayed_again(lab):
     turn = wake.reply("Created project Nepal trip.")
     assert wake.turns.allow_unplayed_reply(turn) is False  # no duplicate speech
     await asyncio.sleep(0)
+
+
+def test_instruction_text_is_stripped_from_a_transcript_verbatim_only():
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+    from jarvis.voice.voice_output_safety import strip_internal_text
+
+    assert (
+        strip_internal_text(_WAKE_ACK_INSTRUCTIONS + "Standing by.") == "Standing by."
+    )
+    spaced = _WAKE_ACK_INSTRUCTIONS.replace(". ", ".\n  ") + "  Standing by."
+    assert strip_internal_text(spaced) == "Standing by."
+    assert strip_internal_text(_WAKE_ACK_INSTRUCTIONS) == ""
+    for text in LEGITIMATE:
+        assert strip_internal_text(text) == text

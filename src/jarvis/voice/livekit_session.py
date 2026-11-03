@@ -36,6 +36,7 @@ from jarvis.conversation import ConversationRole, ConversationSession, Conversat
 from jarvis.memory.learning_diagnostics import content_for_log
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import build_instructions
+from jarvis.voice.voice_output_safety import strip_internal_text
 
 LOGGER = logging.getLogger(__name__)
 
@@ -469,6 +470,22 @@ class LiveKitConversationBridge:
                 self._seen_item_ids.add(item_id)
             return
 
+        if role is ConversationRole.ASSISTANT:
+            spoken = strip_internal_text(text)
+            if spoken != " ".join(text.split()):
+                # Gemini transcribed Jarvis's own instructions as part of its
+                # turn (they reach it as model-role text). They were not said
+                # to the owner and never become conversation.
+                LOGGER.warning(
+                    "Assistant transcript contained internal instruction text; "
+                    "removed | kept_chars=%s",
+                    len(spoken),
+                )
+                if not spoken:
+                    if item_id is not None:
+                        self._seen_item_ids.add(item_id)
+                    return
+                text = spoken
         interrupted = bool(item.interrupted and role is ConversationRole.ASSISTANT)
         self._accept_canonical_turn(
             role,

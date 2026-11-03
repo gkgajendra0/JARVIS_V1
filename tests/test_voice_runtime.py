@@ -19,7 +19,11 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.audio import LocalAudioOutput
@@ -1337,3 +1341,59 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
+
+
+# -- internal instruction text in assistant transcripts (live at 1b13dfb8) -------
+
+
+def test_wake_ack_instructions_never_enter_the_conversation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Live 11:52:52Z: the ack's transcript was the wake-ack instructions
+    followed by "Standing by." with 1.17 s of audio, i.e. only "Standing by."
+    was spoken. Gemini transcribes the model-role instructions as part of its
+    own turn; the bridge keeps only what was said to the owner."""
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="ack",
+                role="assistant",
+                content=[_WAKE_ACK_INSTRUCTIONS + "Standing by."],
+            )
+        ),
+    )
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="echo", role="assistant", content=[_WAKE_ACK_INSTRUCTIONS]
+            )
+        ),
+    )
+    assert [(t.role, t.text) for t in conversation.turns] == [
+        (ConversationRole.ASSISTANT, "Standing by.")
+    ]
+    assert "contained internal instruction text" in caplog.text
+    assert _WAKE_ACK_INSTRUCTIONS not in caplog.text  # never logged either
+
+
+def test_ordinary_assistant_transcripts_are_unchanged() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    reply = "The owner of the Yak and Yeti hotel is not known to me."
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(id="a", role="assistant", content=[reply])
+        ),
+    )
+    assert [t.text for t in conversation.turns] == [reply]
