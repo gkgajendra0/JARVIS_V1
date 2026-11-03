@@ -1380,7 +1380,7 @@ def test_wake_ack_instructions_never_enter_the_conversation(
     assert [(t.role, t.text) for t in conversation.turns] == [
         (ConversationRole.ASSISTANT, "Standing by.")
     ]
-    assert "contained internal instruction text" in caplog.text
+    assert "contained internal text" in caplog.text
     assert _WAKE_ACK_INSTRUCTIONS not in caplog.text  # never logged either
 
 
@@ -1397,3 +1397,52 @@ def test_ordinary_assistant_transcripts_are_unchanged() -> None:
         ),
     )
     assert [t.text for t in conversation.turns] == [reply]
+
+
+def _assistant_item(session, item_id, text):
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(id=item_id, role="assistant", content=[text])
+        ),
+    )
+
+
+def test_an_echo_of_any_instruction_sent_on_the_session_is_removed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Formatted instructions (not registered prompts) are noted as they are
+    sent through the bridged session, so their echo is recognised too."""
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    said = "Correction: no project was created or switched. You are in Nepal trip."
+    instructions = "Say only this, briefly: '" + said + "' Do not add anything else."
+    session.generate_reply(instructions=instructions, allow_interruptions=True)
+    assert session.generated_replies[-1]["instructions"] == instructions
+    _assistant_item(session, "a", instructions + " " + said)
+    _assistant_item(session, "b", said)
+    assert [t.text for t in conversation.turns] == [said, said]
+
+
+def test_reasoning_prose_never_becomes_an_assistant_turn_or_log_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    caplog.set_level("INFO")
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    reasoning = (
+        "The user has only said my wake word, so I should acknowledge briefly. "
+        "Wait, let me re-read the instructions."
+    )
+    first = " ".join(_WAKE_ACK_INSTRUCTIONS.split()[:10])
+    _assistant_item(session, "a", first + " " + reasoning)
+    _assistant_item(session, "b", reasoning)
+    assert list(conversation.turns) == []
+    assert "turn dropped" in caplog.text
+    assert "re-read" not in caplog.text and "invoked you" not in caplog.text

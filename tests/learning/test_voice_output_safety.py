@@ -108,7 +108,7 @@ def test_each_layer_catches_the_trace_on_its_own():
     assert non_user_facing_reason(no_markers) == "reasoning_trace"
     first_step = no_markers.split("2.  **")[0].split("1.  **Analyze the context:** ")[1]
     plain = first_step.replace("*", "")
-    assert non_user_facing_reason(plain) == "instruction_echo"
+    assert non_user_facing_reason(plain) in {"instruction_echo", "meta_narration"}
 
 
 def test_a_paraphrase_of_jarvis_prompt_is_not_user_facing():
@@ -208,3 +208,143 @@ def test_instruction_text_is_stripped_from_a_transcript_verbatim_only():
     assert strip_internal_text(_WAKE_ACK_INSTRUCTIONS) == ""
     for text in LEGITIMATE:
         assert strip_internal_text(text) == text
+
+
+# -- b418aa91 follow-up: every transcript path, and audio -----------------------
+#
+# The verbatim-only strip at b418aa91 missed echoes that differ in case or
+# punctuation, partial echoes, echoes of formatted (dynamic) instructions, and
+# reasoning in plain prose. And it only cleaned the saved transcript: the audio
+# of a generation that turned into internal text kept playing.
+
+
+def test_an_echo_differing_in_case_and_punctuation_is_removed():
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+    from jarvis.voice.voice_output_safety import strip_internal_text
+
+    echoed = _WAKE_ACK_INSTRUCTIONS.lower().replace(".", ",").replace(";", "")
+    assert strip_internal_text(echoed + " Standing by.") == "Standing by."
+    assert strip_internal_text("Yes? " + _WAKE_ACK_INSTRUCTIONS) == "Yes?"
+
+
+def test_a_partial_echo_followed_by_reasoning_is_rejected_whole():
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+    from jarvis.voice.voice_output_safety import sanitize_assistant_transcript
+
+    first = " ".join(_WAKE_ACK_INSTRUCTIONS.split()[:12])
+    text = (
+        first + " The user has not given a request yet, so I should just "
+        "acknowledge briefly. Wait, let me re-read the instructions."
+    )
+    assert sanitize_assistant_transcript(text) == ("", "meta_narration")
+    assert sanitize_assistant_transcript(first + " Standing by.") == (
+        "Standing by.",
+        "instruction_echo_removed",
+    )
+
+
+def test_formatted_instructions_jarvis_sent_are_recognised_but_never_censor_the_reply():
+    from jarvis.voice.voice_output_safety import (
+        note_generation_instructions,
+        strip_internal_text,
+    )
+
+    said = "Sorry, I couldn't load the project memory for that. Please say it again."
+    instruction = "Say only this, briefly: '" + said + "' Do not answer the request."
+    note_generation_instructions(instruction)
+    assert strip_internal_text(instruction + said) == said  # echo, then speech
+    assert strip_internal_text(said) == said  # the reply itself is untouched
+    assert is_user_facing(said)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The user hasn't said anything new. I should remain silent and wait.",
+        "Since the owner only said my wake word, I will just acknowledge.",
+        "The instructions say to respond briefly, so the owner gets one sentence.",
+        LIVE_TRACE.replace("Thinking Process:", "").replace("**", ""),
+    ],
+)
+def test_reasoning_in_plain_prose_is_internal(text):
+    from jarvis.voice.voice_output_safety import internal_text_reason
+
+    assert internal_text_reason(text) is not None
+
+
+def test_long_ordinary_replies_are_never_internal():
+    from jarvis.voice.voice_output_safety import internal_text_reason
+
+    report = (
+        "Today in Kathmandu, expect mostly clear and sunny skies with a high near "
+        "24 degrees Celsius and a low near 12. " * 12
+    )
+    assert len(report) > 900
+    assert internal_text_reason(report) is None
+    for text in LEGITIMATE:
+        assert internal_text_reason(text) is None
+
+
+class _Speech:
+    def __init__(self):
+        self.interrupts = 0
+
+    def done(self):
+        return False
+
+    def interrupt(self, *, force=False):
+        self.interrupts += 1
+
+
+class _Agent:
+    def __init__(self):
+        from types import SimpleNamespace
+
+        self.speech = _Speech()
+        self.session = SimpleNamespace(current_speech=self.speech)
+
+
+async def _stream(chunks):
+    for chunk in chunks:
+        yield chunk
+
+
+async def _transcribe(chunks):
+    from jarvis.voice.agent import guarded_transcription
+
+    agent = _Agent()
+    out = [c async for c in guarded_transcription(agent, _stream(chunks), None)]
+    return agent.speech.interrupts, "".join(out)
+
+
+def _chunked(text, size=3):
+    words = text.split(" ")
+    return [" ".join(words[i : i + size]) + " " for i in range(0, len(words), size)]
+
+
+@pytest.mark.asyncio
+async def test_speech_stops_as_soon_as_the_generation_turns_into_reasoning():
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    chunks = _chunked(_WAKE_ACK_INSTRUCTIONS) + _chunked(LIVE_TRACE)
+    interrupts, forwarded = await _transcribe(chunks)
+    assert interrupts == 1  # the rest of the audio is never played
+    assert "Thinking Process" not in forwarded and "Analyze" not in forwarded
+
+
+@pytest.mark.asyncio
+async def test_an_instruction_echo_then_a_real_acknowledgement_plays():
+    """The live 11:52:52Z shape: echo + "Standing by." (1.17 s of audio)."""
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    interrupts, _ = await _transcribe(
+        _chunked(_WAKE_ACK_INSTRUCTIONS) + ["Standing by."]
+    )
+    assert interrupts == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", list(LEGITIMATE) + ["Today in Kathmandu. " * 80])
+async def test_ordinary_replies_stream_untouched(text):
+    interrupts, forwarded = await _transcribe(_chunked(text))
+    assert interrupts == 0 and forwarded.strip() == text.strip()

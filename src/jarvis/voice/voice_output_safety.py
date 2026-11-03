@@ -45,11 +45,34 @@ _INTERNAL_MARKERS = (
     "developer message",
 )
 _REASONING_LABEL = re.compile(
-    r"(?im)^\s*(?:\*\*)?\s*(?:thinking(?: process)?|reasoning|analysis|"
+    r"(?im)(?:^|(?<=[.!?]) )\s*(?:\*\*)?\s*(?:thinking(?: process)?|reasoning|analysis|"
     r"chain[- ]of[- ]thought|internal (?:notes?|monologue)|self[- ]correction)"
     r"\s*(?:\*\*)?\s*:"
 )
 _ANALYSIS_STEP = re.compile(r"(?m)^\s*(?:\d+\.|[-*])\s+\*\*[^*\n]{2,60}\*\*")
+# Narration ABOUT the conversation rather than speech TO the owner: the model
+# reasoning in prose ("The user hasn't spoken ... I should remain silent ...
+# the system instructions say ..."). Two different kinds of cue are required.
+_META_CUES = (
+    re.compile(r"\bthe (?:user|owner)(?:'s)?\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:I|we) (?:should|must|need to|will|have to|am (?:forced|supposed) to)"
+        r"(?: just)? (?:respond|reply|answer|acknowledge|output|remain|stay|say|"
+        r"wait|not (?:respond|reply|output|say))\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:the prompt|system instructions?|developer instructions?|the "
+        r"instructions? (?:say|says|said|is|are)|wake[- ](?:word|name)|activation "
+        r"residue|generate_reply|tool call)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:let me re-?read|wait, (?:if|the|let)|let's just output|output "
+        r"nothing|remain silent)\b",
+        re.IGNORECASE,
+    ),
+)
 
 _lock = threading.Lock()
 _registered: dict[str, frozenset[tuple[str, ...]]] = {}
@@ -92,26 +115,89 @@ def _normalized(text: str) -> str:
     return " ".join((text or "").split())
 
 
+# Every instruction text Jarvis itself sends with generate_reply (including
+# formatted ones, e.g. "Say only this, exactly: '...'"). Used ONLY to strip an
+# echo of the instruction from the start of its own generation's transcript,
+# never to classify: such an instruction legitimately contains the words that
+# are then spoken.
+_RECENT_INSTRUCTIONS = 64
+_sent: dict[str, tuple[str, ...]] = {}
+# An echo shorter than this is not removed (an ordinary reply may share a few
+# leading words with an instruction); shorter instructions must match whole.
+_PREFIX_MIN_WORDS = 8
+
+
+def note_generation_instructions(text: str) -> None:
+    """Record instructions Jarvis is about to send to the realtime model."""
+    words = tuple(_words(text))
+    if not words:
+        return
+    with _lock:
+        _sent.pop(text, None)
+        _sent[text] = words
+        while len(_sent) > _RECENT_INSTRUCTIONS:
+            _sent.pop(next(iter(_sent)))
+
+
+def _word_spans(text: str) -> list[tuple[str, int, int]]:
+    return [
+        (m.group(0).casefold(), m.start(), m.end())
+        for m in re.finditer(r"[^\W_]+", text or "")
+    ]
+
+
 def strip_internal_text(text: str) -> str:
-    """``text`` without any registered instruction quoted in it verbatim.
+    """``text`` without echoes of Jarvis's own instructions.
 
     Gemini's output transcription can begin with the generate_reply
-    instructions it was given (LiveKit sends them as MODEL-role text), followed
-    by what was actually spoken, e.g. "<wake-ack instructions>Standing by."
-    (live qualification at 1b13dfb8, 1.17 s of audio). Only the spoken part is
-    a reply. Whitespace differences are tolerated; nothing else is rewritten.
+    instructions it was given (LiveKit sends them as MODEL-role text, and Gemini
+    continues that turn), followed by what was actually spoken, e.g.
+    "<wake-ack instructions>Standing by." (live qualification at 1b13dfb8, 1.17 s
+    of audio). Removed: any run of words that reproduces an instruction FROM ITS
+    START (at least eight words, or the whole of a shorter one), wherever it
+    begins, ignoring case, spacing and punctuation. Nothing else is rewritten;
+    paraphrases are left for :func:`internal_text_reason`.
     """
     _load_sources()
-    cleaned = _normalized(text)
-    if not cleaned:
-        return ""
+    original = text or ""
     with _lock:
-        registered = sorted(_registered, key=len, reverse=True)
-    for instruction in registered:
-        quoted = _normalized(instruction)
-        if quoted and quoted in cleaned:
-            cleaned = cleaned.replace(quoted, " ")
-    return _normalized(cleaned)
+        candidates = {tuple(_words(t)) for t in _registered} | set(_sent.values())
+    candidates = sorted((c for c in candidates if c), key=len, reverse=True)
+    for _ in range(4):  # an instruction may be echoed more than once
+        spans = _word_spans(original)
+        words = [w for w, _, _ in spans]
+        cut = None
+        for instruction in candidates:
+            need = min(_PREFIX_MIN_WORDS, len(instruction))
+            first = instruction[0]
+            for start, word in enumerate(words):
+                if word != first:
+                    continue
+                k = 0
+                while (
+                    start + k < len(words)
+                    and k < len(instruction)
+                    and words[start + k] == instruction[k]
+                ):
+                    k += 1
+                if k >= need:
+                    cut = (spans[start][1], spans[start + k - 1][2])
+                    break
+            if cut is not None:
+                break
+        if cut is None:
+            break
+        original = original[: cut[0]] + " " + original[cut[1] :]
+    return _tidy(original)
+
+
+def _tidy(text: str) -> str:
+    """Spacing tidied (line breaks kept: they carry reasoning structure), and
+    punctuation orphaned by a removal dropped."""
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in (text or "").split("\n")]
+    tidy = "\n".join(lines).strip()
+    tidy = re.sub(r"(?m)(?<=\S) +[.,;:]+(?= |$)", "", tidy)
+    return tidy.lstrip(" .,;:!?-—–\n")
 
 
 def register_internal_text(*texts: str) -> None:
@@ -134,6 +220,8 @@ def non_user_facing_reason(text: str) -> str | None:
             return "internal_marker"
     if _REASONING_LABEL.search(stripped) or len(_ANALYSIS_STEP.findall(stripped)) >= 2:
         return "reasoning_trace"
+    if sum(1 for cue in _META_CUES if cue.search(stripped)) >= 2:
+        return "meta_narration"
     words = _words(stripped)
     reply = _shingles(words)
     if reply:
@@ -155,3 +243,63 @@ def non_user_facing_reason(text: str) -> str | None:
 
 def is_user_facing(text: str) -> bool:
     return non_user_facing_reason(text) is None
+
+
+# Content that is internal by what it SAYS (not merely long or empty).
+_INTERNAL_REASONS = frozenset(
+    {"internal_marker", "reasoning_trace", "meta_narration", "instruction_echo"}
+)
+
+
+def internal_text_reason(text: str) -> str | None:
+    """Why ``text`` (already stripped of instruction echoes) is internal text
+    that must never be shown, saved or spoken as a reply; None for an ordinary
+    reply of any length."""
+    reason = non_user_facing_reason(text)
+    return reason if reason in _INTERNAL_REASONS else None
+
+
+def sanitize_assistant_transcript(text: str) -> tuple[str, str | None]:
+    """(user-facing text, why something was removed or rejected).
+
+    Instruction echoes are removed; if what remains is still internal text the
+    whole transcript is rejected (returns ""), since it is not what Jarvis
+    should have said to the owner.
+    """
+    spoken = strip_internal_text(text)
+    removed = (
+        "instruction_echo_removed" if _normalized(spoken) != _normalized(text) else None
+    )
+    if not spoken:
+        return "", removed or "empty"
+    reason = internal_text_reason(spoken)
+    if reason is not None:
+        return "", reason
+    return spoken, removed
+
+
+class SpokenTextGuard:
+    """Watches a generation's transcription as it streams (with its audio).
+
+    ``feed`` returns a reason ONCE when the text, after removing instruction
+    echoes, turns out to be internal (reasoning, prompt echo, internal
+    markers): the caller then stops that speech so the rest is never played.
+    A partial instruction echo still streaming (under eight words) is not
+    judged yet.
+    """
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.reason: str | None = None
+
+    def feed(self, delta: str) -> str | None:
+        if self.reason is not None:
+            return None
+        self.text += str(delta)
+        spoken = strip_internal_text(self.text)
+        if len(_words(spoken)) < _PREFIX_MIN_WORDS and not _REASONING_LABEL.search(
+            spoken
+        ):
+            return None
+        self.reason = internal_text_reason(spoken)
+        return self.reason

@@ -89,6 +89,11 @@ class _TransportAgent(Agent):
     async def on_enter(self):
         self._transport_ready.set()
 
+    def transcription_node(self, text, model_settings):
+        from jarvis.voice.agent import guarded_transcription
+
+        return guarded_transcription(self, text, model_settings)
+
 
 class GeminiLiveHandoff:
     def __init__(

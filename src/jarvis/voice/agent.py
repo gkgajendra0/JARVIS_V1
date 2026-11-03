@@ -1,10 +1,13 @@
 """JARVIS voice identity and tool-use behavior."""
 
 import json
+import logging
 
 from livekit.agents import Agent
 
-from jarvis.voice.voice_output_safety import register_internal_text
+from jarvis.voice.voice_output_safety import SpokenTextGuard, register_internal_text
+
+LOGGER = logging.getLogger(__name__)
 
 INSTRUCTIONS = """
 You are JARVIS, GK's discreet personal intelligence.
@@ -410,6 +413,41 @@ link, and present owner reports as such ("you said ...").
 """
 
 
+def _stop_current_speech(agent: Agent, reason: str) -> None:
+    try:
+        speech = agent.session.current_speech
+    except RuntimeError:  # the agent is not running
+        speech = None
+    LOGGER.warning(
+        "Realtime generation produced internal text; its speech is stopped | reason=%s",
+        reason,
+    )
+    if speech is not None and not speech.done():
+        speech.interrupt(force=True)
+
+
+async def guarded_transcription(agent: Agent, text, model_settings):
+    """The generation's transcript, watched as it streams with its audio.
+
+    Gemini's transcript can carry Jarvis's own instructions or a reasoning
+    trace (live qualification at 8155df0d, 1b13dfb8). Once what streams is
+    internal text (after removing an echo of the instructions Jarvis sent),
+    that speech is stopped, so the rest is never played, and the internal text
+    is not forwarded as transcript.
+    """
+    guard = SpokenTextGuard()
+    stopped = False
+    async for delta in Agent.default.transcription_node(agent, text, model_settings):
+        if stopped:
+            continue
+        reason = guard.feed(str(delta))
+        if reason is not None:
+            stopped = True
+            _stop_current_speech(agent, reason)
+            continue
+        yield delta
+
+
 class JarvisVoiceAgent(Agent):
     def __init__(
         self,
@@ -440,6 +478,9 @@ class JarvisVoiceAgent(Agent):
             instructions=instructions,
             tools=tools or [],
         )
+
+    def transcription_node(self, text, model_settings):
+        return guarded_transcription(self, text, model_settings)
 
 
 PERSONAL_CONTEXT_INSTRUCTIONS = """

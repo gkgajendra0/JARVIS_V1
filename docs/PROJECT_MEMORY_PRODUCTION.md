@@ -537,3 +537,55 @@ research PASS), Q4 NOT_RUN (no lock/unlock), Q5 PASS.
   history; a transcript that is only instruction text is dropped. Q5 now fails
   if a wake acknowledgement's transcript still holds internal text. The prompt
   registry loads itself, so the standalone grader checks the same texts.
+
+## 14. Internal text in assistant transcripts after b418aa91 (run 20261103T121450Z-f4bf0f)
+
+The owner reported wake acknowledgements at 12:26:04, 12:26:23 and 12:26:56
+whose transcripts still held internal instructions and reasoning-like text.
+
+**Lifecycle (LiveKit 1.8.3, Gemini plugin).** `generate_reply(instructions=…)`
+sends the instructions as a `role="model"` content turn with
+`turn_complete=True`, so Gemini *continues that model turn*. Its
+`output_transcription` for the generation can then contain the prefilled
+instruction text, then what it actually spoke, and sometimes prose about the
+request ("the user has not said anything, I should …"). The plugin forwards
+that transcription text to the agent's `transcription_node`. The text becomes
+the `ChatMessage` committed through `conversation_item_added`, which is the
+only path into Jarvis's canonical conversation, its "assistant:" log line,
+diagnostics and project history. Audio is a separate stream on the same
+generation.
+
+**Why b418aa91 was incomplete.** It removed only verbatim copies of
+registered prompts, and only at the bridge. It missed:
+- echoes differing in case, punctuation or spacing;
+- partial echoes;
+- echoes of formatted instructions that are never registered, such as "Say only
+  this, exactly: '…'" and correction notices;
+- reasoning written as plain prose.
+
+It also did nothing for audio.
+
+**Fix.**
+- **Every instruction sent is noted.** The bridge wraps the session's
+  `generate_reply`, so each instruction text (formatted ones included) is
+  known. An echo is removed only when it reproduces an instruction from its
+  start: at least 8 words, or the whole of a shorter instruction, ignoring
+  case and punctuation. This never removes the reply itself, even when the
+  reply's words are quoted inside the instruction.
+- **What remains is classified.** The classes are: registered-prompt echo,
+  internal markers, reasoning structure, and new meta-narration (two distinct
+  cues of talking *about* the user, instructions or wake word instead of *to*
+  the owner). Internal text drops the turn entirely, and the log line says
+  only "turn dropped | reason=…". Long ordinary replies are never affected.
+- **Audio.** `JarvisVoiceAgent` (and the Gemini handoff agent) override
+  `transcription_node`. The transcript is watched as it streams with the
+  audio; as soon as it becomes internal text, that speech is interrupted, so
+  the rest is not played, and the internal text is not forwarded. An
+  instruction echo followed by a real acknowledgement ("…Standing by.") plays
+  normally.
+
+**Limits.** Text that arrived before detection may already have played, but
+the guard decides from 8 words onward or at a reasoning label. Detection
+relies on content cues, so a novel phrasing could still pass. Ownership
+protections (epoch 0 never replayed, ack not reported as played) are
+unchanged.
