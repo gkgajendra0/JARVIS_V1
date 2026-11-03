@@ -117,6 +117,7 @@ async def test_repair_delivers_context_without_relying_on_a_tool_call(lab):
     wake.close()
     wake = FastWake(voice)
     await wake.preload()
+    tool_turns = voice.metrics.tool_path_turns  # runtime-wide, from the setup
     wake.speech()
     question = "What did we decide about Nepal?"
     wake.partial(question)
@@ -126,7 +127,8 @@ async def test_repair_delivers_context_without_relying_on_a_tool_call(lab):
     await settle(voice)
     delivered = wake.agent.injected()[-1]
     assert "We will take the Jimny." in delivered and "Nepal trip" in delivered
-    assert voice.metrics.repair_deliveries == 1 and voice.metrics.tool_path_turns == 0
+    assert voice.metrics.repair_deliveries == 1
+    assert voice.metrics.tool_path_turns == tool_turns  # no tool call needed
     assert wake.response()[0] is True
     reply = wake.reply("We are taking the Jimny, from Nepal trip.")
     await settle(voice)
