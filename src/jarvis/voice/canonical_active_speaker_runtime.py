@@ -959,6 +959,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 or (self._personal_context is not None and self._personal_context.busy)
             ):
                 return
+            pending = getattr(self._project_turns, "approval_pending_seconds", None)
+            remaining = pending() if callable(pending) else 0.0
+            if remaining > 0:
+                # The owner is approving Windows Hello for project memory: the
+                # wake stays open (bounded by the renewal wait), so a command
+                # spoken right after approval is still captured.
+                self._timeout_handle = asyncio.get_running_loop().call_later(
+                    remaining + seconds, expire_inactivity
+                )
+                return
             LOGGER.info(
                 "Voice session inactivity timeout expired | seconds=%.2f | "
                 "user_speaking=%s | canonical_user_turns=%s",

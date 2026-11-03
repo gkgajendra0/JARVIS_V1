@@ -34,6 +34,28 @@ def lab_tool_allowlist(*, baseline: bool) -> frozenset[str]:
     return BASELINE_TOOLS if baseline else PROJECT_MEMORY_TOOLS
 
 
+def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
+    """The installed profile's managed winapp directory, for this process.
+
+    Production starts Jarvis through Set-JarvisStorage.ps1, which puts
+    ``<state>\\tools\\winapp`` on PATH; Hands resolves ``winapp`` from PATH. The
+    lab launcher did not, so every open_app/close_app reported "unavailable"
+    (live qualification at 8155df0d). The same read-only directory is added to
+    this lab process's PATH only; no policy or tool selection changes.
+    """
+    import shutil
+
+    env = os.environ if environ is None else environ
+    if shutil.which("winapp", path=env.get("PATH")):
+        return None
+    candidate = Path(source_profile).resolve().parent / "tools" / "winapp"
+    if not (candidate / "winapp.exe").is_file():
+        return None
+    entries = [e for e in env.get("PATH", "").split(os.pathsep) if e]
+    env["PATH"] = os.pathsep.join([str(candidate), *entries])
+    return candidate
+
+
 def voice_lab_config(config):
     if config.ai_provider != "gemini":
         raise ValueError("existing Gemini configuration required")
@@ -208,6 +230,9 @@ def main():
     repo = Path(__file__).resolve().parents[3]
     verify_source(repo, args.source_commit)
     settings = load_machine_settings(args.profile)
+    winapp = managed_tool_path(args.profile)
+    if winapp is not None:
+        print(f"Hands: using the installed profile's managed winapp at {winapp}")
     tool_paths = (
         {}
         if args.resume_lab

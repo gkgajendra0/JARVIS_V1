@@ -186,26 +186,29 @@ prompt is about 70 tokens of instructions plus two short tool schemas.
 
 ### Windows Hello renewal (owner decisions D1–D3 applied)
 
-The first wake after a lock, unlock or user switch:
+The first wake after a lock, unlock or user switch (revised in section 12):
 
 1. Revokes the lapsed grant; a revoked grant is never reused.
 2. Requests a fresh grant, which shows the Hello prompt.
-3. **Waits at most 20 s** (`RENEWAL_WAIT_SECONDS`) before the session starts.
-   - **Approved in time:** this same wake uses project memory and saves its turns.
-   - **Denied, timed out or failing:** this wake is ordinary voice, and Jarvis
-     first says: "Project memory is paused, so I won't remember this
-     conversation. It resumes after Windows Hello approval." The notice is
-     spoken once per failed attempt.
+3. **Starts the realtime session at once**, so speech during the Hello prompt
+   is captured. The wake's turns wait **at most 20 s** after the wake
+   (`RENEWAL_WAIT_SECONDS`) for the approval before anything is saved,
+   preloaded or answered with project context. The inactivity timeout is held
+   open for that bounded wait only.
+   - **Approved in time:** this same wake saves its turns and answers.
+   - **Denied, timed out or failing:** this wake continues as ordinary voice,
+     says once: "Project memory is paused, so I won't remember this
+     conversation. It resumes after Windows Hello approval.", and saves
+     nothing, even if the approval arrives later.
    - **Too slow:** a renewal still running after 20 s may finish in the
-     background, and then the next wake has memory.
+     background; the next wake then has memory.
 
 After a failure, nobody is asked again for 5 minutes (D2,
 `RENEWAL_COOLDOWN_SECONDS`): those wakes are ordinary, with no wait and no
-repeated notice. Speak the request after approving; speech during the Hello
-prompt may not be captured. Counters: `renewals` and `renewal_failures`.
+repeated notice. Counters: `renewals`, `renewal_failures`, `paused_sessions`.
 Diagnostics runtime events: `renewal_requested`, `renewal_succeeded`,
-`renewal_failed`, `renewal_wait_timed_out`, `renewal_ready_for_wake` and
-`paused_notice_spoken`.
+`renewal_failed`, `renewal_ready_for_wake` (also recorded in that wake's own
+session) and `paused_notice_spoken`.
 
 Forgetting keeps explicit-word matching, cross-project scope, the deletion
 preview and a fresh Hello approval. There is no semantic deletion (D3).
@@ -253,10 +256,9 @@ Approve Windows Hello. Then, in one run:
    `-DiagnosticsReport` page for audio and transcripts.
 
 The grader writes `qualification.json` next to the sealed run, with PASS, FAIL,
-NOT_RUN or REVIEW per step. Q2 reports `partial_forget:canonical_only` or
-`partial_forget:history_only` whenever only one store was cleared, and
-`resurfaced:<word>` if a later session was given or spoke the word. Listen to
-the audio before accepting the transcripts.
+NOT_RUN or REVIEW per step. Its rules were revised after the run at 8155df0d
+(section 12); the module docstring of `project_voice_qualification.py` is the
+authoritative list. Listen to the audio before accepting the transcripts.
 
 ## 10. First-turn fix (live -Qualification at 3938b428)
 
@@ -344,4 +346,158 @@ previous utterance (stale `response_epoch`). Fixed.
 
 **Remaining:** a Gemini-side cause for transcript-only tool follow-ups is
 outside Jarvis. The replay uses the TTS voice, not Gemini's.
+
+## 12. Live qualification failures at 8155df0d (run 20261103T100642Z-20dd6e)
+
+Graded result was Q1 PASS, Q2 FAIL (`partial_forget:history_only`), Q3 PASS,
+Q4 FAIL (`renewed_wake_saved_nothing`), Q5 PASS. Two of those verdicts were
+wrong, and the run exposed two runtime defects. Root causes come from the lab
+log, the sealed diagnostics and the LiveKit 1.8.3 / Gemini plugin source.
+
+### FIX 1 — internal Gemini text reached scripted TTS
+
+**Evidence.** In the first wake after the Hello renewal (10:16:12Z) the wake
+acknowledgement came back as a text-only transcript: "Neither claim that a
+greeting is required nor describe its purpose. Thinking Process: 1.
+**Analyze the context:** The user's prompt is a "[Project memory from Jarvis
+...]" block ...". No audio played; recovery logged `replay=scripted_tts`.
+At 09:55Z another acknowledgement was transcribed as "Do not offer help or ask
+a question." (a paraphrase of Jarvis's own prompt).
+
+**Root causes.**
+1. *Open context turn.* The session preload was injected as a lone user-role
+   chat item; LiveKit syncs it with `turn_complete=False`. The acknowledgement's
+   `generate_reply` then made Gemini treat the memory block as the owner's
+   prompt, and it reasoned about it in text.
+2. *Instructions are MODEL-role text.* The Gemini plugin sends
+   `generate_reply(instructions=...)` as a `role="model"` content turn, so
+   Gemini can continue or paraphrase it as if it were its own reply.
+3. *No ownership check before replay.* `allow_unplayed_reply` allowed epoch 0
+   (no owner speech yet), so a system generation was treated as an unvoiced
+   reply. A transcript alone was taken as evidence that replay was safe.
+
+**Fix.**
+- Context (preload and repair delivery) is injected as a **completed
+  exchange**: the labelled memory message plus a Jarvis "Noted." item, both
+  registered with the bridge so neither becomes a turn. Context is never put in
+  `generate_reply` instructions.
+- **Ownership/lifecycle** (`VoiceProjectTurns.allow_unplayed_reply`): a text-only
+  turn is replayed only if it answers an accepted owner utterance of the
+  current activity epoch (never epoch 0), that utterance has not already been
+  answered audibly, it is not a forget confirmation, the context gate would
+  have allowed it, and its text is user-facing. Each rejection is a
+  diagnostics event with its reason.
+- **Content boundary** (`voice_output_safety.py`), applied to both recovery
+  paths (also with project memory OFF) and to saving assistant turns:
+  registered prompt/instruction text echoed (shingle overlap or a dozen
+  quoted words), internal markers, reasoning-trace structure (a labelled
+  section or several bold analysis steps) and over-long text are never spoken
+  or saved. It is a second line, not the primary protection.
+
+### FIX 2 — wake acknowledgement race
+
+**Root cause.** When owner speech began right after the acknowledgement was
+requested, its `generate_reply` was still pending; the plugin binds the next
+generation to a pending future, so the owner's own response could be consumed
+by it ("generate_reply timed out waiting for generation_created"). The runtime
+also logged "finished playing" for an acknowledgement that produced no audio.
+
+**Fix** (`runtime._run_one_session_owned`): if owner speech arrives before the
+acknowledgement produced audio, only the acknowledgement's own SpeechHandle is
+interrupted (LiveKit cancels its pending generation; the plugin's interrupt is
+a guarded `activity_start`, a no-op while the owner speaks). Once its audio
+plays, provider-native barge-in still owns interruption (no session
+interrupt). Playback is logged as played only when a new output segment
+started; otherwise "produced no audio; not reported as played". Recovery never
+replays it (FIX 1).
+
+### FIX 3 — Q2 forgetting grader, and forget ordering
+
+- The grader took the **first** `forget_memory` attempt (a failed predicate
+  guess) and ignored the committed third. It now grades all attempts within the
+  latest forget utterance; earlier requests never count as evidence. It
+  requires both stores, checks that no confirmation played before both were
+  done, checks later sessions' context for the words, and checks later replies
+  only for forgotten words the owner did not say in that session (the live
+  "car" was the owner's own question word).
+- **Why three attempts.** With personal context off (lab), canonical forget
+  keeps the legacy exact-predicate rule: Gemini must name the stored key and
+  guessed `car` and `suzuki_jimny` first. Each miss is a side-effect-free
+  ToolError. This is the canonical memory's own security boundary and is not
+  changed here; production APPLY selects the target from the catalog instead.
+- **Premature confirmation.** After a canonical forget, no confirmation audio
+  may play until the saved conversation is also forgotten (the response is
+  interrupted and Gemini is asked once to call `forget_saved_history`). If it
+  is not done within 12 s (`FORGET_HISTORY_SECONDS`) Jarvis says honestly: "I
+  removed the saved fact, but I could not remove it from our saved
+  conversation yet. Please ask me to forget it again." The two deletions are
+  not atomic and are never reported as one success when only one happened.
+- **2 owner / 13 Jarvis rows.** Owner rows are removed only if they contain
+  all the words (the fact and the forget request). Every Jarvis reply generated
+  with a removed row in its context is removed too, by design, since it may
+  paraphrase it. Because the preload puts recent rows in every reply's
+  context, this includes Jarvis replies on other topics (hotel, packing). The
+  owner's own hotel/packing statements are kept (test
+  `test_forget_keeps_unrelated_owner_history_and_says_what_else_went`).
+  Narrowing this is an owner decision (it trades privacy for retention).
+
+### FIX 4 — Hands `open_app` unavailable; Q3 false PASS
+
+- **Cause.** Hands resolves the Microsoft `winapp` CLI from `PATH`. Production
+  starts through `Set-JarvisStorage.ps1`, which puts `<state>\tools\winapp` on
+  PATH; the lab process never did, so `open_app` returned
+  `status=unavailable` (ok=False, verified=False). The lab now prepends the
+  installed profile's managed winapp directory to its own PATH when `winapp`
+  is not already resolvable (`project_voice_lab.managed_tool_path`). Policy,
+  tool selection and execution are unchanged.
+- **Grader.** LiveKit hands the tool result to observers as `str(dict)`, not
+  JSON, so diagnostics never parsed it and the grader saw only `is_error=False`.
+  Diagnostics now parse it (`ast.literal_eval`, never evaluated as code) and
+  record `ok`, `status` and Hands' `verified` postcondition. Q3 reports
+  invocation, execution and verification separately: Hands passes only with
+  `ok`, `succeeded` and `verified=True`; research only when a search ran and
+  returned evidence.
+
+### FIX 5 — renewal, then the first command
+
+**Evidence.** The renewal was approved after 2.9 s, before the session started;
+then the session ran 8 s with no owner speech at all (no VAD activity,
+`canonical_user_turns=0`) and ended on inactivity. So no command was lost
+there: none was spoken in that wake. The design still could lose one: the old
+`prepare_wake` blocked the session until approval, so speech during the Hello
+prompt was never captured, and the 8 s inactivity timeout could end the wake
+while the owner was still approving.
+
+**Fix.** Section 8 (revised): the session starts at once, turns wait (bounded)
+for the approval, the inactivity timeout is held only for that bounded wait,
+and a denied/late approval pauses that wake with one notice and nothing saved.
+Hello security is unchanged: a fresh grant per continuity change, never
+extended or reused.
+
+**Grader.** Q4 now finds the wake whose turns waited and reports: no speech
+(NOT_RUN, incomplete), speech without transcript (REVIEW), recognised but not
+accepted / captured but not saved / saved twice / no audible reply (FAIL),
+paused notice with nothing saved (REVIEW).
+
+### FIX 6 — whole grader review
+
+Q1 now requires the audible reply to use a distinctive word of a row found
+outside the preload. Q5 fails when internal text may have been spoken or an
+accepted request got no audible reply, and asks for review when speech had no
+transcript. The full rules are in the grader's module docstring.
+
+### FIX 7 — preserved
+
+Flag OFF: unchanged except that the existing near-silent replay refuses
+non-user-facing text. Canonical personal memory, learning APPLY, Gemini paid
+fallback/handoff, Exa research, Hello, wake word, standby and barge-in paths
+are not modified. Full coexistence of project memory with personal-context
+APPLY remains a separate integration requirement and is not claimed here.
+
+### Still needs a physical Windows run
+
+Native audio of the acknowledgement race, the Hello prompt timing with real
+speech, Hands actually opening Notepad/Brave with the managed winapp, and
+whether Gemini still produces text-only system generations after the
+closed-context change. Automated tests cannot show these.
 

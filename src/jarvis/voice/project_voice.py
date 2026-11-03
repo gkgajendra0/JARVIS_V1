@@ -43,6 +43,7 @@ from jarvis.memory.project_routing import (
     ProjectClarificationRequired,
     needs_project_routing,
 )
+from jarvis.voice.voice_output_safety import register_internal_text
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +72,13 @@ SEARCH_MAX_CHARS = 2400
 _FORGET_VERB = re.compile(
     r"\b(?:forget|delete|erase|remove|wipe|bh[uo]+l|mita)\w*", re.IGNORECASE
 )
+FORGET_INCOMPLETE_INSTRUCTIONS = (
+    "Say only this, briefly: 'I removed the saved fact, but I could not remove "
+    "it from our saved conversation yet. Please ask me to forget it again.'"
+)
+# After a canonical forget, the saved conversation must follow within this time,
+# else the honest partial-forget notice above is spoken.
+FORGET_HISTORY_SECONDS = 12.0
 FORGET_HISTORY_NUDGE = (
     "The owner asked to forget something and the saved personal fact was "
     "removed. Now also call forget_saved_history with the distinctive words the "
@@ -84,8 +92,8 @@ CONTROL_TOOLS = frozenset({"enter_standby"})
 # (no reliance on the model calling a tool), then asks for the answer.
 REPAIR_ANSWER_INSTRUCTIONS = (
     "Project memory for the owner's last request was just added to this "
-    "conversation. Answer that request now, briefly, from it. Do not repeat a "
-    "tool call that already ran."
+    "conversation. Answer that request now, briefly, from it. Speak only the "
+    "answer to the owner. Do not repeat a tool call that already ran."
 )
 # If a re-request produces no audible reply within this time, speak the fallback
 # rather than leaving the owner in silence until the session times out.
@@ -229,7 +237,6 @@ class VoiceProjectMemory:
         self._opener = None
         self._renewing = None
         self._renew_after = 0.0
-        self._paused_notice_due = False
         self._memory = memory_runtime
         self._capability = capability_runtime
         self._clearance = source_clearance
@@ -309,14 +316,12 @@ class VoiceProjectMemory:
                 return
             self._attach(grant)
             self._paused_logged = False
-            self._paused_notice_due = False
             self.metrics.renewals += 1
             self._runtime_event("renewal_succeeded")
             LOGGER.info("Voice project memory renewed with a fresh Windows Hello grant")
         except Exception as exc:  # noqa: BLE001 - ordinary voice continues
             self.metrics.renewal_failures += 1
             self._renew_after = monotonic() + RENEWAL_COOLDOWN_SECONDS
-            self._paused_notice_due = True
             self._runtime_event("renewal_failed", error=type(exc).__name__)
             LOGGER.warning(
                 "Voice project memory renewal failed; ordinary voice continues | "
@@ -343,21 +348,29 @@ class VoiceProjectMemory:
         """Whether a new wake session can use project memory.
 
         The history grant ends when Windows session continuity changes (lock,
-        user switch). It is never reopened silently: this wake runs as ordinary
-        voice while a fresh Windows Hello approval is requested in the
-        background (:meth:`request_renewal`); later wakes use the new grant.
+        user switch). It is never reopened silently: a fresh Windows Hello
+        approval is requested and the wake session starts AT ONCE, so the
+        owner's speech is captured. Its turns wait (bounded) for the approval
+        before anything is saved or answered with project context; see
+        :meth:`VoiceProjectTurns._ready`. During the cooldown after a denied
+        renewal the wake is ordinary voice.
         """
-        current = self._grant_current()
-        if not current and self.access is not None:
-            self.metrics.paused_sessions += 1
-            if not self._paused_logged:
-                self._paused_logged = True
-                LOGGER.warning(
-                    "Voice project memory paused: history grant no longer current; "
-                    "requesting a fresh Windows Hello approval"
-                )
-            self.request_renewal()
-        return current
+        if self._grant_current():
+            return True
+        if self.access is None:
+            return False
+        if not self._paused_logged:
+            self._paused_logged = True
+            LOGGER.warning(
+                "Voice project memory paused: history grant no longer current; "
+                "requesting a fresh Windows Hello approval"
+            )
+        if self.request_renewal():
+            self._runtime_event("renewal_requested")
+        if self._renewing is not None:
+            return True  # pending: the session waits for the approval
+        self.metrics.paused_sessions += 1
+        return False
 
     def _grant_current(self) -> bool:
         if self.access is None or self._closed:
@@ -368,41 +381,34 @@ class VoiceProjectMemory:
             return False
 
     async def prepare_wake(self, timeout: float | None = None) -> str | None:
-        """Before an owner wake session: renew a lapsed grant, bounded.
+        """Before an owner wake session: start a lapsed grant's renewal.
 
-        Returns instructions for a spoken notice when project memory stays
-        paused for this wake (once per failed or timed-out renewal attempt),
-        else None. Never waits longer than ``timeout``; a denied renewal is not
-        asked again during RENEWAL_COOLDOWN_SECONDS.
+        Never blocks the wake: blocking here lost the owner's first words while
+        the Hello prompt was open (live qualification at 8155df0d). The
+        session's own turns wait for the approval instead (bounded).
         """
-        if self.access is None or self._closed or self._grant_current():
-            return None
-        bound = RENEWAL_WAIT_SECONDS if timeout is None else timeout
-        started = monotonic()
-        if self.request_renewal():
+        del timeout
+        if (
+            self.access is not None
+            and not self._closed
+            and not self._grant_current()
+            and self.request_renewal()
+        ):
             self._runtime_event("renewal_requested")
-        task = self._renewing
-        if task is not None:
-            try:
-                await asyncio.wait_for(asyncio.shield(task), bound)
-            except TimeoutError:
-                # Keeps running in the background; this wake stays ordinary.
-                self._paused_notice_due = True
-                self._runtime_event(
-                    "renewal_wait_timed_out",
-                    waited_ms=round((monotonic() - started) * 1000),
-                )
-        if self._grant_current():
-            self._runtime_event(
-                "renewal_ready_for_wake",
-                waited_ms=round((monotonic() - started) * 1000),
-            )
-            return None
-        if self._paused_notice_due:
-            self._paused_notice_due = False
-            self._runtime_event("paused_notice_spoken")
-            return PAUSED_NOTICE_INSTRUCTIONS
         return None
+
+    async def wait_ready(self, deadline: float) -> bool:
+        """Whether the grant is current, waiting for a pending renewal until
+        ``deadline`` (monotonic). Never extends or reuses a grant."""
+        task = self._renewing
+        if task is not None and not self._grant_current():
+            remaining = deadline - monotonic()
+            if remaining > 0:
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), remaining)
+                except TimeoutError:
+                    pass
+        return self._grant_current()
 
     def _runtime_event(self, kind, **fields) -> None:
         diagnostics = self.diagnostics
@@ -625,6 +631,16 @@ class VoiceProjectTurns:
         self._nudged_epochs: set[int] = set()
         self._retire = None
         self._played = 0  # audible response segments allowed so far
+        self._played_epochs: set[int] = set()
+        # Grant renewal pending at wake: turns wait (bounded) for Hello.
+        self._renewal_started = monotonic()
+        self._renewal_deadline = (
+            None
+            if owner._grant_current()
+            else self._renewal_started + RENEWAL_WAIT_SECONDS
+        )
+        self._paused = False
+        self._forget_incomplete_epochs: set[int] = set()
         self._withheld_keys: set[tuple] = set()
 
     @property
@@ -686,6 +702,15 @@ class VoiceProjectTurns:
         if turn.role is not ConversationRole.ASSISTANT or self._closed:
             return
         if turn.turn_id in self._recorded_assistant:
+            return
+        from jarvis.voice.voice_output_safety import non_user_facing_reason
+
+        unsafe = non_user_facing_reason(turn.text)
+        if unsafe is not None:
+            # An echoed instruction or reasoning trace is never conversation.
+            self._recorded_assistant.add(turn.turn_id)
+            self.metrics.assistant_skipped += 1
+            self._diag("assistant_not_user_facing", reason=unsafe)
             return
         epoch = self._response_epoch
         latest_user = self._latest_user_before(turn)
@@ -783,6 +808,58 @@ class VoiceProjectTurns:
 
     # -- application-owned preparation ---------------------------------------
 
+    # -- grant renewal pending at wake --------------------------------------
+
+    async def _ready(self) -> bool:
+        """Whether project memory may be used in this session now.
+
+        On the first wake after a lock/unlock the session starts at once and
+        this waits (until RENEWAL_WAIT_SECONDS after the wake) for the fresh
+        Hello approval. Not approved in time: the session continues as ordinary
+        voice, says so once, and saves nothing.
+        """
+        # A closed session still finishes its in-flight saves (sleep right
+        # after speaking), so only a pause ends readiness.
+        if self._paused:
+            return False
+        if self._renewal_deadline is None:
+            # The grant was current at wake. If it lapses mid-session, the
+            # archive itself refuses reads and writes (fails closed).
+            return True
+        ready = await self._owner.wait_ready(self._renewal_deadline)
+        if ready:
+            if self._renewal_deadline is not None:
+                waited = round((monotonic() - self._renewal_started) * 1000)
+                self._owner._runtime_event("renewal_ready_for_wake", waited_ms=waited)
+                # Also in THIS session's record, so a grader knows which wake.
+                self._diag("renewal_ready_for_wake", waited_ms=waited)
+                self._renewal_deadline = None
+            return True
+        self._enter_paused()
+        return False
+
+    def approval_pending_seconds(self) -> float:
+        """Seconds this wake still waits for the fresh Hello approval (0: none)."""
+        deadline = self._renewal_deadline
+        if deadline is None or self._paused or self._closed:
+            return 0.0
+        if self._owner._grant_current():
+            return 0.0
+        return max(0.0, deadline - monotonic())
+
+    def _enter_paused(self) -> None:
+        if self._paused:
+            return
+        self._paused = True
+        self._fast_ready = False
+        self._renewal_deadline = None
+        self.metrics.paused_sessions += 1
+        self._owner._runtime_event("paused_notice_spoken")
+        self._diag("project_memory_paused")
+        LOGGER.warning("Voice project memory paused for this wake (no Hello grant)")
+        if not self._closed:
+            self._generate(PAUSED_NOTICE_INSTRUCTIONS)
+
     def _outcome_future(self, turn) -> asyncio.Future:
         future = self._outcomes.get(turn.turn_id)
         if future is None:
@@ -795,6 +872,18 @@ class VoiceProjectTurns:
 
     async def _prepare_turn(self, turn, future) -> None:
         owner = self._owner
+        if not await self._ready():
+            # Paused: nothing is saved without a current grant.
+            if not future.done():
+                future.set_result(_Outcome("not_saved", reason="project_memory_paused"))
+            self._diag(
+                "prepared",
+                epoch=turn.user_activity_epoch,
+                turn_id=turn.turn_id,
+                status="not_saved",
+                reason="project_memory_paused",
+            )
+            return
         started = monotonic()
         try:
             async with owner.prepare_lock:
@@ -1046,6 +1135,7 @@ class VoiceProjectTurns:
         if allowed and not trailing:
             self._response_epoch = self._conversation.user_activity_epoch
             self._played += 1
+            self._played_epochs.add(self._response_epoch)
         if not trailing:
             self._diag("response_played" if allowed else "response_withheld")
         return allowed
@@ -1053,9 +1143,14 @@ class VoiceProjectTurns:
     def _decide_response_audio(self) -> bool:
         """Decide one response segment: play only a context-informed answer."""
         epoch = self._conversation.user_activity_epoch
-        if epoch == 0 or self._closed:
-            # Before any owner speech (wake acknowledgement), nothing to prepare.
+        if epoch == 0 or self._closed or self._paused:
+            # Before any owner speech (wake acknowledgement) nothing to prepare;
+            # a paused session is ordinary voice.
             return True
+        if epoch in self._forget_incomplete_epochs:
+            return True  # the honest partial-forget notice
+        if epoch in self._canonical_forget_epochs and epoch not in self._forget_epochs:
+            return self._hold_for_history_forget(epoch)
         if epoch in self._control_epochs:
             return True  # acknowledgement of an executed control tool
         key = self._key(epoch)
@@ -1144,7 +1239,12 @@ class VoiceProjectTurns:
 
     async def _deliver_in_context(self, source, outcome, epoch) -> bool:
         """Give Gemini this utterance's prepared context directly (chat context),
-        exactly what prepare_project_turn would have returned."""
+        exactly what prepare_project_turn would have returned.
+
+        Added as a completed exchange (see :meth:`_inject_closed_context`), and
+        never inside generate_reply instructions: LiveKit sends those to Gemini
+        as MODEL-role text, which Gemini can echo as if it were its own reply.
+        """
         if outcome is None or outcome.status not in {
             "ready",
             "clarification",
@@ -1157,24 +1257,13 @@ class VoiceProjectTurns:
             agent = None
         if agent is None or not callable(getattr(agent, "update_chat_ctx", None)):
             return False
-        from livekit.agents.llm import ChatContext, ChatMessage
-
         result, new_ids = model_view(outcome, self._delivered_ids)
-        message = ChatMessage(
-            id="jarvis:project-context:" + uuid4().hex[:12],
-            role="user",
-            content=[
-                "[Project memory from Jarvis for the owner's last request, not "
-                "speech from the owner. Do not reply to this message itself.] "
-                + json.dumps(result, ensure_ascii=False)
-            ],
-        )
         try:
-            if self._register_injected is not None:
-                self._register_injected(ChatContext(items=[message]))
-            context = agent.chat_ctx.copy()
-            context.items.append(message)
-            await agent.update_chat_ctx(context)
+            await self._inject_closed_context(
+                agent,
+                "[Project memory from Jarvis for the owner's last request, not "
+                "speech from the owner.] " + json.dumps(result, ensure_ascii=False),
+            )
         except Exception as exc:  # noqa: BLE001 - fall back to the tool request
             LOGGER.warning(
                 "Project voice repair delivery failed | error=%s", type(exc).__name__
@@ -1258,37 +1347,63 @@ class VoiceProjectTurns:
     # -- replies Gemini transcribed but never voiced --------------------------
 
     def allow_unplayed_reply(self, turn) -> bool:
-        """Gate decision for replaying an assistant turn that produced no audio.
+        """Ownership and gate decision for replaying an assistant turn that
+        produced no audio.
 
         Silent-audio recovery asks this before speaking the turn's text through
-        scripted TTS. It is the same decision the audio gate would have made had
-        audio arrived: a response this utterance's gate withheld is never
-        replayed, and a stale reply (the owner spoke again) is not either.
+        scripted TTS. A transcript alone is not evidence of a reply: the turn
+        must answer an accepted owner utterance of the CURRENT activity, which
+        has had no audible response yet, and pass the same context decision the
+        audio gate makes for audio. Never replayed: the wake acknowledgement or
+        any other system generation before owner speech (epoch 0), a stale reply
+        (the owner spoke again), a response the gate withheld, a forget
+        confirmation, and anything that is not user-facing text.
         """
+        from jarvis.voice.voice_output_safety import non_user_facing_reason
+
         if self._closed or turn.role is not ConversationRole.ASSISTANT:
             return False
         epoch = self._conversation.user_activity_epoch
         latest = self._latest_user_before(turn)
-        if latest is not None and (latest.user_activity_epoch or 0) != epoch:
-            return False
-        if epoch == 0:
-            allowed = True
+        owned = (
+            epoch > 0
+            and latest is not None
+            and (latest.user_activity_epoch or 0) == epoch
+        )
+        reason = None
+        if not owned:
+            reason = "not_owned_by_a_current_owner_utterance"
+        elif epoch in self._played_epochs:
+            reason = "utterance_already_answered_audibly"
+        elif (
+            epoch in self._forget_epochs
+            or epoch in self._canonical_forget_epochs
+            or epoch in self._forget_incomplete_epochs
+        ):
+            reason = "forget_confirmation"
+        elif non_user_facing_reason(turn.text) is not None:
+            reason = "not_user_facing"
         else:
             key = self._key(epoch)
             if key in self._withheld_keys and not self._is_delivered(key):
-                return False
-            allowed = (
-                epoch in self._control_epochs
+                reason = "withheld_by_context_gate"
+            elif not (
+                self._paused
+                or epoch in self._control_epochs
                 or key == self._fallback_key
                 or self._is_delivered(key)
                 or self._fast_path_allows(epoch)
-            )
-        if allowed:
-            self._response_epoch = epoch
-            self._played += 1
-            self._diag("unplayed_reply_replayed", epoch=epoch)
-            self.metrics.unplayed_replays += 1
-        return allowed
+            ):
+                reason = "context_not_delivered"
+        if reason is not None:
+            self._diag("unplayed_reply_rejected", epoch=epoch, reason=reason)
+            return False
+        self._response_epoch = epoch
+        self._played += 1
+        self._played_epochs.add(epoch)
+        self._diag("unplayed_reply_replayed", epoch=epoch)
+        self.metrics.unplayed_replays += 1
+        return True
 
     def observe_replayed(self, turn) -> None:
         """The replayed reply was heard: record it like any played reply."""
@@ -1297,6 +1412,37 @@ class VoiceProjectTurns:
     def speak_text(self, text) -> None:
         """Last resort when scripted TTS cannot replay an unvoiced reply."""
         self._generate("Say only this, exactly: '" + text.replace("'", "") + "'")
+
+    def _hold_for_history_forget(self, epoch) -> bool:
+        """Canonical fact forgotten, saved conversation not yet: no confirmation
+        may play until both are done (or the partial result is said honestly)."""
+        handle = self._speech
+        if handle is not None and handle is self._blocked_speech:
+            return False
+        self._blocked_speech = handle
+        if handle is not None:
+            try:
+                handle.interrupt()
+            except Exception:  # noqa: BLE001 - a non-interruptible speech is muted
+                LOGGER.info("Premature forget confirmation could not be interrupted")
+        if epoch not in self._nudged_epochs:
+            self._nudged_epochs.add(epoch)
+            self._diag("forget_history_requested", epoch=epoch)
+            self._generate(FORGET_HISTORY_NUDGE)
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_later(FORGET_HISTORY_SECONDS, self._forget_watchdog, epoch)
+            except RuntimeError:
+                pass
+        return False
+
+    def _forget_watchdog(self, epoch) -> None:
+        if self._closed or epoch in self._forget_epochs or not self._still(epoch):
+            return
+        self._forget_incomplete_epochs.add(epoch)
+        self._diag("forget_incomplete", epoch=epoch)
+        LOGGER.warning("Canonical forget committed but saved conversation was not")
+        self._generate(FORGET_INCOMPLETE_INSTRUCTIONS)
 
     def _still(self, epoch) -> bool:
         return self._active() and self._conversation.user_activity_epoch == epoch
@@ -1365,6 +1511,8 @@ class VoiceProjectTurns:
         if agent is None:
             LOGGER.warning("Project voice preload skipped: no running agent")
             return
+        if not await self._ready():
+            return  # paused: no history is given to the model
         await self._safe_preload(agent)
 
     async def _safe_preload(self, agent) -> None:
@@ -1396,18 +1544,7 @@ class VoiceProjectTurns:
         )
         text = _preload_message(entry.title if entry else None, rows, sources)
         if text:
-            from livekit.agents.llm import ChatContext, ChatMessage
-
-            message = ChatMessage(
-                id="jarvis:project-context:" + uuid4().hex[:12],
-                role="user",
-                content=[text],
-            )
-            if self._register_injected is not None:
-                self._register_injected(ChatContext(items=[message]))
-            context = agent.chat_ctx.copy()
-            context.items.append(message)
-            await agent.update_chat_ctx(context)
+            await self._inject_closed_context(agent, text)
         for row in rows:
             self._delivered_ids[row.event.event_id] = None
         self._catalog = catalog
@@ -1429,6 +1566,36 @@ class VoiceProjectTurns:
         )
 
     _register_injected = None
+
+    async def _inject_closed_context(self, agent, text) -> None:
+        """Add context as a COMPLETED exchange: the labelled memory message and
+        a short Jarvis acknowledgement.
+
+        A lone user-role context message left the owner's "turn" open: the next
+        generate_reply (the wake acknowledgement) then treated the memory block
+        as the owner's prompt and Gemini returned instructions and a reasoning
+        trace as text (live qualification at 8155df0d).
+        """
+        from livekit.agents.llm import ChatContext, ChatMessage
+
+        identity = uuid4().hex[:12]
+        items = [
+            ChatMessage(
+                id="jarvis:project-context:" + identity,
+                role="user",
+                content=[text],
+            ),
+            ChatMessage(
+                id="jarvis:project-context-ack:" + identity,
+                role="assistant",
+                content=["Noted."],
+            ),
+        ]
+        if self._register_injected is not None:
+            self._register_injected(ChatContext(items=list(items)))
+        context = agent.chat_ctx.copy()
+        context.items.extend(items)
+        await agent.update_chat_ctx(context)
 
     def observe_transcription(self, event) -> None:
         """Streaming recognition (cumulative partials, then the final)."""
@@ -1472,6 +1639,8 @@ class VoiceProjectTurns:
         """Async gate entry: lets streaming recognition catch up briefly
         before deciding, rather than withholding an ordinary answer."""
         epoch = self._conversation.user_activity_epoch
+        if epoch and self._renewal_deadline is not None:
+            await self._ready()  # bounded wait for the fresh Hello grant
         if (
             epoch
             and self._fast_ready
@@ -1587,11 +1756,9 @@ class VoiceProjectTurns:
     def _after_forget_reply(self, epoch) -> None:
         if epoch in self._canonical_forget_epochs and epoch not in self._forget_epochs:
             if epoch not in self._nudged_epochs:
-                # Deterministic follow-up: canonical forget alone would leave the
-                # owner's words in project history, to resurface later.
-                self._nudged_epochs.add(epoch)
-                self._diag("forget_history_requested", epoch=epoch)
-                self._generate(FORGET_HISTORY_NUDGE)
+                # The confirmation committed without audio reaching the gate:
+                # still ask for the saved conversation to be forgotten too.
+                self._hold_for_history_forget(epoch)
             return
         if epoch in self._forget_epochs and self._retire is not None:
             retire, self._retire = self._retire, None
@@ -1923,3 +2090,15 @@ class VoiceProjectTools:
         if not isinstance(words, str) or len(words) > 200:
             return {"status": "denied", "reason": "short_words_text_required"}
         return await self._turns.forget_history(words)
+
+
+# Instruction text that must never be spoken back or saved as a reply.
+register_internal_text(
+    REPAIR_ANSWER_INSTRUCTIONS,
+    REPAIR_INSTRUCTIONS,
+    FORGET_HISTORY_NUDGE,
+    _GUIDANCE,
+    _TOOL_DESCRIPTION,
+    _SEARCH_DESCRIPTION,
+    _FORGET_DESCRIPTION,
+)

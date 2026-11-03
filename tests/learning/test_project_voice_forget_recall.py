@@ -9,8 +9,11 @@ P1  "Forget that ..." removes every saved row mentioning the owner's words (any
     resurfaces after a restart, and the index no longer holds the words.
 P2  Older facts beyond the preload/packet windows are found with a bounded,
     authorized FTS5 search; newer owner corrections come last (current).
-P3  After a Windows lock/unlock, the next eligible wake asks for a fresh grant;
-    the revoked one is never reused; a denial leaves ordinary voice.
+P3  After a Windows lock/unlock, the next wake asks for a fresh grant and starts
+    at once; its turns wait (bounded) for the approval, so a command spoken
+    while Hello is open is saved once and answered. The revoked grant is never
+    reused; a denial or timeout leaves ordinary voice, said once, saving
+    nothing.
 """
 
 import asyncio
@@ -223,6 +226,95 @@ async def test_failed_canonical_forget_requests_nothing(lab):
     assert wake.session.replies == []
 
 
+def forget_attempts(wake, *errors):
+    """forget_memory calls in this utterance, as Gemini made them live."""
+    wake.turns.observe_tools_executed(
+        SimpleNamespace(
+            function_calls=[SimpleNamespace(name="forget_memory") for _ in errors],
+            function_call_outputs=[SimpleNamespace(is_error=e) for e in errors],
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_forget_confirmation_plays_before_both_systems_forgot(lab):
+    """Live shape (8155df0d): two failed predicate guesses, then a committed
+    canonical forget, then forget_saved_history. Gemini's "I have removed that"
+    must not be heard while the saved conversation still holds the words."""
+    voice = await nepal(lab)
+    wake = FastWake(voice)
+    await wake.preload()
+    wake.speech()
+    wake.transcript("Forget that we will take the Jimny.")
+    forget_attempts(wake, True, True)  # 'car', 'suzuki_jimny': no such predicate
+    forget_attempts(wake, False)  # the third attempt committed
+    allowed, handle = wake.response()  # premature confirmation
+    assert allowed is False and handle.interrupted
+    assert wake.session.replies == [FORGET_HISTORY_NUDGE]  # asked exactly once
+    allowed, _ = wake.response()
+    assert allowed is False and wake.session.replies == [FORGET_HISTORY_NUDGE]
+    result = await wake.turns.forget_history("Jimny")
+    assert result["status"] == "forgotten"
+    allowed, _ = wake.response()  # now the confirmation is true and may play
+    assert allowed is True
+    await settle(voice)
+    assert not any("jimny" in t.casefold() for t in texts(lab))
+    # Unrelated owner history (the permits) is kept.
+    assert "The permits are sorted." in texts(lab)
+
+
+@pytest.mark.asyncio
+async def test_a_history_forget_that_never_follows_is_reported_honestly(
+    lab, monkeypatch
+):
+    monkeypatch.setattr(project_voice, "FORGET_HISTORY_SECONDS", 0.05)
+    voice = await nepal(lab)
+    wake = FastWake(voice)
+    await wake.preload()
+    wake.speech()
+    wake.transcript("Forget that we will take the Jimny.")
+    forget_attempts(wake, False)
+    assert wake.response()[0] is False
+    await asyncio.sleep(0.15)  # Gemini never calls forget_saved_history
+    assert wake.session.replies == [
+        FORGET_HISTORY_NUDGE,
+        project_voice.FORGET_INCOMPLETE_INSTRUCTIONS,
+    ]
+    assert wake.response()[0] is True  # the honest partial notice plays
+    # Never replayed as a full-success confirmation through recovery either.
+    turn = wake.reply("I have removed that from your memory.")
+    assert wake.turns.allow_unplayed_reply(turn) is False
+
+
+@pytest.mark.asyncio
+async def test_forget_keeps_unrelated_owner_history_and_says_what_else_went(lab):
+    """FIX3 check of the live receipt (owner_rows=2, jarvis_rows=13): owner
+    rows are removed only if they contain the words; every Jarvis reply made
+    with a removed row in its context is removed too (by design: it may
+    paraphrase it), including replies about other topics, since the preload
+    puts recent rows in every reply's context. Owner facts about the hotel or
+    packing are never removed; the count is reported, not hidden."""
+    voice = await nepal(lab)
+    wake = FastWake(voice)
+    await wake.preload()
+    await wake.fast("Where is our hotel?", "I don't have the hotel saved.")
+    wake.close()
+    nxt = FastWake(voice)
+    await nxt.preload()
+    nxt.speech()
+    nxt.transcript("Forget that we will take the Jimny.")
+    result = await nxt.turns.forget_history("Jimny")
+    await settle(voice)
+    assert result["your_messages"] == 2  # the fact and this request
+    assert result["jarvis_replies"] == 3  # replies made with it in context
+    assert texts(lab) == [
+        "create project called Nepal trip",
+        "Created project Nepal trip.",
+        "The permits are sorted.",
+        "Where is our hotel?",
+    ]
+
+
 # -- P2: long-term recall -----------------------------------------------------
 
 
@@ -311,11 +403,13 @@ async def test_lock_unlock_renews_the_grant_at_the_next_wake(lab, authority_part
     old = voice.access.grant
     issuer = voice.access.authority
     authority_parts.windows.lock_unlock()  # Windows lock + unlock
-    assert voice.available() is False  # this wake: ordinary voice...
-    await voice.drain()  # ...while a fresh Hello approval is requested
+    # The wake starts at once with project memory pending a fresh approval.
+    assert voice.available() is True
+    assert voice.metrics.paused_sessions == 0
+    await voice.drain()  # the owner approves Windows Hello
     assert voice.metrics.renewals == 1 and voice.access.grant != old
     assert issuer.validate(old).status != "active"  # never reused
-    assert voice.available() is True  # the next wake has project memory again
+    assert voice.available() is True
     wake = Wake(voice)
     await wake.ask("We will also take a stove.", "Noted.")
     assert "We will also take a stove." in texts(lab)
@@ -328,18 +422,19 @@ async def test_denied_renewal_keeps_ordinary_voice_and_backs_off(
     voice = await nepal(lab)
     authority_parts.windows.lock_unlock()
     authority_parts.hello.denied = True
-    assert voice.available() is False
+    assert voice.available() is True  # pending: this wake waits, bounded
     await voice.drain()
     assert voice.metrics.renewal_failures == 1
     calls = len(authority_parts.hello.calls)
-    assert voice.available() is False
+    assert voice.available() is False  # denied: ordinary voice
     assert voice.request_renewal() is False  # no prompt on every wake
     assert len(authority_parts.hello.calls) == calls
     # After the cooldown the owner is asked again, and approval restores it.
     authority_parts.hello.denied = False
     monkeypatch.setattr(project_voice, "monotonic", lambda: 10**9)
-    assert voice.available() is False
+    assert voice.available() is True
     await voice.drain()
+    assert voice.metrics.renewals == 1
     assert voice.available() is True
 
 
@@ -353,59 +448,122 @@ async def test_renewal_after_shutdown_never_attaches(lab, authority_parts):
     await asyncio.sleep(0)
 
 
-# -- D1: bounded Hello wait on the first wake after lock/unlock ---------------
+# -- D1/FIX5: the first wake after lock/unlock -------------------------------
+#
+# Live qualification at 8155df0d: the wake waited for Windows Hello BEFORE the
+# realtime session started, so the owner's first command, spoken while the
+# Hello prompt was open, was never captured (renewal succeeded, 0 user turns).
+# Now the session starts at once; its turns wait (bounded) for the approval.
+
+
+def slow_hello(voice):
+    import threading
+
+    release = threading.Event()
+    real = voice._opener
+
+    def opener():
+        release.wait(10)
+        return real()
+
+    voice._opener = opener
+    return release
+
+
+def stove_rows(lab):
+    return [r for r in lab.rows() if "stove" in r[1].casefold()]
 
 
 @pytest.mark.asyncio
-async def test_first_wake_after_unlock_waits_for_hello_and_uses_memory(
+async def test_first_command_spoken_during_hello_is_saved_once_and_answered(
     lab, authority_parts
 ):
     voice = await nepal(lab)
     authority_parts.windows.lock_unlock()
-    assert await voice.prepare_wake(timeout=5) is None  # approved in time
-    assert voice.available() is True and voice.metrics.renewals == 1
-    wake = Wake(voice)  # this same wake saves turns again
-    await wake.ask("We will also take a stove.", "Noted.")
-    assert "We will also take a stove." in texts(lab)
+    release = slow_hello(voice)
+    assert await voice.prepare_wake() is None  # never blocks the wake
+    assert voice.available() is True
+    wake = Wake(voice)  # the session is live while Hello is still open
+    wake.speech()
+    wake.transcript("Add a stove to the packing list.")  # captured at once
+    # Gemini calls prepare_project_turn: it waits for the fresh grant.
+    prepared = asyncio.ensure_future(wake.turns.prepare())
+    await asyncio.sleep(0.05)
+    assert not prepared.done()  # held: nothing is saved without the grant
+    assert stove_rows(lab) == []
+    # The wake's inactivity timeout is held open meanwhile (bounded).
+    assert (
+        0 < wake.turns.approval_pending_seconds() <= project_voice.RENEWAL_WAIT_SECONDS
+    )
+    release.set()  # the owner approves Hello
+    assert (await prepared)["status"] == "ready"
+    assert wake.turns.approval_pending_seconds() == 0
+    assert wake.response()[0] is True  # the answer plays
+    wake.reply("Added a stove.")
+    await settle(voice)
+    assert stove_rows(lab) == [
+        ("user", "Add a stove to the packing list.", "complete", "Nepal trip"),
+        ("assistant", "Added a stove.", "complete", "Nepal trip"),
+    ]
+    assert voice.metrics.renewals == 1
+    assert project_voice.PAUSED_NOTICE_INSTRUCTIONS not in wake.session.replies
 
 
 @pytest.mark.asyncio
-async def test_denied_hello_on_wake_says_memory_is_paused_once(lab, authority_parts):
+async def test_denied_hello_on_wake_saves_nothing_and_says_paused_once(
+    lab, authority_parts
+):
     voice = await nepal(lab)
     authority_parts.windows.lock_unlock()
     authority_parts.hello.denied = True
-    notice = await voice.prepare_wake(timeout=5)
-    assert notice == project_voice.PAUSED_NOTICE_INSTRUCTIONS
-    assert voice.available() is False
+    assert voice.available() is True
+    wake = Wake(voice)
+    wake.speech()
+    wake.transcript("Add a stove to the packing list.")
+    result = await wake.turns.prepare()
+    assert result["status"] == "not_saved"
+    assert wake.session.replies == [project_voice.PAUSED_NOTICE_INSTRUCTIONS]
+    # Ordinary voice answers; nothing is saved without a grant.
+    assert await wake.turns.response_audio_allowed() is True
+    wake.reply("Okay.")
+    wake.speech()
+    wake.transcript("And a lantern.")
+    await wake.turns.prepare()
+    await settle(voice)
+    assert stove_rows(lab) == [] and "And a lantern." not in texts(lab)
+    assert wake.session.replies == [project_voice.PAUSED_NOTICE_INSTRUCTIONS]
     calls = len(authority_parts.hello.calls)
-    # Within the 5-minute cooldown: no wait, no new prompt, no repeated notice.
-    assert await voice.prepare_wake(timeout=5) is None
+    # Within the 5-minute cooldown: no new prompt, ordinary voice.
+    assert await voice.prepare_wake() is None
+    assert voice.available() is False
     assert len(authority_parts.hello.calls) == calls
 
 
 @pytest.mark.asyncio
-async def test_slow_hello_never_blocks_the_wake_beyond_the_bound(lab, authority_parts):
-    import threading
-
+async def test_slow_hello_never_holds_the_wake_beyond_the_bound(
+    lab, authority_parts, monkeypatch
+):
+    monkeypatch.setattr(project_voice, "RENEWAL_WAIT_SECONDS", 0.1)
     voice = await nepal(lab)
     authority_parts.windows.lock_unlock()
-    release = threading.Event()
-    real = voice._opener
-
-    def slow_opener():
-        release.wait(5)
-        return real()
-
-    voice._opener = slow_opener
+    release = slow_hello(voice)
+    assert voice.available() is True  # renewal requested at the wake
+    wake = Wake(voice)
+    wake.speech()
+    wake.transcript("Add a stove to the packing list.")
     loop = asyncio.get_running_loop()
     started = loop.time()
-    notice = await voice.prepare_wake(timeout=0.1)
+    assert await wake.turns.response_audio_allowed() is True  # ordinary voice
     assert loop.time() - started < 2
-    assert notice == project_voice.PAUSED_NOTICE_INSTRUCTIONS
+    assert (await wake.turns.prepare())["status"] == "not_saved"
+    assert wake.session.replies == [project_voice.PAUSED_NOTICE_INSTRUCTIONS]
     release.set()  # the owner approves a moment later
-    await voice.drain()
-    assert await voice.prepare_wake(timeout=0.1) is None
-    assert voice.available() is True
+    await settle(voice)
+    assert stove_rows(lab) == []  # the paused wake never saves later
+    wake.close()
+    nxt = Wake(voice)  # the next wake uses the new grant
+    await nxt.ask("Add a stove to the packing list.", "Added the stove.")
+    assert len(stove_rows(lab)) == 2  # owner + Jarvis, exactly once
 
 
 @pytest.mark.asyncio
@@ -414,17 +572,6 @@ async def test_current_grant_needs_no_wait(lab, authority_parts):
     calls = len(authority_parts.hello.calls)
     assert await voice.prepare_wake(timeout=0.01) is None
     assert len(authority_parts.hello.calls) == calls
-
-
-def test_wake_notice_is_spoken_as_the_sessions_first_prompt():
-    import inspect
-
-    from jarvis.voice.runtime import VoiceRuntimeController
-
-    source = inspect.getsource(VoiceRuntimeController._run_one_session_owned)
-    hook = source.index("notice = await self._before_conversation_session()")
-    assert hook < source.index("session, bridge = self._session_factory(self.config)")
-    assert "initial_instructions = notice" in source
 
 
 @pytest.mark.asyncio
@@ -439,8 +586,46 @@ async def test_renewal_events_reach_diagnostics(lab, authority_parts, tmp_path):
     voice = await nepal(lab)
     voice.diagnostics = diagnostics
     authority_parts.windows.lock_unlock()
-    await voice.prepare_wake(timeout=5)
+    await voice.prepare_wake()
+    wake = Wake(voice)
+    await wake.ask("We will also take a stove.", "Noted.")
     await diagnostics.aclose()
     data = vd.load_run(diagnostics.run_dir, FakeProtector())
     kinds = [e["kind"] for e in data["runtime_events"]]
     assert kinds == ["renewal_requested", "renewal_succeeded", "renewal_ready_for_wake"]
+
+
+@pytest.mark.asyncio
+async def test_the_wake_stays_open_while_hello_is_being_approved(monkeypatch):
+    """Live qualification: the post-renewal wake ended after 8 s of inactivity
+    with no owner turn. While this wake still waits for the Hello approval, the
+    inactivity timeout is extended (never beyond the renewal wait); without a
+    pending approval it expires exactly as before."""
+    from jarvis.voice.canonical_active_speaker_runtime import (
+        CanonicalActiveSpeakerRuntimeController,
+    )
+
+    runtime = object.__new__(CanonicalActiveSpeakerRuntimeController)
+    runtime._standby_requested = False
+    runtime._session_ready_for_inactivity = True
+    runtime._agent_state = "listening"
+    runtime._user_is_speaking = False
+    runtime._personal_context = None
+    runtime._timeout_handle = None
+    runtime._session_conversation = None
+    runtime._active_end = asyncio.Event()
+    pending = [0.05]
+    runtime._project_turns = SimpleNamespace(
+        approval_pending_seconds=lambda: pending[0]
+    )
+    runtime._arm_timeout(0.01)
+    await asyncio.sleep(0.03)
+    assert not runtime._active_end.is_set()  # approval still pending
+    pending[0] = 0.0  # approved (or the bounded wait ended)
+    await asyncio.sleep(0.1)
+    assert runtime._active_end.is_set()
+    runtime._project_turns = None  # ordinary voice: unchanged behaviour
+    runtime._active_end = asyncio.Event()
+    runtime._arm_timeout(0.01)
+    await asyncio.sleep(0.03)
+    assert runtime._active_end.is_set()

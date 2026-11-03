@@ -13,6 +13,7 @@ from jarvis.voice.media_devices_audio import (
     PlaybackQualitySnapshot,
 )
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
+from jarvis.voice.voice_output_safety import non_user_facing_reason
 
 LOGGER = logging.getLogger(__name__)
 
@@ -125,6 +126,17 @@ class SilentRealtimeAudioRecovery:
         output = self._output_getter()
         if not text or output is None:
             return
+        unsafe = non_user_facing_reason(text)
+        if unsafe is not None:
+            # A transcript alone is no evidence it is a reply (e.g. an echoed
+            # instruction or a reasoning trace): never spoken.
+            LOGGER.warning(
+                "Unplayed assistant turn %s is not a user-facing reply (%s); "
+                "not replayed",
+                turn.turn_id,
+                unsafe,
+            )
+            return
         try:
             allowed = self._allow_unplayed(turn) is True
         except Exception:  # an unknown gate state never speaks
@@ -196,6 +208,15 @@ class SilentRealtimeAudioRecovery:
             output = self._output_getter()
             text = turn.text.strip()
             if output is None or not text:
+                return
+            unsafe = non_user_facing_reason(text)
+            if unsafe is not None:
+                LOGGER.warning(
+                    "Near-silent assistant turn %s is not a user-facing reply (%s); "
+                    "not replayed",
+                    turn.turn_id,
+                    unsafe,
+                )
                 return
 
             LOGGER.warning(

@@ -146,3 +146,43 @@ async def test_voice_lab_baseline_passes_no_project_memory(tmp_path):
         "run",
     ]
     assert callable(project_memory_factory)
+
+
+# -- FIX4: Hands in the qualification lab ----------------------------------------
+#
+# Live qualification at 8155df0d: every open_app returned status=unavailable
+# (ok=False, verified=False) because the lab process never had the installed
+# profile's managed winapp CLI on PATH; production gets it from
+# Set-JarvisStorage.ps1. Hands' policy and execution path are unchanged.
+
+
+def test_lab_uses_the_installed_profiles_managed_winapp(tmp_path):
+    from jarvis.voice.project_voice_lab import managed_tool_path
+
+    state = tmp_path / "LocalState"
+    winapp = state / "tools" / "winapp"
+    winapp.mkdir(parents=True)
+    (winapp / "winapp.exe").write_bytes(b"")
+    profile = state / "machine.json"
+    env = {"PATH": str(tmp_path / "bin")}
+    assert managed_tool_path(profile, env) == winapp.resolve()
+    assert env["PATH"].split(__import__("os").pathsep)[0] == str(winapp.resolve())
+
+
+def test_lab_keeps_an_existing_winapp_and_never_invents_one(tmp_path):
+    import os
+    import stat
+
+    from jarvis.voice.project_voice_lab import managed_tool_path
+
+    profile = tmp_path / "LocalState" / "machine.json"
+    env = {"PATH": str(tmp_path / "bin")}
+    assert managed_tool_path(profile, env) is None  # nothing installed
+    assert env["PATH"] == str(tmp_path / "bin")
+    on_path = tmp_path / "bin"
+    on_path.mkdir()
+    tool = on_path / ("winapp.exe" if os.name == "nt" else "winapp")
+    tool.write_bytes(b"")
+    tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+    assert managed_tool_path(profile, env) is None  # already resolvable
+    assert env["PATH"] == str(on_path)

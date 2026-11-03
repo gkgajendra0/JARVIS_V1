@@ -661,6 +661,170 @@ async def test_owner_speech_uses_native_barge_in_after_acknowledgement_started(
     await asyncio.wait_for(task, timeout=1)
 
 
+# -- wake acknowledgement races (live qualification at 8155df0d) ---------------
+#
+# The owner began speaking just as the acknowledgement was requested. Its
+# generate_reply was still pending, so the owner's real response was bound to
+# it ("generate_reply timed out waiting for generation_created"), the runtime
+# logged the acknowledgement as played although no audio played, and its text
+# transcript later reached scripted-TTS recovery.
+
+
+class AckHandle(FakeSpeechHandle):
+    """A LiveKit SpeechHandle: interruptible, with completion state."""
+
+    def __init__(self, session: FakeSession) -> None:
+        super().__init__(session)
+        self.interrupted = False
+        self.interrupt_calls = 0
+
+    def done(self) -> bool:
+        return self._done
+
+    def interrupt(self, *, force: bool = False):
+        del force
+        self.interrupt_calls += 1
+        self.interrupted = True
+        self._session.reply_release.set()  # LiveKit ends the interrupted speech
+        return self
+
+
+class AckSession(FakeSession):
+    def __init__(self) -> None:
+        super().__init__(auto_finish_replies=False)
+        self.handles: list[AckHandle] = []
+
+    def generate_reply(self, **kwargs) -> AckHandle:
+        self.generated_replies.append(dict(kwargs))
+        handle = AckHandle(self)
+        self.handles.append(handle)
+        self.reply_started.set()
+        return handle
+
+
+def ack_runtime():
+    session = AckSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    # The physical output's count of playback segments started so far.
+    audio.output.started_segment_sequence = 0  # type: ignore[attr-defined]
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+    return runtime, session, audio
+
+
+@pytest.mark.asyncio
+async def test_owner_speech_before_ack_audio_cancels_only_the_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="jarvis.voice.runtime")
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    runtime, session, _ = ack_runtime()
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=1.0))
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    (ack,) = session.handles
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0.01)
+
+    # Only the acknowledgement's own handle is cancelled (which releases its
+    # pending generation); the session and the owner's turn are untouched.
+    assert ack.interrupt_calls == 1
+    assert session.interrupt_calls == []
+    assert len(session.generated_replies) == 1  # no competing generation
+    text = caplog.text
+    assert "acknowledgement cancelled" in text
+    assert "wake acknowledgement finished playing" not in text
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_owner_speech_after_ack_audio_started_keeps_native_barge_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    runtime, session, audio = ack_runtime()
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=1.0))
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    (ack,) = session.handles
+    audio.output.started_segment_sequence += 1  # its audio is playing
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0)
+
+    assert ack.interrupt_calls == 0  # provider-native barge-in owns it
+    assert session.interrupt_calls == []
+
+    session.reply_release.set()
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_ack_without_audio_is_not_reported_as_played(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="jarvis.voice.runtime")
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    runtime, session, _ = ack_runtime()
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=1.0))
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    session.reply_release.set()  # the generation ends with no playback segment
+    await asyncio.sleep(0.01)
+
+    assert "acknowledgement produced no audio; not reported as played" in caplog.text
+    assert "wake acknowledgement finished playing" not in caplog.text
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_silent_owner_still_gets_one_played_acknowledgement_each_wake(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="jarvis.voice.runtime")
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    sessions: list[AckSession] = []
+
+    def factory(_):
+        session = AckSession()
+        sessions.append(session)
+        return session, _bridge(session, ConversationSession())
+
+    audio = FakeAudio()
+    audio.output.started_segment_sequence = 0  # type: ignore[attr-defined]
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=factory,  # type: ignore[arg-type]
+    )
+    for cycle in range(3):  # repeated wake/sleep cycles on one runtime
+        task = asyncio.create_task(
+            runtime._run_one_session(pre_roll_after_monotonic=float(cycle))
+        )
+        while len(sessions) <= cycle:
+            await asyncio.sleep(0)
+        session = sessions[cycle]
+        await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+        audio.output.started_segment_sequence += 1  # type: ignore[attr-defined]
+        session.reply_release.set()  # the acknowledgement played
+        await asyncio.sleep(0.01)
+        runtime.request_shutdown()
+        await asyncio.wait_for(task, timeout=1)
+        runtime._shutdown.clear()  # the runtime stays up for the next wake
+    assert [len(s.handles) for s in sessions] == [1, 1, 1]
+    assert all(s.handles[0].interrupt_calls == 0 for s in sessions)
+    assert caplog.text.count("wake acknowledgement finished playing") == 3
+
+
 @pytest.mark.asyncio
 async def test_standby_times_out_silently_without_local_voice(
     monkeypatch: pytest.MonkeyPatch,

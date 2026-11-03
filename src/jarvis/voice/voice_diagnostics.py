@@ -496,9 +496,16 @@ class _SessionDiagnostics:
             if output is not None:
                 # Outcome only: an error flag and the tool's own status word.
                 entry["is_error"] = bool(getattr(output, "is_error", False))
-                status = _tool_status(getattr(output, "output", None))
+                raw = getattr(output, "output", None)
+                status = _tool_status(raw)
                 if status is not None:
                     entry["status"] = status
+                ok = _tool_ok(raw)
+                if ok is not None:
+                    entry["ok"] = ok  # the tool's own success flag
+                verified = _tool_verified(raw)
+                if verified is not None:
+                    entry["verified"] = verified  # observed postcondition
             if target is None:
                 self._unmatched("tool_without_utterance", entry)
             else:
@@ -572,18 +579,45 @@ class _SessionDiagnostics:
         )
 
 
-def _tool_status(output):
+def _tool_payload(output):
+    """The tool's returned mapping. LiveKit passes ``str(dict)`` (a Python
+    literal), not JSON, so both are parsed; never evaluated as code."""
     if isinstance(output, dict):
-        value = output.get("status", output.get("ok"))
-    else:
+        return output
+    if not isinstance(output, str) or not output.lstrip().startswith("{"):
+        return None
+    try:
+        parsed = json.loads(output)
+    except ValueError:
+        import ast
+
         try:
-            parsed = json.loads(output) if isinstance(output, str) else None
-        except ValueError:
+            parsed = ast.literal_eval(output)
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
             return None
-        value = (
-            parsed.get("status", parsed.get("ok")) if isinstance(parsed, dict) else None
-        )
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _tool_status(output):
+    payload = _tool_payload(output)
+    if payload is None:
+        return None
+    value = payload.get("status", payload.get("ok"))
     return value if isinstance(value, str | bool) else None
+
+
+def _tool_ok(output):
+    payload = _tool_payload(output)
+    value = None if payload is None else payload.get("ok")
+    return value if isinstance(value, bool) else None
+
+
+def _tool_verified(output):
+    """Hands' observed postcondition (``final_observation.verified``)."""
+    payload = _tool_payload(output)
+    observation = None if payload is None else payload.get("final_observation")
+    value = observation.get("verified") if isinstance(observation, dict) else None
+    return value if isinstance(value, bool) else None
 
 
 def classify_unmatched(utterance) -> str:

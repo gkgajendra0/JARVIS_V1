@@ -122,9 +122,12 @@ async def test_ordinary_turn_is_answered_from_preload_without_the_tool(lab):
     assert "Current project: Nepal trip." in context
     assert "owner: We will take the Jimny." in context
     assert "not speech from the owner" in context
-    # The bridge knows the injected item, so it is never accepted as a turn.
+    # The bridge knows the injected items, so neither is accepted as a turn.
+    # The context is a COMPLETED exchange (context + Jarvis "Noted."), so no
+    # later generation can treat it as the owner's open request.
     (registered,) = wake.registered
-    assert [i.text_content for i in registered.items] == [context]
+    assert [i.text_content for i in registered.items] == [context, "Noted."]
+    assert [i.role for i in registered.items] == ["user", "assistant"]
 
     reply = await wake.fast("Which vehicle are we taking?", "The Jimny.")
     assert voice.metrics.delivered == tool_calls  # no tool call
