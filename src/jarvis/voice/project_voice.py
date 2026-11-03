@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -54,6 +55,20 @@ _FAST_PATH_TEXT_WAIT_SECONDS = 0.35
 PRELOAD_ROWS = 12
 PRELOAD_MAX_CHARS = 3000
 _FAST_REPLY_WAIT_SECONDS = 15.0
+# After a denied or timed-out renewal, do not ask again for this long.
+RENEWAL_COOLDOWN_SECONDS = 300.0
+# Long-term recall: archive searches per utterance, hits and characters given.
+SEARCHES_PER_UTTERANCE = 2
+SEARCH_HITS = 8
+SEARCH_MAX_CHARS = 2400
+_FORGET_VERB = re.compile(
+    r"\b(?:forget|delete|erase|remove|wipe|bh[uo]+l|mita)\w*", re.IGNORECASE
+)
+FORGET_HISTORY_NUDGE = (
+    "The owner asked to forget something and the saved personal fact was "
+    "removed. Now also call forget_saved_history with the distinctive words the "
+    "owner used, then confirm briefly without repeating them."
+)
 
 # Conversation-control tools whose acknowledgement needs no project context.
 CONTROL_TOOLS = frozenset({"enter_standby"})
@@ -99,9 +114,15 @@ class VoiceProjectMetrics:
     false_claims: int = 0
     corrections: int = 0
     paused_sessions: int = 0
+    renewals: int = 0
+    renewal_failures: int = 0
     fast_path_turns: int = 0
     tool_path_turns: int = 0
     late_routing: int = 0
+    history_searches: int = 0
+    history_forgets: int = 0
+    search_ms: list[float] = field(default_factory=list)
+    search_bytes: list[int] = field(default_factory=list)
     preloads: int = 0
     preload_bytes: list[int] = field(default_factory=list)
     undelivered_user_turns: int = 0
@@ -127,7 +148,14 @@ class VoiceProjectMetrics:
                 "sum": round(sum(ordered), 1),
             }
 
-        series = {"prepare_ms", "packet_bytes", "delivered_bytes", "preload_bytes"}
+        series = {
+            "prepare_ms",
+            "packet_bytes",
+            "delivered_bytes",
+            "preload_bytes",
+            "search_ms",
+            "search_bytes",
+        }
         data = {k: v for k, v in self.__dict__.items() if k not in series}
         for name in series:
             data[name] = stats(getattr(self, name))
@@ -177,6 +205,9 @@ class VoiceProjectMemory:
         # continues as ordinary Jarvis without project memory instead.
         self.required = bool(required)
         self._paused_logged = False
+        self._opener = None
+        self._renewing = None
+        self._renew_after = 0.0
         self._memory = memory_runtime
         self._capability = capability_runtime
         self._clearance = source_clearance
@@ -191,8 +222,6 @@ class VoiceProjectMemory:
 
     async def start(self, *, open_grant=None) -> None:
         """Open the project-history grant (Windows Hello) after memory starts."""
-        from jarvis.memory.project_access import ProjectArchiveAccess
-        from jarvis.voice.project_conversation import ProjectConversationCoordinator
 
         if self.access is not None:
             return
@@ -201,19 +230,75 @@ class VoiceProjectMemory:
         opener = open_grant or (
             lambda: authority.open("voice-" + uuid4().hex, self._provider)
         )
+        self._opener = opener
         grant = await asyncio.to_thread(opener)
-        self.access = ProjectArchiveAccess(
-            self._memory.project_conversations, authority=authority, grant=grant
-        )
-        self.coordinator = ProjectConversationCoordinator(
-            self.access, source_clearance=self._clearance
-        )
+        self._attach(grant)
         catalog = await self.access.catalog()
         LOGGER.info(
             "Voice project memory active | projects=%s | current=%s",
             len({e.selection.project_id for e in catalog.entries}),
             "yes" if catalog.current is not None else "none",
         )
+
+    def _attach(self, grant) -> None:
+        from jarvis.memory.project_access import ProjectArchiveAccess
+        from jarvis.voice.project_conversation import ProjectConversationCoordinator
+
+        authority = self._capability.conversation_history_authority
+        self.access = ProjectArchiveAccess(
+            self._memory.project_conversations, authority=authority, grant=grant
+        )
+        self.coordinator = ProjectConversationCoordinator(
+            self.access, source_clearance=self._clearance
+        )
+
+    def request_renewal(self) -> bool:
+        """Ask for a fresh grant (Windows Hello) after the old one lapsed.
+
+        Runs in the background at an eligible wake: that wake stays ordinary
+        voice, later wakes use the new grant. The lapsed grant is revoked and
+        never reused. After a denial or timeout, the owner is not asked again
+        for RENEWAL_COOLDOWN_SECONDS.
+        """
+        if (
+            self._opener is None
+            or self._closed
+            or self._renewing is not None
+            or monotonic() < self._renew_after
+        ):
+            return False
+        self._renewing = self.spawn(self._renew(), name="jarvis-project-renew")
+        return True
+
+    async def _renew(self) -> None:
+        old_access, old_coordinator = self.access, self.coordinator
+        try:
+            if old_coordinator is not None:
+                old_coordinator.invalidate("grant_renewal")
+            try:
+                await asyncio.to_thread(
+                    old_access.authority.revoke, old_access.grant, "continuity_lost"
+                )
+            except Exception:  # noqa: BLE001 - it is already inactive
+                LOGGER.debug("Lapsed project grant revoke failed")
+            grant = await asyncio.to_thread(self._opener)
+            if self._closed:
+                await asyncio.to_thread(old_access.authority.revoke, grant, "shutdown")
+                return
+            self._attach(grant)
+            self._paused_logged = False
+            self.metrics.renewals += 1
+            LOGGER.info("Voice project memory renewed with a fresh Windows Hello grant")
+        except Exception as exc:  # noqa: BLE001 - ordinary voice continues
+            self.metrics.renewal_failures += 1
+            self._renew_after = monotonic() + RENEWAL_COOLDOWN_SECONDS
+            LOGGER.warning(
+                "Voice project memory renewal failed; ordinary voice continues | "
+                "error=%s",
+                type(exc).__name__,
+            )
+        finally:
+            self._renewing = None
 
     @staticmethod
     def configure_realtime_model(llm) -> None:
@@ -232,9 +317,9 @@ class VoiceProjectMemory:
         """Whether a new wake session can use project memory.
 
         The history grant ends when Windows session continuity changes (lock,
-        user switch). Like personal learning, it is never reopened silently:
-        later wake sessions run as ordinary voice until Jarvis restarts and the
-        owner approves Windows Hello again.
+        user switch). It is never reopened silently: this wake runs as ordinary
+        voice while a fresh Windows Hello approval is requested in the
+        background (:meth:`request_renewal`); later wakes use the new grant.
         """
         current = False
         if self.access is not None and not self._closed:
@@ -242,15 +327,15 @@ class VoiceProjectMemory:
                 current = bool(self.access.current())
             except Exception:  # noqa: BLE001 - unavailable OS evidence fails closed
                 current = False
-        if not current and self.access is not None and not self._paused_logged:
-            self._paused_logged = True
+        if not current and self.access is not None:
             self.metrics.paused_sessions += 1
-            LOGGER.warning(
-                "Voice project memory paused: history grant no longer current; "
-                "restart Jarvis and approve Windows Hello to resume"
-            )
-        elif not current and self.access is not None:
-            self.metrics.paused_sessions += 1
+            if not self._paused_logged:
+                self._paused_logged = True
+                LOGGER.warning(
+                    "Voice project memory paused: history grant no longer current; "
+                    "requesting a fresh Windows Hello approval"
+                )
+            self.request_renewal()
         return current
 
     def session(self, conversation) -> VoiceProjectTurns:
@@ -404,7 +489,7 @@ def _preload_message(title, rows, sources) -> str:
         lines.append(
             "Recent saved history, oldest first"
             + (
-                "; older history exists, call prepare_project_turn if needed"
+                "; older history exists: search_project_history finds it"
                 if older
                 else ""
             )
@@ -459,6 +544,11 @@ class VoiceProjectTurns:
         self._preload_task = None
         self._response_epoch = None  # activity epoch of the last played response
         self._tool_epochs: set[int] = set()
+        self._searches: dict[int, int] = {}
+        self._forget_epochs: set[int] = set()
+        self._canonical_forget_epochs: set[int] = set()
+        self._nudged_epochs: set[int] = set()
+        self._retire = None
 
     @property
     def metrics(self) -> VoiceProjectMetrics:
@@ -481,12 +571,22 @@ class VoiceProjectTurns:
         lets it through instead of re-requesting project memory. The accepted
         turn itself is still saved like any other.
         """
-        names = {getattr(c, "name", "") for c in getattr(event, "function_calls", ())}
+        calls = tuple(getattr(event, "function_calls", ()))
+        outputs = tuple(getattr(event, "function_call_outputs", ()) or ())
+        names = {getattr(c, "name", "") for c in calls}
+        epoch = self._conversation.user_activity_epoch
         control = names & CONTROL_TOOLS
         if control:
-            epoch = self._conversation.user_activity_epoch
             self._control_epochs.add(epoch)
             self._diag("control_tool", epoch=epoch, tools=sorted(control))
+        for index, call in enumerate(calls):
+            output = outputs[index] if index < len(outputs) else None
+            if getattr(call, "name", "") == "forget_memory" and not getattr(
+                output, "is_error", True
+            ):
+                # A canonical fact was forgotten; its saved conversation must be
+                # forgotten too (checked after the reply, see observe_turn).
+                self._canonical_forget_epochs.add(epoch)
 
     def observe_speech(self, event) -> None:
         self._speech = getattr(event, "speech_handle", None)
@@ -510,8 +610,14 @@ class VoiceProjectTurns:
             return
         if turn.turn_id in self._recorded_assistant:
             return
-        delivered = self._delivered
         epoch = self._response_epoch
+        if epoch in self._forget_epochs or epoch in self._canonical_forget_epochs:
+            # A forget confirmation is never saved (it would restate the words).
+            self._recorded_assistant.add(turn.turn_id)
+            self.metrics.assistant_skipped += 1
+            self._after_forget_reply(epoch)
+            return
+        delivered = self._delivered
         if epoch in self._fast_epochs and (
             delivered is None or delivered.turn.user_activity_epoch != epoch
         ):
@@ -1209,6 +1315,237 @@ class VoiceProjectTurns:
         if agent is not None and self._active():
             await self._safe_preload(agent)
 
+    # -- forgetting and long-term recall ---------------------------------------
+
+    def bind_retire(self, retire) -> None:
+        """Ends this wake session, so forgotten words leave the model context."""
+        self._retire = retire
+
+    def _after_forget_reply(self, epoch) -> None:
+        if epoch in self._canonical_forget_epochs and epoch not in self._forget_epochs:
+            if epoch not in self._nudged_epochs:
+                # Deterministic follow-up: canonical forget alone would leave the
+                # owner's words in project history, to resurface later.
+                self._nudged_epochs.add(epoch)
+                self._diag("forget_history_requested", epoch=epoch)
+                self._generate(FORGET_HISTORY_NUDGE)
+            return
+        if epoch in self._forget_epochs and self._retire is not None:
+            retire, self._retire = self._retire, None
+            try:
+                retire()
+            except Exception:  # noqa: BLE001 - the session also ends on its timer
+                LOGGER.warning("Project voice: session retire after forget failed")
+
+    async def _current_source(self):
+        activity = self._conversation.user_activity_epoch
+        try:
+            return activity, await asyncio.wait_for(
+                self._wait_source(activity), timeout=_SOURCE_WAIT_SECONDS
+            )
+        except TimeoutError:
+            return activity, None
+
+    async def forget_history(self, words) -> dict:
+        """Forget saved conversation that mentions what the owner named."""
+        from jarvis.memory.project_access import conversation_search_terms
+        from jarvis.memory.project_controls import (
+            MAX_FORGET_TERMS,
+            ForgetTooBroadError,
+            ProjectControls,
+        )
+
+        epoch, turn = await self._current_source()
+        if turn is None:
+            return {"status": "unavailable", "reason": "no_current_request"}
+        # The reply reports this operation; like standby it needs no project
+        # context, so the gate lets it play (it is never saved, see observe_turn).
+        self._control_epochs.add(epoch)
+        if not _FORGET_VERB.search(turn.text):
+            return {
+                "status": "denied",
+                "reason": "not_a_forget_request",
+                "guidance": "Only call this when the owner asks to forget something.",
+            }
+        spoken = set(conversation_search_terms(turn.text))
+        terms = tuple(
+            t
+            for t in conversation_search_terms(str(words or ""))
+            if not _FORGET_VERB.fullmatch(t)
+        )
+        if not 1 <= len(terms) <= MAX_FORGET_TERMS or not set(terms) <= spoken:
+            return {
+                "status": "denied",
+                "reason": "words_not_said",
+                "guidance": "Pass one to six distinctive words the owner actually "
+                "said about what to forget (not 'forget' itself).",
+            }
+        # The request itself mentions the words: wait until it is saved, so it is
+        # forgotten with everything else rather than left behind.
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(self._outcome_future(turn)), _REPAIR_WAIT_SECONDS
+            )
+        except TimeoutError:
+            return {"status": "unavailable", "reason": "request_not_saved_yet"}
+        owner = self._owner
+        controls = ProjectControls(owner.access)
+        async with owner.prepare_lock:
+            try:
+                preview = await controls.preview_forget_mentions(terms)
+            except ForgetTooBroadError:
+                return {
+                    "status": "too_broad",
+                    "guidance": "Nothing was deleted. Ask the owner to name it more "
+                    "specifically.",
+                }
+            if not preview.matched:
+                return {
+                    "status": "nothing_saved",
+                    "guidance": "No saved conversation mentions it.",
+                }
+            try:
+                # Fresh Windows Hello approval showing exactly what is removed.
+                receipt = await controls.forget_mentions(preview)
+            except (PermissionError, RuntimeError):
+                # Hello denied or timed out, or the history changed meanwhile.
+                self._diag("history_forget_not_approved", epoch=epoch)
+                return {
+                    "status": "not_forgotten",
+                    "reason": "not_approved_or_changed",
+                    "guidance": "Say nothing was deleted from saved conversation.",
+                }
+        self._forget_epochs.add(epoch)
+        self._fast_ready = False  # this session's context still holds the words
+        for identity in (*preview.matched, *preview.derived):
+            self._delivered_ids.pop(identity, None)
+        self.metrics.history_forgets += 1
+        self._diag(
+            "history_forgotten",
+            epoch=epoch,
+            owner_rows=receipt.owner_rows,
+            jarvis_rows=receipt.jarvis_rows,
+            projects=list(receipt.projects),
+        )
+        LOGGER.info(
+            "Project history forget committed | owner_rows=%s | jarvis_rows=%s | projects=%s",
+            receipt.owner_rows,
+            receipt.jarvis_rows,
+            len(receipt.projects),
+        )
+        return {
+            "status": "forgotten",
+            "your_messages": receipt.owner_rows,
+            "jarvis_replies": receipt.jarvis_rows,
+            "projects": list(receipt.projects),
+            "guidance": "Confirm briefly WITHOUT repeating the forgotten words, and "
+            "never use them again. If it was also a saved personal fact, call "
+            "forget_memory too. This conversation ends after your confirmation.",
+        }
+
+    async def search_history(self, query) -> dict:
+        """Bounded archive search for older project facts (FTS5, authorized)."""
+        from jarvis.memory.project_access import conversation_search_terms
+
+        epoch, turn = await self._current_source()
+        if turn is None:
+            return {"status": "unavailable", "reason": "no_current_request"}
+        used = self._searches.get(epoch, 0)
+        if used >= SEARCHES_PER_UTTERANCE:
+            return {"status": "denied", "reason": "search_budget_exhausted"}
+        if not conversation_search_terms(str(query or "")):
+            return {"status": "denied", "reason": "search_words_required"}
+        self._searches[epoch] = used + 1
+        owner = self._owner
+        # The question itself is saved first and never returned as an answer.
+        try:
+            outcome = await asyncio.wait_for(
+                asyncio.shield(self._outcome_future(turn)), _REPAIR_WAIT_SECONDS
+            )
+        except TimeoutError:
+            outcome = None
+        exclude = (
+            outcome.packet.request_id
+            if outcome is not None and outcome.status == "ready"
+            else None
+        )
+        selection = self._committed_selection
+        if selection is None:
+            catalog = await owner.access.catalog()
+            selection = catalog.current
+        if selection is None:
+            return {"status": "no_match", "history": []}
+        started = monotonic()
+        result = await owner.access.snapshot(
+            selection,
+            query=str(query),
+            limit=SEARCH_HITS,
+            project_wide=True,
+            exclude_request_id=exclude,
+        )
+        status = result.status
+        if status == "no_match":
+            # Soft separation, as in text: other projects only when this one has
+            # nothing; every hit keeps its project label.
+            wider = await owner.access.snapshot(
+                selection,
+                query=str(query),
+                limit=SEARCH_HITS,
+                all_projects=True,
+                exclude_request_id=exclude,
+            )
+            if wider.sources:
+                result, status = wider, "other_projects"
+        rows, given, already, total = [], [], 0, 0
+        for source in sorted(
+            result.sources, key=lambda s: (s.event.accepted_at, s.sequence)
+        ):
+            event = source.event
+            if event.event_id in self._delivered_ids:
+                already += 1
+                continue
+            size = len(event.text) + 40
+            if total + size > SEARCH_MAX_CHARS:
+                continue  # whole rows only; never shortened
+            total += size
+            item = {
+                "role": "owner" if event.role == "user" else "Jarvis",
+                "date": event.accepted_at.date().isoformat(),
+                "text": event.text,
+            }
+            if source.project_id and source.project_id != selection.project_id:
+                item["from_project"] = source.project_title
+            if event.delivery == "partial":
+                item["interrupted"] = True
+            rows.append(item)
+            given.append(event.event_id)
+        for identity in given:
+            self._delivered_ids[identity] = None
+        elapsed = round((monotonic() - started) * 1000, 1)
+        payload = {
+            "status": status if rows or already else "no_match",
+            "history": rows,
+            "already_in_conversation": already,
+            "guidance": "Saved conversation, oldest first. When rows disagree, the "
+            "newest owner statement is current; mention that it changed. Rows with "
+            "from_project come from that project. Missing is not proof it never "
+            "happened.",
+        }
+        size = len(json.dumps(payload, ensure_ascii=False).encode())
+        self.metrics.history_searches += 1
+        self.metrics.search_ms.append(elapsed)
+        self.metrics.search_bytes.append(size)
+        self._diag(
+            "history_searched",
+            epoch=epoch,
+            hits=len(rows),
+            already=already,
+            search_ms=elapsed,
+            bytes=size,
+            history=[{"role": r["role"], "text": r["text"]} for r in rows],
+        )
+        return payload
+
     # -- recording ------------------------------------------------------------
 
     async def _record_assistant(self, outcome: _Outcome, turn, evidence) -> None:
@@ -1235,13 +1572,30 @@ _TOOL_DESCRIPTION = (
 )
 
 
+_SEARCH_DESCRIPTION = (
+    "Searches this project's saved conversation (then other projects if nothing "
+    "matches) for older details than the history you have. Bounded and "
+    "evidence-only; at most two searches per request."
+)
+_FORGET_DESCRIPTION = (
+    "When the owner asks to forget something, removes saved conversation that "
+    "mentions it (all their words must appear) and Jarvis replies made from it, "
+    "after the owner approves with Windows Hello. Also use forget_memory for a "
+    "saved personal fact."
+)
+
+
 class VoiceProjectTools:
     def __init__(self, turns: VoiceProjectTurns) -> None:
         self._turns = turns
 
     @property
     def tools(self) -> list:
-        return [self.prepare_project_turn]
+        return [
+            self.prepare_project_turn,
+            self.search_project_history,
+            self.forget_saved_history,
+        ]
 
     @function_tool(
         raw_schema={
@@ -1258,3 +1612,50 @@ class VoiceProjectTools:
         if raw_arguments not in ({}, None):
             return {"status": "denied", "reason": "no_arguments_accepted"}
         return await self._turns.prepare()
+
+    @function_tool(
+        raw_schema={
+            "name": "search_project_history",
+            "description": _SEARCH_DESCRIPTION,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "A few key words from the owner's question.",
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    async def search_project_history(self, raw_arguments: dict[str, object]) -> dict:
+        query = (raw_arguments or {}).get("query")
+        if not isinstance(query, str) or len(query) > 200:
+            return {"status": "denied", "reason": "short_query_text_required"}
+        return await self._turns.search_history(query)
+
+    @function_tool(
+        raw_schema={
+            "name": "forget_saved_history",
+            "description": _FORGET_DESCRIPTION,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "words": {
+                        "type": "string",
+                        "description": "One to six distinctive words the owner said "
+                        "about what to forget.",
+                    }
+                },
+                "required": ["words"],
+                "additionalProperties": False,
+            },
+        }
+    )
+    async def forget_saved_history(self, raw_arguments: dict[str, object]) -> dict:
+        words = (raw_arguments or {}).get("words")
+        if not isinstance(words, str) or len(words) > 200:
+            return {"status": "denied", "reason": "short_words_text_required"}
+        return await self._turns.forget_history(words)

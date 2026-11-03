@@ -23,7 +23,11 @@ from pathlib import Path
 # capability acquisition, research, work, vision and canonical-memory tools are
 # all withheld; their internal authority services still run for Hello/SQLCipher.
 BASELINE_TOOLS = frozenset({"enter_standby"})
-PROJECT_MEMORY_TOOLS = frozenset({"enter_standby", "prepare_project_turn"})
+# Project memory's own tools: context, older-history search and forgetting.
+PROJECT_TOOLS = frozenset(
+    {"prepare_project_turn", "search_project_history", "forget_saved_history"}
+)
+PROJECT_MEMORY_TOOLS = frozenset({"enter_standby"}) | PROJECT_TOOLS
 
 
 def lab_tool_allowlist(*, baseline: bool) -> frozenset[str]:

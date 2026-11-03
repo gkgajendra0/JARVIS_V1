@@ -13,6 +13,7 @@ import pytest
 from jarvis.voice.project_voice_lab import (
     BASELINE_TOOLS,
     PROJECT_MEMORY_TOOLS,
+    PROJECT_TOOLS,
     lab_tool_allowlist,
     run_voice_lab,
 )
@@ -64,22 +65,23 @@ def fake_tools(names):
 @pytest.mark.parametrize("baseline", [True, False])
 def test_lab_modes_expose_only_their_exact_tools(baseline):
     allowlist = lab_tool_allowlist(baseline=baseline)
-    offered = fake_tools(
-        PRODUCTION_ACTION_TOOLS | {"enter_standby", "prepare_project_turn"}
-    )
+    offered = fake_tools(PRODUCTION_ACTION_TOOLS | {"enter_standby"} | PROJECT_TOOLS)
     offered.append(SimpleNamespace())  # a tool without a declared id
     kept = {tool.id for tool in restrict_tools(offered, allowlist)}
     assert kept == set(allowlist)
     assert not kept & PRODUCTION_ACTION_TOOLS
-    expected = (
-        {"enter_standby"} if baseline else {"enter_standby", "prepare_project_turn"}
-    )
+    expected = {"enter_standby"} if baseline else {"enter_standby", *PROJECT_TOOLS}
     assert kept == expected
 
 
 def test_allowlists_are_disjoint_from_every_action_tool():
     assert BASELINE_TOOLS == frozenset({"enter_standby"})
-    assert PROJECT_MEMORY_TOOLS == BASELINE_TOOLS | {"prepare_project_turn"}
+    assert PROJECT_MEMORY_TOOLS == BASELINE_TOOLS | PROJECT_TOOLS
+    assert PROJECT_TOOLS == {
+        "prepare_project_turn",
+        "search_project_history",
+        "forget_saved_history",
+    }
     assert not PROJECT_MEMORY_TOOLS & PRODUCTION_ACTION_TOOLS
 
 
@@ -182,7 +184,7 @@ def test_real_decorated_tools_are_filtered_by_their_declared_ids():
     real = [*StandbyAgentTools(lambda: True).tools, *VoiceProjectTools(object()).tools]
     assert {t.id for t in restrict_tools(real, PROJECT_MEMORY_TOOLS)} == {
         "enter_standby",
-        "prepare_project_turn",
+        *PROJECT_TOOLS,
     }
     assert [t.id for t in restrict_tools(real, BASELINE_TOOLS)] == ["enter_standby"]
 

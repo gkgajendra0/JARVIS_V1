@@ -108,6 +108,7 @@ class StubMemory:
         turns = SimpleNamespace(
             bind_session=lambda s: None,
             bind_injection_registry=lambda r: None,
+            bind_retire=lambda r: None,
             observe_speech=lambda e: None,
             observe_turn=lambda t: None,
             close=lambda: None,

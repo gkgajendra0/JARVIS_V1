@@ -265,6 +265,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 project_turns = project_memory.session(bridge.conversation)
                 project_turns.bind_session(session)
                 project_turns.bind_injection_registry(bridge.register_restored_context)
+
+                def retire_after_forget():
+                    # The live model context still holds forgotten words; end
+                    # this wake so the next one starts from the cleaned archive.
+                    if self._live_session is session and self._active_end is not None:
+                        LOGGER.info("Wake session ended after a project-history forget")
+                        self._active_end.set()
+
+                project_turns.bind_retire(retire_after_forget)
                 session.on("speech_created", project_turns.observe_speech)
                 self._project_turns = project_turns
                 bridge.add_accepted_turn_observer(project_turns.observe_turn)

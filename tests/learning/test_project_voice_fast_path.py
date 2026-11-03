@@ -373,7 +373,7 @@ def test_fixed_project_mode_prompt_and_schema_stay_small():
 
     # Roughly 4 characters per token. Before the performance pass: 1,059 +
     # 435 + 724. The instructions include the voice grounding rules (#303).
-    assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 1000
+    assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 1250  # + search/forget routing
     assert len(project_voice._TOOL_DESCRIPTION) <= 260
     assert len(project_voice._GUIDANCE) <= 460
 
