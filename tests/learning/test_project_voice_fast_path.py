@@ -26,7 +26,7 @@ from jarvis.voice import voice_diagnostics as vd
 from jarvis.voice.project_voice import (
     PRELOAD_MAX_CHARS,
     PRELOAD_ROWS,
-    REPAIR_INSTRUCTIONS,
+    REPAIR_ANSWER_INSTRUCTIONS,
     VoiceProjectMemory,
 )
 
@@ -180,7 +180,14 @@ async def test_commands_and_other_projects_still_go_through_the_tool(lab, partia
     assert voice.metrics.fast_path_turns == 0
     wake.transcript(partial)
     await settle(voice)
-    assert wake.session.replies == [REPAIR_INSTRUCTIONS]  # the tool path
+    # Repair by delivery: the application gives Gemini exactly the context the
+    # tool would have returned, then re-requests the answer.
+    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS]
+    assert voice.metrics.repair_deliveries == 1
+    repaired = wake.agent.injected()[-1]
+    assert "for the owner's last request" in repaired
+    assert '"status": "ready"' in repaired or '"status": "clarification"' in repaired
+    # A late tool call returns the same, already delivered result.
     result = await wake.turns.prepare()
     assert result["status"] in {"ready", "clarification"}
     assert wake.response()[0] is True

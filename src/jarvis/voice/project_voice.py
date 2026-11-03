@@ -80,6 +80,16 @@ FORGET_HISTORY_NUDGE = (
 # Conversation-control tools whose acknowledgement needs no project context.
 CONTROL_TOOLS = frozenset({"enter_standby"})
 
+# Repair by delivery: the application itself gives Gemini the prepared context
+# (no reliance on the model calling a tool), then asks for the answer.
+REPAIR_ANSWER_INSTRUCTIONS = (
+    "Project memory for the owner's last request was just added to this "
+    "conversation. Answer that request now, briefly, from it. Do not repeat a "
+    "tool call that already ran."
+)
+# If a re-request produces no audible reply within this time, speak the fallback
+# rather than leaving the owner in silence until the session times out.
+REPAIR_RESPONSE_SECONDS = 8.0
 REPAIR_INSTRUCTIONS = (
     "Before answering the owner's last request you must call prepare_project_turn. "
     "Call it now, without speaking first, then answer from its result."
@@ -135,6 +145,9 @@ class VoiceProjectMetrics:
     undelivered_user_turns: int = 0
     unprepared_responses_blocked: int = 0
     repairs: int = 0
+    repair_deliveries: int = 0
+    repair_timeouts: int = 0
+    fast_context_syncs: int = 0
     fallbacks: int = 0
     assistant_recorded: int = 0
     assistant_skipped: int = 0
@@ -610,6 +623,7 @@ class VoiceProjectTurns:
         self._canonical_forget_epochs: set[int] = set()
         self._nudged_epochs: set[int] = set()
         self._retire = None
+        self._played = 0  # audible response segments allowed so far
 
     @property
     def metrics(self) -> VoiceProjectMetrics:
@@ -786,6 +800,8 @@ class VoiceProjectTurns:
             owner.metrics.packet_bytes.append(len(outcome.packet.context.encode()))
         if outcome.status == "ready":
             self._committed_selection = outcome.packet.selection
+            if self._fast_enabled:
+                self._sync_fast_context(turn, outcome)
         if not future.done():
             future.set_result(outcome)
         if owner.diagnostics is not None:
@@ -1018,6 +1034,7 @@ class VoiceProjectTurns:
         allowed = self._decide_response_audio()
         if allowed and not trailing:
             self._response_epoch = self._conversation.user_activity_epoch
+            self._played += 1
         if not trailing:
             self._diag("response_played" if allowed else "response_withheld")
         return allowed
@@ -1087,25 +1104,155 @@ class VoiceProjectTurns:
                 self._fallback(key, NO_TRANSCRIPT_INSTRUCTIONS)
             elif attempts == 0:
                 self.metrics.repairs += 1
-                self._diag("repair_requested", epoch=epoch)
-                LOGGER.info(
-                    "Project voice: model answered without context; re-requesting"
-                )
-                self._generate(REPAIR_INSTRUCTIONS)
+                outcome = self._outcome_if_done(source)
+                if await self._deliver_in_context(source, outcome, epoch):
+                    self._diag("repair_requested", epoch=epoch, via="delivery")
+                    LOGGER.info(
+                        "Project voice: model answered without context; context "
+                        "delivered by the application, re-requesting the answer"
+                    )
+                    self._generate(REPAIR_ANSWER_INSTRUCTIONS)
+                else:
+                    self._diag("repair_requested", epoch=epoch, via="tool")
+                    LOGGER.info(
+                        "Project voice: model answered without context; re-requesting"
+                    )
+                    self._generate(REPAIR_INSTRUCTIONS)
+                self._arm_repair_watchdog(key)
             else:
                 self._fallback(key, FALLBACK_INSTRUCTIONS)
         finally:
             self._repairing.discard(blocked_key)
 
+    def _outcome_if_done(self, source):
+        future = self._outcomes.get(source.turn_id)
+        if future is None or not future.done() or future.cancelled():
+            return None
+        return future.result()
+
+    async def _deliver_in_context(self, source, outcome, epoch) -> bool:
+        """Give Gemini this utterance's prepared context directly (chat context),
+        exactly what prepare_project_turn would have returned."""
+        if outcome is None or outcome.status not in {
+            "ready",
+            "clarification",
+            "not_saved",
+        }:
+            return False
+        try:
+            agent = self._session.current_agent if self._session is not None else None
+        except Exception:  # noqa: BLE001 - not running: fall back to the tool
+            agent = None
+        if agent is None or not callable(getattr(agent, "update_chat_ctx", None)):
+            return False
+        from livekit.agents.llm import ChatContext, ChatMessage
+
+        result, new_ids = model_view(outcome, self._delivered_ids)
+        message = ChatMessage(
+            id="jarvis:project-context:" + uuid4().hex[:12],
+            role="user",
+            content=[
+                "[Project memory from Jarvis for the owner's last request, not "
+                "speech from the owner. Do not reply to this message itself.] "
+                + json.dumps(result, ensure_ascii=False)
+            ],
+        )
+        try:
+            if self._register_injected is not None:
+                self._register_injected(ChatContext(items=[message]))
+            context = agent.chat_ctx.copy()
+            context.items.append(message)
+            await agent.update_chat_ctx(context)
+        except Exception as exc:  # noqa: BLE001 - fall back to the tool request
+            LOGGER.warning(
+                "Project voice repair delivery failed | error=%s", type(exc).__name__
+            )
+            return False
+        if not self._still(epoch):
+            return False
+        for identity in new_ids:
+            self._delivered_ids[identity] = None
+        self._delivered = _Delivered(source, outcome, result)
+        self._delivered_turns.add(source.turn_id)
+        self._mark_delivered(epoch, source)
+        if outcome.status == "ready":
+            self._fast_selection = outcome.packet.selection
+        self.metrics.delivered += 1
+        self.metrics.repair_deliveries += 1
+        self._diag(
+            "delivered_to_model",
+            epoch=epoch,
+            via="repair",
+            status=result["status"],
+            new_rows=len(result.get("history", ())),
+            history=[
+                {k: r[k] for k in ("role", "text", "from_project") if k in r}
+                for r in result.get("history", ())
+            ],
+        )
+        return True
+
+    def _arm_repair_watchdog(self, key) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        played = self._played
+        loop.call_later(REPAIR_RESPONSE_SECONDS, self._repair_watchdog, key, played)
+
+    def _repair_watchdog(self, key, played) -> None:
+        if self._played != played or not self._still(key[0]):
+            return  # something was heard, or the owner spoke again
+        if key == self._fallback_key:
+            return
+        self.metrics.repair_timeouts += 1
+        self._diag("repair_unanswered", epoch=key[0])
+        self._fallback(key, FALLBACK_INSTRUCTIONS, reason="repair_produced_no_reply")
+
+    def _sync_fast_context(self, turn, outcome) -> None:
+        """Keep the fast path's view of Gemini's context in step with routing.
+
+        The silent default workspace (General opened on a first ordinary turn)
+        is a new, empty project: Gemini needs nothing beyond this conversation,
+        so its context is already current. Before this, such a first turn was
+        withheld as if context were missing (live -Qualification, 3938b428).
+        A silent switch to an existing project is preloaded again instead.
+        """
+        selection = outcome.packet.selection
+        if selection == self._fast_selection:
+            return
+        decision = outcome.decision
+        epoch = turn.user_activity_epoch
+        if decision.create and not decision.announcement:
+            self._fast_selection = selection
+            self.metrics.fast_context_syncs += 1
+            self._diag("fast_context_synced", epoch=epoch, reason="new_empty_project")
+            return
+        if (
+            not decision.announcement
+            and epoch not in self._fast_epochs
+            and epoch not in self._tool_epochs
+        ):
+            agent = None
+            try:
+                agent = self._session.current_agent if self._session else None
+            except Exception:  # noqa: BLE001 - session already gone
+                agent = None
+            if agent is not None:
+                self._owner.spawn(
+                    self._safe_preload(agent), name="jarvis-project-preload-sync"
+                )
+
     def _still(self, epoch) -> bool:
         return self._active() and self._conversation.user_activity_epoch == epoch
 
-    def _fallback(self, key, instructions) -> None:
+    def _fallback(self, key, instructions, *, reason=None) -> None:
         self.metrics.fallbacks += 1
         self._diag(
             "fallback",
             epoch=key[0],
-            reason="no_transcript" if key[1] is None else "model_skipped_tool_twice",
+            reason=reason
+            or ("no_transcript" if key[1] is None else "model_skipped_tool_twice"),
         )
         self._fallback_key = key
         LOGGER.warning("Project voice: speaking fallback without project context")

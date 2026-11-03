@@ -258,3 +258,41 @@ NOT_RUN or REVIEW per step. Q2 reports `partial_forget:canonical_only` or
 `resurfaced:<word>` if a later session was given or spoke the word. Listen to
 the audio before accepting the transcripts.
 
+## 10. First-turn fix (live -Qualification at 3938b428)
+
+**Symptom.** In a fresh lab, the first utterance "Remember that my car is a
+Jimny" ran `remember_memory`, and both canonical memory and project history
+committed. Routing silently opened General. Then:
+- the audio gate withheld the reply;
+- the tool re-request produced nothing audible;
+- the session timed out in silence (`unprepared_responses_blocked=1`,
+  `repairs=1`, `undelivered_user_turns=1`).
+
+**Root cause: the gate rejected a valid answer.** The session preload ran with
+no project, so the fast path recorded Gemini's context as "no project". The
+first turn's routing then committed the new General workspace. From then on
+the gate saw "routing moved since the preload" and treated Gemini's context as
+stale. That was wrong: a silently opened, empty workspace has no history to
+give. A second defect turned the block into silence: the repair depended on
+Gemini calling `prepare_project_turn`, and nothing covered the case where it
+answered nothing at all.
+
+**Fix (the gate is unchanged in what it requires):**
+1. A silently created empty project, i.e. the default General workspace on a
+   first ordinary turn, keeps the fast path current (`fast_context_synced`).
+   A silent switch to an existing project is preloaded again. Announced
+   changes still go through the context path.
+2. **Repair by delivery:** when an answer is withheld, the application itself
+   adds the prepared context to Gemini's conversation. It is exactly what
+   `prepare_project_turn` would have returned. The application then
+   re-requests the answer, and tells Gemini not to repeat a tool call that
+   already ran. The old tool re-request is kept only when no running agent is
+   available.
+3. **Watchdog:** if a re-request yields no audible reply within 8 s
+   (`REPAIR_RESPONSE_SECONDS`), the fixed fallback is spoken
+   (`repair_unanswered`, counted in `repair_timeouts`). The owner is never left
+   in silence until the session times out.
+
+The turn is still saved exactly once by the application; the canonical write
+happens once, in `remember_memory`. New counters: `fast_context_syncs`,
+`repair_deliveries` and `repair_timeouts`.
