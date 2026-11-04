@@ -186,7 +186,6 @@ def main():
 
     from jarvis.authority.tooling import (
         resolve_opa_binary,
-        resolve_windows_hello_helper,
     )
     from jarvis.config import JarvisConfig
     from jarvis.logging_config import configure_logging
@@ -238,9 +237,6 @@ def main():
         if args.resume_lab
         else {
             "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
-            "JARVIS_WINDOWS_HELLO_HELPER": resolve_windows_hello_helper(
-                machine_settings=settings
-            ).resolve(),
         }
     )
     profile = prepare_project_profile(

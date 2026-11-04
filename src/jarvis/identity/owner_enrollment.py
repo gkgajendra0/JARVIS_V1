@@ -56,24 +56,6 @@ def default_identity_data_dir() -> Path:
     return Path.home() / ".local" / "share" / "jarvis" / "identity"
 
 
-def _default_hello_helper_path() -> Path | None:
-    configured = os.getenv("JARVIS_WINDOWS_HELLO_HELPER")
-    if configured:
-        return Path(configured).expanduser()
-    repo_root = Path(__file__).resolve().parents[3]
-    candidate = (
-        repo_root
-        / "tools"
-        / "windows"
-        / "Jarvis.WindowsHelloVerifier"
-        / "bin"
-        / "Release"
-        / "net9.0-windows10.0.22000.0"
-        / "Jarvis.WindowsHelloVerifier.exe"
-    )
-    return candidate if candidate.is_file() else None
-
-
 def _load_face_models():
     manifest = load_default_face_model_manifest()
     cache = ModelAssetCache()
@@ -114,14 +96,6 @@ def run_owner_enrollment(
     data_dir.mkdir(parents=True, exist_ok=True)
     identity_db = data_dir / "owner_identity.db"
     audit_db = data_dir / "authority_audit.db"
-
-    helper_path = _default_hello_helper_path()
-    if helper_path is None or not helper_path.is_file():
-        print(
-            "Windows Hello helper is missing. Build the Release helper or set "
-            "JARVIS_WINDOWS_HELLO_HELPER before enrollment."
-        )
-        return 2
 
     store = SqliteOwnerProfileStore(
         identity_db,
@@ -214,7 +188,7 @@ def run_owner_enrollment(
                     store=store,
                     strong_approval=StrongApprovalService(
                         approvals=approvals,
-                        verifier=WindowsHelloVerifier(helper_path=helper_path),
+                        verifier=WindowsHelloVerifier(),
                     ),
                     authority=authority,
                     session_provider=WindowsWtsSessionProvider(),

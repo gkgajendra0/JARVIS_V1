@@ -190,7 +190,6 @@ def main(*, continuity_default=False):
 
     from jarvis.authority.tooling import (
         resolve_opa_binary,
-        resolve_windows_hello_helper,
     )
     from jarvis.logging_config import configure_logging
     from jarvis.machine_config import default_machine_config_path
@@ -213,9 +212,6 @@ def main(*, continuity_default=False):
     settings = load_machine_settings(args.profile)
     tool_paths = {
         "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
-        "JARVIS_WINDOWS_HELLO_HELPER": resolve_windows_hello_helper(
-            machine_settings=settings
-        ).resolve(),
     }
     profile = (
         resume_continuity_profile(args.profile, args.lab_root)
