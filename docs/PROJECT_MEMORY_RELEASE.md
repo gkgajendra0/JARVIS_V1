@@ -24,6 +24,12 @@ on the installed configuration: Gemini free by default, paid fallback ON
 Existing memory records and experimental conversations are **not** preserved.
 No backup or migration rehearsal is required.
 
+`memory.db` is the single canonical memory store. Starting it fresh therefore
+also empties the remembered personal facts (for example, diet preference),
+learned preferences and project history. The personal-context and learning
+*capabilities* stay on (APPLY) and refill the new database as you use Jarvis.
+The DPAPI key in `memory.key.dpapi` is used only by `memory.db`.
+
 | Kept unchanged | Started fresh |
 | --- | --- |
 | `machine.json` (all settings: fallback, APPLY, devices, models) | `memory.db` (+ `-wal`, `-shm`): a new SQLCipher database at schema 7, empty |
