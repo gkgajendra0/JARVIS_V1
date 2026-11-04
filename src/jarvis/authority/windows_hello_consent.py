@@ -323,7 +323,10 @@ class _WinRt:
                     info, _ASYNC_INFO_GET_ERROR_CODE, ctypes.POINTER(ctypes.c_long)
                 )(ctypes.byref(code))
                 raise WinRtError("async_error", code.value)
-            result = ctypes.c_int()
+            # -1 is no UserConsentVerificationResult: if Windows ever reported
+            # success without writing a value, it maps to failed, never to
+            # Verified (0).
+            result = ctypes.c_int(-1)
             self.check(
                 "async_results",
                 self.method(

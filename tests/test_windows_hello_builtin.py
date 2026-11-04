@@ -400,3 +400,118 @@ def test_managed_opa_server_reports_a_policy_block(monkeypatch, tmp_path):
     with pytest.raises(local_opa.LocalOpaError, match="code integrity policy"):
         server.start()
     assert local_opa.ManagedOpaServer()._startup_timeout_seconds >= 30
+
+
+class _FakeComWinRt(consent._WinRt):
+    """``wait_for_enum`` with Python stand-ins for the COM vtable calls."""
+
+    def __init__(self, statuses, result=None, results_hresult=0):
+        import ctypes
+
+        self.ctypes = ctypes
+        self.statuses = list(statuses)
+        self.result = result
+        self.results_hresult = results_hresult
+        self.canceled = False
+
+    def query_interface(self, pointer, iid):
+        return "info"
+
+    def release(self, pointer):
+        pass
+
+    def pump(self):
+        pass
+
+    def method(self, pointer, index, *argtypes):
+        def get_status(out):
+            out._obj.value = self.statuses.pop(0) if self.statuses else 1
+            return 0
+
+        def get_results(out):
+            if self.result is not None:
+                out._obj.value = self.result
+            return self.results_hresult
+
+        def error_code(out):
+            out._obj.value = -2147024891
+            return 0
+
+        def cancel():
+            self.canceled = True
+            return 0
+
+        if pointer == "info":
+            return {7: get_status, 8: error_code, 9: cancel}[index]
+        return get_results
+
+
+def test_completed_operation_returns_windows_value():
+    winrt = _FakeComWinRt([0, 0, 1], result=6)
+    assert winrt.wait_for_enum("op", deadline=1e18, pump=True) == 6
+
+
+def test_success_without_a_written_result_is_never_verified():
+    winrt = _FakeComWinRt([1], result=None)
+    value = winrt.wait_for_enum("op", deadline=1e18, pump=False)
+    assert value == -1
+    assert consent.verification_response(value)[0] != "verified"
+
+
+def test_async_error_and_cancel_raise():
+    with pytest.raises(consent.WinRtError, match="async_error"):
+        _FakeComWinRt([3]).wait_for_enum("op", deadline=1e18, pump=False)
+    with pytest.raises(consent.WinRtError, match="async_canceled"):
+        _FakeComWinRt([2]).wait_for_enum("op", deadline=1e18, pump=False)
+    with pytest.raises(consent.WinRtError, match="async_results"):
+        _FakeComWinRt([1], result=0, results_hresult=-1).wait_for_enum(
+            "op", deadline=1e18, pump=False
+        )
+
+
+def test_deadline_cancels_the_operation_and_raises():
+    winrt = _FakeComWinRt([0] * 1000)
+    with pytest.raises(TimeoutError):
+        winrt.wait_for_enum("op", deadline=0.0, pump=False)
+    assert winrt.canceled
+
+
+@pytest.mark.parametrize(
+    "stdout, code",
+    [
+        ("", 0),
+        ("garbage", 0),
+        ('{"status": "available", "reason": "available"}', 0),
+        ('{"status": "verified", "reason": "verified"}', 1),
+        ('["verified"]', 0),
+        ('{"status": "verified"}', 0),
+    ],
+)
+def test_verifier_never_authorizes_on_bad_helper_output(monkeypatch, stdout, code):
+    monkeypatch.setattr("jarvis.authority.verifier.sys.platform", "win32")
+    monkeypatch.setattr(
+        "jarvis.authority.verifier.subprocess.run",
+        lambda args, **k: subprocess.CompletedProcess(args, code, stdout, ""),
+    )
+    result = WindowsHelloVerifier().verify(proposal=_proposal(), session_id="s1")
+    assert not result.verified
+    assert result.status is StrongVerificationStatus.ERROR
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        subprocess.TimeoutExpired(["x"], 60),
+        OSError(22, "blocked"),
+        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad"),
+    ],
+)
+def test_verifier_never_authorizes_on_timeout_or_launch_error(monkeypatch, error):
+    monkeypatch.setattr("jarvis.authority.verifier.sys.platform", "win32")
+
+    def run(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr("jarvis.authority.verifier.subprocess.run", run)
+    result = WindowsHelloVerifier().verify(proposal=_proposal(), session_id="s1")
+    assert not result.verified and result.status is StrongVerificationStatus.ERROR
