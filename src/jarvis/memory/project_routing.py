@@ -25,6 +25,23 @@ def _name_words(text):
     return [w for w in _words(normalize_name(text)) if w not in _NAME_FILLER]
 
 
+# Words too generic to identify a project on their own.
+_GENERIC_NAME_WORDS = frozenset(
+    {
+        "trip", "trips", "plan", "plans", "planning", "project", "projects",
+        "preparation", "prep", "notes", "note", "list", "ideas", "idea", "work",
+        "home", "general", "new", "meeting", "meetings", "stuff", "things",
+        "task", "tasks", "travel", "holiday", "vacation",
+    }
+)  # fmt: skip
+
+
+def _distinctive_words(label):
+    return {
+        w for w in _name_words(label) if w not in _GENERIC_NAME_WORDS and len(w) > 2
+    }
+
+
 def _partial_matches(name, entries):
     """Similar names, in either direction: every word of one name is in the
     other ("the trip" -> "Nepal trip", "nepal trip" -> "nepal"). Several
@@ -58,7 +75,40 @@ _SELECT_COMMAND = re.compile(
     r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
     re.IGNORECASE,
 )
-_POLITE = r"^(?:(?:can|could|would|will)\s+you\s+|please\s+)*"
+_POLITE = (
+    r"^(?:(?:can|could|would|will)\s+(?:you|we)\s+|please\s+|let['’]?s\s+"
+    r"|i\s+(?:want|would\s+like|['’]d\s+like|wanna)\s+to\s+|go\s+ahead\s+and\s+)*"
+)
+# Spoken commands often open with a discourse marker ("Okay. Create a project
+# called X", "Hey Jarvis, switch to Y"). Only this closed set of lead-ins is
+# removed, and only at the very start, so a command still has to be the whole
+# remaining sentence: "I told him to create a project" is never a command.
+_LEAD_IN = re.compile(
+    r"^(?:(?:okay|ok|alright|all\s+right|right|so|well|um+|uh+|hmm+|hey|hi|hello"
+    r"|jarvis|yes|yeah|yep|now|and|then|great|cool|fine|sure|thanks|thank\s+you|oh"
+    r"|actually|acha|accha|achha|theek\s+hai|thik\s+hai|haan|chalo)"
+    r"(?=$|[\s,.!;:\u2014-])[\s,.!;:\u2014-]*){1,4}",
+    re.IGNORECASE,
+)
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+
+
+def strip_lead_in(text: str) -> str:
+    """Remove a short conversational lead-in, e.g. "Okay." or "Hey Jarvis,"."""
+    return _LEAD_IN.sub("", text.strip(), count=1).strip()
+
+
+def embedded_project_command(text: str):
+    """A project command in a later sentence, e.g. "It went well. Create a
+    project called Goa." Routing asks rather than guessing either way."""
+    sentences = _SENTENCE_BREAK.split(text.strip())
+    for sentence in sentences[1:]:
+        name, kind = parse_project_command(sentence)
+        if name is not None:
+            return name, kind
+    return None, None
+
+
 _KEYWORD = r"(?P<kw>called|named)\s+"
 _CREATE_COMMANDS = (
     # "create project Nepal", "create a new project called Nepal",
@@ -187,6 +237,7 @@ def parse_project_command(text):
 
     kind is "create" or "plan" (asks for a new project) or "select".
     """
+    text = strip_lead_in(text)
     for pattern in _CREATE_COMMANDS:
         match = pattern.match(text)
         if match:
@@ -203,6 +254,34 @@ def parse_project_command(text):
         )
         return match.group(1).strip(" .?!"), kind
     return None, None
+
+
+_SELECT_BY_ID = re.compile(r"select project (\S+)(?: thread (\S+))?", re.IGNORECASE)
+
+
+def needs_project_routing(text: str, catalog) -> bool:
+    """Whether an utterance must go through full project routing first.
+
+    True for anything that could change or widen the project context: a
+    project command (also after a lead-in, or unreadable), a command in a later
+    sentence, or a mention (exact, partial or ambiguous) of another project.
+    False only for ordinary speech in the current project, whose context the
+    voice path may already have delivered. Uses the same rules as
+    :class:`ProjectRouter`; never changes anything.
+    """
+    text = (text or "").strip()
+    if not text:
+        return True  # nothing to classify yet: not safe to skip routing
+    if _SELECT_BY_ID.fullmatch(text) or parse_project_command(text)[0] is not None:
+        return True
+    lead = strip_lead_in(text)
+    if _UNPARSED_PROJECT_COMMAND.match(lead) or _CREATE_PROJECT_PREFIX.match(lead):
+        return True
+    if embedded_project_command(text)[0] is not None:
+        return True
+    current = next((e for e in catalog.entries if e.selection == catalog.current), None)
+    named, ambiguous = ProjectRouter._named_projects(catalog, text, current)
+    return bool(named or ambiguous)
 
 
 @dataclass(frozen=True)
@@ -223,6 +302,9 @@ class ProjectRoutingDecision:
     # labelled evidence; the selection itself does not change.
     references: tuple[ProjectSelection, ...] = ()
     reference_titles: tuple[str, ...] = ()
+    # Existing projects a question names only ambiguously ("Nepal" with both
+    # "Nepal trip" and "Nepal trek"): neither is read; the answer asks which.
+    ambiguous_reference_titles: tuple[str, ...] = ()
     # Shown to the owner when status is "clarification".
     question: str = ""
 
@@ -242,9 +324,7 @@ class ProjectRouter:
             raise PermissionError("accepted user routing source required")
         catalog = await self.access.catalog()
         text = turn.text.strip()
-        explicit_id = re.fullmatch(
-            r"select project (\S+)(?: thread (\S+))?", text, re.IGNORECASE
-        )
+        explicit_id = _SELECT_BY_ID.fullmatch(text)
         if explicit_id:
             owned = [
                 e
@@ -266,12 +346,27 @@ class ProjectRouter:
                 announcement=f"Selected {entry.title}.",
             )
         name, kind = parse_project_command(text)
+        command_text = strip_lead_in(text)
         if name is None and (
-            _UNPARSED_PROJECT_COMMAND.match(text) or _CREATE_PROJECT_PREFIX.match(text)
+            _UNPARSED_PROJECT_COMMAND.match(command_text)
+            or _CREATE_PROJECT_PREFIX.match(command_text)
         ):
             # A project command we could not read must not fall through to
             # the current project as if it had succeeded.
             return self._clarify(catalog, "")
+        if name is None:
+            embedded, embedded_kind = embedded_project_command(text)
+            if embedded is not None:
+                verb = (
+                    "switch to"
+                    if embedded_kind == "select"
+                    else "create project called"
+                )
+                return self._clarify(
+                    catalog,
+                    f"Nothing was changed. If you want a project change, say just: "
+                    f"'{verb} {embedded}'.",
+                )
         if proposed_name is not None:
             # Model suggestions only refine an explicit project command. They
             # cannot silently reroute ordinary discussion or invent a label.
@@ -284,7 +379,7 @@ class ProjectRouter:
         # the selection. Existing projects a message names are read as
         # labelled evidence for this answer only.
         current = self._current_or_general(catalog)
-        references = self._named_projects(catalog, text, current)
+        references, ambiguous = self._named_projects(catalog, text, current)
         if current is None:
             return ProjectRoutingDecision(
                 "ready",
@@ -292,10 +387,13 @@ class ProjectRouter:
                 "General",
                 catalog.selection_revision,
                 create=True,
-                announcement="Created project General.",
+                # Implicit default workspace is internal routing, not a spoken
+                # project-create request. Keep the committed action for audit.
+                announcement="",
                 action="created",
                 references=tuple(e.selection for e in references),
                 reference_titles=tuple(e.title for e in references),
+                ambiguous_reference_titles=ambiguous,
             )
         action = "resumed" if not self._announced and catalog.current else "continued"
         if catalog.current is None:
@@ -307,11 +405,29 @@ class ProjectRouter:
             current.title,
             catalog.selection_revision,
             current.archive_revision,
-            announcement=self._announce(action, current.title),
+            # Ordinary speech must not announce an implicit General switch
+            # or resume. Explicit project commands use _command below and
+            # retain their spoken announcements.
+            announcement=(
+                ""
+                if normalize_name(current.title) == "general"
+                else self._announce(action, current.title)
+            ),
             action=action,
             references=tuple(e.selection for e in references),
             reference_titles=tuple(e.title for e in references),
+            ambiguous_reference_titles=ambiguous,
         )
+
+    def announces_next_turn(self, catalog) -> bool:
+        """Whether the next ordinary turn carries a spoken announcement
+        ("Resuming X." once per router), so it must not skip the tool."""
+        if self._announced or catalog.current is None:
+            return False
+        entry = next(
+            (e for e in catalog.entries if e.selection == catalog.current), None
+        )
+        return entry is not None and normalize_name(entry.title) != "general"
 
     @staticmethod
     def _announce(action, title):
@@ -342,14 +458,27 @@ class ProjectRouter:
 
     @staticmethod
     def _named_projects(catalog, text, current):
+        """Other existing projects a message names, read as evidence only.
+
+        Exact title/alias mentions first. Otherwise a project is named when
+        every DISTINCTIVE word of its title/alias appears in the message
+        ("Nepal" -> "Nepal trip"); generic words ("trip", "plan") never name a
+        project on their own. A word that would name several projects names
+        none of them: they are returned as ambiguous, never guessed.
+        """
         normalized = normalize_name(text)
-        named = {}
-        for e in catalog.entries:
-            if normalize_name(e.title) == "general" or (
+        message_words = set(_words(normalized))
+        candidates = [
+            e
+            for e in catalog.entries
+            if normalize_name(e.title) != "general"
+            and not (
                 current is not None
                 and e.selection.project_id == current.selection.project_id
-            ):
-                continue
+            )
+        ]
+        named = {}
+        for e in candidates:
             if any(
                 re.search(
                     r"(?<!\w)" + re.escape(normalize_name(label)) + r"(?!\w)",
@@ -358,7 +487,49 @@ class ProjectRouter:
                 for label in (e.title, *e.aliases)
             ):
                 named.setdefault(e.selection.project_id, e)
-        return list(named.values())[:3]
+        # Words the owner used for a project named exactly belong to it.
+        exact_words = set().union(
+            *(
+                _distinctive_words(label)
+                for e in named.values()
+                for label in (e.title, *e.aliases)
+            )
+        )
+        partial = {}
+        for e in candidates:
+            if e.selection.project_id in named:
+                continue
+            for label in (e.title, *e.aliases):
+                distinctive = _distinctive_words(label)
+                if distinctive and distinctive <= message_words:
+                    if not distinctive & exact_words:
+                        partial[e.selection.project_id] = (e, distinctive)
+                    break
+        # A distinctive word another (not exactly named) project also uses
+        # makes the mention ambiguous: "Nepal" with "Nepal trip" and "Nepal
+        # trek" names neither, even though only the trip fully matches.
+        owners = {}
+        for e in candidates:
+            if e.selection.project_id in named:
+                continue
+            for label in (e.title, *e.aliases):
+                for word in _distinctive_words(label) & message_words:
+                    owners.setdefault(word, {})[e.selection.project_id] = e
+        ambiguous = {}
+        for project_id, (e, distinctive) in partial.items():
+            sharers = {
+                other_id: other
+                for word in distinctive
+                for other_id, other in owners.get(word, {}).items()
+            }
+            if len(sharers) > 1:
+                ambiguous.update(sharers)
+            else:
+                named.setdefault(project_id, e)
+        return (
+            list(named.values())[:3],
+            tuple(sorted({e.title for e in ambiguous.values()}))[:3],
+        )
 
     def _command(self, catalog, text, name, kind):
         exact = [
@@ -391,7 +562,7 @@ class ProjectRouter:
         entry = next(
             (e for e in matches if e.selection == catalog.current), matches[-1]
         )
-        if text.casefold().startswith("new conversation in "):
+        if strip_lead_in(text).casefold().startswith("new conversation in "):
             return ProjectRoutingDecision(
                 "ready",
                 ProjectSelection(

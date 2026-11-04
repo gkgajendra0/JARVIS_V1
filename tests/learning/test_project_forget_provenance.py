@@ -601,9 +601,11 @@ async def test_one_cross_project_recall_does_not_taint_later_unrelated_replies(
             interview.selection.project_id,
             expected_revision=inspected.archive_revision,
         )
-        # Only the recall reply and the search result that listed Interview's
-        # sources are derived.
-        assert receipt.derived_sources == 2
+        # Only the recall reply is derived. "interview" now names the
+        # "interview preparation" project directly (distinctive-word
+        # reference), so its rows arrive as labelled evidence and no separate
+        # search-result row is produced. Later unrelated replies stay intact.
+        assert receipt.derived_sources == 1
         replies = rows(
             path,
             "SELECT e.text FROM conversation_event e JOIN conversation_thread t "

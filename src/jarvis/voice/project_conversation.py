@@ -446,6 +446,79 @@ class ProjectConversationCoordinator:
             return response
         raise PermissionError("answer/tool continuation budget exhausted")
 
+    async def session_context(self, *, limit=12):
+        """Recent history of the current project for a new live model session.
+
+        The same grant, scope and release rules as a prepared packet: the
+        current grant is required, only the current project's live rows are
+        read (forgotten, quarantined and cross-project-derived rows are
+        excluded by the archive), and a retention-paused project releases no
+        history. Returns ``(entry or None, sources)``; nothing is recorded.
+        """
+        if not self.access.current():
+            raise PermissionError("project history grant is no longer current")
+        catalog = await self.access.catalog()
+        entry = next(
+            (e for e in catalog.entries if e.selection == catalog.current), None
+        )
+        if entry is None:
+            return catalog, None, ()
+        snapshot = await self.access.snapshot(
+            entry.selection, project_wide=True, limit=limit
+        )
+        if snapshot.retention_paused:
+            return catalog, entry, ()
+        return catalog, entry, tuple(snapshot.sources)
+
+    def receipt_for(self, request_id):
+        """The durable receipt of the USER turn recorded for ``request_id``."""
+        return self._receipts.get(request_id)
+
+    @property
+    def last_decision(self):
+        """The routing decision committed by the most recent prepare_reply."""
+        return self._decision
+
+    async def record_spoken_assistant(
+        self, conversation, packet, turn, *, evidence=None, not_before=None
+    ):
+        """Record an ASSISTANT turn the voice bridge already accepted.
+
+        Native audio generates the reply itself, so there is no issued text
+        answer to compare against. The caller binds ``turn`` to the request
+        whose ``packet`` was given to the model. Evidence defaults to every
+        packet source, as in the text path; a live session passes every source
+        it has delivered so far, since the reply may restate any of them.
+        """
+        evidence = packet.source_ids if evidence is None else tuple(evidence)
+        if not set(packet.source_ids) <= set(evidence):
+            raise ValueError("reply evidence must include its own packet")
+        if not isinstance(packet, PreparedProjectReply):
+            raise TypeError("prepared project packet required")
+        if turn.role is not ConversationRole.ASSISTANT or not any(
+            item is turn for item in conversation.turns
+        ):
+            raise PermissionError("exact accepted assistant turn required")
+        if not self.access.current():
+            raise PermissionError("project history grant is no longer current")
+        async with self._delivery_lock:
+            snapshot = await self.access.snapshot(packet.selection)
+            route = RecordingRoute(
+                packet.selection, snapshot.archive_revision, packet.request_id
+            )
+            if snapshot.retention_paused or self.recorder._clearance(turn) is not True:
+                return await self.recorder.record_omission(
+                    conversation,
+                    turn,
+                    route,
+                    reason="retention_paused"
+                    if snapshot.retention_paused
+                    else "source_not_eligible",
+                )
+            return await self.recorder.record(
+                conversation, turn, route, evidence=evidence, not_before=not_before
+            )
+
     def diagnostics(self):
         selection = self._decision.selection if self._decision else None
         return {

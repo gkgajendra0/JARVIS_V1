@@ -59,6 +59,7 @@ from jarvis.voice.scripted_speech import ScriptedSpeech
 from jarvis.voice.standby_tools import StandbyAgentTools
 from jarvis.voice.startup_greeting import select_startup_greeting
 from jarvis.voice.vision_tools import VisionAgentTools
+from jarvis.voice.voice_output_safety import register_internal_text
 from jarvis.voice.wakeword import LiveKitWakeDetector, load_livekit_predictor
 
 LOGGER = logging.getLogger(__name__)
@@ -104,6 +105,25 @@ class _UpdateApprovalRequest:
     response: asyncio.Future[bool]
 
 
+def restrict_tools(tools: list, allowlist: frozenset[str] | None) -> list:
+    """Keep only allowlisted tools (by declared id); None means unrestricted.
+
+    Enforced in code at the single point where a session's tools are handed to
+    the realtime agent (Gemini handoff copies that agent's tools), so a
+    withheld tool is never declared to, or callable by, the model.
+    """
+    if allowlist is None:
+        return tools
+    kept = [tool for tool in tools if getattr(tool, "id", None) in allowlist]
+    withheld = len(tools) - len(kept)
+    LOGGER.info(
+        "Session tools restricted | exposed=%s | withheld=%s",
+        sorted(getattr(tool, "id", "") for tool in kept),
+        withheld,
+    )
+    return kept
+
+
 class VoiceRuntimeController:
     """Own wake, activation, active-session, recovery, and shutdown truth."""
 
@@ -127,10 +147,27 @@ class VoiceRuntimeController:
         startup_readiness_timeout_seconds: float = 30.0,
         voice_behavior_observer: VoiceBehaviorObserver | None = None,
         conversation_success_observer: ConversationSuccessObserver | None = None,
+        tool_allowlist: frozenset[str] | None = None,
+        session_audio_tap: Callable | None = None,
     ) -> None:
+        if session_audio_tap is not None and not callable(session_audio_tap):
+            raise TypeError("session_audio_tap must be callable")
+        # Isolated lab diagnostics only; None (normal Jarvis) adds no audio observer.
+        self._session_audio_tap = session_audio_tap
+        if tool_allowlist is not None and (
+            not isinstance(tool_allowlist, frozenset)
+            or not all(isinstance(name, str) and name for name in tool_allowlist)
+        ):
+            raise TypeError("tool_allowlist must be a frozenset of tool names")
+        # None keeps normal Jarvis unchanged. Isolated labs pass an exact set:
+        # every other tool is removed before the model can see or call it.
+        self._tool_allowlist = tool_allowlist
         self.config = config
         self.audio = audio
         self._session_factory = session_factory
+        # "conversation" for owner wake/proactive sessions; "system" while a
+        # one-off system utterance or update-approval session is created.
+        self._session_purpose = "conversation"
         self._vision_service = vision_service
         self._owner_context_state = owner_context_state
         self._active_speaker_visual_buffer = active_speaker_visual_buffer
@@ -291,7 +328,7 @@ class VoiceRuntimeController:
     ) -> None:
         """Speak one system message through the normal realtime model/voice lane."""
 
-        session, bridge = self._session_factory(self.config)
+        session, bridge = self._system_session()
         session.output.audio = output
         try:
             session.input.set_audio_enabled(False)
@@ -795,7 +832,7 @@ class VoiceRuntimeController:
         self._active_end = active_end
         decision = asyncio.get_running_loop().create_future()
         accepting_decision = False
-        session, bridge = self._session_factory(self.config)
+        session, bridge = self._system_session()
         session_input = SessionAudioInput()
         session.input.audio = session_input
 
@@ -907,6 +944,18 @@ class VoiceRuntimeController:
     def _session_audio_output(self, bridge, output):
         return output
 
+    async def _before_conversation_session(self) -> str | None:
+        """Hook before an owner conversation session; returns a notice to speak."""
+        return None
+
+    def _system_session(self):
+        """A session for a system utterance or decision, not owner conversation."""
+        self._session_purpose = "system"
+        try:
+            return self._session_factory(self.config)
+        finally:
+            self._session_purpose = "conversation"
+
     async def _validate_gemini_handoff(self, bridge):
         return (
             not self._shutdown.is_set()
@@ -933,6 +982,10 @@ class VoiceRuntimeController:
         self._standby_requested = False
         active_end = asyncio.Event()
         self._active_end = active_end
+        notice = await self._before_conversation_session()
+        if notice is not None and initial_instructions is None:
+            initial_instructions = notice
+            initial_prompt_label = "status notice"
         session, bridge = self._session_factory(self.config)
         turn_capture = (
             InMemorySpeakerTurnCapture(
@@ -946,11 +999,18 @@ class VoiceRuntimeController:
             paired_turn_capture.clear()
         shadow_tasks: set[asyncio.Task[None]] = set()
         exit_in_progress = False
+        audio_tap = (
+            self._session_audio_tap(bridge)
+            if self._session_audio_tap is not None
+            else None
+        )
 
         def on_audio_frame(
             frame,
             observed_at_monotonic: float,
         ) -> None:
+            if audio_tap is not None:
+                audio_tap(frame, observed_at_monotonic)
             if turn_capture is None:
                 return
 
@@ -964,7 +1024,7 @@ class VoiceRuntimeController:
 
         session_input = (
             ObservedSessionAudioInput(on_audio_frame)
-            if turn_capture is not None
+            if turn_capture is not None or audio_tap is not None
             else SessionAudioInput()
         )
         session.input.audio = session_input
@@ -1014,10 +1074,17 @@ class VoiceRuntimeController:
         owner_activity = asyncio.Event()
         wake_ack_task: asyncio.Task[None] | None = None
         wake_ack_started = False
+        wake_ack_handle = None
+        wake_ack_audio_before = None
         session_success_observed = False
 
+        def played_segments():
+            # Physical playback segments started so far (None: not observable).
+            value = getattr(self.audio.output, "started_segment_sequence", None)
+            return value if isinstance(value, int) else None
+
         async def maybe_acknowledge_wake() -> None:
-            nonlocal wake_ack_started
+            nonlocal wake_ack_started, wake_ack_handle, wake_ack_audio_before
             try:
                 await asyncio.sleep(_WAKE_ACK_GRACE_SECONDS)
                 if (
@@ -1032,16 +1099,36 @@ class VoiceRuntimeController:
                     "Wake acknowledgement grace expired with no owner speech; "
                     "requesting one brief realtime acknowledgement"
                 )
+                wake_ack_audio_before = played_segments()
                 handle = session.generate_reply(
                     instructions=_WAKE_ACK_INSTRUCTIONS,
                     allow_interruptions=True,
                     input_modality="text",
                 )
+                wake_ack_handle = handle
                 await handle.wait_for_playout()
+                if getattr(handle, "interrupted", False) is True:
+                    LOGGER.info(
+                        "JARVIS wake acknowledgement cancelled: owner speech has priority"
+                    )
+                    return
                 error = handle.exception()
                 if error is not None:
                     raise error
-                LOGGER.info("JARVIS wake acknowledgement finished playing")
+                after = played_segments()
+                if (
+                    after is not None
+                    and wake_ack_audio_before is not None
+                    and after <= wake_ack_audio_before
+                ):
+                    # A transcript without audio is not a played acknowledgement
+                    # (and is never replayed: it is a system generation).
+                    LOGGER.warning(
+                        "JARVIS wake acknowledgement produced no audio; not reported "
+                        "as played"
+                    )
+                else:
+                    LOGGER.info("JARVIS wake acknowledgement finished playing")
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -1050,6 +1137,7 @@ class VoiceRuntimeController:
                 )
             finally:
                 wake_ack_started = False
+                wake_ack_handle = None
 
         def note_owner_activity() -> None:
             nonlocal wake_ack_task
@@ -1061,9 +1149,35 @@ class VoiceRuntimeController:
                 task.cancel()
                 wake_ack_task = None
                 return
-            # Gemini Live server-side activity detection already owns barge-in.
-            # Calling AgentSession.interrupt() here races the provider's new user
-            # turn and can cancel the response generated for the real utterance.
+            handle = wake_ack_handle
+            current = played_segments()
+            done = getattr(handle, "done", None)
+            if (
+                handle is not None
+                and callable(getattr(handle, "interrupt", None))
+                and not (callable(done) and done())
+                and current is not None
+                and wake_ack_audio_before is not None
+                and current <= wake_ack_audio_before
+            ):
+                # The acknowledgement has not produced audio yet: cancel only its
+                # own speech handle. That also releases its pending
+                # generate_reply, so the owner's real response is not bound to
+                # the acknowledgement (it timed out waiting for
+                # generation_created in live qualification at 8155df0d).
+                try:
+                    handle.interrupt()
+                    LOGGER.info(
+                        "Owner speech arrived before the wake acknowledgement "
+                        "played; acknowledgement cancelled"
+                    )
+                    return
+                except Exception:  # noqa: BLE001 - uninterruptible: fall through
+                    LOGGER.debug("Wake acknowledgement handle not interruptible")
+            # Audio is already playing: Gemini Live server-side activity detection
+            # owns barge-in. Calling AgentSession.interrupt() here races the
+            # provider's new user turn and can cancel the response generated for
+            # the real utterance.
             LOGGER.info(
                 "Owner speech arrived during wake acknowledgement; "
                 "provider-native barge-in owns interruption"
@@ -1242,6 +1356,7 @@ class VoiceRuntimeController:
             )
             standby_tools = StandbyAgentTools(request_standby)
             tools.extend(standby_tools.tools)
+        tools = restrict_tools(tools, self._tool_allowlist)
         try:
             try:
                 agent = JarvisVoiceAgent(
@@ -1340,6 +1455,10 @@ class VoiceRuntimeController:
                 turn_capture.clear()
             if paired_turn_capture is not None:
                 paired_turn_capture.clear()
+
+
+# System-generation instructions must never be spoken back as a reply.
+register_internal_text(_WAKE_ACK_INSTRUCTIONS)
 
 
 def build_voice_runtime(config: JarvisConfig) -> VoiceRuntimeController:

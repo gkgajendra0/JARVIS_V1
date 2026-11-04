@@ -61,12 +61,17 @@ class RequiredConversationRecorder:
         routing_receipt: RecordingRoute,
         *,
         evidence: tuple[str, ...] = (),
+        not_before=None,
     ) -> ConversationReceipt:
         # Source leases are shared by event identity. A duplicate callback must
         # never release the lease still needed by an overlapping write.
         async with self._record_lock:
             return await self._record(
-                conversation, turn, routing_receipt, evidence=evidence
+                conversation,
+                turn,
+                routing_receipt,
+                evidence=evidence,
+                not_before=not_before,
             )
 
     async def _record(
@@ -76,6 +81,7 @@ class RequiredConversationRecorder:
         routing_receipt: RecordingRoute,
         *,
         evidence: tuple[str, ...] = (),
+        not_before=None,
     ) -> ConversationReceipt:
         if (
             not isinstance(conversation, ConversationSession)
@@ -107,7 +113,12 @@ class RequiredConversationRecorder:
                 routing_receipt.request_id,
                 turn.role.value,
                 turn.text,
-                turn.accepted_at,
+                # A reply may only be archived LATER than its acceptance (never
+                # earlier): a voice reply committed a moment before the final
+                # transcript of the question it answers keeps history in order.
+                max(turn.accepted_at, not_before)
+                if not_before is not None
+                else turn.accepted_at,
                 delivery="partial"
                 if turn.role is ConversationRole.ASSISTANT and turn.interrupted
                 else "complete",
