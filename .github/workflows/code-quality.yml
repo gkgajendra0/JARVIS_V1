@@ -139,16 +139,19 @@ jobs:
       - name: Contract probe (no prompt)
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $response = '{}' | python -I src\jarvis\authority\windows_hello_consent.py
           if ($LASTEXITCODE -ne 2) { throw "Expected exit 2, got $LASTEXITCODE" }
           $payload = $response | ConvertFrom-Json
           if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
             throw "Contract mismatch: $response"
           }
+          exit 0
 
       - name: Real WinRT availability check (no prompt)
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $response = '{"action": "availability"}' | python -I src\jarvis\authority\windows_hello_consent.py
           Write-Host "availability: $response (exit $LASTEXITCODE)"
           if ($LASTEXITCODE -ne 0) { throw "WinRT availability call failed: $response" }
@@ -156,11 +159,13 @@ jobs:
           if ($payload.status -notin @('available', 'unavailable', 'not_configured')) {
             throw "Unexpected availability: $response"
           }
+          exit 0
 
       - name: Real interop request on an owner window (runner has no Hello device)
         timeout-minutes: 3
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           python -I -c @"
           import importlib.util as u, time
           s = u.spec_from_file_location('c', 'src/jarvis/authority/windows_hello_consent.py')
