@@ -612,7 +612,13 @@ def test_production_entry_point_never_enables_project_voice():
     for entry in (production.main, production._run_from_configuration):
         source = inspect.getsource(entry)
         assert "project_memory" not in source and "voice_session_observer" not in source
-    assert "project_voice" not in inspect.getsource(production)
+    # The only route into project voice is the owner's flag, off by default
+    # (jarvis.voice.project_voice_production); no lab module is reachable.
+    source = inspect.getsource(production)
+    assert source.count("project_voice") == source.count("project_voice_production")
+    from jarvis.config import JarvisConfig
+
+    assert JarvisConfig().project_memory_mode == "off"
     signature = inspect.signature(production.build_production_voice_runtime)
     assert signature.parameters["project_memory_factory"].default is None
     assert signature.parameters["voice_session_observer"].default is None
@@ -630,7 +636,11 @@ def test_real_tool_schema_and_agent_instructions():
     from jarvis.voice.project_voice import VoiceProjectTools
 
     tools = VoiceProjectTools(object()).tools
-    assert [t.id for t in tools] == ["prepare_project_turn"]
+    assert [t.id for t in tools] == [
+        "prepare_project_turn",
+        "search_project_history",
+        "forget_saved_history",
+    ]
     agent = JarvisVoiceAgent(tools=tools)
     flat = " ".join(agent.instructions.split())
     assert "Call prepare_project_turn first, with no spoken preamble" in flat

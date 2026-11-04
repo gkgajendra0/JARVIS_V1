@@ -55,6 +55,14 @@ class ControlledGeminiLiveModel(llm.RealtimeModel):
     def provider(self):
         return "gemini"
 
+    def update_options(self, *, tool_behavior=None, **unsupported):
+        """Controlled sessions always declare BLOCKING tools (see
+        ControlledGeminiLiveSession); only that behaviour can be requested."""
+        if unsupported or str(
+            getattr(tool_behavior, "value", tool_behavior)
+        ).upper() != ("BLOCKING"):
+            raise TypeError("controlled Live sessions support only BLOCKING tools")
+
     def session(self, *, turn_detection_disabled=False):
         if self.closed or not self.state.current or not turn_detection_disabled:
             raise llm.RealtimeError(

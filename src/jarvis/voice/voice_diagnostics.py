@@ -92,6 +92,7 @@ class VoiceDiagnostics:
         self.utterance_count = 0
         self.audio_bytes = 0
         self._tasks: set[asyncio.Task] = set()
+        self._runtime_events: list[dict] = []
         self._closed = False
         self._write_now("run.json", {"run_id": self.run_id, "started_at": _now()})
 
@@ -106,6 +107,7 @@ class VoiceDiagnostics:
         session.on("agent_state_changed", diag.on_agent_state)
         session.on("user_input_transcribed", diag.on_transcribed)
         session.on("function_tools_executed", diag.on_tools)
+        session.on("speech_created", diag.on_speech_created)
         session.on("error", diag.on_error)
         bridge.add_accepted_turn_observer(diag.observe_turn)
         bridge.add_close_observer(diag.close)
@@ -114,6 +116,17 @@ class VoiceDiagnostics:
         """session_audio_tap: frames forwarded to Gemini for this session."""
         diag = self._sessions.get(id(bridge.conversation))
         return None if diag is None else diag.observe_frame
+
+    def runtime_event(self, kind: str, **fields) -> None:
+        """Runtime-level event outside any wake session (e.g. Hello renewal)."""
+        self._runtime_events.append(
+            {"at": _now(), "kind": kind, "session_count": self._session_count, **fields}
+        )
+        # Rare events: written in order, synchronously, so the newest list wins.
+        try:
+            self._write_now("runtime-events.json", list(self._runtime_events))
+        except OSError:
+            LOGGER.warning("Voice diagnostics runtime event write failed")
 
     def project_event(self, conversation, kind: str, **fields) -> None:
         """Hook used by VoiceProjectTurns (lab only)."""
@@ -459,10 +472,40 @@ class _SessionDiagnostics:
         if target is not None and target["latency_ms"] is None and self._speech_ended:
             target["latency_ms"] = round((time.monotonic() - self._speech_ended) * 1000)
 
+    def on_speech_created(self, event) -> None:
+        """Every response LiveKit schedules, including Gemini's automatic tool
+        follow-up (user_initiated=False), so a reply that never played shows."""
+        entry = {
+            "at": _now(),
+            "kind": "speech_created",
+            "source": str(getattr(event, "source", "")),
+            "user_initiated": bool(getattr(event, "user_initiated", False)),
+        }
+        target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
+        if target is None:
+            self._unmatched("speech_without_utterance", entry)
+        else:
+            target["responses"].append(entry)
+
     def on_tools(self, event) -> None:
         target = self._utterance_for_epoch(self._conversation.user_activity_epoch)
-        for call in getattr(event, "function_calls", ()) or ():
+        outputs = tuple(getattr(event, "function_call_outputs", ()) or ())
+        for index, call in enumerate(getattr(event, "function_calls", ()) or ()):
             entry = {"at": _now(), "name": getattr(call, "name", "unknown")}
+            output = outputs[index] if index < len(outputs) else None
+            if output is not None:
+                # Outcome only: an error flag and the tool's own status word.
+                entry["is_error"] = bool(getattr(output, "is_error", False))
+                raw = getattr(output, "output", None)
+                status = _tool_status(raw)
+                if status is not None:
+                    entry["status"] = status
+                ok = _tool_ok(raw)
+                if ok is not None:
+                    entry["ok"] = ok  # the tool's own success flag
+                verified = _tool_verified(raw)
+                if verified is not None:
+                    entry["verified"] = verified  # observed postcondition
             if target is None:
                 self._unmatched("tool_without_utterance", entry)
             else:
@@ -536,6 +579,47 @@ class _SessionDiagnostics:
         )
 
 
+def _tool_payload(output):
+    """The tool's returned mapping. LiveKit passes ``str(dict)`` (a Python
+    literal), not JSON, so both are parsed; never evaluated as code."""
+    if isinstance(output, dict):
+        return output
+    if not isinstance(output, str) or not output.lstrip().startswith("{"):
+        return None
+    try:
+        parsed = json.loads(output)
+    except ValueError:
+        import ast
+
+        try:
+            parsed = ast.literal_eval(output)
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _tool_status(output):
+    payload = _tool_payload(output)
+    if payload is None:
+        return None
+    value = payload.get("status", payload.get("ok"))
+    return value if isinstance(value, str | bool) else None
+
+
+def _tool_ok(output):
+    payload = _tool_payload(output)
+    value = None if payload is None else payload.get("ok")
+    return value if isinstance(value, bool) else None
+
+
+def _tool_verified(output):
+    """Hands' observed postcondition (``final_observation.verified``)."""
+    payload = _tool_payload(output)
+    observation = None if payload is None else payload.get("final_observation")
+    value = observation.get("verified") if isinstance(observation, dict) else None
+    return value if isinstance(value, bool) else None
+
+
 def classify_unmatched(utterance) -> str:
     """Why speech has no accepted transcript. Evidence only, never "dropped"."""
     if any(not a.get("duplicate") for a in utterance["asr"]):
@@ -594,10 +678,16 @@ def load_run(run_dir: Path, protector) -> dict:
             entry = utterance.get("audio")
             if entry and (run_dir / entry["file"]).exists():
                 audio[utterance["id"]] = read(entry["file"])
+    events = (
+        json.loads(read("runtime-events.json.sealed"))
+        if (run_dir / "runtime-events.json.sealed").exists()
+        else []
+    )
     return {
         "run": json.loads(read("run.json.sealed")),
         "sessions": sessions,
         "audio": audio,
+        "runtime_events": events,
     }
 
 
@@ -662,7 +752,11 @@ _STOP = frozenset(
     ]
 )
 _BENIGN_UNMATCHED = frozenset(
-    {"assistant_before_any_owner_speech", "project_event_before_any_owner_speech"}
+    {
+        "assistant_before_any_owner_speech",
+        "project_event_before_any_owner_speech",
+        "speech_without_utterance",  # e.g. the wake acknowledgement
+    }
 )
 
 
@@ -1081,7 +1175,10 @@ def render_report(data: dict, verdicts: dict | None = None) -> str:
                 for a in u["assistant"]
             )
             responses = ", ".join(
-                "withheld" if r["kind"] == "response_withheld" else "played"
+                {
+                    "response_withheld": "withheld",
+                    "response_played": "played",
+                }.get(r["kind"], "scheduled")
                 for r in u["responses"]
             )
             if u.get("unmatched_reason"):

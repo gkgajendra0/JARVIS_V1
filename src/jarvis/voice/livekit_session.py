@@ -36,6 +36,10 @@ from jarvis.conversation import ConversationRole, ConversationSession, Conversat
 from jarvis.memory.learning_diagnostics import content_for_log
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.agent import build_instructions
+from jarvis.voice.voice_output_safety import (
+    note_generation_instructions,
+    sanitize_assistant_transcript,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -217,6 +221,27 @@ def require_blocking_realtime_tools(llm) -> None:
     update(tool_behavior=google_types.Behavior.BLOCKING)
 
 
+def _note_instructions_sent(session) -> None:
+    """Every generate_reply instruction Jarvis sends on this session is noted,
+    so an echo of it in the generation's transcript is recognised as Jarvis's
+    own text, never as something said to the owner."""
+    original = getattr(session, "generate_reply", None)
+    if not callable(original) or getattr(original, "_jarvis_notes_instructions", False):
+        return
+
+    def generate_reply(*args, **kwargs):
+        instructions = kwargs.get("instructions")
+        if isinstance(instructions, str) or instructions is not None:
+            note_generation_instructions(str(instructions))
+        return original(*args, **kwargs)
+
+    generate_reply._jarvis_notes_instructions = True
+    try:
+        session.generate_reply = generate_reply
+    except (AttributeError, TypeError):
+        LOGGER.debug("Session generate_reply cannot be observed")
+
+
 class LiveKitConversationBridge:
     """Translate final LiveKit USER transcripts and committed items into JARVIS turns."""
 
@@ -243,6 +268,7 @@ class LiveKitConversationBridge:
         session.on("conversation_item_added", self._on_conversation_item_added)
         session.on("error", self._on_error)
         session.on("close", self._on_close)
+        _note_instructions_sent(session)
 
     def project_accepted_context(self):
         from livekit.agents import ChatContext
@@ -469,6 +495,25 @@ class LiveKitConversationBridge:
                 self._seen_item_ids.add(item_id)
             return
 
+        if role is ConversationRole.ASSISTANT:
+            spoken, reason = sanitize_assistant_transcript(text)
+            if reason is not None:
+                # Gemini transcribed Jarvis's own instructions as part of its
+                # turn (they reach it as model-role text), or produced internal
+                # reasoning. None of it was meant for the owner: it never
+                # becomes conversation, a log line or saved history.
+                LOGGER.warning(
+                    "Assistant transcript contained internal text; %s | "
+                    "reason=%s | kept_chars=%s",
+                    "removed" if spoken else "turn dropped",
+                    reason,
+                    len(spoken),
+                )
+            if not spoken:
+                if item_id is not None:
+                    self._seen_item_ids.add(item_id)
+                return
+            text = spoken
         interrupted = bool(item.interrupted and role is ConversationRole.ASSISTANT)
         self._accept_canonical_turn(
             role,

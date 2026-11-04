@@ -72,6 +72,14 @@ class GuardedGeminiRealtimeModel(llm.RealtimeModel):
         self.sessions.append(session)
         return session
 
+    def update_options(self, **kwargs):
+        """Model-level options (e.g. blocking tool behaviour for project
+        memory) reach the wrapped model, so every session it opens uses them."""
+        update = getattr(self.inner, "update_options", None)
+        if not callable(update):
+            raise TypeError("wrapped realtime model does not accept options")
+        update(**kwargs)
+
     def retire(self):
         self.state.active = False
         if self._close_task is None:
