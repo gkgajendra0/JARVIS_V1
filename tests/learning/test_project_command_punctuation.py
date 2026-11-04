@@ -98,6 +98,9 @@ def _source(text):
         "Create project called Nepal trip.",
         "Okay, switch to Interview prep.",
         "Open project Nepal trip",
+        "Can you switch to Nepal trip?",
+        "Create a project called Nepal trip, please.",
+        "Create a project, um, called Nepal trip.",
     ],
 )
 def test_project_commands_are_not_learning_sources(text):
@@ -110,6 +113,12 @@ def test_project_commands_are_not_learning_sources(text):
     "text",
     [
         "We will take the Jimny.",
+        "I'm planning a trip to Nepal next month.",
+        "We are going to Nepal in spring.",
+        "My interview is on Friday at ten.",
+        "I need to switch to a new laptop for work.",
+        "Switch to Hindi.",
+        "Go back to sleep.",
         "Let's plan my Goa trip.",
         "Resume my thesis writing tomorrow.",
         "I told him to create a project called Goa.",

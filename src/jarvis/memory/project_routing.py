@@ -71,13 +71,33 @@ class ProjectClarificationRequired(ValueError):
         self.question = question
 
 
-_SELECT_COMMAND = re.compile(
-    r"^(?:let['’]?s\s+plan|plan|new conversation in|switch to|continue|resume|open project)\s+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
-    re.IGNORECASE,
-)
 _POLITE = (
     r"^(?:(?:can|could|would|will)\s+(?:you|we)\s+|please\s+|let['’]?s\s+"
     r"|i\s+(?:want|would\s+like|['’]d\s+like|wanna)\s+to\s+|go\s+ahead\s+and\s+)*"
+)
+# Switching. Speech-to-text may add punctuation after the verb ("Switch to.
+# Nepal trip."); polite forms ("Can you switch to ...?") are commands too.
+_SELECT_COMMAND = re.compile(
+    r"^(?:let['’]?s\s+plan|plan|new conversation in|continue|resume|"
+    + _POLITE[1:]
+    + r"(?:switch(?:\s+(?:over|back))?\s+to|open\s+project))"
+    r"[\s.,;:\u2013\u2014-]+(?:my\s+|the\s+|a\s+)?(.+?)[.?!]*$",
+    re.IGNORECASE,
+)
+_LANGUAGES = frozenset(
+    {
+        "english", "hindi", "hinglish", "marathi", "tamil", "telugu", "kannada",
+        "malayalam", "bengali", "bangla", "gujarati", "punjabi", "urdu", "odia",
+        "spanish", "french", "german", "japanese", "chinese", "arabic",
+        "english please", "hindi please",
+    }
+)  # fmt: skip
+# Verbs that are ordinary speech as often as commands ("Go back to sleep",
+# "open the window"): a switch only when the name is an existing project.
+_SELECT_IF_KNOWN = re.compile(
+    _POLITE + r"(?:go(?:\s+back)?\s+to|open|move\s+to|take\s+me\s+to|change\s+to)"
+    r"[\s.,;:]+(?:my\s+|the\s+)?(.+?)[.?!]*$",
+    re.IGNORECASE,
 )
 # Spoken commands often open with a discourse marker ("Okay. Create a project
 # called X", "Hey Jarvis, switch to Y"). Only this closed set of lead-ins is
@@ -104,13 +124,21 @@ def embedded_project_command(text: str):
     sentences = _SENTENCE_BREAK.split(text.strip())
     for sentence in sentences[1:]:
         name, kind = parse_project_command(sentence)
-        if name is not None:
+        if name is not None and kind != "select_if_known":
             return name, kind
     return None, None
 
 
-_KEYWORD = r"(?P<kw>called|named)\s+"
-_SPOKEN_BREAK = r"\s*[.,;:!?\u2013\u2014-]+\s*"
+# Naming phrases. Speech-to-text may put punctuation after them ("called,
+# Nepal trip"), so any punctuation or space may follow.
+_NAMING = r"(?:called|named|with\s+the\s+name|by\s+the\s+name|and\s+(?:call|name)\s+it)"
+_AFTER_NAMING = r"[\s.,;:!?\u2013\u2014-]+"
+_KEYWORD = r"(?P<kw>" + _NAMING + r")" + _AFTER_NAMING
+# A spoken break between "project" and the naming phrase: punctuation and/or
+# fillers ("Create a project. Called ...", "Create a project, um, called ...").
+_SPOKEN_BREAK = (
+    r"(?:\s*[.,;:!?\u2013\u2014-]+\s*|\s+(?:um+|uh+|er+|erm|hmm+)\b[\s.,;:!?-]*)+"
+)
 _CREATE_COMMANDS = (
     # Speech-to-text splits one spoken command into sentences: "Create a
     # project. Called Nepal trip." Punctuation is accepted only directly before
@@ -122,13 +150,21 @@ _CREATE_COMMANDS = (
         _POLITE
         + r"(?:create|add|make|start)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
         + _SPOKEN_BREAK
-        + r"(?P<split_kw>called|named)\s+(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
+        + r"(?P<split_kw>"
+        + _NAMING
+        + r")"
+        + _AFTER_NAMING
+        + r"(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
         re.IGNORECASE,
     ),
     re.compile(
         r"^new\s+project"
         + _SPOKEN_BREAK
-        + r"(?P<split_kw>called|named)\s+(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
+        + r"(?P<split_kw>"
+        + _NAMING
+        + r")"
+        + _AFTER_NAMING
+        + r"(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
         re.IGNORECASE,
     ),
     # "create project Nepal", "create a new project called Nepal",
@@ -236,6 +272,26 @@ def _words(text):
     return [w.casefold() for w in words]
 
 
+_QUOTES = "\"'“”‘’«»`"
+
+
+def clean_project_name(raw: str) -> str:
+    """The name as the owner meant it, without speech-to-text artifacts.
+
+    "Nepal trip, please" -> "Nepal trip"; '"Nepal trip"' -> "Nepal trip";
+    "Nepal. Trip" -> "Nepal Trip"; "the Nepal trip project" -> "Nepal trip".
+    """
+    text = unicodedata.normalize("NFKC", raw).strip()
+    text = re.sub(r"[\s,.;:!?]*\bplease$", "", text, flags=re.IGNORECASE)
+    text = text.strip(" \t.,;:!?\u2013\u2014-" + _QUOTES)
+    text = re.sub(r"\s*[.,;:!?]+\s+", " ", text)  # sentence marks inside
+    text = re.sub(r"^(?:the|my)\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"^project\s+(?:called\s+|named\s+)?|\s+project$", "", text, flags=re.IGNORECASE
+    )
+    return " ".join(text.strip(" .,;:!?" + _QUOTES).split())
+
+
 def _project_name(raw, *, explicit=False):
     """A plausible project name, else None.
 
@@ -243,7 +299,7 @@ def _project_name(raw, *, explicit=False):
     Nepal"). Otherwise 1-4 words without sentence words, so "create a timeline
     for the project" is not read as a project.
     """
-    text = re.sub(r"\s+please$", "", raw.strip(" .?!,"), flags=re.IGNORECASE)
+    text = clean_project_name(raw)
     words = _words(text)
     if explicit:
         return text if 1 <= len(words) <= 8 else None
@@ -265,14 +321,26 @@ def parse_project_command(text):
             name = _project_name(match.group("name"), explicit=explicit)
             if name:
                 return name, "create"
-    match = _SELECT_COMMAND.search(text)
+    match = _SELECT_COMMAND.match(text)
     if match:
         kind = (
             "plan"
             if re.match(r"^(?:let['’]?s\s+plan|plan)\b", text, re.IGNORECASE)
             else "select"
         )
-        return match.group(1).strip(" .?!"), kind
+        name = clean_project_name(match.group(1))
+        if not name:
+            return None, None
+        if kind == "select" and normalize_name(name) in _LANGUAGES:
+            # "Switch to Hindi" changes the spoken language, unless a project
+            # really has that name.
+            return name, "select_if_known"
+        return name, kind
+    match = _SELECT_IF_KNOWN.match(text)
+    if match:
+        name = clean_project_name(match.group(1))
+        if name:
+            return name, "select_if_known"
     return None, None
 
 
@@ -286,8 +354,12 @@ def is_project_control_command(text: str) -> bool:
     _, kind = parse_project_command(text)
     if kind == "create":
         return True
-    return kind == "select" and bool(
-        re.match(r"(?:switch to|open project)\b", strip_lead_in(text), re.IGNORECASE)
+    # A switch ("switch to", "can you switch to", "open project"); "continue
+    # X" and "resume X" are left to learning.
+    return kind == "select" and not re.match(
+        r"(?:continue|resume|new conversation in)\b",
+        strip_lead_in(text),
+        re.IGNORECASE,
     )
 
 
@@ -307,8 +379,11 @@ def needs_project_routing(text: str, catalog) -> bool:
     text = (text or "").strip()
     if not text:
         return True  # nothing to classify yet: not safe to skip routing
-    if _SELECT_BY_ID.fullmatch(text) or parse_project_command(text)[0] is not None:
+    if _SELECT_BY_ID.fullmatch(text):
         return True
+    name, kind = parse_project_command(text)
+    if name is not None and kind != "select_if_known":
+        return True  # "Go to X" counts below only if it names a project
     lead = strip_lead_in(text)
     if _UNPARSED_PROJECT_COMMAND.match(lead) or _CREATE_PROJECT_PREFIX.match(lead):
         return True
@@ -408,6 +483,18 @@ class ProjectRouter:
             if not name or normalize_name(proposed_name) != normalize_name(name):
                 raise PermissionError("project proposal lacks exact explicit source")
             name = proposed_name
+        if name and kind == "select_if_known":
+            # "Go back to sleep", "open the window": a switch only when it
+            # names an existing project; otherwise ordinary speech.
+            known = [
+                e
+                for e in catalog.entries
+                if normalize_name(name)
+                in {normalize_name(e.title), *(normalize_name(a) for a in e.aliases)}
+            ] or _partial_matches(name, catalog.entries)
+            if known:
+                return self._command(catalog, text, name, "select")
+            name = None
         if name:
             return self._command(catalog, text, name, kind)
         # Not a project command: questions and ordinary messages never change
