@@ -105,6 +105,11 @@ class MediaDevicesAudioOutput(io.AudioOutput):
         self._closed = False
 
     @property
+    def started_segment_sequence(self) -> int:
+        """Sequence of the most recent playback segment that STARTED (0: none)."""
+        return self._next_segment_sequence - 1
+
+    @property
     def last_completed_quality(self) -> PlaybackQualitySnapshot | None:
         """Return the most recently completed output segment's energy evidence."""
 

@@ -19,7 +19,11 @@ from livekit.agents import (
 from livekit.agents.llm import ChatMessage
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 from jarvis.identity.speaker_turn import InMemorySpeakerTurnCapture
 from jarvis.memory.live_context import LiveContext
 from jarvis.voice.audio import LocalAudioOutput
@@ -661,6 +665,170 @@ async def test_owner_speech_uses_native_barge_in_after_acknowledgement_started(
     await asyncio.wait_for(task, timeout=1)
 
 
+# -- wake acknowledgement races (live qualification at 8155df0d) ---------------
+#
+# The owner began speaking just as the acknowledgement was requested. Its
+# generate_reply was still pending, so the owner's real response was bound to
+# it ("generate_reply timed out waiting for generation_created"), the runtime
+# logged the acknowledgement as played although no audio played, and its text
+# transcript later reached scripted-TTS recovery.
+
+
+class AckHandle(FakeSpeechHandle):
+    """A LiveKit SpeechHandle: interruptible, with completion state."""
+
+    def __init__(self, session: FakeSession) -> None:
+        super().__init__(session)
+        self.interrupted = False
+        self.interrupt_calls = 0
+
+    def done(self) -> bool:
+        return self._done
+
+    def interrupt(self, *, force: bool = False):
+        del force
+        self.interrupt_calls += 1
+        self.interrupted = True
+        self._session.reply_release.set()  # LiveKit ends the interrupted speech
+        return self
+
+
+class AckSession(FakeSession):
+    def __init__(self) -> None:
+        super().__init__(auto_finish_replies=False)
+        self.handles: list[AckHandle] = []
+
+    def generate_reply(self, **kwargs) -> AckHandle:
+        self.generated_replies.append(dict(kwargs))
+        handle = AckHandle(self)
+        self.handles.append(handle)
+        self.reply_started.set()
+        return handle
+
+
+def ack_runtime():
+    session = AckSession()
+    conversation = ConversationSession()
+    bridge = _bridge(session, conversation)
+    audio = FakeAudio()
+    # The physical output's count of playback segments started so far.
+    audio.output.started_segment_sequence = 0  # type: ignore[attr-defined]
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=lambda _: (session, bridge),  # type: ignore[arg-type,return-value]
+    )
+    return runtime, session, audio
+
+
+@pytest.mark.asyncio
+async def test_owner_speech_before_ack_audio_cancels_only_the_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="jarvis.voice.runtime")
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    runtime, session, _ = ack_runtime()
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=1.0))
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    (ack,) = session.handles
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0.01)
+
+    # Only the acknowledgement's own handle is cancelled (which releases its
+    # pending generation); the session and the owner's turn are untouched.
+    assert ack.interrupt_calls == 1
+    assert session.interrupt_calls == []
+    assert len(session.generated_replies) == 1  # no competing generation
+    text = caplog.text
+    assert "acknowledgement cancelled" in text
+    assert "wake acknowledgement finished playing" not in text
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_owner_speech_after_ack_audio_started_keeps_native_barge_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    runtime, session, audio = ack_runtime()
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=1.0))
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+    (ack,) = session.handles
+    audio.output.started_segment_sequence += 1  # its audio is playing
+
+    session.emit("user_state_changed", SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0)
+
+    assert ack.interrupt_calls == 0  # provider-native barge-in owns it
+    assert session.interrupt_calls == []
+
+    session.reply_release.set()
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_ack_without_audio_is_not_reported_as_played(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="jarvis.voice.runtime")
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    runtime, session, _ = ack_runtime()
+    task = asyncio.create_task(runtime._run_one_session(pre_roll_after_monotonic=1.0))
+    await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+
+    session.reply_release.set()  # the generation ends with no playback segment
+    await asyncio.sleep(0.01)
+
+    assert "acknowledgement produced no audio; not reported as played" in caplog.text
+    assert "wake acknowledgement finished playing" not in caplog.text
+
+    runtime.request_shutdown()
+    await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_silent_owner_still_gets_one_played_acknowledgement_each_wake(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="jarvis.voice.runtime")
+    monkeypatch.setattr("jarvis.voice.runtime._WAKE_ACK_GRACE_SECONDS", 0.01)
+    sessions: list[AckSession] = []
+
+    def factory(_):
+        session = AckSession()
+        sessions.append(session)
+        return session, _bridge(session, ConversationSession())
+
+    audio = FakeAudio()
+    audio.output.started_segment_sequence = 0  # type: ignore[attr-defined]
+    runtime = VoiceRuntimeController(
+        JarvisConfig(initial_request_timeout_seconds=1),
+        audio,  # type: ignore[arg-type]
+        session_factory=factory,  # type: ignore[arg-type]
+    )
+    for cycle in range(3):  # repeated wake/sleep cycles on one runtime
+        task = asyncio.create_task(
+            runtime._run_one_session(pre_roll_after_monotonic=float(cycle))
+        )
+        while len(sessions) <= cycle:
+            await asyncio.sleep(0)
+        session = sessions[cycle]
+        await asyncio.wait_for(session.reply_started.wait(), timeout=1)
+        audio.output.started_segment_sequence += 1  # type: ignore[attr-defined]
+        session.reply_release.set()  # the acknowledgement played
+        await asyncio.sleep(0.01)
+        runtime.request_shutdown()
+        await asyncio.wait_for(task, timeout=1)
+        runtime._shutdown.clear()  # the runtime stays up for the next wake
+    assert [len(s.handles) for s in sessions] == [1, 1, 1]
+    assert all(s.handles[0].interrupt_calls == 0 for s in sessions)
+    assert caplog.text.count("wake acknowledgement finished playing") == 3
+
+
 @pytest.mark.asyncio
 async def test_standby_times_out_silently_without_local_voice(
     monkeypatch: pytest.MonkeyPatch,
@@ -1173,3 +1341,108 @@ async def test_startup_greeting_timeout_does_not_block_runtime(
 
     runtime.request_shutdown()
     await asyncio.wait_for(task, timeout=1)
+
+
+# -- internal instruction text in assistant transcripts (live at 1b13dfb8) -------
+
+
+def test_wake_ack_instructions_never_enter_the_conversation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Live 11:52:52Z: the ack's transcript was the wake-ack instructions
+    followed by "Standing by." with 1.17 s of audio, i.e. only "Standing by."
+    was spoken. Gemini transcribes the model-role instructions as part of its
+    own turn; the bridge keeps only what was said to the owner."""
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="ack",
+                role="assistant",
+                content=[_WAKE_ACK_INSTRUCTIONS + "Standing by."],
+            )
+        ),
+    )
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(
+                id="echo", role="assistant", content=[_WAKE_ACK_INSTRUCTIONS]
+            )
+        ),
+    )
+    assert [(t.role, t.text) for t in conversation.turns] == [
+        (ConversationRole.ASSISTANT, "Standing by.")
+    ]
+    assert "contained internal text" in caplog.text
+    assert _WAKE_ACK_INSTRUCTIONS not in caplog.text  # never logged either
+
+
+def test_ordinary_assistant_transcripts_are_unchanged() -> None:
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    reply = "The owner of the Yak and Yeti hotel is not known to me."
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(id="a", role="assistant", content=[reply])
+        ),
+    )
+    assert [t.text for t in conversation.turns] == [reply]
+
+
+def _assistant_item(session, item_id, text):
+    session.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=ChatMessage(id=item_id, role="assistant", content=[text])
+        ),
+    )
+
+
+def test_an_echo_of_any_instruction_sent_on_the_session_is_removed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Formatted instructions (not registered prompts) are noted as they are
+    sent through the bridged session, so their echo is recognised too."""
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    said = "Correction: no project was created or switched. You are in Nepal trip."
+    instructions = "Say only this, briefly: '" + said + "' Do not add anything else."
+    session.generate_reply(instructions=instructions, allow_interruptions=True)
+    assert session.generated_replies[-1]["instructions"] == instructions
+    _assistant_item(session, "a", instructions + " " + said)
+    _assistant_item(session, "b", said)
+    assert [t.text for t in conversation.turns] == [said, said]
+
+
+def test_reasoning_prose_never_becomes_an_assistant_turn_or_log_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from jarvis.voice.runtime import _WAKE_ACK_INSTRUCTIONS
+
+    caplog.set_level("INFO")
+    session = FakeSession()
+    conversation = ConversationSession()
+    conversation.start()
+    _bridge(session, conversation)
+    reasoning = (
+        "The user has only said my wake word, so I should acknowledge briefly. "
+        "Wait, let me re-read the instructions."
+    )
+    first = " ".join(_WAKE_ACK_INSTRUCTIONS.split()[:10])
+    _assistant_item(session, "a", first + " " + reasoning)
+    _assistant_item(session, "b", reasoning)
+    assert list(conversation.turns) == []
+    assert "turn dropped" in caplog.text
+    assert "re-read" not in caplog.text and "invoked you" not in caplog.text

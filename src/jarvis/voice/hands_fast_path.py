@@ -174,12 +174,14 @@ async def execute_fast_hint(
     verified = bool(observation["verified"])
     LOGGER.info(
         "Hands fast path | operation=%s | status=%s | ok=%s | verified=%s | "
-        "execution_ms=%.1f",
+        "execution_ms=%.1f | reason=%s",
         normalized.operation,
         result.status.value,
         result.ok,
         verified,
         elapsed_ms,
+        # Content-free cause, e.g. "Microsoft winapp CLI is not installed".
+        (str(result.reason)[:160] if result.reason else "-"),
     )
 
     success = bool(result.ok and verified)

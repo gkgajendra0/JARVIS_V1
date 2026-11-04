@@ -78,6 +78,58 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
         return scope()
 
     def authorize_project_deletion(self, material):
+        return self._authorize_history_change(
+            material,
+            target={"project_id": material["project_id"]},
+            summary="Forget this project's retained conversation content and derived state, including "
+            f"{int(material.get('derived_count', 0))} Jarvis replies or tool results in other projects "
+            "that were generated with it in context; your own messages elsewhere are kept. "
+            "Minimal deletion identities are preserved to block late writes.",
+            destructive=True,
+        )
+
+    def authorize_mention_deletion(self, material):
+        """Fresh owner approval (Windows Hello) to forget what was said about
+        something: only rows containing all the words, and Jarvis replies or
+        tool results generated with them in context."""
+        if material.get("operation") != "forget_mentions":
+            raise ValueError("mention deletion material required")
+        words = " ".join(material.get("terms", ()))
+        where = ", ".join(material.get("projects", ())) or "no project"
+        return self._authorize_history_change(
+            material,
+            target={"mentions": material["digest"]},
+            summary=f"Forget saved conversation mentioning '{words}': "
+            f"{int(material.get('owner_rows', 0))} of your messages and "
+            f"{int(material.get('jarvis_rows', 0))} Jarvis replies or tool results "
+            f"generated with them, in: {where}. Everything else is kept. Minimal "
+            "deletion identities are preserved to block late writes.",
+            destructive=True,
+        )
+
+    def authorize_quarantine_resolution(self, material):
+        """Fresh owner approval to end the upgrade quarantine (Windows Hello)."""
+        if material.get("action") not in {"delete", "restore"}:
+            raise ValueError("quarantine action must be delete or restore")
+        where = ", ".join(
+            f"{title} ({count})" for title, count in material.get("projects", ())
+        )
+        count = int(material.get("count", 0))
+        summary = (
+            f"Permanently delete {count} older Jarvis replies/tool results that may "
+            f"repeat a forgotten project, in: {where}. Your own messages are kept."
+            if material["action"] == "delete"
+            else f"Restore {count} older Jarvis replies/tool results in: {where}. "
+            "They may repeat information from a project you forgot."
+        )
+        return self._authorize_history_change(
+            material,
+            target={"quarantine": "upgrade"},
+            summary=summary,
+            destructive=material["action"] == "delete",
+        )
+
+    def _authorize_history_change(self, material, *, target, summary, destructive):
         from uuid import uuid4
 
         from jarvis.authority.personal_learning import LearningPermitHandle
@@ -95,10 +147,10 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
                 {"payload_sha256": digest},
                 ActionOrigin.DIRECT_USER,
             ),
-            {"project_id": material["project_id"]},
+            target,
             {"payload_sha256": digest},
-            "Forget this project's retained conversation content and derived state; preserve minimal deletion identities to block late writes.",
-            ActionAttributes(persistent_write=True, destructive=True),
+            summary,
+            ActionAttributes(persistent_write=True, destructive=destructive),
             {},
         )
         with self._broker._lock:

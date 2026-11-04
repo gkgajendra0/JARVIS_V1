@@ -249,6 +249,22 @@ class CapabilityRuntime:
             self._conversation_history_authority = issuer
         return issuer
 
+    @property
+    def personal_context_session_authority(self):
+        from jarvis.authority.personal_context_session import (
+            PersonalContextSessionAuthority,
+        )
+
+        issuer = getattr(self, "_personal_context_session_authority", None)
+        if issuer is None:
+            if not isinstance(self._authority, CapabilityAuthorityBroker):
+                raise CapabilityAuthorizationError(
+                    "personal context session authority is unavailable"
+                )
+            issuer = PersonalContextSessionAuthority(self._authority)
+            self._personal_context_session_authority = issuer
+        return issuer
+
     def open_personal_learning(self, runtime_id: str, provider: str):
         return self.personal_learning_authority.open(runtime_id, provider)
 

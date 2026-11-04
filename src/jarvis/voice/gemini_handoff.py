@@ -89,6 +89,11 @@ class _TransportAgent(Agent):
     async def on_enter(self):
         self._transport_ready.set()
 
+    def transcription_node(self, text, model_settings):
+        from jarvis.voice.agent import guarded_transcription
+
+        return guarded_transcription(self, text, model_settings)
+
 
 class GeminiLiveHandoff:
     def __init__(
@@ -141,6 +146,11 @@ class GeminiLiveHandoff:
         self._recovery_demand = False
         self._recovery_lease = None
         self.last_reason = "ready"
+        # Session features that must survive a model switch (project memory):
+        # options for every new model, and context that is not a canonical turn.
+        self._model_configurers = []
+        self._context_providers = []
+        self._provided = []
         bridge.bind_transport_error_handler(self.try_handle_event)
         bridge.add_accepted_turn_observer(self._accepted_turn)
         session.on("user_state_changed", self._user_state)
@@ -150,6 +160,16 @@ class GeminiLiveHandoff:
 
     def bind_agent(self, agent):
         self.agent = agent
+
+    def add_model_configurer(self, configure):
+        """``configure(model)`` runs on every new model before it opens a
+        session; a failure aborts that switch (fail closed)."""
+        self._model_configurers.append(configure)
+
+    def add_context_provider(self, provide, observe=None):
+        """``provide()`` returns inert ChatMessages appended to the replayed
+        context; ``observe(items)`` is told after a switch succeeded."""
+        self._context_providers.append((provide, observe))
 
     def bind_io(self, audio_input, audio_output):
         self.input = audio_input
@@ -459,12 +479,22 @@ class GeminiLiveHandoff:
                         ],
                     )
                 )
+        self._provided = []
+        for provide, observe in self._context_providers:
+            try:
+                items = list(provide())
+            except Exception:  # noqa: BLE001 - a provider never blocks recovery
+                LOGGER.warning("Handoff context provider failed; continuing without it")
+                continue
+            context.items.extend(items)
+            self._provided.append((observe, items))
         return context
 
     async def _switch(self, target, *, continue_request, pending_input=None):
         if self.agent is None or not await self._authorized():
             return False
         context = self._context_for_replay()
+        provided = self._provided
         self.bridge.register_restored_context(context)
         latest = (
             self.bridge.conversation.turns[-1]
@@ -550,6 +580,14 @@ class GeminiLiveHandoff:
             model = self.model_factory(
                 self.config, target=target, transport_state=state
             )
+            for configure in self._model_configurers:
+                try:
+                    configure(model)
+                except Exception as exc:
+                    retire = getattr(model, "retire", None)
+                    if callable(retire):
+                        retire()
+                    raise RuntimeError("new model could not be configured") from exc
             ready = asyncio.Event()
             agent = _TransportAgent(
                 previous=self.agent, model=model, context=context, ready=ready
@@ -590,6 +628,12 @@ class GeminiLiveHandoff:
                 )
             if target.credential_ref == gemini_credential_ref("free"):
                 self._recovery_demand = False
+            for observe, items in provided:
+                if observe is not None:
+                    try:
+                        observe(items)
+                    except Exception:  # noqa: BLE001 - diagnostics only
+                        LOGGER.debug("Handoff context observer failed")
             self.last_reason = "switched"
             return True
         except (TimeoutError, RuntimeError, ValueError):

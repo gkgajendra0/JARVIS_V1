@@ -20,6 +20,7 @@ on:
       - "tools/research/step4_sqlcipher_dpapi_bakeoff.py"
       - "tools/research/step4_sqlcipher_production_adapter_smoke.py"
       - "src/jarvis/memory/database.py"
+      - "src/jarvis/memory/fresh_initialization.py"
       - "src/jarvis/memory/migration_runner.py"
       - "src/jarvis/memory/migrations/**"
       - "src/jarvis/security/**"
@@ -65,7 +66,7 @@ jobs:
           & $python -m pip install --disable-pip-version-check --upgrade pip
           $wheel = Get-ChildItem ".step4-sqlcipher417-wheelhouse\sqlcipher3-*.whl" | Select-Object -First 1
           if (-not $wheel) { throw "Built SQLCipher wheel not found" }
-          & $python -m pip install $wheel.FullName "cryptography==50.0.1" "pydantic==2.13.5"
+          & $python -m pip install $wheel.FullName "cryptography==50.0.1" "pydantic==2.13.5" "psutil==7.2.2"
 
       - name: Run full synthetic SQLCipher and DPAPI bake-off
         shell: pwsh
@@ -88,6 +89,23 @@ jobs:
           & $python -X utf8 tools\research\step4_sqlcipher_production_adapter_smoke.py --artifact-dir .step4-sqlcipher-production-adapter --output .step4-sqlcipher-production-adapter.json
           if ($LASTEXITCODE -ne 0) { throw "Production SQLCipher memory adapter smoke failed" }
           Copy-Item .step4-sqlcipher-production-adapter.json .step4-sqlcipher417-wheelhouse\production-adapter-verification.json
+
+      - name: Clean memory initialization (fresh deployment tool)
+        shell: pwsh
+        run: |
+          $python = ".\.step4-sqlcipher417-verify\Scripts\python.exe"
+          $env:PYTHONPATH = "src"
+          New-Item -ItemType Directory .fresh-memory-data | Out-Null
+          Set-Content .fresh-memory-data\machine.json '{"schema_version": 1, "settings": {}}'
+          & $python -X utf8 -m jarvis.memory.fresh_initialization initialize --data .fresh-memory-data --retire-to .fresh-memory-retired
+          if ($LASTEXITCODE -ne 0) { throw "Fresh memory initialization failed" }
+          # A second run retires that database and creates another one.
+          & $python -X utf8 -m jarvis.memory.fresh_initialization initialize --data .fresh-memory-data --retire-to .fresh-memory-retired
+          if ($LASTEXITCODE -ne 0) { throw "Repeated fresh memory initialization failed" }
+          & $python -X utf8 -m jarvis.memory.fresh_initialization verify --data .fresh-memory-data --expect-empty
+          if ($LASTEXITCODE -ne 0) { throw "Fresh memory database verification failed" }
+          if ((Get-Content .fresh-memory-data\machine.json -Raw).Trim() -ne '{"schema_version": 1, "settings": {}}') { throw "machine.json changed" }
+          if ((Get-ChildItem .fresh-memory-retired -Directory).Count -ne 1) { throw "expected one retired set" }
 
       - name: Record wheel digest in job summary
         shell: pwsh

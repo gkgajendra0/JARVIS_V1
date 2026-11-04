@@ -64,7 +64,9 @@ class _SessionToolBundle:
         work_runtime: WorkRuntime | None = None,
         personal_context_getter: Callable[[], PersonalContextSession | None]
         | None = None,
+        project_turns_getter: Callable[[], Any] | None = None,
     ) -> None:
+        self._project_turns_getter = project_turns_getter or (lambda: None)
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
         self._memory_runtime = memory_runtime
@@ -81,6 +83,11 @@ class _SessionToolBundle:
         conversation = self._conversation_getter()
         if conversation is None:
             return tools
+        project_turns = self._project_turns_getter()
+        if project_turns is not None:
+            from jarvis.voice.project_voice import VoiceProjectTools
+
+            tools.extend(VoiceProjectTools(project_turns).tools)
         if self._memory_runtime is not None:
             personal = self._personal_context_getter()
             tools.extend(
@@ -110,6 +117,29 @@ class _SessionToolBundle:
         return tools
 
 
+def personal_speech_finished(personal, project_turns, handle, *, provider) -> None:
+    """A speech handle of a personal-context session finished.
+
+    A protected (personal facts released) session retires after its answer
+    was heard, or at once when the owner barged in. A response the PROJECT gate
+    withheld before any audio is neither: the project repair answers the same
+    utterance under the same personal permit, so it must not retire the session.
+    """
+    if project_turns is not None and project_turns.response_withheld(handle):
+        return
+    # Gemini's automatic tool follow-up has a SEPARATE handle.
+    # The completed tool/preamble handle is not the final answer.
+    if provider == "gemini" and any(
+        isinstance(item, FunctionCall) for item in handle.chat_items
+    ):
+        return
+    if handle.interrupted:
+        if personal.protected:
+            personal.close()
+        return
+    personal.response_finished()
+
+
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     """Run CAM++ + LR-ASD shadow analysis on one canonical microphone timeline."""
 
@@ -132,8 +162,21 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         semantic_accepted_plan_epoch=None,
         semantic_topic_resume_enabled=False,
         topic_continuity_factory=None,
+        project_memory=None,
+        voice_session_observer=None,
         **kwargs: Any,
     ) -> None:
+        # Isolated opt-in only (jarvis.voice.project_voice_lab); None in normal Jarvis.
+        if project_memory is not None and (
+            memory_runtime is None or capability_runtime is None
+        ):
+            raise ValueError(
+                "project voice memory requires canonical memory and authority"
+            )
+        if voice_session_observer is not None and not callable(voice_session_observer):
+            raise TypeError("voice_session_observer must be callable")
+        self._project_memory = project_memory
+        self._project_turns = None
         original_session_factory = kwargs.pop("session_factory", create_voice_session)
         self._session_conversation: ConversationSession | None = None
         self._user_is_speaking = False
@@ -229,6 +272,62 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
             session, bridge = original_session_factory(config)
             self._live_session = session
+            if voice_session_observer is not None:
+                voice_session_observer(session, bridge)
+            # Only owner conversation sessions use project memory. System
+            # sessions (startup/status/work-delivery speech, update approval)
+            # never save turns to, or receive context from, project history.
+            project_memory = self._project_memory
+            if (
+                project_memory is not None
+                and self._session_purpose == "conversation"
+                and project_memory.available()
+            ):
+                # Blocking tool behaviour first: fails closed before any audio.
+                project_memory.configure_realtime_model(session.llm)
+                project_turns = project_memory.session(bridge.conversation)
+                project_turns.bind_session(session)
+                project_turns.bind_injection_registry(bridge.register_restored_context)
+
+                def retire_after_forget():
+                    # The live model context still holds forgotten words; end
+                    # this wake so the next one starts from the cleaned archive.
+                    if self._live_session is session and self._active_end is not None:
+                        LOGGER.info("Wake session ended after a project-history forget")
+                        self._active_end.set()
+
+                project_turns.bind_retire(retire_after_forget)
+                # A reply Gemini transcribed but never voiced is replayed once
+                # through scripted TTS, only if this gate approves it.
+                recovery = getattr(bridge, "silent_audio_recovery", None)
+                bind_unplayed = getattr(recovery, "bind_unplayed_turn_policy", None)
+                if callable(bind_unplayed):
+                    bind_unplayed(
+                        allow=project_turns.allow_unplayed_reply,
+                        replayed=project_turns.observe_replayed,
+                        fallback=project_turns.speak_text,
+                    )
+                session.on("speech_created", project_turns.observe_speech)
+                # Gemini paid fallback / free recovery / fresh-session recovery
+                # replace the model mid-wake: the new model gets the same
+                # blocking tools and the project context this session holds.
+                handoff = getattr(bridge, "gemini_handoff", None)
+                if handoff is not None:
+                    handoff.add_model_configurer(
+                        project_memory.configure_realtime_model
+                    )
+                    handoff.add_context_provider(
+                        project_turns.handoff_context_items,
+                        project_turns.observe_transport_switch,
+                    )
+                self._project_turns = project_turns
+                bridge.add_accepted_turn_observer(project_turns.observe_turn)
+                bridge.add_close_observer(project_turns.close)
+                # Current project's recent history, once per wake session.
+                project_turns.start_preload()
+            else:
+                project_turns = None
+                self._project_turns = None
             self._session_conversation = bridge.conversation
             self._user_is_speaking = False
             self._session_ready_for_inactivity = False
@@ -285,6 +384,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     topic_continuity=continuity,
                 )
                 self._personal_context = personal
+                if project_turns is not None:
+                    # Replies built from released personal facts are not saved
+                    # to project history (question-bound permit).
+                    personal.add_release_observer(
+                        project_turns.observe_personal_release
+                    )
                 bridge.add_accepted_turn_observer(personal.observe_turn)
                 bridge.add_close_observer(personal.close)
             else:
@@ -393,6 +498,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         bridge.conversation.begin_user_activity()
                         if personal is not None:
                             personal.observe_activity()
+                        if project_turns is not None:
+                            project_turns.observe_activity()
                     self._user_is_speaking = True
                     sync_interactive_brain_gate()
                     self._cancel_timeout()
@@ -421,6 +528,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     if personal is not None:
                         personal.close()
                     self._personal_context = None
+                    if project_turns is not None:
+                        project_turns.close()
+                    self._project_turns = None
                     self._live_session = None
                     self._agent_state = "unavailable"
                     self._user_is_speaking = False
@@ -434,17 +544,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 def finished(handle):
                     if self._live_session is not session:
                         return
-                    # Gemini's automatic tool follow-up has a SEPARATE handle.
-                    # The completed tool/preamble handle is not the final answer.
-                    if config.ai_provider == "gemini" and any(
-                        isinstance(item, FunctionCall) for item in handle.chat_items
-                    ):
-                        return
-                    if handle.interrupted:
-                        if personal.protected:
-                            personal.close()
-                        return
-                    personal.response_finished()
+                    personal_speech_finished(
+                        personal, project_turns, handle, provider=config.ai_provider
+                    )
 
                 event.speech_handle.add_done_callback(finished)
 
@@ -483,7 +585,22 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
                 personal_context_getter=lambda: self._personal_context,
+                project_turns_getter=lambda: self._project_turns,
             )
+
+    async def _before_conversation_session(self) -> str | None:
+        # First wake after a Windows lock/unlock: bounded wait for a fresh
+        # Hello grant. On failure this wake is ordinary voice, and says so.
+        memory = self._project_memory
+        if memory is None:
+            return None
+        try:
+            return await memory.prepare_wake()
+        except Exception as exc:  # noqa: BLE001 - never blocks ordinary voice
+            LOGGER.warning(
+                "Project memory wake preparation failed | error=%s", type(exc).__name__
+            )
+            return None
 
     async def _validate_gemini_handoff(self, bridge):
         if (
@@ -507,8 +624,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
     def _session_audio_output(self, bridge, output):
         personal = self._personal_context
+        inner_detach = None
         if personal is not None and bridge.conversation is self._session_conversation:
-            return PersonalContextAudioOutput(output, personal)
+            output = PersonalContextAudioOutput(output, personal)
+            inner_detach = output.detach
+        project_turns = self._project_turns
+        if (
+            project_turns is not None
+            and bridge.conversation is self._session_conversation
+        ):
+            from jarvis.voice.project_voice_audio import ProjectAudioGate
+
+            output = ProjectAudioGate(output, project_turns, inner_detach=inner_detach)
         return output
 
     @staticmethod
@@ -865,6 +992,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 or (self._personal_context is not None and self._personal_context.busy)
             ):
                 return
+            pending = getattr(self._project_turns, "approval_pending_seconds", None)
+            remaining = pending() if callable(pending) else 0.0
+            if remaining > 0:
+                # The owner is approving Windows Hello for project memory: the
+                # wake stays open (bounded by the renewal wait), so a command
+                # spoken right after approval is still captured.
+                self._timeout_handle = asyncio.get_running_loop().call_later(
+                    remaining + seconds, expire_inactivity
+                )
+                return
             LOGGER.info(
                 "Voice session inactivity timeout expired | seconds=%.2f | "
                 "user_speaking=%s | canonical_user_turns=%s",
@@ -1074,8 +1211,26 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 name="jarvis-work-delivery",
             )
         try:
+            if self._project_memory is not None:
+                # Inside try: a denied Hello still releases memory below.
+                try:
+                    await self._project_memory.start()
+                except Exception as exc:
+                    if self._project_memory.required:
+                        raise  # isolated lab: stop rather than run without it
+                    LOGGER.error(
+                        "Voice project memory unavailable; continuing as ordinary "
+                        "voice | error=%s",
+                        type(exc).__name__,
+                    )
+                    await self._project_memory.aclose()
+                    self._project_memory = None
             await super().run()
         finally:
+            if self._project_memory is not None:
+                # Committed replies finish recording before memory closes.
+                await self._project_memory.aclose()
+                self._project_turns = None
             if delivery_task is not None:
                 delivery_task.cancel()
                 await asyncio.gather(delivery_task, return_exceptions=True)

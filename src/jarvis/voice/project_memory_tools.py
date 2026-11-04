@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 
 class ProjectMemoryTools:
     def __init__(self, access, *, selection, request_id, is_current):
@@ -9,6 +11,7 @@ class ProjectMemoryTools:
         self._current = is_current
         self._searched = self._read = False
         self._allowed = set()
+        self._outside = set()
 
     def _check(self):
         if self._current() is not True or not self.access.current():
@@ -41,6 +44,30 @@ class ProjectMemoryTools:
             exclude_request_id=self.request_id,
         )
         self._check()
+        if result.status == "no_match":
+            # Soft separation: the selected project is searched first; only when
+            # it has nothing relevant does the search widen to the owner's other
+            # non-forgotten projects. Each hit keeps its own project label.
+            wider = await self.access.snapshot(
+                self.selection,
+                query=query,
+                limit=8,
+                all_projects=True,
+                exclude_request_id=self.request_id,
+            )
+            self._check()
+            if wider.sources:
+                result = replace(
+                    wider,
+                    status="other_projects"
+                    if wider.status == "complete"
+                    else "other_projects_partial",
+                )
+                self._outside.update(
+                    s.event.event_id
+                    for s in wider.sources
+                    if s.project_id != self.selection.project_id
+                )
         self._allowed.update(s.event.event_id for s in result.sources)
         return result
 
@@ -52,7 +79,11 @@ class ProjectMemoryTools:
             raise PermissionError("source read budget exhausted")
         self._read = True
         result = await self.access.snapshot(
-            self.selection, source_ids=source_ids, limit=16, project_wide=True
+            self.selection,
+            source_ids=source_ids,
+            limit=16,
+            project_wide=True,
+            all_projects=bool(self._outside & set(source_ids)),
         )
         self._check()
         return result

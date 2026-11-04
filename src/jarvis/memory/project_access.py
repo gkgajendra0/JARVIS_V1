@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from uuid import uuid4
@@ -11,9 +12,44 @@ from jarvis.authority.conversation_history import HistoryActionBinding
 
 from .project_conversation_store import archive_digest
 from .project_conversations import ConversationEvent, ProjectSelection
-from .retrieval import build_fts5_query
+from .retrieval import _STOPWORDS
 
 CATALOG = ProjectSelection("*", "*", 0)
+MAX_SEARCH_TERMS = 24
+
+
+def conversation_search_terms(text: str) -> tuple[str, ...]:
+    """Unicode-aware search words for the conversation index.
+
+    Letters, combining marks and digits stay together, so Devanagari words keep
+    their vowel signs (the shared ``build_fts5_query`` splits them apart).
+    """
+    if not isinstance(text, str):
+        raise TypeError("search text must be a string")
+    words, current = [], []
+    for character in unicodedata.normalize("NFKC", text):
+        if unicodedata.category(character)[0] in "LMN":
+            current.append(character)
+        elif current:
+            words.append("".join(current))
+            current = []
+    if current:
+        words.append("".join(current))
+    terms = []
+    for word in words:
+        folded = word.casefold()
+        if len(folded) >= 2 and folded not in _STOPWORDS and folded not in terms:
+            terms.append(folded)
+    return tuple(terms[:MAX_SEARCH_TERMS])
+
+
+def conversation_match_expression(terms: tuple[str, ...]) -> str:
+    """FTS5 MATCH text built only from quoted letter/digit words; never raw input."""
+    if not terms:
+        raise ValueError("search terms required")
+    # Prefix matching keeps "permit" finding "permits" (and porter stems both),
+    # which the previous substring search also allowed.
+    return " OR ".join(f'"{t}"*' if len(t) >= 3 else f'"{t}"' for t in terms)
 
 
 @dataclass(frozen=True)
@@ -38,6 +74,8 @@ class ArchivedSource:
     revision: int
     thread_id: str = ""
     search_priority: int = 0
+    project_title: str = ""
+    project_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -63,6 +101,8 @@ def _sources(rows):
             r[2],
             r[9] if len(r) > 9 else "",
             r[10] if len(r) > 10 else 0,
+            r[11] if len(r) > 11 else "",
+            r[12] if len(r) > 12 else "",
         )
         for r in rows
     )
@@ -215,9 +255,12 @@ class ProjectArchiveAccess:
         source_ids=None,
         project_wide=False,
         exclude_request_id=None,
+        all_projects=False,
     ):
-        if type(project_wide) is not bool:
+        if type(project_wide) is not bool or type(all_projects) is not bool:
             raise ValueError("explicit project scope required")
+        if all_projects and (query is None) == (source_ids is None):
+            raise ValueError("all-project scope is only for one search or source read")
         if type(limit) is not int or not 1 <= limit <= 512:
             raise ValueError("bounded source limit required")
         if query is not None and (
@@ -244,7 +287,9 @@ class ProjectArchiveAccess:
             "source_ids": source_ids,
             "project_wide": project_wide,
             "exclude_request_id": exclude_request_id,
+            "all_projects": all_projects,
         }
+        terms = conversation_search_terms(query) if query is not None else ()
 
         def read(conn):
             row = conn.execute(
@@ -255,28 +300,45 @@ class ProjectArchiveAccess:
             ).fetchone()
             if row is None or row[1] != selection.revision:
                 raise PermissionError("project deleted or epoch changed")
-            scope_sql = (
-                "thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)"
-                if project_wide
-                else "thread_id=?"
+            # Rows removed by forget (in any project) remain only as tombstones
+            # and are never context, search or read material. The zero digest
+            # is set solely by forget; the column name is unambiguous in joins.
+            live = (
+                " AND e.payload_sha256<>'" + "0" * 64 + "'"
+                # Upgrade quarantine: kept for the owner's decision, never used.
+                " AND NOT EXISTS (SELECT 1 FROM conversation_event_quarantine q "
+                "WHERE q.event_id=e.event_id)"
+                # Jarvis replies and tool results generated with another
+                # project's events in context are never fed back as context or
+                # search material. The original sources stay findable with
+                # their own project label, so knowledge is not lost, but a
+                # restatement can never become the next reply's evidence. This
+                # keeps forget's derived set to direct dependants only.
+                " AND (e.role='user' OR NOT EXISTS (SELECT 1 FROM "
+                "conversation_event_dependency d JOIN conversation_event s "
+                "ON s.event_id=d.source_event_id JOIN conversation_thread st "
+                "ON st.thread_id=s.thread_id JOIN conversation_thread et "
+                "ON et.thread_id=e.thread_id WHERE d.event_id=e.event_id "
+                "AND st.project_id<>et.project_id))"
             )
-            scope_parameters = (
-                selection.project_id if project_wide else selection.thread_id,
-            )
+            if all_projects:
+                # Soft separation: every project the owner has not forgotten.
+                scope_sql = (
+                    "thread_id IN (SELECT t.thread_id FROM conversation_thread t "
+                    "JOIN conversation_workspace w ON w.project_id=t.project_id "
+                    "WHERE w.forgotten_at IS NULL)"
+                )
+                scope_parameters = ()
+            elif project_wide:
+                scope_sql = "thread_id IN (SELECT thread_id FROM conversation_thread WHERE project_id=?)"
+                scope_parameters = (selection.project_id,)
+            else:
+                scope_sql = "thread_id=?"
+                scope_parameters = (selection.thread_id,)
+            scope_sql = "(" + scope_sql + ")" + live
             parameters = list(scope_parameters)
             filters = scope_sql
             if query is not None:
-                # Reuse the existing safe Unicode lexical normalization. Search is
-                # scoped before ranking; no embedding/model dependency is introduced.
-                terms = [t.strip('"') for t in build_fts5_query(query).split(" OR ")][
-                    :24
-                ]
-                filters += (
-                    " AND ("
-                    + " OR ".join("instr(lower(text),?)>0" for _ in terms)
-                    + ")"
-                )
-                parameters += terms
                 filters += " AND role IN ('user','assistant')"
                 if exclude_request_id is not None:
                     filters += " AND request_id<>?"
@@ -287,17 +349,27 @@ class ProjectArchiveAccess:
                 )
                 parameters += list(source_ids)
             columns = "event_id,sequence,revision,segment_id,request_id,role,text,accepted_at,delivery,thread_id"
-            if query is not None:
-                # Promote one best lexical match per role alongside its newest
-                # evidence; fill remaining slots by recency so redundant older
-                # full-term matches do not crowd out recent corrections.
-                relevance = "+".join("(instr(lower(text),?)>0)" for _ in terms)
+            title = (
+                "(SELECT w.title FROM conversation_thread t JOIN conversation_workspace w "
+                "ON w.project_id=t.project_id WHERE t.thread_id=e.thread_id) AS project_title, "
+                "(SELECT t.project_id FROM conversation_thread t WHERE t.thread_id=e.thread_id) "
+                "AS project_id"
+            )
+            if query is not None and not terms:
+                rows = []
+            elif query is not None:
+                # BM25 relevance over the derived FTS5 index; the canonical row is
+                # always re-read from conversation_event. Promote one best match
+                # per role alongside its newest evidence; fill remaining slots by
+                # recency so older full matches do not crowd out recent corrections.
+                qualified = ",".join("e." + c for c in columns.split(","))
                 sql = (
                     "WITH matched AS (SELECT "
-                    + columns
-                    + ", ("
-                    + relevance
-                    + ") AS term_matches FROM conversation_event WHERE "
+                    + qualified
+                    + ", -bm25(conversation_event_fts) AS term_matches FROM "
+                    "conversation_event_fts JOIN conversation_event e "
+                    "ON e.rowid=conversation_event_fts.rowid WHERE "
+                    "conversation_event_fts MATCH ? AND "
                     + filters
                     + "), ranked AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY role "
                     "ORDER BY accepted_at DESC,event_id DESC) AS recent_rank,"
@@ -306,28 +378,37 @@ class ProjectArchiveAccess:
                     " balanced AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY role "
                     "ORDER BY CASE WHEN recent_rank=1 THEN 0 "
                     "WHEN relevance_rank=1 THEN 1 ELSE 2 END,accepted_at DESC,event_id DESC) "
-                    "AS role_rank FROM ranked) SELECT "
-                    + columns
+                    "AS role_rank FROM ranked) SELECT b."
+                    + ",b.".join(columns.split(","))
                     + ", CASE WHEN recent_rank=1 THEN 2 WHEN relevance_rank=1 THEN 1 "
-                    "ELSE 0 END AS search_priority FROM balanced"
+                    "ELSE 0 END AS search_priority, (SELECT w.title FROM conversation_thread t "
+                    "JOIN conversation_workspace w ON w.project_id=t.project_id "
+                    "WHERE t.thread_id=b.thread_id) AS project_title, (SELECT t.project_id FROM "
+                    "conversation_thread t WHERE t.thread_id=b.thread_id) AS project_id "
+                    "FROM balanced b"
                     + " ORDER BY role_rank,CASE role WHEN 'user' THEN 0 ELSE 1 END LIMIT ?"
                 )
-                parameters = [*terms, *parameters]
+                parameters = [conversation_match_expression(terms), *parameters]
+                rows = conn.execute(sql, (*parameters, limit + 1)).fetchall()
             else:
                 sql = (
                     "SELECT "
                     + columns
-                    + " FROM conversation_event WHERE "
+                    + ", 0 AS search_priority, "
+                    + title
+                    + " FROM conversation_event e WHERE "
                     + filters
                     + (
-                        " ORDER BY accepted_at DESC,event_id DESC LIMIT ?"
-                        if project_wide
+                        # Equal timestamps (Windows' ~16 ms clock) keep their
+                        # append order within a thread instead of a random id.
+                        " ORDER BY accepted_at DESC,sequence DESC,event_id DESC LIMIT ?"
+                        if project_wide or all_projects
                         else " ORDER BY sequence DESC LIMIT ?"
                     )
                 )
-            rows = conn.execute(sql, (*parameters, limit + 1)).fetchall()
+                rows = conn.execute(sql, (*parameters, limit + 1)).fetchall()
             total = conn.execute(
-                "SELECT count(*) FROM conversation_event WHERE " + scope_sql,
+                "SELECT count(*) FROM conversation_event e WHERE " + scope_sql,
                 scope_parameters,
             ).fetchone()[0]
             truncated = len(rows) > limit
@@ -343,7 +424,7 @@ class ProjectArchiveAccess:
             if not rows and query is not None:
                 status = "no_match"
             omissions = conn.execute(
-                "SELECT count(*) FROM conversation_event WHERE "
+                "SELECT count(*) FROM conversation_event e WHERE "
                 + scope_sql
                 + " AND role='tool' AND delivery='failed' AND instr(text,?)>0",
                 (*scope_parameters, '"capture":"omitted"'),
@@ -364,11 +445,14 @@ class ProjectArchiveAccess:
                 self.store.change_revision,
             )
 
+        # An all-project read is bound to the whole owner catalog, never
+        # presented as a read of the currently selected project.
+        bound = CATALOG if all_projects else selection
         result = await self._perform(
-            selection,
+            bound,
             material,
             "read",
-            lambda p: self.store._bound_read(selection, material, permit=p, read=read),
+            lambda p: self.store._bound_read(bound, material, permit=p, read=read),
         )
 
         if not self.current() or result.store_revision != self.store.change_revision:

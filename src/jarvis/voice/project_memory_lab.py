@@ -15,9 +15,9 @@ from contextlib import contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 
-from jarvis.conversation import ConversationTurn
-from jarvis.memory.explicit import MemorySecretRejectedError, reject_prohibited_secret
-from jarvis.memory.topic_continuity_policy import _RESTRICTED
+from jarvis.memory.project_history_source import (
+    standard_history_source,
+)
 from jarvis.voice.semantic_smoke_lab import prepare_smoke_profile, smoke_environment
 
 MARKER = "jarvis-project-memory-text-v1"
@@ -37,20 +37,6 @@ def project_lab_environment(profile: Path, repo: Path):
                 os.environ.pop("JARVIS_STEP3_POLICY_PATH", None)
             else:
                 os.environ["JARVIS_STEP3_POLICY_PATH"] = previous
-
-
-def standard_history_source(turn):
-    if (
-        not isinstance(turn, ConversationTurn)
-        or len(turn.text.encode("utf-8")) > 8000
-        or _RESTRICTED.search(turn.text)
-    ):
-        return False
-    try:
-        reject_prohibited_secret(predicate="", value=turn.text)
-    except MemorySecretRejectedError:
-        return False
-    return True
 
 
 def verify_source(repo: Path, expected: str):
@@ -96,7 +82,15 @@ def prepare_project_profile(
     return profile
 
 
-def build_project_personal_session(conversation, memory, capability):
+def build_project_personal_session(
+    conversation, memory, capability, *, read_issuer=None, read_grant=None
+):
+    """Personal facts for one request.
+
+    With ``read_issuer``/``read_grant`` the read uses the owner's read-only
+    session grant (one Hello per session). Without them every read asks for a
+    fresh exact-request approval, as before. Writes always ask separately.
+    """
     from jarvis.voice.personal_context import PersonalContextSession
 
     return PersonalContextSession(
@@ -104,8 +98,36 @@ def build_project_personal_session(conversation, memory, capability):
         retrieval=memory.retrieval,
         authority=capability,
         retire=lambda: None,
+        learning_authority=read_issuer,
+        learning_grant=read_grant,
         explicit_question_queries=True,
     )
+
+
+def build_session_personal_factory(memory, capability, *, provider="gemini"):
+    """Factory for the coordinator plus the session it shares across requests."""
+    from jarvis.voice.project_personal_session import (
+        LazyPersonalContext,
+        PersonalReadSession,
+    )
+
+    session = PersonalReadSession(
+        lambda: capability.personal_context_session_authority, provider=provider
+    )
+
+    def factory(conversation):
+        return LazyPersonalContext(
+            lambda issuer, grant: build_project_personal_session(
+                conversation,
+                memory,
+                capability,
+                read_issuer=issuer,
+                read_grant=grant,
+            ),
+            session,
+        )
+
+    return factory, session
 
 
 async def reauthorize_lab_history(access, coordinator, *, personal_factory=None):
@@ -128,7 +150,15 @@ async def reauthorize_lab_history(access, coordinator, *, personal_factory=None)
 
 
 async def _close_lab_resources(
-    *, coordinator, authority, capability, routing, memory, lock, unlock
+    *,
+    coordinator,
+    authority,
+    capability,
+    routing,
+    memory,
+    lock,
+    unlock,
+    personal_session=None,
 ):
     """Try every release; the caller preserves the primary exception afterward."""
     failures = []
@@ -144,6 +174,8 @@ async def _close_lab_resources(
 
     if coordinator is not None:
         await attempt("coordinator", lambda: coordinator.invalidate("shutdown"))
+    if personal_session is not None:
+        await attempt("personal_session", personal_session.close)
     await attempt("authority", authority.close)
     await attempt("capability", capability.close)
     if routing is not None:
@@ -176,6 +208,7 @@ async def run_text_lab(
     from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
     from jarvis.memory.project_access import ProjectArchiveAccess
     from jarvis.memory.project_controls import ProjectControls
+    from jarvis.memory.project_routing import ProjectClarificationRequired
     from jarvis.memory.runtime import build_default_memory_runtime
     from jarvis.model_routing.runtime import build_routing_runtime
     from jarvis.voice.project_answer_provider import ProjectAnswerProvider
@@ -202,6 +235,7 @@ async def run_text_lab(
     routing = None
     work_store = None
     coordinator = None
+    personal_session = None
     contract_observations = []
     terminal_error = None
     try:
@@ -232,8 +266,9 @@ async def run_text_lab(
         )
         provider = ProjectAnswerProvider(client)
 
-        def personal(conversation):
-            return build_project_personal_session(conversation, memory, capability)
+        # One Hello opens a read-only personal-fact session for this lab run
+        # (30 min, 10 min idle, ends on Windows lock); writes ask separately.
+        personal, personal_session = build_session_personal_factory(memory, capability)
 
         coordinator = ProjectConversationCoordinator(
             access, source_clearance=standard_history_source, personal_factory=personal
@@ -245,7 +280,7 @@ async def run_text_lab(
             from jarvis.voice.project_personal_acceptance import run_personal_acceptance
 
             print(
-                "PERSONAL FIXTURE: fictional diet, two projects, correction, three questions. Fresh Hello approvals for mutations and personal reads. Free lane only; no setup inference or automatic retry.",
+                "PERSONAL FIXTURE: fictional diet, two projects, correction, three questions. Fresh Hello approvals for mutations; one Hello opens the personal-read session. Free lane only; no setup inference or automatic retry.",
                 flush=True,
             )
             with observe_contract_failures() as contract_observations:
@@ -296,11 +331,20 @@ async def run_text_lab(
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         else:
             manifest = None
+        quarantine = await controls.quarantine_report()
+        if quarantine.count:
+            where = ", ".join(f"{t} ({n})" for t, n in quarantine.projects)
+            print(
+                f"UPGRADE CHECK: {quarantine.count} older Jarvis replies/tool results may "
+                f"repeat a project you forgot: {where}. Nothing was deleted; they are "
+                "hidden from Jarvis until you decide. /repair inspect shows them; "
+                "/repair delete or /repair restore asks for Windows Hello."
+            )
         print(
-            "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; personal reads/deletion keep their own approvals."
+            "TEXT LAB: original history retained locally when eligible. Configured Free credential lane only; no Paid fallback. Windows Hello grants project retention; one more Hello opens personal reads for 30 min (10 min idle); corrections/deletion keep their own approvals."
         )
         print(
-            "Commands: /projects /inspect /pause /resume /forget /sleep /reauthorize /quit. Normal text selects explicit projects and asks questions."
+            "Commands: /projects /inspect /pause /resume /forget /sleep /reauthorize /repair /quit. Normal text selects explicit projects and asks questions."
         )
         while True:
             text = await asyncio.to_thread(input, "Jarvis> ")
@@ -310,6 +354,9 @@ async def run_text_lab(
                 continue
             try:
                 if text == "/reauthorize":
+                    # Renewal also ends the personal-read session; the next
+                    # personal question asks for a fresh owner approval.
+                    personal_session.close("owner_reauthorization")
                     try:
                         access, coordinator = await reauthorize_lab_history(
                             access, coordinator, personal_factory=personal
@@ -326,6 +373,34 @@ async def run_text_lab(
                 if text == "/sleep":
                     coordinator.invalidate("sleep")
                     print("Listening segment closed; project selection retained.")
+                    continue
+                if text.startswith("/repair"):
+                    action = text.removeprefix("/repair").strip() or "status"
+                    if action == "status":
+                        report = await controls.quarantine_report()
+                        print(json.dumps(asdict(report), ensure_ascii=False))
+                    elif action == "inspect":
+                        for (
+                            title,
+                            at,
+                            role,
+                            body,
+                        ) in await controls.inspect_quarantine():
+                            print(
+                                json.dumps([title, at, role, body], ensure_ascii=False)
+                            )
+                    elif action in {"delete", "restore"}:
+                        coordinator.invalidate("quarantine_" + action)
+                        report = await controls.resolve_quarantine(action)
+                        print(
+                            f"Upgrade quarantine {action}d: {report.count} messages."
+                            if report.count
+                            else "Nothing is quarantined."
+                        )
+                    else:
+                        raise ValueError(
+                            "use /repair, /repair inspect, delete or restore"
+                        )
                     continue
                 if text.startswith("/"):
                     catalog = await access.catalog()
@@ -355,6 +430,14 @@ async def run_text_lab(
                         continue
                     if text == "/forget":
                         inspected = await controls.inspect_project(project_id)
+                        preview = await controls.preview_forget(project_id)
+                        if preview.derived_sources:
+                            print(
+                                f"Forgetting also removes {preview.derived_sources} Jarvis "
+                                "replies/tool results generated with this project's content in: "
+                                + ", ".join(preview.affected_projects)
+                                + ". Your own messages there are kept."
+                            )
                         coordinator.invalidate("forget")
                         result = await controls.forget_project(
                             project_id, expected_revision=inspected.archive_revision
@@ -381,7 +464,8 @@ async def run_text_lab(
                 await coordinator.validate_for_release(result)
                 if not coordinator.validate_current(result.packet):
                     raise PermissionError("answer invalidated")
-                print(result.announcement)
+                if result.announcement:
+                    print(result.announcement)
                 print(result.answer)
                 receipt = await coordinator.record_assistant(
                     conversation, result, delivered_text=result.answer
@@ -403,6 +487,8 @@ async def run_text_lab(
                         }
                     )
                 )
+            except ProjectClarificationRequired as exc:
+                print(exc.question)
             except (PermissionError, ValueError, RuntimeError, OSError) as exc:
                 print(
                     f"NOT COMPLETED: {json.dumps(coordinator.diagnostics())}; error={type(exc).__name__}. Inspect saved sources before retrying; no successful-save claim for failed stage."
@@ -428,6 +514,7 @@ async def run_text_lab(
             memory=memory,
             lock=lock,
             unlock=lambda: msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1),
+            personal_session=personal_session,
         )
         if cleanup:
             from jarvis.voice.project_contract_diagnostics import DevelopmentCaseFailure

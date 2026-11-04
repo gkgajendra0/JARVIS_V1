@@ -63,8 +63,8 @@ The initial delivery uses the current configured provider/model. Do not change a
 2. “We will take the Jimny.” Automatically preserve the turn in the selected thread; Gemini may also propose a project decision supported by that exact source.
 3. “The permits are sorted.” Preserve it under the same thread. Record it as an owner report, not independent legal/world verification.
 4. Protected response/session retirement keeps the logical thread selected. Actual sleep closes a listening segment, not the project.
-5. “Switch to interview preparation.” Commit a validated selection change. The switch command/acknowledgement belongs to the destination; previous project identity is routing metadata only. Later/queued messages remain bound to their original request.
-6. “What is the status of my Nepal trip?” Select that project, load current project context and retrieve evidence before the answer. Do not confuse retrieval failure with “you never told me.”
+5. “Switch to interview preparation.” Commit a validated selection change to an existing project (exact name first, then a single similar name; several similar names or none → ask, never create). Only explicit create/plan commands create projects, and only when no project with that name exists. The switch command/acknowledgement belongs to the destination; previous project identity is routing metadata only. Later/queued messages remain bound to their original request.
+6. “What is the status of my Nepal trip?” Questions never change the selection: stay in the current project, read the named existing project as attributed evidence (`from_project`), and never invent a project that does not exist. Acknowledgements state the committed action (“Created project X.”, “Switched to X.”, “Resuming X.”, or nothing when continuing). Do not confuse retrieval failure with “you never told me.”
 7. Restart preserves last selected IDs locally, not authority. After current-owner authorization, an unnamed continuation announces the resumed project; a named request selects its named project. Ask once when duplicate names/versions cannot be distinguished.
 8. “New conversation in Nepal trip” opens another thread inside the same project. Otherwise resume its latest open thread.
 9. “What project are we discussing?”, “What did you save?” and “Where did that come from?” report actual IDs/names, committed source evidence and coverage. “Forget this project” uses the canonical explicit deletion boundary.
@@ -128,6 +128,25 @@ If the current transport cannot satisfy the contract, record the exact unsupport
 ## 10. Correct, forget, inspect and fail safely
 
 Corrections append source history and supersede relevant current state; historical queries may intentionally report older values with dates. Any cached/derived packet must be invalidated by correction. Forget removes the selected retained content and derived/index copies through one lifecycle, advances its generation, and prevents delayed work from recreating it. Preserve personal facts with independent surviving sources; remove or mark unsupported those derived solely from deleted content. Never infer that deleting one project deletes all independently sourced personal facts.
+
+**Derived replies (implemented 2 Nov 2026, migration 0007).** Every saved Jarvis reply and tool result records the archived event IDs that were in its context packet (`conversation_event_dependency`); owner turns record none.
+
+- **Forget removes direct dependants.** Forgetting a project redacts its own events and every Jarvis reply or tool result, in any project, generated with them in its context. The owner's own messages everywhere are kept.
+- **Restatements never become evidence.** A reply or tool result whose evidence includes another project's events is excluded from all later context, search and source reads; the original sources stay findable with their project label. A model restatement therefore cannot be quoted onward, which keeps removal to direct dependants instead of every later reply.
+- **Approval shows the scope.** `/forget` prints how many replies in which projects will also go; the Windows Hello text states the count; the approval binds a digest of exactly that set, and if it changes before deletion nothing is deleted.
+- **Late saves are refused.** A reply prepared before forget and delivered after it is not saved: its evidence is gone.
+- **Older databases: quarantine, then owner decision.** Rows saved before migration 0007 have no evidence. The upgrade deletes nothing: Jarvis replies and tool results in live projects saved at or after an already-forgotten project's first event are quarantined (`conversation_event_quarantine`) with their text unchanged in the encrypted database, and are excluded from every context, search, source read and evidence check, so forgotten information cannot reappear through them. At start the lab shows how many messages in which projects are quarantined. `/repair inspect` shows them locally; `/repair delete` (tombstones them and rewrites the search index) or `/repair restore` (returns them to use) each need Windows Hello, and the approval binds the exact set shown. Owner turns and omission markers are never quarantined. Forgetting a project later still applies the same rule to any remaining untracked rows, inside that forget's preview and approval.
+- **Recovery and backups.** Until the owner chooses, quarantine is the rollback: nothing is lost and `/repair restore` undoes it. No extra backup copy is created, deliberately: a copy would retain exactly the replies the owner may want deleted, outside the forget and quarantine controls. The database stays SQLCipher-encrypted under the existing DPAPI-sealed key throughout. A lab database that applied an earlier draft of 0007 fails closed on its checksum; recreate that lab.
+
+Limits:
+
+- Facts the owner states again independently, in any project, are new owner evidence and are not removed.
+- A reply is removed if forgotten evidence was in its context, even if it did not use it.
+- "Direct dependants only" is exact for rows saved after migration 0007; untracked older chains are followed further.
+- Replies built from another project's evidence are also hidden from `/inspect`, so inspection under-counts saved Jarvis replies.
+- Migration 0007 must not be edited after a lab applies it (checksum); later repairs ship as new migrations.
+- Text already sent to the model provider, printed to a console or copied elsewhere cannot be recalled. Encrypted free pages and backups are not forensically erased.
+- Personal facts in canonical memory are a separate store: the text lab does not learn them from project turns, so they need their own explicit forget.
 
 Authenticated local inspection is sufficient for the first delivery: active project, chronological sources, state coverage, last committed sequence and pending/error status. Voice controls can invoke the same inspector. Do not add owner transcripts to the existing UI's general snapshot/events feed; its loopback Host check is not private-history authentication. Full UI expansion is deferred.
 

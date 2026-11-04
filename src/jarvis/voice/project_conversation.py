@@ -27,7 +27,11 @@ from jarvis.memory.project_conversations import (
     PreparedProjectReply,
     ProjectSelection,
 )
-from jarvis.memory.project_routing import ProjectRouter, ProjectRoutingDecision
+from jarvis.memory.project_routing import (
+    ProjectClarificationRequired,
+    ProjectRouter,
+    ProjectRoutingDecision,
+)
 from jarvis.voice.project_memory_tools import ProjectMemoryTools
 
 
@@ -117,13 +121,21 @@ class ProjectConversationCoordinator:
         # A project is the durable context boundary; a new thread must not hide
         # its recent originals. The same authorized scope and wire budget apply.
         snapshot = await self.access.snapshot(selection, project_wide=True)
+        # A question that names another existing project reads that project's
+        # recent history as labelled evidence; the selection stays unchanged.
+        referenced = []
+        decision = self._decision
+        for reference in decision.references if decision is not None else ():
+            other = await self.access.snapshot(reference, project_wide=True, limit=12)
+            referenced.extend(other.sources)
         if before != (self.access.local_revision, self.access.store.change_revision):
             raise PermissionError("archive changed during context preparation")
         context, ids, tokens = build_project_context(
             snapshot,
-            extra_sources=extra_sources,
+            extra_sources=(*extra_sources, *referenced),
             personal=personal,
             retrieval=retrieval,
+            routing=self._routing_outcome(),
         )
         digest = hashlib.sha256(context.encode()).hexdigest()
         packet = PreparedProjectReply(
@@ -136,6 +148,17 @@ class ProjectConversationCoordinator:
         self._packet_activity = self._activity
         self._check(packet)
         return packet
+
+    def _routing_outcome(self):
+        """What routing actually committed for this request, from the decision
+        object, so the model never has to guess whether a project changed."""
+        decision = self._decision
+        if decision is None:
+            return None
+        outcome = {"action": decision.action, "project_title": decision.title}
+        if decision.reference_titles:
+            outcome["referenced_projects"] = list(decision.reference_titles)
+        return outcome
 
     async def prepare_reply(
         self, conversation, turn, *, routing_receipt=None, authorize
@@ -175,10 +198,29 @@ class ProjectConversationCoordinator:
                 catalog.selection_revision,
                 entry.archive_revision if entry else 0,
                 create=entry is None,
+                announcement="Created project General." if entry is None else "",
+                action="created" if entry is None else "continued",
             )
         if decision.status != "ready":
-            raise ValueError(
-                "project clarification required: " + ", ".join(decision.candidates)
+            # Nothing was created or switched: say so deterministically rather
+            # than letting the model describe a project action that never ran.
+            catalog = await self.access.catalog()
+            titles = sorted(
+                {
+                    e.title
+                    for e in catalog.entries
+                    if e.selection.project_id in decision.candidates
+                }
+            )
+            self.stage = "clarification"
+            raise ProjectClarificationRequired(
+                decision.question
+                or (
+                    "Which project do you mean: " + ", ".join(titles) + "?"
+                    if titles
+                    else "No project was created or switched. Say, for example, "
+                    "'create project called Nepal trip' or 'switch to Nepal trip'."
+                )
             )
         await self.router.select(decision)
         if not self._request_current(request_id, activity):
@@ -221,6 +263,7 @@ class ProjectConversationCoordinator:
             "tool",
             json.dumps({"tool": name, "phase": phase, "source_ids": list(source_ids)}),
             datetime.now(UTC),
+            evidence=tuple(dict.fromkeys(source_ids)),
         )
         material = self.access.store.append_material(
             packet.selection, event, snapshot.archive_revision
@@ -403,6 +446,79 @@ class ProjectConversationCoordinator:
             return response
         raise PermissionError("answer/tool continuation budget exhausted")
 
+    async def session_context(self, *, limit=12):
+        """Recent history of the current project for a new live model session.
+
+        The same grant, scope and release rules as a prepared packet: the
+        current grant is required, only the current project's live rows are
+        read (forgotten, quarantined and cross-project-derived rows are
+        excluded by the archive), and a retention-paused project releases no
+        history. Returns ``(entry or None, sources)``; nothing is recorded.
+        """
+        if not self.access.current():
+            raise PermissionError("project history grant is no longer current")
+        catalog = await self.access.catalog()
+        entry = next(
+            (e for e in catalog.entries if e.selection == catalog.current), None
+        )
+        if entry is None:
+            return catalog, None, ()
+        snapshot = await self.access.snapshot(
+            entry.selection, project_wide=True, limit=limit
+        )
+        if snapshot.retention_paused:
+            return catalog, entry, ()
+        return catalog, entry, tuple(snapshot.sources)
+
+    def receipt_for(self, request_id):
+        """The durable receipt of the USER turn recorded for ``request_id``."""
+        return self._receipts.get(request_id)
+
+    @property
+    def last_decision(self):
+        """The routing decision committed by the most recent prepare_reply."""
+        return self._decision
+
+    async def record_spoken_assistant(
+        self, conversation, packet, turn, *, evidence=None, not_before=None
+    ):
+        """Record an ASSISTANT turn the voice bridge already accepted.
+
+        Native audio generates the reply itself, so there is no issued text
+        answer to compare against. The caller binds ``turn`` to the request
+        whose ``packet`` was given to the model. Evidence defaults to every
+        packet source, as in the text path; a live session passes every source
+        it has delivered so far, since the reply may restate any of them.
+        """
+        evidence = packet.source_ids if evidence is None else tuple(evidence)
+        if not set(packet.source_ids) <= set(evidence):
+            raise ValueError("reply evidence must include its own packet")
+        if not isinstance(packet, PreparedProjectReply):
+            raise TypeError("prepared project packet required")
+        if turn.role is not ConversationRole.ASSISTANT or not any(
+            item is turn for item in conversation.turns
+        ):
+            raise PermissionError("exact accepted assistant turn required")
+        if not self.access.current():
+            raise PermissionError("project history grant is no longer current")
+        async with self._delivery_lock:
+            snapshot = await self.access.snapshot(packet.selection)
+            route = RecordingRoute(
+                packet.selection, snapshot.archive_revision, packet.request_id
+            )
+            if snapshot.retention_paused or self.recorder._clearance(turn) is not True:
+                return await self.recorder.record_omission(
+                    conversation,
+                    turn,
+                    route,
+                    reason="retention_paused"
+                    if snapshot.retention_paused
+                    else "source_not_eligible",
+                )
+            return await self.recorder.record(
+                conversation, turn, route, evidence=evidence, not_before=not_before
+            )
+
     def diagnostics(self):
         selection = self._decision.selection if self._decision else None
         return {
@@ -480,4 +596,9 @@ class ProjectConversationCoordinator:
                 if snapshot.retention_paused
                 else "source_not_eligible",
             )
-        return await self.recorder.record(conversation, turn, route)
+        # The reply may restate anything that was in its context packet, so
+        # every packet source is recorded as its evidence. Forgetting any of
+        # them later removes this reply too (see ProjectControls.forget_project).
+        return await self.recorder.record(
+            conversation, turn, route, evidence=response.packet.source_ids
+        )
