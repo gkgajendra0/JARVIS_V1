@@ -13,8 +13,9 @@ through ``prepare_project_turn``. Differences from the lab are deliberate:
 - the normal tool set stays available (no lab allowlist);
 - a denied or timed-out Windows Hello approval at startup leaves Jarvis running
   as ordinary voice (logged), instead of stopping it;
-- in a configuration not yet qualified with project memory, Jarvis starts as
-  ordinary voice and logs the exact reasons at ERROR, before any Hello prompt
+- in a configuration project memory cannot run with (memory disabled, a
+  non-Gemini provider), Jarvis starts as ordinary voice and logs the exact
+  reasons at ERROR, before any Hello prompt
   (see :func:`activation_blockers`). ``python -m
   jarvis.voice.project_voice_production --check`` reports them without
   starting Jarvis.
@@ -46,18 +47,12 @@ def activation_blockers(config) -> list[str]:
             "JARVIS_AI_PROVIDER must be gemini: project memory needs native Gemini "
             "Live with blocking tool behaviour"
         )
-    if config.gemini_fallback.enabled:
-        blockers.append(
-            "Gemini fallback/transport handoff must be disabled: a handoff starts a "
-            "new model session without the preloaded project context or blocking "
-            "tool behaviour (not yet qualified)"
-        )
-    if config.personal_context_mode != "off":
-        blockers.append(
-            "JARVIS_PERSONAL_CONTEXT_MODE (and personal learning) must be off: "
-            "personal-context APPLY has its own response gate and session "
-            "retirement that are not yet qualified together with project memory"
-        )
+    # Gemini paid fallback / handoff and personal context or learning APPLY
+    # are supported together with project memory (B2/B3 resolved): a handoff
+    # gives the new model the same blocking tools and this session's project
+    # context; replies built from released personal facts are not saved to
+    # project history; the two response gates compose. See
+    # docs/PROJECT_MEMORY_COEXISTENCE.md.
     return blockers
 
 

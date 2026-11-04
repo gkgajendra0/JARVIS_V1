@@ -27,6 +27,7 @@ tested :class:`ProjectConversationCoordinator`. Disabled by default; only
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -61,6 +62,8 @@ RENEWAL_COOLDOWN_SECONDS = 300.0
 # First wake after a lock/unlock waits this long for the fresh Hello approval
 # before continuing as ordinary voice (the renewal itself may finish later).
 RENEWAL_WAIT_SECONDS = 20.0
+# Upper bound of project history re-given to a new model session at a handoff.
+HANDOFF_CONTEXT_MAX_CHARS = 6000
 PAUSED_NOTICE_INSTRUCTIONS = (
     "Say only this, briefly, then listen: 'Project memory is paused, so I won't "
     "remember this conversation. It resumes after Windows Hello approval.'"
@@ -156,6 +159,11 @@ class VoiceProjectMetrics:
     repair_deliveries: int = 0
     repair_timeouts: int = 0
     unplayed_replays: int = 0
+    # Provider/transport handoffs given this session's project context again.
+    handoff_restores: int = 0
+    # Replies carrying personal facts released under a personal-context permit:
+    # never saved to project history (that permit is per question).
+    personal_replies_not_saved: int = 0
     fast_context_syncs: int = 0
     fallbacks: int = 0
     assistant_recorded: int = 0
@@ -598,8 +606,12 @@ class VoiceProjectTurns:
         self._outcomes: dict[str, asyncio.Future] = {}
         self._seen_user: set[str] = set()
         self._recorded_assistant: set[str] = set()
-        # Every source given to THIS Gemini session, in delivery order.
+        # Every source given to THIS Gemini session, in delivery order, and the
+        # line it was given as (so a provider handoff can give it again).
         self._delivered_ids: dict[str, None] = {}
+        self._delivered_rows: dict[str, str] = {}
+        self._personal_epochs: set[int] = set()
+        self._withheld_handles: list = []
         self._delivered: _Delivered | None = None
         self._delivered_epoch: int | None = None
         self._delivered_turns: set[str] = set()
@@ -722,6 +734,14 @@ class VoiceProjectTurns:
             # The last audible response belonged to an earlier utterance: this
             # reply was never played (no gate decision), so it is not attributed.
             epoch = None
+        answered = latest_user.user_activity_epoch if latest_user is not None else None
+        if self._personal_epochs & {epoch, answered}:
+            # Built from personal facts released under a question-bound permit:
+            # the owner's question is saved, the reply is not.
+            self._recorded_assistant.add(turn.turn_id)
+            self.metrics.personal_replies_not_saved += 1
+            self._diag("assistant_not_saved_personal_context", epoch=answered)
+            return
         if epoch in self._forget_epochs or epoch in self._canonical_forget_epochs:
             # A forget confirmation is never saved (it would restate the words).
             self._recorded_assistant.add(turn.turn_id)
@@ -791,6 +811,98 @@ class VoiceProjectTurns:
             self._diag("correction_spoken", epoch=epoch)
             self._generate(CORRECTION_INSTRUCTIONS.format(what=what, project=project))
         return True
+
+    # -- provider / transport handoff (Gemini paid fallback, fresh session) ----
+
+    def _remember_delivered(self, identities, items) -> None:
+        for identity, item in zip(identities, items, strict=False):
+            self._delivered_ids[identity] = None
+            role = item.get("role")
+            who = "owner" if role in {"user", "owner"} else "Jarvis"
+            label = (
+                f" (from project {item['from_project']})"
+                if item.get("from_project")
+                else ""
+            )
+            self._delivered_rows[identity] = (
+                f"- {item.get('date', '')} {who}{label}: {item.get('text', '')}"
+            )
+
+    def handoff_context_items(self) -> list:
+        """What THIS Gemini session was given from project history, for a new
+        model session (paid fallback, free recovery, fresh-session recovery).
+
+        LiveKit's handoff rebuilds the new session from canonical turns only:
+        the preload and tool results are not turns, so without this the new
+        model would lack the project context the response gate believes it
+        has. Given as one completed exchange (see _inject_closed_context),
+        bounded: the oldest rows beyond the bound are dropped AND forgotten as
+        delivered, so the gate sends them again if they are needed.
+        """
+        from livekit.agents.llm import ChatMessage
+
+        if self._closed or not self._delivered_rows:
+            return []
+        lines, size = [], 0
+        for identity in reversed(tuple(self._delivered_rows)):
+            line = self._delivered_rows[identity]
+            if size + len(line) > HANDOFF_CONTEXT_MAX_CHARS:
+                self._delivered_rows.pop(identity, None)
+                self._delivered_ids.pop(identity, None)
+                continue
+            lines.append(line)
+            size += len(line)
+        lines.reverse()
+        title = self._current_title or "the current project"
+        text = (
+            "[Project memory from Jarvis, not speech from the owner. Do not reply "
+            f"to this message.] Current project: {title}. Saved history already "
+            "given in this conversation, oldest first:\n" + "\n".join(lines)
+        )
+        # Same content, same ids: a transport that replays the context again
+        # (reconnect) presents items the bridge already knows.
+        identity = hashlib.sha256(text.encode()).hexdigest()[:12]
+        return [
+            ChatMessage(
+                id="jarvis:project-context:" + identity, role="user", content=[text]
+            ),
+            ChatMessage(
+                id="jarvis:project-context-ack:" + identity,
+                role="assistant",
+                content=["Noted."],
+            ),
+        ]
+
+    def observe_transport_switch(self, items) -> None:
+        if items:
+            self.metrics.handoff_restores += 1
+            self._diag("context_restored_after_handoff", rows=len(self._delivered_rows))
+            LOGGER.info(
+                "Project voice context restored on the new model session | rows=%s",
+                len(self._delivered_rows),
+            )
+
+    # -- personal context APPLY coexistence ------------------------------------
+
+    def observe_personal_release(self) -> None:
+        """Personal facts were released (or a canonical change committed) for
+        the current utterance under a personal-context permit. That permit is
+        question-bound and ends with the response, so the reply is not saved
+        to project history, where it would resurface later without a permit
+        and outlive a correction or forget of the canonical fact."""
+        epoch = self._conversation.user_activity_epoch
+        if epoch:
+            self._personal_epochs.add(epoch)
+
+    def response_withheld(self, handle) -> bool:
+        """Whether the project gate withheld (and interrupted) this speech: it
+        was never heard, and the utterance is answered by a later response."""
+        return any(h is handle for h in self._withheld_handles)
+
+    def _note_withheld(self, handle) -> None:
+        if handle is not None and not self.response_withheld(handle):
+            self._withheld_handles.append(handle)
+            del self._withheld_handles[:-16]
 
     def observe_activity(self) -> None:
         """New user speech: wake any waiting tool so it can re-check currentness."""
@@ -1081,8 +1193,7 @@ class VoiceProjectTurns:
         if not self._active() or self._conversation.user_activity_epoch != activity:
             return {"status": "unavailable", "reason": "request_changed"}
         result, new_ids = model_view(outcome, self._delivered_ids)
-        for identity in new_ids:
-            self._delivered_ids[identity] = None
+        self._remember_delivered(new_ids, result.get("history", ()))
         self._delivered = _Delivered(source, outcome, result)
         self._delivered_turns.add(source.turn_id)
         self.metrics.tool_path_turns += 1
@@ -1164,6 +1275,7 @@ class VoiceProjectTurns:
         if handle is not None and handle is self._blocked_speech:
             return False  # trailing frames of a response already blocked
         self._blocked_speech = handle
+        self._note_withheld(handle)
         self._withheld_keys.add(key)
         self.metrics.unprepared_responses_blocked += 1
         if handle is not None:
@@ -1271,8 +1383,7 @@ class VoiceProjectTurns:
             return False
         if not self._still(epoch):
             return False
-        for identity in new_ids:
-            self._delivered_ids[identity] = None
+        self._remember_delivered(new_ids, result.get("history", ()))
         self._delivered = _Delivered(source, outcome, result)
         self._delivered_turns.add(source.turn_id)
         self._mark_delivered(epoch, source)
@@ -1420,6 +1531,7 @@ class VoiceProjectTurns:
         if handle is not None and handle is self._blocked_speech:
             return False
         self._blocked_speech = handle
+        self._note_withheld(handle)
         if handle is not None:
             try:
                 handle.interrupt()
@@ -1545,8 +1657,17 @@ class VoiceProjectTurns:
         text = _preload_message(entry.title if entry else None, rows, sources)
         if text:
             await self._inject_closed_context(agent, text)
-        for row in rows:
-            self._delivered_ids[row.event.event_id] = None
+        self._remember_delivered(
+            [row.event.event_id for row in rows],
+            [
+                {
+                    "role": row.event.role,
+                    "date": row.event.accepted_at.date().isoformat(),
+                    "text": row.event.text,
+                }
+                for row in rows
+            ],
+        )
         self._catalog = catalog
         # Fast answers resume only if nothing was committed meanwhile.
         self._fast_selection = selection
@@ -1849,6 +1970,7 @@ class VoiceProjectTurns:
         self._fast_ready = False  # this session's context still holds the words
         for identity in (*preview.matched, *preview.derived):
             self._delivered_ids.pop(identity, None)
+            self._delivered_rows.pop(identity, None)  # never restored again
         self.metrics.history_forgets += 1
         self._diag(
             "history_forgotten",
@@ -1950,8 +2072,7 @@ class VoiceProjectTurns:
                 item["interrupted"] = True
             rows.append(item)
             given.append(event.event_id)
-        for identity in given:
-            self._delivered_ids[identity] = None
+        self._remember_delivered(given, rows)
         elapsed = round((monotonic() - started) * 1000, 1)
         payload = {
             "status": status if rows or already else "no_match",

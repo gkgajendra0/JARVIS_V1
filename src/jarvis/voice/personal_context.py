@@ -106,6 +106,7 @@ class PersonalContextSession:
         self._response_done = False
         self._watchdog = None
         self._clear_audio = lambda: None
+        self._release_observers: list[Callable[[], None]] = []
 
     @property
     def busy(self):
@@ -267,6 +268,16 @@ class PersonalContextSession:
         self._protected = True
         self._played = False
         self._response_done = False
+        for observer in tuple(self._release_observers):
+            try:
+                observer()
+            except Exception:  # noqa: BLE001 - an observer never affects the permit
+                LOGGER.warning("Personal context release observer failed")
+
+    def add_release_observer(self, observer) -> None:
+        """Called whenever owner facts are released (or a canonical change is
+        committed) for the current utterance under this session's permit."""
+        self._release_observers.append(observer)
 
     @property
     def supports_question_query(self):

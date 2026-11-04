@@ -52,7 +52,7 @@ stores hold different things: conversation history versus facts.
 The grounding rules are model instructions, so they lower the risk but do not
 guarantee behaviour. Their live effect is unmeasured: no model calls were made
 for this work. The release gate for grounding is a short live check on the
-owner machine (§6, step 7).
+owner machine (`PROJECT_MEMORY_RELEASE.md` §5).
 
 ## 3. Interaction review
 
@@ -63,27 +63,27 @@ owner machine (§6, step 7).
 | Retention pause | Honoured: a paused project saves only an omission marker and releases no history (preload included). | OK |
 | Windows Hello | One approval at Jarvis startup (grant per runtime). A WTS session change (lock, unlock, user switch) revokes it, by design. | **Resolved in #308** (§8): renewal at the next wake, without a restart. |
 | Voice sessions | Before this change, every session the factory made got project memory, including system utterances and update approval. The owner's "yes" to an update would have been saved as project history, and history preloaded into a greeting session. | **Fixed:** `VoiceRuntimeController._system_session`; tests cover it. |
-| Gemini fallback / handoff | A handoff builds a new agent from canonical turns only. It drops the preload and tool results, and its new model keeps the default NON_BLOCKING tools. The gate would then believe context was delivered. | **B2:** refused while `gemini_fallback.enabled`. |
+| Gemini fallback / handoff | A handoff builds a new agent from canonical turns only. It drops the preload and tool results, and its new model keeps the default NON_BLOCKING tools. The gate would then believe context was delivered. | **B2: resolved** (PROJECT_MEMORY_COEXISTENCE.md): new models get BLOCKING tools and this session's project context. |
 | OpenAI provider | Blocking Gemini tool behaviour is required. | Refused unless `JARVIS_AI_PROVIDER=gemini`. |
-| Personal context APPLY / learning | It has its own audio gate and session retirement around tool-follow-up handles. The combination has not been qualified with project memory. | **B3:** refused while enabled. |
+| Personal context APPLY / learning | It has its own audio gate and session retirement around tool-follow-up handles. The combination has not been qualified with project memory. | **B3: resolved** (PROJECT_MEMORY_COEXISTENCE.md): a project-withheld response no longer retires the personal session; replies built from released personal facts are not saved to project history. |
 | Model routing (tools) | `require_blocking_realtime_tools` is model-wide. With the flag on, **every** tool is BLOCKING, including Hands, research and work: Gemini waits silently for a result instead of speaking over it. | **B6** qualification item. |
-| Database migrations | Migrations 0004–0007 come from #303/#305. They run on the first start of the merged build **even with the flag off**. Main refuses a newer schema (`MemorySchemaTooNewError`). | **B5:** merge-time rollback hazard; back up first (§6). |
-| Machine profile | Older builds reject unknown keys in `machine.json`. A build without `JARVIS_PROJECT_MEMORY_MODE` in its allowlist will not start while the key is present. | Rollback order in §7. |
+| Database migrations | Migrations 0004–0007 come from #303/#305. They run on the first start of the merged build **even with the flag off**. Main refuses a newer schema (`MemorySchemaTooNewError`). | **B5:** resolved by a fresh deployment (owner decision 2026-11-04): the old database is retired, not migrated (`PROJECT_MEMORY_RELEASE.md` §2). |
+| Machine profile | Older builds reject unknown keys in `machine.json`. A build without `JARVIS_PROJECT_MEMORY_MODE` in its allowlist will not start while the key is present. | Rollback order in §5. |
 
 ## 4. Blockers
 
 Merging with the flag off is blocked only by the PRs' own status (draft, owner
-approval) and B5's backup requirement. Activation is blocked as follows.
+approval). Activation is blocked as follows.
 
 | Id | Blocker | What clears it |
 | --- | --- | --- |
 | B1 | **Resolved in #308.** The first wake after a lock/unlock runs as ordinary voice (its turns are not saved) while Hello renews in the background. | Owner decisions D1/D2 (§8). |
-| B2 | Gemini fallback / transport handoff is unsupported. | Run with fallback off, or implement handoff re-preload plus blocking tools on the new model. |
-| B3 | Personal context / learning APPLY is unsupported together with project memory. | Run with them off, or qualify the combined gates. |
+| B2 | **Resolved** in the coexistence PR. | Live check: a real quota or recovery handoff during the activation smoke. |
+| B3 | **Resolved** in the coexistence PR. | Live check: a personal question inside a project during the activation smoke. |
 | B4 | **Resolved in #308.** Matching uses all the owner's words (§8). | Owner decision D3 (§8). |
-| B5 | Schema migrations 4–7 are one-way for older builds. | Back up the database before the first run of the merged build. |
-| B6 | All tools become BLOCKING with the flag on. | Check Hands/research/work replies in the step 7 smoke run. |
-| B7 | Grounding and answer quality are unmeasured live in production voice. | Step 7 smoke run. |
+| B5 | **Resolved: fresh deployment.** Existing memory is not preserved; `fresh_initialization initialize` retires the old files and creates schema 7. | `PROJECT_MEMORY_RELEASE.md` §2, §4. |
+| B6 | All tools become BLOCKING with the flag on. | Check Hands/research replies in the live acceptance (`PROJECT_MEMORY_RELEASE.md` §5). |
+| B7 | Grounding and answer quality are unmeasured live in production voice. | Live acceptance (`PROJECT_MEMORY_RELEASE.md` §5). |
 | — | No voice controls for `/projects`, `/inspect` or `/pause`. Whole-project `/forget` is text lab only; forgetting what was said about something works by voice (#308). | Use the text lab for the others (accepted limitation). |
 
 ## 5. Rollback
@@ -92,38 +92,18 @@ approval) and B5's backup requirement. Activation is blocked as follows.
    (or delete the key) and restart Jarvis. History stays encrypted and unused.
    Nothing else changes.
 2. **Code rollback to a pre-merge build:** stop Jarvis and remove the
-   `JARVIS_PROJECT_MEMORY_MODE` key from `machine.json` first. Then restore the
-   database backup from §6 step 2. The older build refuses a schema-7 database
-   and rejects the unknown key. Canonical memory written after the backup is
-   lost in this path.
+   `JARVIS_PROJECT_MEMORY_MODE` key from `machine.json` first. Then run
+   `fresh_initialization restore --from <retired folder>` while the new code is
+   still checked out, and check out the rollback tag
+   (`PROJECT_MEMORY_RELEASE.md` §6). Memory written by the new build is moved
+   aside, not kept, in this path.
 
 ## 6. Activation procedure (owner only, after approval)
 
-Paths are the installed defaults: app `E:\Jarvis\App`, data
-`E:\Jarvis\Data\LocalState` (junction `%LOCALAPPDATA%\JARVIS`).
-
-1. Stop Jarvis (close `jarvis-voice` / the supervisor task) and confirm that no
-   `jarvis-voice.exe` process remains.
-2. Back up `memory.db`, `memory.db-wal`, `memory.db-shm` (if present),
-   `memory.key.dpapi` and `machine.json` from the data folder into a dated
-   folder.
-3. Install the approved merged build into `E:\Jarvis\App` as usual. Leave the
-   flag **off** and start Jarvis once: migrations 4–7 run. Confirm normal voice
-   works, then stop Jarvis.
-4. Clear B2/B3 if needed: `JARVIS_GEMINI_PAID_FALLBACK_ENABLED` off,
-   `JARVIS_PERSONAL_CONTEXT_MODE=off`, `JARVIS_PERSONAL_LEARNING_MODE=off`.
-   Also required: `JARVIS_MEMORY_ENABLED=true`, `JARVIS_AI_PROVIDER=gemini`.
-5. Add `"JARVIS_PROJECT_MEMORY_MODE": "voice"` to `settings` in
-   `machine.json`, then run
-   `E:\Jarvis\App\.venv\Scripts\python.exe -m jarvis.voice.project_voice_production --check`.
-   It must print "will start with Jarvis".
-6. Start Jarvis and approve Windows Hello. The log must show `Voice project
-   memory active`; `Project memory NOT active` means a blocker remains.
-7. Smoke run, about 10 minutes, then judge B6/B7:
-   - an ordinary question, a project command and a cross-project question
-   - one Hands command and one research question (they speak after their tool finishes)
-   - one lock/unlock, confirming the logged pause (B1)
-8. On any problem: §5 step 1.
+Superseded by the fresh-deployment procedure in `PROJECT_MEMORY_RELEASE.md`
+§4 (install, clean memory initialization, flag-OFF start, activation) and its
+§5 live acceptance test. No database backup is taken: existing memory is not
+preserved (owner decision, 2026-11-04).
 
 ## 8. Forgetting, long-term recall and Hello renewal (#308)
 

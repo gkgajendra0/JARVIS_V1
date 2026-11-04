@@ -1,169 +1,167 @@
-# Project memory (#303–#308) — final release gate
+# Memory milestone — production release (#303–#309)
 
-Gate run against `feat/project-memory-forget-recall-renewal` (PR #308, which
-contains #303 → #305 → #306 → #307 → #308; #304 is archived and not part of
-the release). `main` has not moved since the stack branched (`488954a6`). The
-installed build (`E:\Jarvis\App` at `1a4f24be`) has the same `src/` as `main`:
-it differs only in docs and two test fixtures, checked file by file.
+The release is the stack #303 → #305 → #306 → #307 → #308 → #309 (#304 is
+archived and not part of it). Project memory is deployed as a **fresh** feature
+on the installed configuration: Gemini free by default, paid fallback ON
+(automatic admission), personal context APPLY, personal learning APPLY.
 
-## Decision
+## 1. Release verification (evidence)
 
-| Question | Answer |
+| Check | Result |
 | --- | --- |
-| Merge with project memory **OFF**? | **Merge-ready after the owner's approval**, subject to the procedure below: backup, migration rehearsal, then merge in stack order. |
-| Activate project memory in production? | **No — blocked.** The installed profile has Gemini paid fallback ON and personal context/learning APPLY. Project memory refuses to start with either (by design, B2/B3), and the owner has said these must not be disabled to simplify. |
+| Stack is linear: every head contains its base's head, down to `main` `488954a6` | PASS (`git merge-base --is-ancestor` along the chain) |
+| `main` has not moved since the stack began | PASS (`main` = `488954a6`) |
+| Every PR draft, `mergeable_state=clean`, all checks green at its head | PASS: #303 `cf42ecb6`, #305 `92b93c4b`, #306 `70a684ff`, #307 `7bb3671e`, #308 `03606ff5`, #309 `75f56a1b` |
+| Hosted CI at #309 `75f56a1b` | PASS: ruff, pytest, windows-dpapi, windows-hello-helper, windows-full-pytest, promotion-policy, SQLCipher 4.17 Windows |
+| Dependencies | unchanged (`pyproject.toml` identical to `main`): no install step |
+| Installed build `E:\Jarvis\App` `1a4f24be` vs `main` | same `src/`; only docs and two test fixtures differ. The App is an editable install, so a git checkout is the whole code update |
+| Schema | 3 → 7 on first start (migrations 0004–0007), one-way for older builds |
+| B2 Gemini fallback / handoff, B3 personal context / learning APPLY | resolved in #309 (`PROJECT_MEMORY_COEXISTENCE.md`); the installed profile passes `--check` (tested) |
+| Earlier gates (projects, cross-project, corrections, archive search, forgetting, grounding evidence, restart, wake/output safety, flag OFF) | PASS, recorded in `PROJECT_MEMORY_PRODUCTION.md` §12–14 and the release-gate tests; not repeated |
 
-## What merging changes even with the flag OFF
+## 2. Fresh memory deployment (owner decision, 2026-11-04)
 
-These parts of the stack are active in ordinary voice. Every other project-memory
-code path returns early when the flag is off.
+Existing memory records and experimental conversations are **not** preserved.
+No backup or migration rehearsal is required.
 
-1. **Schema migrations 4–7** run on the first start of the merged build. They
-   add the topic-checkpoint, project-conversation, search (FTS5) and provenance
-   tables, and they are one-way for older builds (B5). Rehearse first (below).
-2. **Wake-acknowledgement safety** (#308): owner speech before the ack produced
-   audio cancels only the ack. An ack is not logged as played without audio.
-3. **Output safety** (#308): Jarvis's own instruction text, internal markers,
-   reasoning and meta-narration never become an assistant turn, a log line or
-   history. A generation that turns into internal text has its speech stopped
-   while streaming. The near-silent replay refuses such text.
-4. **Topic continuity** code (#303) is present but disabled (no factory).
+`memory.db` is the single canonical memory store. Starting it fresh therefore
+also empties the remembered personal facts (for example, diet preference),
+learned preferences and project history. The personal-context and learning
+*capabilities* stay on (APPLY) and refill the new database as you use Jarvis.
+The DPAPI key in `memory.key.dpapi` is used only by `memory.db`.
 
-Items 2 and 3 apply to the owner's real configuration (personal context APPLY
-plus paid fallback). In that configuration they are covered only by automated
-tests; the live runs used the isolated lab. See "Physical check" below.
+| Kept unchanged | Started fresh |
+| --- | --- |
+| `machine.json` (all settings: fallback, APPLY, devices, models) | `memory.db` (+ `-wal`, `-shm`): a new SQLCipher database at schema 7, empty |
+| API keys (user environment variables) | `memory.key.dpapi`: a new random key, DPAPI-sealed for your Windows user |
+| Windows Hello helper, `authority\`, `identity\` (speaker/face), `work\`, `secrets\`, `operations\`, models, logs, deployment and releases | — |
 
-## Gate evidence
+- **Safest clean initialization: retire, then create through the production
+  path.** `python -m jarvis.memory.fresh_initialization initialize`:
+  1. refuses while any Jarvis process runs;
+  2. moves exactly the four memory files, all or nothing, to
+     `E:\Jarvis\Data\Retired\memory-retired-<time>` (outside the data folder,
+     so nothing loads them);
+  3. creates the new database the way Jarvis does: SQLCipher 4.17 verified, a
+     new DPAPI-sealed key, WAL, migrations 1–7;
+  4. verifies it, counting rows only: schema 7, ledger 1–7, integrity and
+     foreign keys OK, project-memory tables present, every data table empty.
 
-`tests/learning/test_project_memory_release_gate.py` runs on the real archive
-(schema 7, FTS5, provenance), the real history authority and routing, and the
-Hello/Windows-session fakes; only Gemini is simulated:
+  Nothing is deleted. You may delete the retired folder whenever you like;
+  until then it makes a code rollback possible.
+- **Why not reuse the old database:** a fresh file has no historical rows, no
+  learning suppressions and no partial migration history, and its new key
+  shares no material with the experimental data.
+- **Why not delete:** deletion gains nothing at this point and would remove
+  the only rollback path.
+- **Evidence:**
+  - `tests/test_memory_fresh_initialization.py`: everything else in the data
+    folder is byte-identical, a new key is created, Jarvis-running refusal, a
+    file in use moves nothing, restore works;
+  - the Windows SQLCipher workflow now runs `initialize` twice and then
+    `verify --expect-empty` with real SQLCipher 4.17 and DPAPI.
 
-| Gate | Test | Result |
-| --- | --- | --- |
-| Separate Nepal / Interview projects | `test_g1_projects_are_separate` | PASS |
-| Cross-project retrieval, labelled | `test_g2_cross_project_retrieval_is_labelled` | PASS |
-| Correction precedence | `test_g3_the_newer_correction_wins` + `test_newer_correction_comes_last_and_is_marked_current` | PASS |
-| Archive search beyond the preload | `test_g4_…`, `test_project_voice_archive_qualification.py` (graded from real diagnostics) | PASS |
-| Selective forgetting, no unrelated loss, restart | `test_g5_selective_forgetting_keeps_everything_else` | PASS (see note) |
-| Grounding evidence: owner vs Jarvis, tentative vs decided | `test_g6_grounding_evidence_keeps_who_said_it_and_how_sure` | PASS (evidence and instructions; see limits) |
-| Restart persistence, both projects | `test_g7_both_projects_survive_restart` | PASS |
-| Installed profile cannot activate | `test_the_installed_profile_cannot_activate_project_memory_yet` | PASS (exactly 2 blockers) |
-| Wake-output safety regressions | `test_voice_output_safety.py`, `test_voice_runtime.py` (ack races, transcript paths) | PASS |
-| Flag OFF unchanged | `test_project_voice_production.py` (`test_flag_off_builds_no_project_memory`, `test_no_project_memory_leaves_sessions_untouched`) | PASS |
-| Migration rehearsal tool | `tests/test_memory_migration_rehearsal.py` | PASS |
-| Encryption / Windows | hosted CI: windows-dpapi, windows-hello-helper, windows-full-pytest, SQLCipher 4.17 Windows | see PR #308 |
+## 3. What needs you (Windows PC)
 
-**Forgetting note (owner decision, not a defect).** Owner rows are removed only
-when they contain all the words; every other owner row survives, in every
-project. Jarvis replies generated in a session whose model context held a
-forgotten row are removed too, even in another project, because they may
-restate it. A reply made without that row in its context is kept (tested).
-
-**Grounding.** The model receives `owner:` / `Jarvis:` labels, dates and the
-owner's exact wording (including hedges such as "maybe … not decided yet").
-Its instructions now state that a tentative plan is not a decision, and that
-Jarvis's replies and suggestions are not owner decisions unless the owner
-accepted them. Whether Gemini follows the instructions cannot be tested without
-a model call. That remains B7, and the first production smoke covers it.
-
-## Must remain disabled
-
-| Setting | Required value for project memory | Installed today | Why |
+| # | Who | Action | Changes production? |
 | --- | --- | --- | --- |
-| `JARVIS_PROJECT_MEMORY_MODE` | `off` until activation | absent (off) | the release flag |
-| `JARVIS_GEMINI_PAID_FALLBACK_ENABLED` | `false` | **`true`** | B2: a handoff starts a new model session without the preload or blocking tools; the gate would wrongly think context was delivered |
-| `JARVIS_PERSONAL_CONTEXT_MODE` | `off` | **`apply`** | B3: its response gate and session retirement are not qualified together with project memory's gate |
-| `JARVIS_PERSONAL_LEARNING_MODE` | `off` | **`apply`** | forces personal context `apply` (B3) |
-| `JARVIS_MEMORY_ENABLED`, `JARVIS_AI_PROVIDER` | `true`, `gemini` | `true`, `gemini` | met |
+| 1 | You → me | Approve the merge | No (GitHub only) |
+| 2 | You | Install the code, initialize memory, start with the flag OFF (≈5 min) | Yes |
+| 3 | You | Add the flag, approve Hello, run the live acceptance (≈15 min) | Yes: activation |
 
-So activation needs either the owner's explicit choice to give up paid fallback
-and personal learning while project memory is on, or a separate coexistence
-change (handoff re-preload plus blocking tools; one combined response gate).
-That separate change is not part of this release.
+Windows Hello approvals: at startup (as today), one for each personal-context
+consent, one for the forget step, and one after lock/unlock.
 
-## Release procedure (owner-run; nothing here has been executed)
+## 4. Procedure
 
-**A. Backup and rehearsal (no change to production).**
-1. Stop Jarvis (supervisor task and `jarvis-voice`).
-2. Run `tools\windows\release\Backup-JarvisProduction.ps1`. It refuses while
-   Jarvis runs. It copies `memory.db*`, `memory.key.dpapi`, `machine.json` and
-   `authority\`, then verifies every copy by SHA-256 and writes `manifest.json`
-   with the installed commit (expected `1a4f24be`).
-3. Rehearse the migration on a copy, using the merged code from a separate
-   worktree (not the installed App):
+**Background:** the supervisor (`runtime_supervisor --branch main`) offers an
+update only as a fast-forward from the local commit. The installed `main`
+(`1a4f24be`) is not an ancestor of GitHub `main` (the October sync was
+squashed). So merging never updates the PC by itself; step 2 is explicit.
 
-   ```powershell
-   $c = "<final #308 SHA>"
-   git -C E:\Jarvis\App fetch origin feat/project-memory-forget-recall-renewal
-   git -C E:\Jarvis\App worktree add --detach E:\Jarvis\Worktrees\release-$($c.Substring(0,8)) $c
-   $env:PYTHONPATH = "E:\Jarvis\Worktrees\release-$($c.Substring(0,8))\src"
-   E:\Jarvis\App\.venv\Scripts\python.exe -X utf8 -m jarvis.memory.migration_rehearsal `
-     --source E:\Jarvis\Data\LocalState\memory.db --work "$env:TEMP\jarvis-migration-rehearsal"
-   Remove-Item Env:PYTHONPATH
-   ```
+### Step 1. Merge (after your approval; I do this)
 
-   PASS requires all of these: the source is unchanged, the copy migrated to
-   version 7, integrity and foreign keys are OK, and every existing table keeps
-   its row count. Then delete the work folder, which holds an encrypted copy.
-4. Start Jarvis again. Nothing has changed yet.
+The PRs are merged top-down, each into its own base, with merge commits (no
+squash, so the ancestry stays intact): #309 → #308's branch, #308 → #307's, …,
+#303 → `main`. Then `main` = the release commit `R`, and CI runs on `main`.
 
-**B. Merge (after approval).** Mark #303 → #305 → #306 → #307 → #308 ready and
-merge them in order (each base is the previous branch), or merge #308's branch
-into `main` once. Keep `JARVIS_PROJECT_MEMORY_MODE` absent.
+### Step 2. Install, initialize, start with the flag OFF (you)
 
-**C. Install with the flag OFF.**
-1. Stop Jarvis.
-2. Update `E:\Jarvis\App` to the merged `main`. No dependency changes:
-   `pyproject.toml` is identical.
-3. Start Jarvis normally. Migrations 4–7 run once.
-4. Run `python -m jarvis.voice.project_voice_production --check`; it must say
-   "disabled".
+```powershell
+# Stop Jarvis (close the supervisor window/task) first.
+git -C E:\Jarvis\App status --porcelain               # must print nothing
+git -C E:\Jarvis\App tag jarvis-pre-memory-1a4f24be 1a4f24be
+git -C E:\Jarvis\App fetch origin main
+git -C E:\Jarvis\App checkout -B main origin/main       # code = R (editable install: no pip step)
+E:\Jarvis\App\.venv\Scripts\python.exe -X utf8 -m jarvis.memory.fresh_initialization initialize `
+  --data E:\Jarvis\Data\LocalState --retire-to E:\Jarvis\Data\Retired
+& E:\Jarvis\Bootstrap\Start-Jarvis.ps1 -CheckOnly       # startup preflight only
+& E:\Jarvis\Bootstrap\Start-Jarvis.ps1                  # normal start
+```
 
-**D. Physical check (needed once, about 5 minutes, real hardware).** This uses
-the owner's real configuration (personal APPLY, paid fallback, flag OFF), which
-the lab never ran. Do:
-- one wake with silence (hear one short acknowledgement);
-- one wake speaking immediately;
-- one personal-memory question;
-- one Hands command;
-- one research question.
+Pass when:
+- `initialize` prints `Memory database: PASS`;
+- the preflight succeeds;
+- startup reaches wake mode with your usual Hello approval;
+- one wake works (an acknowledgement, then one question);
+- `E:\Jarvis\App\.venv\Scripts\python.exe -m jarvis.voice.project_voice_production --check`
+  prints "disabled".
 
-Then check the log has no "turn dropped" or "speech is stopped" line for a
-genuine reply. This is the only manual step; the gate cannot simulate Gemini
-audio.
+Then stop Jarvis.
 
-**E. Rollback.**
-- **Code-only problem:** stop Jarvis, then
-  `git -C E:\Jarvis\App checkout 1a4f24be`. The old build refuses the schema-7
-  database (`MemorySchemaTooNewError`), so also restore the data (next point).
-- **Data:** run `tools\windows\release\Restore-JarvisProduction.ps1 -Backup
-  <folder>`. It verifies the manifest, moves current files aside (never
-  deletes them), copies the backup back and prints the code checkout. Memory
-  written after the backup is lost on this path.
+### Step 3. Activate and accept (you)
 
-## Activation (only after B2/B3 are resolved by the owner)
+Add `"JARVIS_PROJECT_MEMORY_MODE": "voice"` to `settings` in
+`E:\Jarvis\Data\LocalState\machine.json`, changing nothing else. Run `--check`;
+it must print "will start with Jarvis". Start Jarvis, approve Hello, then run §5.
 
-1. Decide B2/B3: either set fallback off and personal context/learning off,
-   accepting the loss of those features while project memory is on, or wait
-   for the coexistence change.
-2. Add `"JARVIS_PROJECT_MEMORY_MODE": "voice"` to `machine.json` and run
-   `--check`, which must say "will start with Jarvis".
-3. Start Jarvis and approve Hello. The log must show `Voice project memory
-   active`.
-4. Do the 10-minute smoke from `PROJECT_MEMORY_PRODUCTION.md` §6 step 7, which
-   covers grounding (B7) and blocking tools (B6).
-5. Any problem: remove the key and restart (instant rollback; history stays
-   encrypted and unused).
+## 5. Live acceptance test (one run, ≈15 minutes)
 
-## Remaining blockers
+Memory starts empty, so the test seeds what it checks.
 
-| Id | Blocks | Status |
+| Step | Say / do | Pass when |
 | --- | --- | --- |
-| Owner approval | merge | required (PRs remain draft) |
-| B5 | merge | handled by the backup and rehearsal (A) |
-| Physical check D | confidence after merge | 5 minutes, flag OFF |
-| B2 paid fallback | activation | unresolved: owner choice or a coexistence change |
-| B3 personal context / learning | activation | unresolved: owner choice or a coexistence change |
-| B6 all tools blocking, B7 live grounding | activation | first activation smoke |
-| Forget redacts Jarvis replies made with the words in context | none (design) | owner may ask to narrow it |
+| 1 Start | start Jarvis, approve Hello | log: `Voice project memory active` |
+| 2 Memory | "Create project called Nepal trip." · "We will take the Thar." · "Maybe we'll visit Pokhara, not decided yet." Let the wake end; wake again: "Which vehicle are we taking, and is Pokhara decided?" | "the Thar"; Pokhara described as not decided |
+| 3 Personal security | "Remember that my diet preference is vegetarian." Then: "What should I eat on the Nepal trip?" (approve the personal-context Hello) | answered as vegetarian; at shutdown the `Voice project memory summary` shows `personal_replies_not_saved` ≥ 1 |
+| 4 No leak | new wake: "What did you tell me to eat?" | it does not repeat that answer from project history (it may ask again via personal context) |
+| 5 Renewal | Win+L, unlock, wake, approve Hello, "Add a stove to the packing list." | saved and answered once |
+| 6 Recovery | in a wake, turn the network off for ~5 s, then on, then ask "Which project are we in?" | either the log shows `Gemini fresh voice session ready` + `Project voice context restored on the new model session`, or the session ends cleanly and the next wake answers "Nepal trip". Either way: no duplicate saves, no internal text spoken |
+| 7 Forget | "Forget that we will take the Thar." (approve Hello); new wake: "Which vehicle?" | one confirmation, after both deletions; the vehicle is not known |
+| 8 Restart | restart Jarvis, approve Hello: "Is Pokhara decided?" | "not decided" (it persisted) |
+| Throughout | — | no `turn dropped` / `speech is stopped` line on a genuine reply; Hands, research and wake/standby behave as before |
+
+**Paid-key handoff cannot be forced in your configuration.** The bounded
+fault-injection plan requires budget-enforced paid admission, and yours is
+automatic. A real quota event is unpredictable. The handoff path is verified by
+automated tests against the real `GeminiLiveHandoff` and LiveKit session (#309).
+In production, a natural handoff shows the line `Project voice context
+restored on the new model session`.
+
+## 6. Rollback
+
+| Problem | Action |
+| --- | --- |
+| Project memory misbehaves | Remove `JARVIS_PROJECT_MEMORY_MODE` and restart. Instant |
+| Merged build misbehaves | Stop Jarvis, **then, while the new code is still checked out**: `E:\Jarvis\App\.venv\Scripts\python.exe -m jarvis.memory.fresh_initialization restore --data E:\Jarvis\Data\LocalState --retire-to E:\Jarvis\Data\Retired --from E:\Jarvis\Data\Retired\memory-retired-<time>`. Then `git -C E:\Jarvis\App checkout -B main jarvis-pre-memory-1a4f24be` and start Jarvis. The old build needs its old schema-3 files, which the restore puts back; the new files are moved aside, not deleted |
+
+## 7. Deployment checklist
+
+- [ ] 1: your approval; merges #309 → … → #303 done; `main` = R; CI green on `main`
+- [ ] 2: rollback tag created; App at R; `initialize` PASS; preflight OK; flag-OFF start and one wake OK; `--check` "disabled"
+- [ ] 3: flag added; `--check` "will start"; Hello; `Voice project memory active`
+- [ ] §5 steps 1–8 pass
+- [ ] Optional cleanup:
+  - delete `E:\Jarvis\Data\Retired\memory-retired-*` (this ends the code-rollback option);
+  - delete the `%TEMP%\jarvis-qualification-*` labs, then run `git -C E:\Jarvis\App worktree prune`
+
+## 8. Decision
+
+**GO.** Merge on your approval, then steps 2–3. The milestone is complete when
+§5 passes.
+
+Known, accepted limits:
+- A paid handoff is observed only if it happens naturally.
+- Gemini's adherence to grounding instructions is judged by §5 step 2.
+- Forgetting also removes Jarvis replies made with the forgotten words in
+  context (by design).
