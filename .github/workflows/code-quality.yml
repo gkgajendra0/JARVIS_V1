@@ -116,17 +116,23 @@ jobs:
           $include = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Include" -Directory |
             Sort-Object Name -Descending | Select-Object -First 1
           if (-not $include) { throw "Windows SDK headers not found" }
-          $interop = Get-ChildItem $include.FullName -Recurse -Filter userconsentverifierinterop.h | Select-Object -First 1
-          $winrt = Get-ChildItem $include.FullName -Recurse -Filter windows.security.credentials.ui.h | Select-Object -First 1
-          if (-not $interop -or -not $winrt) { throw "Hello SDK headers not found under $($include.FullName)" }
+          $interop = Join-Path $include.FullName 'um\userconsentverifierinterop.h'
+          $winrt = Join-Path $include.FullName 'winrt\windows.security.credentials.ui.h'
+          foreach ($h in @($interop, $winrt)) { if (-not (Test-Path $h)) { throw "SDK header missing: $h" } }
           Write-Host "SDK: $($include.Name)"
           $ids = python -I -c "import importlib.util as u; s=u.spec_from_file_location('c','src/jarvis/authority/windows_hello_consent.py'); m=u.module_from_spec(s); s.loader.exec_module(m); print(m.IID_USER_CONSENT_VERIFIER_INTEROP, m.IID_USER_CONSENT_VERIFIER_STATICS, m.IID_ASYNC_VERIFICATION_RESULT, m.IID_ASYNC_AVAILABILITY)"
           $ids = $ids.Trim().Split(' ')
-          $interopText = Get-Content $interop.FullName -Raw
-          $winrtText = Get-Content $winrt.FullName -Raw
-          if ($interopText -notmatch [regex]::Escape($ids[0])) { throw "IUserConsentVerifierInterop IID $($ids[0]) not in $($interop.FullName)" }
+          function Test-Iid([string]$text, [string]$id) {
+            # String form ("af4f3f91-...") or DEFINE_GUID form (0xaf4f3f91, 0x564c, 0x4ddc, ...).
+            $p = $id.Split('-')
+            $numeric = '0x0*{0}\s*,\s*0x0*{1}\s*,\s*0x0*{2}\s*,' -f $p[0], $p[1], $p[2]
+            return ($text -match [regex]::Escape($id)) -or ($text -match $numeric)
+          }
+          $interopText = Get-Content $interop -Raw
+          $winrtText = Get-Content $winrt -Raw
+          if (-not (Test-Iid $interopText $ids[0])) { throw "IUserConsentVerifierInterop IID $($ids[0]) not in $interop" }
           foreach ($id in $ids[1..3]) {
-            if ($winrtText -notmatch [regex]::Escape($id)) { throw "IID $id not in $($winrt.FullName)" }
+            if (-not (Test-Iid $winrtText $id)) { throw "IID $id not in $winrt" }
           }
           Write-Host "All four interface IDs match the SDK: $($ids -join ', ')"
 
