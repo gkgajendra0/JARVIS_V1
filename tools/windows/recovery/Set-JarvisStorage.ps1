@@ -45,7 +45,6 @@ if (-not (Test-Path -LiteralPath $LegacyHomePath)) {
         throw "Existing Jarvis home is not the expected E-drive junction: $LegacyHomePath. Preserve and migrate it before continuing."
     }
 }
-[Environment]::SetEnvironmentVariable('JARVIS_WINDOWS_HELLO_HELPER',(Join-Path $StatePath 'tools\windows-hello\Jarvis.WindowsHelloVerifier.exe'),'Process')
 $winappRoot = Join-Path $StatePath 'tools\winapp'
 if (Test-Path -LiteralPath (Join-Path $winappRoot 'winapp.exe') -PathType Leaf) {
     # Reapply the portable Hands dependency after reinstall; preserve the user's PATH.

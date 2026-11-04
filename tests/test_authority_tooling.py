@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.authority import tool_setup, tooling
+from jarvis.authority import tooling
 from jarvis.machine_config import load_machine_settings, save_machine_settings
 
 
@@ -60,17 +60,6 @@ def test_invalid_persisted_opa_path_fails_closed_without_path_fallback(
         tooling.resolve_opa_binary(
             machine_settings={"JARVIS_OPA_PATH": str(tmp_path / "missing.exe")}
         )
-
-
-def test_windows_hello_falls_back_to_managed_helper_when_unconfigured(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    helper = _touch(tmp_path / "managed" / "Jarvis.WindowsHelloVerifier.exe")
-    monkeypatch.delenv("JARVIS_WINDOWS_HELLO_HELPER", raising=False)
-    monkeypatch.setattr(tooling, "managed_windows_hello_helper_path", lambda: helper)
-
-    assert tooling.resolve_windows_hello_helper(machine_settings={}) == helper
 
 
 def test_opa_probe_requires_real_version_prefix(
@@ -134,32 +123,3 @@ def test_authority_paths_are_valid_non_secret_machine_settings(tmp_path: Path) -
         tooling.OPA_PATH_SETTING: str(opa),
         tooling.WINDOWS_HELLO_HELPER_SETTING: str(hello),
     }
-
-
-def test_hello_publish_command_is_self_contained_single_file(tmp_path: Path) -> None:
-    command = tool_setup._publish_command(
-        dotnet="dotnet",
-        project=tmp_path / "helper.csproj",
-        output=tmp_path / "publish",
-        runtime_identifier="win-x64",
-    )
-
-    assert command[:2] == ["dotnet", "publish"]
-    assert "--self-contained" in command
-    assert "true" in command
-    assert "-p:PublishSingleFile=true" in command
-    assert "-p:IncludeNativeLibrariesForSelfExtract=true" in command
-    assert "-p:PublishTrimmed=false" in command
-    assert ["--runtime", "win-x64"] == command[
-        command.index("--runtime") : command.index("--runtime") + 2
-    ]
-
-
-def test_windows_runtime_identifier_supports_current_desktop_architectures(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(tool_setup.platform, "machine", lambda: "AMD64")
-    assert tool_setup._windows_runtime_identifier() == "win-x64"
-
-    monkeypatch.setattr(tool_setup.platform, "machine", lambda: "ARM64")
-    assert tool_setup._windows_runtime_identifier() == "win-arm64"

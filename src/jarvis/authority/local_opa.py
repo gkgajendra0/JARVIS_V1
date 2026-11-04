@@ -9,7 +9,12 @@ import urllib.request
 from pathlib import Path
 from typing import Self
 
-from jarvis.authority.tooling import AuthorityToolError, resolve_opa_binary
+from jarvis.authority.tooling import (
+    OPA_PROBE_TIMEOUT_SECONDS,
+    AuthorityToolError,
+    describe_launch_failure,
+    resolve_opa_binary,
+)
 
 
 class LocalOpaError(RuntimeError):
@@ -44,7 +49,7 @@ class ManagedOpaServer:
         self,
         *,
         policy_path: str | Path | None = None,
-        startup_timeout_seconds: float = 5.0,
+        startup_timeout_seconds: float = OPA_PROBE_TIMEOUT_SECONDS,
     ) -> None:
         if startup_timeout_seconds <= 0:
             raise ValueError("OPA startup timeout must be positive")
@@ -71,21 +76,27 @@ class ManagedOpaServer:
 
         binary = _resolve_opa_binary()
         self._port = _reserve_loopback_port()
-        self._process = subprocess.Popen(
-            [
-                str(binary),
-                "run",
-                "--server",
-                "--addr",
-                f"127.0.0.1:{self._port}",
-                str(self._policy_path),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        try:
+            self._process = subprocess.Popen(
+                [
+                    str(binary),
+                    "run",
+                    "--server",
+                    "--addr",
+                    f"127.0.0.1:{self._port}",
+                    str(self._policy_path),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError as exc:
+            self._port = None
+            raise LocalOpaError(
+                f"OPA could not start: {describe_launch_failure(exc)}"
+            ) from exc
         deadline = time.monotonic() + self._startup_timeout_seconds
         health_url = f"http://127.0.0.1:{self._port}/health"
         while time.monotonic() < deadline:
@@ -99,7 +110,9 @@ class ManagedOpaServer:
             except (OSError, TimeoutError, urllib.error.URLError):
                 time.sleep(0.05)
         self.close()
-        raise LocalOpaError("OPA did not become healthy before the startup timeout")
+        raise LocalOpaError(
+            f"OPA did not become healthy within {self._startup_timeout_seconds:g} s"
+        )
 
     def close(self) -> None:
         process = self._process

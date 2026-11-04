@@ -96,103 +96,87 @@ jobs:
           retention-days: 7
 
   windows-hello-helper:
+    # Windows Hello runs in the signed Python runtime (no compiled helper, so
+    # nothing for Smart App Control to block). This job runs the real WinRT
+    # calls on Windows.
     needs: ruff
     runs-on: windows-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up .NET 9
-        uses: actions/setup-dotnet@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          dotnet-version: "9.0.x"
+          python-version: "3.11"
 
-      - name: Build Windows Hello helper
-        run: >-
-          dotnet build
-          tools/windows/Jarvis.WindowsHelloVerifier/Jarvis.WindowsHelloVerifier.csproj
-          --configuration Release
-          --nologo
-
-      - name: Probe Windows Hello helper JSON contract
+      - name: Interface IDs match the Windows SDK headers
         shell: pwsh
         run: |
-          $helper = Resolve-Path ".\tools\windows\Jarvis.WindowsHelloVerifier\bin\Release\net9.0-windows10.0.22000.0\Jarvis.WindowsHelloVerifier.exe"
-          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-          $startInfo.FileName = $helper.Path
-          $startInfo.UseShellExecute = $false
-          $startInfo.RedirectStandardInput = $true
-          $startInfo.RedirectStandardOutput = $true
-          $startInfo.RedirectStandardError = $true
-          $process = [System.Diagnostics.Process]::new()
-          $process.StartInfo = $startInfo
-          if (-not $process.Start()) {
-            throw "Failed to start Windows Hello helper contract probe"
+          $include = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Include" -Directory |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $include) { throw "Windows SDK headers not found" }
+          $interop = Get-ChildItem $include.FullName -Recurse -Filter userconsentverifierinterop.h | Select-Object -First 1
+          $winrt = Get-ChildItem $include.FullName -Recurse -Filter windows.security.credentials.ui.h | Select-Object -First 1
+          if (-not $interop -or -not $winrt) { throw "Hello SDK headers not found under $($include.FullName)" }
+          Write-Host "SDK: $($include.Name)"
+          $ids = python -I -c "import importlib.util as u; s=u.spec_from_file_location('c','src/jarvis/authority/windows_hello_consent.py'); m=u.module_from_spec(s); s.loader.exec_module(m); print(m.IID_USER_CONSENT_VERIFIER_INTEROP, m.IID_USER_CONSENT_VERIFIER_STATICS, m.IID_ASYNC_VERIFICATION_RESULT, m.IID_ASYNC_AVAILABILITY)"
+          $ids = $ids.Trim().Split(' ')
+          $interopText = Get-Content $interop.FullName -Raw
+          $winrtText = Get-Content $winrt.FullName -Raw
+          if ($interopText -notmatch [regex]::Escape($ids[0])) { throw "IUserConsentVerifierInterop IID $($ids[0]) not in $($interop.FullName)" }
+          foreach ($id in $ids[1..3]) {
+            if ($winrtText -notmatch [regex]::Escape($id)) { throw "IID $id not in $($winrt.FullName)" }
           }
-          $process.StandardInput.Write('{}')
-          $process.StandardInput.Close()
-          $response = $process.StandardOutput.ReadToEnd()
-          $stderr = $process.StandardError.ReadToEnd()
-          $process.WaitForExit()
-          if ($process.ExitCode -ne 2) {
-            throw "Expected invalid-request exit code 2, got $($process.ExitCode). stderr=$stderr"
-          }
+          Write-Host "All four interface IDs match the SDK: $($ids -join ', ')"
+
+      - name: Contract probe (no prompt)
+        shell: pwsh
+        run: |
+          $response = '{}' | python -I src\jarvis\authority\windows_hello_consent.py
+          if ($LASTEXITCODE -ne 2) { throw "Expected exit 2, got $LASTEXITCODE" }
           $payload = $response | ConvertFrom-Json
           if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
-            throw "Windows Hello helper JSON contract mismatch: $response"
+            throw "Contract mismatch: $response"
           }
 
-      - name: Publish production Windows Hello helper
+      - name: Real WinRT availability check (no prompt)
         shell: pwsh
         run: |
-          $output = Join-Path $env:RUNNER_TEMP "jarvis-hello-publish"
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $output
-          dotnet publish `
-            tools/windows/Jarvis.WindowsHelloVerifier/Jarvis.WindowsHelloVerifier.csproj `
-            --configuration Release `
-            --runtime win-x64 `
-            --self-contained true `
-            --nologo `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:PublishTrimmed=false `
-            -p:DebugType=None `
-            --output $output
-          if ($LASTEXITCODE -ne 0) {
-            throw "Production Windows Hello helper publish failed"
-          }
-          $helper = Join-Path $output "Jarvis.WindowsHelloVerifier.exe"
-          if (-not (Test-Path $helper -PathType Leaf)) {
-            throw "Published Windows Hello helper executable is missing"
-          }
-
-      - name: Probe published Windows Hello helper JSON contract
-        shell: pwsh
-        run: |
-          $helper = Join-Path $env:RUNNER_TEMP "jarvis-hello-publish\Jarvis.WindowsHelloVerifier.exe"
-          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-          $startInfo.FileName = $helper
-          $startInfo.UseShellExecute = $false
-          $startInfo.RedirectStandardInput = $true
-          $startInfo.RedirectStandardOutput = $true
-          $startInfo.RedirectStandardError = $true
-          $process = [System.Diagnostics.Process]::new()
-          $process.StartInfo = $startInfo
-          if (-not $process.Start()) {
-            throw "Failed to start published Windows Hello helper contract probe"
-          }
-          $process.StandardInput.Write('{}')
-          $process.StandardInput.Close()
-          $response = $process.StandardOutput.ReadToEnd()
-          $stderr = $process.StandardError.ReadToEnd()
-          $process.WaitForExit()
-          if ($process.ExitCode -ne 2) {
-            throw "Expected published helper exit code 2, got $($process.ExitCode). stderr=$stderr"
-          }
+          $response = '{"action": "availability"}' | python -I src\jarvis\authority\windows_hello_consent.py
+          Write-Host "availability: $response (exit $LASTEXITCODE)"
+          if ($LASTEXITCODE -ne 0) { throw "WinRT availability call failed: $response" }
           $payload = $response | ConvertFrom-Json
-          if ($payload.status -ne 'error' -or $payload.reason -ne 'invalid_request') {
-            throw "Published Windows Hello helper JSON contract mismatch: $response"
+          if ($payload.status -notin @('available', 'unavailable', 'not_configured')) {
+            throw "Unexpected availability: $response"
           }
+
+      - name: Real interop request on an owner window (runner has no Hello device)
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          python -I -c @"
+          import importlib.util as u, time
+          s = u.spec_from_file_location('c', 'src/jarvis/authority/windows_hello_consent.py')
+          m = u.module_from_spec(s); s.loader.exec_module(m)
+          w = m._WinRt(); w.initialize()
+          try:
+              availability = m.check_availability(w, deadline=time.monotonic() + 60)
+              print('availability', availability, m.availability_response(availability))
+              if availability == 0:
+                  raise SystemExit('runner unexpectedly has Windows Hello; not prompting')
+              hwnd = w.owner_window()
+              try:
+                  value = m.request_verification(w, hwnd, 'JARVIS CI interop check', deadline=time.monotonic() + 90)
+              finally:
+                  w.destroy_window(hwnd)
+              print('interop result', value, m.verification_response(value))
+              assert value in (1, 2, 3, 4), value
+              assert m.verification_response(value)[0] != 'verified'
+          finally:
+              w.uninitialize()
+          "@
+          if ($LASTEXITCODE -ne 0) { throw "Interop request failed" }
 
   windows-dpapi:
     needs: ruff
@@ -231,6 +215,7 @@ jobs:
           tests/test_hands_contracts.py
           tests/test_hands_generic_grounding.py
           tests/test_windows_hello_utf8.py
+          tests/test_windows_hello_builtin.py
 
       - name: Run Windows sandbox path regressions
         run: >-

@@ -25,10 +25,7 @@ from jarvis.identity.lifecycle import (
     OwnerProfileAuthorizationDenied,
     OwnerProfileLifecycleService,
 )
-from jarvis.identity.owner_enrollment import (
-    _default_hello_helper_path,
-    default_identity_data_dir,
-)
+from jarvis.identity.owner_enrollment import default_identity_data_dir
 from jarvis.identity.speaker_assets import (
     CAMPP_MODEL_ID,
     CAMPP_MODEL_VERSION,
@@ -226,12 +223,6 @@ def _commit_voice_template(
 ) -> None:
     identity_db = data_dir / "owner_identity.db"
     audit_db = data_dir / "authority_audit.db"
-    helper_path = _default_hello_helper_path()
-    if helper_path is None or not helper_path.is_file():
-        raise RuntimeError(
-            "Windows Hello helper is missing. Build the Release helper or set "
-            "JARVIS_WINDOWS_HELLO_HELPER before speaker enrollment."
-        )
 
     store = SqliteOwnerProfileStore(
         identity_db,
@@ -260,7 +251,7 @@ def _commit_voice_template(
                     store=store,
                     strong_approval=StrongApprovalService(
                         approvals=approvals,
-                        verifier=WindowsHelloVerifier(helper_path=helper_path),
+                        verifier=WindowsHelloVerifier(),
                     ),
                     authority=authority,
                     session_provider=WindowsWtsSessionProvider(),

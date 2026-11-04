@@ -117,9 +117,6 @@ def test_launcher_main_loads_isolated_config_before_voice(tmp_path, monkeypatch)
     )
     monkeypatch.setattr(tooling, "resolve_opa_binary", lambda **kwargs: source)
     monkeypatch.setattr(
-        tooling, "resolve_windows_hello_helper", lambda **kwargs: source
-    )
-    monkeypatch.setattr(
         logging_config, "configure_logging", lambda *args, **kwargs: None
     )
     seen = []

@@ -41,9 +41,7 @@ The current repository Code Quality workflow includes:
 - Ubuntu Python install with the accepted development/Hands test extras;
 - Playwright Chromium provisioning and real headless-launch smoke;
 - full repository `pytest` suite on Ubuntu;
-- Windows .NET 9 build of `Jarvis.WindowsHelloVerifier`;
-- Windows Hello helper JSON contract probe;
-- production self-contained Windows Hello helper publish + JSON contract probe;
+- built-in Windows Hello consent (`jarvis.authority.windows_hello_consent`): interface IDs checked against the Windows SDK headers, JSON contract probe, real WinRT availability call and a real interop request on an owner window;
 - Windows unified Hands dependency probe;
 - Windows multilingual Hands/grounding/UTF-8 regressions;
 - Windows DPAPI smoke/regressions.

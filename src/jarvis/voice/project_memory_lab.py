@@ -628,7 +628,6 @@ def main():
     verify_source(repo, args.source_commit)
     from jarvis.authority.tooling import (
         resolve_opa_binary,
-        resolve_windows_hello_helper,
     )
     from jarvis.machine_config import load_machine_settings
 
@@ -638,9 +637,6 @@ def main():
         if args.resume_lab
         else {
             "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
-            "JARVIS_WINDOWS_HELLO_HELPER": resolve_windows_hello_helper(
-                machine_settings=settings
-            ).resolve(),
         }
     )
     if args.development_batch:

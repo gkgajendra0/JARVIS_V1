@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
-from jarvis.authority.tooling import AuthorityToolError, resolve_windows_hello_helper
+from jarvis.authority.tooling import builtin_windows_hello_command
 
 from .proposal import ActionProposal
 
@@ -58,7 +58,13 @@ class StrongVerifier(Protocol):
 
 
 class WindowsHelloVerifier:
-    """Desktop Windows Hello verifier using the JARVIS .NET interop helper."""
+    """Desktop Windows Hello verifier (UserConsentVerifier for an owner window).
+
+    By default the prompt runs in the signed Python runtime
+    (``jarvis.authority.windows_hello_consent``), so no separately compiled
+    executable has to pass Smart App Control. ``helper_path`` runs a separate
+    executable with the same JSON contract instead (tests and diagnostics).
+    """
 
     verifier_id = "windows-hello-userconsentverifier-v1"
 
@@ -68,14 +74,17 @@ class WindowsHelloVerifier:
         *,
         timeout_seconds: float = 60.0,
     ) -> None:
-        if helper_path is not None:
-            self._helper_path = Path(helper_path).expanduser()
-        else:
-            try:
-                self._helper_path = resolve_windows_hello_helper()
-            except (AuthorityToolError, RuntimeError):
-                self._helper_path = None
+        self._helper_path = (
+            Path(helper_path).expanduser() if helper_path is not None else None
+        )
         self._timeout_seconds = timeout_seconds
+
+    def _command(self) -> list[str] | None:
+        if self._helper_path is None:
+            return list(builtin_windows_hello_command())
+        if not self._helper_path.is_file():
+            return None
+        return [str(self._helper_path)]
 
     def verify(
         self,
@@ -103,9 +112,8 @@ class WindowsHelloVerifier:
             return result(StrongVerificationStatus.ERROR, "session_mismatch")
         if not proposal.has_valid_fingerprint():
             return result(StrongVerificationStatus.ERROR, "proposal_integrity_invalid")
-        if self._helper_path is None:
-            return result(StrongVerificationStatus.UNAVAILABLE, "helper_not_configured")
-        if not self._helper_path.is_file():
+        command = self._command()
+        if command is None:
             return result(StrongVerificationStatus.UNAVAILABLE, "helper_not_found")
 
         request = json.dumps(
@@ -114,7 +122,7 @@ class WindowsHelloVerifier:
         )
         try:
             completed = subprocess.run(
-                [str(self._helper_path)],
+                command,
                 input=request,
                 capture_output=True,
                 text=True,
