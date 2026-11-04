@@ -26,7 +26,7 @@ from jarvis.voice import voice_diagnostics as vd
 from jarvis.voice.project_voice import (
     PRELOAD_MAX_CHARS,
     PRELOAD_ROWS,
-    REPAIR_INSTRUCTIONS,
+    REPAIR_ANSWER_INSTRUCTIONS,
     VoiceProjectMemory,
 )
 
@@ -122,9 +122,12 @@ async def test_ordinary_turn_is_answered_from_preload_without_the_tool(lab):
     assert "Current project: Nepal trip." in context
     assert "owner: We will take the Jimny." in context
     assert "not speech from the owner" in context
-    # The bridge knows the injected item, so it is never accepted as a turn.
+    # The bridge knows the injected items, so neither is accepted as a turn.
+    # The context is a COMPLETED exchange (context + Jarvis "Noted."), so no
+    # later generation can treat it as the owner's open request.
     (registered,) = wake.registered
-    assert [i.text_content for i in registered.items] == [context]
+    assert [i.text_content for i in registered.items] == [context, "Noted."]
+    assert [i.role for i in registered.items] == ["user", "assistant"]
 
     reply = await wake.fast("Which vehicle are we taking?", "The Jimny.")
     assert voice.metrics.delivered == tool_calls  # no tool call
@@ -180,7 +183,14 @@ async def test_commands_and_other_projects_still_go_through_the_tool(lab, partia
     assert voice.metrics.fast_path_turns == 0
     wake.transcript(partial)
     await settle(voice)
-    assert wake.session.replies == [REPAIR_INSTRUCTIONS]  # the tool path
+    # Repair by delivery: the application gives Gemini exactly the context the
+    # tool would have returned, then re-requests the answer.
+    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS]
+    assert voice.metrics.repair_deliveries == 1
+    repaired = wake.agent.injected()[-1]
+    assert "for the owner's last request" in repaired
+    assert '"status": "ready"' in repaired or '"status": "clarification"' in repaired
+    # A late tool call returns the same, already delivered result.
     result = await wake.turns.prepare()
     assert result["status"] in {"ready", "clarification"}
     assert wake.response()[0] is True
@@ -373,7 +383,7 @@ def test_fixed_project_mode_prompt_and_schema_stay_small():
 
     # Roughly 4 characters per token. Before the performance pass: 1,059 +
     # 435 + 724. The instructions include the voice grounding rules (#303).
-    assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 1000
+    assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 1250  # + search/forget routing
     assert len(project_voice._TOOL_DESCRIPTION) <= 260
     assert len(project_voice._GUIDANCE) <= 460
 

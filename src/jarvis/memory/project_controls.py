@@ -515,3 +515,215 @@ class ProjectControls:
         for callback in self.access._invalidators:
             callback("forget", project_id)
         return result
+
+    async def preview_forget_mentions(self, terms):
+        """What forgetting these words would remove: ids, counts and project
+        titles, read under the owner's history grant. Nothing is changed."""
+        terms = _forget_terms(terms)
+        from .project_access import CATALOG
+
+        material = {"operation": "preview_forget_mentions", "terms": list(terms)}
+        return await self.access._perform(
+            CATALOG,
+            material,
+            "read",
+            lambda p: self.access.store._bound_read(
+                CATALOG,
+                material,
+                permit=p,
+                read=lambda conn: _mention_state(conn, terms)[0],
+            ),
+        )
+
+    async def forget_mentions(self, preview, *, permit=None):
+        """Redact exactly the previewed rows after a fresh owner approval (Windows
+        Hello). If anything they cover changed since the preview, nothing changes."""
+        if not isinstance(preview, MentionForgetPreview) or not preview.matched:
+            raise ValueError("a non-empty mention preview is required")
+        material = {
+            "operation": "forget_mentions",
+            "terms": list(preview.terms),
+            "owner_rows": preview.owner_rows,
+            "jarvis_rows": preview.jarvis_rows,
+            "projects": list(preview.projects),
+            "digest": preview.digest,
+        }
+        issuer = self.access.authority
+        if permit is None:
+            permit = await asyncio.to_thread(
+                issuer.authorize_mention_deletion, material
+            )
+
+        def erase(conn):
+            with issuer.deletion_scope(permit, material) as validate:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    current, threads = _mention_state(conn, preview.terms)
+                    if current.digest != preview.digest:
+                        raise PermissionError("history changed before deletion")
+                    ids = (*current.matched, *current.derived)
+                    for start in range(0, len(ids), 256):
+                        chunk = ids[start : start + 256]
+                        marks = ",".join("?" for _ in chunk)
+                        conn.execute(
+                            "UPDATE conversation_event SET text='[forgotten]',role='tool',"
+                            f"delivery='failed',payload_sha256=? WHERE event_id IN ({marks})",
+                            (REDACTED_DIGEST, *chunk),
+                        )
+                        conn.execute(
+                            f"DELETE FROM conversation_event_dependency WHERE event_id IN ({marks})",
+                            chunk,
+                        )
+                        conn.execute(
+                            f"DELETE FROM conversation_event_quarantine WHERE event_id IN ({marks})",
+                            chunk,
+                        )
+                    for thread_id in threads:
+                        # Derived thread state may summarise the removed words.
+                        conn.execute(
+                            "UPDATE conversation_thread SET state_json=NULL,covered_sequence=0,"
+                            "archive_revision=archive_revision+1 WHERE thread_id=?",
+                            (thread_id,),
+                        )
+                    # Physically rewrite the search index without the removed words.
+                    conn.execute(
+                        "INSERT INTO conversation_event_fts(conversation_event_fts) VALUES('optimize')"
+                    )
+                    validate()
+                    conn.commit()
+                    self.access.store.change_revision += 1
+                    return MentionDeletionReceipt(
+                        current.owner_rows, current.jarvis_rows, current.projects
+                    )
+                except BaseException:
+                    conn.rollback()
+                    raise
+
+        result = await self.access.store._writer.run(erase)
+        self.access.local_revision += 1
+        for callback in self.access._invalidators:
+            callback("forget_mentions", None)
+        return result
+
+
+# -- forgetting what the owner said about something --------------------------
+#
+# Project forget removes a whole project. Mention forget removes only the saved
+# rows (in any live project) that contain ALL of the owner's words, plus every
+# Jarvis reply or tool result generated with one of them in context (evidence
+# edges, transitively). Owner turns that do not contain the words are kept.
+
+MAX_FORGET_TERMS = 6
+MAX_FORGET_ROWS = 64
+
+
+class ForgetTooBroadError(ValueError):
+    """The words match too many saved rows; the owner must be more specific."""
+
+
+@dataclass(frozen=True)
+class MentionForgetPreview:
+    terms: tuple[str, ...]
+    matched: tuple[str, ...]
+    derived: tuple[str, ...]
+    owner_rows: int
+    jarvis_rows: int
+    projects: tuple[str, ...]
+    digest: str
+
+
+def _and_expression(terms):
+    return " AND ".join(f'"{t}"*' if len(t) >= 3 else f'"{t}"' for t in terms)
+
+
+def _mentioning(conn, terms):
+    """Live rows whose text contains every term (FTS candidates, then an exact
+    case-insensitive check so stemming never widens the match)."""
+    rows = conn.execute(
+        "SELECT e.event_id,e.role,e.text,w.title,t.thread_id,t.archive_revision "
+        "FROM conversation_event_fts JOIN conversation_event e "
+        "ON e.rowid=conversation_event_fts.rowid "
+        "JOIN conversation_thread t ON t.thread_id=e.thread_id "
+        "JOIN conversation_workspace w ON w.project_id=t.project_id "
+        "WHERE conversation_event_fts MATCH ? AND w.forgotten_at IS NULL "
+        "AND e.payload_sha256<>? LIMIT ?",
+        (_and_expression(terms), REDACTED_DIGEST, MAX_FORGET_ROWS * 4 + 1),
+    ).fetchall()
+    return [r for r in rows if all(t in r[2].casefold() for t in terms)]
+
+
+_DEPENDANTS = """
+WITH RECURSIVE tainted(event_id) AS (
+    SELECT value FROM json_each(:seed)
+    UNION
+    SELECT d.event_id FROM conversation_event_dependency d
+    JOIN tainted ON tainted.event_id = d.source_event_id
+    JOIN conversation_event e ON e.event_id = d.event_id
+    WHERE e.role <> 'user' AND e.payload_sha256 <> :redacted
+)
+SELECT event_id FROM tainted
+"""
+
+
+def _mention_state(conn, terms):
+    rows = _mentioning(conn, terms)
+    if len(rows) > MAX_FORGET_ROWS:
+        raise ForgetTooBroadError(
+            "those words match too many saved messages; name it more specifically"
+        )
+    matched = tuple(sorted(r[0] for r in rows))
+    tainted = {
+        r[0]
+        for r in conn.execute(
+            _DEPENDANTS,
+            {"seed": json.dumps(list(matched)), "redacted": REDACTED_DIGEST},
+        )
+    }
+    derived = tuple(sorted(tainted - set(matched)))
+    everything = (*matched, *derived)
+    threads, owner, jarvis, titles = {}, 0, 0, set()
+    for start in range(0, len(everything), 256):
+        chunk = everything[start : start + 256]
+        marks = ",".join("?" for _ in chunk)
+        for role, title, thread_id, revision in conn.execute(
+            "SELECT e.role,w.title,t.thread_id,t.archive_revision FROM conversation_event e "
+            "JOIN conversation_thread t ON t.thread_id=e.thread_id "
+            "JOIN conversation_workspace w ON w.project_id=t.project_id "
+            f"WHERE e.event_id IN ({marks})",
+            chunk,
+        ):
+            threads[thread_id] = revision
+            titles.add(title)
+            if role == "user":
+                owner += 1
+            else:
+                jarvis += 1
+    import hashlib
+
+    digest = hashlib.sha256(
+        json.dumps(
+            [list(terms), list(matched), list(derived), sorted(threads.items())]
+        ).encode()
+    ).hexdigest()
+    return (
+        MentionForgetPreview(
+            tuple(terms), matched, derived, owner, jarvis, tuple(sorted(titles)), digest
+        ),
+        tuple(sorted(threads)),
+    )
+
+
+def _forget_terms(terms):
+    from .project_access import conversation_search_terms
+
+    folded = conversation_search_terms(" ".join(terms))
+    if not 1 <= len(folded) <= MAX_FORGET_TERMS:
+        raise ValueError("one to six distinctive words required")
+    return folded
+
+
+@dataclass(frozen=True)
+class MentionDeletionReceipt:
+    owner_rows: int
+    jarvis_rows: int
+    projects: tuple[str, ...]

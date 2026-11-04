@@ -53,8 +53,6 @@ def test_flag_off_builds_no_project_memory():
     [
         ({"memory_enabled": False}, "JARVIS_MEMORY_ENABLED"),
         ({"ai_provider": "openai"}, "JARVIS_AI_PROVIDER"),
-        ({"gemini_fallback": GeminiFallbackConfig(enabled=True)}, "handoff"),
-        ({"personal_context_mode": "apply"}, "JARVIS_PERSONAL_CONTEXT_MODE"),
     ],
 )
 def test_unqualified_combinations_run_as_ordinary_voice(change, reason, caplog):
@@ -63,6 +61,18 @@ def test_unqualified_combinations_run_as_ordinary_voice(change, reason, caplog):
     with caplog.at_level(logging.ERROR):
         assert production.production_project_memory_factory(config) is None
     assert "Project memory NOT active" in caplog.text and reason in caplog.text
+
+
+def test_fallback_and_personal_apply_are_compatible_with_project_memory():
+    """B2/B3 resolved (docs/PROJECT_MEMORY_COEXISTENCE.md)."""
+    config = replace(
+        QUALIFIED,
+        gemini_fallback=GeminiFallbackConfig(enabled=True),
+        personal_context_mode="apply",
+        personal_learning_mode="apply",
+    )
+    assert production.activation_blockers(config) == []
+    assert production.production_project_memory_factory(config) is not None
 
 
 def test_qualified_flag_builds_non_required_memory():
@@ -108,6 +118,7 @@ class StubMemory:
         turns = SimpleNamespace(
             bind_session=lambda s: None,
             bind_injection_registry=lambda r: None,
+            bind_retire=lambda r: None,
             observe_speech=lambda e: None,
             observe_turn=lambda t: None,
             close=lambda: None,

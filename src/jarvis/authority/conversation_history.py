@@ -88,6 +88,25 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
             destructive=True,
         )
 
+    def authorize_mention_deletion(self, material):
+        """Fresh owner approval (Windows Hello) to forget what was said about
+        something: only rows containing all the words, and Jarvis replies or
+        tool results generated with them in context."""
+        if material.get("operation") != "forget_mentions":
+            raise ValueError("mention deletion material required")
+        words = " ".join(material.get("terms", ()))
+        where = ", ".join(material.get("projects", ())) or "no project"
+        return self._authorize_history_change(
+            material,
+            target={"mentions": material["digest"]},
+            summary=f"Forget saved conversation mentioning '{words}': "
+            f"{int(material.get('owner_rows', 0))} of your messages and "
+            f"{int(material.get('jarvis_rows', 0))} Jarvis replies or tool results "
+            f"generated with them, in: {where}. Everything else is kept. Minimal "
+            "deletion identities are preserved to block late writes.",
+            destructive=True,
+        )
+
     def authorize_quarantine_resolution(self, material):
         """Fresh owner approval to end the upgrade quarantine (Windows Hello)."""
         if material.get("action") not in {"delete", "restore"}:

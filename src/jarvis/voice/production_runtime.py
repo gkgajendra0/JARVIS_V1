@@ -657,6 +657,9 @@ def build_production_voice_runtime(
         )
         bridge.add_accepted_turn_observer(silent_audio_recovery.observe_turn)
         bridge.add_close_observer(silent_audio_recovery.close)
+        # Project voice memory (opt-in) binds its response gate to this; with
+        # the flag off nothing binds and recovery behaves exactly as before.
+        bridge.silent_audio_recovery = silent_audio_recovery
         if candidate_extractor is not None:
             candidate_runtime = MemoryCandidateSessionRuntime(
                 conversation=bridge.conversation,
