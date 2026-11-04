@@ -15,6 +15,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from jarvis import startup_progress
 from jarvis.ai_provider import require_provider_api_key
 from jarvis.capabilities.runtime import build_default_capability_runtime
 from jarvis.capabilities.self_awareness_reads import SelfAwarenessReadExecutor
@@ -874,6 +875,7 @@ async def _run_from_configuration(
     while True:
         config = _load_voice_config(personal_context_mode, personal_learning_mode)
         configure_logging(config.log_level)
+        startup_progress.install()  # after logging: configuring clears handlers
         if has_pending_gemini_live_migration(config.gemini_realtime_model):
             migration_needs_preflight_validation = True
             LOGGER.warning(

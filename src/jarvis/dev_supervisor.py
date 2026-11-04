@@ -6,11 +6,13 @@ import json
 import os
 import queue
 import secrets
+import shutil
 import signal
 import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass
@@ -56,10 +58,16 @@ from jarvis.self_repair.windows_job import (
     WindowsJobObjectError,
     WindowsRuntimeJob,
 )
+from jarvis.startup_progress import STARTUP_PROGRESS_FILE_ENV, read_progress
 from jarvis.work.privacy import build_default_work_payload_codec
 from jarvis.work.store import SQLiteWorkStore, default_work_store_path
 
 _BRANCH_ENV = "JARVIS_DEV_BRANCH"
+# Startup is judged by progress, not by one deadline for the whole build: the
+# child may build for minutes on a cold start (CUDA model loads, Windows Hello).
+# ``startup_timeout_seconds`` is the longest allowed gap between startup
+# steps; this cap bounds the whole startup however steadily it progresses.
+STARTUP_MAX_SECONDS = 900.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,13 +277,75 @@ class VoiceControlServer:
         self._child_release_identity: RuntimeReleaseIdentity | None = None
         self._receive_buffer = bytearray()
         self._request_sequence = 0
+        self._progress_dir = Path(tempfile.mkdtemp(prefix="jarvis-startup-"))
+        self._progress_path = self._progress_dir / "progress.json"
+        self._process: subprocess.Popen | None = None
 
     def child_environment(self) -> dict[str, str]:
         return {
             DEV_CONTROL_HOST_ENV: str(self._host),
             DEV_CONTROL_PORT_ENV: str(self._port),
             DEV_CONTROL_TOKEN_ENV: self._token,
+            STARTUP_PROGRESS_FILE_ENV: str(self._progress_path),
         }
+
+    def watch_startup(self, process: subprocess.Popen) -> None:
+        """Judge the next startup of ``process`` by its progress heartbeat."""
+
+        self._process = process
+        try:
+            self._progress_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def _await_connection(
+        self,
+        *,
+        stall_seconds: float,
+        max_seconds: float | None = None,
+    ) -> None:
+        """Wait for the child's control connection while startup progresses.
+
+        Fails when the child exits, when no startup step completes for
+        ``stall_seconds`` (a hang), or after ``max_seconds`` in total. A child
+        without the heartbeat (older build) gets ``stall_seconds`` in total,
+        exactly as before.
+        """
+
+        if max_seconds is None:
+            max_seconds = STARTUP_MAX_SECONDS
+        started = time.monotonic()
+        last_change = started
+        last_seen: tuple | None = None
+        process = self._process
+        while True:
+            self._listener.settimeout(1.0)
+            try:
+                connection, _ = self._listener.accept()
+            except TimeoutError:
+                pass
+            else:
+                self._authenticate(connection, timeout_seconds=stall_seconds)
+                return
+            now = time.monotonic()
+            if process is not None and process.poll() is not None:
+                raise RuntimeError(
+                    f"JARVIS exited during startup (exit code {process.returncode})"
+                )
+            progress = read_progress(self._progress_path)
+            if progress is not None and (
+                process is None or progress.get("pid") == process.pid
+            ):
+                seen = (progress.get("pid"), progress.get("sequence"))
+                if seen != last_seen:
+                    last_seen, last_change = seen, now
+            if now - last_change > stall_seconds:
+                raise TimeoutError(
+                    f"no startup progress for {stall_seconds:g} s "
+                    f"(startup steps seen: {last_seen[1] if last_seen else 0})"
+                )
+            if now - started > max_seconds:
+                raise TimeoutError(f"startup exceeded {max_seconds:g} s")
 
     def _next_request_id(self) -> str:
         self._request_sequence += 1
@@ -325,6 +395,11 @@ class VoiceControlServer:
             return
         self._listener.settimeout(timeout_seconds)
         connection, _ = self._listener.accept()
+        self._authenticate(connection, timeout_seconds=timeout_seconds)
+
+    def _authenticate(
+        self, connection: socket.socket, *, timeout_seconds: float
+    ) -> None:
         connection.settimeout(timeout_seconds)
         self._connection = connection
         self._receive_buffer.clear()
@@ -360,8 +435,12 @@ class VoiceControlServer:
         expected_release: RuntimeReleaseIdentity | None = None,
     ) -> None:
         """Require authenticated readiness and, when supplied, exact release identity."""
-        deadline = time.monotonic() + timeout_seconds
         try:
+            if self._connection is None and self._process is not None:
+                self._await_connection(stall_seconds=timeout_seconds)
+            # Connected: initialization is done; readiness follows within the
+            # usual window (vision and audio start).
+            deadline = time.monotonic() + timeout_seconds
             self._ensure_child(timeout_seconds=timeout_seconds)
             while True:
                 remaining = deadline - time.monotonic()
@@ -508,6 +587,7 @@ class VoiceControlServer:
     def close(self) -> None:
         self._reset_child()
         self._listener.close()
+        shutil.rmtree(self._progress_dir, ignore_errors=True)
 
 
 def _config_from_environment() -> DevSupervisorConfig:
@@ -564,6 +644,7 @@ def _start_jarvis(
             process.kill()
             process.wait(timeout=3.0)
         raise
+    control.watch_startup(process)
     print(f"JARVIS started (pid={process.pid}).")
     return process
 
