@@ -16,6 +16,7 @@ from .learning_contracts import (
     LearningCandidate,
     LearningEligibility,
 )
+from .project_routing import is_project_control_command
 
 
 class LearningPolicy:
@@ -26,7 +27,12 @@ class LearningPolicy:
             reject_prohibited_secret(predicate="", value=source.text)
         except (ExplicitMemoryAuthorizationError, MemorySecretRejectedError):
             return False
-        return not is_explicit_memory_control_text(source.text)
+        if is_explicit_memory_control_text(source.text):
+            return False
+        # "Create a project called Nepal trip" / "Switch to Nepal trip" control
+        # project memory; they are not statements about the owner's life
+        # (production 2026-11-04: a create command was stored as a plan).
+        return not is_project_control_command(source.text)
 
     def evaluate(self, source, candidate, suppressed_categories=frozenset()):
         try:

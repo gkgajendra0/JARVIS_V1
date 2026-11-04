@@ -110,7 +110,27 @@ def embedded_project_command(text: str):
 
 
 _KEYWORD = r"(?P<kw>called|named)\s+"
+_SPOKEN_BREAK = r"\s*[.,;:!?\u2013\u2014-]+\s*"
 _CREATE_COMMANDS = (
+    # Speech-to-text splits one spoken command into sentences: "Create a
+    # project. Called Nepal trip." Punctuation is accepted only directly before
+    # "called"/"named", and the name then gets the strict check (1-4 words, no
+    # sentence words), so "Create a project. Called my mom about it." is not
+    # read as a project name. These come first: the
+    # next pattern would read "— called Goa" as a bare name.
+    re.compile(
+        _POLITE
+        + r"(?:create|add|make|start)\s+(?:a\s+|an\s+)?(?:new\s+)?project"
+        + _SPOKEN_BREAK
+        + r"(?P<split_kw>called|named)\s+(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^new\s+project"
+        + _SPOKEN_BREAK
+        + r"(?P<split_kw>called|named)\s+(?:my\s+|the\s+)?(?P<name>.+?)[.?!]*$",
+        re.IGNORECASE,
+    ),
     # "create project Nepal", "create a new project called Nepal",
     # "can you create a project for Nepal?"
     re.compile(
@@ -254,6 +274,21 @@ def parse_project_command(text):
         )
         return match.group(1).strip(" .?!"), kind
     return None, None
+
+
+def is_project_control_command(text: str) -> bool:
+    """A command that only creates or switches a project.
+
+    Personal learning skips these. "Resume my thesis writing tomorrow" or "let's
+    plan my Goa trip" also route as project commands, but they describe the
+    owner's life, so only create and "switch to"/"open project" count.
+    """
+    _, kind = parse_project_command(text)
+    if kind == "create":
+        return True
+    return kind == "select" and bool(
+        re.match(r"(?:switch to|open project)\b", strip_lead_in(text), re.IGNORECASE)
+    )
 
 
 _SELECT_BY_ID = re.compile(r"select project (\S+)(?: thread (\S+))?", re.IGNORECASE)
