@@ -166,7 +166,10 @@ class DevControlClient:
 
     def mark_ready(self) -> None:
         """Publish that core runtime initialization completed successfully."""
+        from jarvis import startup_progress
+
         self._runtime_ready = True
+        startup_progress.finish()
 
     @classmethod
     def from_environment(cls) -> DevControlClient | None:

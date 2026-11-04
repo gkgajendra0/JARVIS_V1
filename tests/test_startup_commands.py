@@ -10,6 +10,9 @@ class FakeControl:
     def child_environment(self) -> dict[str, str]:
         return {"JARVIS_TEST_CONTROL": "1"}
 
+    def watch_startup(self, process) -> None:
+        self.watched = process
+
 
 def test_dev_supervisor_launches_same_production_runtime_as_jarvis_voice(
     monkeypatch,
