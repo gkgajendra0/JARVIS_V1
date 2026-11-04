@@ -119,6 +119,7 @@ class MemoryService:
         self._reader = reader
         self._learning_authority = None
         self._learning_invalidator = None
+        self._plan_epoch_refresher = None
 
     def bind_learning_invalidator(self, callback):
         if self._learning_invalidator is not None or not callable(callback):
@@ -128,6 +129,15 @@ class MemoryService:
     def _invalidate_learning(self):
         if self._learning_invalidator:
             self._learning_invalidator()
+
+    def bind_plan_epoch_refresher(self, callback):
+        if self._plan_epoch_refresher is not None or not callable(callback):
+            raise RuntimeError("plan epoch refresher already bound or invalid")
+        self._plan_epoch_refresher = callback
+
+    async def _refresh_plan_epoch(self):
+        if self._plan_epoch_refresher is not None:
+            await self._plan_epoch_refresher()
 
     @property
     def canonical_reader(self):
@@ -204,6 +214,8 @@ class MemoryService:
         await self._lifecycle.suppress_learning_categories(
             categories, source, permit, authority, binding
         )
+        if "plan" in categories:
+            await self._refresh_plan_epoch()
 
     async def reenable_learning_category(self, category, explicit_source, commit_guard):
         from jarvis.personal_learning_scope import SUPPRESSION_KEYS
@@ -221,6 +233,8 @@ class MemoryService:
         await self._lifecycle.reenable_learning_category(
             category, explicit_source, commit_guard, self._learning_authority
         )
+        if category == "plan":
+            await self._refresh_plan_epoch()
         self._invalidate_learning()
 
     async def remember_text(
@@ -293,6 +307,9 @@ class MemoryService:
             commit_guard=commit_guard,
         )
         self._invalidate_learning()
+        # An explicit legacy plan correction may have advanced the plan epoch
+        # and erased checkpoints in the same canonical transaction.
+        await self._refresh_plan_epoch()
         return ExplicitMemoryResult(predicate=key, record=record)
 
     async def forget_exact(
@@ -324,6 +341,10 @@ class MemoryService:
         if not forgotten:
             raise MemoryNotFoundError(f"memory disappeared before forget for {key!r}")
         self._invalidate_learning()
+        # Legacy exact forgetting can now suppress the plan category inside its
+        # SQLCipher transaction. Refresh the cached epoch after any exact delete;
+        # unchanged generations are harmless and there is no voice-path read.
+        await self._refresh_plan_epoch()
         after = await self._reader.find_current_exact(
             subject_scope=_PERSONAL_SCOPE,
             subject=_OWNER_SUBJECT,

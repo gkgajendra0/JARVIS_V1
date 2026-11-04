@@ -163,8 +163,31 @@ def build_production_voice_runtime(
     provider_lifecycle_trigger: asyncio.Event | None = None,
     provider_migration_rollback_trigger: asyncio.Event | None = None,
     gemini_live_diagnostic_plan=None,
+    semantic_session_factory=None,
+    topic_continuity_factory=None,
+    project_memory_factory=None,
+    voice_session_observer=None,
+    tool_allowlist=None,
+    session_audio_tap=None,
 ) -> CanonicalActiveSpeakerRuntimeController:
-    """Build the production single-microphone-owner voice/vision runtime."""
+    """Build the production single-microphone-owner voice/vision runtime.
+
+    ``project_memory_factory``, ``voice_session_observer``, ``tool_allowlist``
+    and ``session_audio_tap`` are disabled by default and passed only by the
+    isolated project voice lab. Normal Jarvis builds project memory only when
+    the owner sets ``JARVIS_PROJECT_MEMORY_MODE=voice``
+    (:mod:`jarvis.voice.project_voice_production`).
+    """
+    if project_memory_factory is None:
+        # Owner-activated normal-voice project memory; None while the flag is
+        # off (default), which leaves the runtime exactly as before.
+        from jarvis.voice.project_voice_production import (
+            production_project_memory_factory,
+        )
+
+        project_memory_factory = production_project_memory_factory(config)
+    if project_memory_factory is not None and not config.memory_enabled:
+        raise ValueError("project voice memory requires canonical memory")
     if config.wake_model_path is None:
         raise RuntimeError("wake model is required for Step-2 wake mode")
     if config.active_speaker_shadow_enabled and not config.speaker_shadow_enabled:
@@ -634,6 +657,9 @@ def build_production_voice_runtime(
         )
         bridge.add_accepted_turn_observer(silent_audio_recovery.observe_turn)
         bridge.add_close_observer(silent_audio_recovery.close)
+        # Project voice memory (opt-in) binds its response gate to this; with
+        # the flag off nothing binds and recovery behaves exactly as before.
+        bridge.silent_audio_recovery = silent_audio_recovery
         if candidate_extractor is not None:
             candidate_runtime = MemoryCandidateSessionRuntime(
                 conversation=bridge.conversation,
@@ -666,6 +692,36 @@ def build_production_voice_runtime(
         work_runtime=work_runtime,
         routing_runtime=routing_runtime,
         session_factory=production_session_factory,
+        **(
+            {"semantic_session_factory": semantic_session_factory}
+            if semantic_session_factory is not None
+            else {}
+        ),
+        **(
+            {"topic_continuity_factory": topic_continuity_factory}
+            if topic_continuity_factory is not None
+            else {}
+        ),
+        **(
+            {
+                "project_memory": project_memory_factory(
+                    memory_runtime, capability_runtime
+                )
+            }
+            if project_memory_factory is not None
+            else {}
+        ),
+        **(
+            {"voice_session_observer": voice_session_observer}
+            if voice_session_observer is not None
+            else {}
+        ),
+        **({"tool_allowlist": tool_allowlist} if tool_allowlist is not None else {}),
+        **(
+            {"session_audio_tap": session_audio_tap}
+            if session_audio_tap is not None
+            else {}
+        ),
         local_status_speech=local_status_speech,
         startup_readiness_waiter=(
             tracking_observer.wait_for_startup_lock

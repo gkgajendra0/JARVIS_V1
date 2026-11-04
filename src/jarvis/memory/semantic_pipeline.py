@@ -1,0 +1,341 @@
+"""Nonblocking, authorization-bound semantic ingestion for canonical voice turns.
+
+The pipeline does not own persistent memory or model-context release. It is
+deliberately separate from the audio critical path, and cannot synthesize
+canonical turns. The embedding application must rotate authorization bindings
+when owner authority changes and call invalidate() on a lock or revocation.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
+from time import monotonic
+
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+    ConversationTurn,
+)
+
+from .conversation_semantics import (
+    SemanticContextEngine,
+    SemanticProposal,
+    SemanticRejected,
+    TopicSnapshot,
+)
+
+LOGGER = logging.getLogger(__name__)
+
+# Never interpolate exception text: provider/validation errors can contain source
+# or payload content. Only these reviewed literal messages become diagnostics.
+_REJECTION_CODES = {
+    "no active topic; explicit topic required": "no_active_topic",
+    "topic must be named in the user evidence": "topic_not_in_evidence",
+    "cannot modify inactive topic implicitly": "inactive_topic",
+    "unsupported semantic interpretation": "unsupported_interpretation",
+    "unsupported semantic field key": "unsupported_field_key",
+    "invalid topic or field key": "invalid_key",
+    "correction has no target": "correction_without_target",
+    "completion must name the pending step": "completion_step_not_named",
+    "completion has no matching pending step": "completion_without_step",
+    "completion needs explicit confirmed state": "completion_not_confirmed",
+    "completed work cannot be pending": "completed_work_proposed_pending",
+    "proposal does not match exact user evidence": "evidence_mismatch",
+    "missing semantic value": "missing_value",
+    "missing field key": "missing_field_key",
+    "unquoted numerical claim": "unsupported_number",
+    "ambiguous negated semantic interpretation": "ambiguous_negation",
+    "question is not an owner factual statement": "question_not_statement",
+    "semantic external inference source denied": "source_denied",
+    "ambiguous or unsupported semantic quote": "ambiguous_quote",
+    "canonical source or owner authority changed": "source_or_authority_changed",
+    "owner authority unavailable": "authority_unavailable",
+    "source clearance failed": "clearance_failed",
+    "stale asynchronous turn": "stale_turn",
+    "stale semantic context generation": "stale_epoch",
+}
+
+ProposalProducer = Callable[[ConversationTurn], Awaitable[Sequence[SemanticProposal]]]
+AuthorizationBinding = Callable[[], str | None]
+AcceptedPlanEpoch = Callable[[ConversationTurn], int]
+AppliedStateCallback = Callable[
+    [
+        ConversationTurn,
+        tuple[SemanticProposal, ...],
+        TopicSnapshot | None,
+        TopicSnapshot | None,
+        int,
+    ],
+    Awaitable[None],
+]
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticPipelineStatus:
+    submitted: int
+    applied: int
+    dropped: int
+    failures: int
+    queued: int
+
+
+class SemanticTurnPipeline:
+    """Single-writer semantic queue, with bounded work and revoke fencing.
+
+    A binding is an opaque, rotating authorization epoch from the existing
+    authority system, not a user ID or an API key. No binding means no work.
+    Successful proposals are still *transient*, not permission to release state.
+    """
+
+    def __init__(
+        self,
+        *,
+        conversation: ConversationSession,
+        state: SemanticContextEngine,
+        producer: ProposalProducer,
+        authorization_binding: AuthorizationBinding,
+        on_applied: AppliedStateCallback | None = None,
+        accepted_plan_epoch: AcceptedPlanEpoch | None = None,
+        max_pending: int = 16,
+        timeout_seconds: float = 5.0,
+    ) -> None:
+        if not isinstance(conversation, ConversationSession):
+            raise TypeError("conversation must be canonical")
+        if not isinstance(state, SemanticContextEngine):
+            raise TypeError("state must be SemanticContextEngine")
+        if not callable(producer) or not callable(authorization_binding):
+            raise TypeError("producer and authorization_binding must be callable")
+        if type(max_pending) is not int or not 1 <= max_pending <= 128:
+            raise ValueError("max_pending must be between 1 and 128")
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, int | float)
+            or not 0 < float(timeout_seconds) <= 20
+        ):
+            raise ValueError("timeout_seconds must be in (0, 20]")
+        self._conversation = conversation
+        self.state = state
+        self._producer = producer
+        self._authorization_binding = authorization_binding
+        if on_applied is not None and (
+            not callable(on_applied) or not callable(accepted_plan_epoch)
+        ):
+            raise TypeError(
+                "persisted state requires async callback and accepted-turn epoch"
+            )
+        self._on_applied = on_applied
+        self._accepted_plan_epoch = accepted_plan_epoch
+        self._timeout_seconds = float(timeout_seconds)
+        self._queue: asyncio.Queue[tuple[ConversationTurn, str, int, int]] = (
+            asyncio.Queue(maxsize=max_pending)
+        )
+        self._worker: asyncio.Task[None] | None = None
+        self._binding: str | None = None
+        self._submitted_ids: set[str] = set()
+        self._closed = False
+        self._submitted = 0
+        self._applied = 0
+        self._dropped = 0
+        self._failures = 0
+
+    @property
+    def status(self) -> SemanticPipelineStatus:
+        return SemanticPipelineStatus(
+            submitted=self._submitted,
+            applied=self._applied,
+            dropped=self._dropped,
+            failures=self._failures,
+            queued=self._queue.qsize(),
+        )
+
+    def start(self) -> None:
+        if self._closed:
+            raise RuntimeError("pipeline is closed")
+        if self._worker is not None:
+            raise RuntimeError("pipeline already started")
+        self._worker = asyncio.create_task(
+            self._run(), name="jarvis-semantic-turn-pipeline"
+        )
+
+    def submit(self, turn: ConversationTurn) -> bool:
+        """An accepted-turn observer may call this without awaiting inference."""
+        if self._closed or self._worker is None:
+            return False
+        if (
+            not isinstance(turn, ConversationTurn)
+            or turn.role is not ConversationRole.USER
+            or self._conversation.status is not ConversationStatus.ACTIVE
+            or not self._conversation.turns
+            or self._conversation.turns[-1] is not turn
+            or turn.turn_id in self._submitted_ids
+            or len(self._submitted_ids) >= 4096
+        ):
+            self._dropped += 1
+            return False
+        binding = self._current_binding()
+        if binding is None:
+            self.invalidate()
+            self._dropped += 1
+            return False
+        if self._binding is not None and binding != self._binding:
+            self.invalidate()
+        self._binding = binding
+        try:
+            plan_epoch = (
+                self._accepted_plan_epoch(turn)
+                if self._accepted_plan_epoch is not None
+                else 0
+            )
+            if type(plan_epoch) is not int or plan_epoch < 0:
+                raise ValueError("invalid accepted-turn plan epoch")
+        except Exception:  # noqa: BLE001 - reject invalid external epoch callbacks
+            self._dropped += 1
+            return False
+        try:
+            self._queue.put_nowait((turn, binding, self.state.epoch, plan_epoch))
+        except asyncio.QueueFull:
+            self._dropped += 1
+            return False
+        self._submitted += 1
+        self._submitted_ids.add(turn.turn_id)
+        return True
+
+    def invalidate(self) -> None:
+        """Must be called on owner lock, grant expiry, or protected retirement."""
+        self.state.clear()
+        self._binding = None
+        while True:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            self._queue.task_done()
+            self._dropped += 1
+
+    async def drain(self) -> None:
+        """Test/integration flush; never call on the synchronous voice path."""
+        await self._queue.join()
+
+    def request_close(self) -> None:
+        """Synchronously revoke and cancel work from a voice close observer."""
+        if self._closed:
+            return
+        self._closed = True
+        self.invalidate()
+        if self._worker is not None:
+            self._worker.cancel()
+
+    async def close(self) -> None:
+        self.request_close()
+        task, self._worker = self._worker, None
+        if task is None:
+            return
+        # A routed model producer may ignore cancellation temporarily.
+        # Voice retirement must not wait forever for third-party I/O.
+        _done, pending = await asyncio.wait({task}, timeout=1.0)
+        if pending:
+            LOGGER.warning(
+                "Semantic inference did not cancel promptly; context remains revoked"
+            )
+            task.add_done_callback(self._consume_closed_worker)
+            return
+        self._consume_closed_worker(task)
+
+    @staticmethod
+    def _consume_closed_worker(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception:
+            LOGGER.exception("Semantic worker failed during shutdown")
+
+    def _current_binding(self) -> str | None:
+        try:
+            value = self._authorization_binding()
+        except Exception:
+            LOGGER.exception("Semantic owner binding check failed")
+            return None
+        return value if type(value) is str and value.strip() else None
+
+    async def _run(self) -> None:
+        while True:
+            turn, binding, epoch, plan_epoch = await self._queue.get()
+            stage = "producer"
+            started = monotonic()
+            try:
+                if not self._still_authorized(binding, epoch):
+                    self._dropped += 1
+                    continue
+                proposals = await asyncio.wait_for(
+                    self._producer(turn), timeout=self._timeout_seconds
+                )
+                if not self._still_authorized(binding, epoch):
+                    self._dropped += 1
+                    continue
+                if not isinstance(proposals, (tuple, list)):
+                    raise SemanticRejected("producer must return a proposal sequence")
+                before = self.state.snapshot()
+                stage = "reducer"
+                changed = self.state.apply(
+                    self._conversation, turn, proposals, epoch=epoch
+                )
+                self._applied += 1
+                if (
+                    changed
+                    and self._on_applied is not None
+                    and self._still_authorized(binding, epoch)
+                ):
+                    try:
+                        stage = "applied_callback"
+                        await self._on_applied(
+                            turn,
+                            tuple(proposals),
+                            before,
+                            self.state.snapshot(),
+                            plan_epoch,
+                        )
+                    except BaseException:
+                        # A failed durable save/forget cannot leave an
+                        # apparently committed transient semantic state.
+                        # Invalidate pending work and all derived context.
+                        self.invalidate()
+                        raise
+            except asyncio.CancelledError:
+                raise
+            except (SemanticRejected, TimeoutError, ValueError, TypeError) as exc:
+                self._failures += 1
+                if isinstance(exc, SemanticRejected):
+                    reason = _REJECTION_CODES.get(str(exc), "unclassified_rejection")
+                elif isinstance(exc, TimeoutError):
+                    reason = "timeout"
+                elif isinstance(exc, TypeError):
+                    reason = "invalid_type"
+                else:
+                    reason = "invalid_value"
+                LOGGER.warning(
+                    "Semantic update rejected | stage=%s | reason=%s | "
+                    "elapsed_ms=%.1f | deadline_s=%.1f",
+                    stage,
+                    reason,
+                    (monotonic() - started) * 1000,
+                    self._timeout_seconds,
+                )
+            except Exception:
+                self._failures += 1
+                LOGGER.exception("Semantic producer failed; conversation continues")
+            finally:
+                self._queue.task_done()
+
+    def _still_authorized(self, binding: str, epoch: int) -> bool:
+        return (
+            not self._closed
+            and self._conversation.status is ConversationStatus.ACTIVE
+            and epoch == self.state.epoch
+            and self._binding == binding
+            and self._current_binding() == binding
+        )

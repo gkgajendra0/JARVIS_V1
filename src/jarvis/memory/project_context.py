@@ -1,0 +1,101 @@
+"""Bounded source material; originals remain evidence, never executable policy."""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC
+
+
+def conservative_token_bound(text: str) -> int:
+    """UTF-8 wire-byte upper estimate, matching the existing paid routing bound.
+
+    Deliberately overestimates ordinary text; this is not a calibrated tokenizer
+    or a report of provider usage. Actual provider usage is retained separately.
+    """
+    return len(text.encode("utf-8")) + 32
+
+
+def build_project_context(
+    snapshot, *, extra_sources=(), personal=None, retrieval=(), routing=None
+):
+    personal = personal or {"status": "not_requested", "facts": []}
+    base = {
+        "project_id": snapshot.selection.project_id,
+        "thread_id": snapshot.selection.thread_id,
+        "project_title": snapshot.title,
+        "archive_revision": snapshot.archive_revision,
+        "last_committed_sequence": snapshot.last_sequence,
+        "coverage": snapshot.status,
+        "omitted_source_count": snapshot.omissions,
+        "personal": personal,
+        "retrieval": list(retrieval),
+        "sources": [],
+        **({"routing": dict(routing)} if routing is not None else {}),
+        "omitted_source_ids": [],
+    }
+    # Recent uncovered discussion is independent of model-selected state patches.
+    candidates = {s.event.event_id: s for s in (*snapshot.sources, *extra_sources)}
+    # Reserve coverage metadata before selecting text. Appending omitted IDs only
+    # after filling the text budget can itself overflow a long project's packet.
+    base["omitted_source_ids"] = list(candidates)
+    selected = []
+    # Retain search admission priorities through byte-budget selection. Only the
+    # admitted rows are then presented chronologically; priority is not evidence
+    # of truth and is never serialized as source content.
+    prioritized = list(reversed(extra_sources))
+    prioritized.sort(key=lambda s: s.search_priority, reverse=True)
+    preferred = [
+        *(s for s in prioritized if s.event.role == "user"),
+        *(s for s in prioritized if s.event.role != "user"),
+        *reversed(snapshot.sources),
+    ]
+    seen = set()
+    for source in preferred:
+        event = source.event
+        if event.event_id in seen:
+            continue
+        seen.add(event.event_id)
+        row = {
+            "source_id": event.event_id,
+            "thread_id": source.thread_id or snapshot.selection.thread_id,
+            "sequence": source.sequence,
+            "role": event.role,
+            "accepted_at": event.accepted_at.astimezone(UTC).isoformat(),
+            "delivery": event.delivery,
+            "text": event.text,
+        }
+        if source.project_id and source.project_id != snapshot.selection.project_id:
+            # Soft separation: evidence from another project is labelled, never
+            # presented as part of the selected project's own discussion.
+            row["from_project"] = source.project_title
+        remaining_ids = [
+            identity
+            for identity in base["omitted_source_ids"]
+            if identity != event.event_id
+        ]
+        trial = {
+            **base,
+            "sources": [*selected, row],
+            "omitted_source_ids": remaining_ids,
+        }
+        if (
+            conservative_token_bound(
+                json.dumps(trial, ensure_ascii=False, separators=(",", ":"))
+            )
+            <= 5600
+        ):
+            selected.append(row)
+            base["omitted_source_ids"] = remaining_ids
+    selected.sort(key=lambda s: (s["accepted_at"], s["thread_id"], s["sequence"]))
+    base["sources"] = selected
+    if len(selected) < len(candidates):
+        base["coverage"] = "partial"
+    text = json.dumps(base, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if conservative_token_bound(text) > 6000:
+        # Never truncate personal values or source text invisibly.
+        raise ValueError("personal/context metadata exceeds external budget")
+    return (
+        text,
+        tuple(row["source_id"] for row in selected),
+        conservative_token_bound(text),
+    )

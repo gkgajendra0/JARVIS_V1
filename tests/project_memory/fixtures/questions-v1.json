@@ -1,0 +1,2182 @@
+[
+  {
+    "id": "p0-q0",
+    "split": "development",
+    "project_id": "p0",
+    "question": "What resource did I choose for Nepal trip?",
+    "expected": "Jimny",
+    "source_ids": [
+      "p0-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q1",
+    "split": "development",
+    "project_id": "p0",
+    "question": "What is the latest status of Nepal trip?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p0-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q2",
+    "split": "development",
+    "project_id": "p0",
+    "question": "What is the corrected budget for Nepal trip?",
+    "expected": "12000",
+    "source_ids": [
+      "p0-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q3",
+    "split": "development",
+    "project_id": "p0",
+    "question": "Did I say I owned the rental for Nepal trip?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p0-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q4",
+    "split": "development",
+    "project_id": "p0",
+    "question": "What external action has Jarvis executed for Nepal trip?",
+    "expected": "none",
+    "source_ids": [
+      "p0-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q5",
+    "split": "development",
+    "project_id": "p0",
+    "question": "What is my diet for Nepal trip?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q6",
+    "split": "held_out",
+    "project_id": "p0",
+    "question": "Nepal trip ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p0-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q7",
+    "split": "held_out",
+    "project_id": "p0",
+    "question": "Nepal trip की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p0-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q8",
+    "split": "held_out",
+    "project_id": "p0",
+    "question": "Was the hotel booking done for Nepal trip?",
+    "expected": "not booked",
+    "source_ids": [
+      "p0-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p0-q9",
+    "split": "held_out",
+    "project_id": "p0",
+    "question": "For Nepal trip, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p0-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q0",
+    "split": "development",
+    "project_id": "p1",
+    "question": "What resource did I choose for Interview preparation?",
+    "expected": "Snowflake",
+    "source_ids": [
+      "p1-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q1",
+    "split": "development",
+    "project_id": "p1",
+    "question": "What is the latest status of Interview preparation?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p1-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q2",
+    "split": "development",
+    "project_id": "p1",
+    "question": "What is the corrected budget for Interview preparation?",
+    "expected": "12000",
+    "source_ids": [
+      "p1-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q3",
+    "split": "development",
+    "project_id": "p1",
+    "question": "Did I say I owned the rental for Interview preparation?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p1-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q4",
+    "split": "development",
+    "project_id": "p1",
+    "question": "What external action has Jarvis executed for Interview preparation?",
+    "expected": "none",
+    "source_ids": [
+      "p1-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q5",
+    "split": "development",
+    "project_id": "p1",
+    "question": "What is my diet for Interview preparation?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q6",
+    "split": "held_out",
+    "project_id": "p1",
+    "question": "Interview preparation ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p1-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q7",
+    "split": "held_out",
+    "project_id": "p1",
+    "question": "Interview preparation की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p1-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q8",
+    "split": "held_out",
+    "project_id": "p1",
+    "question": "Was the hotel booking done for Interview preparation?",
+    "expected": "not booked",
+    "source_ids": [
+      "p1-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p1-q9",
+    "split": "held_out",
+    "project_id": "p1",
+    "question": "For Interview preparation, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p1-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q0",
+    "split": "development",
+    "project_id": "p2",
+    "question": "What resource did I choose for Car service?",
+    "expected": "service centre",
+    "source_ids": [
+      "p2-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q1",
+    "split": "development",
+    "project_id": "p2",
+    "question": "What is the latest status of Car service?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p2-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q2",
+    "split": "development",
+    "project_id": "p2",
+    "question": "What is the corrected budget for Car service?",
+    "expected": "12000",
+    "source_ids": [
+      "p2-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q3",
+    "split": "development",
+    "project_id": "p2",
+    "question": "Did I say I owned the rental for Car service?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p2-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q4",
+    "split": "development",
+    "project_id": "p2",
+    "question": "What external action has Jarvis executed for Car service?",
+    "expected": "none",
+    "source_ids": [
+      "p2-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q5",
+    "split": "development",
+    "project_id": "p2",
+    "question": "What is my diet for Car service?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q6",
+    "split": "held_out",
+    "project_id": "p2",
+    "question": "Car service ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p2-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q7",
+    "split": "held_out",
+    "project_id": "p2",
+    "question": "Car service की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p2-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q8",
+    "split": "held_out",
+    "project_id": "p2",
+    "question": "Was the hotel booking done for Car service?",
+    "expected": "not booked",
+    "source_ids": [
+      "p2-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p2-q9",
+    "split": "held_out",
+    "project_id": "p2",
+    "question": "For Car service, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p2-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q0",
+    "split": "development",
+    "project_id": "p3",
+    "question": "What resource did I choose for Data migration?",
+    "expected": "dbt",
+    "source_ids": [
+      "p3-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q1",
+    "split": "development",
+    "project_id": "p3",
+    "question": "What is the latest status of Data migration?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p3-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q2",
+    "split": "development",
+    "project_id": "p3",
+    "question": "What is the corrected budget for Data migration?",
+    "expected": "12000",
+    "source_ids": [
+      "p3-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q3",
+    "split": "development",
+    "project_id": "p3",
+    "question": "Did I say I owned the rental for Data migration?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p3-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q4",
+    "split": "development",
+    "project_id": "p3",
+    "question": "What external action has Jarvis executed for Data migration?",
+    "expected": "none",
+    "source_ids": [
+      "p3-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q5",
+    "split": "development",
+    "project_id": "p3",
+    "question": "What is my diet for Data migration?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q6",
+    "split": "held_out",
+    "project_id": "p3",
+    "question": "Data migration ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p3-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q7",
+    "split": "held_out",
+    "project_id": "p3",
+    "question": "Data migration की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p3-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q8",
+    "split": "held_out",
+    "project_id": "p3",
+    "question": "Was the hotel booking done for Data migration?",
+    "expected": "not booked",
+    "source_ids": [
+      "p3-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p3-q9",
+    "split": "held_out",
+    "project_id": "p3",
+    "question": "For Data migration, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p3-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q0",
+    "split": "development",
+    "project_id": "p4",
+    "question": "What resource did I choose for Home solar?",
+    "expected": "inverter",
+    "source_ids": [
+      "p4-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q1",
+    "split": "development",
+    "project_id": "p4",
+    "question": "What is the latest status of Home solar?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p4-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q2",
+    "split": "development",
+    "project_id": "p4",
+    "question": "What is the corrected budget for Home solar?",
+    "expected": "12000",
+    "source_ids": [
+      "p4-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q3",
+    "split": "development",
+    "project_id": "p4",
+    "question": "Did I say I owned the rental for Home solar?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p4-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q4",
+    "split": "development",
+    "project_id": "p4",
+    "question": "What external action has Jarvis executed for Home solar?",
+    "expected": "none",
+    "source_ids": [
+      "p4-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q5",
+    "split": "development",
+    "project_id": "p4",
+    "question": "What is my diet for Home solar?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q6",
+    "split": "held_out",
+    "project_id": "p4",
+    "question": "Home solar ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p4-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q7",
+    "split": "held_out",
+    "project_id": "p4",
+    "question": "Home solar की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p4-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q8",
+    "split": "held_out",
+    "project_id": "p4",
+    "question": "Was the hotel booking done for Home solar?",
+    "expected": "not booked",
+    "source_ids": [
+      "p4-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p4-q9",
+    "split": "held_out",
+    "project_id": "p4",
+    "question": "For Home solar, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p4-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q0",
+    "split": "development",
+    "project_id": "p5",
+    "question": "What resource did I choose for German study?",
+    "expected": "grammar book",
+    "source_ids": [
+      "p5-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q1",
+    "split": "development",
+    "project_id": "p5",
+    "question": "What is the latest status of German study?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p5-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q2",
+    "split": "development",
+    "project_id": "p5",
+    "question": "What is the corrected budget for German study?",
+    "expected": "12000",
+    "source_ids": [
+      "p5-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q3",
+    "split": "development",
+    "project_id": "p5",
+    "question": "Did I say I owned the rental for German study?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p5-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q4",
+    "split": "development",
+    "project_id": "p5",
+    "question": "What external action has Jarvis executed for German study?",
+    "expected": "none",
+    "source_ids": [
+      "p5-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q5",
+    "split": "development",
+    "project_id": "p5",
+    "question": "What is my diet for German study?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q6",
+    "split": "held_out",
+    "project_id": "p5",
+    "question": "German study ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p5-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q7",
+    "split": "held_out",
+    "project_id": "p5",
+    "question": "German study की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p5-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q8",
+    "split": "held_out",
+    "project_id": "p5",
+    "question": "Was the hotel booking done for German study?",
+    "expected": "not booked",
+    "source_ids": [
+      "p5-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p5-q9",
+    "split": "held_out",
+    "project_id": "p5",
+    "question": "For German study, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p5-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p6",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q0",
+    "split": "development",
+    "project_id": "p6",
+    "question": "What resource did I choose for Bike tour?",
+    "expected": "motorcycle",
+    "source_ids": [
+      "p6-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q1",
+    "split": "development",
+    "project_id": "p6",
+    "question": "What is the latest status of Bike tour?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p6-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q2",
+    "split": "development",
+    "project_id": "p6",
+    "question": "What is the corrected budget for Bike tour?",
+    "expected": "12000",
+    "source_ids": [
+      "p6-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q3",
+    "split": "development",
+    "project_id": "p6",
+    "question": "Did I say I owned the rental for Bike tour?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p6-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q4",
+    "split": "development",
+    "project_id": "p6",
+    "question": "What external action has Jarvis executed for Bike tour?",
+    "expected": "none",
+    "source_ids": [
+      "p6-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q5",
+    "split": "development",
+    "project_id": "p6",
+    "question": "What is my diet for Bike tour?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q6",
+    "split": "held_out",
+    "project_id": "p6",
+    "question": "Bike tour ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p6-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q7",
+    "split": "held_out",
+    "project_id": "p6",
+    "question": "Bike tour की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p6-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q8",
+    "split": "held_out",
+    "project_id": "p6",
+    "question": "Was the hotel booking done for Bike tour?",
+    "expected": "not booked",
+    "source_ids": [
+      "p6-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p6-q9",
+    "split": "held_out",
+    "project_id": "p6",
+    "question": "For Bike tour, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p6-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p7",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q0",
+    "split": "development",
+    "project_id": "p7",
+    "question": "What resource did I choose for Fitness plan?",
+    "expected": "training plan",
+    "source_ids": [
+      "p7-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q1",
+    "split": "development",
+    "project_id": "p7",
+    "question": "What is the latest status of Fitness plan?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p7-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q2",
+    "split": "development",
+    "project_id": "p7",
+    "question": "What is the corrected budget for Fitness plan?",
+    "expected": "12000",
+    "source_ids": [
+      "p7-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q3",
+    "split": "development",
+    "project_id": "p7",
+    "question": "Did I say I owned the rental for Fitness plan?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p7-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q4",
+    "split": "development",
+    "project_id": "p7",
+    "question": "What external action has Jarvis executed for Fitness plan?",
+    "expected": "none",
+    "source_ids": [
+      "p7-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q5",
+    "split": "development",
+    "project_id": "p7",
+    "question": "What is my diet for Fitness plan?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q6",
+    "split": "held_out",
+    "project_id": "p7",
+    "question": "Fitness plan ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p7-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q7",
+    "split": "held_out",
+    "project_id": "p7",
+    "question": "Fitness plan की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p7-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q8",
+    "split": "held_out",
+    "project_id": "p7",
+    "question": "Was the hotel booking done for Fitness plan?",
+    "expected": "not booked",
+    "source_ids": [
+      "p7-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p7-q9",
+    "split": "held_out",
+    "project_id": "p7",
+    "question": "For Fitness plan, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p7-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p8",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q0",
+    "split": "development",
+    "project_id": "p8",
+    "question": "What resource did I choose for Family event?",
+    "expected": "venue",
+    "source_ids": [
+      "p8-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q1",
+    "split": "development",
+    "project_id": "p8",
+    "question": "What is the latest status of Family event?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p8-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q2",
+    "split": "development",
+    "project_id": "p8",
+    "question": "What is the corrected budget for Family event?",
+    "expected": "12000",
+    "source_ids": [
+      "p8-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q3",
+    "split": "development",
+    "project_id": "p8",
+    "question": "Did I say I owned the rental for Family event?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p8-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q4",
+    "split": "development",
+    "project_id": "p8",
+    "question": "What external action has Jarvis executed for Family event?",
+    "expected": "none",
+    "source_ids": [
+      "p8-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q5",
+    "split": "development",
+    "project_id": "p8",
+    "question": "What is my diet for Family event?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q6",
+    "split": "held_out",
+    "project_id": "p8",
+    "question": "Family event ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p8-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q7",
+    "split": "held_out",
+    "project_id": "p8",
+    "question": "Family event की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p8-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q8",
+    "split": "held_out",
+    "project_id": "p8",
+    "question": "Was the hotel booking done for Family event?",
+    "expected": "not booked",
+    "source_ids": [
+      "p8-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p8-q9",
+    "split": "held_out",
+    "project_id": "p8",
+    "question": "For Family event, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p8-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p9"
+    ]
+  },
+  {
+    "id": "p9-q0",
+    "split": "development",
+    "project_id": "p9",
+    "question": "What resource did I choose for Pipeline deployment?",
+    "expected": "scheduler",
+    "source_ids": [
+      "p9-e2"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q1",
+    "split": "development",
+    "project_id": "p9",
+    "question": "What is the latest status of Pipeline deployment?",
+    "expected": "sorted; owner-reported",
+    "source_ids": [
+      "p9-e6"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q2",
+    "split": "development",
+    "project_id": "p9",
+    "question": "What is the corrected budget for Pipeline deployment?",
+    "expected": "12000",
+    "source_ids": [
+      "p9-e12"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q3",
+    "split": "development",
+    "project_id": "p9",
+    "question": "Did I say I owned the rental for Pipeline deployment?",
+    "expected": "no ownership established",
+    "source_ids": [
+      "p9-e14"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q4",
+    "split": "development",
+    "project_id": "p9",
+    "question": "What external action has Jarvis executed for Pipeline deployment?",
+    "expected": "none",
+    "source_ids": [
+      "p9-e18"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q5",
+    "split": "development",
+    "project_id": "p9",
+    "question": "What is my diet for Pipeline deployment?",
+    "expected": "unknown",
+    "source_ids": [],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q6",
+    "split": "held_out",
+    "project_id": "p9",
+    "question": "Pipeline deployment ka purana status kya tha?",
+    "expected": "pending; historical",
+    "source_ids": [
+      "p9-e4"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q7",
+    "split": "held_out",
+    "project_id": "p9",
+    "question": "Pipeline deployment की तय तारीख क्या है?",
+    "expected": "15 November 2026",
+    "source_ids": [
+      "p9-e8"
+    ],
+    "critical": false,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q8",
+    "split": "held_out",
+    "project_id": "p9",
+    "question": "Was the hotel booking done for Pipeline deployment?",
+    "expected": "not booked",
+    "source_ids": [
+      "p9-e16"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  },
+  {
+    "id": "p9-q9",
+    "split": "held_out",
+    "project_id": "p9",
+    "question": "For Pipeline deployment, was verifying the next step my decision or your suggestion?",
+    "expected": "assistant suggestion",
+    "source_ids": [
+      "p9-e19"
+    ],
+    "critical": true,
+    "forbidden_project_ids": [
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8"
+    ]
+  }
+]

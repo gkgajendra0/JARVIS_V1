@@ -1,5 +1,7 @@
 # JARVIS V1
 
+**Current memory workstream — 31 October 2026:** [Project conversations and personal memory](docs/PROJECT_CONVERSATION_MEMORY.md) defines the owner-selected design, goals and acceptance contract. [Current Plan](docs/CURRENT_PLAN.md) owns the next task. The controlled text project-memory candidate is implemented; [acceptance and remaining gates](docs/project-memory-acceptance.md) distinguish software checks from actual-model/Windows/native evidence. It is not activated.
+
 **Current integration:** [implemented behavior and remaining limits](docs/reference/IMPLEMENTATION_STATUS.md). This status page supersedes older dated candidate statements; [Windows recovery recipes](docs/reference/WINDOWS_E_DRIVE_RECOVERY.md) are preserved in the repository.
 
 JARVIS V1 is a personal, voice-first intelligent assistant built research-first around explicit JARVIS-owned truth, authority, memory, and execution boundaries, with an owner-approved north star of becoming a governed autonomous self-managing personal intelligence runtime.
