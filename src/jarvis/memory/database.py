@@ -278,3 +278,42 @@ class SqlCipherMemoryDatabaseFactory:
             except MemoryDatabaseKeyError as exc:
                 cleanup_errors.append(exc)
         return cleanup_errors
+
+
+def open_existing_memory_database_read_only(
+    database_path: str | Path,
+    *,
+    key_protector: KeyProtector,
+    key_path: str | Path | None = None,
+    driver_loader: Callable[[], Any] = _load_sqlcipher_driver,
+) -> Any:
+    """Inspect existing encrypted memory without creation, migrations or WAL setup.
+
+    URI mode=ro is the write barrier; query_only adds defence in depth. Do not
+    construct the normal factory, whose constructor/open path can create files.
+    Never use immutable=1: a live database may have committed rows in its WAL.
+    """
+    path = Path(database_path).resolve()
+    if not path.is_file():
+        raise MemoryDatabaseError("existing memory database is required for inspection")
+    store = MemoryDatabaseKeyStore(
+        Path(key_path) if key_path is not None else default_memory_key_path(path),
+        key_protector=key_protector,
+    )
+    raw_key, _ = store.load_or_create(database_exists=True)
+    connection = None
+    try:
+        connection = driver_loader().connect(path.as_uri() + "?mode=ro", uri=True)
+        SqlCipherMemoryDatabaseFactory._key_connection(connection, raw_key)
+        connection.execute("PRAGMA query_only = ON")
+        connection.execute("PRAGMA cipher_memory_security = ON")
+        connection.execute("PRAGMA temp_store = MEMORY")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        SqlCipherMemoryDatabaseFactory._verify_encrypted_connection(connection)
+        return connection
+    except BaseException:
+        if connection is not None:
+            connection.close()
+        raise
+    finally:
+        del raw_key
