@@ -298,6 +298,31 @@ class VoiceControlServer:
         except OSError:
             pass
 
+    @staticmethod
+    def _startup_writer_matches(progress: dict, process: subprocess.Popen) -> bool:
+        writer_pid = progress.get("pid")
+        if type(writer_pid) is not int or writer_pid <= 0:
+            return False
+        if writer_pid == process.pid:
+            return True
+        if os.name != "nt":
+            return False
+        # A Windows venv redirector stays alive while the base interpreter runs
+        # its script. Its worker writes os.getpid(), not Popen's redirector PID.
+        # Verify the live direct parent and interpreter image; an arbitrary or
+        # stale Python process must never extend this child's startup deadline.
+        try:
+            writer = psutil.Process(writer_pid)
+            parent = writer.parent()
+            return (
+                parent is not None
+                and parent.pid == process.pid
+                and Path(writer.exe()).samefile(sys._base_executable)
+                and Path(parent.exe()).samefile(sys.executable)
+            )
+        except (OSError, psutil.Error):
+            return False
+
     def _await_connection(
         self,
         *,
@@ -334,7 +359,7 @@ class VoiceControlServer:
                 )
             progress = read_progress(self._progress_path)
             if progress is not None and (
-                process is None or progress.get("pid") == process.pid
+                process is None or self._startup_writer_matches(progress, process)
             ):
                 seen = (progress.get("pid"), progress.get("sequence"))
                 if seen != last_seen:

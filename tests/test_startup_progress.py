@@ -16,6 +16,7 @@ import textwrap
 import time
 from pathlib import Path
 
+import psutil
 import pytest
 
 import jarvis.dev_supervisor as supervisor
@@ -90,6 +91,18 @@ def control():
     )
     yield server
     for process in processes:
+        # Windows venv python.exe can be a redirector with a real Python child.
+        # Killing only the redirector leaves a hanging synthetic child behind.
+        try:
+            descendants = psutil.Process(process.pid).children(recursive=True)
+        except psutil.NoSuchProcess:
+            descendants = []
+        for child in descendants:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        psutil.wait_procs(descendants, timeout=10)
         if process.poll() is None:
             process.kill()
         process.wait(timeout=10)
@@ -172,3 +185,31 @@ def test_no_supervisor_means_no_heartbeat(tmp_path, monkeypatch):
     startup_progress.install()
     startup_progress.finish()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_unrelated_python_process_cannot_keep_a_watched_startup_alive(control):
+    control.start(1, 0.1, 0, 0, CHILD_HANG="1")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(SRC)
+    # Same interpreter and heartbeat schema, but a sibling rather than the
+    # watched process's worker. It must not extend the watched stall deadline.
+    script = (
+        "from pathlib import Path; import sys,time; from jarvis.startup_progress import write_progress; p=Path(sys.argv[1]); "
+        + "\nfor n in range(50): write_progress(p,n); time.sleep(.1)"
+    )
+    unrelated = subprocess.Popen(
+        [sys._base_executable, "-c", script, str(control._progress_path)], env=env
+    )
+    try:
+        with pytest.raises(RuntimeError, match="no startup progress"):
+            control.wait_for_child_ready(timeout_seconds=2.0)
+    finally:
+        unrelated.kill()
+        unrelated.wait(timeout=10)
+
+
+@pytest.mark.parametrize("writer_pid", [-1, 0, 2**128])
+def test_malformed_heartbeat_pid_is_ignored(control, writer_pid):
+    assert not control._startup_writer_matches(
+        {"pid": writer_pid}, psutil.Process(os.getpid())
+    )
