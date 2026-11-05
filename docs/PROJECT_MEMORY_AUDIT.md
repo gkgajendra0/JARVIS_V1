@@ -9,11 +9,11 @@ are in PR #312.
 | --- | --- | --- |
 | Hello helper blocked by Smart App Control (#310) | A locally compiled, unsigned helper; Smart App Control allows only signed or cloud-known files | CI runners do not enforce Smart App Control |
 | Startup killed at 120 s (#311) | One deadline for the whole build; a cold LR-ASD CUDA load took 80 s | Tests used fast fakes; no timing variance |
-| "Create a project. Called Nepal trip." created nothing (#312) | Parser required "project called" with no punctuation between | Every test used tidy typed text ("create project called Nepal trip") |
+| "Create a project. Called Nepal trip." created nothing (#312) | Parser required "project called" with no punctuation between | The failing speech-to-text split was absent from regression fixtures |
 | That failed command was learned as a plan "Nepal trip" (#312) | Personal learning had no notion of project-control commands | Learning and project routing were tested separately |
 
-Common cause: **tests checked typed, tidy input and component behaviour, not
-what speech-to-text writes and what ends up in the database**. The audit
+Coverage gap: **the failing speech-to-text forms were absent from the tested
+journeys**, despite existing component and archive tests. The audit
 below therefore drives the real voice pipeline with transcripts as
 speech-to-text writes them, and asserts on database rows.
 
@@ -97,14 +97,37 @@ transcripts (#312), the wake-acknowledgement leaks from 2026-11-03
 **The recorder** is `python -m jarvis.voice.project_memory_production_acceptance --since <UTC start>`.
 - **What it reads:**
   - the production log: transcripts, replies and project receipts;
-  - the production database, through SQLCipher/DPAPI, then `PRAGMA
-    query_only`, so it cannot write. It checks projects and row counts,
+  - the existing production database, through SQLCipher/DPAPI with URI
+    `mode=ro` and `PRAGMA query_only`; it never initialises or migrates it. It checks projects and row counts,
     expected facts present, forgotten facts absent, duplicate titles, and
-    plans learned from commands.
+    possible plans learned from commands. Surviving scenario turns must match
+    their canonical log turn IDs, exact text and expected project. The hotel
+    statement and forget command are intentionally removed, so their evidence
+    comes from the transcript, deletion receipt, absence checks and review.
 - **What it records per step:** PASS, FAIL or NOT TESTED, with the expected
   reply, the actual transcript, the actual reply, the receipt and the
   database result.
-- **No credentials** are read or written.
+- **Key handling:** the protected SQLCipher key is unsealed internally via
+  DPAPI, never included in the report. No provider credentials are needed.
+- **Release verdict:** missing receipts, missing replies, wrong project rows,
+  or reuse of the previous wake session fail the relevant step. Receipts must
+  contain the exact canonical turn ID and session ID; legacy anonymous
+  receipts cannot qualify a run. Replies are matched within their wake, and
+  multiple unanswered user turns are flagged as ambiguous. Any unresolved
+  REVIEW keeps the overall result INCOMPLETE. Keyword checks are smoke checks;
+  they cannot certify response meaning, audible output or process restart.
+- **Explicit review:** the recorder writes a `.review.json` template with
+  NOT TESTED entries. A named reviewer must assess each answer, record restart
+  evidence (shutdown/startup timestamps or process IDs) and audible output.
+  Supply the completed file with `--review <file>`, using the same run start.
+  The review is bound to a SHA256 of the collected timeline, database evidence
+  and scenario. Changed evidence invalidates it; review cannot override a
+  failed automatic check. A review file is an observation record, not a
+  cryptographic identity or an independent semantic evaluator. The logs do
+  not carry exact response-to-user metadata for same-session continuations;
+  the reviewer must inspect the full conversation and audible output, wait
+  for each reply before the next scenario statement, and reject uncertain
+  attribution rather than infer success.
 
 **The scenario** is in `SCENARIO` in the recorder module:
 1. **Create, using the production phrasing:** "Create a project. Called Nepal
@@ -122,7 +145,7 @@ transcripts (#312), the wake-acknowledgement leaks from 2026-11-03
 
 | Gate | Status |
 | --- | --- |
-| Jarvis starts reliably | PASS on your PC after #311 |
+| Jarvis starts reliably | One observed start after #311; cold-start venv worker qualification pending |
 | Normal wake and voice responses | PASS (2026-11-04 12:44 UTC: greeting, time, IST answer) |
 | Projects created and stored correctly | Fixed in #312; **E pending** |
 | Memory survives new wake sessions | B pass; **E pending** |
@@ -131,21 +154,103 @@ transcripts (#312), the wake-acknowledgement leaks from 2026-11-03
 | Forgetting exact | B pass; **E pending** |
 | Survives restart | B pass; **E pending** |
 | Authentication and failures fail closed | PASS (A–C, plus Hello approve/cancel on your PC) |
-| No critical regression | PASS once #312 CI is green |
+| Automated regression gate | Require checks on the exact amended PR head; live acceptance remains separate |
 | Real-machine evidence recorded | **Pending:** recorder run |
 
 ## 7. Decision
 
-**NO-GO until the E/F run passes.** Code gates are met with #312.
+**NO-GO until the E/F run and explicit evidence review pass.** Green code
+checks do not establish real-machine acceptance.
 Production-ready means:
 1. you approve merging #312;
 2. I deploy it to your PC;
 3. you speak the scenario once (about 15 minutes, with two Hello approvals and
    one restart);
-4. the recorder reports PASS.
+4. the recorder and evidence-bound review report PASS, with any existing
+   questionable personal fact resolved explicitly without automatic deletion.
 
 Outstanding risks:
 - **Model behaviour** (F10): Gemini may still word an answer badly; the
-  recorder catches leaks and wrong facts.
+  keyword checks catch some obvious failures; a reviewer must judge meaning.
 - **Paid handoff:** observed only if it happens naturally.
 - **The learned plan `c19a81f9`** stays until you decide.
+
+
+## 8. Codex handover: validation limits and safe next steps
+
+The saved local Hello acceptance artifact records approval and cancellation
+PASS, but also a failed Smart App Control policy check and no completed
+no-answer/timeout step. Those results do not establish that all original
+Hello acceptance steps passed. Investigate the policy-query failure before
+attributing it to the actual enforced policy or changing Windows settings.
+Do not disable Smart App Control to get a test to pass.
+
+The original recorder's normal database opener could configure WAL and apply
+migrations before query_only was enabled. The inspection opener now requires
+existing database/key files, opens mode=ro, verifies SQLCipher, and skips all
+creation/migration paths. Encrypted fixtures test write denial even if
+query_only is disabled, missing-file preservation, wrong keys, older schema
+markers and committed WAL visibility.
+
+Before a deployment: record the installed Git SHA and clean-tree status;
+confirm Jarvis is stopped; preserve an encrypted database/key/config backup
+and verify hashes. If WAL/SHM files exist or a writer remains active, use an
+appropriate consistent backup rather than assuming copying memory.db alone
+captures it. Keep the current environment and dependencies intact.
+
+The scenario uses fictional facts in real project history. The owner should
+know that these statements will be saved. If Nepal trip or Interview prep
+already exists, the create receipt may correctly be 'continued' rather than
+'created'; do not delete or reset existing projects to satisfy this script.
+Choose an isolated acceptance profile or agree on distinct scenario names
+before running it. This fixed-name recorder cannot qualify a renamed scenario
+without matching changes to SCENARIO and its expectations.
+
+For this installation the recorder shell must explicitly select the E-drive
+machine config and log. From the tested source/environment after approval:
+
+```powershell
+$env:JARVIS_MACHINE_CONFIG = 'E:\Jarvis\Data\LocalState\machine.json'
+& E:\Jarvis\App\.venv\Scripts\python.exe -m jarvis.voice.project_memory_production_acceptance --since <UTC-start> --log E:\Jarvis\Data\LocalState\logs\jarvis.jsonl --out <private-report-directory>
+```
+
+Do not run a recorder from an unverified source path. Preserve the original
+log and reports locally; they contain conversation text. Review the full
+JSON and log, because the Markdown reply column is abbreviated. No API-key
+handoff or paid-provider test is authorised by this acceptance procedure.
+
+
+### Additional startup finding during full-suite handover validation
+
+The full suite found two repeatable failures in test_startup_progress, also
+reproduced in isolation. On this Windows installation, the venv python.exe
+redirector's Popen PID differs from the base-Python worker writing the heartbeat.
+The existing PID check rejected real progress. A warm start can still connect
+before the old timeout; this does not prove a cold progressing start is protected.
+
+The separate proposed supervisor fix accepts the exact watched PID, or on
+Windows its OS-verified live direct worker with matching Python executable
+images. Unrelated/stale processes remain rejected. Real child tests cover the
+steady start, stall, exit, overall cap, and unrelated Python heartbeat writer.
+This fix is not deployed; actual cold-start qualification remains pending.
+
+
+### Local verification of the proposed amendments (2026-11-05)
+
+The final standard-CLI full suite completed with **4499 passed, 19 skipped**
+and exit code 0 in 384.14 seconds. Ruff and formatting checks passed.
+The skips include real OPA (required separately in Linux CI), unavailable
+symlink privileges, platform-specific negative controls and real Hello prompts.
+Four dependency future warnings were reported. Independent code review found
+no remaining Critical or Important findings in the amendments.
+
+A previous run exposed the Windows venv startup identity defect described
+above. Another interrupted run used overly long diagnostic temp paths; the
+mapped incident-repair tests passed with short paths and reproduced Git's
+"Filename too long" under the long paths. The completed verification used a
+short task-local temp root. No incident-repair code was changed.
+
+The pinned Windows SQLCipher workflow now runs the read-only encrypted-memory
+tests explicitly, with test-file path triggers. Hosted checks for the exact
+amended head, real microphone/audio, Hello timeout and process restart remain
+pending. These local results do not grant production acceptance.
