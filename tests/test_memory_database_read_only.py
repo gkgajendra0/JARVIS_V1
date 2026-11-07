@@ -105,3 +105,79 @@ def test_read_only_connection_sees_committed_live_wal_rows(tmp_path):
             reader.close()
     finally:
         writer.close()
+
+
+def _sidecars(path):
+    return sorted(p.name for p in path.parent.iterdir() if p.name != path.name)
+
+
+def _wal_database(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "plain.db"
+    c = sqlite3.connect(path)
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("CREATE TABLE t(x)")
+    c.execute("INSERT INTO t VALUES (1)")
+    c.commit()
+    c.close()
+    return path
+
+
+def test_plain_read_only_leaves_wal_files_behind(tmp_path):
+    # The defect: URI mode=ro alone creates -wal/-shm beside a cleanly closed
+    # WAL database (the production state when Jarvis is stopped) and, being
+    # read-only, cannot remove them.
+    import sqlite3
+
+    path = _wal_database(tmp_path)
+    c = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
+    c.execute("SELECT count(*) FROM t").fetchone()
+    c.close()
+    assert _sidecars(path) == ["plain.db-shm", "plain.db-wal"]
+
+
+def test_inspection_uri_creates_no_files_for_a_closed_database(tmp_path):
+    import sqlite3
+
+    path = _wal_database(tmp_path)
+    before = path.read_bytes()
+    c = sqlite3.connect(m.read_only_uri(path), uri=True)
+    try:
+        assert c.execute("SELECT count(*) FROM t").fetchone() == (1,)
+        with pytest.raises(sqlite3.OperationalError):
+            c.execute("INSERT INTO t VALUES (2)")
+    finally:
+        c.close()
+    assert _sidecars(path) == []
+    assert path.read_bytes() == before
+
+
+def test_inspection_uri_reads_committed_wal_rows_of_a_live_database(tmp_path):
+    import sqlite3
+
+    path = _wal_database(tmp_path)
+    writer = sqlite3.connect(path)
+    try:
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("INSERT INTO t VALUES (2)")
+        writer.commit()
+        assert "immutable" not in m.read_only_uri(path)
+        reader = sqlite3.connect(m.read_only_uri(path), uri=True)
+        try:
+            assert reader.execute("SELECT count(*) FROM t").fetchone() == (2,)
+        finally:
+            reader.close()
+    finally:
+        writer.close()
+
+
+def test_encrypted_inspection_of_a_closed_database_creates_no_files(tmp_path):
+    path, key, _ = encrypted_fixture(tmp_path)
+    assert not path.with_name(path.name + "-wal").exists()
+    c = open_read_only(path)
+    try:
+        assert c.execute("SELECT count(*) FROM inspection_probe").fetchone() == (1,)
+    finally:
+        c.close()
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([path.name, key.name])

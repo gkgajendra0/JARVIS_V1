@@ -181,7 +181,10 @@ def read_timeline(log: Path, since: datetime) -> list[Turn]:
             identity = metadata.get("turn_id"), metadata.get("session_id")
             if match := _TRANSCRIPT.match(event):
                 role, text = match.groups()
-                text = text.replace('\\"', '"')
+                try:  # the transcript is logged as a JSON string
+                    text = json.loads(f'"{text}"')
+                except ValueError:
+                    text = text.replace('\\"', '"')
                 session_id = metadata.get("session_id")
                 if role == "user":
                     turn = Turn(
