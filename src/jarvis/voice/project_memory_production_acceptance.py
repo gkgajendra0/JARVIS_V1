@@ -226,7 +226,7 @@ def read_timeline(log: Path, since: datetime) -> list[Turn]:
 # -- the production database (read-only) --------------------------------------------
 
 
-def read_database(open_connection, *, turn_ids=()) -> dict:
+def read_database(open_connection, *, turn_ids=(), since=None) -> dict:
     connection = open_connection()
     try:
         connection.execute("PRAGMA query_only = ON")
@@ -265,13 +265,20 @@ def read_database(open_connection, *, turn_ids=()) -> dict:
             for title, word in DB_EXPECT_PRESENT
         }
         absent = {word: owner_rows_with(word) for word in DB_EXPECT_ABSENT}
-        plans = [
-            json.loads(value).get("label")
-            for (value,) in connection.execute(
-                "SELECT value_json FROM semantic_assertion "
-                "WHERE predicate LIKE 'plan_%' AND state='active'"
-            )
-        ]
+        plans, run_plans = [], []
+        for value, recorded in connection.execute(
+            "SELECT value_json, system_from FROM semantic_assertion "
+            "WHERE predicate LIKE 'plan_%' AND state='active'"
+        ):
+            label = json.loads(value).get("label")
+            plans.append(label)
+            try:
+                recorded_at = datetime.fromisoformat(str(recorded))
+            except ValueError:
+                recorded_at = None
+            # Unknown time counts as this run: never hide a possible regression.
+            if since is None or recorded_at is None or recorded_at >= since:
+                run_plans.append(label)
         titles = [row[0] for row in project_rows]
         duplicates = sorted(
             {
@@ -302,6 +309,7 @@ def read_database(open_connection, *, turn_ids=()) -> dict:
             "absent": absent,
             "duplicate_titles": duplicates,
             "active_plan_labels": plans,
+            "run_plan_labels": run_plans,
         }
     finally:
         connection.close()
@@ -424,9 +432,15 @@ def grade(timeline: list[Turn], db: dict | None, *, review=None) -> dict:
         db_checks.append(
             {
                 "check": "no plan learned from a project command",
+                # Plans recorded before this run (e.g. the 2026-11-04 fact the
+                # owner chose to keep) are listed, not judged: they predate the
+                # fix. Without a run start, every plan counts.
                 "verdict": "PASS"
                 if not {"nepal trip", "interview prep"}
-                & {str(p).casefold() for p in db["active_plan_labels"]}
+                & {
+                    str(p).casefold()
+                    for p in db.get("run_plan_labels", db["active_plan_labels"])
+                }
                 else "REVIEW",
             }
         )
@@ -572,7 +586,9 @@ def main(argv=None, *, opener=None) -> int:
     db = None
     if not args.no_database:
         db = read_database(
-            opener or _production_opener(), turn_ids=[t.turn_id for t in timeline]
+            opener or _production_opener(),
+            turn_ids=[t.turn_id for t in timeline],
+            since=since,
         )
     review = (
         json.loads(args.review.read_text(encoding="utf-8")) if args.review else None

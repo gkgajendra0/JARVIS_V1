@@ -205,3 +205,51 @@ def test_multiple_unanswered_users_in_one_wake_are_flagged_as_ambiguous(tmp_path
         ],
     )
     assert all(t.not_saved == "ambiguous_reply_attribution" for t in turns)
+
+
+def test_a_plan_kept_from_before_the_run_does_not_block_acceptance():
+    # The owner kept the 2026-11-04 "Nepal trip" plan fact. It predates the
+    # run, so it is listed but cannot make the run INCOMPLETE; one learned
+    # during the run still needs review.
+    turns, db = evidence()
+    db["active_plan_labels"] = ["Nepal trip"]
+    db["run_plan_labels"] = []
+    checks = {c["check"]: c["verdict"] for c in a.grade(turns, db)["database_checks"]}
+    assert checks["no plan learned from a project command"] == "PASS"
+    db["run_plan_labels"] = ["Nepal trip"]
+    checks = {c["check"]: c["verdict"] for c in a.grade(turns, db)["database_checks"]}
+    assert checks["no plan learned from a project command"] == "REVIEW"
+
+
+def test_read_database_separates_plans_recorded_before_the_run(tmp_path):
+    import json
+    import sqlite3
+    from datetime import UTC, datetime
+
+    from jarvis.memory.migration_runner import MemoryMigrationRunner
+
+    path = tmp_path / "m.db"
+    c = sqlite3.connect(path)
+    MemoryMigrationRunner().apply(c)
+    c.execute("PRAGMA foreign_keys=OFF")
+    for n, (label, at) in enumerate(
+        [("Nepal trip", "2026-11-04T12:44:47Z"), ("Goa", "2026-11-08T10:00:00Z")]
+    ):
+        c.execute(
+            "INSERT INTO semantic_assertion(assertion_id,subject_scope,subject,"
+            "predicate,value_type,value_json,normalized_text,source_id,system_from,"
+            "state,verification_state,freshness_class,sensitivity,created_at,"
+            "updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                f"a{n}", "owner", "owner", f"plan_{n}", "json",
+                json.dumps({"label": label}), label, "s", at, "active", "unverified",
+                "changeable", "standard", at, at,
+            ),
+        )  # fmt: skip
+    c.commit()
+    c.close()
+    db = a.read_database(
+        lambda: sqlite3.connect(path), since=datetime(2026, 11, 8, tzinfo=UTC)
+    )
+    assert sorted(db["active_plan_labels"]) == ["Goa", "Nepal trip"]
+    assert db["run_plan_labels"] == ["Goa"]
