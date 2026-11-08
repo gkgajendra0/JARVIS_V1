@@ -49,3 +49,23 @@ def test_an_ordinary_first_person_reply_is_saved_unchanged() -> None:
         ConversationItemAddedEvent(item=message("a1", "assistant", text)),
     )
     assert [t.text for t in bridge.conversation.turns] == [text]
+
+
+def test_a_style_instruction_is_removed_from_the_accepted_turn() -> None:
+    """Live 2026-11-08 17:34:10."""
+    livekit, bridge = active_bridge()
+    livekit.emit(
+        "conversation_item_added",
+        ConversationItemAddedEvent(
+            item=message(
+                "a1",
+                "assistant",
+                "Never say 'Based on your recent request', 'According to project "
+                "memory' or equivalent phrasing. Keep to one or two sentences.I "
+                "don't have information about which hotel you are staying at.",
+            )
+        ),
+    )
+    assert [t.text for t in bridge.conversation.turns] == [
+        "I don't have information about which hotel you are staying at."
+    ]
