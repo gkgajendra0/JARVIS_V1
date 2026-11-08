@@ -97,7 +97,10 @@ async def test_g2_cross_project_retrieval_is_labelled(lab, clock):
     wake = FastWake(voice)
     await wake.preload()
     wake.speech()
-    wake.transcript("When is the interview panel?")
+    # Only when the owner reaches across projects; a plain question about the
+    # current project stays inside it (live run 2026-11-08, see
+    # test_project_search_isolation.py).
+    wake.transcript("When is the interview panel in my other project?")
     found = await wake.turns.search_history("interview panel")
     assert found["status"] == "other_projects"
     hits = [r for r in found["history"] if "panel" in r["text"]]

@@ -388,7 +388,7 @@ async def test_search_widens_to_other_projects_with_labels(lab):
     wake.close()
     wake = FastWake(voice)
     wake.speech()
-    wake.transcript("What did we say about permits?")
+    wake.transcript("What did we say about permits in the Nepal trip?")
     found = await wake.turns.search_history("permits")
     assert found["status"] == "other_projects"
     assert {r.get("from_project") for r in found["history"]} == {"Nepal trip"}
