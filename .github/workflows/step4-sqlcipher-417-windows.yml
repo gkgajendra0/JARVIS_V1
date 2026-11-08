@@ -10,6 +10,8 @@ on:
       - "tools/research/step4_sqlcipher_production_adapter_smoke.py"
       - "src/jarvis/memory/**"
       - "src/jarvis/security/**"
+      - "tests/test_memory_database.py"
+      - "tests/test_memory_database_read_only.py"
   push:
     branches:
       - research/step-4-memory-context
@@ -24,6 +26,8 @@ on:
       - "src/jarvis/memory/migration_runner.py"
       - "src/jarvis/memory/migrations/**"
       - "src/jarvis/security/**"
+      - "tests/test_memory_database.py"
+      - "tests/test_memory_database_read_only.py"
 
 permissions:
   contents: read
@@ -89,6 +93,16 @@ jobs:
           & $python -X utf8 tools\research\step4_sqlcipher_production_adapter_smoke.py --artifact-dir .step4-sqlcipher-production-adapter --output .step4-sqlcipher-production-adapter.json
           if ($LASTEXITCODE -ne 0) { throw "Production SQLCipher memory adapter smoke failed" }
           Copy-Item .step4-sqlcipher-production-adapter.json .step4-sqlcipher417-wheelhouse\production-adapter-verification.json
+
+      - name: Run read-only encrypted-memory regressions
+        shell: pwsh
+        run: |
+          $python = ".\.step4-sqlcipher417-verify\Scripts\python.exe"
+          & $python -m pip install --disable-pip-version-check "pytest>=8,<10"
+          if ($LASTEXITCODE -ne 0) { throw "Read-only regression test dependency installation failed" }
+          $env:PYTHONPATH = "src"
+          & $python -m pytest tests/test_memory_database_read_only.py -q
+          if ($LASTEXITCODE -ne 0) { throw "Read-only SQLCipher memory regressions failed" }
 
       - name: Clean memory initialization (fresh deployment tool)
         shell: pwsh

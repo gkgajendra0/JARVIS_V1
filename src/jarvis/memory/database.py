@@ -278,3 +278,60 @@ class SqlCipherMemoryDatabaseFactory:
             except MemoryDatabaseKeyError as exc:
                 cleanup_errors.append(exc)
         return cleanup_errors
+
+
+def read_only_uri(path: Path) -> str:
+    """URI for inspecting an existing WAL-mode database without writing anything.
+
+    ``mode=ro`` alone still creates ``-wal``/``-shm`` beside a cleanly closed
+    WAL database and cannot remove them afterwards. With no WAL or shared-memory
+    file present there is no live writer and no committed WAL content, so the
+    main file is complete and ``immutable=1`` reads it with no side files.
+    When either file exists (Jarvis running, or an unclean stop), plain
+    ``mode=ro`` is used so committed WAL rows stay visible.
+    """
+    uri = path.as_uri() + "?mode=ro"
+    sidecars = (path.with_name(path.name + suffix) for suffix in ("-wal", "-shm"))
+    if not any(sidecar.exists() for sidecar in sidecars):
+        uri += "&immutable=1"
+    return uri
+
+
+def open_existing_memory_database_read_only(
+    database_path: str | Path,
+    *,
+    key_protector: KeyProtector,
+    key_path: str | Path | None = None,
+    driver_loader: Callable[[], Any] = _load_sqlcipher_driver,
+) -> Any:
+    """Inspect existing encrypted memory without creation, migrations or WAL setup.
+
+    URI mode=ro is the write barrier; query_only adds defence in depth. Do not
+    construct the normal factory, whose constructor/open path can create files.
+    immutable=1 is used only when no WAL/shm exists (see ``read_only_uri``): a
+    live database may have committed rows in its WAL.
+    """
+    path = Path(database_path).resolve()
+    if not path.is_file():
+        raise MemoryDatabaseError("existing memory database is required for inspection")
+    store = MemoryDatabaseKeyStore(
+        Path(key_path) if key_path is not None else default_memory_key_path(path),
+        key_protector=key_protector,
+    )
+    raw_key, _ = store.load_or_create(database_exists=True)
+    connection = None
+    try:
+        connection = driver_loader().connect(read_only_uri(path), uri=True)
+        SqlCipherMemoryDatabaseFactory._key_connection(connection, raw_key)
+        connection.execute("PRAGMA query_only = ON")
+        connection.execute("PRAGMA cipher_memory_security = ON")
+        connection.execute("PRAGMA temp_store = MEMORY")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        SqlCipherMemoryDatabaseFactory._verify_encrypted_connection(connection)
+        return connection
+    except BaseException:
+        if connection is not None:
+            connection.close()
+        raise
+    finally:
+        del raw_key

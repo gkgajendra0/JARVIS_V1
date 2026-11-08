@@ -876,7 +876,9 @@ def assess(data: dict) -> dict:
                     "unmatched_speech:" + (u.get("unmatched_reason") or "unknown")
                 )
             text = accepted[-1] if accepted else ""
-            name = parse_project_command(text)[0] if text else None
+            name, command_kind = parse_project_command(text) if text else (None, None)
+            if command_kind == "select_if_known":
+                name = None  # "go to sleep": a command only if it names a project
             last = prepared[-1] if prepared else None
             action = last.get("action") if last else None
             if accepted and last is None:

@@ -1102,14 +1102,21 @@ class VoiceProjectTurns:
                 self.metrics.not_saved += 1
                 return _Outcome("not_saved", reason=stage)
             self.metrics.failed += 1
-            LOGGER.warning("Project voice turn not saved | stage=%s", stage)
+            LOGGER.warning(
+                "Project voice turn not saved | stage=%s | turn_id=%s | session_id=%s",
+                stage,
+                turn.turn_id,
+                self._conversation.session_id,
+            )
             return _Outcome("failed", reason="permission")
         except (ValueError, RuntimeError, OSError) as exc:
             self.metrics.failed += 1
             LOGGER.warning(
-                "Project voice turn not saved | stage=%s | error=%s",
+                "Project voice turn not saved | stage=%s | error=%s | turn_id=%s | session_id=%s",
                 coordinator.stage,
                 type(exc).__name__,
+                turn.turn_id,
+                self._conversation.session_id,
             )
             return _Outcome("failed", reason="error")
         decision = coordinator.last_decision
@@ -1127,10 +1134,12 @@ class VoiceProjectTurns:
             except Exception:  # noqa: BLE001 - no catalog only disables fast path
                 self._catalog = None
         LOGGER.info(
-            "Project voice turn saved | action=%s | references=%s | sources=%s",
+            "Project voice turn saved | action=%s | references=%s | sources=%s | turn_id=%s | session_id=%s",
             decision.action,
             len(decision.references),
             len(packet.source_ids),
+            turn.turn_id,
+            self._conversation.session_id,
         )
         return _Outcome("ready", packet=packet, decision=decision, previous=previous)
 
@@ -1981,10 +1990,12 @@ class VoiceProjectTurns:
             projects=list(receipt.projects),
         )
         LOGGER.info(
-            "Project history forget committed | owner_rows=%s | jarvis_rows=%s | projects=%s",
+            "Project history forget committed | owner_rows=%s | jarvis_rows=%s | projects=%s | turn_id=%s | session_id=%s",
             receipt.owner_rows,
             receipt.jarvis_rows,
             len(receipt.projects),
+            turn.turn_id,
+            self._conversation.session_id,
         )
         return {
             "status": "forgotten",
