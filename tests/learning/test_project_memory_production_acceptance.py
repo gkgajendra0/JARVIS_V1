@@ -230,3 +230,18 @@ async def test_real_runtime_save_receipt_survives_interleaved_log_order(
     assert turns[0].saved_action == "created"
     assert turns[1].saved_action is None
     wake.close()
+
+
+def test_transcripts_are_decoded_exactly_as_livekit_logs_them(tmp_path):
+    # livekit_session logs json.dumps(text, ensure_ascii=False); the recorder
+    # compares the decoded text with the stored canonical turn.
+    said = 'Path C:\\trips "Nepal"\nनेपाल'
+    logged = json.dumps(said, ensure_ascii=False)
+    event = f"user: {logged} | turn_id=t1 | session_id=s1"
+    log = tmp_path / "jarvis.jsonl"
+    log.write_text(
+        json.dumps({"event": event, "timestamp": "2026-11-05T10:00:00+00:00"}) + "\n",
+        encoding="utf-8",
+    )
+    (turn,) = acceptance.read_timeline(log, datetime(2026, 11, 5, tzinfo=UTC))
+    assert turn.user == said
