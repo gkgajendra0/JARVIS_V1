@@ -1,0 +1,242 @@
+[
+ {
+  "at": "2026-11-08T05:53:13.408619Z",
+  "user": "Create a project called Nepal trip.",
+  "reply": "Created project Nepal trip.",
+  "saved_action": "created",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "dc796c3d-7992-4d9e-bdcc-4eb908543795",
+  "session_id": "11fe3fd1-5394-41f1-a3f0-220725ec7748"
+ },
+ {
+  "at": "2026-11-08T05:53:19.713944Z",
+  "user": "project",
+  "reply": "",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": "ambiguous_reply_attribution",
+  "turn_id": "9a0c234d-2239-40cd-b121-dcad2971846b",
+  "session_id": "11fe3fd1-5394-41f1-a3f0-220725ec7748"
+ },
+ {
+  "at": "2026-11-08T05:53:30.302269Z",
+  "user": "Okay, and we will take the chimney on our Nepal trip.",
+  "reply": "Understood, noted for the Nepal trip.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": "ambiguous_reply_attribution",
+  "turn_id": "3cb13024-0bc8-4865-8828-22ae1d36fdb1",
+  "session_id": "11fe3fd1-5394-41f1-a3f0-220725ec7748"
+ },
+ {
+  "at": "2026-11-08T05:53:40.561279Z",
+  "user": "Our hotel is Yak and Yeti.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "1aaeb527-efad-414c-bb38-a9b633e4296c",
+  "session_id": "11fe3fd1-5394-41f1-a3f0-220725ec7748"
+ },
+ {
+  "at": "2026-11-08T05:53:51.223752Z",
+  "user": "And maybe we will visit Pokhara. Not not decided yet.",
+  "reply": "Noted as a possibility for the trip.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "00275e8c-5ccc-4c42-953d-c2db8a909445",
+  "session_id": "11fe3fd1-5394-41f1-a3f0-220725ec7748"
+ },
+ {
+  "at": "2026-11-08T05:53:58.305038Z",
+  "user": "Go back to sleep.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "09e6c5c8-edd7-437f-aa78-c07ff417707c",
+  "session_id": "11fe3fd1-5394-41f1-a3f0-220725ec7748"
+ },
+ {
+  "at": "2026-11-08T05:54:17.284913Z",
+  "user": "Which vehicle are we taking? And is Pokhara decided or not?",
+  "reply": "We are taking the chimney, and the visit to Pokhara is not decided yet.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "0eabc4e1-60a3-4408-8d15-1685268ca2b9",
+  "session_id": "2d831ec3-5003-46a8-a75e-6e2bebb6f7b0"
+ },
+ {
+  "at": "2026-11-08T05:54:28.062790Z",
+  "user": "Okay. There is a correction. We will take Thar, not Jimny.",
+  "reply": "Understood, updated to the Thar.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "f2bf7091-10ff-48b5-acca-8a8dee980cb7",
+  "session_id": "2d831ec3-5003-46a8-a75e-6e2bebb6f7b0"
+ },
+ {
+  "at": "2026-11-08T05:54:41.304949Z",
+  "user": "Okay, go back to sleep.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "6289259d-a5fe-4f2f-aafb-a9f4829f1157",
+  "session_id": "26d40544-2f43-4f0e-87e0-096e0bc58a2f"
+ },
+ {
+  "at": "2026-11-08T05:54:56.452452Z",
+  "user": "Which vehicle are we taking?",
+  "reply": "We are taking the Thar.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "d4d407e5-fc6b-4f32-9787-5a7000b519a8",
+  "session_id": "33a43ae3-6796-4bbe-a041-5e5dc74cf7c9"
+ },
+ {
+  "at": "2026-11-08T05:55:06.573542Z",
+  "user": "Okay.",
+  "reply": "Hmm.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "88172752-490a-489d-bd7d-981b4692cb91",
+  "session_id": "33a43ae3-6796-4bbe-a041-5e5dc74cf7c9"
+ },
+ {
+  "at": "2026-11-08T05:55:09.737386Z",
+  "user": "Go back to sleep.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "abfb55af-5fe3-4cdb-93e9-85a2aeefea7e",
+  "session_id": "33a43ae3-6796-4bbe-a041-5e5dc74cf7c9"
+ },
+ {
+  "at": "2026-11-08T05:55:25.826489Z",
+  "user": "Create a project called Interview Prep.",
+  "reply": "Created project Interview Prep.",
+  "saved_action": "created",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "78d6c9cb-2877-4cdf-a05a-6cb4dbb274dc",
+  "session_id": "469189f9-4ec2-46c3-affa-c2595a6673ef"
+ },
+ {
+  "at": "2026-11-08T05:55:39.847363Z",
+  "user": "The interview panel is on Friday at 10:00.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "9e36cbaa-eb91-445b-a70b-29f2ed6b90dd",
+  "session_id": "469189f9-4ec2-46c3-affa-c2595a6673ef"
+ },
+ {
+  "at": "2026-11-08T05:55:48.371131Z",
+  "user": "Okay, go back to sleep.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "3abff75b-5b98-47e0-b629-9fe717582f4f",
+  "session_id": "469189f9-4ec2-46c3-affa-c2595a6673ef"
+ },
+ {
+  "at": "2026-11-08T05:56:00.799466Z",
+  "user": "Which hotel are we staying at?",
+  "reply": "You are staying at the Yak and Yeti hotel.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "23417a8f-dcfc-4fdc-a585-52971be4e3c5",
+  "session_id": "6a05c928-b224-40f1-aef7-1701439fb4fe"
+ },
+ {
+  "at": "2026-11-08T05:56:13.941595Z",
+  "user": "Okay. Go back to sleep.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "6fabec8d-9461-4be2-8a87-9ed41b23e442",
+  "session_id": "ee091e8e-29c5-4c7a-a48e-6b9d6419cdc9"
+ },
+ {
+  "at": "2026-11-08T05:56:27.282469Z",
+  "user": "Switch to Nepal trip.",
+  "reply": "Switched to Nepal trip.",
+  "saved_action": "switched",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "eaefae04-119d-4609-946d-c9b9b0da8ca7",
+  "session_id": "3c98d326-6acc-4250-96c7-d0fd8aaaa9c8"
+ },
+ {
+  "at": "2026-11-08T05:56:38.966334Z",
+  "user": "Okay. Now forget the Yak and Yeti Hotel.",
+  "reply": "Understood. That information has been removed from the project history.",
+  "saved_action": "continued",
+  "forget_owner_rows": 2,
+  "not_saved": null,
+  "turn_id": "f1e56d92-b861-47ff-9439-a324cedf9d83",
+  "session_id": "3c98d326-6acc-4250-96c7-d0fd8aaaa9c8"
+ },
+ {
+  "at": "2026-11-08T05:57:11.189696Z",
+  "user": "Go back to sleep.",
+  "reply": "Understood.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "66f7e740-bb66-4f35-8c01-ec7c7abb3984",
+  "session_id": "6630a7c9-33c2-4507-9fb0-d76d191f258a"
+ },
+ {
+  "at": "2026-11-08T05:58:27.170652Z",
+  "user": "Switch to interview prep.",
+  "reply": "Switched to Interview Prep.",
+  "saved_action": "switched",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "376d8371-68a7-4133-82c3-4744fd9e59fc",
+  "session_id": "245ae719-1bc9-418a-b077-eb39f18dddce"
+ },
+ {
+  "at": "2026-11-08T05:58:37.663628Z",
+  "user": "Now tell me when is the interview panel?",
+  "reply": "The interview panel is on Friday at 10:00.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "609af1b9-18ab-4cf1-b34a-6a827475140d",
+  "session_id": "245ae719-1bc9-418a-b077-eb39f18dddce"
+ },
+ {
+  "at": "2026-11-08T05:58:47.006373Z",
+  "user": "Okay. And now switch to Nepal trip.",
+  "reply": "Switched to Nepal trip.",
+  "saved_action": "switched",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "0c83790f-8aa5-4884-b27e-a60dbc93173f",
+  "session_id": "245ae719-1bc9-418a-b077-eb39f18dddce"
+ },
+ {
+  "at": "2026-11-08T05:58:59.673736Z",
+  "user": "Now tell me, are we going to Pokhara or not?",
+  "reply": "You said you might visit Pokhara, but it hasn't been decided yet.",
+  "saved_action": "continued",
+  "forget_owner_rows": null,
+  "not_saved": null,
+  "turn_id": "76a4d1f9-c3fa-46e5-9f53-500bf7d2cce9",
+  "session_id": "245ae719-1bc9-418a-b077-eb39f18dddce"
+ }
+]

@@ -2010,6 +2010,7 @@ class VoiceProjectTurns:
     async def search_history(self, query) -> dict:
         """Bounded archive search for older project facts (FTS5, authorized)."""
         from jarvis.memory.project_access import conversation_search_terms
+        from jarvis.memory.project_routing import owner_asked_beyond_current_project
 
         epoch, turn = await self._current_source()
         if turn is None:
@@ -2033,10 +2034,8 @@ class VoiceProjectTurns:
             if outcome is not None and outcome.status == "ready"
             else None
         )
-        selection = self._committed_selection
-        if selection is None:
-            catalog = await owner.access.catalog()
-            selection = catalog.current
+        catalog = await owner.access.catalog()
+        selection = self._committed_selection or catalog.current
         if selection is None:
             return {"status": "no_match", "history": []}
         started = monotonic()
@@ -2048,9 +2047,14 @@ class VoiceProjectTurns:
             exclude_request_id=exclude,
         )
         status = result.status
-        if status == "no_match":
-            # Soft separation, as in text: other projects only when this one has
-            # nothing; every hit keeps its project label.
+        if status == "no_match" and owner_asked_beyond_current_project(
+            catalog, getattr(turn, "text", "")
+        ):
+            # Projects stay separate: other projects are searched only when the
+            # owner's own words reach there (they name another project or ask
+            # across projects), never because the model searched broadly. A
+            # live run (2026-11-08) answered an Interview prep question with
+            # the Nepal trip hotel through this fallback. Hits keep their label.
             wider = await owner.access.snapshot(
                 selection,
                 query=str(query),
@@ -2091,7 +2095,8 @@ class VoiceProjectTurns:
             "already_in_conversation": already,
             "guidance": "Saved conversation, oldest first. When rows disagree, the "
             "newest owner statement is current; mention that it changed. Rows with "
-            "from_project come from that project. Missing is not proof it never "
+            "from_project belong to that other project, not the current one: name "
+            "that project when you use them. Missing is not proof it never "
             "happened.",
         }
         size = len(json.dumps(payload, ensure_ascii=False).encode())

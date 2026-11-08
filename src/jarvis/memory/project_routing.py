@@ -394,6 +394,29 @@ def needs_project_routing(text: str, catalog) -> bool:
     return bool(named or ambiguous)
 
 
+_ACROSS_PROJECTS = re.compile(
+    r"\b(?:other|another|all(?:\s+(?:my|the|our))?|any|every|each|which|both)\s+"
+    r"projects?\b|\bacross\s+(?:my\s+|all\s+)?projects\b|\bin\s+any\s+project\b",
+    re.IGNORECASE,
+)
+
+
+def owner_asked_beyond_current_project(catalog, text: str) -> bool:
+    """Whether the owner's own words reach outside the current project.
+
+    True when the message names another existing project ("the Nepal trip
+    hotel") or asks across projects ("which project has the hotel?", "in my
+    other projects"). A question about the current project ("Which hotel are
+    we staying at?") is not: projects stay separate unless the owner says so.
+    """
+    text = unicodedata.normalize("NFKC", text or "")
+    if _ACROSS_PROJECTS.search(text):
+        return True
+    current = next((e for e in catalog.entries if e.selection == catalog.current), None)
+    named, ambiguous = ProjectRouter._named_projects(catalog, text, current)
+    return bool(named or ambiguous)
+
+
 @dataclass(frozen=True)
 class ProjectRoutingDecision:
     status: str
