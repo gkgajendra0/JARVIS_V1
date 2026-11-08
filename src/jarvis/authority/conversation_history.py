@@ -96,14 +96,21 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
             raise ValueError("mention deletion material required")
         words = " ".join(material.get("terms", ()))
         where = ", ".join(material.get("projects", ())) or "no project"
+        facts = int(material.get("personal_facts", 0))
+        personal = (
+            f" Also {facts} personal fact{'s' if facts != 1 else ''} saved from "
+            "those messages."
+            if facts
+            else ""
+        )
         return self._authorize_history_change(
             material,
             target={"mentions": material["digest"]},
             summary=f"Forget saved conversation mentioning '{words}': "
             f"{int(material.get('owner_rows', 0))} of your messages and "
             f"{int(material.get('jarvis_rows', 0))} Jarvis replies or tool results "
-            f"generated with them, in: {where}. Everything else is kept. Minimal "
-            "deletion identities are preserved to block late writes.",
+            f"generated with them, in: {where}.{personal} Everything else is kept. "
+            "Minimal deletion identities are preserved to block late writes.",
             destructive=True,
         )
 

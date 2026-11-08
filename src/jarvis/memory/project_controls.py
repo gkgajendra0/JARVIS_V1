@@ -546,6 +546,7 @@ class ProjectControls:
             "owner_rows": preview.owner_rows,
             "jarvis_rows": preview.jarvis_rows,
             "projects": list(preview.projects),
+            "personal_facts": len(preview.personal_facts),
             "digest": preview.digest,
         }
         issuer = self.access.authority
@@ -585,6 +586,14 @@ class ProjectControls:
                             "archive_revision=archive_revision+1 WHERE thread_id=?",
                             (thread_id,),
                         )
+                    # Personal facts saved from the removed owner turns go with
+                    # them, in the same transaction and approval.
+                    _erase_personal_facts(
+                        conn,
+                        current.personal_facts,
+                        current.checkpoints,
+                        datetime.now(UTC),
+                    )
                     # Physically rewrite the search index without the removed words.
                     conn.execute(
                         "INSERT INTO conversation_event_fts(conversation_event_fts) VALUES('optimize')"
@@ -593,7 +602,11 @@ class ProjectControls:
                     conn.commit()
                     self.access.store.change_revision += 1
                     return MentionDeletionReceipt(
-                        current.owner_rows, current.jarvis_rows, current.projects
+                        current.owner_rows,
+                        current.jarvis_rows,
+                        current.projects,
+                        len(current.personal_facts),
+                        current.personal_mentions_kept,
                     )
                 except BaseException:
                     conn.rollback()
@@ -630,6 +643,13 @@ class MentionForgetPreview:
     jarvis_rows: int
     projects: tuple[str, ...]
     digest: str
+    # Personal facts saved or learned from the matched owner turns (provenance),
+    # removed with them; conversation topic checkpoints taken from them.
+    personal_facts: tuple[str, ...] = ()
+    checkpoints: tuple[str, ...] = ()
+    # Current personal facts that mention every word but were not saved from
+    # these turns. They are kept and reported, never deleted by a guess.
+    personal_mentions_kept: int = 0
 
 
 def _and_expression(terms):
@@ -700,17 +720,167 @@ def _mention_state(conn, terms):
                 jarvis += 1
     import hashlib
 
+    facts = _personal_facts_from(conn, matched)
+    checkpoints = _checkpoints_from(conn, matched)
+    kept = _personal_mentions(conn, terms, exclude=set(facts))
     digest = hashlib.sha256(
         json.dumps(
-            [list(terms), list(matched), list(derived), sorted(threads.items())]
+            [
+                list(terms),
+                list(matched),
+                list(derived),
+                sorted(threads.items()),
+                list(facts),
+                list(checkpoints),
+            ]
         ).encode()
     ).hexdigest()
     return (
         MentionForgetPreview(
-            tuple(terms), matched, derived, owner, jarvis, tuple(sorted(titles)), digest
+            tuple(terms),
+            matched,
+            derived,
+            owner,
+            jarvis,
+            tuple(sorted(titles)),
+            digest,
+            facts,
+            checkpoints,
+            kept,
         ),
         tuple(sorted(threads)),
     )
+
+
+# -- personal memory saved from forgotten turns --------------------------------
+#
+# Personal learning and explicit "remember" both record the owner turn a fact
+# came from: a learning receipt (source_turn_id) and the fact's source
+# reference ``conversation:<session>:turn:<turn id>``. Saved owner turns use the
+# same id. Forgetting those turns removes exactly the facts they produced;
+# unrelated personal facts are never touched.
+
+_TURN_REF = ":turn:"
+
+
+def _personal_facts_from(conn, event_ids):
+    ids = set(event_ids)
+    if not ids:
+        return ()
+    found = set()
+    ordered = sorted(ids)
+    for start in range(0, len(ordered), 256):
+        chunk = ordered[start : start + 256]
+        marks = ",".join("?" for _ in chunk)
+        found.update(
+            r[0]
+            for r in conn.execute(
+                "SELECT r.target_id FROM personal_learning_receipt r "
+                "JOIN semantic_assertion a ON a.assertion_id=r.target_id "
+                f"WHERE r.source_turn_id IN ({marks})",
+                chunk,
+            )
+        )
+    for assertion_id, reference in conn.execute(
+        "SELECT a.assertion_id,s.canonical_ref FROM semantic_assertion a "
+        "JOIN memory_source s ON s.source_id=a.source_id "
+        "WHERE s.canonical_ref LIKE 'conversation:%'"
+    ):
+        _, marker, turn_id = str(reference).rpartition(_TURN_REF)
+        if marker and turn_id in ids:
+            found.add(assertion_id)
+    return tuple(sorted(found))
+
+
+def _checkpoints_from(conn, event_ids):
+    ordered = sorted(set(event_ids))
+    keys = set()
+    for start in range(0, len(ordered), 256):
+        chunk = ordered[start : start + 256]
+        marks = ",".join("?" for _ in chunk)
+        keys.update(
+            r[0]
+            for r in conn.execute(
+                "SELECT topic_key FROM conversation_topic_checkpoint "
+                f"WHERE source_turn_id IN ({marks})",
+                chunk,
+            )
+        )
+    return tuple(sorted(keys))
+
+
+def _personal_mentions(conn, terms, *, exclude):
+    count = 0
+    for assertion_id, value, normalized in conn.execute(
+        "SELECT assertion_id,value_json,normalized_text FROM current_semantic_assertion"
+    ):
+        if assertion_id in exclude:
+            continue
+        text = f"{value} {normalized}".casefold()
+        if all(t in text for t in terms):
+            count += 1
+    return count
+
+
+def _erase_personal_facts(conn, facts, checkpoints, now):
+    """Delete the previewed personal facts with their learning lineage (inside
+    the caller's transaction). Category learning stays enabled: the owner asked
+    to forget one thing, not to stop learning a kind of fact."""
+    from uuid import uuid4
+
+    stamp = now.isoformat(timespec="microseconds")
+    for start in range(0, len(facts), 256):
+        chunk = facts[start : start + 256]
+        marks = ",".join("?" for _ in chunk)
+        sources = {
+            r[0]
+            for r in conn.execute(
+                f"SELECT source_id FROM semantic_assertion WHERE assertion_id IN ({marks})",
+                chunk,
+            )
+        }
+        conn.execute(
+            f"DELETE FROM personal_learning_receipt WHERE target_id IN ({marks})",
+            chunk,
+        )
+        conn.execute(
+            f"DELETE FROM memory_operation WHERE target_id IN ({marks})", chunk
+        )
+        conn.execute(
+            f"DELETE FROM semantic_assertion_embedding WHERE assertion_id IN ({marks})",
+            chunk,
+        )
+        conn.execute(
+            f"DELETE FROM semantic_assertion WHERE assertion_id IN ({marks})", chunk
+        )
+        for source_id in sorted(sources):
+            conn.execute(
+                "DELETE FROM memory_source WHERE source_id=? "
+                "AND NOT EXISTS(SELECT 1 FROM semantic_assertion WHERE source_id=?) "
+                "AND NOT EXISTS(SELECT 1 FROM memory_operation WHERE source_id=?)",
+                (source_id, source_id, source_id),
+            )
+        for assertion_id in chunk:
+            conn.execute(
+                "INSERT INTO memory_operation (operation_id,operation_type,target_kind,"
+                "target_id,source_id,occurred_at,reason_code,result_state,"
+                "content_fingerprint) VALUES (?,'forget','semantic_assertion',?,NULL,?,"
+                "'conversation_forget','forgotten',NULL)",
+                (str(uuid4()), assertion_id, stamp),
+            )
+    for key in checkpoints:
+        conn.execute(
+            "DELETE FROM conversation_topic_checkpoint WHERE topic_key=?", (key,)
+        )
+        # A checkpoint save already in flight for this topic is rejected.
+        conn.execute(
+            "INSERT INTO conversation_topic_tombstone (topic_key,forgotten_at,"
+            "source_turn_id) VALUES (?,?,'conversation_forget') "
+            "ON CONFLICT(topic_key) DO UPDATE SET forgotten_at=excluded.forgotten_at,"
+            "source_turn_id=excluded.source_turn_id "
+            "WHERE excluded.forgotten_at > forgotten_at",
+            (key, stamp),
+        )
 
 
 def _forget_terms(terms):
@@ -727,3 +897,5 @@ class MentionDeletionReceipt:
     owner_rows: int
     jarvis_rows: int
     projects: tuple[str, ...]
+    personal_facts: int = 0
+    personal_mentions_kept: int = 0

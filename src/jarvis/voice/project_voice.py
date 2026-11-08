@@ -32,7 +32,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from time import monotonic
 from uuid import uuid4
@@ -72,6 +72,9 @@ PAUSED_NOTICE_INSTRUCTIONS = (
 SEARCHES_PER_UTTERANCE = 2
 SEARCH_HITS = 8
 SEARCH_MAX_CHARS = 2400
+# Candidates read across projects when the owner named one; only that project's
+# hits are kept (at most SEARCH_HITS), the rest never reach the model.
+NAMED_SEARCH_CANDIDATES = 64
 _FORGET_VERB = re.compile(
     r"\b(?:forget|delete|erase|remove|wipe|bh[uo]+l|mita)\w*", re.IGNORECASE
 )
@@ -88,6 +91,33 @@ FORGET_HISTORY_NUDGE = (
     "owner used, then confirm briefly without repeating them."
 )
 
+
+def forget_confirmation(receipt, *, canonical_already=False) -> str:
+    """What the owner is told after a mention forget: exactly what was removed.
+
+    Saved conversation is always removed when this is called. Personal facts
+    saved from those messages were removed in the same step; other current
+    personal facts that merely mention the words were kept and are named as
+    kept, so the reply never claims a deletion that did not happen.
+    """
+    removed = int(getattr(receipt, "personal_facts", 0))
+    kept = int(getattr(receipt, "personal_mentions_kept", 0))
+    if removed or canonical_already:
+        said = (
+            "Done. I removed it from our saved conversations and your personal memory."
+        )
+    else:
+        said = "Done. I removed it from our saved conversations."
+    if kept:
+        said += (
+            " A separate saved personal fact still mentions it; I kept that."
+            if kept == 1
+            else f" {kept} separate saved personal facts still mention it; I kept those."
+        )
+        said += " Ask me to forget that saved fact if you want it gone too."
+    return said
+
+
 # Conversation-control tools whose acknowledgement needs no project context.
 CONTROL_TOOLS = frozenset({"enter_standby"})
 
@@ -97,6 +127,10 @@ REPAIR_ANSWER_INSTRUCTIONS = (
     "Project memory for the owner's last request was just added to this "
     "conversation. Answer that request now, briefly, from it. Speak only the "
     "answer to the owner. Do not repeat a tool call that already ran."
+)
+REPAIR_ATTRIBUTION_INSTRUCTIONS = (
+    " Begin with '{attribution},' then give the answer, even if it is that the "
+    "detail isn't recorded there."
 )
 # If a re-request produces no audible reply within this time, speak the fallback
 # rather than leaving the owner in silence until the session times out.
@@ -533,6 +567,13 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
         result["previous_project"] = outcome.previous
     if decision.reference_titles:
         result["referenced_projects"] = list(decision.reference_titles)
+        attribution = source_attribution(decision.reference_titles)
+        result["source_attribution"] = attribution
+        result["guidance"] = _GUIDANCE + (
+            " The owner asked about another project: start the answer with "
+            "'source_attribution' (after any announcement), even when the answer "
+            "is that it isn't recorded there."
+        )
     if decision.ambiguous_reference_titles:
         result["ambiguous_projects"] = list(decision.ambiguous_reference_titles)
         result["ambiguity_note"] = (
@@ -540,6 +581,18 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
             "Ask which one they mean before answering about it."
         )
     return result, tuple(new_ids)
+
+
+def source_attribution(titles) -> str:
+    """Spoken lead-in naming the project(s) an answer came from (R2-A, live run
+    2026-11-08 07:19:20: the Nepal trip hotel was given from Interview Prep
+    without saying where it came from)."""
+    names = [str(t) for t in titles if str(t).strip()]
+    if not names:
+        return ""
+    if len(names) == 1:
+        return f"In your {names[0]} project"
+    return f"In your {', '.join(names[:-1])} and {names[-1]} projects"
 
 
 def _preload_rows(sources, *, exclude) -> list:
@@ -1339,7 +1392,7 @@ class VoiceProjectTurns:
                         "Project voice: model answered without context; context "
                         "delivered by the application, re-requesting the answer"
                     )
-                    self._generate(REPAIR_ANSWER_INSTRUCTIONS)
+                    self._generate(self._repair_answer_instructions())
                 else:
                     self._diag("repair_requested", epoch=epoch, via="tool")
                     LOGGER.info(
@@ -1351,6 +1404,21 @@ class VoiceProjectTurns:
                 self._fallback(key, FALLBACK_INSTRUCTIONS)
         finally:
             self._repairing.discard(blocked_key)
+
+    def _repair_answer_instructions(self) -> str:
+        """The re-request after repair delivery; names the source project when
+        the owner asked about another one (the live 07:19:20 answer did not)."""
+        delivered = self._delivered
+        attribution = (
+            delivered.result.get("source_attribution", "")
+            if delivered is not None and isinstance(delivered.result, dict)
+            else ""
+        )
+        if not attribution:
+            return REPAIR_ANSWER_INSTRUCTIONS
+        return REPAIR_ANSWER_INSTRUCTIONS + REPAIR_ATTRIBUTION_INSTRUCTIONS.format(
+            attribution=attribution.replace("'", "")
+        )
 
     def _outcome_if_done(self, source):
         future = self._outcomes.get(source.turn_id)
@@ -1960,9 +2028,17 @@ class VoiceProjectTurns:
                     "specifically.",
                 }
             if not preview.matched:
+                if preview.personal_mentions_kept:
+                    return {
+                        "status": "nothing_saved",
+                        "personal_facts_mentioning": preview.personal_mentions_kept,
+                        "guidance": "No saved conversation mentions it, but a saved "
+                        "personal fact does: use forget_memory for that fact. Nothing "
+                        "has been deleted yet.",
+                    }
                 return {
                     "status": "nothing_saved",
-                    "guidance": "No saved conversation mentions it.",
+                    "guidance": "Nothing saved mentions it. Say nothing was deleted.",
                 }
             try:
                 # Fresh Windows Hello approval showing exactly what is removed.
@@ -1990,27 +2066,51 @@ class VoiceProjectTurns:
             projects=list(receipt.projects),
         )
         LOGGER.info(
-            "Project history forget committed | owner_rows=%s | jarvis_rows=%s | projects=%s | turn_id=%s | session_id=%s",
+            "Project history forget committed | owner_rows=%s | jarvis_rows=%s | projects=%s | personal_facts=%s | personal_mentions_kept=%s | turn_id=%s | session_id=%s",
             receipt.owner_rows,
             receipt.jarvis_rows,
             len(receipt.projects),
+            receipt.personal_facts,
+            receipt.personal_mentions_kept,
             turn.turn_id,
             self._conversation.session_id,
+        )
+        confirmation = forget_confirmation(
+            receipt,
+            canonical_already=epoch in self._canonical_forget_epochs,
         )
         return {
             "status": "forgotten",
             "your_messages": receipt.owner_rows,
             "jarvis_replies": receipt.jarvis_rows,
             "projects": list(receipt.projects),
-            "guidance": "Confirm briefly WITHOUT repeating the forgotten words, and "
-            "never use them again. If it was also a saved personal fact, call "
-            "forget_memory too. This conversation ends after your confirmation.",
+            "personal_facts_removed": receipt.personal_facts,
+            "personal_facts_kept": receipt.personal_mentions_kept,
+            "confirmation": confirmation,
+            "guidance": "Say only the confirmation, in the owner's language, "
+            "WITHOUT repeating the forgotten words; never use them again and "
+            "never claim more was removed than it says. Do not call forget_memory "
+            "now. This conversation ends after your confirmation.",
         }
+
+    async def _search_named(self, selection, query, exclude, project_ids):
+        """Search only the projects the owner named (hits keep their label)."""
+        wider = await self._owner.access.snapshot(
+            selection,
+            query=str(query),
+            limit=NAMED_SEARCH_CANDIDATES,
+            all_projects=True,
+            exclude_request_id=exclude,
+        )
+        sources = tuple(s for s in wider.sources if s.project_id in project_ids)
+        if not sources:
+            return replace(wider, sources=()), "no_match_in_named_project"
+        return replace(wider, sources=sources[:SEARCH_HITS]), "other_projects"
 
     async def search_history(self, query) -> dict:
         """Bounded archive search for older project facts (FTS5, authorized)."""
         from jarvis.memory.project_access import conversation_search_terms
-        from jarvis.memory.project_routing import owner_asked_beyond_current_project
+        from jarvis.memory.project_routing import owner_search_scope
 
         epoch, turn = await self._current_source()
         if turn is None:
@@ -2039,31 +2139,36 @@ class VoiceProjectTurns:
         if selection is None:
             return {"status": "no_match", "history": []}
         started = monotonic()
-        result = await owner.access.snapshot(
-            selection,
-            query=str(query),
-            limit=SEARCH_HITS,
-            project_wide=True,
-            exclude_request_id=exclude,
-        )
-        status = result.status
-        if status == "no_match" and owner_asked_beyond_current_project(
-            catalog, getattr(turn, "text", "")
-        ):
-            # Projects stay separate: other projects are searched only when the
-            # owner's own words reach there (they name another project or ask
-            # across projects), never because the model searched broadly. A
-            # live run (2026-11-08) answered an Interview prep question with
-            # the Nepal trip hotel through this fallback. Hits keep their label.
-            wider = await owner.access.snapshot(
+        # Projects stay separate: other projects are read only when the owner's
+        # own words reach there, never because the model searched broadly. A
+        # live run (2026-11-08) answered an Interview prep question with the
+        # Nepal trip hotel through a widening fallback.
+        scope = owner_search_scope(catalog, getattr(turn, "text", ""))
+        if isinstance(scope, frozenset):
+            # The owner NAMED another project: search only there. Neither the
+            # current project's rows nor a third project's can stand in for a
+            # missing answer ("the Goa hotel" is never the Nepal trip hotel).
+            result, status = await self._search_named(selection, query, exclude, scope)
+        else:
+            result = await owner.access.snapshot(
                 selection,
                 query=str(query),
                 limit=SEARCH_HITS,
-                all_projects=True,
+                project_wide=True,
                 exclude_request_id=exclude,
             )
-            if wider.sources:
-                result, status = wider, "other_projects"
+            status = result.status
+            if status == "no_match" and scope == "all":
+                # An explicit across-projects question reads every project.
+                wider = await owner.access.snapshot(
+                    selection,
+                    query=str(query),
+                    limit=SEARCH_HITS,
+                    all_projects=True,
+                    exclude_request_id=exclude,
+                )
+                if wider.sources:
+                    result, status = wider, "other_projects"
         rows, given, already, total = [], [], 0, 0
         for source in sorted(
             result.sources, key=lambda s: (s.event.accepted_at, s.sequence)
@@ -2089,6 +2194,14 @@ class VoiceProjectTurns:
             given.append(event.event_id)
         self._remember_delivered(given, rows)
         elapsed = round((monotonic() - started) * 1000, 1)
+        if status == "no_match_in_named_project" and not rows and not already:
+            return {
+                "status": "no_match",
+                "history": [],
+                "already_in_conversation": 0,
+                "guidance": "Nothing about that is saved in the project the owner "
+                "named. Say so; do not answer from any other project.",
+            }
         payload = {
             "status": status if rows or already else "no_match",
             "history": rows,
@@ -2148,8 +2261,9 @@ _SEARCH_DESCRIPTION = (
 _FORGET_DESCRIPTION = (
     "When the owner asks to forget something, removes saved conversation that "
     "mentions it (all their words must appear) and Jarvis replies made from it, "
-    "after the owner approves with Windows Hello. Also use forget_memory for a "
-    "saved personal fact."
+    "after the owner approves with Windows Hello. Personal facts saved from "
+    "those messages are removed with them; use forget_memory only for a saved "
+    "fact this reports as kept."
 )
 
 

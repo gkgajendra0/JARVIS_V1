@@ -27,6 +27,7 @@ REPLIES = {
     "3-recall-corrected": "The Thar.",
     "4-create-second": "Created project Interview prep.",
     "4-isolation": "I don't know which hotel.",
+    "4-cross-project": "In your Nepal trip project, the hotel is Yak and Yeti.",
     "5-switch": "Switched to Nepal trip.",
     "5-recall-forgotten": "I don't have a hotel saved.",
     "6-restart-other": "Friday at ten.",

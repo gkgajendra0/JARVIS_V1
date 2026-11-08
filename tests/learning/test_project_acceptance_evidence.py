@@ -14,6 +14,7 @@ def evidence():
         "2-recall": "The Jimny; Pokhara is not decided.",
         "3-recall-corrected": "The Thar.",
         "4-isolation": "I do not know the hotel.",
+        "4-cross-project": "In your Nepal trip project, the hotel is Yak and Yeti.",
         "5-recall-forgotten": "I do not have a hotel saved.",
         "6-restart-other": "Friday at ten.",
         "6-restart-tentative": "No, it is not decided.",

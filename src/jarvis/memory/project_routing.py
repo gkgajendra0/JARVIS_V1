@@ -417,6 +417,28 @@ def owner_asked_beyond_current_project(catalog, text: str) -> bool:
     return bool(named or ambiguous)
 
 
+def owner_search_scope(catalog, text: str):
+    """Which other projects the owner's own words reach, for a search that
+    found nothing in the current project.
+
+    ``None``: none (a question about the current project). ``"all"``: the
+    owner asked across projects ("which project has the hotel?"). Otherwise
+    the frozenset of project ids they named (or could have meant, when a word
+    names several). A named project with no match never widens to a third
+    project: "the Goa hotel" must not be answered with the Nepal trip hotel.
+    """
+    text = unicodedata.normalize("NFKC", text or "")
+    if _ACROSS_PROJECTS.search(text):
+        return "all"
+    current = next((e for e in catalog.entries if e.selection == catalog.current), None)
+    named, ambiguous = ProjectRouter._named_projects(catalog, text, current)
+    ids = {e.selection.project_id for e in named}
+    ids.update(
+        e.selection.project_id for e in catalog.entries if e.title in set(ambiguous)
+    )
+    return frozenset(ids) or None
+
+
 @dataclass(frozen=True)
 class ProjectRoutingDecision:
     status: str
