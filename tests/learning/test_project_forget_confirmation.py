@@ -46,8 +46,15 @@ async def _forget_with_noise_during_approval(wake, words="Himalayan Lotus"):
     wake.speech()
     wake.partial(REQUEST)
     wake.transcript(REQUEST)
+    epoch = wake.conversation.user_activity_epoch
     task = asyncio.ensure_future(wake.turns.forget_history(words))
-    await asyncio.sleep(0)  # the tool has taken the request's activity
+    # Live order: the tool found the request (17:33:31.25) before the burst
+    # (17:33:31.61). Wait until it has, on any event loop / Python version.
+    for _ in range(200):
+        if epoch in wake.turns._control_epochs or task.done():
+            break
+        await asyncio.sleep(0)
+    assert epoch in wake.turns._control_epochs
     wake.speech()  # a noise burst: new activity, never transcribed
     return await task
 
