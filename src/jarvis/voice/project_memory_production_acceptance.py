@@ -41,6 +41,7 @@ class Step:
     match: tuple[str, ...]  # words the owner's utterance contains
     reply_any: tuple[str, ...] = ()  # one of these must be in the reply
     reply_none: tuple[str, ...] = ()  # none of these may be in the reply
+    reply_all: tuple[str, ...] = ()  # every one of these must be in the reply
     action: str | None = None  # expected project receipt action
     forget: bool = False  # expects a forget commit
 
@@ -97,6 +98,13 @@ SCENARIO = (
         "(new wake) Which hotel are we staying at?",
         ("hotel",),
         reply_none=("yak",),
+    ),
+    Step(
+        "4-cross-project",
+        "Which hotel are we staying at for the Nepal trip?",
+        ("hotel", "nepal"),
+        # The answer, and the project it came from (R2-A, 2026-11-08 07:19:20).
+        reply_all=("yak", "nepal"),
     ),
     Step(
         "5-switch",
@@ -272,6 +280,18 @@ def read_database(open_connection, *, turn_ids=(), since=None) -> dict:
             for title, word in DB_EXPECT_PRESENT
         }
         absent = {word: owner_rows_with(word) for word in DB_EXPECT_ABSENT}
+        # Personal facts (canonical memory) still mentioning a forgotten word:
+        # forgetting by voice must remove the fact learned from it too (R2-C).
+        personal_absent = {}
+        for word in DB_EXPECT_ABSENT:
+            personal_absent[word] = int(
+                connection.execute(
+                    "SELECT count(*) FROM current_semantic_assertion WHERE "
+                    "instr(lower(value_json), lower(?)) > 0 "
+                    "OR instr(lower(normalized_text), lower(?)) > 0",
+                    (word, word),
+                ).fetchone()[0]
+            )
         plans, run_plans = [], []
         for value, recorded in connection.execute(
             "SELECT value_json, system_from FROM semantic_assertion "
@@ -314,6 +334,7 @@ def read_database(open_connection, *, turn_ids=(), since=None) -> dict:
             "projects": projects,
             "present": present,
             "absent": absent,
+            "personal_absent": personal_absent,
             "duplicate_titles": duplicates,
             "active_plan_labels": plans,
             "run_plan_labels": run_plans,
@@ -425,6 +446,9 @@ def grade(timeline: list[Turn], db: dict | None, *, review=None) -> dict:
                 reasons.append("canonical turn missing from expected project")
         if step.reply_any and not any(w in reply for w in step.reply_any):
             reasons.append(f"reply lacks any of {list(step.reply_any)}")
+        for word in step.reply_all:
+            if word not in reply:
+                reasons.append(f"reply lacks '{word}'")
         for word in step.reply_none:
             if word in reply:
                 reasons.append(f"reply contains '{word}'")
@@ -463,6 +487,13 @@ def grade(timeline: list[Turn], db: dict | None, *, review=None) -> dict:
         for word, count in db["absent"].items():
             db_checks.append(
                 {"check": f"absent {word}", "verdict": "FAIL" if count else "PASS"}
+            )
+        for word, count in db.get("personal_absent", {}).items():
+            db_checks.append(
+                {
+                    "check": f"absent personal fact {word}",
+                    "verdict": "FAIL" if count else "PASS",
+                }
             )
         db_checks.append(
             {

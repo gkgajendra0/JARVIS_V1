@@ -13,7 +13,10 @@ from jarvis.voice.media_devices_audio import (
     PlaybackQualitySnapshot,
 )
 from jarvis.voice.scripted_speech import ScriptedSpeech, build_scripted_speech
-from jarvis.voice.voice_output_safety import non_user_facing_reason
+from jarvis.voice.voice_output_safety import (
+    non_user_facing_reason,
+    strip_self_narration,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -122,7 +125,8 @@ class SilentRealtimeAudioRecovery:
         return None
 
     async def _replay_unplayed(self, turn: ConversationTurn) -> None:
-        text = turn.text.strip()
+        # Scripted TTS speaks only the reply, never the model's narration.
+        text = strip_self_narration(turn.text).strip()
         output = self._output_getter()
         if not text or output is None:
             return
@@ -206,7 +210,7 @@ class SilentRealtimeAudioRecovery:
                 return
 
             output = self._output_getter()
-            text = turn.text.strip()
+            text = strip_self_narration(turn.text).strip()
             if output is None or not text:
                 return
             unsafe = non_user_facing_reason(text)

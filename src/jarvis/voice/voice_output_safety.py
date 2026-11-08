@@ -146,7 +146,47 @@ def _word_spans(text: str) -> list[tuple[str, int, int]]:
     ]
 
 
+# A whole sentence in which the model tells itself to produce the reply
+# ("So I just need to output the answer.", "I should respond briefly.") rather
+# than speaking to the owner. Live run 2026-11-08 07:19:20 (repair path):
+# "So I just need to output the answer.You are staying at the Yak and Yeti."
+# Only a sentence made of nothing else matches: "I'll say it again: the hotel is
+# ..." or "I need to check the permits" keep their content.
+_NARRATION_SENTENCE = re.compile(
+    r"(?i)(?:^|(?<=[.!?]))[ \t]*"
+    r"(?:(?:so|okay|ok|alright|all right|right|now|well|then|fine)[,\s]+)*"
+    r"(?:I|we)(?:'ll|'m going to|'d|\s+will|\s+am going to|\s+shall)?"
+    r"(?:\s+(?:just|simply|only|now|then|directly|briefly|basically))*"
+    r"(?:\s+(?:(?:need|have|want|ought|am going|are going|got)\s+to|should|must|"
+    r"can|will|shall|'ll))?"
+    r"(?:\s+(?:just|simply|only|now|then|directly|briefly|basically))*"
+    r"\s+(?:output|give|provide|state|deliver|produce|respond|reply|answer|"
+    r"return)"
+    r"(?:\s+(?:with|to|that|this|it|the|an?|my|our|their|his|her|owner'?s?|user'?s?|"
+    r"final|direct|short|brief|actual|requested|correct|concise|just|only))*"
+    r"(?:\s+(?:answer|response|reply|result|information|fact|facts|details?|"
+    r"question|request|it|that|this|them|now|then|briefly|directly|only))?"
+    r"[ \t]*[.!?]+"
+)
+
+
+def strip_self_narration(text: str) -> str:
+    """``text`` without sentences in which the model narrates producing its
+    reply. Nothing else is rewritten."""
+    original = text or ""
+    cleaned = _NARRATION_SENTENCE.sub(" ", original)
+    if cleaned == original:
+        return original
+    return _tidy(cleaned)
+
+
 def strip_internal_text(text: str) -> str:
+    """``text`` without echoes of Jarvis's own instructions or the model's
+    narration of producing the reply (:func:`strip_self_narration`)."""
+    return strip_self_narration(_strip_instruction_echoes(text))
+
+
+def _strip_instruction_echoes(text: str) -> str:
     """``text`` without echoes of Jarvis's own instructions.
 
     Gemini's output transcription can begin with the generate_reply
@@ -266,10 +306,14 @@ def sanitize_assistant_transcript(text: str) -> tuple[str, str | None]:
     whole transcript is rejected (returns ""), since it is not what Jarvis
     should have said to the owner.
     """
-    spoken = strip_internal_text(text)
-    removed = (
-        "instruction_echo_removed" if _normalized(spoken) != _normalized(text) else None
-    )
+    unechoed = _strip_instruction_echoes(text)
+    spoken = strip_self_narration(unechoed)
+    labels = []
+    if _normalized(unechoed) != _normalized(text):
+        labels.append("instruction_echo_removed")
+    if _normalized(spoken) != _normalized(unechoed):
+        labels.append("self_narration_removed")
+    removed = "+".join(labels) or None
     if not spoken:
         return "", removed or "empty"
     reason = internal_text_reason(spoken)
