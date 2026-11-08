@@ -185,7 +185,12 @@ async def test_commands_and_other_projects_still_go_through_the_tool(lab, partia
     await settle(voice)
     # Repair by delivery: the application gives Gemini exactly the context the
     # tool would have returned, then re-requests the answer.
-    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS]
+    (reply,) = wake.session.replies
+    assert reply.startswith(REPAIR_ANSWER_INSTRUCTIONS)
+    if "Nepal" in partial:  # another project: the answer must name it
+        assert "Begin with 'In your Nepal trip project,'" in reply
+    else:
+        assert reply == REPAIR_ANSWER_INSTRUCTIONS
     assert voice.metrics.repair_deliveries == 1
     repaired = wake.agent.injected()[-1]
     assert "for the owner's last request" in repaired
