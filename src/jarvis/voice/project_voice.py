@@ -96,9 +96,9 @@ def forget_confirmation(receipt, *, canonical_already=False) -> str:
     """What the owner is told after a mention forget: exactly what was removed.
 
     Saved conversation is always removed when this is called. Personal facts
-    saved from those messages were removed in the same step; other current
-    personal facts that merely mention the words were kept and are named as
-    kept, so the reply never claims a deletion that did not happen.
+    saved from those messages, or naming every one of the words, were removed
+    in the same step. If the words matched too many personal facts, those were
+    kept and the reply says so: it never claims a deletion that did not happen.
     """
     removed = int(getattr(receipt, "personal_facts", 0))
     kept = int(getattr(receipt, "personal_mentions_kept", 0))
@@ -110,11 +110,10 @@ def forget_confirmation(receipt, *, canonical_already=False) -> str:
         said = "Done. I removed it from our saved conversations."
     if kept:
         said += (
-            " A separate saved personal fact still mentions it; I kept that."
-            if kept == 1
-            else f" {kept} separate saved personal facts still mention it; I kept those."
+            f" {kept} saved personal facts also mention those words, too many to "
+            "remove on a guess, so I kept them. Name the one to forget more "
+            "specifically."
         )
-        said += " Ask me to forget that saved fact if you want it gone too."
     return said
 
 
@@ -2032,9 +2031,9 @@ class VoiceProjectTurns:
                     return {
                         "status": "nothing_saved",
                         "personal_facts_mentioning": preview.personal_mentions_kept,
-                        "guidance": "No saved conversation mentions it, but a saved "
-                        "personal fact does: use forget_memory for that fact. Nothing "
-                        "has been deleted yet.",
+                        "guidance": "Nothing was deleted: those words match too "
+                        "many saved personal facts. Ask the owner to name the one "
+                        "to forget more specifically.",
                     }
                 return {
                     "status": "nothing_saved",

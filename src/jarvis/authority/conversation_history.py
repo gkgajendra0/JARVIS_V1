@@ -97,9 +97,13 @@ class ConversationHistoryAuthority(PersonalLearningAuthority):
         words = " ".join(material.get("terms", ()))
         where = ", ".join(material.get("projects", ())) or "no project"
         facts = int(material.get("personal_facts", 0))
+        labels = ", ".join(
+            f"'{label}'" for label in material.get("personal_fact_labels", ())
+        )
         personal = (
-            f" Also {facts} personal fact{'s' if facts != 1 else ''} saved from "
-            "those messages."
+            f" Also {facts} personal memory entr{'ies' if facts != 1 else 'y'}"
+            + (f" ({labels})" if labels else "")
+            + " saved from those messages or naming those words."
             if facts
             else ""
         )

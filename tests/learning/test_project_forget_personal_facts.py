@@ -153,9 +153,7 @@ async def test_forget_removes_the_personal_fact_learned_from_that_turn(
     assert "personal memory" in result["confirmation"]
     assert "kept" not in result["confirmation"]
     # The Hello approval showed the personal fact too.
-    assert "1 personal fact saved from those messages" in repr(
-        authority_parts.hello.calls[-1]
-    )
+    assert "1 personal memory entry ('hotel')" in repr(authority_parts.hello.calls[-1])
     with sqlite3.connect(lab.db) as c:
         assert not c.execute(
             "SELECT 1 FROM personal_learning_receipt WHERE target_id=?", (hotel,)
@@ -193,20 +191,58 @@ async def test_explicitly_saved_fact_from_that_turn_is_removed_without_a_receipt
 
 
 @pytest.mark.asyncio
-async def test_a_personal_fact_not_saved_from_those_turns_is_kept_and_said(lab):
-    """A fact that only mentions the words is never deleted by a guess; the
-    confirmation says it was kept instead of claiming everything is gone."""
+async def test_an_orphan_fact_naming_the_words_is_removed_in_the_same_approval(
+    lab, authority_parts
+):
+    """Live 2026-11-08: fact b66068f7 ("hotel: YAK and YETI") outlived the
+    message it came from (forgotten earlier). A later forget naming it removes
+    it in the same Windows Hello approval, which names it by label; a fact
+    without every word is kept."""
     voice = await _hotel_trip(lab)
-    other = await _learn(lab, "hotel", "YAK and YETI")  # learned elsewhere
+    orphan = await _learn(lab, "hotel", "YAK and YETI")  # no saved message
+    other_hotel = await _learn(lab, "hotel", "Taj Lake Palace")
+    approvals = len(authority_parts.hello.calls)
     wake = FastWake(voice)
     result = await ask_to_forget(wake, "Forget the YAK and YETI hotel.", "YETI hotel")
     assert result["status"] == "forgotten"
+    assert result["personal_facts_removed"] == 1
+    assert result["personal_facts_kept"] == 0
+    facts = _facts(lab)
+    assert orphan not in facts and other_hotel in facts
+    assert len(authority_parts.hello.calls) == approvals + 1  # one approval
+    assert "('hotel')" in repr(authority_parts.hello.calls[-1])
+    assert "personal memory" in result["confirmation"]
+    with sqlite3.connect(lab.db) as c:
+        assert not c.execute(
+            "SELECT 1 FROM personal_learning_suppression WHERE suppressed=1"
+        ).fetchone()  # learning stays on: one fact forgotten, not a category
+
+
+@pytest.mark.asyncio
+async def test_words_matching_too_many_personal_facts_delete_none_of_them(lab):
+    voice = await _hotel_trip(lab)
+    ids = [await _learn(lab, "hotel", name) for name in ("A1", "B2", "C3", "D4")]
+    wake = FastWake(voice)
+    result = await ask_to_forget(wake, "Forget the hotel.", "hotel")
+    assert result["status"] == "forgotten"
     assert result["personal_facts_removed"] == 0
-    assert result["personal_facts_kept"] == 1
-    assert other in _facts(lab)
-    said = result["confirmation"]
-    assert "saved conversations" in said and "personal memory" not in said
-    assert "kept" in said
+    assert result["personal_facts_kept"] == 4
+    assert set(ids) <= set(_facts(lab))
+    assert "kept them" in result["confirmation"]
+    assert "personal memory" not in result["confirmation"]
+
+
+@pytest.mark.asyncio
+async def test_only_label_and_value_words_count_not_schema_keys(lab):
+    """'event' and 'state' are keys inside every learned fact's JSON: words in
+    the owner's request must match the fact's own words."""
+    voice = await _hotel_trip(lab)
+    fact = await _learn(lab, "hotel", "YAK and YETI")
+    wake = FastWake(voice)
+    result = await ask_to_forget(wake, "Forget that event state.", "event state")
+    assert result["status"] == "forgotten"
+    assert result["personal_facts_removed"] == 0
+    assert fact in _facts(lab)
 
 
 @pytest.mark.asyncio
@@ -267,7 +303,7 @@ async def test_canonical_forget_then_history_forget_reports_personal_memory(lab)
     assert "personal memory" in forget_confirmation(receipt, canonical_already=True)
     assert "personal memory" not in forget_confirmation(receipt)
     two = SimpleNamespace(personal_facts=1, personal_mentions_kept=2)
-    assert "2 separate saved personal facts" in forget_confirmation(two)
+    assert "2 saved personal facts also mention" in forget_confirmation(two)
 
 
 @pytest.mark.asyncio
@@ -301,15 +337,12 @@ async def test_topic_checkpoint_from_the_forgotten_turn_is_removed(lab):
 
 
 @pytest.mark.asyncio
-async def test_nothing_in_conversation_but_a_personal_fact_points_to_forget_memory(lab):
+async def test_a_fact_whose_message_was_never_saved_is_removed_by_its_words(lab):
     voice = await _hotel_trip(lab)
-    await _learn(lab, "favourite tea", "Darjeeling")
+    tea = await _learn(lab, "favourite tea", "Darjeeling")
+    keep = await _learn(lab, "favourite coffee", "Coorg")
     wake = FastWake(voice)
     result = await ask_to_forget(wake, "Forget my Darjeeling tea.", "Darjeeling")
-    # The request itself mentions the word, so it matches only itself.
-    if result["status"] == "nothing_saved":
-        assert result["personal_facts_mentioning"] == 1
-    else:
-        assert result["status"] == "forgotten"
-        assert result["personal_facts_kept"] == 1
-        assert "kept" in result["confirmation"]
+    assert result["status"] == "forgotten"
+    assert result["personal_facts_removed"] == 1
+    assert tea not in _facts(lab) and keep in _facts(lab)

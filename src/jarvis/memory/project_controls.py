@@ -547,6 +547,7 @@ class ProjectControls:
             "jarvis_rows": preview.jarvis_rows,
             "projects": list(preview.projects),
             "personal_facts": len(preview.personal_facts),
+            "personal_fact_labels": list(preview.personal_fact_labels),
             "digest": preview.digest,
         }
         issuer = self.access.authority
@@ -647,9 +648,11 @@ class MentionForgetPreview:
     # removed with them; conversation topic checkpoints taken from them.
     personal_facts: tuple[str, ...] = ()
     checkpoints: tuple[str, ...] = ()
-    # Current personal facts that mention every word but were not saved from
-    # these turns. They are kept and reported, never deleted by a guess.
+    # Current personal facts that name every word but were not saved from these
+    # turns, beyond MAX_FORGET_FACTS_BY_WORDS: too broad, kept and reported.
     personal_mentions_kept: int = 0
+    # What the owner sees in the Windows Hello prompt for those facts.
+    personal_fact_labels: tuple[str, ...] = ()
 
 
 def _and_expression(terms):
@@ -720,9 +723,11 @@ def _mention_state(conn, terms):
                 jarvis += 1
     import hashlib
 
-    facts = _personal_facts_from(conn, matched)
+    saved_from = _personal_facts_from(conn, matched)
     checkpoints = _checkpoints_from(conn, matched)
-    kept = _personal_mentions(conn, terms, exclude=set(facts))
+    named, kept = _personal_mentions(conn, terms, exclude=set(saved_from))
+    facts = tuple(sorted({*saved_from, *named}))
+    labels = _fact_labels(conn, facts)
     digest = hashlib.sha256(
         json.dumps(
             [
@@ -747,6 +752,7 @@ def _mention_state(conn, terms):
             facts,
             checkpoints,
             kept,
+            labels,
         ),
         tuple(sorted(threads)),
     )
@@ -809,17 +815,78 @@ def _checkpoints_from(conn, event_ids):
     return tuple(sorted(keys))
 
 
+# A current personal fact whose own words (label and value) include every word
+# the owner asked to forget is what they named, even when the message it came
+# from was forgotten earlier (live 2026-11-08: fact b66068f7, "hotel: YAK and
+# YETI", outlived its conversation). It is listed by label in the same Windows
+# Hello approval. More matches than this means the words are too broad for
+# personal memory: those facts are kept and reported.
+MAX_FORGET_FACTS_BY_WORDS = 3
+
+
+def _fact_words(value_json, normalized):
+    from .project_access import conversation_search_terms
+
+    try:
+        value = json.loads(value_json)
+    except (TypeError, ValueError):
+        value = None
+    if isinstance(value, dict) and value.get("schema") == "personal-learning-v1":
+        text = f"{value.get('label') or ''} {value.get('value') or ''}"
+    elif isinstance(value, str | int | float):
+        text = f"{value} {normalized}"
+    else:
+        text = str(normalized or "")
+    return set(conversation_search_terms(text))
+
+
 def _personal_mentions(conn, terms, *, exclude):
-    count = 0
-    for assertion_id, value, normalized in conn.execute(
-        "SELECT assertion_id,value_json,normalized_text FROM current_semantic_assertion"
-    ):
-        if assertion_id in exclude:
-            continue
-        text = f"{value} {normalized}".casefold()
-        if all(t in text for t in terms):
-            count += 1
-    return count
+    """(ids of current facts naming every term, with their lineage; count of
+    matching facts kept because the words were too broad)."""
+    wanted = set(terms)
+    hits = [
+        (assertion_id, scope, subject, predicate)
+        for assertion_id, scope, subject, predicate, value, normalized in conn.execute(
+            "SELECT assertion_id,subject_scope,subject,predicate,value_json,"
+            "normalized_text FROM current_semantic_assertion"
+        )
+        if assertion_id not in exclude
+        and wanted
+        and wanted <= _fact_words(value, normalized)
+    ]
+    if len(hits) > MAX_FORGET_FACTS_BY_WORDS:
+        return (), len(hits)
+    ids = set()
+    for _, scope, subject, predicate in hits:
+        # The fact's earlier (superseded) versions say the same thing.
+        ids.update(
+            r[0]
+            for r in conn.execute(
+                "SELECT assertion_id FROM semantic_assertion WHERE subject_scope=? "
+                "AND subject=? AND predicate=?",
+                (scope, subject, predicate),
+            )
+        )
+    return tuple(sorted(ids)), 0
+
+
+def _fact_labels(conn, facts):
+    labels = []
+    for start in range(0, len(facts), 256):
+        chunk = facts[start : start + 256]
+        marks = ",".join("?" for _ in chunk)
+        for value_json, predicate in conn.execute(
+            "SELECT value_json,predicate FROM current_semantic_assertion "
+            f"WHERE assertion_id IN ({marks})",
+            chunk,
+        ):
+            try:
+                value = json.loads(value_json)
+            except (TypeError, ValueError):
+                value = None
+            label = value.get("label") if isinstance(value, dict) else None
+            labels.append(str(label or predicate)[:40])
+    return tuple(sorted(labels))
 
 
 def _erase_personal_facts(conn, facts, checkpoints, now):
