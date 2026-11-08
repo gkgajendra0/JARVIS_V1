@@ -175,7 +175,6 @@ where = ["src"]
 addopts = "-q"
 pythonpath = ["src"]
 testpaths = ["tests"]
-faulthandler_timeout = 120
 
 [tool.ruff]
 target-version = "py311"
