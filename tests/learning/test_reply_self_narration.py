@@ -136,3 +136,65 @@ def test_streaming_guard_still_stops_a_reasoning_trace_after_a_narration():
 async def test_gemini_audio_is_not_cut_for_a_narration_sentence():
     interrupts, _ = await _transcribe(_chunked(LIVE))
     assert interrupts == 0
+
+
+# -- style instructions to the model (live 2026-11-08 17:34:10) ------------------
+
+DIRECTIVE_LIVE = (
+    "Never say 'Based on your recent request', 'According to project memory' or "
+    "equivalent phrasing. Keep to one or two sentences.I don't have information "
+    "about which hotel you are staying at."
+)
+DIRECTIVE_ANSWER = "I don't have information about which hotel you are staying at."
+
+
+def test_style_instruction_is_not_saved_in_the_transcript():
+    assert sanitize_assistant_transcript(DIRECTIVE_LIVE) == (
+        DIRECTIVE_ANSWER,
+        "self_narration_removed",
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Don't worry, it's safe.",
+        "Keep your passport handy.",
+        "Always carry water on the trek.",
+        "Use the Thar for the mountain roads.",
+        "Be careful on the road, sir.",
+        "Only the Thar is booked.",
+    ],
+)
+def test_ordinary_imperatives_to_the_owner_are_kept(text):
+    assert sanitize_assistant_transcript(text) == (text, None)
+
+
+@pytest.mark.asyncio
+async def test_scripted_tts_never_speaks_a_style_instruction():
+    output = Output()
+    speech = Speech(output)
+    r = recovery(output, speech, allow=lambda t: True)
+    r.observe_turn(assistant(DIRECTIVE_LIVE))
+    await finish(r)
+    assert speech.spoken == [DIRECTIVE_ANSWER]
+
+
+def test_streaming_guard_stops_speech_as_the_instruction_is_spoken():
+    chunks = _chunked(DIRECTIVE_LIVE)
+    guard = SpokenTextGuard()
+    reasons = [(i, r) for i, c in enumerate(chunks) if (r := guard.feed(c))]
+    assert reasons and reasons[0][1] == "style_instruction"
+    # Stopped at the end of the first instruction sentence, before the second.
+    assert "".join(chunks[: reasons[0][0] + 1]).count("Keep to") == 0
+
+
+def test_streaming_guard_leaves_ordinary_imperatives_alone():
+    assert _guard(_chunked("Don't worry, it's safe. Keep your passport handy.")) == []
+
+
+@pytest.mark.asyncio
+async def test_gemini_audio_is_stopped_for_a_style_instruction():
+    interrupts, forwarded = await _transcribe(_chunked(DIRECTIVE_LIVE))
+    assert interrupts == 1
+    assert "Keep to one or two sentences" not in forwarded

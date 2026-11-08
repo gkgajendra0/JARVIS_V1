@@ -170,11 +170,31 @@ _NARRATION_SENTENCE = re.compile(
 )
 
 
+# A whole sentence that is a style instruction to the model, not speech to the
+# owner. Live run 2026-11-08 17:34:10 (repair path): "Never say 'Based on your
+# recent request', 'According to project memory' or equivalent phrasing. Keep to
+# one or two sentences.I don't have information about which hotel ..." The
+# sentence is not Jarvis prompt text (so echo removal could not match it): an
+# imperative opening plus wording about phrasing, sentence count or "the
+# user/owner" marks it. "Don't worry, it's safe." has neither cue and is kept.
+_DIRECTIVE_SENTENCE = re.compile(
+    r"(?i)(?:^|(?<=[.!?]))[ \t]*"
+    r"(?:never|always|do not|don't|avoid|keep|use|respond|reply|answer|speak|"
+    r"be|only|refer)\b"
+    r"[^.!?]{0,240}?"
+    r"(?:\bphrasing\b|\bwording\b|\bpreamble\b|"
+    r"\b(?:one|two|three|a few|short|full|complete)(?: or (?:one|two|three))?"
+    r" sentences?\b|\bthe (?:user|owner)\b)"
+    r"[^.!?]*[.!?]+"
+)
+
+
 def strip_self_narration(text: str) -> str:
     """``text`` without sentences in which the model narrates producing its
-    reply. Nothing else is rewritten."""
+    reply or states a style instruction to itself. Nothing else is rewritten."""
     original = text or ""
     cleaned = _NARRATION_SENTENCE.sub(" ", original)
+    cleaned = _DIRECTIVE_SENTENCE.sub(" ", cleaned)
     if cleaned == original:
         return original
     return _tidy(cleaned)
@@ -340,7 +360,14 @@ class SpokenTextGuard:
         if self.reason is not None:
             return None
         self.text += str(delta)
-        spoken = strip_internal_text(self.text)
+        unechoed = _strip_instruction_echoes(self.text)
+        if _DIRECTIVE_SENTENCE.match(unechoed.lstrip()):
+            # A style instruction to the model is being SPOKEN (live
+            # 2026-11-08 17:34:10, about 11 s of audio): stop it now. The
+            # answer that may follow is lost with it; the owner can ask again.
+            self.reason = "style_instruction"
+            return self.reason
+        spoken = strip_self_narration(unechoed)
         if len(_words(spoken)) < _PREFIX_MIN_WORDS and not _REASONING_LABEL.search(
             spoken
         ):
