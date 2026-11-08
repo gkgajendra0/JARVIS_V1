@@ -245,3 +245,18 @@ def test_transcripts_are_decoded_exactly_as_livekit_logs_them(tmp_path):
     )
     (turn,) = acceptance.read_timeline(log, datetime(2026, 11, 5, tzinfo=UTC))
     assert turn.user == said
+
+
+@pytest.mark.asyncio
+async def test_database_facts_match_titles_in_any_capitalisation(lab):
+    # 2026-11-08: the title was stored as spoken, "Interview Prep".
+    voice = await lab.runtime()
+    wake = Wake(voice)
+    await wake.ask(
+        "Create a project called Interview Prep.", "Created project Interview Prep."
+    )
+    await wake.ask("The interview panel is on Friday at 10:00.", "Understood.")
+    wake.close()
+    db = acceptance.read_database(lambda: sqlite3.connect(lab.db))
+    assert "Interview Prep" in db["projects"]
+    assert db["present"]["Interview prep: Friday"] == 1

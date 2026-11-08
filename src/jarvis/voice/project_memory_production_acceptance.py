@@ -45,6 +45,11 @@ class Step:
     forget: bool = False  # expects a forget commit
 
 
+# Speech-to-text heard "Jimny" as "chimney" in the 2026-11-08 run. A variant
+# only binds the owner's turn to its step; the reviewer still confirms what
+# was said and heard.
+JIMNY = "jimny|chimney|jimmy|jimni|gymny"
+
 # The real-machine scenario. Memory may start non-empty: every check is about
 # what this run said and stored.
 SCENARIO = (
@@ -55,7 +60,7 @@ SCENARIO = (
         ("nepal trip",),
         action="created",
     ),
-    Step("1-fact-vehicle", "We will take the Jimny.", ("jimny",)),
+    Step("1-fact-vehicle", "We will take the Jimny.", (JIMNY,)),
     Step("1-fact-hotel", "Our hotel is Yak and Yeti.", ("yak",)),
     Step(
         "1-fact-tentative",
@@ -66,7 +71,7 @@ SCENARIO = (
         "2-recall",
         "(new wake) Which vehicle are we taking, and is Pokhara decided?",
         ("vehicle",),
-        ("jimny",),
+        tuple(JIMNY.split("|")),
     ),
     Step(
         "3-correct",
@@ -121,8 +126,10 @@ SCENARIO = (
     Step(
         "6-restart-tentative",
         "Switch to Nepal trip. Is Pokhara decided?",
-        ("pokhara", "decided"),
-        ("not",),
+        # Any Pokhara question after the restart ("are we going to Pokhara or
+        # not?" in the 2026-11-08 run); "hasn't been decided" counts as not.
+        ("pokhara",),
+        ("not", "n't", "undecided", "tentative", "maybe"),
     ),
 )
 
@@ -256,7 +263,7 @@ def read_database(open_connection, *, turn_ids=(), since=None) -> dict:
             )
             args = [word]
             if title is not None:
-                sql += " AND w.title = ?"
+                sql += " AND lower(w.title) = lower(?)"
                 args.append(title)
             return int(connection.execute(sql, args).fetchone()[0])
 
@@ -333,6 +340,42 @@ def _words(text: str) -> set[str]:
     return set(re.findall(r"\w+", text.casefold()))
 
 
+def _matches(step: Step, text: str) -> bool:
+    words = _words(text)
+    return all(any(alt in words for alt in item.split("|")) for item in step.match)
+
+
+def _align(timeline: list[Turn]) -> dict[int, int]:
+    """Step index -> turn index: the largest in-order matching.
+
+    Matching each step to the first later turn with its words let one
+    unrecognised turn ("chimney" for "Jimny") bind a step to a much later turn
+    (the correction), which then skipped every step in between and could PASS
+    the wrong turn. Steps and turns keep their order; the alignment with the
+    most matched steps wins, earliest turns first on ties.
+    """
+    n, m = len(SCENARIO), len(timeline)
+    hit = [[_matches(step, turn.user) for turn in timeline] for step in SCENARIO]
+    best = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            best[i][j] = max(
+                best[i + 1][j],
+                best[i][j + 1],
+                1 + best[i + 1][j + 1] if hit[i][j] else 0,
+            )
+    pairs, i, j = {}, 0, 0
+    while i < n and j < m:
+        if hit[i][j] and best[i][j] == 1 + best[i + 1][j + 1]:
+            pairs[i] = j
+            i, j = i + 1, j + 1
+        elif best[i][j + 1] == best[i][j]:
+            j += 1
+        else:
+            i += 1
+    return pairs
+
+
 NEW_WAKE_STEPS = frozenset(
     {"2-recall", "3-recall-corrected", "4-isolation", "5-recall-forgotten"}
 )
@@ -349,18 +392,13 @@ def _expected_project(step_id):
 
 def grade(timeline: list[Turn], db: dict | None, *, review=None) -> dict:
     results: list[StepResult] = []
-    cursor = 0
     previous_session = None
-    for step in SCENARIO:
-        found = None
-        for index in range(cursor, len(timeline)):
-            if set(step.match) <= _words(timeline[index].user):
-                found = index
-                break
+    aligned = _align(timeline)
+    for number, step in enumerate(SCENARIO):
+        found = aligned.get(number)
         if found is None:
             results.append(StepResult(step.step_id, step.say, "NOT TESTED"))
             continue
-        cursor = found + 1
         turn = timeline[found]
         reply = turn.reply.casefold()
         reasons = []
@@ -378,7 +416,10 @@ def grade(timeline: list[Turn], db: dict | None, *, review=None) -> dict:
             row = db.get("turns", {}).get(turn.turn_id)
             if (
                 not row
-                or row["project"] != _expected_project(step.step_id)
+                # Titles keep the owner's spoken capitalisation ("Interview
+                # Prep"); the project is the same.
+                or row["project"].casefold()
+                != _expected_project(step.step_id).casefold()
                 or row["text"] != turn.user
             ):
                 reasons.append("canonical turn missing from expected project")
