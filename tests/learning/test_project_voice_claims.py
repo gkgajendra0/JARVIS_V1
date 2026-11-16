@@ -1,8 +1,11 @@
 """Jarvis may only claim a project change the application committed."""
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 import test_project_voice as project_voice_tests
-from test_project_voice import Wake, settle
+from test_project_voice import FakeSession, Wake, settle
 
 from jarvis.voice.project_claims import false_project_claims, project_claims
 
@@ -24,6 +27,14 @@ lab = project_voice_tests.lab  # shared real-archive fixture
         ("We are now in Kathmandu.", set()),
         ("The Jimny and the permits are sorted.", set()),
         ("Resuming Nepal trip.", set()),
+        # Zanskar live test 2026-11-16: the owner's vehicle switch, not a project.
+        ("You told me you were switching to the Thar on November 16, 2026.", set()),
+        ("We're switching to the Fortuner for the trip.", set()),
+        ("They switched to a later flight.", set()),
+        ("Okay, switching you to Goa.", {"switched"}),
+        ("I've switched you to Goa.", {"switched"}),
+        ("I switched to Goa for you.", {"switched"}),
+        ("Done, we've switched over to the Goa project.", {"switched"}),
     ],
 )
 def test_claim_detection(text, claims):
@@ -108,3 +119,111 @@ async def test_a_true_switch_announcement_is_not_flagged(lab):
     await wake.ask("create project called Goa", "Created project Goa.")
     await wake.ask("Okay, switch to Nepal trip.", "Switched to Nepal trip.")
     assert voice.metrics.false_claims == 0 and wake.session.replies == []
+
+
+@pytest.mark.asyncio
+async def test_owner_vehicle_switch_in_a_reply_is_not_a_project_claim(lab):
+    """The live trigger: no correction, and the accurate reply is saved."""
+    voice = await lab.runtime()
+    wake = Wake(voice)
+    await wake.ask(
+        "create project called Zanskar trip", "Created project Zanskar trip."
+    )
+    await wake.ask("We are taking the Thar.", "Understood.")
+    text = "You told me you were switching to the Thar on November 16, 2026."
+    await wake.ask("When did I tell you we were switching to the Thar?", text)
+    await settle(voice)
+    assert voice.metrics.false_claims == 0 and wake.session.replies == []
+    assert lab.rows()[-1][1] == text
+
+
+class StuckHandle:
+    """A LiveKit speech handle whose generation never plays or finishes."""
+
+    def __init__(self, *, finished=False):
+        self.finished = finished
+        self.interrupts = []
+
+    def done(self):
+        return self.finished
+
+    def interrupt(self, **kwargs):
+        self.interrupts.append(kwargs)
+
+    async def wait_for_playout(self):
+        return None
+
+
+class HandleSession(FakeSession):
+    def __init__(self, handle):
+        super().__init__()
+        self.handle = handle
+
+    def generate_reply(self, **kwargs):
+        super().generate_reply(**kwargs)
+        return self.handle
+
+
+async def false_claim_wake(lab, monkeypatch, handle):
+    from jarvis.voice import project_voice
+
+    monkeypatch.setattr(project_voice, "CORRECTION_PLAY_SECONDS", 0.05)
+    voice = await lab.runtime()
+    wake = Wake(voice)
+    wake.session = HandleSession(handle)
+    wake.turns.bind_session(wake.session)
+    retired = []
+    wake.turns.bind_retire(lambda: retired.append(True))
+    await wake.ask("create project called Nepal trip", "Created project Nepal trip.")
+    await wake.ask("We will take the Jimny.")
+    assert wake.response()[0] is True
+    wake.reply("Switched to Jimny for you.")  # a real false project claim
+    await settle(voice)
+    (correction,) = wake.session.replies
+    assert "no project was created or switched" in correction
+    return voice, wake, retired
+
+
+@pytest.mark.asyncio
+async def test_unplayed_correction_is_cancelled_and_the_wake_ends(
+    lab, monkeypatch, caplog
+):
+    handle = StuckHandle()
+    voice, _wake, retired = await false_claim_wake(lab, monkeypatch, handle)
+    await asyncio.sleep(0.15)
+    assert handle.interrupts == [{"force": True}]
+    assert retired == [True]  # next wake is a fresh Gemini session
+    assert voice.metrics.unplayed_corrections == 1
+    assert "correction reply did not play" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_correction_that_finished_unheard_still_ends_the_wake(lab, monkeypatch):
+    handle = StuckHandle(finished=True)
+    voice, _wake, retired = await false_claim_wake(lab, monkeypatch, handle)
+    await asyncio.sleep(0.15)
+    assert handle.interrupts == []  # nothing left to cancel
+    assert retired == [True] and voice.metrics.unplayed_corrections == 1
+
+
+@pytest.mark.asyncio
+async def test_correction_that_plays_keeps_the_wake(lab, monkeypatch):
+    handle = StuckHandle()
+    voice, wake, retired = await false_claim_wake(lab, monkeypatch, handle)
+    wake.turns.observe_speech(SimpleNamespace(speech_handle=handle))
+    assert wake.turns.allow_response_audio() is True  # its first audio frame
+    await asyncio.sleep(0.15)
+    assert handle.interrupts == [] and retired == []
+    assert voice.metrics.unplayed_corrections == 0
+
+
+@pytest.mark.asyncio
+async def test_owner_speaking_over_a_pending_correction_keeps_the_wake(
+    lab, monkeypatch
+):
+    handle = StuckHandle()
+    voice, wake, retired = await false_claim_wake(lab, monkeypatch, handle)
+    wake.speech()  # barge-in: LiveKit interrupts the correction itself
+    await asyncio.sleep(0.15)
+    assert handle.interrupts == [] and retired == []
+    assert voice.metrics.unplayed_corrections == 0
