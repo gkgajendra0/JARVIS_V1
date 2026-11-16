@@ -85,6 +85,10 @@ FORGET_INCOMPLETE_INSTRUCTIONS = (
 # After a canonical forget, the saved conversation must follow within this time,
 # else the honest partial-forget notice above is spoken.
 FORGET_HISTORY_SECONDS = 12.0
+# After a committed history forget the wake ends after the confirmation; if no
+# confirmation is heard by then, it ends anyway (the live model context still
+# holds the forgotten words).
+FORGET_RETIRE_SECONDS = 15.0
 FORGET_HISTORY_NUDGE = (
     "The owner asked to forget something and the saved personal fact was "
     "removed. Now also call forget_saved_history with the distinctive words the "
@@ -706,6 +710,10 @@ class VoiceProjectTurns:
         self._paused = False
         self._forget_incomplete_epochs: set[int] = set()
         self._withheld_keys: set[tuple] = set()
+        # (activity epoch, request turn id) of a committed history forget whose
+        # confirmation has not been heard yet.
+        self._forget_confirmation: tuple[int, str] | None = None
+        self._response_epoch_override: int | None = None
 
     @property
     def metrics(self) -> VoiceProjectMetrics:
@@ -1303,9 +1311,14 @@ class VoiceProjectTurns:
 
     def allow_response_audio(self) -> bool:
         trailing = self._speech is not None and self._speech is self._blocked_speech
+        self._response_epoch_override = None
         allowed = self._decide_response_audio()
         if allowed and not trailing:
-            self._response_epoch = self._conversation.user_activity_epoch
+            self._response_epoch = (
+                self._response_epoch_override
+                if self._response_epoch_override is not None
+                else self._conversation.user_activity_epoch
+            )
             self._played += 1
             self._played_epochs.add(self._response_epoch)
         if not trailing:
@@ -1321,6 +1334,15 @@ class VoiceProjectTurns:
             return True
         if epoch in self._forget_incomplete_epochs:
             return True  # the honest partial-forget notice
+        pending = self._pending_forget_confirmation()
+        if pending is not None:
+            # The confirmation of a committed forget. A noise burst during the
+            # Windows Hello approval starts a new (empty) activity, but no new
+            # request was spoken: this reply still answers the forget. Live
+            # 2026-11-08 17:33:31: it was withheld, "didn't catch that" was
+            # spoken instead and the wake stayed open with the forgotten words.
+            self._response_epoch_override = pending
+            return True
         if epoch in self._canonical_forget_epochs and epoch not in self._forget_epochs:
             return self._hold_for_history_forget(epoch)
         if epoch in self._control_epochs:
@@ -1950,6 +1972,27 @@ class VoiceProjectTurns:
         """Ends this wake session, so forgotten words leave the model context."""
         self._retire = retire
 
+    def _pending_forget_confirmation(self) -> int | None:
+        """The forget epoch whose confirmation is due, if no newer request has
+        been transcribed since the forget request."""
+        pending = self._forget_confirmation
+        if pending is None:
+            return None
+        latest = self._latest_user()
+        if latest is None or latest.turn_id != pending[1]:
+            return None
+        return pending[0]
+
+    def _retire_after_forget_deadline(self, epoch) -> None:
+        if self._closed or self._retire is None or epoch not in self._forget_epochs:
+            return
+        self._diag("forget_retired_without_confirmation", epoch=epoch)
+        LOGGER.info(
+            "Wake session ending after a project-history forget: no confirmation "
+            "was heard in time"
+        )
+        self._after_forget_reply(epoch)
+
     def _after_forget_reply(self, epoch) -> None:
         if epoch in self._canonical_forget_epochs and epoch not in self._forget_epochs:
             if epoch not in self._nudged_epochs:
@@ -1958,6 +2001,7 @@ class VoiceProjectTurns:
                 self._hold_for_history_forget(epoch)
             return
         if epoch in self._forget_epochs and self._retire is not None:
+            self._forget_confirmation = None
             retire, self._retire = self._retire, None
             try:
                 retire()
@@ -2051,7 +2095,14 @@ class VoiceProjectTurns:
                     "guidance": "Say nothing was deleted from saved conversation.",
                 }
         self._forget_epochs.add(epoch)
+        self._forget_confirmation = (epoch, turn.turn_id)
         self._fast_ready = False  # this session's context still holds the words
+        try:
+            asyncio.get_running_loop().call_later(
+                FORGET_RETIRE_SECONDS, self._retire_after_forget_deadline, epoch
+            )
+        except RuntimeError:
+            pass
         for identity in (*preview.matched, *preview.derived):
             self._delivered_ids.pop(identity, None)
             self._delivered_rows.pop(identity, None)  # never restored again
