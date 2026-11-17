@@ -65,9 +65,17 @@ PRELOAD_MAX_CHARS = 3000
 DECISION_SCAN_ROWS = 200
 DECISION_MAX_ROWS = 8
 DECISION_MAX_CHARS = 900
+# Corrections of an earlier statement. Speech recognition splits words
+# ("mis spoke": live transcript eaa67639, 2026-11-17).
+_CORRECTION_CUES = re.compile(
+    r"\bmis[\s-]?spo(?:ke|ken)\b|\bmisstated\b|\bi was wrong\b|\bi meant\b"
+    r"|\bcorrection\b|\b(?:was|were) always\b",
+    re.IGNORECASE,
+)
 _DECISION_CUES = re.compile(
-    r"\bchange (?:of|in) plans?\b|\bmisspoke\b|\bcorrection\b|\bnot .{1,40}\banymore\b"
-    r"|\b(?:we|i)(?:['’](?:re|ll|m)|\s+(?:are|will|am|shall))?\s+(?:now\s+)?"
+    r"\bchange (?:of|in) plans?\b|\bnot .{1,40}\banymore\b"
+    r"|\b(?:we|i)(?:['’](?:re|ll|m|ve|d)|\s+(?:are|were|was|will|am|shall|have|had))?"
+    r"(?:\s+(?:been|be|now|always|actually|still|definitely|instead|also|just)){0,3}\s+"
     r"(?:taking|take|going|staying|stay|driving|drive|flying|fly|leaving|leave|"
     r"booking|booked|book|bringing|bring|travell?ing|starting|start|meeting)\b"
     r"|\b(?:our|my|the)\s+(?:campsite|camp|hotel|stay|cottage|resort|flight|train|"
@@ -90,7 +98,7 @@ def _is_owner_decision(event) -> bool:
     text = " ".join(str(event.text).split())
     if len(text.split()) < 4 or text.endswith("?") or _QUESTION_START.match(text):
         return False
-    return bool(_DECISION_CUES.search(text))
+    return bool(_DECISION_CUES.search(text) or _CORRECTION_CUES.search(text))
 
 
 def _decision_rows(older, *, exclude) -> list:
@@ -728,8 +736,14 @@ def _preload_message(title, rows, sources, decisions=()) -> str:
             )
             for source in decisions:
                 event = source.event
+                # A correction says the value it replaces was never the plan.
+                who = (
+                    "owner (correction)"
+                    if _CORRECTION_CUES.search(" ".join(str(event.text).split()))
+                    else "owner"
+                )
                 lines.append(
-                    f"- {event.accepted_at.date().isoformat()} owner: {event.text}"
+                    f"- {event.accepted_at.date().isoformat()} {who}: {event.text}"
                 )
             lines.append("Recent history:")
         for source in rows:

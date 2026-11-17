@@ -84,8 +84,7 @@ async def test_decisions_pushed_out_of_the_recent_rows_still_reach_gemini(lab):
     # ... and still reach Gemini, oldest first, so the change and the
     # correction are the newer statements.
     order = [
-        decisions.index("owner: " + line)
-        for line in (INNOVA, TEA_VALLEY, CRETA, HILLTOP)
+        decisions.index(": " + line) for line in (INNOVA, TEA_VALLEY, CRETA, HILLTOP)
     ]
     assert order == sorted(order)
     # Chatter, questions and fragments are not promoted.
@@ -105,7 +104,8 @@ async def test_practical_question_is_answered_from_the_preload_without_repeating
     wake = FastWake(voice)
     await wake.preload()
     (context,) = wake.agent.injected()
-    assert "owner: " + CRETA in context and "owner: " + HILLTOP in context
+    assert "owner: " + CRETA in context
+    assert "owner (correction): " + HILLTOP in context
     # The owner does not repeat the car or the cottage; the ordinary fast path
     # answers from what was preloaded, with no tool call or second generation.
     await wake.fast(
@@ -228,4 +228,93 @@ async def test_decisions_come_only_from_the_active_project(lab):
     assert "taking the train" in context and "Palm Grove Villa" in context
     for line in (INNOVA, TEA_VALLEY, CRETA, HILLTOP):
         assert line not in context
+    wake.close()
+
+
+# Verbatim live transcripts (jarvis.jsonl, 2026-11-17 06:47-06:49 UTC). The
+# owner's live check of #322 at 7b12c424 found the Hilltop correction
+# (eaa67639) missing: the recogniser wrote "mis spoke", and "We were always
+# staying" matched no plan pattern.
+LIVE_DECISIONS = [
+    "For the Munnar trip, we are taking Innova.",
+    "Change of plan, we are taking Creta.",
+    "And we are staying at Tea Valley Resort.",
+    "Javed I mis spoke earlier. We were always staying at Hilltop Cottage, not T Valley Resort.",
+]
+LIVE_HILLTOP = LIVE_DECISIONS[-1]
+
+
+async def live_munnar_then_chatter(lab, *, other_project=False):
+    voice = await lab.runtime()
+    wake = Wake(voice)
+    if other_project:
+        await wake.ask("create a project called Goa trip", "Created project Goa trip.")
+        await wake.ask("For the Goa trip, we are taking the train.", "Understood.")
+        await wake.ask("We were always staying at Palm Grove Villa.", "Understood.")
+    await wake.ask(
+        "create a project called Munnar trip", "Created project Munnar trip."
+    )
+    await wake.ask(LIVE_DECISIONS[0], "Understood.")
+    await wake.ask("Go back.", "Okay.")
+    wake.close()
+    wake = Wake(voice)
+    for line in LIVE_DECISIONS[1:]:
+        await wake.ask(line, "Understood.")
+    await wake.ask("Okay, go back to sleep.", "Okay.")
+    wake.close()
+    wake = Wake(voice)
+    for line in CHATTER:
+        await wake.ask(line, "Okay.")
+    wake.close()
+    return voice
+
+
+def test_the_live_hilltop_correction_qualifies_as_a_decision():
+    assert _is_owner_decision(_Event("user", LIVE_HILLTOP))
+    for line in LIVE_DECISIONS:
+        assert _is_owner_decision(_Event("user", line))
+    for line in (
+        "Go back.",
+        "Okay, go back to sleep.",
+        "create a project called Munnar trip",
+    ):
+        assert not _is_owner_decision(_Event("user", line))
+
+
+@pytest.mark.asyncio
+async def test_live_hilltop_correction_reaches_gemini_as_the_current_stay(lab):
+    voice = await live_munnar_then_chatter(lab)
+    wake = FastWake(voice)
+    await wake.preload()
+    (context,) = wake.agent.injected()
+    recent = section(context, "Recent history:")
+    decisions = section(context, "Earlier owner decisions", "Recent history:")
+    assert LIVE_HILLTOP not in recent  # pushed out of the newest 12 rows
+    lines = [line for line in decisions.splitlines() if line.startswith("- ")]
+    texts = [line.split(": ", 1)[1] for line in lines]
+    assert texts == LIVE_DECISIONS  # all four, oldest first
+    by_text = dict(zip(texts, lines, strict=True))
+    # The correction is marked and comes after the value it corrects, and
+    # the rules say a correction means the earlier value was never the plan.
+    assert "owner (correction): " + LIVE_HILLTOP in by_text[LIVE_HILLTOP]
+    assert (
+        "owner: And we are staying at Tea Valley Resort." in by_text[LIVE_DECISIONS[2]]
+    )
+    assert "(correction)" not in by_text[LIVE_DECISIONS[2]]
+    rules = section(context, "How to read it: ", "Earlier owner decisions")
+    assert "misspoke or that it was always X" in rules
+    assert "never the plan" in rules
+    wake.close()
+
+
+@pytest.mark.asyncio
+async def test_live_transcripts_stay_within_the_active_project(lab):
+    voice = await live_munnar_then_chatter(lab, other_project=True)
+    wake = FastWake(voice)
+    await wake.preload()
+    (context,) = wake.agent.injected()
+    assert "Current project: Munnar trip." in context
+    assert LIVE_HILLTOP in context and LIVE_DECISIONS[1] in context
+    assert "Goa" not in context and "Palm Grove" not in context
+    assert "taking the train" not in context
     wake.close()
