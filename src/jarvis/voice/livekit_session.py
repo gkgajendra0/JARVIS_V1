@@ -586,6 +586,12 @@ def create_voice_session(
             preemptive_generation={"enabled": False},
         ),
     )
+    from jarvis.voice import reply_diagnostics
+
+    if reply_diagnostics.enabled():
+        # Opt-in investigation of the reply/turn_complete stall: IDs and
+        # timestamps only, never conversation text, audio or memory.
+        reply_diagnostics.ReplyDiagnostics().attach(livekit_session)
     bridge = LiveKitConversationBridge(
         livekit_session,
         conversation,
