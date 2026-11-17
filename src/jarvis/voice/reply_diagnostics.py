@@ -25,6 +25,8 @@ Events:
   playback_started / playback_finished / playback_interrupted
   generation_complete / turn_complete / server_interrupted   Gemini signals
   input_speech_started     Gemini reported the owner speaking
+  tool_call                Gemini asked for a tool (closes that generation)
+  tool_output_sent         tool results were handed back for an automatic reply
   speech_done / speech_done_interrupted
   reply_uncommitted        a reply ended without a committed assistant message
 """
@@ -101,6 +103,12 @@ class ReplyDiagnostics:
         session.on("agent_state_changed", lambda _ev: self._refresh())
         session.on("user_state_changed", lambda _ev: self._refresh())
         session.on("conversation_item_added", lambda _ev: self._refresh())
+        # Tool results are handed back to Gemini; with automatic tool replies
+        # the spoken answer must then arrive as a new generation.
+        session.on(
+            "function_tools_executed",
+            lambda _ev: self.event("tool_output_sent", reply=self._current()),
+        )
         return self
 
     def _refresh(self) -> None:
@@ -132,6 +140,24 @@ class ReplyDiagnostics:
                 return
         if hasattr(plugin, "_handle_server_content"):
             self._wrap_server_content(plugin)
+        if hasattr(plugin, "_handle_tool_calls"):
+            self._wrap_tool_calls(plugin)
+
+    def _wrap_tool_calls(self, plugin) -> None:
+        """Gemini asked for a tool. The plugin closes that generation here,
+        without turn_complete; the answer must come in a later generation."""
+        original = plugin._handle_tool_calls
+        if getattr(original, "_jarvis_reply_diagnostics", False):
+            return
+
+        def traced(tool_call):
+            generation = getattr(plugin, "_current_generation", None)
+            gid = getattr(generation, "response_id", None)
+            self.event("tool_call", generation=gid)
+            return original(tool_call)
+
+        traced._jarvis_reply_diagnostics = True
+        plugin._handle_tool_calls = traced
 
     def _wrap_server_content(self, plugin) -> None:
         original = plugin._handle_server_content

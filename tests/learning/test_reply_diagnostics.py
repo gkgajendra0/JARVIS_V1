@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 from livekit import rtc
-from livekit.agents import Agent, AgentSession, llm, utils
+from livekit.agents import Agent, AgentSession, function_tool, llm, utils
 from livekit.agents.llm import (
     FunctionCall,
     GenerationCreatedEvent,
@@ -191,6 +191,36 @@ class PluginShapedSession(llm.RealtimeSession):
                     generation_complete=None, turn_complete=True, interrupted=None
                 )
             )
+
+    def serve_tool_call(self, gid, name):
+        """Gemini answers a question with a tool call, like the plugin: the
+        call goes out on the function stream and the generation closes."""
+        gen = self._current_generation = _Generation(gid)
+        gen.text_ch.close()
+        gen.audio_ch.close()
+        self.emit(
+            "generation_created",
+            GenerationCreatedEvent(
+                message_stream=gen.message_ch,
+                function_stream=gen.function_ch,
+                user_initiated=False,
+                response_id=gid,
+            ),
+        )
+        self._handle_tool_calls(
+            SimpleNamespace(
+                function_calls=[SimpleNamespace(id="call_1", name=name, args={})]
+            )
+        )
+
+    def _handle_tool_calls(self, tool_call):
+        gen = self._current_generation
+        for call in tool_call.function_calls:
+            gen.function_ch.send_nowait(
+                FunctionCall(call_id=call.id, name=call.name, arguments="{}")
+            )
+        gen.message_ch.close()
+        gen.function_ch.close()
 
     def _handle_server_content(self, server_content):
         gen = self._current_generation
@@ -363,3 +393,53 @@ async def test_reproduced_missing_turn_complete_sequence(caplog, monkeypatch):
     assert has("reply_uncommitted", repl)  # heard, never transcribed or saved
     order = [n for n, r, _ in log if r == repl]
     assert order.index("playback_finished") < order.index("speech_done_interrupted")
+
+
+# Same teardown note as above.
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+@pytest.mark.asyncio
+async def test_tool_answer_that_never_arrives_is_visible(caplog, monkeypatch):
+    """Ladakh/Spiti, 2026-11-17 12:19 UTC, in an already stalled wake: Gemini
+    called the personal-context tool, it returned four facts, and no answer was
+    ever heard. The diagnostics must show the tool call, the tool result handed
+    back, and that no answer generation or playback followed."""
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(speech_handle_module, "INTERRUPTION_TIMEOUT", 0.3)
+    model = PluginShapedModel()
+    turns = EarlyAnswerTurns()
+    looked_up = []
+
+    @function_tool
+    async def read_personal_context_for_question(question: str = "") -> str:
+        """Stand-in for the personal-context read."""
+        looked_up.append(True)
+        return "4 facts"
+
+    async with AgentSession(llm=model) as session:
+        session.output.audio = ProjectAudioGate(VirtualSpeaker(), turns)
+        turns.session = session
+        reply_diagnostics.ReplyDiagnostics().attach(session)
+        await session.start(
+            Agent(instructions="test", tools=[read_personal_context_for_question])
+        )
+        rt = model.sessions[-1]
+        rt.serve("GR_early", 0.5, text=SECRET, turn_complete=True)
+        for _ in range(300):
+            if rt.pending:
+                break
+            await asyncio.sleep(0.01)
+        rt.serve("GR_repl", 0.5, text=SECRET, turn_complete=False)  # the stall
+        await asyncio.sleep(1.2)
+        rt.emit("input_speech_started", InputSpeechStartedEvent())  # next question
+        await asyncio.sleep(0.6)
+        rt.serve_tool_call("GR_tool", "read_personal_context_for_question")
+        await asyncio.sleep(1.0)  # Gemini sends nothing after the tool result
+        assert looked_up
+
+    log = events(caplog)
+    names = [n for n, _, _ in log]
+    assert any(n == "tool_call" and g == "GR_tool" for n, _, g in log)
+    assert "tool_output_sent" in names
+    after = names[names.index("tool_output_sent") + 1 :]
+    assert "generation_created" not in after  # no answer generation
+    assert "playback_started" not in after  # nothing reached the speaker
