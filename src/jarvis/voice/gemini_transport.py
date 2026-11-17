@@ -131,12 +131,15 @@ class GuardedGeminiRealtimeSession(llm.RealtimeSession):
         if name == "remote_item_added" and value.item.id in self.state.restored_ids:
             return
         if name == "generation_created":
-            value = replace(
-                value,
-                message_stream=self._messages(value.message_stream),
-                function_stream=self._stream(value.function_stream),
-            )
+            value = self._fence_generation(value)
         self.emit(name, value)
+
+    def _fence_generation(self, value):
+        return replace(
+            value,
+            message_stream=self._messages(value.message_stream),
+            function_stream=self._stream(value.function_stream),
+        )
 
     async def _stream(self, source):
         async for item in source:
@@ -221,7 +224,35 @@ class GuardedGeminiRealtimeSession(llm.RealtimeSession):
             return future
         if self.state.budget is not None:
             self.state.budget.admit_generation(kwargs)
-        return self.inner.generate_reply(**kwargs)
+        # A requested reply reaches LiveKit through this future, not through
+        # the forwarded generation_created event, so its streams must be
+        # fenced the same way: otherwise its audio carries no transport epoch,
+        # GeminiEpochAudioOutput drops every frame after the layers above it
+        # have counted the segment, that segment never finishes, and every
+        # later reply (and any tool result) waits on it. Live: Zanskar
+        # 2026-11-16, Munnar and diagnostic runs 2026-11-17.
+        inner = self.inner.generate_reply(**kwargs)
+        fenced = asyncio.get_running_loop().create_future()
+
+        def resolve(done):
+            if fenced.done():
+                return
+            if done.cancelled():
+                fenced.cancel()
+                return
+            error = done.exception()
+            if error is not None:
+                fenced.set_exception(error)
+                return
+            fenced.set_result(self._fence_generation(done.result()))
+
+        def cancel_inner(done):
+            if done.cancelled() and not inner.done():
+                inner.cancel()
+
+        inner.add_done_callback(resolve)
+        fenced.add_done_callback(cancel_inner)
+        return fenced
 
     def commit_audio(self):
         if self.state.current and self.state.ready:
