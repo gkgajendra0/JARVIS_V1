@@ -23,8 +23,17 @@ _CREATED = re.compile(
     r"|\bnew\s+project\b[^.!?]{0,30}\b(?:ready|created|set\s+up)\b",
     re.IGNORECASE,
 )
+# Only Jarvis's own switch: a sentence that opens with it ("Switched to Goa.",
+# "Okay, switching you to Goa."), "I('ve) switched ...", or one that names a
+# project. Zanskar live test 2026-11-16: "You told me you were switching to
+# the Thar" (the owner's vehicle) was read as a project switch, and the
+# correction requested for it never played.
 _SWITCHED = re.compile(
-    r"\b(?:switched|switching)\b[^.!?]{0,25}\bto\b"
+    r"^\s*(?:(?:okay|ok|alright|all\s+right|done|sure)[,.!]?\s+)?"
+    r"(?:switched|switching)\b[^.!?]{0,25}\bto\b"
+    r"|\bI(?:['’]ve|\s+have|['’]m|\s+am)?\s+(?:now\s+|just\s+)?"
+    r"(?:switched|switching)\b[^.!?]{0,25}\bto\b"
+    r"|\b(?:switched|switching)\b[^.!?]{0,25}\bto\b[^.!?]{0,40}\bproject\b"
     r"|\byou(?:['’]re|\s+are)\s+now\s+in\b|\bnow\s+in\s+(?:the\s+|your\s+)?project\b",
     re.IGNORECASE,
 )

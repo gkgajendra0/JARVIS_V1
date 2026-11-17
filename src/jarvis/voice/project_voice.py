@@ -89,6 +89,12 @@ FORGET_HISTORY_SECONDS = 12.0
 # confirmation is heard by then, it ends anyway (the live model context still
 # holds the forgotten words).
 FORGET_RETIRE_SECONDS = 15.0
+# A spoken false-claim correction normally starts within ~2 s. Zanskar live
+# test 2026-11-16: one never played, and every later reply in that wake was
+# left unfinished and untranscribed (the forget confirmation included). If a
+# correction has not started playing by then and the owner has not spoken,
+# it is cancelled and the wake ends, so the next wake is a fresh session.
+CORRECTION_PLAY_SECONDS = 6.0
 FORGET_HISTORY_NUDGE = (
     "The owner asked to forget something and the saved personal fact was "
     "removed. Now also call forget_saved_history with the distinctive words the "
@@ -212,6 +218,7 @@ class VoiceProjectMetrics:
     repair_deliveries: int = 0
     repair_timeouts: int = 0
     unplayed_replays: int = 0
+    unplayed_corrections: int = 0
     # Provider/transport handoffs given this session's project context again.
     handoff_restores: int = 0
     # Replies carrying personal facts released under a personal-context permit:
@@ -694,6 +701,7 @@ class VoiceProjectTurns:
         self._repairing: set[tuple] = set()
         self._speech = None
         self._corrected: set[str] = set()
+        self._correction_watch = None  # (speech handle, owner epoch)
         self._control_epochs: set[int] = set()
         self._current_title: str | None = None
         self._blocked_speech = None
@@ -887,8 +895,57 @@ class VoiceProjectTurns:
             )
             self.metrics.corrections += 1
             self._diag("correction_spoken", epoch=epoch)
-            self._generate(CORRECTION_INSTRUCTIONS.format(what=what, project=project))
+            handle = self._generate(
+                CORRECTION_INSTRUCTIONS.format(what=what, project=project)
+            )
+            self._watch_correction(handle)
         return True
+
+    def _watch_correction(self, handle) -> None:
+        if handle is None:
+            return
+        owner_epoch = self._conversation.user_activity_epoch
+        self._correction_watch = (handle, owner_epoch)
+        try:
+            asyncio.get_running_loop().call_later(
+                CORRECTION_PLAY_SECONDS, self._check_correction_played, handle
+            )
+        except RuntimeError:
+            self._correction_watch = None
+
+    def _note_correction_playing(self) -> None:
+        watch = self._correction_watch
+        if watch is not None and self._speech is watch[0]:
+            self._correction_watch = None
+
+    def _check_correction_played(self, handle) -> None:
+        watch = self._correction_watch
+        if self._closed or watch is None or watch[0] is not handle:
+            return  # it played, or a newer correction replaced it
+        self._correction_watch = None
+        if self._conversation.user_activity_epoch != watch[1]:
+            return  # the owner spoke: LiveKit interrupts it as usual
+        done = getattr(handle, "done", None)
+        finished = bool(done()) if callable(done) else False
+        self.metrics.unplayed_corrections += 1
+        self._diag("correction_unplayed", finished=finished)
+        LOGGER.warning(
+            "Project voice: correction reply did not play within %.0f s "
+            "| speech_finished=%s; cancelling it and ending the wake",
+            CORRECTION_PLAY_SECONDS,
+            finished,
+        )
+        if not finished:
+            try:
+                handle.interrupt(force=True)
+            except Exception:  # noqa: BLE001 - the wake still ends below
+                LOGGER.info("Unplayed correction could not be interrupted")
+        if self._retire is not None:
+            retire, self._retire = self._retire, None
+            try:
+                retire()
+            except Exception:  # noqa: BLE001 - the session also ends on its timer
+                LOGGER.warning("Project voice: session retire after correction failed")
 
     # -- provider / transport handoff (Gemini paid fallback, fresh session) ----
 
@@ -1328,6 +1385,7 @@ class VoiceProjectTurns:
         return turn_id in self._delivered_turns
 
     def allow_response_audio(self) -> bool:
+        self._note_correction_playing()
         trailing = self._speech is not None and self._speech is self._blocked_speech
         self._response_epoch_override = None
         allowed = self._decide_response_audio()
@@ -1687,17 +1745,19 @@ class VoiceProjectTurns:
         LOGGER.warning("Project voice: speaking fallback without project context")
         self._generate(instructions)
 
-    def _generate(self, instructions) -> None:
+    def _generate(self, instructions):
+        """Request a reply; returns LiveKit's speech handle when it gives one."""
         if self._session is None:
-            return
+            return None
         try:
-            self._session.generate_reply(
+            return self._session.generate_reply(
                 instructions=instructions, allow_interruptions=True
             )
         except Exception as exc:  # noqa: BLE001 - voice continues; next turn retries
             LOGGER.warning(
                 "Project voice re-request failed | error=%s", type(exc).__name__
             )
+            return None
 
     # -- fast path: preloaded context, no tool call for ordinary turns ---------
     #
