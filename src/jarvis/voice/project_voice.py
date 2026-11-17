@@ -56,6 +56,62 @@ _FAST_PATH_TEXT_WAIT_SECONDS = 0.35
 # Session preload bounds: recent current-project rows given once per wake.
 PRELOAD_ROWS = 12
 PRELOAD_MAX_CHARS = 3000
+# Earlier owner decisions kept in the wake preload after newer turns push them
+# out of the recent rows (Munnar live test 2026-11-17: background speech and
+# follow-up questions filled the newest 12 rows, so the vehicle change and the
+# stay correction never reached Gemini and packing advice was generic). Only
+# owner statements that state a plan or correct one qualify; questions,
+# fragments and chatter do not. Newest decisions win if the budget overflows.
+DECISION_SCAN_ROWS = 200
+DECISION_MAX_ROWS = 8
+DECISION_MAX_CHARS = 900
+_DECISION_CUES = re.compile(
+    r"\bchange (?:of|in) plans?\b|\bmisspoke\b|\bcorrection\b|\bnot .{1,40}\banymore\b"
+    r"|\b(?:we|i)(?:['’](?:re|ll|m)|\s+(?:are|will|am|shall))?\s+(?:now\s+)?"
+    r"(?:taking|take|going|staying|stay|driving|drive|flying|fly|leaving|leave|"
+    r"booking|booked|book|bringing|bring|travell?ing|starting|start|meeting)\b"
+    r"|\b(?:our|my|the)\s+(?:campsite|camp|hotel|stay|cottage|resort|flight|train|"
+    r"car|vehicle|budget|plan|date|dates|itinerary|booking|venue|deadline)\s+"
+    r"(?:is|was|will be|has been|stays?)\b"
+    r"|\b(?:le ja rahe|ja rahe|ruk rahe|rukenge|lenge|jayenge|jaenge)\b",
+    re.IGNORECASE,
+)
+_QUESTION_START = re.compile(
+    r"^\W*(?:jarvis\W+)?(?:what|which|where|when|who|whom|whose|why|how|is|are|was|"
+    r"were|do|does|did|can|could|should|would|will|shall|have|has|kya|kab|kahan|kaun)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_owner_decision(event) -> bool:
+    """An owner statement of a plan or a correction, not a question or chatter."""
+    if event.role != "user":
+        return False
+    text = " ".join(str(event.text).split())
+    if len(text.split()) < 4 or text.endswith("?") or _QUESTION_START.match(text):
+        return False
+    return bool(_DECISION_CUES.search(text))
+
+
+def _decision_rows(older, *, exclude) -> list:
+    """Earlier owner decisions beyond the recent rows, newest first within the
+    budget, returned oldest first. Whole rows only, like the preload."""
+    chosen, total = [], 0
+    for source in reversed(tuple(older)):
+        event = source.event
+        if event.event_id in exclude or not _is_owner_decision(event):
+            continue
+        size = len(event.text) + 24
+        if total + size > DECISION_MAX_CHARS:
+            continue
+        total += size
+        chosen.append(source)
+        if len(chosen) >= DECISION_MAX_ROWS:
+            break
+    chosen.reverse()
+    return chosen
+
+
 _FAST_REPLY_WAIT_SECONDS = 15.0
 # After a denied or timed-out renewal, do not ask again for this long.
 RENEWAL_COOLDOWN_SECONDS = 300.0
@@ -645,7 +701,7 @@ def _preload_rows(sources, *, exclude) -> list:
     return chosen
 
 
-def _preload_message(title, rows, sources) -> str:
+def _preload_message(title, rows, sources, decisions=()) -> str:
     """Compact, clearly labelled evidence: one line per saved row."""
     if title is None:
         return ""
@@ -665,6 +721,17 @@ def _preload_message(title, rows, sources) -> str:
             + ":"
         )
         lines.append("How to read it: " + HISTORY_RULES)
+        if decisions:
+            lines.append(
+                "Earlier owner decisions, older than the recent history"
+                " (still current unless a newer owner statement changes them):"
+            )
+            for source in decisions:
+                event = source.event
+                lines.append(
+                    f"- {event.accepted_at.date().isoformat()} owner: {event.text}"
+                )
+            lines.append("Recent history:")
         for source in rows:
             event = source.event
             who = "owner" if event.role == "user" else "Jarvis"
@@ -1820,28 +1887,37 @@ class VoiceProjectTurns:
         live = {t.turn_id for t in self._conversation.turns}
         async with self._owner.prepare_lock:
             # One extra row tells whether older history exists.
+            # Read further back than the recent rows so earlier owner
+            # decisions can be kept when newer turns have pushed them out.
             catalog, entry, sources = await self._owner.coordinator.session_context(
-                limit=PRELOAD_ROWS + 1
+                limit=DECISION_SCAN_ROWS
             )
             selection = entry.selection if entry else None
             # Truth at this instant: every prepare holds the same lock and
             # records its committed selection as soon as it releases it.
             self._committed_selection = selection
-        rows = _preload_rows(
-            sources[-PRELOAD_ROWS:], exclude=set(self._delivered_ids) | live
+        sources = tuple(sources)
+        exclude = set(self._delivered_ids) | live
+        rows = _preload_rows(sources[-PRELOAD_ROWS:], exclude=exclude)
+        decisions = _decision_rows(
+            sources[:-PRELOAD_ROWS],
+            exclude=exclude | {row.event.event_id for row in rows},
         )
-        text = _preload_message(entry.title if entry else None, rows, sources)
+        text = _preload_message(
+            entry.title if entry else None, rows, sources, decisions
+        )
         if text:
             await self._inject_closed_context(agent, text)
+        given = [*decisions, *rows]
         self._remember_delivered(
-            [row.event.event_id for row in rows],
+            [row.event.event_id for row in given],
             [
                 {
                     "role": row.event.role,
                     "date": row.event.accepted_at.date().isoformat(),
                     "text": row.event.text,
                 }
-                for row in rows
+                for row in given
             ],
         )
         self._catalog = catalog
@@ -1856,6 +1932,7 @@ class VoiceProjectTurns:
             epoch=self._conversation.user_activity_epoch,
             project=entry.title if entry else None,
             rows=len(rows),
+            decisions=len(decisions),
             bytes=size,
             preload_ms=round((monotonic() - started) * 1000, 1),
             # Sealed lab diagnostics only: what the model was actually given.

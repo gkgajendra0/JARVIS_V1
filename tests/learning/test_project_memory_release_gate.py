@@ -117,15 +117,22 @@ async def test_g3_the_newer_correction_wins(lab, clock):
     await wake.preload()
     # The correction is recent: it is in the preload, after nothing older.
     assert "Correction: we will take the Thar, not the Jimny." in preloaded(wake)
+    # The older decision, pushed out of the recent rows, is preloaded as an
+    # earlier owner decision (Munnar live test 2026-11-17), before the newer
+    # correction, so the model holds both and the newer one is current.
+    context = preloaded(wake)
+    assert "owner: We will take the Jimny." in context
+    assert context.index("owner: We will take the Jimny.") < context.index(
+        "Correction: we will take the Thar, not the Jimny."
+    )
     wake.speech()
     wake.transcript("Which vehicle are we taking?")
     found = await wake.turns.search_history("Jimny")
     owner = [r["text"] for r in found["history"] if r["role"] == "owner"]
-    # Search excludes rows already in the conversation (the correction is in
-    # the preload), so the older statement comes back as history, and the
-    # model already holds the newer correction.
-    assert "We will take the Jimny." in owner
+    # Search never resends rows already in the conversation.
+    assert "We will take the Jimny." not in owner
     assert "Correction: we will take the Thar, not the Jimny." not in owner
+    assert found["already_in_conversation"] >= 2
     assert "newest owner statement is current" in found["guidance"]
     rules = " ".join(PROJECT_MEMORY_INSTRUCTIONS.split())
     assert "a newer owner statement replaces an older one" in rules
