@@ -185,12 +185,16 @@ async def test_commands_and_other_projects_still_go_through_the_tool(lab, partia
     await settle(voice)
     # Repair by delivery: the application gives Gemini exactly the context the
     # tool would have returned, then re-requests the answer.
-    (reply,) = wake.session.replies
-    assert reply.startswith(REPAIR_ANSWER_INSTRUCTIONS)
+    # The re-request is the newest owner-side turn, quoting the question;
+    # generate_reply itself carries no instructions.
+    assert wake.session.replies == [None]
+    reply = wake.agent.chat_ctx.items[-1].text_content
+    question = REPAIR_ANSWER_INSTRUCTIONS.format(question=partial.replace('"', "'"))
+    assert reply.startswith(question)
     if "Nepal" in partial:  # another project: the answer must name it
         assert "Begin with 'In your Nepal trip project,'" in reply
     else:
-        assert reply == REPAIR_ANSWER_INSTRUCTIONS
+        assert reply == question
     assert voice.metrics.repair_deliveries == 1
     repaired = wake.agent.injected()[-1]
     assert "for the owner's last request" in repaired

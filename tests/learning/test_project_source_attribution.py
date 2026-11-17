@@ -87,10 +87,12 @@ async def test_the_repair_re_request_names_the_source_project(lab):
     assert voice.metrics.repair_deliveries == 1
     delivered = wake.agent.injected()[-1]
     assert '"source_attribution": "In your Nepal trip project"' in delivered
-    expected = REPAIR_ANSWER_INSTRUCTIONS + REPAIR_ATTRIBUTION_INSTRUCTIONS.format(
-        attribution="In your Nepal trip project"
-    )
-    assert wake.session.replies == [expected]
+    # The owner-side re-request quotes the question and asks for the lead-in.
+    expected = REPAIR_ANSWER_INSTRUCTIONS.format(
+        question=QUESTION
+    ) + REPAIR_ATTRIBUTION_INSTRUCTIONS.format(attribution="In your Nepal trip project")
+    assert wake.agent.chat_ctx.items[-1].text_content == expected
+    assert wake.session.replies == [None]
     assert wake.response()[0] is True
 
 

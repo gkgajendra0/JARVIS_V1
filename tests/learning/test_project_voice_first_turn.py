@@ -26,7 +26,6 @@ from test_project_voice_fast_path import FastWake, nepal
 from jarvis.voice import project_voice
 from jarvis.voice.project_voice import (
     FALLBACK_INSTRUCTIONS,
-    REPAIR_ANSWER_INSTRUCTIONS,
 )
 
 lab = project_voice_tests.lab  # shared real-archive fixture
@@ -104,7 +103,7 @@ async def test_an_explicit_create_still_needs_its_announcement(lab):
     wake.transcript("create project called Goa")
     await settle(voice)
     # Delivered by the application; the answer then carries the announcement.
-    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS]
+    assert wake.session.replies == [None]
     assert "Created project Goa." in wake.agent.injected()[-1]
     assert wake.response()[0] is True
 
@@ -149,9 +148,9 @@ async def test_an_unanswered_repair_speaks_the_fallback_before_timeout(
     assert (await wake.gate())[0] is False
     wake.transcript("switch to General")
     await settle(voice)
-    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS]
+    assert wake.session.replies == [None]
     await asyncio.sleep(0.15)  # Gemini produced nothing audible
-    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS, FALLBACK_INSTRUCTIONS]
+    assert wake.session.replies == [None, FALLBACK_INSTRUCTIONS]
     assert voice.metrics.repair_timeouts == 1
     assert wake.response()[0] is True  # the fallback itself is heard
 
@@ -169,7 +168,7 @@ async def test_an_answered_repair_never_adds_a_fallback(lab, monkeypatch):
     await settle(voice)
     assert wake.response()[0] is True  # the repaired answer plays
     await asyncio.sleep(0.15)
-    assert wake.session.replies == [REPAIR_ANSWER_INSTRUCTIONS]
+    assert wake.session.replies == [None]
     assert voice.metrics.repair_timeouts == 0
 
 

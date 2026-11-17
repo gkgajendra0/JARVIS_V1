@@ -177,12 +177,15 @@ _NARRATION_SENTENCE = re.compile(
 # sentence is not Jarvis prompt text (so echo removal could not match it): an
 # imperative opening plus wording about phrasing, sentence count or "the
 # user/owner" marks it. "Don't worry, it's safe." has neither cue and is kept.
+# Live 2026-11-17 16:56 (repair path): "Do not mention project memory, history
+# or the background process." - Jarvis's own machinery named is a cue too.
 _DIRECTIVE_SENTENCE = re.compile(
     r"(?i)(?:^|(?<=[.!?]))[ \t]*"
     r"(?:never|always|do not|don't|avoid|keep|use|respond|reply|answer|speak|"
     r"be|only|refer)\b"
     r"[^.!?]{0,240}?"
-    r"(?:\bphrasing\b|\bwording\b|\bpreamble\b|"
+    r"(?:\bphrasing\b|\bwording\b|\bpreamble\b|\bproject memory\b|"
+    r"\bbackground process\b|\btool calls?\b|"
     r"\b(?:one|two|three|a few|short|full|complete)(?: or (?:one|two|three))?"
     r" sentences?\b|\bthe (?:user|owner)\b)"
     r"[^.!?]*[.!?]+"

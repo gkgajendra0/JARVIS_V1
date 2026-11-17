@@ -117,7 +117,7 @@ class FakeSession:
         self.replies = []
 
     def generate_reply(self, **kwargs):
-        self.replies.append(kwargs["instructions"])
+        self.replies.append(kwargs.get("instructions"))
 
 
 class Wake:
