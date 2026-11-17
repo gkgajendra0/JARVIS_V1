@@ -194,6 +194,7 @@ async def run_text_lab(
     seed_acceptance=False,
     development_case=None,
     personal_acceptance=False,
+    context_eval_arm=None,
     source_commit=None,
 ):
     import asyncio
@@ -294,6 +295,31 @@ async def run_text_lab(
                     source_commit=source_commit,
                     model=model,
                 )
+        if context_eval_arm is not None:
+            from jarvis.voice.project_personal_context_eval import run_context_eval
+
+            print(
+                f"CONTEXT EVALUATION ({context_eval_arm} saved facts): fictional "
+                "projects and facts, three questions in fresh sessions. "
+                + (
+                    "Fresh Hello approvals for each fictional memory command; "
+                    if context_eval_arm == "with"
+                    else "No memory commands; "
+                )
+                + "one Hello opens personal reads. Free lane only; no automatic retry.",
+                flush=True,
+            )
+            return await run_context_eval(
+                root,
+                arm=context_eval_arm,
+                memory=memory,
+                capability=capability,
+                coordinator=coordinator,
+                access=access,
+                provider=provider,
+                source_commit=source_commit,
+                model=model,
+            )
         if development_case is not None:
             from jarvis.voice.project_contract_diagnostics import (
                 observe_contract_failures,
@@ -584,6 +610,39 @@ def run_development_mode(args, repo, tool_paths):
     )
 
 
+def run_context_eval_mode(args, repo, tool_paths):
+    """Both arms, each in its own fresh isolated profile: without saved facts
+    first (no memory commands), then with them. Stops on the first failure."""
+    import asyncio
+
+    from jarvis.config import JarvisConfig
+    from jarvis.voice.project_personal_context_eval import ARMS
+
+    args.lab_root.mkdir(parents=True, exist_ok=False)
+    for arm in ARMS:
+        root = args.lab_root / arm
+        profile = prepare_project_profile(
+            args.profile,
+            root,
+            resume=False,
+            commit=args.source_commit,
+            tool_paths=tool_paths,
+        )
+        with project_lab_environment(profile, repo):
+            config = JarvisConfig.from_environment()
+            if config.ai_provider != "gemini":
+                raise ValueError("existing Gemini configuration required")
+            asyncio.run(
+                run_text_lab(
+                    config,
+                    profile.parent,
+                    model=args.model,
+                    context_eval_arm=arm,
+                    source_commit=args.source_commit,
+                )
+            )
+
+
 def main():
     import argparse
     import asyncio
@@ -602,7 +661,16 @@ def main():
     parser.add_argument("--development-batch", action="store_true")
     parser.add_argument("--development-case", choices=CASE_IDS)
     parser.add_argument("--personal-acceptance", action="store_true")
+    parser.add_argument("--context-eval", action="store_true")
     args = parser.parse_args()
+    if args.context_eval and (
+        args.resume_lab
+        or args.seed_acceptance
+        or args.development_batch
+        or args.development_case
+        or args.personal_acceptance
+    ):
+        parser.error("context evaluation requires a fresh standalone lab")
     if args.personal_acceptance and (
         args.resume_lab
         or args.seed_acceptance
@@ -639,6 +707,9 @@ def main():
             "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
         }
     )
+    if args.context_eval:
+        run_context_eval_mode(args, repo, tool_paths)
+        return
     if args.development_batch:
         summary = run_development_mode(args, repo, tool_paths)
         if summary["failed"] or summary["reporting_errors"]:
