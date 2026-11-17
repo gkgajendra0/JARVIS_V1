@@ -44,6 +44,7 @@ from jarvis.memory.project_routing import (
     ProjectClarificationRequired,
     needs_project_routing,
 )
+from jarvis.voice import reply_diagnostics
 from jarvis.voice.voice_output_safety import register_internal_text
 
 LOGGER = logging.getLogger(__name__)
@@ -896,7 +897,8 @@ class VoiceProjectTurns:
             self.metrics.corrections += 1
             self._diag("correction_spoken", epoch=epoch)
             handle = self._generate(
-                CORRECTION_INSTRUCTIONS.format(what=what, project=project)
+                CORRECTION_INSTRUCTIONS.format(what=what, project=project),
+                kind="correction_requested",
             )
             self._watch_correction(handle)
         return True
@@ -1434,6 +1436,7 @@ class VoiceProjectTurns:
         if handle is not None and handle is self._blocked_speech:
             return False  # trailing frames of a response already blocked
         self._blocked_speech = handle
+        reply_diagnostics.note("early_answer_held_back", handle)
         self._note_withheld(handle)
         self._withheld_keys.add(key)
         self.metrics.unprepared_responses_blocked += 1
@@ -1489,13 +1492,15 @@ class VoiceProjectTurns:
                         "Project voice: model answered without context; context "
                         "delivered by the application, re-requesting the answer"
                     )
-                    self._generate(self._repair_answer_instructions())
+                    self._generate(
+                        self._repair_answer_instructions(), kind="replacement_requested"
+                    )
                 else:
                     self._diag("repair_requested", epoch=epoch, via="tool")
                     LOGGER.info(
                         "Project voice: model answered without context; re-requesting"
                     )
-                    self._generate(REPAIR_INSTRUCTIONS)
+                    self._generate(REPAIR_INSTRUCTIONS, kind="replacement_requested")
                 self._arm_repair_watchdog(key)
             else:
                 self._fallback(key, FALLBACK_INSTRUCTIONS)
@@ -1705,6 +1710,7 @@ class VoiceProjectTurns:
         if handle is not None and handle is self._blocked_speech:
             return False
         self._blocked_speech = handle
+        reply_diagnostics.note("forget_confirmation_held_back", handle)
         self._note_withheld(handle)
         if handle is not None:
             try:
@@ -1714,7 +1720,7 @@ class VoiceProjectTurns:
         if epoch not in self._nudged_epochs:
             self._nudged_epochs.add(epoch)
             self._diag("forget_history_requested", epoch=epoch)
-            self._generate(FORGET_HISTORY_NUDGE)
+            self._generate(FORGET_HISTORY_NUDGE, kind="forget_nudge_requested")
             try:
                 loop = asyncio.get_running_loop()
                 loop.call_later(FORGET_HISTORY_SECONDS, self._forget_watchdog, epoch)
@@ -1745,14 +1751,16 @@ class VoiceProjectTurns:
         LOGGER.warning("Project voice: speaking fallback without project context")
         self._generate(instructions)
 
-    def _generate(self, instructions):
+    def _generate(self, instructions, *, kind="reply_requested"):
         """Request a reply; returns LiveKit's speech handle when it gives one."""
         if self._session is None:
             return None
         try:
-            return self._session.generate_reply(
+            handle = self._session.generate_reply(
                 instructions=instructions, allow_interruptions=True
             )
+            reply_diagnostics.note(kind, handle)
+            return handle
         except Exception as exc:  # noqa: BLE001 - voice continues; next turn retries
             LOGGER.warning(
                 "Project voice re-request failed | error=%s", type(exc).__name__
