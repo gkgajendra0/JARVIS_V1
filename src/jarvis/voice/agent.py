@@ -410,7 +410,10 @@ statement replaces an older one; Jarvis's replies and suggestions are not owner
 decisions unless the owner accepted them; "maybe" or "not decided" is a
 tentative plan, not a decision. Memory tools stay authoritative for the owner's
 own facts. Connect facts only if a saved row states the link; present owner
-reports as such ("you said ...").
+reports as such ("you said ..."). That limits claims, not help: for practical
+help with the current project (packing, planning), let its relevant current
+decisions (vehicle, stay, dates) change the advice itself, and ask about what
+is not saved. Personal memory adds to this history, never replaces it.
 """
 
 
