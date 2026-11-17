@@ -169,6 +169,22 @@ _GUIDANCE = (
     "answer, say you don't have it."
 )
 
+# How saved history is read, sent with every block of it (preload, prepared
+# turn, search). Zanskar live test 2026-11-16: with the owner's "I misspoke
+# earlier. The campsite was always Riverside Camp, not Lakeview Camp." in the
+# preload, Gemini still called Lakeview "the original plan", its own saved
+# replies repeated that, and packing advice ignored the saved vehicle and
+# campsite. Raw rows are unchanged; only how Gemini weighs them is stated.
+HISTORY_RULES = (
+    "Owner rows decide; Jarvis rows only show what Jarvis said and never prove "
+    "a plan. The newest owner statement is current. If the owner said they "
+    "misspoke or that it was always X, the earlier value was a mistake and never "
+    "the plan: do not call it original, initial or former. Only a change of plan "
+    "makes the earlier value a former plan. Use the current decisions for "
+    "practical help with this project (packing, planning) without asking; ask "
+    "only for what is missing."
+)
+
 
 @dataclass
 class VoiceProjectMetrics:
@@ -567,6 +583,7 @@ def model_view(outcome: _Outcome, delivered_ids: dict) -> tuple[dict, tuple[str,
         "earlier_history_already_provided": already,
         "coverage": context.get("coverage"),
         "guidance": _GUIDANCE,
+        "history_rules": HISTORY_RULES,
     }
     if not changed:
         result["note"] = (
@@ -647,6 +664,7 @@ def _preload_message(title, rows, sources) -> str:
             )
             + ":"
         )
+        lines.append("How to read it: " + HISTORY_RULES)
         for source in rows:
             event = source.event
             who = "owner" if event.role == "user" else "Jarvis"
@@ -2317,10 +2335,10 @@ class VoiceProjectTurns:
             "history": rows,
             "already_in_conversation": already,
             "guidance": "Saved conversation, oldest first. When rows disagree, the "
-            "newest owner statement is current; mention that it changed. Rows with "
-            "from_project belong to that other project, not the current one: name "
-            "that project when you use them. Missing is not proof it never "
-            "happened.",
+            "newest owner statement is current. Rows with from_project belong to "
+            "that other project, not the current one: name that project when you "
+            "use them. Missing is not proof it never happened.",
+            "history_rules": HISTORY_RULES,
         }
         size = len(json.dumps(payload, ensure_ascii=False).encode())
         self.metrics.history_searches += 1
@@ -2459,6 +2477,7 @@ register_internal_text(
     REPAIR_INSTRUCTIONS,
     FORGET_HISTORY_NUDGE,
     _GUIDANCE,
+    HISTORY_RULES,
     _TOOL_DESCRIPTION,
     _SEARCH_DESCRIPTION,
     _FORGET_DESCRIPTION,
