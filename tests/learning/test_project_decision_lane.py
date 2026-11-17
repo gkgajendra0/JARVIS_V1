@@ -189,3 +189,43 @@ class _Event:
     def __init__(self, role, text):
         self.role = role
         self.text = text
+
+
+@pytest.mark.asyncio
+async def test_decisions_come_only_from_the_active_project(lab):
+    """Another project's decisions never enter this project's wake history,
+    however far back they sit or however much chatter follows."""
+    voice = await lab.runtime()
+    wake = Wake(voice)
+    await wake.ask("Create a project called Goa trip.", "Created project Goa trip.")
+    await wake.ask("For the Goa trip, we're taking the train.", "Understood.")
+    await wake.ask("We're staying at Palm Grove Villa.", "Understood.")
+    await wake.ask(
+        "Create a project called Munnar trip.", "Created project Munnar trip."
+    )
+    for line in (INNOVA, TEA_VALLEY, CRETA, HILLTOP):
+        await wake.ask(line, "Understood.")
+    wake.close()
+    wake = Wake(voice)
+    for line in CHATTER:
+        await wake.ask(line, "Okay.")
+    wake.close()
+    wake = FastWake(voice)
+    await wake.preload()
+    (context,) = wake.agent.injected()
+    assert "Current project: Munnar trip." in context
+    assert CRETA in context and HILLTOP in context
+    assert "taking the train" not in context and "Palm Grove" not in context
+    wake.close()
+
+    switch = Wake(voice)
+    await switch.ask("switch to Goa trip", "Switched.")
+    switch.close()
+    wake = FastWake(voice)
+    await wake.preload()
+    (context,) = wake.agent.injected()
+    assert "Current project: Goa trip." in context
+    assert "taking the train" in context and "Palm Grove Villa" in context
+    for line in (INNOVA, TEA_VALLEY, CRETA, HILLTOP):
+        assert line not in context
+    wake.close()
