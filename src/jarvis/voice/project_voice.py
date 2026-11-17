@@ -45,7 +45,10 @@ from jarvis.memory.project_routing import (
     needs_project_routing,
 )
 from jarvis.voice import reply_diagnostics
-from jarvis.voice.voice_output_safety import register_internal_text
+from jarvis.voice.voice_output_safety import (
+    note_generation_instructions,
+    register_internal_text,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -197,10 +200,19 @@ CONTROL_TOOLS = frozenset({"enter_standby"})
 
 # Repair by delivery: the application itself gives Gemini the prepared context
 # (no reliance on the model calling a tool), then asks for the answer.
+# The re-request after repair delivery. Sent as the newest OWNER-side turn
+# (from Jarvis, quoting the question), with no generate_reply instructions:
+# the plugin sends those as Gemini's own (model-role) words. Live 2026-11-17
+# 16:56: "What time is it?" was held back for "Resuming Munnar trip."; the
+# retry then ended with the memory block plus a model-role "Answer that request
+# now ... from it", never restated the question (which Gemini had already
+# answered server-side), and the replacement said "Do not mention project
+# memory, history or the background process. Resuming Munnar trip. We are
+# taking the Creta." with no time.
 REPAIR_ANSWER_INSTRUCTIONS = (
-    "Project memory for the owner's last request was just added to this "
-    "conversation. Answer that request now, briefly, from it. Speak only the "
-    "answer to the owner. Do not repeat a tool call that already ran."
+    '[From Jarvis, not speech from the owner.] The owner asked: "{question}" '
+    "Your first reply to it was not heard. Answer that question now, briefly, "
+    "to the owner. Use the project memory above only where it helps answer it."
 )
 REPAIR_ATTRIBUTION_INSTRUCTIONS = (
     " Begin with '{attribution},' then give the answer, even if it is that the "
@@ -1567,15 +1579,15 @@ class VoiceProjectTurns:
             elif attempts == 0:
                 self.metrics.repairs += 1
                 outcome = self._outcome_if_done(source)
-                if await self._deliver_in_context(source, outcome, epoch):
+                if await self._deliver_in_context(
+                    source, outcome, epoch, request=self._repair_answer_request
+                ):
                     self._diag("repair_requested", epoch=epoch, via="delivery")
                     LOGGER.info(
                         "Project voice: model answered without context; context "
                         "delivered by the application, re-requesting the answer"
                     )
-                    self._generate(
-                        self._repair_answer_instructions(), kind="replacement_requested"
-                    )
+                    self._generate(None, kind="replacement_requested")
                 else:
                     self._diag("repair_requested", epoch=epoch, via="tool")
                     LOGGER.info(
@@ -1588,18 +1600,19 @@ class VoiceProjectTurns:
         finally:
             self._repairing.discard(blocked_key)
 
-    def _repair_answer_instructions(self) -> str:
-        """The re-request after repair delivery; names the source project when
-        the owner asked about another one (the live 07:19:20 answer did not)."""
-        delivered = self._delivered
+    @staticmethod
+    def _repair_answer_request(source, result) -> str:
+        """The owner-side re-request after repair delivery: quotes the question
+        and names the source project when the owner asked about another one
+        (the live 07:19:20 answer did not)."""
+        question = " ".join(str(getattr(source, "text", "") or "").split())
+        request = REPAIR_ANSWER_INSTRUCTIONS.format(question=question.replace('"', "'"))
         attribution = (
-            delivered.result.get("source_attribution", "")
-            if delivered is not None and isinstance(delivered.result, dict)
-            else ""
+            result.get("source_attribution", "") if isinstance(result, dict) else ""
         )
         if not attribution:
-            return REPAIR_ANSWER_INSTRUCTIONS
-        return REPAIR_ANSWER_INSTRUCTIONS + REPAIR_ATTRIBUTION_INSTRUCTIONS.format(
+            return request
+        return request + REPAIR_ATTRIBUTION_INSTRUCTIONS.format(
             attribution=attribution.replace("'", "")
         )
 
@@ -1609,7 +1622,9 @@ class VoiceProjectTurns:
             return None
         return future.result()
 
-    async def _deliver_in_context(self, source, outcome, epoch) -> bool:
+    async def _deliver_in_context(
+        self, source, outcome, epoch, *, request=None
+    ) -> bool:
         """Give Gemini this utterance's prepared context directly (chat context),
         exactly what prepare_project_turn would have returned.
 
@@ -1635,6 +1650,7 @@ class VoiceProjectTurns:
                 agent,
                 "[Project memory from Jarvis for the owner's last request, not "
                 "speech from the owner.] " + json.dumps(result, ensure_ascii=False),
+                request=request(source, result) if request is not None else None,
             )
         except Exception as exc:  # noqa: BLE001 - fall back to the tool request
             LOGGER.warning(
@@ -1836,10 +1852,11 @@ class VoiceProjectTurns:
         """Request a reply; returns LiveKit's speech handle when it gives one."""
         if self._session is None:
             return None
+        kwargs = {"allow_interruptions": True}
+        if instructions is not None:
+            kwargs["instructions"] = instructions
         try:
-            handle = self._session.generate_reply(
-                instructions=instructions, allow_interruptions=True
-            )
+            handle = self._session.generate_reply(**kwargs)
             reply_diagnostics.note(kind, handle)
             return handle
         except Exception as exc:  # noqa: BLE001 - voice continues; next turn retries
@@ -1963,7 +1980,7 @@ class VoiceProjectTurns:
 
     _register_injected = None
 
-    async def _inject_closed_context(self, agent, text) -> None:
+    async def _inject_closed_context(self, agent, text, *, request=None) -> None:
         """Add context as a COMPLETED exchange: the labelled memory message and
         a short Jarvis acknowledgement.
 
@@ -1971,6 +1988,10 @@ class VoiceProjectTurns:
         generate_reply (the wake acknowledgement) then treated the memory block
         as the owner's prompt and Gemini returned instructions and a reasoning
         trace as text (live qualification at 8155df0d).
+
+        ``request`` (repair only) is added after the acknowledgement as the
+        owner-side turn the very next generation answers; it is noted as
+        Jarvis's own text so an echo of it is never spoken back or saved.
         """
         from livekit.agents.llm import ChatContext, ChatMessage
 
@@ -1987,6 +2008,15 @@ class VoiceProjectTurns:
                 content=["Noted."],
             ),
         ]
+        if request:
+            items.append(
+                ChatMessage(
+                    id="jarvis:project-request:" + identity,
+                    role="user",
+                    content=[request],
+                )
+            )
+            note_generation_instructions(request)
         if self._register_injected is not None:
             self._register_injected(ChatContext(items=list(items)))
         context = agent.chat_ctx.copy()

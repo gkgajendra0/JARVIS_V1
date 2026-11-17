@@ -27,7 +27,6 @@ from test_project_voice_unvoiced_reply import (
 from test_voice_output_safety import LIVE_TRACE, _chunked, _transcribe
 
 import jarvis.voice.agent  # noqa: F401 - registers Jarvis's prompt text
-from jarvis.voice.project_voice import REPAIR_ANSWER_INSTRUCTIONS
 from jarvis.voice.voice_output_safety import (
     SpokenTextGuard,
     note_generation_instructions,
@@ -74,10 +73,19 @@ def test_saved_transcript_keeps_only_the_answer(text, answer):
     assert reason == "self_narration_removed"
 
 
+# The repair instructions sent in that run (model-role generate_reply text,
+# replaced on 2026-11-17 by an owner-side re-request).
+LIVE_REPAIR_INSTRUCTIONS = (
+    "Project memory for the owner's last request was just added to this "
+    "conversation. Answer that request now, briefly, from it. Speak only the "
+    "answer to the owner. Do not repeat a tool call that already ran."
+)
+
+
 def test_the_live_repair_transcript_with_its_instruction_echo():
     """The live turn also began with the repair instruction echo."""
-    note_generation_instructions(REPAIR_ANSWER_INSTRUCTIONS)
-    saved, reason = sanitize_assistant_transcript(REPAIR_ANSWER_INSTRUCTIONS + LIVE)
+    note_generation_instructions(LIVE_REPAIR_INSTRUCTIONS)
+    saved, reason = sanitize_assistant_transcript(LIVE_REPAIR_INSTRUCTIONS + LIVE)
     assert saved == ANSWER
     assert reason == "instruction_echo_removed+self_narration_removed"
 
