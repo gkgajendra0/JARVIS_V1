@@ -16,8 +16,12 @@ param(
     # One focused live qualification (normal tools + project memory); implies diagnostics.
     [switch]$Qualification,
     # Saved personal context ON (production --personal-learning apply), read-only
-    # tools, this lab's fictional memory only. Seed with -SeedVoiceEval first.
+    # tools, automatic learning off, this lab's fictional memory only. Seed with
+    # -SeedVoiceEval first.
     [switch]$PersonalContext,
+    # With -PersonalContext: keep production's automatic learning on (learned
+    # facts go into this lab's memory only).
+    [switch]$PersonalLearning,
     # Decrypt the latest diagnostics run into a local HTML report (no voice run).
     [switch]$DiagnosticsReport,
     # Delete all diagnostics recordings, records and reports of this lab.
@@ -84,6 +88,7 @@ try {
     if ($RecordDiagnostics) { $arguments += "--record-diagnostics" }
     if ($ToolOnlyMemory) { $arguments += "--tool-only-memory" }
     if ($PersonalContext) { $arguments += "--personal-context" }
+    if ($PersonalLearning) { $arguments += "--personal-learning" }
     if ($Qualification) {
         $arguments += "--qualification"
         if (-not $RecordDiagnostics) { $arguments += "--record-diagnostics" }

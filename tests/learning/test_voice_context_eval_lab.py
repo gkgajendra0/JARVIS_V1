@@ -101,6 +101,11 @@ def test_the_voice_agent_in_this_mode_carries_the_pr_328_guidance():
             "--personal-context needs project memory",
         ),
         (
+            "jarvis.voice.project_voice_lab",
+            ["--personal-learning"],
+            "--personal-learning needs --personal-context",
+        ),
+        (
             "jarvis.voice.project_memory_lab",
             ["--seed-voice-eval", "--context-eval", "--model", "m"],
             "voice evaluation seeding requires a fresh standalone lab",
@@ -148,6 +153,24 @@ async def test_lab_runtime_is_built_without_automatic_learning(tmp_path):
     seen.clear()
     await run_voice_lab(object(), tmp_path, baseline=False, runtime_builder=builder)
     assert "automatic_learning" not in seen  # production default untouched
+    seen.clear()
+    # --personal-learning: production's automatic learning, same read-only tools.
+    await run_voice_lab(
+        object(),
+        tmp_path,
+        baseline=False,
+        runtime_builder=builder,
+        personal=True,
+        learning=True,
+    )
+    assert "automatic_learning" not in seen
+    assert not {"remember_memory", "correct_memory", "forget_memory"} & set(
+        seen["tool_allowlist"]
+    )
+    with pytest.raises(ValueError, match="needs saved personal context"):
+        await run_voice_lab(
+            object(), tmp_path, baseline=False, runtime_builder=builder, learning=True
+        )
 
 
 @pytest.mark.asyncio

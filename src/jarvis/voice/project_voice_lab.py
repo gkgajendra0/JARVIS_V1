@@ -30,7 +30,8 @@ PROJECT_TOOLS = frozenset(
 PROJECT_MEMORY_TOOLS = frozenset({"enter_standby"}) | PROJECT_TOOLS
 # --personal-context only: the production read-only personal tools. Memory
 # writes (remember/correct/forget) stay withheld and automatic learning is not
-# started (automatic_learning=False); facts are seeded beforehand.
+# started (automatic_learning=False) unless --personal-learning opts in; facts
+# are seeded beforehand.
 PERSONAL_READ_TOOLS = frozenset(
     {
         "personal_context_catalog",
@@ -75,8 +76,9 @@ def voice_lab_config(config, *, personal: bool = False):
     ``--personal-learning apply`` does (the startup learning session, which
     grants question-bound reads), against this lab's isolated memory only.
     The learning mode is needed for that read authority; run_voice_lab then
-    builds the runtime with automatic_learning=False so the lab is read-only:
-    nothing is extracted from conversation or written."""
+    builds the runtime with automatic_learning=False so no personal facts are
+    extracted from conversation, unless ``--personal-learning`` asks for
+    production's automatic learning (into this lab's memory only)."""
     if config.ai_provider != "gemini":
         raise ValueError("existing Gemini configuration required")
     mode = "apply" if personal else "off"
@@ -135,8 +137,12 @@ async def run_voice_lab(
     fast_path: bool = True,
     qualification: bool = False,
     personal: bool = False,
+    learning: bool = False,
 ):
-    """``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics.
+    """``learning`` (only with ``personal``) keeps production's automatic
+    personal learning on, writing to this lab's memory only.
+
+    ``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics.
 
     ``fast_path=False`` (--tool-only-memory) keeps the earlier behaviour: every
     request goes through prepare_project_turn. For A/B latency comparisons.
@@ -156,6 +162,8 @@ async def run_voice_lab(
         runtime_builder = build_production_voice_runtime
     if qualification and (baseline or diagnostics is None):
         raise ValueError("qualification needs project memory and diagnostics")
+    if learning and not personal:
+        raise ValueError("automatic learning needs saved personal context")
     # Qualification exposes the normal tool set (Hands, research, canonical
     # memory), as the production flag would; the isolated profile is kept.
     allowlist = (
@@ -189,9 +197,10 @@ async def run_voice_lab(
     runtime = runtime_builder(
         config,
         voice_session_observer=observe_session,
-        # Saved personal context is read, never learned from, in this lab: the
-        # learning session supplies question-bound read authority only.
-        **({"automatic_learning": False} if personal else {}),
+        # By default saved personal context is read, never learned from, in
+        # this lab: the learning session supplies question-bound read authority
+        # only. --personal-learning keeps production's automatic learning.
+        **({"automatic_learning": False} if personal and not learning else {}),
         **({} if allowlist is None else {"tool_allowlist": allowlist}),
         **({} if baseline else {"project_memory_factory": memory_factory}),
         **(
@@ -257,9 +266,18 @@ def main():
         "read-only: no memory write tools and no automatic learning; isolated "
         "lab memory only.",
     )
+    parser.add_argument(
+        "--personal-learning",
+        action="store_true",
+        help="With --personal-context: keep production's automatic personal "
+        "learning on, so facts the owner states are learned into this lab's "
+        "memory (still no memory write tools for the model).",
+    )
     args = parser.parse_args()
     if args.personal_context and args.baseline:
         parser.error("--personal-context needs project memory (no --baseline)")
+    if args.personal_learning and not args.personal_context:
+        parser.error("--personal-learning needs --personal-context")
     if args.qualification and (args.baseline or not args.record_diagnostics):
         parser.error("--qualification needs project memory and --record-diagnostics")
     if os.name != "nt":
@@ -330,9 +348,16 @@ def main():
                 print(
                     "Approve Windows Hello for project history"
                     + (
-                        " and for the personal learning session (saved personal "
-                        "context ON, read-only: automatic learning is off; this "
-                        "lab's fictional memory only)"
+                        (
+                            " and for the personal learning session (saved personal "
+                            "context ON, automatic learning ON as in production: "
+                            "facts you state are learned into this lab's fictional "
+                            "memory only)"
+                            if args.personal_learning
+                            else " and for the personal learning session (saved "
+                            "personal context ON, automatic learning OFF: no new "
+                            "personal facts; this lab's fictional memory only)"
+                        )
                         if args.personal_context
                         else ""
                     )
@@ -369,6 +394,7 @@ def main():
                     fast_path=not args.tool_only_memory,
                     qualification=args.qualification,
                     personal=args.personal_context,
+                    learning=args.personal_learning,
                 )
             )
             if diagnostics is not None:
