@@ -12,13 +12,14 @@ param(
     [switch]$PersonalAcceptance,
     [switch]$ContextEval,
     [ValidateSet('without','with')][string]$ContextEvalArm,
+    [ValidateSet('travel','diet')][string]$ContextEvalCase,
     [ValidateSet('p0-q0','p1-q1','p2-q2','p3-q3','p4-q4','p5-q5')][string]$DevelopmentCase
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 if ($PersonalAcceptance -and ($ResumeLab -or $SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase)) { throw "Personal acceptance requires a fresh standalone lab." }
 if ($ContextEval -and ($ResumeLab -or $SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase -or $PersonalAcceptance)) { throw "Context evaluation requires a fresh standalone lab." }
-if ($ContextEvalArm -and -not $ContextEval) { throw "ContextEvalArm requires ContextEval." }
+if (($ContextEvalArm -or $ContextEvalCase) -and -not $ContextEval) { throw "ContextEvalArm/ContextEvalCase require ContextEval." }
 if ($DevelopmentCase -and -not $DevelopmentBatch) { throw "DevelopmentCase requires DevelopmentBatch." }
 if ($DevelopmentBatch -and ($SeedAcceptance -or $ResumeLab)) { throw "Development batch requires a new isolated lab, without acceptance seeding or resume." }
 if ($SeedAcceptance -and $ResumeLab) { throw "Acceptance seeding requires a new isolated lab." }
@@ -51,6 +52,7 @@ try {
     if ($PersonalAcceptance) { $arguments += "--personal-acceptance" }
     if ($ContextEval) { $arguments += "--context-eval" }
     if ($ContextEvalArm) { $arguments += @("--context-eval-arm", $ContextEvalArm) }
+    if ($ContextEvalCase) { $arguments += @("--context-eval-case", $ContextEvalCase) }
     if ($DevelopmentCase) { $arguments += @("--development-case", $DevelopmentCase) }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }

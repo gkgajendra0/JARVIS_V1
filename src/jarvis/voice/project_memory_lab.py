@@ -195,6 +195,7 @@ async def run_text_lab(
     development_case=None,
     personal_acceptance=False,
     context_eval_arm=None,
+    context_eval_case=None,
     source_commit=None,
 ):
     import asyncio
@@ -306,7 +307,8 @@ async def run_text_lab(
                     if context_eval_arm == "with"
                     else "No memory commands; "
                 )
-                + "one Hello opens personal reads. Free lane only; no automatic retry.",
+                + "one Hello opens personal reads FIRST, before any question, as "
+                "live Jarvis does. Free lane only; no automatic retry.",
                 flush=True,
             )
             return await run_context_eval(
@@ -319,6 +321,8 @@ async def run_text_lab(
                 provider=provider,
                 source_commit=source_commit,
                 model=model,
+                personal_session=personal_session,
+                case=context_eval_case,
             )
         if development_case is not None:
             from jarvis.voice.project_contract_diagnostics import (
@@ -641,6 +645,7 @@ def run_context_eval_mode(args, repo, tool_paths):
                     profile.parent,
                     model=args.model,
                     context_eval_arm=arm,
+                    context_eval_case=args.context_eval_case,
                     source_commit=args.source_commit,
                 )
             )
@@ -666,9 +671,10 @@ def main():
     parser.add_argument("--personal-acceptance", action="store_true")
     parser.add_argument("--context-eval", action="store_true")
     parser.add_argument("--context-eval-arm", choices=("without", "with"))
+    parser.add_argument("--context-eval-case", choices=("travel", "diet"))
     args = parser.parse_args()
-    if args.context_eval_arm and not args.context_eval:
-        parser.error("--context-eval-arm requires --context-eval")
+    if (args.context_eval_arm or args.context_eval_case) and not args.context_eval:
+        parser.error("--context-eval-arm/--context-eval-case require --context-eval")
     if args.context_eval and (
         args.resume_lab
         or args.seed_acceptance

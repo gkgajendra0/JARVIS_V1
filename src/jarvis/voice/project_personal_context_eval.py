@@ -225,6 +225,33 @@ def first_failure(question, arm, row):
     return None
 
 
+CASES = ("travel", "diet")
+
+
+async def _open_personal_reads(session):
+    """Open the read-only personal session now; record the exact outcome."""
+    started = time.perf_counter()
+    row = {
+        "kind": "authorization",
+        "capability": "memory:personal_context_session",
+        "requested": "at_start",
+    }
+    try:
+        await session.active_grant()
+    except PermissionError as exc:
+        cause = exc.__cause__
+        row.update(
+            result="refused",
+            reason=str(cause) if cause is not None else str(exc),
+            error_type=type(cause or exc).__name__,
+        )
+    else:
+        row.update(result="approved", reason=None, opened=session.opened)
+    row["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
+    print("PERSONAL_READS " + json.dumps(row), flush=True)
+    return row
+
+
 class RecordingClient:
     """Wraps the routed client: records exactly what each step sent and got."""
 
@@ -455,15 +482,22 @@ async def run_context_eval(
     provider,
     source_commit=None,
     model=None,
+    personal_session=None,
+    case=None,
 ):
     if arm not in ARMS:
         raise ValueError("unknown evaluation arm")
+    if case is not None and case not in CASES:
+        raise ValueError("unknown evaluation case")
+    questions = [q for q in QUESTIONS if case is None or q["case"] == case]
     recorder = RecordingClient(provider.client)
     recorded = ProjectAnswerProvider(recorder)
     summary = {
         "kind": KIND,
         "arm": arm,
-        "planned": [q["id"] for q in QUESTIONS],
+        "case": case,
+        "planned": [q["id"] for q in questions],
+        "not_run": [q["id"] for q in QUESTIONS if q not in questions],
         "completed": [],
         "first_failures": {},
         "answer_quality": "manual_review_required",
@@ -483,6 +517,25 @@ async def run_context_eval(
             stream.flush()
 
         try:
+            if personal_session is not None:
+                # As live Jarvis does at startup: the personal-read session is
+                # approved before any question, never mid-question. A refusal
+                # stops the run before any seeding, memory command or model call.
+                authorization = await _open_personal_reads(personal_session)
+                emit(authorization)
+                if authorization["result"] != "approved":
+                    for question in questions:
+                        emit(
+                            {
+                                "kind": "question",
+                                "question_id": question["id"],
+                                "status": "authorization_blocked",
+                                "reason": authorization["reason"],
+                            }
+                        )
+                    summary["authorization_blocked"] = summary["planned"]
+                    raise PermissionError("personal-read session was not approved")
+                summary["personal_reads"] = "approved_at_start"
             if (await access.catalog()).entries or (
                 await memory.retrieval.learning_context_snapshot()
             ).entries:
@@ -494,7 +547,7 @@ async def run_context_eval(
                 )
                 emit({"kind": "seed", "project": title, "event_ids": ids})
             facts = {}
-            for question in QUESTIONS:
+            for question in questions:
                 if arm == "with" and question["scope"] not in facts:
                     if question["scope"] == "owned_item.vehicle":
                         record = await _mutate(
@@ -543,6 +596,8 @@ async def run_context_eval(
                 row["answer_checks"] = answer_checks(
                     question["id"], arm, row["answer"], clarified_by_router=clarified
                 )
+                if personal_session is not None:
+                    row["personal_session_opened_total"] = personal_session.opened
                 row["first_failure"] = first_failure(question, arm, row)
                 emit(row)
                 print(

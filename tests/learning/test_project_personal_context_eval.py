@@ -61,7 +61,17 @@ GOOD = {
 }
 
 
-async def run(empty_access, authority_parts, tmp_path, arm, answers, **kwargs):
+async def run(
+    empty_access,
+    authority_parts,
+    tmp_path,
+    arm,
+    answers,
+    *,
+    personal_session=None,
+    case=None,
+    **kwargs,
+):
     memory, capability, coordinator, _, _ = acceptance_runtime(
         empty_access, authority_parts
     )
@@ -77,6 +87,8 @@ async def run(empty_access, authority_parts, tmp_path, arm, answers, **kwargs):
             coordinator=coordinator,
             access=empty_access,
             provider=provider,
+            personal_session=personal_session,
+            case=case,
         )
     finally:
         coordinator.invalidate("test_end")
@@ -272,6 +284,7 @@ def test_one_arm_runs_alone_in_its_own_new_root(tmp_path, monkeypatch):
         source_commit="a" * 40,
         model="fictional",
         context_eval_arm="with",
+        context_eval_case=None,
     )
     lab.run_context_eval_mode(args, tmp_path, {})
     assert arms == ["with"]
@@ -302,5 +315,101 @@ def test_context_eval_arm_requires_context_eval(tmp_path, monkeypatch, capsys):
     )
     with pytest.raises(SystemExit):
         main()
-    assert "--context-eval-arm requires --context-eval" in capsys.readouterr().err
+    assert (
+        "--context-eval-arm/--context-eval-case require --context-eval"
+        in capsys.readouterr().err
+    )
     assert not (tmp_path / "absent").exists()
+
+
+class StartSession:
+    """PersonalReadSession stand-in: approve once, or refuse like Hello did."""
+
+    def __init__(self, refuse=None):
+        self.refuse = refuse
+        self.opened = 0
+        self.calls = 0
+
+    async def active_grant(self):
+        self.calls += 1
+        if self.refuse:
+            try:
+                raise RuntimeError(self.refuse)
+            except RuntimeError as exc:
+                raise PermissionError("learning session was not authorized") from exc
+        self.opened += 1
+        return object()
+
+
+@pytest.mark.asyncio
+async def test_personal_reads_are_approved_first_and_the_travel_case_runs_alone(
+    empty_access, authority_parts, tmp_path
+):
+    session = StartSession()
+    summary, rows, payloads, memory = await run(
+        empty_access,
+        authority_parts,
+        tmp_path,
+        "with",
+        GOOD,
+        personal_session=session,
+        case="travel",
+    )
+    assert rows[0] == {
+        **rows[0],
+        "kind": "authorization",
+        "result": "approved",
+        "requested": "at_start",
+    }
+    assert summary["planned"] == [
+        "travel_named_destination",
+        "travel_ambiguous_followup",
+    ]
+    assert summary["not_run"] == ["dinner_after_correction"]
+    assert summary["personal_reads"] == "approved_at_start"
+    assert [r["operation"] for r in rows if r["kind"] == "mutation"] == ["remember"]
+    assert all(p["question"] != QUESTIONS[2]["question"] for p in payloads)
+    questions = [r for r in rows if r["kind"] == "question"]
+    assert [q["personal_session_opened_total"] for q in questions] == [1, 1]
+    from jarvis.memory.service import MemoryNotFoundError
+
+    with pytest.raises(MemoryNotFoundError):  # the diet case never ran
+        await memory.service.inspect_exact(predicate="diet preference")
+
+
+@pytest.mark.asyncio
+async def test_a_refused_start_approval_blocks_every_model_call(
+    empty_access, authority_parts, tmp_path
+):
+    session = StartSession(
+        refuse="strong owner verification was not granted: user_canceled"
+    )
+    with pytest.raises(PermissionError):
+        await run(
+            empty_access,
+            authority_parts,
+            tmp_path,
+            "with",
+            GOOD,
+            personal_session=session,
+            case="travel",
+        )
+    root = tmp_path / "with"
+    rows = [
+        json.loads(line)
+        for line in (root / "context-eval-with.jsonl").read_text().splitlines()
+    ]
+    assert rows[0]["kind"] == "authorization"
+    assert rows[0]["result"] == "refused"
+    assert rows[0]["reason"] == (
+        "strong owner verification was not granted: user_canceled"
+    )
+    blocked = [r for r in rows if r.get("status") == "authorization_blocked"]
+    assert [r["question_id"] for r in blocked] == [
+        "travel_named_destination",
+        "travel_ambiguous_followup",
+    ]
+    assert not [r for r in rows if r["kind"] in {"seed", "mutation"}]
+    summary = json.loads((root / "context-eval-with-summary.json").read_text())
+    assert summary["authorization_blocked"] == summary["planned"]
+    assert summary["completed"] == []
