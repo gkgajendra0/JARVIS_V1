@@ -20,6 +20,7 @@ from jarvis.memory.explicit import ExplicitMemoryAuthorizationError
 from jarvis.memory.personal_context_projection import (
     ScopeKey,
     context_scope_signature,
+    only_additions_from_turn,
     parse_context_requests,
     project_personal_context,
 )
@@ -144,6 +145,7 @@ class PersonalContextSession:
         self._query_attempts = 0
         self._query_requests = None
         self._query_projection = None
+        self._query_baseline = None
         self._closed = False
         self.retirement_reason = None
         self._busy = False
@@ -486,9 +488,10 @@ class PersonalContextSession:
             projection = self._query_projection
             if projection is not None:
                 snapshot = await self._retrieval.learning_context_snapshot()
-                if (
-                    context_scope_signature(snapshot, projection.scope_keys)
-                    != projection.signature
+                if context_scope_signature(
+                    snapshot, projection.scope_keys
+                ) != projection.signature and not self._learned_from_bound_turn(
+                    snapshot, projection
                 ):
                     return False
                 current = {}
@@ -514,6 +517,24 @@ class PersonalContextSession:
             return True
         except Exception:  # noqa: BLE001
             return False
+
+    def _learned_from_bound_turn(self, snapshot, projection):
+        """Automatic learning of the very turn being answered (voice-eval-1,
+        2026-11-18: the Gokarna plan from the question was committed 12.7 s
+        later, mid-answer, into the looked-up empty plan scope, and the answer
+        was cut off). Those words are the question itself, so new facts from
+        them do not make the answer stale. Only pure additions from the bound
+        turn are accepted; see only_additions_from_turn."""
+        baseline, binding = self._query_baseline, self._binding
+        if baseline is None or binding is None or not self._same(binding):
+            return False
+        session_id, turn_id = binding[0], binding[1]
+        return only_additions_from_turn(
+            baseline,
+            snapshot,
+            projection.scope_keys,
+            f"conversation:{session_id}:turn:{turn_id}",
+        )
 
     async def read(self, catalog_id, facet_indices):
         async with self._context_lock:
@@ -695,6 +716,7 @@ class PersonalContextSession:
                     self._release_path = "query"
                     self._query_requests = parsed
                     self._query_projection = projection
+                    self._query_baseline = snapshot
                     if not await self._facts_current() or not await current_read():
                         self.close()
                         return {"status": "denied"}
@@ -1099,6 +1121,7 @@ class PersonalContextSession:
         self._turn_ready.set()
         self.retirement_reason = reason
         self._query_projection = None
+        self._query_baseline = None
         self._query_requests = None
         self._clear_audio()
         if self._watchdog is not None:

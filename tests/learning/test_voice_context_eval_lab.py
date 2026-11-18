@@ -202,10 +202,11 @@ async def test_learning_session_without_automatic_learning_reads_but_never_learn
 
 
 def test_a_newly_learned_fact_in_a_requested_empty_scope_changes_the_release():
-    """Production finding behind the cut-off (not changed here): a release is
-    bound to every requested scope, including empty ones, so a fact learned
-    into one of them while the answer plays invalidates it. A request that did
-    not include that scope is unaffected."""
+    """The signature behind the voice-eval-1 cut-off: a release is bound to
+    every requested scope, including empty ones, so a fact learned into one of
+    them changes it. A request that did not include that scope is unaffected.
+    The session now accepts the change only when it is a pure addition learned
+    from the turn being answered (test_same_turn_learning_keeps_answer)."""
     from test_context_projection import record
 
     from jarvis.memory.personal_context_projection import (

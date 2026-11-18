@@ -86,6 +86,8 @@ def parse_context_requests(
 class ScopedContextSnapshot:
     entries: tuple[tuple[SemanticAssertionRecord, str], ...]
     suppression: tuple[tuple[str, int, bool], ...]
+    # (source_id, canonical_ref) for the entries, read in the same transaction.
+    sources: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -133,6 +135,45 @@ def context_scope_signature(
             default=_json_default,
         ).encode()
     ).hexdigest()
+
+
+def only_additions_from_turn(
+    before: ScopedContextSnapshot,
+    after: ScopedContextSnapshot,
+    scope_keys: tuple[str, ...],
+    canonical_ref: str,
+) -> bool:
+    """Whether ``after`` differs from ``before`` within ``scope_keys`` only by
+    new rows learned from ``canonical_ref`` (one accepted owner turn).
+
+    Every looked-up row is still current and unchanged, nothing new replaces
+    anything, and suppression for those scopes is the same. Any other
+    difference - a correction, forget, retraction, disabled category, or a row
+    from another turn or source - is not accepted."""
+    keys = set(scope_keys)
+
+    def rows(snapshot):
+        return {
+            record.assertion_id: asdict(record)
+            for record, scope in snapshot.entries
+            if scope in keys
+        }
+
+    def suppression(snapshot):
+        return {k: (e, x) for k, e, x in snapshot.suppression if k in keys}
+
+    if suppression(before) != suppression(after):
+        return False
+    old, new = rows(before), rows(after)
+    if any(new.get(assertion) != row for assertion, row in old.items()):
+        return False
+    added = [row for assertion, row in new.items() if assertion not in old]
+    references = dict(after.sources)
+    return bool(added) and all(
+        row["supersedes_id"] is None
+        and references.get(row["source_id"]) == canonical_ref
+        for row in added
+    )
 
 
 def _current_label(record, scope):
