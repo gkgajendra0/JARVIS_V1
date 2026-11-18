@@ -96,6 +96,10 @@ class ContextProjection:
     selected: tuple[SemanticAssertionRecord, ...]
     scope_keys: tuple[str, ...]
     signature: str
+    # Every requested scope's own outcome: "selected", "no_match" or
+    # "clarification_required". A mixed request releases the matched scopes and
+    # names the rest, so a partial result is never presented as complete.
+    scope_results: tuple[tuple[str, str], ...] = ()
 
 
 def _json_default(value):
@@ -160,17 +164,32 @@ def project_personal_context(
 ) -> ContextProjection:
     scopes = tuple(sorted({r.scope_key for r in requests}))
 
+    outcome = {}
+
     def result(status, reason=None, facts=(), selected=(), signature=""):
         return ContextProjection(
-            status, reason, tuple(facts), tuple(selected), scopes, signature
+            status,
+            reason,
+            tuple(facts),
+            tuple(selected),
+            scopes,
+            signature,
+            ()
+            if status == "unavailable"  # nothing was reliably checked
+            else tuple((scope, outcome[scope]) for scope in scopes if scope in outcome),
         )
+
+    def settle(scope, status):
+        # Within one scope: clarification outranks a match, a match outranks none.
+        rank = {"no_match": 0, "selected": 1, "clarification_required": 2}
+        if rank[status] >= rank.get(outcome.get(scope), -1):
+            outcome[scope] = status
 
     try:
         if len(snapshot.entries) > 32:
             return result("unavailable", "storage_unavailable")
         chosen = {}
         clarification = None
-        missing = False
         for request in requests:
             candidates = [
                 r for r, scope in snapshot.entries if scope == request.scope_key
@@ -184,19 +203,26 @@ def project_personal_context(
                     and _normalize_label(label)
                     == _normalize_label(request.target_quote)
                 ]
+                unclear = None
                 if len(candidates) > 1:
-                    clarification = "ambiguous_target"
+                    unclear = "ambiguous_target"
                 elif not candidates and any(label is None for _, label in labels):
-                    clarification = "unresolved_target"
-            if not candidates:
-                missing = True
+                    unclear = "unresolved_target"
+                if unclear:
+                    # That scope releases nothing; matched scopes still do.
+                    clarification = clarification or unclear
+                    settle(request.scope_key, "clarification_required")
+                    continue
+            settle(request.scope_key, "selected" if candidates else "no_match")
             for r in candidates:
                 chosen[r.assertion_id] = (r, request.scope_key)
-        if clarification:
-            return result("clarification_required", clarification)
-        if missing:
+        chosen = {k: v for k, v in chosen.items() if outcome[v[1]] == "selected"}
+        if not chosen:
+            if clarification:
+                return result("clarification_required", clarification)
             return result("no_match")
         if len(chosen) > 4:
+            outcome.clear()
             return result("clarification_required", "narrow_request")
         facts = []
         selected = []
@@ -252,6 +278,7 @@ def project_personal_context(
             facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False
         ).encode()
         if len(encoded) > 1800:
+            outcome.clear()
             return result("clarification_required", "narrow_request")
         return result(
             "selected",

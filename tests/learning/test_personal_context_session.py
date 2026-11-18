@@ -14,6 +14,7 @@ from jarvis.capabilities.discovery import CapabilityResolver
 from jarvis.capabilities.runtime import CapabilityRuntime
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.memory.retrieval import SemanticRetrievalService
+from jarvis.voice.personal_context import NOT_CHECKED_RULE
 from jarvis.voice.project_memory_lab import build_session_personal_factory
 
 VEHICLE = [{"scope_key": "owned_item.vehicle"}]
@@ -137,6 +138,10 @@ async def test_declined_hello_releases_no_facts(learning, authority_parts):
         "status": "denied",
         "facts": [],
         "reason": "personal_session_not_approved",
+        # A refused lookup says nothing was checked, never "nothing saved".
+        "lookup": "not_completed",
+        "scopes": {"owned_item.vehicle": "not_checked"},
+        "absence_rule": NOT_CHECKED_RULE,
     }
     assert session.opened == 0
 
