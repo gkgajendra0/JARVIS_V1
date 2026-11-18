@@ -228,3 +228,79 @@ def test_context_eval_requires_a_fresh_standalone_lab(
         "context evaluation requires a fresh standalone lab" in capsys.readouterr().err
     )
     assert not (tmp_path / "absent").exists()
+
+
+def test_one_arm_runs_alone_in_its_own_new_root(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from jarvis.voice import project_memory_lab as lab
+
+    roots = []
+    monkeypatch.setattr(
+        lab,
+        "prepare_project_profile",
+        lambda source, root, **kw: roots.append(root) or root / "machine.json",
+    )
+
+    class Env:
+        def __init__(self, *a):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(lab, "project_lab_environment", Env)
+    arms = []
+
+    async def fake_run(config, root, **kwargs):
+        arms.append(kwargs["context_eval_arm"])
+
+    monkeypatch.setattr(lab, "run_text_lab", fake_run)
+    import jarvis.config
+
+    monkeypatch.setattr(
+        jarvis.config.JarvisConfig,
+        "from_environment",
+        classmethod(lambda cls: SimpleNamespace(ai_provider="gemini")),
+    )
+    args = SimpleNamespace(
+        lab_root=tmp_path / "profile",
+        profile=tmp_path / "live.json",
+        source_commit="a" * 40,
+        model="fictional",
+        context_eval_arm="with",
+    )
+    lab.run_context_eval_mode(args, tmp_path, {})
+    assert arms == ["with"]
+    assert roots == [tmp_path / "profile" / "with"]
+    with pytest.raises(FileExistsError):  # never reuses an earlier root
+        lab.run_context_eval_mode(args, tmp_path, {})
+
+
+def test_context_eval_arm_requires_context_eval(tmp_path, monkeypatch, capsys):
+    import sys
+
+    from jarvis.voice.project_memory_lab import main
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "lab",
+            "--lab-root",
+            str(tmp_path / "absent"),
+            "--source-commit",
+            "a" * 40,
+            "--model",
+            "fictional",
+            "--context-eval-arm",
+            "with",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+    assert "--context-eval-arm requires --context-eval" in capsys.readouterr().err
+    assert not (tmp_path / "absent").exists()

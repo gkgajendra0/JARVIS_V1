@@ -611,15 +611,18 @@ def run_development_mode(args, repo, tool_paths):
 
 
 def run_context_eval_mode(args, repo, tool_paths):
-    """Both arms, each in its own fresh isolated profile: without saved facts
-    first (no memory commands), then with them. Stops on the first failure."""
+    """Both arms (or the one named by --context-eval-arm), each in its own
+    fresh isolated profile: without saved facts first (no memory commands),
+    then with them. Stops on the first failure."""
     import asyncio
 
     from jarvis.config import JarvisConfig
     from jarvis.voice.project_personal_context_eval import ARMS
 
     args.lab_root.mkdir(parents=True, exist_ok=False)
-    for arm in ARMS:
+    # One arm alone (--context-eval-arm) reruns an unfinished half in its own
+    # new lab root; the completed half and its model calls are never repeated.
+    for arm in (args.context_eval_arm,) if args.context_eval_arm else ARMS:
         root = args.lab_root / arm
         profile = prepare_project_profile(
             args.profile,
@@ -662,7 +665,10 @@ def main():
     parser.add_argument("--development-case", choices=CASE_IDS)
     parser.add_argument("--personal-acceptance", action="store_true")
     parser.add_argument("--context-eval", action="store_true")
+    parser.add_argument("--context-eval-arm", choices=("without", "with"))
     args = parser.parse_args()
+    if args.context_eval_arm and not args.context_eval:
+        parser.error("--context-eval-arm requires --context-eval")
     if args.context_eval and (
         args.resume_lab
         or args.seed_acceptance
