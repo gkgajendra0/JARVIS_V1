@@ -196,6 +196,7 @@ async def run_text_lab(
     personal_acceptance=False,
     context_eval_arm=None,
     context_eval_case=None,
+    seed_voice_eval=False,
     source_commit=None,
 ):
     import asyncio
@@ -296,6 +297,24 @@ async def run_text_lab(
                     source_commit=source_commit,
                     model=model,
                 )
+        if seed_voice_eval:
+            from jarvis.voice.project_personal_context_eval import (
+                seed_voice_eval as seed,
+            )
+
+            print(
+                "VOICE EVAL SEED: fictional Spiti Valley trip (selected) and Home "
+                "errands projects; one fresh Hello saves the fictional vehicles. "
+                "No model call.",
+                flush=True,
+            )
+            return await seed(
+                root,
+                memory=memory,
+                capability=capability,
+                access=access,
+                source_commit=source_commit,
+            )
         if context_eval_arm is not None:
             from jarvis.voice.project_personal_context_eval import run_context_eval
 
@@ -672,7 +691,17 @@ def main():
     parser.add_argument("--context-eval", action="store_true")
     parser.add_argument("--context-eval-arm", choices=("without", "with"))
     parser.add_argument("--context-eval-case", choices=("travel", "diet", "device"))
+    parser.add_argument("--seed-voice-eval", action="store_true")
     args = parser.parse_args()
+    if args.seed_voice_eval and (
+        args.resume_lab
+        or args.seed_acceptance
+        or args.development_batch
+        or args.development_case
+        or args.personal_acceptance
+        or args.context_eval
+    ):
+        parser.error("voice evaluation seeding requires a fresh standalone lab")
     if (args.context_eval_arm or args.context_eval_case) and not args.context_eval:
         parser.error("--context-eval-arm/--context-eval-case require --context-eval")
     if args.context_eval and (
@@ -746,6 +775,7 @@ def main():
                     model=args.model,
                     seed_acceptance=args.seed_acceptance,
                     personal_acceptance=args.personal_acceptance,
+                    seed_voice_eval=args.seed_voice_eval,
                     source_commit=args.source_commit,
                 )
             )

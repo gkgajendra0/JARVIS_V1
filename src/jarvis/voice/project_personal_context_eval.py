@@ -689,3 +689,35 @@ async def run_context_eval(
             json.dump(summary, out, indent=2)
             print("CONTEXT_EVAL_SUMMARY " + json.dumps(summary), flush=True)
     return summary
+
+
+async def seed_voice_eval(root, *, memory, capability, access, source_commit=None):
+    """Fictional setup for the isolated VOICE check of the travel case: the
+    same Spiti and Home errands projects, the same vehicles saved through the
+    real explicit memory path (one fresh Hello), Spiti left selected. No model
+    call and no question; the owner asks them by voice afterwards."""
+    if (await access.catalog()).entries or (
+        await memory.retrieval.learning_context_snapshot()
+    ).entries:
+        raise PermissionError("empty isolated fixture required")
+    start = datetime(2026, 11, 1, 9, tzinfo=UTC)
+    seeded = {}
+    for offset, (title, turns) in enumerate(PROJECTS.items()):
+        _, ids = await _seed_project(
+            access, title, turns, start + timedelta(days=offset)
+        )
+        seeded[title] = ids
+    record = await _mutate(memory, capability, "remember", *VEHICLES)
+    await _select(access, ACTIVE_TRIP, new_thread=False)
+    summary = {
+        "kind": "personal-context-voice-seed-v1",
+        "source_commit": source_commit,
+        "projects": seeded,
+        "selected_project": ACTIVE_TRIP,
+        "vehicles_assertion_id": record.assertion_id,
+        "questions": [q["question"] for q in QUESTIONS if q["case"] == "travel"],
+    }
+    with (root / "voice-eval-seed.json").open("x", encoding="utf-8") as out:
+        json.dump(summary, out, indent=2)
+    print("VOICE_EVAL_SEED " + json.dumps(summary), flush=True)
+    return summary

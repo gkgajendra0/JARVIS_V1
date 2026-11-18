@@ -28,10 +28,23 @@ PROJECT_TOOLS = frozenset(
     {"prepare_project_turn", "search_project_history", "forget_saved_history"}
 )
 PROJECT_MEMORY_TOOLS = frozenset({"enter_standby"}) | PROJECT_TOOLS
+# --personal-context only: the production read-only personal tools. Memory
+# writes (remember/correct/forget) stay withheld; facts are seeded beforehand.
+PERSONAL_READ_TOOLS = frozenset(
+    {
+        "personal_context_catalog",
+        "read_personal_context",
+        "read_personal_context_for_question",
+        "prepare_conversation_topic",
+        "resume_conversation_topic",
+    }
+)
 
 
-def lab_tool_allowlist(*, baseline: bool) -> frozenset[str]:
-    return BASELINE_TOOLS if baseline else PROJECT_MEMORY_TOOLS
+def lab_tool_allowlist(*, baseline: bool, personal: bool = False) -> frozenset[str]:
+    if baseline:
+        return BASELINE_TOOLS
+    return PROJECT_MEMORY_TOOLS | (PERSONAL_READ_TOOLS if personal else frozenset())
 
 
 def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
@@ -56,14 +69,18 @@ def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
     return candidate
 
 
-def voice_lab_config(config):
+def voice_lab_config(config, *, personal: bool = False):
+    """``personal`` turns on saved personal context exactly as production's
+    ``--personal-learning apply`` does (question-bound reads, the startup
+    learning session), against this lab's isolated memory only."""
     if config.ai_provider != "gemini":
         raise ValueError("existing Gemini configuration required")
+    mode = "apply" if personal else "off"
     return replace(
         config,
         memory_enabled=True,
-        personal_context_mode="off",
-        personal_learning_mode="off",
+        personal_context_mode=mode,
+        personal_learning_mode=mode,
         personal_learning_reenable_categories=(),
         memory_candidate_extraction_enabled=False,
         memory_semantic_recall_model=None,
@@ -113,6 +130,7 @@ async def run_voice_lab(
     diagnostics=None,
     fast_path: bool = True,
     qualification: bool = False,
+    personal: bool = False,
 ):
     """``diagnostics`` (VoiceDiagnostics) only with explicit --record-diagnostics.
 
@@ -136,7 +154,11 @@ async def run_voice_lab(
         raise ValueError("qualification needs project memory and diagnostics")
     # Qualification exposes the normal tool set (Hands, research, canonical
     # memory), as the production flag would; the isolated profile is kept.
-    allowlist = None if qualification else lab_tool_allowlist(baseline=baseline)
+    allowlist = (
+        None
+        if qualification
+        else lab_tool_allowlist(baseline=baseline, personal=personal)
+    )
     meter = VoiceUsageMeter(
         lab / "voice-usage.jsonl",
         mode="baseline"
@@ -221,7 +243,15 @@ def main():
         help="Lab only: keep DPAPI-sealed utterance audio and per-turn records "
         "in this lab (7-day / 5-run retention).",
     )
+    parser.add_argument(
+        "--personal-context",
+        action="store_true",
+        help="Saved personal context as production --personal-learning apply, "
+        "read-only tools, isolated lab memory only.",
+    )
     args = parser.parse_args()
+    if args.personal_context and args.baseline:
+        parser.error("--personal-context needs project memory (no --baseline)")
     if args.qualification and (args.baseline or not args.record_diagnostics):
         parser.error("--qualification needs project memory and --record-diagnostics")
     if os.name != "nt":
@@ -259,7 +289,9 @@ def main():
             lock.close()
             parser.error("another lab process owns this lab; close it first")
         try:
-            config = voice_lab_config(JarvisConfig.from_environment())
+            config = voice_lab_config(
+                JarvisConfig.from_environment(), personal=args.personal_context
+            )
             configure_logging(config.log_level, jsonl_path=lab / "voice-lab.jsonl")
             require_startup_preflight(config)
             mode = (
@@ -274,7 +306,13 @@ def main():
             else:
                 print(
                     "Tools Gemini can call: "
-                    + ", ".join(sorted(lab_tool_allowlist(baseline=args.baseline)))
+                    + ", ".join(
+                        sorted(
+                            lab_tool_allowlist(
+                                baseline=args.baseline, personal=args.personal_context
+                            )
+                        )
+                    )
                     + ". Hands, desktop/file control, capability acquisition, research and work are unavailable."
                 )
             print(
@@ -282,7 +320,14 @@ def main():
             )
             if not args.baseline:
                 print(
-                    "Approve Windows Hello for project history. Then wake Jarvis and talk."
+                    "Approve Windows Hello for project history"
+                    + (
+                        " and for the personal learning session (saved personal "
+                        "context ON, this lab's fictional memory only)"
+                        if args.personal_context
+                        else ""
+                    )
+                    + ". Then wake Jarvis and talk."
                 )
                 print(
                     "Use the text lab on this same lab root (-ResumeLab) for /projects, /inspect and /forget, after Ctrl+C here."
@@ -314,6 +359,7 @@ def main():
                     diagnostics=diagnostics,
                     fast_path=not args.tool_only_memory,
                     qualification=args.qualification,
+                    personal=args.personal_context,
                 )
             )
             if diagnostics is not None:
