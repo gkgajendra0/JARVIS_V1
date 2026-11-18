@@ -671,7 +671,7 @@ def main():
     parser.add_argument("--personal-acceptance", action="store_true")
     parser.add_argument("--context-eval", action="store_true")
     parser.add_argument("--context-eval-arm", choices=("without", "with"))
-    parser.add_argument("--context-eval-case", choices=("travel", "diet"))
+    parser.add_argument("--context-eval-case", choices=("travel", "diet", "device"))
     args = parser.parse_args()
     if (args.context_eval_arm or args.context_eval_case) and not args.context_eval:
         parser.error("--context-eval-arm/--context-eval-case require --context-eval")

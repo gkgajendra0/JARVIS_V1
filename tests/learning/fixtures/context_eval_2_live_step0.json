@@ -1,0 +1,192 @@
+{
+ "travel_named_destination": {
+  "request_id": "8feb7b94-f54c-4d55-9f98-52c995fc4816",
+  "context_revision": "083cb26ec81321bc02b08d61d7c568fb98ce804df3c642ab6f42899069d0e0b2",
+  "context": {
+   "archive_revision": 6,
+   "coverage": "complete",
+   "last_committed_sequence": 6,
+   "omitted_source_count": 0,
+   "omitted_source_ids": [],
+   "personal": {
+    "facts": [],
+    "status": "not_requested"
+   },
+   "project_id": "d50a96cc-e465-4a46-b6de-c260becedec3",
+   "project_title": "Spiti Valley trip",
+   "retrieval": [],
+   "routing": {
+    "action": "resumed",
+    "project_title": "Spiti Valley trip"
+   },
+   "sources": [
+    {
+     "accepted_at": "2026-11-01T09:00:00+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 1,
+     "source_id": "eval-c1227e9d-e0",
+     "text": "We are planning a Spiti Valley trip for June.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:01:00+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 2,
+     "source_id": "eval-c1227e9d-e1",
+     "text": "For Spiti we will fly to Chandigarh and hire a local driver for the mountain roads.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:02:00+00:00",
+     "delivery": "complete",
+     "role": "assistant",
+     "sequence": 3,
+     "source_id": "eval-c1227e9d-e2",
+     "text": "Noted: fly to Chandigarh, then a hired local driver.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:03:00+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 4,
+     "source_id": "eval-c1227e9d-e3",
+     "text": "Book the homestay in Kaza for four nights.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:04:00+00:00",
+     "delivery": "complete",
+     "role": "assistant",
+     "sequence": 5,
+     "source_id": "eval-c1227e9d-e4",
+     "text": "Okay, four nights at the homestay in Kaza.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-18T11:57:01.316838+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 6,
+     "source_id": "42b31552-49da-4892-83ee-f020f05ac0f4",
+     "text": "I'm going to Gokarna from Bengaluru for a long weekend next month. Help me decide how to get there.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    }
+   ],
+   "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+  },
+  "question": "I'm going to Gokarna from Bengaluru for a long weekend next month. Help me decide how to get there.",
+  "available_tools": {
+   "search_available": true,
+   "read_source_ids": [],
+   "personal_available": true,
+   "remaining_steps": 4
+  }
+ },
+ "travel_ambiguous_followup": {
+  "request_id": "61f05246-55bb-4b01-8d2e-f4ed69f71b56",
+  "context_revision": "f1605925e644ecc0039c36cbd89a7354a55886c59391bdd14fcb858ac34354a3",
+  "context": {
+   "archive_revision": 1,
+   "coverage": "partial",
+   "last_committed_sequence": 1,
+   "omitted_source_count": 1,
+   "omitted_source_ids": [],
+   "personal": {
+    "facts": [],
+    "status": "not_requested"
+   },
+   "project_id": "d50a96cc-e465-4a46-b6de-c260becedec3",
+   "project_title": "Spiti Valley trip",
+   "retrieval": [],
+   "routing": {
+    "action": "continued",
+    "project_title": "Spiti Valley trip"
+   },
+   "sources": [
+    {
+     "accepted_at": "2026-11-01T09:00:00+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 1,
+     "source_id": "eval-c1227e9d-e0",
+     "text": "We are planning a Spiti Valley trip for June.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:01:00+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 2,
+     "source_id": "eval-c1227e9d-e1",
+     "text": "For Spiti we will fly to Chandigarh and hire a local driver for the mountain roads.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:02:00+00:00",
+     "delivery": "complete",
+     "role": "assistant",
+     "sequence": 3,
+     "source_id": "eval-c1227e9d-e2",
+     "text": "Noted: fly to Chandigarh, then a hired local driver.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:03:00+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 4,
+     "source_id": "eval-c1227e9d-e3",
+     "text": "Book the homestay in Kaza for four nights.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-01T09:04:00+00:00",
+     "delivery": "complete",
+     "role": "assistant",
+     "sequence": 5,
+     "source_id": "eval-c1227e9d-e4",
+     "text": "Okay, four nights at the homestay in Kaza.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-18T11:57:01.316838+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 6,
+     "source_id": "42b31552-49da-4892-83ee-f020f05ac0f4",
+     "text": "I'm going to Gokarna from Bengaluru for a long weekend next month. Help me decide how to get there.",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-18T11:57:05.662367+00:00",
+     "delivery": "failed",
+     "role": "tool",
+     "sequence": 7,
+     "source_id": "f03c3feb-dc91-4180-8b1d-52709080a886",
+     "text": "{\"capture\":\"omitted\",\"reason\":\"source_not_eligible\",\"source_role\":\"assistant\"}",
+     "thread_id": "e031e82e-efda-4dec-bb6e-94ede3204d29"
+    },
+    {
+     "accepted_at": "2026-11-18T11:57:05.853540+00:00",
+     "delivery": "complete",
+     "role": "user",
+     "sequence": 1,
+     "source_id": "f3870655-66ff-4592-99d6-d0e3338c4b2f",
+     "text": "Should I just drive myself for the trip, then?",
+     "thread_id": "f30f2e12-c0d5-4e3d-a891-e57d70e11139"
+    }
+   ],
+   "thread_id": "f30f2e12-c0d5-4e3d-a891-e57d70e11139"
+  },
+  "question": "Should I just drive myself for the trip, then?",
+  "available_tools": {
+   "search_available": true,
+   "read_source_ids": [],
+   "personal_available": true,
+   "remaining_steps": 4
+  }
+ }
+}

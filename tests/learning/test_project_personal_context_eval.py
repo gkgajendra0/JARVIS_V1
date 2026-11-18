@@ -23,6 +23,8 @@ SCOPES = {
     "travel_ambiguous_followup": "owned_item.vehicle",
     "dinner_after_correction": "food_preference",
 }
+HELD_OUT = {"video_app_after_device_correction": "owned_item.device"}
+RUN_BY_DEFAULT = [q["id"] for q in QUESTIONS if not q.get("held_out")]
 
 
 def scripted(answers, *, request_personal=True):
@@ -39,7 +41,9 @@ def scripted(answers, *, request_personal=True):
             )
             if request_personal and payload["available_tools"]["personal_available"]:
                 response = {
-                    "personal_requests": [{"scope_key": SCOPES[question["id"]]}]
+                    "personal_requests": [
+                        {"scope_key": {**SCOPES, **HELD_OUT}[question["id"]]}
+                    ]
                 }
             else:
                 response = {"answer": answers[question["id"]]}
@@ -106,7 +110,8 @@ async def test_with_facts_records_what_the_model_saw_and_what_was_selected(
     summary, rows, payloads, memory = await run(
         empty_access, authority_parts, tmp_path, "with", GOOD
     )
-    assert summary["completed"] == [q["id"] for q in QUESTIONS]
+    assert summary["completed"] == RUN_BY_DEFAULT
+    assert summary["not_run"] == ["video_app_after_device_correction"]
     assert summary["first_failures"] == dict.fromkeys(SCOPES)
     mutations = [r for r in rows if r["kind"] == "mutation"]
     assert [m["operation"] for m in mutations] == ["remember", "remember", "correct"]
@@ -365,7 +370,10 @@ async def test_personal_reads_are_approved_first_and_the_travel_case_runs_alone(
         "travel_named_destination",
         "travel_ambiguous_followup",
     ]
-    assert summary["not_run"] == ["dinner_after_correction"]
+    assert summary["not_run"] == [
+        "dinner_after_correction",
+        "video_app_after_device_correction",
+    ]
     assert summary["personal_reads"] == "approved_at_start"
     assert [r["operation"] for r in rows if r["kind"] == "mutation"] == ["remember"]
     assert all(p["question"] != QUESTIONS[2]["question"] for p in payloads)
@@ -413,3 +421,26 @@ async def test_a_refused_start_approval_blocks_every_model_call(
     summary = json.loads((root / "context-eval-with-summary.json").read_text())
     assert summary["authorization_blocked"] == summary["planned"]
     assert summary["completed"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_held_out_case_runs_only_when_named(
+    empty_access, authority_parts, tmp_path
+):
+    answers = {
+        **GOOD,
+        "video_app_after_device_correction": "On your MacBook Air, try iMovie or "
+        "DaVinci Resolve for travel vlogs.",
+    }
+    summary, rows, _payloads, _ = await run(
+        empty_access, authority_parts, tmp_path, "with", answers, case="device"
+    )
+    assert summary["planned"] == ["video_app_after_device_correction"]
+    seeds = [r["project"] for r in rows if r["kind"] == "seed"]
+    assert seeds == ["Spiti Valley trip", "Home errands", "Kitchen renovation"]
+    (question,) = [r for r in rows if r["kind"] == "question"]
+    assert question["personal"]["selected_facts"] == [
+        "devices: a MacBook Air M3 laptop"
+    ]
+    assert not question["personal"]["stale_selected"]
+    assert question["first_failure"] is None

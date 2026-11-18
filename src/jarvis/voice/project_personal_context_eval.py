@@ -80,6 +80,22 @@ VEHICLES = (
 )
 DIET = ("diet preference", "vegetarian", "vegan")
 
+# Held-out generalization case (docs/evals/personal-context-heldout.md): sealed
+# 2026-11-17, never run with --context-eval unless -ContextEvalCase device is
+# named; prompts and checks must not be tuned on it.
+HELD_OUT_PROJECT = "Kitchen renovation"
+HELD_OUT_TURNS = (
+    ("user", "We are renovating the kitchen in March."),
+    ("user", "The countertop will be grey granite."),
+    ("assistant", "Noted: kitchen renovation in March, grey granite countertop."),
+)
+DEVICES = (
+    "devices",
+    "a Lenovo ThinkPad X1 Carbon laptop",
+    "a MacBook Air M3 laptop",
+)
+CORRECTED = {"food_preference": DIET, "owned_item.device": DEVICES}
+
 QUESTIONS = (
     {
         "id": "travel_named_destination",
@@ -108,6 +124,16 @@ QUESTIONS = (
         "question": "What should I cook for dinner tonight? Something quick.",
         "advice": True,
         "scope": "food_preference",
+    },
+    {
+        "id": "video_app_after_device_correction",
+        "case": "device",
+        "held_out": True,
+        "project": HELD_OUT_PROJECT,
+        "new_thread": True,
+        "question": "Which video editing app should I install for my travel vlogs?",
+        "advice": True,
+        "scope": "owned_item.device",
     },
 )
 
@@ -196,6 +222,22 @@ def answer_checks(question_id, arm, answer, *, clarified_by_router=False):
             if arm == "with"
             else True,
         }
+    if question_id == "video_app_after_device_correction":
+        old_device = _has(text, ("thinkpad", "lenovo"))
+        windows_only = _has(text, ("windows only", "windows-only", "for windows"))
+        mac = _has(text, ("mac", "imovie", "final cut"))
+        return {
+            "mentions_old_device": bool(old_device),
+            "windows_only_terms": windows_only,
+            "mac_terms": mac,
+            "renovation_terms": _has(text, ("kitchen", "granite", "renovat")),
+            "passes": (
+                not old_device
+                and not windows_only
+                and not _has(text, ("kitchen", "granite", "renovat"))
+                and (bool(mac) if arm == "with" else True)
+            ),
+        }
     raise ValueError("unknown evaluation question")
 
 
@@ -225,7 +267,7 @@ def first_failure(question, arm, row):
     return None
 
 
-CASES = ("travel", "diet")
+CASES = ("travel", "diet", "device")
 
 
 async def _open_personal_reads(session):
@@ -489,7 +531,11 @@ async def run_context_eval(
         raise ValueError("unknown evaluation arm")
     if case is not None and case not in CASES:
         raise ValueError("unknown evaluation case")
-    questions = [q for q in QUESTIONS if case is None or q["case"] == case]
+    questions = [
+        q
+        for q in QUESTIONS
+        if (q["case"] == case if case is not None else not q.get("held_out"))
+    ]
     recorder = RecordingClient(provider.client)
     recorded = ProjectAnswerProvider(recorder)
     summary = {
@@ -541,7 +587,10 @@ async def run_context_eval(
             ).entries:
                 raise PermissionError("empty isolated fixture required")
             start = datetime(2026, 11, 1, 9, tzinfo=UTC)
-            for offset, (title, turns) in enumerate(PROJECTS.items()):
+            projects = dict(PROJECTS)
+            if any(q["project"] == HELD_OUT_PROJECT for q in questions):
+                projects[HELD_OUT_PROJECT] = HELD_OUT_TURNS
+            for offset, (title, turns) in enumerate(projects.items()):
                 _, ids = await _seed_project(
                     access, title, turns, start + timedelta(days=offset)
                 )
@@ -563,26 +612,27 @@ async def run_context_eval(
                             }
                         )
                     else:
+                        predicate, before, after = CORRECTED[question["scope"]]
                         old = await _mutate(
-                            memory, capability, "remember", DIET[0], DIET[1]
+                            memory, capability, "remember", predicate, before
                         )
                         emit(
                             {
                                 "kind": "mutation",
                                 "operation": "remember",
-                                "fact": f"{DIET[0]} {DIET[1]}",
+                                "fact": f"{predicate} {before}",
                                 "assertion_id": old.assertion_id,
                             }
                         )
                         new = await _mutate(
-                            memory, capability, "correct", DIET[0], DIET[2]
+                            memory, capability, "correct", predicate, after
                         )
-                        facts["food_preference"] = (new, old)
+                        facts[question["scope"]] = (new, old)
                         emit(
                             {
                                 "kind": "mutation",
                                 "operation": "correct",
-                                "fact": f"{DIET[0]} {DIET[2]}",
+                                "fact": f"{predicate} {after}",
                                 "assertion_id": new.assertion_id,
                                 "superseded_assertion_id": old.assertion_id,
                             }

@@ -12,7 +12,7 @@ param(
     [switch]$PersonalAcceptance,
     [switch]$ContextEval,
     [ValidateSet('without','with')][string]$ContextEvalArm,
-    [ValidateSet('travel','diet')][string]$ContextEvalCase,
+    [ValidateSet('travel','diet','device')][string]$ContextEvalCase,
     [ValidateSet('p0-q0','p1-q1','p2-q2','p3-q3','p4-q4','p5-q5')][string]$DevelopmentCase
 )
 Set-StrictMode -Version Latest

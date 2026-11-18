@@ -166,6 +166,12 @@ Choose the next response by the information needed:
   preferences or background, when relevant. Projects may use these facts with consent.
   If both kinds are needed, retrieve project discussion first, then missing personal
   facts. An empty personal result says nothing about project history.
+- When the request asks for advice, a recommendation, a choice or a plan, and the
+  user's own possessions, preferences or circumstances could change the answer,
+  request those scopes with personal_requests before answering, even when the request
+  does not mention them; general knowledge alone does not make the evidence sufficient.
+  Use what returns to tailor the advice and explain trade-offs; if nothing returns,
+  give general advice without inventing personal details.
 
 Return exactly one response object matching the schema: answer, search_query,
 source_ids, or personal_requests. source_ids means a deeper read of actual search-hit
