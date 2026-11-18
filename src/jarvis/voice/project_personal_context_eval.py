@@ -300,6 +300,7 @@ class RecordingClient:
     def __init__(self, client):
         self.client = client
         self.steps = []
+        self.origin = time.perf_counter()  # reset per question
 
     async def parse_with_telemetry(self, **kwargs):
         record = {
@@ -307,7 +308,10 @@ class RecordingClient:
             "input_payload": json.loads(json.dumps(kwargs["input_payload"])),
         }
         self.steps.append(record)
+        started = time.perf_counter()
+        record["started_ms"] = round((started - self.origin) * 1000)
         result = await self.client.parse_with_telemetry(**kwargs)
+        record["model_ms"] = round((time.perf_counter() - started) * 1000)
         response = result.parsed.response
         record["output"] = response.model_dump(mode="json")
         record["output_kind"] = type(response).__name__.lstrip("_")
@@ -445,6 +449,7 @@ async def _ask(coordinator, access, provider, recorder, question, selection, fac
     conversation = ConversationSession()
     conversation.start()
     recorder.steps.clear()
+    recorder.origin = time.perf_counter()
     projections = []
 
     class Observed:
@@ -488,7 +493,14 @@ async def _ask(coordinator, access, provider, recorder, question, selection, fac
         clarified, answer = True, exc.question
         row["status"] = "completed"
     except Exception as exc:  # noqa: BLE001 - recorded; the run stops after it
-        row.update(status="failed", error=type(exc).__name__)
+        # Fixed internal reasons only (for example "personal context
+        # invalidated"); never model text or memory values.
+        row.update(
+            status="failed",
+            error=type(exc).__name__,
+            error_message=str(exc)[:200],
+            coordinator_stage=getattr(coordinator, "stage", None),
+        )
     print("Jarvis> " + (answer or "(no answer)"), flush=True)
     expected, stale = facts.get(question["scope"], (None, None))
     projection = next((p for p in reversed(projections) if p is not None), None)
