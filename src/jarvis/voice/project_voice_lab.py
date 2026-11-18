@@ -29,7 +29,8 @@ PROJECT_TOOLS = frozenset(
 )
 PROJECT_MEMORY_TOOLS = frozenset({"enter_standby"}) | PROJECT_TOOLS
 # --personal-context only: the production read-only personal tools. Memory
-# writes (remember/correct/forget) stay withheld; facts are seeded beforehand.
+# writes (remember/correct/forget) stay withheld and automatic learning is not
+# started (automatic_learning=False); facts are seeded beforehand.
 PERSONAL_READ_TOOLS = frozenset(
     {
         "personal_context_catalog",
@@ -70,9 +71,12 @@ def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
 
 
 def voice_lab_config(config, *, personal: bool = False):
-    """``personal`` turns on saved personal context exactly as production's
-    ``--personal-learning apply`` does (question-bound reads, the startup
-    learning session), against this lab's isolated memory only."""
+    """``personal`` turns on saved personal context as production's
+    ``--personal-learning apply`` does (the startup learning session, which
+    grants question-bound reads), against this lab's isolated memory only.
+    The learning mode is needed for that read authority; run_voice_lab then
+    builds the runtime with automatic_learning=False so the lab is read-only:
+    nothing is extracted from conversation or written."""
     if config.ai_provider != "gemini":
         raise ValueError("existing Gemini configuration required")
     mode = "apply" if personal else "off"
@@ -185,6 +189,9 @@ async def run_voice_lab(
     runtime = runtime_builder(
         config,
         voice_session_observer=observe_session,
+        # Saved personal context is read, never learned from, in this lab: the
+        # learning session supplies question-bound read authority only.
+        **({"automatic_learning": False} if personal else {}),
         **({} if allowlist is None else {"tool_allowlist": allowlist}),
         **({} if baseline else {"project_memory_factory": memory_factory}),
         **(
@@ -246,8 +253,9 @@ def main():
     parser.add_argument(
         "--personal-context",
         action="store_true",
-        help="Saved personal context as production --personal-learning apply, "
-        "read-only tools, isolated lab memory only.",
+        help="Saved personal context with production's question-bound reads; "
+        "read-only: no memory write tools and no automatic learning; isolated "
+        "lab memory only.",
     )
     args = parser.parse_args()
     if args.personal_context and args.baseline:
@@ -323,7 +331,8 @@ def main():
                     "Approve Windows Hello for project history"
                     + (
                         " and for the personal learning session (saved personal "
-                        "context ON, this lab's fictional memory only)"
+                        "context ON, read-only: automatic learning is off; this "
+                        "lab's fictional memory only)"
                         if args.personal_context
                         else ""
                     )

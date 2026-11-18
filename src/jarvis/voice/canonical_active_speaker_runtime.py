@@ -164,6 +164,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         topic_continuity_factory=None,
         project_memory=None,
         voice_session_observer=None,
+        automatic_learning: bool = True,
         **kwargs: Any,
     ) -> None:
         # Isolated opt-in only (jarvis.voice.project_voice_lab); None in normal Jarvis.
@@ -188,6 +189,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._learning_authority = None
         self._learning_grant = None
         self._learning_start_attempted = False
+        # Isolated opt-in only (project_voice_lab --personal-context): keep the
+        # learning session's question-bound read authority but never start the
+        # automatic learning worker, so nothing is written mid-conversation.
+        if type(automatic_learning) is not bool:
+            raise TypeError("automatic_learning must be bool")
+        self._automatic_learning = automatic_learning
         self._semantic_context_attachment = None
         if topic_continuity_factory is not None and (
             not callable(topic_continuity_factory)
@@ -1115,6 +1122,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     "Conversation diagnostics enabled | accepted transcripts and memory decisions "
                     "are written to console and rotating logs | credentials=masked"
                 )
+            if not self._automatic_learning:
+                LOGGER.info(
+                    "Personal learning session active | automatic_learning=off "
+                    "(isolated lab) | question-bound reads only; nothing is "
+                    "learned or written from conversation"
+                )
+                return
             phase = "provider_adapters"
             extractor, resolver = build_learning_adapters(
                 self.config.ai_provider,

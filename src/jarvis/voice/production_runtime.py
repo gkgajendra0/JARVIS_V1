@@ -170,6 +170,7 @@ def build_production_voice_runtime(
     voice_session_observer=None,
     tool_allowlist=None,
     session_audio_tap=None,
+    automatic_learning: bool = True,
 ) -> CanonicalActiveSpeakerRuntimeController:
     """Build the production single-microphone-owner voice/vision runtime.
 
@@ -718,6 +719,8 @@ def build_production_voice_runtime(
             else {}
         ),
         **({"tool_allowlist": tool_allowlist} if tool_allowlist is not None else {}),
+        # False only from the isolated voice lab (--personal-context).
+        **({} if automatic_learning else {"automatic_learning": False}),
         **(
             {"session_audio_tap": session_audio_tap}
             if session_audio_tap is not None

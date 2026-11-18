@@ -125,3 +125,99 @@ def test_incompatible_flags_are_refused(
         main()
     assert message in capsys.readouterr().err
     assert not (tmp_path / "absent").exists()
+
+
+@pytest.mark.asyncio
+async def test_lab_runtime_is_built_without_automatic_learning(tmp_path):
+    from jarvis.voice.project_voice_lab import run_voice_lab
+
+    seen = {}
+
+    class Runtime:
+        async def run(self):
+            pass
+
+    def builder(config, **kwargs):
+        seen.update(kwargs)
+        return Runtime()
+
+    await run_voice_lab(
+        object(), tmp_path, baseline=False, runtime_builder=builder, personal=True
+    )
+    assert seen["automatic_learning"] is False
+    seen.clear()
+    await run_voice_lab(object(), tmp_path, baseline=False, runtime_builder=builder)
+    assert "automatic_learning" not in seen  # production default untouched
+
+
+@pytest.mark.asyncio
+async def test_learning_session_without_automatic_learning_reads_but_never_learns(
+    learning, authority_parts, monkeypatch
+):
+    """voice-eval-1 (2026-11-18 18:09): with automatic learning on, the owner's
+    Gokarna request was learned as a plan mid-answer; the release was
+    invalidated and the answer cut off. The lab now opens the session for
+    question-bound reads only."""
+    from types import SimpleNamespace
+
+    from test_production import _session_pair, capability
+
+    import jarvis.memory.learning_extractors as adapters
+    from jarvis.memory.retrieval import SemanticRetrievalService
+    from jarvis.memory.service import MemoryService
+    from jarvis.voice.canonical_active_speaker_runtime import (
+        CanonicalActiveSpeakerRuntimeController,
+    )
+
+    def never(*args, **kwargs):
+        raise AssertionError("no learning extractor may be built")
+
+    monkeypatch.setattr(adapters, "build_learning_adapters", never)
+    capabilities = capability(authority_parts.broker)
+    capabilities._authority = authority_parts.broker
+    service = MemoryService(learning.lifecycle, learning.service.canonical_reader)
+    memory = SimpleNamespace(
+        service=service,
+        retrieval=SemanticRetrievalService(learning.reader),
+        bind_learning_authority=service.bind_learning_authority,
+    )
+    controller = CanonicalActiveSpeakerRuntimeController(
+        JarvisConfig(personal_learning_mode="apply"),
+        SimpleNamespace(),
+        memory_runtime=memory,
+        capability_runtime=capabilities,
+        session_factory=lambda config: _session_pair(),
+        automatic_learning=False,
+    )
+    try:
+        await controller._start_personal_learning()
+        assert controller._learning_grant is not None  # read authority kept
+        assert controller._personal_learning is None  # nothing learns or writes
+    finally:
+        capabilities.close_personal_learning(controller._learning_grant)
+    with pytest.raises(TypeError):
+        CanonicalActiveSpeakerRuntimeController(
+            JarvisConfig(), SimpleNamespace(), automatic_learning="no"
+        )
+
+
+def test_a_newly_learned_fact_in_a_requested_empty_scope_changes_the_release():
+    """Production finding behind the cut-off (not changed here): a release is
+    bound to every requested scope, including empty ones, so a fact learned
+    into one of them while the answer plays invalidates it. A request that did
+    not include that scope is unaffected."""
+    from test_context_projection import record
+
+    from jarvis.memory.personal_context_projection import (
+        ScopedContextSnapshot,
+        context_scope_signature,
+    )
+
+    vehicle = (record(), "owned_item.vehicle")
+    plan = (record("Gokarna", "plan-1", "other"), "plan")
+    before = ScopedContextSnapshot((vehicle,), ())
+    after = ScopedContextSnapshot((vehicle, plan), ())
+    both = ("owned_item.vehicle", "plan")
+    assert context_scope_signature(before, both) != context_scope_signature(after, both)
+    only = ("owned_item.vehicle",)
+    assert context_scope_signature(before, only) == context_scope_signature(after, only)
