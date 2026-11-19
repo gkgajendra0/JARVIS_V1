@@ -1,10 +1,21 @@
-# Personal-context evaluation: held-out scenario (do not run or tune on it)
+# Personal-context evaluation: held-out scenario (used; do not tune on it)
 
 Sealed on 2026-11-17 with the first two evaluation cases
 (`--context-eval`, `src/jarvis/voice/project_personal_context_eval.py`).
-It has never been run. It is encoded as `-ContextEvalCase device` (question
-`video_app_after_device_correction`); it runs only when that case is named. Use it once, unchanged, to check a proposed prompt or
-retrieval fix after the fix is written; do not adjust the fix to it afterwards.
+It is encoded as `-ContextEvalCase device` (question
+`video_app_after_device_correction`); it runs only when that case is named. It
+was meant to be used once, unchanged, to check a proposed prompt or retrieval
+fix after the fix is written; do not adjust the fix to it afterwards.
+
+**Run once (2026-11-18, with arm, commit 0574827a):** controlled text through
+the project answer model on the explicit Paid credential (3 calls, no
+retries), owner-run. Requested `owned_item.device` + `personal_fact`; only the
+MacBook assertion was selected, and the ThinkPad was neither selected nor in
+the final context. The answer recommended DaVinci Resolve, Final Cut Pro,
+CapCut and iMovie for the MacBook Air M3. Owner grade: successful use of the
+corrected fact, with an unnecessary remark about the kitchen renovation
+project. The without arm was not run. Having been used, it is no longer
+held out.
 
 **Shape:** a corrected owned-item fact used for advice while an unrelated project
 is active, in a fresh session, without the owner naming the item.
