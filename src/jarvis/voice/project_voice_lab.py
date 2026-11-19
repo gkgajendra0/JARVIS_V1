@@ -101,7 +101,13 @@ def prepare_speaker_evidence(source_profile: Path, lab: Path, environ=None) -> d
     return {"identity_copy": copy, "model": model}
 
 
-def voice_lab_config(config, *, personal: bool = False, speaker_evidence: bool = False):
+def voice_lab_config(
+    config,
+    *,
+    personal: bool = False,
+    speaker_evidence: bool = False,
+    speaker_evidence_observe: bool = False,
+):
     """``personal`` turns on saved personal context as production's
     ``--personal-learning apply`` does (the startup learning session, which
     grants question-bound reads), against this lab's isolated memory only.
@@ -128,12 +134,14 @@ def voice_lab_config(config, *, personal: bool = False, speaker_evidence: bool =
         # --speaker-evidence: the enrolled-speaker score per transcript, with
         # the R2-D candidates enforced in this lab only (normal Jarvis keeps
         # them off).
-        speaker_shadow_enabled=speaker_evidence,
+        # --speaker-evidence-observe: scored and logged per transcript, nothing
+        # enforced and the follow-up window unchanged (measurement runs).
+        speaker_shadow_enabled=speaker_evidence or speaker_evidence_observe,
         speaker_evidence_enforcement=speaker_evidence,
         follow_up_window_bounded=speaker_evidence,
         speaker_owner_min_cosine=(
             SPEAKER_EVIDENCE_THRESHOLD
-            if speaker_evidence
+            if speaker_evidence or speaker_evidence_observe
             else config.speaker_owner_min_cosine
         ),
         active_speaker_shadow_enabled=False,
@@ -321,6 +329,12 @@ def main():
         f"candidates in this lab only: speaker evidence at {SPEAKER_EVIDENCE_THRESHOLD} "
         "and the bounded follow-up window.",
     )
+    parser.add_argument(
+        "--speaker-evidence-observe",
+        action="store_true",
+        help="As --speaker-evidence, but nothing is enforced and the follow-up "
+        "window is unchanged: each transcript's speaker score is only logged.",
+    )
     args = parser.parse_args()
     if args.personal_context and args.baseline:
         parser.error("--personal-context needs project memory (no --baseline)")
@@ -328,6 +342,10 @@ def main():
         parser.error("--personal-learning needs --personal-context")
     if args.speaker_evidence and not args.personal_context:
         parser.error("--speaker-evidence needs --personal-context")
+    if args.speaker_evidence_observe and not args.personal_context:
+        parser.error("--speaker-evidence-observe needs --personal-context")
+    if args.speaker_evidence and args.speaker_evidence_observe:
+        parser.error("choose --speaker-evidence or --speaker-evidence-observe")
     if args.qualification and (args.baseline or not args.record_diagnostics):
         parser.error("--qualification needs project memory and --record-diagnostics")
     if os.name != "nt":
@@ -355,7 +373,7 @@ def main():
     lab = profile.parent
     with project_lab_environment(profile, repo):
         speaker = None
-        if args.speaker_evidence:
+        if args.speaker_evidence or args.speaker_evidence_observe:
             from jarvis.identity.speaker_shadow import (
                 SpeakerShadowRuntimeError,
                 build_default_enrolled_speaker_observer,
@@ -381,6 +399,7 @@ def main():
                 JarvisConfig.from_environment(),
                 personal=args.personal_context,
                 speaker_evidence=args.speaker_evidence,
+                speaker_evidence_observe=args.speaker_evidence_observe,
             )
             configure_logging(config.log_level, jsonl_path=lab / "voice-lab.jsonl")
             require_startup_preflight(config)
@@ -413,9 +432,16 @@ def main():
                     "SPEAKER EVIDENCE (lab only): enrolled owner voice template loaded "
                     f"({speaker.template.prototype_count} prototypes, model "
                     f"{speaker.template.model_id}); copy {paths['identity_copy']}. "
-                    f"Threshold {config.speaker_owner_min_cosine:.2f}, enforcement ON, "
-                    "bounded follow-up window ON. Each transcript's status is logged "
-                    "as 'Speaker evidence | turn_id=...'."
+                    f"Threshold {config.speaker_owner_min_cosine:.2f}, enforcement "
+                    + (
+                        "ON"
+                        if config.speaker_evidence_enforcement
+                        else "OFF (observe only)"
+                    )
+                    + ", bounded follow-up window "
+                    + ("ON" if config.follow_up_window_bounded else "OFF")
+                    + ". Each transcript's status is logged as "
+                    "'Speaker evidence | turn_id=...'."
                 )
             if not args.baseline:
                 print(

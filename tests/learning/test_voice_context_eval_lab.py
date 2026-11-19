@@ -111,6 +111,11 @@ def test_the_voice_agent_in_this_mode_carries_the_pr_328_guidance():
             "--speaker-evidence needs --personal-context",
         ),
         (
+            "jarvis.voice.project_voice_lab",
+            ["--speaker-evidence-observe"],
+            "--speaker-evidence-observe needs --personal-context",
+        ),
+        (
             "jarvis.voice.project_memory_lab",
             ["--seed-voice-eval", "--context-eval", "--model", "m"],
             "voice evaluation seeding requires a fresh standalone lab",
@@ -294,3 +299,14 @@ def test_speaker_evidence_copies_the_identity_store_and_leaves_the_live_one(tmp_
     (state / "models" / "speaker" / CAMPP_MODEL_FILENAME).unlink()
     with pytest.raises(RuntimeError, match="speaker model not found"):
         prepare_speaker_evidence(state / "machine.json", tmp_path / "lab2", environ={})
+
+
+def test_speaker_evidence_observe_scores_without_enforcing():
+    from jarvis.config import JarvisConfig
+    from jarvis.voice.project_voice_lab import voice_lab_config
+
+    lab = voice_lab_config(
+        JarvisConfig(ai_provider="gemini"), personal=True, speaker_evidence_observe=True
+    )
+    assert lab.speaker_shadow_enabled and lab.speaker_owner_min_cosine == 0.45
+    assert not lab.speaker_evidence_enforcement and not lab.follow_up_window_bounded
