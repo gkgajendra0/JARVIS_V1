@@ -40,12 +40,17 @@ from jarvis.voice.personal_context import (
 from jarvis.voice.personal_context_audio import PersonalContextAudioOutput
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
+from jarvis.voice.speaker_turn_evidence import SpeakerTurnEvidenceBook
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.models import WorkDeliveryKind, WorkState
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
 from jarvis.work.runtime import WorkRuntime
 
 LOGGER = logging.getLogger(__name__)
+
+# Bounded follow-up window: time allowed after in-window speech ends for its
+# final transcript (observed 0.9-1.2 s) before the wake may close.
+FOLLOW_UP_TRANSCRIPT_GRACE = 2.5
 
 
 class _SessionToolBundle:
@@ -279,6 +284,26 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
             session, bridge = original_session_factory(config)
             self._live_session = session
+            # Speaker evidence per accepted transcript (owner/non-owner/unknown).
+            # Registered before project history and learning observe the turn.
+            evidence = None
+            if (
+                self._speaker_shadow_observer is not None
+                and self._session_purpose == "conversation"
+            ):
+                evidence = SpeakerTurnEvidenceBook(
+                    threshold=config.speaker_owner_min_cosine,
+                    enforce=config.speaker_evidence_enforcement,
+                    follow_up=self._follow_up_listening,
+                )
+                bridge.add_accepted_turn_observer(evidence.observe_turn)
+                bridge.add_close_observer(evidence.close)
+            self._speaker_evidence = evidence
+            self._window_deadline = None
+            self._window_grace_until = 0.0
+            self._window_speech = False
+            self._last_user_in_window = True
+            self._last_user_turn_id = None
             if voice_session_observer is not None:
                 voice_session_observer(session, bridge)
             # Only owner conversation sessions use project memory. System
@@ -304,6 +329,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         self._active_end.set()
 
                 project_turns.bind_retire(retire_after_forget)
+                bind_evidence = getattr(project_turns, "bind_speaker_evidence", None)
+                if callable(bind_evidence):
+                    bind_evidence(evidence)
                 # A reply Gemini transcribed but never voiced is replayed once
                 # through scripted TTS, only if this gate approves it.
                 recovery = getattr(bridge, "silent_audio_recovery", None)
@@ -350,7 +378,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         if personal.retirement_reason in {
                             "response_completed",
                             "user_activity",
-                        }:
+                        } and self._follow_up_earned(config):
                             self._follow_up_requested_after = monotonic()
                         LOGGER.info(
                             "Personal context session retired | reason=%s",
@@ -405,9 +433,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             if self._personal_learning is not None and self._learning_grant is not None:
                 bridge.add_accepted_turn_observer(
                     self._personal_learning.bind(
-                        bridge.conversation, self._learning_grant
+                        bridge.conversation,
+                        self._learning_grant,
+                        speaker_evidence=evidence,
                     )
                 )
+            bridge.add_accepted_turn_observer(self._note_window_turn)
             # Explicit opt-in only. No model dispatch, memory persistence, or
             # model-visible release without a separately provided, trusted gate.
             # The bridge closes and invalidates this state on session retirement.
@@ -486,6 +517,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     turn.role is ConversationRole.USER
                     for turn in bridge.conversation.turns
                 )
+                if config.follow_up_window_bounded and self._window_reopens():
+                    # Session ready, or Jarvis finished replying to speech that
+                    # began inside the window: a fresh full window.
+                    self._window_deadline = asyncio.get_running_loop().time() + (
+                        config.follow_up_timeout_seconds
+                        if has_user_turn or self._follow_up_listening
+                        else config.initial_request_timeout_seconds
+                    )
+                    self._window_grace_until = 0.0
                 self._arm_timeout(
                     config.follow_up_timeout_seconds
                     if has_user_turn or self._follow_up_listening
@@ -509,6 +549,16 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                             project_turns.observe_activity()
                     self._user_is_speaking = True
                     sync_interactive_brain_gate()
+                    if config.follow_up_window_bounded and self._window_closed():
+                        # Started after the window closed: it does not hold the
+                        # wake open (TV/background, or speech the owner can
+                        # repeat after the wake word).
+                        LOGGER.info(
+                            "Speech began after the follow-up window closed; "
+                            "it does not hold the wake open"
+                        )
+                        return
+                    self._window_speech = True
                     self._cancel_timeout()
                     return
                 if event.new_state != "listening":
@@ -516,6 +566,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
                 self._user_is_speaking = False
                 sync_interactive_brain_gate()
+                if config.follow_up_window_bounded and self._window_speech:
+                    # Speech that began inside the window may end after it:
+                    # leave time for its final transcript to arrive.
+                    self._window_speech = False
+                    self._window_grace_until = (
+                        asyncio.get_running_loop().time() + FOLLOW_UP_TRANSCRIPT_GRACE
+                    )
                 if not self._session_ready_for_inactivity:
                     return
                 has_user_turn = any(
@@ -565,6 +622,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         super().__init__(*args, session_factory=capture_session, **kwargs)
         self._speaker_shadow_observer = speaker_shadow_observer
+        self._speaker_evidence: SpeakerTurnEvidenceBook | None = None
+        self._window_deadline: float | None = None
+        self._window_grace_until = 0.0
+        self._window_speech = False
+        self._last_user_in_window = True
+        self._last_user_turn_id: str | None = None
         self._memory_runtime = memory_runtime
         if memory_query_coordinator is not None and memory_runtime is None:
             raise ValueError(
@@ -970,6 +1033,63 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 except TimeoutError:
                     pass
 
+    def _window_closed(self) -> bool:
+        """New speech may start only before the deadline. The transcript grace
+        after in-window speech never admits new speech."""
+        deadline = self._window_deadline
+        return deadline is not None and asyncio.get_running_loop().time() >= deadline
+
+    def _transcript_in_window(self) -> bool:
+        deadline = self._window_deadline
+        if deadline is None or self._window_speech:
+            return True
+        return asyncio.get_running_loop().time() < max(
+            deadline, self._window_grace_until
+        )
+
+    def _note_window_turn(self, turn) -> None:
+        """Accepted-turn observer (bounded window): was this turn's speech
+        begun inside the window (or in its transcript grace)?"""
+        if turn.role is not ConversationRole.USER:
+            return
+        self._last_user_turn_id = turn.turn_id
+        self._last_user_in_window = self._transcript_in_window()
+        if self.config.follow_up_window_bounded and not self._last_user_in_window:
+            # The runtime cancels the timer when a user item arrives; for
+            # speech begun after the window closed, re-arm it right after so
+            # the wake still ends if Jarvis stays silent.
+            asyncio.get_running_loop().call_soon(
+                self._arm_timeout, self.config.follow_up_timeout_seconds
+            )
+
+    def _latest_turn_withheld(self) -> bool:
+        evidence = self._speaker_evidence
+        turn_id = self._last_user_turn_id
+        if evidence is None or turn_id is None:
+            return False
+        return evidence.withholds(evidence.current(turn_id))
+
+    def _window_reopens(self) -> bool:
+        """A fresh window at session start, or after a reply to a turn whose
+        speech began inside the window and was not withheld as non-owner."""
+        if self._window_deadline is None:
+            return True
+        return self._last_user_in_window and not self._latest_turn_withheld()
+
+    def _follow_up_earned(self, config: JarvisConfig) -> bool:
+        if config.speaker_evidence_enforcement and self._latest_turn_withheld():
+            LOGGER.info(
+                "Follow-up listening not offered: the answered turn was not the owner's"
+            )
+            return False
+        if config.follow_up_window_bounded and not self._last_user_in_window:
+            LOGGER.info(
+                "Follow-up listening not offered: the answered speech began after "
+                "the follow-up window closed"
+            )
+            return False
+        return True
+
     def _arm_timeout(self, seconds: float) -> None:
         """Arm inactivity shutdown only after startup and only while user is silent."""
 
@@ -977,10 +1097,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             super()._arm_timeout(seconds)
             return
 
+        config = getattr(self, "config", None)
+        bounded = bool(config is not None and config.follow_up_window_bounded)
+        holding_speech = (
+            getattr(self, "_window_speech", False)
+            if bounded
+            else self._user_is_speaking
+        )
         if (
             not self._session_ready_for_inactivity
             or self._agent_state in {"thinking", "speaking"}
-            or self._user_is_speaking
+            or holding_speech
             or (self._personal_context is not None and self._personal_context.busy)
         ):
             self._cancel_timeout()
@@ -990,11 +1117,18 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         active_end = self._active_end
         if active_end is None:
             return
+        if bounded and getattr(self, "_window_deadline", None) is not None:
+            # Measured from when the window opened, not from the latest noise.
+            now = asyncio.get_running_loop().time()
+            seconds = max(
+                self._window_deadline - now, self._window_grace_until - now, 0.0
+            )
 
         def expire_inactivity() -> None:
+            holding = self._window_speech if bounded else self._user_is_speaking
             if (
                 self._active_end is not active_end
-                or self._user_is_speaking
+                or holding
                 or self._agent_state in {"thinking", "speaking"}
                 or (self._personal_context is not None and self._personal_context.busy)
             ):
@@ -1273,9 +1407,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         turn: SpeakerTurnAudio,
         *,
         audio_turn_id: str,
+        conversation_turn_id: str | None = None,
     ) -> None:
         observer = self._speaker_shadow_observer
         if observer is None:
+            self._resolve_speaker_evidence(conversation_turn_id, None, "no_observer")
             return
         try:
             result = await asyncio.to_thread(
@@ -1288,7 +1424,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "Enrolled speaker shadow turn %s failed; conversation is unaffected",
                 audio_turn_id,
             )
+            self._resolve_speaker_evidence(conversation_turn_id, None, "scoring_failed")
             return
+        self._resolve_speaker_evidence(
+            conversation_turn_id,
+            result.max_reference_cosine,
+            "scored" if result.max_reference_cosine is not None else str(result.state),
+        )
         LOGGER.info(
             "Enrolled speaker shadow turn %s | state=%s | max_owner_cosine=%s | "
             "embedding_ms=%.1f | threshold_selected=False | owner_classification=False | "
@@ -1304,14 +1446,34 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             ",".join(result.reason_codes) if result.reason_codes else "none",
         )
 
+    def _resolve_speaker_evidence(
+        self, conversation_turn_id: str | None, score: float | None, reason: str
+    ) -> None:
+        evidence = self._speaker_evidence
+        if evidence is None or conversation_turn_id is None:
+            return
+        evidence.resolve(conversation_turn_id, score=score, reason=reason)
+
+    def _speaker_evidence_unavailable(
+        self, conversation_turn_id: str | None, reason: str
+    ) -> None:
+        self._resolve_speaker_evidence(conversation_turn_id, None, reason)
+
     async def _inspect_shadow_turn(
         self,
         turn: SpeakerTurnAudio,
         *,
         audio_turn_id: str,
         active_speaker_turn: SpeakerTurnAudio | None = None,
+        conversation_turn_id: str | None = None,
     ) -> None:
         del active_speaker_turn
+        if conversation_turn_id is not None:
+            LOGGER.info(
+                "Speaker shadow turn %s belongs to transcript turn_id=%s",
+                audio_turn_id,
+                conversation_turn_id,
+            )
 
         analysis_turn = turn
         speech_segments = 0
@@ -1334,6 +1496,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     turn.duration_seconds,
                     owner_context_live,
                     region.reason,
+                )
+                self._resolve_speaker_evidence(
+                    conversation_turn_id, None, "no_speech_region"
                 )
                 return
             analysis_turn = region.turn
@@ -1374,6 +1539,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self._score_enrolled_speaker(
                     analysis_turn,
                     audio_turn_id=audio_turn_id,
+                    conversation_turn_id=conversation_turn_id,
                 )
             )
         elif self._speaker_shadow_observer is not None:
@@ -1382,5 +1548,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 "threshold_selected=False | owner_classification=False | "
                 "authority_effect=False | reasons=speaker_quality_rejected",
                 audio_turn_id,
+            )
+            self._resolve_speaker_evidence(
+                conversation_turn_id, None, "speaker_quality_rejected"
             )
         await asyncio.gather(*tasks)

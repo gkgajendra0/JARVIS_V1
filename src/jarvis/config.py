@@ -153,6 +153,17 @@ class JarvisConfig:
     wake_cooldown_seconds: float = 1.0
     initial_request_timeout_seconds: float = 8.0
     follow_up_timeout_seconds: float = 15.0
+    # Candidate (off until owner acceptance): speech that starts after the
+    # follow-up window has closed no longer holds the wake open, and a reply
+    # to such speech does not reopen it. Speech begun inside the window is
+    # still captured in full.
+    follow_up_window_bounded: bool = False
+    # Candidate (off until owner acceptance): a later turn in a wake whose
+    # enrolled-speaker score is below the threshold is kept out of project
+    # history and personal learning. Evidence is linked and logged either way.
+    speaker_evidence_enforcement: bool = False
+    # Experimental threshold for the enrolled-speaker cosine (CAM++).
+    speaker_owner_min_cosine: float = 0.45
     max_utterance_seconds: float = 15.0
     live_context_recent_turns: int = 24
     memory_enabled: bool = False
@@ -387,6 +398,8 @@ class JarvisConfig:
 
         if not 0 < self.wake_threshold <= 1:
             raise ValueError("wake_threshold must be greater than 0 and at most 1")
+        if not 0 < self.speaker_owner_min_cosine < 1:
+            raise ValueError("speaker_owner_min_cosine must be between 0 and 1")
         positive_values = (
             "wake_debounce_seconds",
             "audio_ring_buffer_seconds",
@@ -565,6 +578,15 @@ class JarvisConfig:
             ),
             follow_up_timeout_seconds=_configured_float(
                 "JARVIS_FOLLOW_UP_TIMEOUT_SECONDS", 15.0, machine
+            ),
+            follow_up_window_bounded=_configured_bool(
+                "JARVIS_FOLLOW_UP_WINDOW_BOUNDED", False, machine
+            ),
+            speaker_evidence_enforcement=_configured_bool(
+                "JARVIS_SPEAKER_EVIDENCE_ENFORCEMENT", False, machine
+            ),
+            speaker_owner_min_cosine=_configured_float(
+                "JARVIS_SPEAKER_OWNER_MIN_COSINE", 0.45, machine
             ),
             max_utterance_seconds=_configured_float(
                 "JARVIS_MAX_UTTERANCE_SECONDS", 15.0, machine

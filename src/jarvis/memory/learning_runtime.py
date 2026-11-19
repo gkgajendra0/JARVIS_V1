@@ -59,6 +59,8 @@ class PersonalLearningRuntime:
         self._inflight_receipt = None
         self._closed = False
         self._grant = None
+        self._speaker_evidence = None
+        self._admissions = set()
         self._processed = self._committed = self._dropped = 0
         self._reason = "ready"
         self._unavailable_reported = False
@@ -93,8 +95,9 @@ class PersonalLearningRuntime:
         if self.status_observer:
             self.status_observer(self.status())
 
-    def bind(self, conversation, grant):
+    def bind(self, conversation, grant, *, speaker_evidence=None):
         self._grant = grant
+        self._speaker_evidence = speaker_evidence
         return lambda turn: self.observe_turn(conversation, turn, grant)
 
     def observe_turn(self, conversation, turn, grant):
@@ -133,55 +136,98 @@ class PersonalLearningRuntime:
                 )
                 self._report("source_veto")
                 return
-            # Remove vetoed/pre-forget context before any provider receives it.
-            turns = tuple(
-                t
-                for t in source.turns
-                if t.turn_id not in self._vetoed
-                and LearningPolicy.source_allowed(replace(source, turns=(t,)))
-                and (self._window_cutoff is None or t.accepted_at > self._window_cutoff)
-            )
-            if not turns or turns[-1] is not turn:
-                raise PermissionError("stale input")
-            source = replace(
-                source,
-                turns=turns,
-                digest=hashlib.sha256(
-                    json.dumps(
-                        [(t.turn_id, t.text) for t in turns], ensure_ascii=False
-                    ).encode()
-                ).hexdigest(),
-            )
-            if self._queue.full():
-                self._dropped += 1
-                self._report("queue_full")
+            evidence = self._speaker_evidence
+            if evidence is not None and evidence.enforcing:
+                # The source is fixed now (latest turn, its context window);
+                # registration waits for the speaker evidence.
+                task = asyncio.create_task(
+                    self._admit_after_evidence(evidence, source, turn, grant),
+                    name="jarvis-learning-speaker-evidence",
+                )
+                self._admissions.add(task)
+                task.add_done_callback(self._admissions.discard)
                 return
-            self.authority.register_source(grant, source.receipt_id, source=source)
-            self._pending[source.receipt_id] = (source, grant)
-            log_learning(self.diagnostics, source, "source", "queued", text=source.text)
-            self._enqueue(source.receipt_id)
+            self._admit(source, turn, grant)
         except (ValueError, PermissionError) as exc:
-            state = self.authority.validate(grant)
-            if state.status != "active" and not self._unavailable_reported:
-                self._unavailable_reported = True
-                LOGGER.warning(
-                    "Automatic memory unavailable | state=%s | reason=%s | "
-                    "new memories are not being saved; restart Jarvis and approve Windows Hello",
-                    state.status,
-                    state.reason,
-                )
-            # Canonical assistant turns are expected here; distinguish them from
-            # rejected user sources without changing admission or counters.
-            if self.diagnostics:
-                LOGGER.info(
-                    "Memory source skipped | turn_id=%s | role=%s | reason=%s | error_type=%s",
-                    turn.turn_id,
-                    turn.role.value,
-                    "not_user_turn" if turn.role.value != "user" else "source_denied",
-                    type(exc).__name__,
-                )
+            self._source_denied(turn, exc, grant)
+
+    async def _admit_after_evidence(self, evidence, source, turn, grant):
+        # Earlier turns in the context window first: a non-owner one is
+        # removed from this source's context before any provider sees it.
+        for context_turn in source.turns[:-1]:
+            if evidence.withholds(await evidence.wait(context_turn.turn_id)):
+                self._vetoed.add(context_turn.turn_id)
+        result = await evidence.wait(turn.turn_id)
+        if self._closed:
+            return
+        if evidence.withholds(result):
+            self._vetoed.add(turn.turn_id)
+            log_learning(
+                self.diagnostics,
+                source,
+                "source",
+                "rejected",
+                reason="speaker_not_owner",
+                score=round(result.score, 4),
+            )
+            self._report("speaker_not_owner")
+            return
+        try:
+            self._admit(source, turn, grant)
+        except (ValueError, PermissionError) as exc:
+            self._source_denied(turn, exc, grant)
+
+    def _admit(self, source, turn, grant):
+        # Remove vetoed/pre-forget context before any provider receives it.
+        turns = tuple(
+            t
+            for t in source.turns
+            if t.turn_id not in self._vetoed
+            and LearningPolicy.source_allowed(replace(source, turns=(t,)))
+            and (self._window_cutoff is None or t.accepted_at > self._window_cutoff)
+        )
+        if not turns or turns[-1] is not turn:
+            raise PermissionError("stale input")
+        source = replace(
+            source,
+            turns=turns,
+            digest=hashlib.sha256(
+                json.dumps(
+                    [(t.turn_id, t.text) for t in turns], ensure_ascii=False
+                ).encode()
+            ).hexdigest(),
+        )
+        if self._queue.full():
             self._dropped += 1
-            self._report("source_denied")
+            self._report("queue_full")
+            return
+        self.authority.register_source(grant, source.receipt_id, source=source)
+        self._pending[source.receipt_id] = (source, grant)
+        log_learning(self.diagnostics, source, "source", "queued", text=source.text)
+        self._enqueue(source.receipt_id)
+
+    def _source_denied(self, turn, exc, grant):
+        state = self.authority.validate(grant)
+        if state.status != "active" and not self._unavailable_reported:
+            self._unavailable_reported = True
+            LOGGER.warning(
+                "Automatic memory unavailable | state=%s | reason=%s | "
+                "new memories are not being saved; restart Jarvis and approve Windows Hello",
+                state.status,
+                state.reason,
+            )
+        # Canonical assistant turns are expected here; distinguish them from
+        # rejected user sources without changing admission or counters.
+        if self.diagnostics:
+            LOGGER.info(
+                "Memory source skipped | turn_id=%s | role=%s | reason=%s | error_type=%s",
+                turn.turn_id,
+                turn.role.value,
+                "not_user_turn" if turn.role.value != "user" else "source_denied",
+                type(exc).__name__,
+            )
+        self._dropped += 1
+        self._report("source_denied")
 
     def _enqueue(self, receipt):
         self._queue.put_nowait(receipt)
@@ -419,6 +465,8 @@ class PersonalLearningRuntime:
                 self._queue.task_done()
 
     async def drain(self):
+        while self._admissions:
+            await asyncio.gather(*tuple(self._admissions), return_exceptions=True)
         await self._queue.join()
 
     async def close(self):
@@ -434,6 +482,8 @@ class PersonalLearningRuntime:
             self._queue.task_done()
         self._seen.clear()
         self._vetoed.clear()
+        for task in tuple(self._admissions):
+            task.cancel()
         for adapter in {
             id(self.extractor): self.extractor,
             id(self.resolver): self.resolver,
