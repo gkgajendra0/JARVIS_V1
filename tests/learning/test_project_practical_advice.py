@@ -76,5 +76,6 @@ def test_personal_memory_route_does_not_replace_project_history(
 
 def test_instruction_budget_stays_bounded():
     # Sent with every response in project mode: 1,212 chars before this
-    # change, +269 for the practical-help rule.
+    # change, +269 for the practical-help rule. The named-subject and
+    # clarification rules (#328) fit by compacting, not by raising the cap.
     assert len(PROJECT_MEMORY_INSTRUCTIONS) <= 1500

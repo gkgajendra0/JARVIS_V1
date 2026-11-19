@@ -124,12 +124,25 @@ class CanonicalMemoryReader:
                     "SELECT category,epoch,suppressed FROM personal_learning_suppression"
                 ).fetchall()
                 epochs = {r[0]: (r[1], bool(r[2])) for r in rows}
+                source_ids = sorted({record.source_id for record, _ in entries})
+                sources = (
+                    connection.execute(
+                        "SELECT source_id,canonical_ref FROM memory_source"
+                        " WHERE source_id IN ("
+                        + ",".join("?" for _ in source_ids)
+                        + ") ORDER BY source_id",
+                        source_ids,
+                    ).fetchall()
+                    if source_ids
+                    else []
+                )
                 snapshot = ScopedContextSnapshot(
                     entries,
                     tuple(
                         (k, *epochs.get(k, (0, False)))
                         for k in sorted(SUPPRESSION_KEYS)
                     ),
+                    tuple((str(a), str(b)) for a, b in sources),
                 )
                 connection.execute("RELEASE personal_context_snapshot")
                 return snapshot

@@ -86,6 +86,8 @@ def parse_context_requests(
 class ScopedContextSnapshot:
     entries: tuple[tuple[SemanticAssertionRecord, str], ...]
     suppression: tuple[tuple[str, int, bool], ...]
+    # (source_id, canonical_ref) for the entries, read in the same transaction.
+    sources: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,10 @@ class ContextProjection:
     selected: tuple[SemanticAssertionRecord, ...]
     scope_keys: tuple[str, ...]
     signature: str
+    # Every requested scope's own outcome: "selected", "no_match" or
+    # "clarification_required". A mixed request releases the matched scopes and
+    # names the rest, so a partial result is never presented as complete.
+    scope_results: tuple[tuple[str, str], ...] = ()
 
 
 def _json_default(value):
@@ -131,6 +137,45 @@ def context_scope_signature(
     ).hexdigest()
 
 
+def only_additions_from_turn(
+    before: ScopedContextSnapshot,
+    after: ScopedContextSnapshot,
+    scope_keys: tuple[str, ...],
+    canonical_ref: str,
+) -> bool:
+    """Whether ``after`` differs from ``before`` within ``scope_keys`` only by
+    new rows learned from ``canonical_ref`` (one accepted owner turn).
+
+    Every looked-up row is still current and unchanged, nothing new replaces
+    anything, and suppression for those scopes is the same. Any other
+    difference - a correction, forget, retraction, disabled category, or a row
+    from another turn or source - is not accepted."""
+    keys = set(scope_keys)
+
+    def rows(snapshot):
+        return {
+            record.assertion_id: asdict(record)
+            for record, scope in snapshot.entries
+            if scope in keys
+        }
+
+    def suppression(snapshot):
+        return {k: (e, x) for k, e, x in snapshot.suppression if k in keys}
+
+    if suppression(before) != suppression(after):
+        return False
+    old, new = rows(before), rows(after)
+    if any(new.get(assertion) != row for assertion, row in old.items()):
+        return False
+    added = [row for assertion, row in new.items() if assertion not in old]
+    references = dict(after.sources)
+    return bool(added) and all(
+        row["supersedes_id"] is None
+        and references.get(row["source_id"]) == canonical_ref
+        for row in added
+    )
+
+
 def _current_label(record, scope):
     value = record.value
     if (
@@ -160,17 +205,32 @@ def project_personal_context(
 ) -> ContextProjection:
     scopes = tuple(sorted({r.scope_key for r in requests}))
 
+    outcome = {}
+
     def result(status, reason=None, facts=(), selected=(), signature=""):
         return ContextProjection(
-            status, reason, tuple(facts), tuple(selected), scopes, signature
+            status,
+            reason,
+            tuple(facts),
+            tuple(selected),
+            scopes,
+            signature,
+            ()
+            if status == "unavailable"  # nothing was reliably checked
+            else tuple((scope, outcome[scope]) for scope in scopes if scope in outcome),
         )
+
+    def settle(scope, status):
+        # Within one scope: clarification outranks a match, a match outranks none.
+        rank = {"no_match": 0, "selected": 1, "clarification_required": 2}
+        if rank[status] >= rank.get(outcome.get(scope), -1):
+            outcome[scope] = status
 
     try:
         if len(snapshot.entries) > 32:
             return result("unavailable", "storage_unavailable")
         chosen = {}
         clarification = None
-        missing = False
         for request in requests:
             candidates = [
                 r for r, scope in snapshot.entries if scope == request.scope_key
@@ -184,19 +244,26 @@ def project_personal_context(
                     and _normalize_label(label)
                     == _normalize_label(request.target_quote)
                 ]
+                unclear = None
                 if len(candidates) > 1:
-                    clarification = "ambiguous_target"
+                    unclear = "ambiguous_target"
                 elif not candidates and any(label is None for _, label in labels):
-                    clarification = "unresolved_target"
-            if not candidates:
-                missing = True
+                    unclear = "unresolved_target"
+                if unclear:
+                    # That scope releases nothing; matched scopes still do.
+                    clarification = clarification or unclear
+                    settle(request.scope_key, "clarification_required")
+                    continue
+            settle(request.scope_key, "selected" if candidates else "no_match")
             for r in candidates:
                 chosen[r.assertion_id] = (r, request.scope_key)
-        if clarification:
-            return result("clarification_required", clarification)
-        if missing:
+        chosen = {k: v for k, v in chosen.items() if outcome[v[1]] == "selected"}
+        if not chosen:
+            if clarification:
+                return result("clarification_required", clarification)
             return result("no_match")
         if len(chosen) > 4:
+            outcome.clear()
             return result("clarification_required", "narrow_request")
         facts = []
         selected = []
@@ -252,6 +319,7 @@ def project_personal_context(
             facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False
         ).encode()
         if len(encoded) > 1800:
+            outcome.clear()
             return result("clarification_required", "narrow_request")
         return result(
             "selected",

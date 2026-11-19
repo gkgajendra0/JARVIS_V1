@@ -466,6 +466,29 @@ class PersonalLearningAuthority:
                 raise PermissionError("not a read child")
             self._consume(child)
 
+    def read_lease_expired(self, grant, permit):
+        """True only when a consumed read child of this still-active session
+        grant lapsed by time alone (or was already pruned after lapsing).
+
+        Revocation, lock/continuity loss, an unknown grant or a write child all
+        answer False, so they can never be "renewed"."""
+        with self._broker._lock:
+            try:
+                self._require(grant)
+            except PermissionError:
+                return False
+            child = self._children.get(permit)
+            if child is None:
+                # Children are dropped only after their lease lapses; close()
+                # clears them too but revokes every grant first.
+                return isinstance(permit, LearningPermitHandle)
+            return (
+                child.grant == grant
+                and child.binding.operation == "read"
+                and child.consumed
+                and child.authorized.proposal.is_expired(self._broker._clock())
+            )
+
     def validate_read(self, permit):
         with self._broker._lock:
             child = self._child(permit)

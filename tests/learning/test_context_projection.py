@@ -122,9 +122,67 @@ def test_ambiguous_normalized_label_and_legacy_unknown_target_require_clarificat
     assert project(snap(record()), target="सिटी").status == "no_match"
 
 
-def test_missing_component_never_releases_partial_multiscope_facts():
+# Replaces test_missing_component_never_releases_partial_multiscope_facts
+# (PI-3, 90befee4, spec 2026-10-22 section 5 step 5: "a missing or ambiguous
+# required component prevents the whole fact release. Do not silently provide
+# a subset and imply all requested information was found"). Its concern was a
+# subset passed off as complete. context-eval-3 (2026-11-18) showed the cost:
+# vehicles + personal_fact returned no_match, the saved vehicles were dropped
+# and the model told the owner his records held no vehicle. Now every
+# requested scope carries its own outcome, so a subset is never implied
+# complete and found facts are not discarded.
+def test_mixed_scopes_release_matches_and_name_each_scope_outcome():
     result = project(snap(record()), extras=({"scope_key": "food_preference"},))
+    assert result.status == "selected"
+    assert [f["text"] for f in result.facts] == ["City"]
+    assert dict(result.scope_results) == {
+        "owned_item.vehicle": "selected",
+        "food_preference": "no_match",
+    }
+    # The signature still covers the empty scope: a later saved preference
+    # invalidates this release.
+    assert set(result.scope_keys) == {"food_preference", "owned_item.vehicle"}
+
+
+def test_ambiguous_scope_releases_nothing_for_itself_only():
+    rows = snap(
+        record("City", "a"), record("ＣＩＴＹ", "b"), record("Pixel", "p", "device")
+    )
+    result = project_personal_context(
+        rows,
+        parse_context_requests(
+            [
+                {"scope_key": "owned_item.vehicle", "target_quote": "City"},
+                {"scope_key": "owned_item.device"},
+            ],
+            question="City",
+        ),
+    )
+    assert result.status == "selected"
+    assert [f["text"] for f in result.facts] == ["Pixel"]
+    assert dict(result.scope_results) == {
+        "owned_item.device": "selected",
+        "owned_item.vehicle": "clarification_required",
+    }
+
+
+def test_all_scopes_empty_is_no_match_with_each_scope_named():
+    result = project(
+        snap(record("Pixel", "p", "device")), extras=({"scope_key": "food_preference"},)
+    )
     assert result.status == "no_match" and not result.facts and not result.selected
+    assert dict(result.scope_results) == {
+        "owned_item.vehicle": "no_match",
+        "food_preference": "no_match",
+    }
+
+
+def test_unavailable_and_over_budget_name_no_scope_outcomes():
+    over = [record("v" + str(i), str(i)) for i in range(5)]
+    assert project(snap(*over)).scope_results == ()
+    broken = replace(record(), normalized_text="")
+    assert project(snap(broken)).status == "unavailable"
+    assert project(snap(broken)).scope_results == ()
 
 
 def test_deduplicate_overlapping_requests_and_do_not_truncate_five_facts():
