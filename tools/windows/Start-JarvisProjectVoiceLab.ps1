@@ -22,6 +22,9 @@ param(
     # With -PersonalContext: keep production's automatic learning on (learned
     # facts go into this lab's memory only).
     [switch]$PersonalLearning,
+    # With -PersonalContext: score each transcript against the enrolled owner voice
+    # (template copied into the lab) and enforce the R2-D candidates in the lab only.
+    [switch]$SpeakerEvidence,
     # Decrypt the latest diagnostics run into a local HTML report (no voice run).
     [switch]$DiagnosticsReport,
     # Delete all diagnostics recordings, records and reports of this lab.
@@ -89,6 +92,7 @@ try {
     if ($ToolOnlyMemory) { $arguments += "--tool-only-memory" }
     if ($PersonalContext) { $arguments += "--personal-context" }
     if ($PersonalLearning) { $arguments += "--personal-learning" }
+    if ($SpeakerEvidence) { $arguments += "--speaker-evidence" }
     if ($Qualification) {
         $arguments += "--qualification"
         if (-not $RecordDiagnostics) { $arguments += "--record-diagnostics" }
