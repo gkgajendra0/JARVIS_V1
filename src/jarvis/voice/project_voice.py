@@ -1123,6 +1123,18 @@ class VoiceProjectTurns:
         epoch = self._conversation.user_activity_epoch
         if epoch:
             self._personal_epochs.add(epoch)
+        # Voice activity without a new turn no longer revokes a release, so the
+        # current epoch can be ahead of the question's: mark the question too.
+        latest = next(
+            (
+                t
+                for t in reversed(self._conversation.turns)
+                if t.role is ConversationRole.USER
+            ),
+            None,
+        )
+        if latest is not None and latest.user_activity_epoch:
+            self._personal_epochs.add(latest.user_activity_epoch)
 
     def response_withheld(self, handle) -> bool:
         """Whether the project gate withheld (and interrupted) this speech: it
