@@ -18,8 +18,10 @@ def _text(value: str, *, name: str) -> str:
 
 
 # Slice 1 PR C: reads are paged by the projection, so the scoped read has no
-# 32-row failure. This ceiling only bounds one read's memory; reaching it is
-# reported as an explicit failure, never as a silently shortened list.
+# 32-row failure. This ceiling bounds one read's memory and latency; reaching
+# it is an explicit failure, never a silently shortened list. A bounded
+# first-release choice with measured limits:
+# docs/policy/personal-memory-paging-limits.md.
 SCOPED_READ_CEILING = 2000
 
 

@@ -531,3 +531,255 @@ def test_projection_now_is_the_owner_local_date():
     assert result.facts[0]["temporal"]["date_status"] == "in_window"
     later = project_personal_context(snap(plan), requests, now=now + timedelta(days=2))
     assert later.facts[0]["temporal"]["date_status"] == "passed_outcome_unknown"
+
+
+# Learning in a category with more than 32 facts (owner check, 2026-11-21) -------
+
+
+class _NoModel:
+    """A resolver client that must not be reached."""
+
+    def __getattr__(self, name):
+        raise AssertionError("model must not be called")
+
+
+async def _learn(h, text, spec, decide):
+    """One turn through the real catalog; ``decide(catalog)`` gives the
+    resolution (as the model would, from the supplied page only)."""
+    from jarvis.memory.learning_contracts import (
+        LearningBatch,
+        LearningCandidate,
+        LearningResolution,
+        LearningResolutionBatch,
+    )
+    from jarvis.memory.learning_reconciliation import LearningReconciler
+
+    owner = Owner(h)
+    turn = owner.conversation.accept_turn(ConversationRole.USER, text)
+    from jarvis.memory.learning_contracts import (
+        AcceptedLearningSource,
+        EvidenceSpan,
+    )
+
+    source = AcceptedLearningSource.from_turn(
+        "runtime", owner.conversation, turn, now=100
+    )
+    h.authority.register_source(h.grant, source.receipt_id, source=source)
+    spec = dict(spec)
+    quote = spec.pop("quotes")[0]
+    start = text.index(quote)
+    candidate = LearningCandidate(
+        **spec,
+        evidence=[
+            EvidenceSpan(turn_id=turn.turn_id, start=start, end=start + len(quote))
+        ],
+    )
+    batch = LearningBatch(candidates=[candidate])
+    reconciler = LearningReconciler(h.service.canonical_reader, h.authority)
+    catalog = await reconciler.catalog(source, batch, h.grant)
+    decision = await decide(source, batch, catalog)
+    if not isinstance(decision, LearningResolutionBatch):
+        decision = LearningResolutionBatch(
+            resolutions=[LearningResolution(candidate_index=0, **decision)]
+        )
+    plan = reconciler.plan(source, batch, catalog, decision)
+    result = None
+    if plan.mutations or plan.outcomes:
+        result = await h.service.admit_learning(
+            plan, h.authority.issue_child(h.grant, plan.binding())
+        )
+    return catalog, plan, result
+
+
+@pytest.mark.asyncio
+async def test_large_category_still_admits_a_genuinely_new_item(learning):
+    from jarvis.memory.learning_extractors import LearningProviderAdapter
+
+    await seed_vehicles(learning, 40, prefix="Bike")
+    resolver = LearningProviderAdapter("gemini", _NoModel(), "fictional")
+
+    async def decide(source, batch, catalog):
+        return await resolver.resolve(source, batch, catalog)
+
+    catalog, plan, result = await _learn(
+        learning,
+        "I bought a Brightwave scooter.",
+        item("Brightwave scooter", ["a Brightwave scooter"]),
+        decide,
+    )
+    # No existing fact shares a distinguishing word: an empty page, a
+    # deterministic "new" without a model call, and the item is admitted.
+    assert catalog.entries == [] and catalog.page_ambiguous == []
+    assert [m.action for m in plan.mutations] == ["create"] and not plan.outcomes
+    assert result.status == "committed"
+    labels_now = await learning.service.current_owned_item_labels()
+    assert "brightwave scooter" in labels_now and len(labels_now) == 41
+
+
+@pytest.mark.asyncio
+async def test_large_category_refines_the_one_reliable_match(learning):
+    await seed_vehicles(learning, 40, prefix="Bike")
+
+    async def decide(source, batch, catalog):
+        target = [
+            e for e in catalog.entries if json.loads(e.value)["label"] == "Bike 07"
+        ]
+        assert len(catalog.entries) == 1 and len(target) == 1
+        return {"decision": "match", "target_id": target[0].assertion_id}
+
+    _catalog, plan, result = await _learn(
+        learning,
+        "Bike 07 is the red one.",
+        item("Bike 07", ["Bike 07 is the red one"], details="red"),
+        decide,
+    )
+    assert [m.action for m in plan.mutations] == ["refine"] and not plan.outcomes
+    assert result.status == "committed"
+    assert plan.mutations[0].draft.value["details"] == "red"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "label,reason",
+    [
+        ("bike", PAGE_AMBIGUOUS),
+        ("old touring bike", "target_missing_or_category_mismatch"),
+    ],
+    ids=["only_common_words", "match_outside_the_page"],
+)
+async def test_large_category_skips_ambiguous_or_incomplete_matching(
+    learning, label, reason
+):
+    await seed_vehicles(learning, 40, prefix="Bike")
+    outside = (
+        await learning.reader.run(
+            lambda c: c.execute(
+                "SELECT assertion_id FROM semantic_assertion WHERE normalized_text"
+                " LIKE 'Bike 31%' AND state='active'"
+            ).fetchone()
+        )
+    )[0]
+
+    async def decide(source, batch, catalog):
+        # A model claiming a target that was not on the supplied page.
+        return {"decision": "match", "target_id": outside}
+
+    _catalog, plan, result = await _learn(
+        learning,
+        f"My {label} is red.",
+        item(label, [f"My {label} is red"], details="red"),
+        decide,
+    )
+    assert not plan.mutations
+    assert [o.reason for o in plan.outcomes] == [reason]
+    assert result.status == "recorded"
+
+
+# Lease renewal keeps every earlier refusal (owner check, 2026-11-21) ------------
+
+
+async def _released_pages(learning, authority_parts):
+    from test_personal_context_session import _question, _setup
+
+    await seed_vehicles(learning, 11)
+    factory, session = await _setup(learning, authority_parts)
+    conversation = _question("Which vehicles do I own?")
+    personal = factory(conversation)
+    first = await personal.query_for_question(VEHICLES)
+    assert first["status"] == "selected" and "next_page" in first["paging"]
+    return personal, session, conversation, first["paging"]["next_page"]
+
+
+@pytest.fixture
+def proposal_clock(monkeypatch, clock):
+    from types import SimpleNamespace
+
+    from jarvis.authority import proposal
+
+    monkeypatch.setattr(proposal, "time", SimpleNamespace(monotonic=clock))
+
+
+@pytest.mark.asyncio
+async def test_lapsed_lease_alone_renews_and_the_next_page_is_released(
+    learning, authority_parts, clock, proposal_clock
+):
+    personal, session, _, token = await _released_pages(learning, authority_parts)
+    hellos = len(authority_parts.hello.calls)
+    try:
+        clock.advance(31)
+        second = await personal.query_for_question(VEHICLES, token)
+        assert second["status"] == "selected" and second["paging"]["complete"]
+        assert personal._inner._read_renewals == 1
+        assert len(authority_parts.hello.calls) == hellos
+    finally:
+        personal.close()
+        session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "change",
+    [
+        "windows_lock",
+        "session_revoked",
+        "session_expired",
+        "new_owner_turn",
+        "renewal_cap",
+        "corrected",
+        "forgotten",
+        "category_disabled",
+        "session_closed",
+    ],
+)
+async def test_lease_renewal_keeps_every_refusal_for_the_next_page(
+    learning, authority_parts, clock, proposal_clock, change
+):
+    from jarvis.authority.personal_context_session import ABSOLUTE_LIMIT_SECONDS
+    from jarvis.voice import personal_context
+
+    personal, session, conversation, token = await _released_pages(
+        learning, authority_parts
+    )
+    statements = {
+        "corrected": "UPDATE semantic_assertion SET normalized_text='Nexon'"
+        " WHERE state='active' AND predicate LIKE 'owned_item%'",
+        "forgotten": "UPDATE semantic_assertion SET state='retracted'"
+        " WHERE state='active' AND predicate LIKE 'owned_item%'",
+        "category_disabled": "INSERT INTO personal_learning_suppression"
+        " VALUES ('owned_item.vehicle',1,1,'fictional')",
+    }
+
+    def update(connection):
+        with connection:
+            connection.execute(statements[change])
+
+    try:
+        clock.advance(31)
+        if change == "windows_lock":
+            authority_parts.windows.lock_unlock()
+        elif change == "session_revoked":
+            session.close("owner_revoked")
+        elif change == "session_expired":
+            clock.advance(ABSOLUTE_LIMIT_SECONDS)
+        elif change == "new_owner_turn":
+            conversation.accept_turn(ConversationRole.USER, "Actually, never mind.")
+        elif change == "renewal_cap":
+            personal._inner._read_renewals = personal_context.MAX_READ_RENEWALS
+        elif change == "session_closed":
+            personal._inner.close()
+        else:
+            await learning.writer.run(update)
+        refused = await personal.query_for_question(VEHICLES, token)
+        assert refused["status"] in {"denied", "invalid_page_token", "unavailable"}
+        assert not refused.get("facts")
+        if change in statements:
+            # The renewal itself re-checks the released facts, finds them
+            # changed and closes the read.
+            assert personal._inner._closed
+        else:
+            assert personal._inner._read_renewals == (
+                personal_context.MAX_READ_RENEWALS if change == "renewal_cap" else 0
+            )
+    finally:
+        personal.close()
+        session.close()
