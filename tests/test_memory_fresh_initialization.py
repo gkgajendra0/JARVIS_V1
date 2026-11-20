@@ -93,7 +93,7 @@ def test_initialize_creates_a_clean_latest_database_and_touches_nothing_else(
         expect_empty=True,
     )
     assert report["verdict"] == "PASS"
-    assert report["schema_version"] == 7 and report["nonempty_tables"] == []
+    assert report["schema_version"] == 8 and report["nonempty_tables"] == []
     assert "experimental" not in out
 
 

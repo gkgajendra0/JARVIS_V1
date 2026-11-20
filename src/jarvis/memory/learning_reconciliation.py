@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from uuid import uuid4
 
 from jarvis.authority.personal_learning import POLICY_VERSION, LearningActionBinding
@@ -43,6 +44,9 @@ class PlannedLearningMutation:
     expected_assertion_id: str | None
     draft: SemanticAssertionDraft | None
     source: MemorySource
+    # A real-world change's effective time, only when the owner stated it at
+    # day precision; None means unknown (never the time Jarvis was told).
+    effective_at: datetime | None = None
 
 
 @dataclass(frozen=True)

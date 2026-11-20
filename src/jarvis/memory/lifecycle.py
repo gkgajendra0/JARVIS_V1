@@ -112,11 +112,18 @@ class MemoryLifecycleService:
         replacement: SemanticAssertionDraft,
         source: MemorySource,
         *,
-        effective_at: datetime,
+        effective_at: datetime | None,
         reason_code: str | None = None,
     ) -> SemanticAssertionRecord:
+        """A real-world change. ``effective_at=None`` means the owner did not
+        say when it happened (or said it only to week/month/year precision):
+        the old row leaves the current view by state, both validity boundaries
+        stay unknown (NULL), and when Jarvis learned it is the source's
+        ``observed_at`` - never written as the event time."""
         target = self._assertion_id(assertion_id)
-        effective = _utc(effective_at, name="effective_at")
+        effective = (
+            None if effective_at is None else _utc(effective_at, name="effective_at")
+        )
         reason = _reason_code(reason_code)
         return await self._writer.run(
             lambda connection: self._historical_change_sync(
@@ -126,6 +133,31 @@ class MemoryLifecycleService:
                 source,
                 effective,
                 reason,
+            )
+        )
+
+    async def refine(
+        self,
+        assertion_id: str,
+        replacement: SemanticAssertionDraft,
+        source: MemorySource,
+        *,
+        reason_code: str | None = None,
+        commit_guard: Callable[[], None] | None = None,
+    ) -> SemanticAssertionRecord:
+        """Replace a true-but-less-complete fact with a more detailed one.
+
+        Only Jarvis's belief changes (system time): the earlier row becomes
+        ``superseded`` with its ``valid_from``/``valid_to`` untouched and is
+        never ``retracted``, so it is neither presented as wrong (``correct``)
+        nor as a former state of the world (``historical_change``). The
+        replacement keeps the same identity and inherits ``valid_from`` unless
+        the draft states one (a newly given day-precision date)."""
+        target = self._assertion_id(assertion_id)
+        reason = _reason_code(reason_code)
+        return await self._writer.run(
+            lambda connection: self._refine_sync(
+                connection, target, replacement, source, reason, commit_guard
             )
         )
 
@@ -327,12 +359,25 @@ class MemoryLifecycleService:
                         join_existing=True,
                     )
                 elif m.action == "change":
+                    # When the owner said it happened, at day precision, the
+                    # plan carries it; otherwise the effective time is
+                    # unknown. When Jarvis was told stays the source's
+                    # observed_at and is never written as the event time.
                     record = self._historical_change_sync(
                         connection,
                         m.expected_assertion_id,
                         m.draft,
                         m.source,
-                        m.source.observed_at,
+                        m.effective_at,
+                        "automatic_learning",
+                        join_existing=True,
+                    )
+                elif m.action == "refine":
+                    record = self._refine_sync(
+                        connection,
+                        m.expected_assertion_id,
+                        m.draft,
+                        m.source,
                         "automatic_learning",
                         join_existing=True,
                     )
@@ -421,7 +466,7 @@ class MemoryLifecycleService:
         assertion_id: str,
         replacement: SemanticAssertionDraft,
         source: MemorySource,
-        effective_at: datetime,
+        effective_at: datetime | None,
         reason_code: str | None,
         join_existing: bool = False,
     ) -> SemanticAssertionRecord:
@@ -429,7 +474,11 @@ class MemoryLifecycleService:
             now = self._clock_utc()
             self._ensure_source(connection, source)
             current = self._require_current(connection, assertion_id)
-            if current.valid_from is not None and effective_at < current.valid_from:
+            if (
+                effective_at is not None
+                and current.valid_from is not None
+                and effective_at < current.valid_from
+            ):
                 raise MemoryLifecycleError(
                     "historical change effective_at precedes current valid_from"
                 )
@@ -472,6 +521,68 @@ class MemoryLifecycleService:
             return self._require_record(connection, replacement_id)
 
         return self._transaction(connection, mutation, join_existing=join_existing)
+
+    def _refine_sync(
+        self,
+        connection: Any,
+        assertion_id: str,
+        replacement: SemanticAssertionDraft,
+        source: MemorySource,
+        reason_code: str | None,
+        commit_guard: Callable[[], None] | None = None,
+        join_existing: bool = False,
+    ) -> SemanticAssertionRecord:
+        def mutation() -> SemanticAssertionRecord:
+            now = self._clock_utc()
+            self._ensure_source(connection, source)
+            current = self._require_current(connection, assertion_id)
+            if (
+                replacement.subject_scope != current.subject_scope
+                or replacement.subject != current.subject
+                or replacement.predicate != current.predicate
+            ):
+                raise MemoryLifecycleError(
+                    "refine must keep the same subject and predicate"
+                )
+            replacement_id = self._fresh_assertion_id()
+            connection.execute(
+                """
+                UPDATE semantic_assertion
+                SET system_to = ?,
+                    state = 'superseded',
+                    updated_at = ?
+                WHERE assertion_id = ?
+                """,
+                (_db_time(now), _db_time(now), assertion_id),
+            )
+            self._insert_assertion(
+                connection,
+                assertion_id=replacement_id,
+                draft=replacement,
+                source_id=source.source_id,
+                valid_from=(
+                    replacement.valid_from
+                    if replacement.valid_from is not None
+                    else current.valid_from
+                ),
+                system_from=now,
+                supersedes_id=assertion_id,
+                created_at=now,
+            )
+            self._insert_operation(
+                connection,
+                operation_type=MemoryOperationType.REFINE,
+                target_id=replacement_id,
+                source_id=source.source_id,
+                occurred_at=now,
+                reason_code=reason_code,
+                result_state=AssertionState.ACTIVE.value,
+            )
+            return self._require_record(connection, replacement_id)
+
+        return self._transaction(
+            connection, mutation, commit_guard, join_existing=join_existing
+        )
 
     def _correct_sync(
         self,

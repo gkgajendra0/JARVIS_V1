@@ -1,6 +1,6 @@
 """Anchor user date expressions to their accepted turn, never to retrieval time."""
 
-from datetime import date, timedelta
+from .personal_time import time_object
 
 HISTORY_CATEGORIES = frozenset({"personal_fact", "activity", "event", "plan"})
 
@@ -21,30 +21,25 @@ def temporal_context(source, candidate):
             anchor = max(
                 quoted, key=lambda turn: turn.accepted_at
             ).accepted_at.astimezone()
-    normalized = expression.casefold().strip() if expression else ""
-    offsets = {
-        "today": 0,
-        "yesterday": -1,
-        "tomorrow": 1,
-        "aaj": 0,
-        "aaj hi": 0,
-        "आज": 0,
-    }
-    resolved = None
-    if normalized in offsets:
-        resolved = (anchor.date() + timedelta(days=offsets[normalized])).isoformat()
-    elif expression:
-        try:
-            resolved = date.fromisoformat(expression).isoformat()
-        except ValueError:
-            pass  # Keep ambiguous 'kal', 'next month', etc. anchored but unresolved.
-    return {
+    stated = time_object(expression, anchor)
+    # ``date`` keeps its meaning: a resolved single day, else None. Coarser
+    # times keep their real precision and bounds; ambiguous ones ('kal', a
+    # bare month) stay anchored but unresolved.
+    resolved = stated["earliest"] if stated and stated["precision"] == "day" else None
+    context = {
         "expression": expression,
         "date": resolved,
         "recorded_at": recorded.isoformat(),
         "anchor_at": anchor.isoformat(),
         "local_date": anchor.date().isoformat(),
     }
+    if stated:
+        context.update(
+            precision=stated["precision"],
+            earliest=stated["earliest"],
+            latest=stated["latest"],
+        )
+    return context
 
 
 def occurrence_matches(entry, candidate, source):
@@ -57,9 +52,30 @@ def occurrence_matches(entry, candidate, source):
     except (ValueError, AttributeError):
         return False
     new = temporal_context(source, candidate)
-    if old.get("date") or new["date"]:
-        return old.get("date") == new["date"]
+    old_date = _resolved_day(old)
+    if old_date or new["date"]:
+        return old_date == new["date"]
     return (old.get("expression"), old.get("local_date")) == (
         new["expression"],
         new["local_date"],
     )
+
+
+def _resolved_day(temporal):
+    """The stored day, re-resolved under the current rules when it was saved
+    before they resolved that wording (no duplicate occurrence for the same
+    stated day)."""
+    if not isinstance(temporal, dict):
+        return None
+    if temporal.get("date"):
+        return temporal["date"]
+    expression, anchor = temporal.get("expression"), temporal.get("anchor_at")
+    if not expression or not anchor:
+        return None
+    from datetime import datetime
+
+    try:
+        stated = time_object(expression, datetime.fromisoformat(anchor))
+    except ValueError:
+        return None
+    return stated["earliest"] if stated and stated["precision"] == "day" else None

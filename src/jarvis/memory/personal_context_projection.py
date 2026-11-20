@@ -176,6 +176,9 @@ def only_additions_from_turn(
     )
 
 
+_STORED_ONLY_TEMPORAL = frozenset({"precision", "earliest", "latest"})
+
+
 def _current_label(record, scope):
     value = record.value
     if (
@@ -313,6 +316,15 @@ def project_personal_context(
                 for key in ("certainty", "temporal", "location", "reason"):
                     if key in r.value:
                         fact[key] = r.value[key]
+                if isinstance(fact.get("temporal"), dict):
+                    # Precision/bounds are stored now; they are released with
+                    # the paged, larger release budget (slice 1 PR C), so this
+                    # release keeps its existing size and fields.
+                    fact["temporal"] = {
+                        k: v
+                        for k, v in fact["temporal"].items()
+                        if k not in _STORED_ONLY_TEMPORAL
+                    }
             facts.append(fact)
             selected.append(r)
         encoded = json.dumps(
