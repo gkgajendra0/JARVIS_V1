@@ -48,6 +48,7 @@ async def test_real_private_guard_revoked_during_budget_wait_prevents_paid_discl
                     source_id="fictional-forget",
                     source_class=MemorySourceClass.OWNER_EXPLICIT,
                     authority_class=AuthorityClass.OWNER_EXPLICIT,
+                    evidence_text=None,
                 )
                 await learning.service.forget_exact(
                     predicate=selected.predicate, source=source
@@ -139,6 +140,7 @@ async def revoke(learning, parts, clock, selected, kind):
             source_id="fictional-boundary-forget",
             source_class=MemorySourceClass.OWNER_EXPLICIT,
             authority_class=AuthorityClass.OWNER_EXPLICIT,
+            evidence_text=None,
         )
         await learning.service.forget_exact(predicate=selected.predicate, source=source)
 

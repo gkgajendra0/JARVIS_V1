@@ -20,7 +20,7 @@
 - “Wake/sleep does not extend the grant.” Restart, security transitions, manual clear and unhealthy continuity revoke it.
 - “No model can create an accepted source, grant, permit, canonical assertion ID or verification status.”
 - “Do not relabel extracted candidates OWNER_EXPLICIT.” Automatic facts use OWNER_DIRECT, not invented explicit consent or VERIFIED truth.
-- “Raw utterances and source spans remain ephemeral.” Canonical provenance has source/time/digest and `evidence_text=None`.
+- “Raw utterances and source spans remain ephemeral.” Canonical provenance has source/time/digest. (Superseded 2026-11-20 for evidence: an admitted standard fact may keep the minimum supporting owner quote; see `docs/policy/personal-memory-evidence-retention.md`.)
 - First release: standard directly stated owned items, food/response preferences, explicit routines and ongoing goals. Inferences, medical/financial, private/local-only, credentials and third-party profiles are outside automatic admission.
 - “32 queued turn receipts, at most 8,000 UTF-8 bytes each”; one inference in flight; at most one extraction plus one reconciliation call per processed turn; no automatic retries.
 - “extraction timeout 10 seconds, reconciliation timeout 10 seconds; receipt maximum age 30 seconds.” At most eight proposals and 32 reconciliation candidates.

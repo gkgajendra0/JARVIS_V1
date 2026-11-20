@@ -330,7 +330,7 @@ class PersonalLearningRuntime:
         )
         self._stage = "reconciliation"
         plan = self.reconciler.plan(source, batch, catalog, resolutions)
-        if not plan.mutations:
+        if not plan.mutations and not plan.outcomes:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
             self._report("no_change")
             return
@@ -345,6 +345,10 @@ class PersonalLearningRuntime:
             "storage",
             result.status,
             assertion_ids=list(result.assertion_ids),
+            skipped=[
+                {"candidate_index": o.ordinal, "reason": o.reason}
+                for o in plan.outcomes
+            ],
             mutations=[
                 {
                     "action": m.action,

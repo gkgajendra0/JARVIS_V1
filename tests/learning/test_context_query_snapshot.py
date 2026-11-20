@@ -30,6 +30,7 @@ async def test_snapshot_facade_contains_only_canonical_registered_current_scope(
             source_id="correction-source",
             source_class=MemorySourceClass.OWNER_EXPLICIT,
             authority_class=AuthorityClass.OWNER_EXPLICIT,
+            evidence_text=None,
         ),
     )
     await seed_item(learning, "PRIVATE", sensitivity=Sensitivity.PRIVATE)
@@ -43,6 +44,7 @@ async def test_snapshot_facade_contains_only_canonical_registered_current_scope(
             source_id="forged-source",
             source_class=MemorySourceClass.OWNER_EXPLICIT,
             authority_class=AuthorityClass.OWNER_EXPLICIT,
+            evidence_text=None,
         ),
     )
     snapshot = await SemanticRetrievalService(
@@ -62,6 +64,7 @@ async def test_snapshot_facade_contains_only_canonical_registered_current_scope(
             source_id="forget-source",
             source_class=MemorySourceClass.OWNER_EXPLICIT,
             authority_class=AuthorityClass.OWNER_EXPLICIT,
+            evidence_text=None,
         ),
     )
     assert not (

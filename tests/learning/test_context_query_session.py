@@ -172,6 +172,7 @@ async def test_corrected_text_projects_value_without_durable_storage_identity(le
         source_id="safe-correction",
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     await learning.service.correct_text(
         predicate=record.predicate, value="Nexon", source=source
@@ -239,6 +240,7 @@ async def test_combined_preference_goal_query_uses_both_and_excludes_device(lear
         source_id="combined",
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     await learning.service.remember_text(
         predicate="diet preference", value="vegetarian", source=source

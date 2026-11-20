@@ -77,6 +77,28 @@ Field meaning examples (illustrations only, never input facts):
   for an existing activity is a change, not a new entity. Copy the new time
   without adding frequency/words that are absent from its quoted substring.
 Do not insert conjunctions or normalize spelling/case inside a copied value.
+Possessions: one owned_item per item, never a combined list. details holds
+make/model/variant/colour words copied from the quote (never registration,
+serial, IMEI or chassis numbers). acquired_expression / disposed_expression copy
+when it was bought/got or sold/given/lost, verbatim ("2019", "last week").
+state sold, gave_away or lost when the user says how ownership ended, otherwise
+not_owned. A later sentence that only adds detail to an item already mentioned
+(its date, model or colour) is intent new with that detail; the application
+decides whether it refines the existing item.
+Plans: plan_status says whether the plan itself stands: considering (the user is
+unsure it will happen), planned (they intend it), cancelled, done. slots hold
+details: destination, when, vehicle, stay, companions, other. A detail the user
+is still choosing between goes in that slot's options (each copied verbatim) with
+no value; options never change plan_status. Taking a vehicle or staying
+somewhere on a trip is a plan slot, never a change to owned items. A question
+asking for information or advice is not a plan.
+Slice examples (illustrations only, never input facts):
+- "We're doing a beach trip in May, Varkala or Gokarna." -> plan, plan_status
+  planned, slots.destination.options ["Varkala", "Gokarna"], slots.when "May".
+- "Maybe we'll visit Mysore sometime." -> plan, plan_status considering.
+- "My bicycle is a grey Firefox Road Runner I bought in 2018." -> owned_item
+  kind other, label/value "Firefox Road Runner", details "grey",
+  acquired_expression "2018", state owned.
 You do not save, approve, authenticate, assign canonical IDs or verify truth.
 """
 
@@ -93,6 +115,8 @@ For events, activities and plans, compare time_expression and temporal metadata:
 same place/action on different dates can be separate occurrences, not duplicates.
 A changed/cancelled existing plan updates that plan; do not call it completed.
 Use new for a genuinely separate occurrence, match for a change to the same one.
+A proposal that only adds detail (a date, model, colour or alias) to an existing
+item or plan is match to that entry, never new.
 No deletion/write permission comes from your decision. Do not invent facts.
 """
 

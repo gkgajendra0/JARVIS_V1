@@ -12,11 +12,36 @@ from .storage_rows import (
     SEMANTIC_ASSERTION_COLUMNS_SQL,
     semantic_assertion_record_from_row,
 )
-from .types import AssertionState, MemoryOperationType, VerificationState
+from .types import (
+    AssertionState,
+    AuthorityClass,
+    MemoryOperationType,
+    MemorySourceClass,
+    Sensitivity,
+    VerificationState,
+)
 from .worker import SerialConnectionWorker
 
 T = TypeVar("T")
 _REASON_CODE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,63}$")
+
+
+LEARNING_QUOTE_CEILING = 500
+
+
+def learning_quote_allowed(source: MemorySource) -> bool:
+    """The single evidence-retention rule, enforced at storage."""
+    text = source.evidence_text
+    return (
+        isinstance(text, str)
+        and 0 < len(text) <= LEARNING_QUOTE_CEILING
+        and text == text.strip()
+        and source.source_class is MemorySourceClass.OWNER_DIRECT
+        and source.authority_class is AuthorityClass.OWNER_DIRECT
+        and source.sensitivity is Sensitivity.STANDARD
+        and source.canonical_ref.startswith("conversation:")
+        and ":turn:" in source.canonical_ref
+    )
 
 
 class MemoryLifecycleError(RuntimeError):
@@ -135,6 +160,31 @@ class MemoryLifecycleService:
                 reason,
             )
         )
+
+    async def create_many(
+        self,
+        drafts: tuple[SemanticAssertionDraft, ...],
+        source: MemorySource,
+        *,
+        reason_code: str | None = None,
+        commit_guard: Callable[[], None] | None = None,
+    ) -> tuple[SemanticAssertionRecord, ...]:
+        """Create several independent facts from one approved owner statement
+        in a single transaction (all or nothing)."""
+        reason = _reason_code(reason_code)
+
+        def run(connection):
+            def mutation():
+                return tuple(
+                    self._create_sync(
+                        connection, draft, source, reason, True, join_existing=True
+                    )
+                    for draft in drafts
+                )
+
+            return self._transaction(connection, mutation, commit_guard)
+
+        return await self._writer.run(run)
 
     async def refine(
         self,
@@ -406,7 +456,23 @@ class MemoryLifecycleService:
                         record.assertion_id,
                     ),
                 )
-            return LearningAdmissionResult("committed" if ids else "noop", tuple(ids))
+            recorded_at = _db_time(self._clock_utc())
+            for outcome in plan.outcomes:
+                connection.execute(
+                    "INSERT OR IGNORE INTO personal_learning_outcome VALUES"
+                    " (?,?,?,?,?,?)",
+                    (
+                        plan.source.receipt_id,
+                        f"conversation:{plan.source.session_id}:turn:{plan.source.turn_id}",
+                        outcome.ordinal,
+                        outcome.category_key,
+                        outcome.reason,
+                        recorded_at,
+                    ),
+                )
+            if ids:
+                return LearningAdmissionResult("committed", tuple(ids))
+            return LearningAdmissionResult("recorded" if plan.outcomes else "noop")
 
         with authority.commit_scope(permit):
             return self._transaction(connection, mutation, guard)
@@ -923,6 +989,9 @@ class MemoryLifecycleService:
         ).fetchall()
         ids = tuple(r[0] for r in rows)
         marks = ",".join("?" for _ in ids)
+        from .forget_residuals import collect_forget_targets, scrub_forgotten_evidence
+
+        forgotten_terms, forgotten_refs = collect_forget_targets(connection, ids)
         categories = {
             r[0]
             for r in connection.execute(
@@ -983,6 +1052,9 @@ class MemoryLifecycleService:
                 "DELETE FROM memory_source WHERE source_id=? AND NOT EXISTS(SELECT 1 FROM semantic_assertion WHERE source_id=?) AND NOT EXISTS(SELECT 1 FROM memory_operation WHERE source_id=?)",
                 (source_id, source_id, source_id),
             )
+        scrub_forgotten_evidence(
+            connection, forgotten_terms, forgotten_refs, _db_time(now)
+        )
         self._insert_operation(
             connection,
             operation_type=MemoryOperationType.FORGET,
@@ -995,7 +1067,10 @@ class MemoryLifecycleService:
         return True
 
     def _ensure_source(self, connection: Any, source: MemorySource) -> None:
-        if source.evidence_text is not None:
+        if source.evidence_text is not None and not learning_quote_allowed(source):
+            # docs/policy/personal-memory-evidence-retention.md: only the
+            # minimum supporting owner quote of an automatically learned
+            # standard fact; every other source keeps no copied text.
             raise MemoryLifecycleError(
                 "canonical semantic memory must not copy raw source evidence text"
             )
@@ -1006,7 +1081,7 @@ class MemoryLifecycleService:
             _db_time(source.observed_at),
             source.authority_class.value,
             source.sensitivity.value,
-            None,
+            source.evidence_text,
             source.evidence_hash,
             source.external_ref,
             _db_time(source.created_at),

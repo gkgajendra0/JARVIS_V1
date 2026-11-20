@@ -185,7 +185,7 @@ class MemoryService:
                 or m.source.source_class is not MemorySourceClass.OWNER_DIRECT
                 or m.source.authority_class is not AuthorityClass.OWNER_DIRECT
                 or m.source.sensitivity is not Sensitivity.STANDARD
-                or m.source.evidence_text is not None
+                or not _quote_admissible(m.source, plan.source)
                 or m.source.canonical_ref
                 != f"conversation:{plan.source.session_id}:turn:{plan.source.turn_id}"
             ):
@@ -204,6 +204,15 @@ class MemoryService:
                     or d.freshness_class is not FreshnessClass.CHANGEABLE
                 ):
                     raise PermissionError("learning draft scope mismatch")
+        for outcome in plan.outcomes:
+            if (
+                outcome.category not in CATEGORIES
+                or not outcome.reason
+                or len(outcome.reason) > 64
+                or not outcome.reason.replace("_", "").isalnum()
+                or not outcome.reason.islower()
+            ):
+                raise PermissionError("learning outcome mismatch")
         return await self._lifecycle.apply_learning_batch(plan, permit, authority)
 
     async def learning_suppression(self):
@@ -279,6 +288,72 @@ class MemoryService:
             ) from exc
         self._invalidate_learning()
         return ExplicitMemoryResult(predicate=key, record=record)
+
+    async def current_owned_item_labels(self) -> set[str]:
+        return {
+            str(r.value.get("label", "")).casefold()
+            for r in await self._reader.learning_current()
+            if isinstance(r.value, dict) and r.value.get("category") == "owned_item"
+        }
+
+    async def remember_owned_items(
+        self,
+        *,
+        kind: str,
+        items: tuple[str, ...],
+        source: MemorySource,
+        commit_guard: Callable[[], None] | None = None,
+    ) -> tuple[SemanticAssertionRecord, ...]:
+        """A newly supplied explicit list ("my vehicles are X and Y") stored as
+        one owned-item fact per item, in one transaction under the single
+        approval that showed every item. Items already current under the same
+        label are not duplicated. Existing combined records are untouched."""
+        from uuid import uuid4
+
+        from jarvis.personal_learning_scope import POLICY_VERSION
+
+        if kind not in {"vehicle", "device", "other"} or not 1 <= len(items) <= 8:
+            raise MemoryServiceError("owned item list must have 1 to 8 items")
+        if len({i.casefold() for i in items}) != len(items):
+            raise MemoryServiceError("owned item list repeats an item")
+        self._validate_write_policy(
+            source, Sensitivity.STANDARD, FreshnessClass.CHANGEABLE
+        )
+        current = await self.current_owned_item_labels()
+        if any(i.casefold() in current for i in items):
+            # The approval showed exactly these items; never commit a
+            # different set than the owner reviewed.
+            raise MemoryServiceError("reviewed items changed before commit")
+        drafts = []
+        for item in items:
+            text = _text_value(item)
+            drafts.append(
+                SemanticAssertionDraft(
+                    "personal",
+                    "owner",
+                    f"owned_item_{uuid4().hex}",
+                    ValueType.JSON,
+                    {
+                        "schema": POLICY_VERSION,
+                        "category": "owned_item",
+                        "kind": kind,
+                        "label": text,
+                        "value": text,
+                        "state": "owned",
+                    },
+                    f"owned_item.{kind}: {text}; value={text}; state=owned",
+                    FreshnessClass.CHANGEABLE,
+                    Sensitivity.STANDARD,
+                )
+            )
+        records = await self._lifecycle.create_many(
+            tuple(drafts),
+            source,
+            reason_code="explicit_owner_remember",
+            commit_guard=commit_guard,
+        )
+        self._invalidate_learning()
+        return records
 
     async def correct_text(
         self,
@@ -438,3 +513,19 @@ class MemoryService:
             raise MemoryServiceError(
                 "explicit memory source sensitivity must match the stored memory"
             )
+
+
+def _quote_admissible(memory_source, accepted_source) -> bool:
+    """None, or a minimum owner quote made only of the accepted USER turns'
+    own words (docs/policy/personal-memory-evidence-retention.md)."""
+    from .lifecycle import learning_quote_allowed
+
+    text = memory_source.evidence_text
+    if text is None:
+        return True
+    if not learning_quote_allowed(memory_source):
+        return False
+    turns = [t.text for t in accepted_source.turns]
+    return all(
+        piece and any(piece in turn for turn in turns) for piece in text.split(" … ")
+    )

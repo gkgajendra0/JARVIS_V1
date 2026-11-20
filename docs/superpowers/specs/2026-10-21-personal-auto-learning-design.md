@@ -201,9 +201,13 @@ Ambiguous candidates are dropped from durable admission without a save prompt;
 JARVIS may ask a useful factual clarification when the conversation requires it.
 
 Raw utterances and source spans remain ephemeral. Canonical provenance stores
-turn/source references, time and evidence digest, with `evidence_text=None`, as
-required by the existing lifecycle. Saved normalized facts are the intended
-personal memory, not an excuse to retain the full conversation.
+turn/source references, time and evidence digest. Saved normalized facts are the
+intended personal memory, not an excuse to retain the full conversation.
+
+> **Superseded 2026-11-20 (evidence only):** an admitted standard-sensitivity
+> fact may keep the minimum supporting owner quote (500-character ceiling),
+> one source per fact, removed on forget with a residual check. The single
+> current rule is `docs/policy/personal-memory-evidence-retention.md`.
 
 ## 6. Canonical representation and reconciliation
 

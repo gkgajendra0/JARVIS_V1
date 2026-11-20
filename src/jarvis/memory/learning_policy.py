@@ -16,6 +16,7 @@ from .learning_contracts import (
     LearningCandidate,
     LearningEligibility,
 )
+from .learning_values import SLOT_NAMES, has_identifier
 from .project_routing import is_project_control_command
 
 
@@ -74,15 +75,63 @@ class LearningPolicy:
             c.label in text for text in fragments
         ):
             return LearningEligibility("drop", "unsupported_label")
-        for field in ("time_expression", "location", "reason"):
+        for field in (
+            "time_expression",
+            "location",
+            "reason",
+            "details",
+            "acquired_expression",
+            "disposed_expression",
+        ):
             text = getattr(c, field)
             if text is not None and not any(text in fragment for fragment in fragments):
                 return LearningEligibility("drop", "unsupported_" + field)
+        slot_texts = []
+        if c.slots is not None:
+            for name in SLOT_NAMES:
+                slot = getattr(c.slots, name)
+                if slot is not None:
+                    slot_texts += [t for t in (slot.value, *slot.options) if t]
+        for text in (*c.aliases, *slot_texts):
+            # Aliases, plan details and alternatives must be the owner's own
+            # words; the model cannot add an option that was never said.
+            if not any(text in fragment for fragment in fragments):
+                return LearningEligibility("drop", "unsupported_detail")
+        if c.category != "plan" and (c.plan_status is not None or c.slots is not None):
+            return LearningEligibility("drop", "plan_fields_on_non_plan")
+        if c.category == "plan" and all(
+            _interrogative(turns[span.turn_id], span.end) for span in c.evidence
+        ):
+            # A request for information is not a plan disclosure, whatever
+            # alternatives it names ("Kaza or Manali, which is better?").
+            return LearningEligibility("drop", "question_not_disclosure")
+        if has_identifier(c.label) or has_identifier(c.value):
+            return LearningEligibility("drop", "identifier_not_allowed")
         try:
             reject_prohibited_secret(predicate=c.label, value=c.value)
-            for text in (c.time_expression, c.location, c.reason):
+            for text in (
+                c.time_expression,
+                c.location,
+                c.reason,
+                c.details,
+                c.acquired_expression,
+                c.disposed_expression,
+                *c.aliases,
+                *slot_texts,
+            ):
                 if text:
                     reject_prohibited_secret(predicate="", value=text)
         except MemorySecretRejectedError:
             return LearningEligibility("drop", "secret")
         return LearningEligibility("eligible")
+
+
+def _interrogative(text: str, end: int) -> bool:
+    """Whether the sentence containing a cited span ends as a question."""
+    for char in text[end:]:
+        if char in ".!\n":
+            return False
+        if char == "?":
+            return True
+    stripped = text[:end].rstrip()
+    return stripped.endswith("?")
