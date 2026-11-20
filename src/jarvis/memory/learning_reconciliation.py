@@ -13,6 +13,7 @@ from jarvis.authority.proposal import canonical_json
 from jarvis.personal_learning_scope import CATEGORIES
 
 from .assertions import SemanticAssertionDraft
+from .learning_catalog_page import PAGE_AMBIGUOUS, bounded_entries
 from .learning_contracts import (
     AcceptedLearningSource,
     LearningBatch,
@@ -215,7 +216,11 @@ class LearningReconciler:
                 )
             )
         self.authority.validate_read(permit)
-        return LearningCatalog(entries=entries)
+        # Only the proposed categories, bounded per proposal (PR C); a proposal
+        # whose identity cannot be resolved from a bounded page is skipped and
+        # recorded instead of failing the whole turn.
+        supplied, ambiguous = bounded_entries(entries, batch.candidates, SCALAR_FACETS)
+        return LearningCatalog(entries=supplied, page_ambiguous=list(ambiguous))
 
     def plan(
         self,
@@ -261,6 +266,9 @@ class LearningReconciler:
 
             if LearningPolicy().evaluate(source, candidate).status != "eligible":
                 skip("policy_rejected", record=False)
+                continue
+            if index in catalog.page_ambiguous:
+                skip(PAGE_AMBIGUOUS)
                 continue
             if (
                 candidate.category == "owned_item"

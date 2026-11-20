@@ -102,6 +102,19 @@ class ContextProjection:
     # "clarification_required". A mixed request releases the matched scopes and
     # names the rest, so a partial result is never presented as complete.
     scope_results: tuple[tuple[str, str], ...] = ()
+    # Paging (slice 1 PR C). ``total`` facts match the request; this page
+    # starts at ``offset``; ``next_offset`` is None only when the list is
+    # complete. ``omitted`` counts items on this page too large to release
+    # whole. ``scope_counts`` is (scope, total, released_through) per scope.
+    total: int = 0
+    offset: int = 0
+    next_offset: int | None = None
+    omitted: int = 0
+    scope_counts: tuple[tuple[str, int, int], ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        return self.next_offset is None and self.omitted == 0
 
 
 def _json_default(value):
@@ -176,7 +189,25 @@ def only_additions_from_turn(
     )
 
 
-_STORED_ONLY_TEMPORAL = frozenset({"precision", "earliest", "latest"})
+# Slice 1 PR C: a page holds at most 8 items or 3,000 bytes of facts,
+# whichever comes first; an item is never cut.
+PAGE_ITEMS = 8
+PAGE_BYTES = 3000
+RELEASED_STATES = frozenset(
+    {
+        "owned",
+        "not_owned",
+        "sold",
+        "gave_away",
+        "lost",
+        "active",
+        "completed",
+        "planned",
+        "cancelled",
+    }
+)
+_ITEM_TIME_KEYS = ("expression", "precision", "earliest", "latest")
+OVERSIZED = "item_exceeds_page_budget"
 
 
 def _current_label(record, scope):
@@ -203,14 +234,120 @@ def _normalize_label(text):
     return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
 
 
+def _encoded_size(facts) -> int:
+    return len(
+        json.dumps(
+            facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        ).encode()
+    )
+
+
+def _owner_today(temporal, now):
+    anchor = temporal.get("anchor_at") if isinstance(temporal, dict) else None
+    zone = datetime.fromisoformat(anchor).tzinfo if isinstance(anchor, str) else None
+    return now.astimezone(zone).date() if zone is not None else now.date()
+
+
+def _sort_label(record, scope):
+    label = _current_label(record, scope)
+    return _normalize_label(label if label is not None else record.normalized_text)
+
+
+def _released_fact(r, scope, ordinal, now):
+    """One fact as released, or None when the stored row is not releasable."""
+    from .personal_time import date_status
+
+    if (
+        r.subject_scope != "personal"
+        or r.subject != "owner"
+        or r.state is not AssertionState.ACTIVE
+        or r.valid_to is not None
+        or r.sensitivity is not Sensitivity.STANDARD
+        or r.freshness_class is FreshnessClass.TIME_SENSITIVE
+        or not isinstance(r.normalized_text, str)
+        or not r.normalized_text
+    ):
+        return None
+    text = r.normalized_text
+    if r.value_type is ValueType.TEXT and r.predicate not in LEGACY_FACETS:
+        if not isinstance(r.value, str) or not r.value:
+            return None
+        # Registered corrections retain scope, not the opaque display prefix.
+        text = f"{scope}: {r.value}"
+    fact = {
+        "evidence_ref": ordinal,
+        "scope_key": scope,
+        "text": text,
+        "recorded_at": _json_default(r.system_from),
+        "freshness": "last_known",
+    }
+    if isinstance(r.value, dict) and r.value.get("schema") == POLICY_VERSION:
+        state = r.value.get("state")
+        if state not in RELEASED_STATES:
+            return None
+        fact["state"] = state
+        for key in (
+            "certainty",
+            "temporal",
+            "location",
+            "reason",
+            "aliases",
+            "details",
+            "plan_status",
+            "slots",
+        ):
+            if key in r.value:
+                fact[key] = r.value[key]
+        for key in ("acquired", "disposed"):
+            stated = r.value.get(key)
+            if isinstance(stated, dict):
+                fact[key] = {k: stated.get(k) for k in _ITEM_TIME_KEYS}
+        temporal = fact.get("temporal")
+        if isinstance(temporal, dict) and temporal.get("precision"):
+            # Only the precision held is released; a passed window says
+            # nothing about whether the plan happened.
+            fact["temporal"] = {
+                **temporal,
+                "date_status": date_status(temporal, _owner_today(temporal, now)),
+            }
+    return fact
+
+
+def _oversized_fact(fact, label):
+    """An item larger than a whole page: released in a reduced, explicitly
+    marked form that names it by its stored label when that is short (never
+    cut mid-value, never an empty page). The omitted details are not
+    summarized or guessed."""
+    reduced = {
+        key: fact[key]
+        for key in ("evidence_ref", "scope_key", "state", "recorded_at", "freshness")
+        if key in fact
+    }
+    if label is not None:
+        reduced["label"] = label
+    reduced["omitted"] = OVERSIZED
+    return reduced
+
+
 def project_personal_context(
-    snapshot: ScopedContextSnapshot, requests: tuple[PersonalContextRequest, ...]
+    snapshot: ScopedContextSnapshot,
+    requests: tuple[PersonalContextRequest, ...],
+    *,
+    offset: int = 0,
+    now: datetime | None = None,
 ) -> ContextProjection:
+    """One page of the requested scopes' current facts.
+
+    Facts are ordered by scope, label, then assertion ID; ``offset`` counts
+    facts already released for this question. The projection reports the
+    total, how many this page holds, and the next offset, so a partial list is
+    never presented as complete."""
     scopes = tuple(sorted({r.scope_key for r in requests}))
+    now = now or datetime.now(UTC)
 
     outcome = {}
 
-    def result(status, reason=None, facts=(), selected=(), signature=""):
+    def result(status, reason=None, facts=(), selected=(), signature="", **paging):
         return ContextProjection(
             status,
             reason,
@@ -221,6 +358,7 @@ def project_personal_context(
             ()
             if status == "unavailable"  # nothing was reliably checked
             else tuple((scope, outcome[scope]) for scope in scopes if scope in outcome),
+            **paging,
         )
 
     def settle(scope, status):
@@ -230,7 +368,7 @@ def project_personal_context(
             outcome[scope] = status
 
     try:
-        if len(snapshot.entries) > 32:
+        if type(offset) is not int or offset < 0:
             return result("unavailable", "storage_unavailable")
         chosen = {}
         clarification = None
@@ -265,79 +403,55 @@ def project_personal_context(
             if clarification:
                 return result("clarification_required", clarification)
             return result("no_match")
-        if len(chosen) > 4:
-            outcome.clear()
-            return result("clarification_required", "narrow_request")
+        ordered = sorted(
+            chosen.values(),
+            key=lambda pair: (
+                pair[1],
+                _sort_label(pair[0], pair[1]),
+                pair[0].assertion_id,
+            ),
+        )
+        total = len(ordered)
+        if offset >= total:
+            return result("unavailable", "storage_unavailable")
         facts = []
         selected = []
-        for ordinal, (r, scope) in enumerate(
-            sorted(
-                chosen.values(),
-                key=lambda pair: (pair[1], pair[0].predicate, pair[0].assertion_id),
-            ),
-            start=1,
-        ):
-            if (
-                r.subject_scope != "personal"
-                or r.subject != "owner"
-                or r.state is not AssertionState.ACTIVE
-                or r.valid_to is not None
-                or r.sensitivity is not Sensitivity.STANDARD
-                or r.freshness_class is FreshnessClass.TIME_SENSITIVE
-                or not isinstance(r.normalized_text, str)
-                or not r.normalized_text
-            ):
+        omitted = 0
+        for ordinal, (r, scope) in enumerate(ordered[offset:], start=offset + 1):
+            if len(facts) >= PAGE_ITEMS:
+                break
+            fact = _released_fact(r, scope, ordinal, now)
+            if fact is None:
                 return result("unavailable", "storage_unavailable")
-            text = r.normalized_text
-            if r.value_type is ValueType.TEXT and r.predicate not in LEGACY_FACETS:
-                if not isinstance(r.value, str) or not r.value:
+            if _encoded_size([*facts, fact]) > PAGE_BYTES:
+                if facts:
+                    break  # the page ends by bytes; the next page starts here
+                fact = _oversized_fact(fact, _current_label(r, scope))
+                if _encoded_size([fact]) > PAGE_BYTES:
                     return result("unavailable", "storage_unavailable")
-                # Registered corrections retain scope, not the opaque display prefix.
-                text = f"{scope}: {r.value}"
-            fact = {
-                "evidence_ref": ordinal,
-                "scope_key": scope,
-                "text": text,
-                "recorded_at": _json_default(r.system_from),
-                "freshness": "last_known",
-            }
-            if isinstance(r.value, dict) and r.value.get("schema") == POLICY_VERSION:
-                state = r.value.get("state")
-                if state not in {
-                    "owned",
-                    "not_owned",
-                    "active",
-                    "completed",
-                    "planned",
-                    "cancelled",
-                }:
-                    return result("unavailable", "storage_unavailable")
-                fact["state"] = state
-                for key in ("certainty", "temporal", "location", "reason"):
-                    if key in r.value:
-                        fact[key] = r.value[key]
-                if isinstance(fact.get("temporal"), dict):
-                    # Precision/bounds are stored now; they are released with
-                    # the paged, larger release budget (slice 1 PR C), so this
-                    # release keeps its existing size and fields.
-                    fact["temporal"] = {
-                        k: v
-                        for k, v in fact["temporal"].items()
-                        if k not in _STORED_ONLY_TEMPORAL
-                    }
+                omitted += 1
             facts.append(fact)
             selected.append(r)
-        encoded = json.dumps(
-            facts, ensure_ascii=False, separators=(",", ":"), allow_nan=False
-        ).encode()
-        if len(encoded) > 1800:
-            outcome.clear()
-            return result("clarification_required", "narrow_request")
+        released_through = offset + len(facts)
+        per_scope = {}
+        for index, (_, scope) in enumerate(ordered):
+            entry = per_scope.setdefault(scope, [0, 0])
+            entry[0] += 1
+            if index < released_through:
+                entry[1] += 1
         return result(
             "selected",
             facts=facts,
             selected=selected,
             signature=context_scope_signature(snapshot, scopes),
+            total=total,
+            offset=offset,
+            next_offset=released_through if released_through < total else None,
+            omitted=omitted,
+            scope_counts=tuple(
+                (scope, counts[0], counts[1])
+                for scope, counts in sorted(per_scope.items())
+            ),
         )
     except (TypeError, ValueError, AttributeError):
         return result("unavailable", "storage_unavailable")

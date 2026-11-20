@@ -17,7 +17,13 @@ def _text(value: str, *, name: str) -> str:
     return normalized
 
 
-def _learning_current_scoped_sync(connection):
+# Slice 1 PR C: reads are paged by the projection, so the scoped read has no
+# 32-row failure. This ceiling only bounds one read's memory; reaching it is
+# reported as an explicit failure, never as a silently shortened list.
+SCOPED_READ_CEILING = 2000
+
+
+def _learning_current_scoped_sync(connection, scopes=None):
     from jarvis.personal_learning_scope import (
         LEGACY_FACETS,
         POLICY_VERSION,
@@ -61,11 +67,17 @@ def _learning_current_scoped_sync(connection):
         " (json_extract(a.value_json,'$.category')='goal' AND substr(a.predicate,1,5)='goal_') OR"
         " (json_extract(a.value_json,'$.category') IN ('personal_fact','activity','event','plan') AND instr(a.predicate,json_extract(a.value_json,'$.category')||'_')=1)))"
         " OR (a.value_type='text' AND EXISTS (" + registered_exists + ")))"
-        " ORDER BY a.predicate, a.assertion_id LIMIT 33",
-        (*LEGACY_FACETS, POLICY_VERSION, *registration_values),
+        " ORDER BY a.predicate, a.assertion_id LIMIT ?",
+        (
+            *LEGACY_FACETS,
+            POLICY_VERSION,
+            *registration_values,
+            SCOPED_READ_CEILING + 1,
+        ),
     ).fetchall()
-    if len(rows) > 32:
-        raise ValueError("learning_catalog_overflow")
+    if len(rows) > SCOPED_READ_CEILING:
+        raise ValueError("learning_scope_too_large")
+    wanted = None if scopes is None else frozenset(scopes)
     scoped = []
     for row in rows:
         record = semantic_assertion_record_from_row(row)
@@ -80,7 +92,7 @@ def _learning_current_scoped_sync(connection):
             ).fetchall()
             if len(registered) == 1:
                 scope = registered[0][0]
-        if scope is not None:
+        if scope is not None and (wanted is None or scope in wanted):
             scoped.append((record, scope))
     return tuple(scoped)
 
@@ -106,12 +118,16 @@ class CanonicalMemoryReader:
     async def learning_current(self):
         return tuple(record for record, _ in await self.learning_current_scoped())
 
-    async def learning_current_scoped(self):
-        """Bounded standard owner snapshot; caller must hold learning read authority."""
-        return await self._reader.run(_learning_current_scoped_sync)
+    async def learning_current_scoped(self, scopes=None):
+        """Standard owner snapshot, optionally limited to some scopes; caller
+        must hold learning read authority."""
+        return await self._reader.run(
+            lambda connection: _learning_current_scoped_sync(connection, scopes)
+        )
 
-    async def learning_context_snapshot(self):
-        """Read current scoped facts and suppression in one coherent read transaction."""
+    async def learning_context_snapshot(self, scopes=None):
+        """Read current scoped facts and suppression in one coherent read
+        transaction, optionally limited to the requested scopes."""
         from jarvis.personal_learning_scope import SUPPRESSION_KEYS
 
         from .personal_context_projection import ScopedContextSnapshot
@@ -119,7 +135,7 @@ class CanonicalMemoryReader:
         def query(connection):
             connection.execute("SAVEPOINT personal_context_snapshot")
             try:
-                entries = _learning_current_scoped_sync(connection)
+                entries = _learning_current_scoped_sync(connection, scopes)
                 rows = connection.execute(
                     "SELECT category,epoch,suppressed FROM personal_learning_suppression"
                 ).fetchall()

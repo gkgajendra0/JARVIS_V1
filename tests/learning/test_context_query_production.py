@@ -34,7 +34,8 @@ async def test_pinned_gemini_schema_and_raw_binding_preserve_strict_local_attemp
         tool = {t.id: t for t in PersonalContextAgentTools(s).tools}[TOOL]
         schema = tool.info.raw_schema["parameters"]
         assert (
-            set(schema["properties"]) == {"requests"}
+            set(schema["properties"]) == {"requests", "page_token"}
+            and schema["required"] == ["requests"]
             and schema["additionalProperties"] is False
         )
         assert (
@@ -53,6 +54,7 @@ async def test_pinned_gemini_schema_and_raw_binding_preserve_strict_local_attemp
             {"requests": [{"scope_key": "goal", "target_quote": None}]},
             {"requests": [], "owner": "PRIVATE-CANARY"},
             {"requests": "PRIVATE-CANARY"},
+            {"page_token": "PRIVATE-CANARY"},
         ):
             args, kwargs = prepare_function_arguments(
                 fnc=tool, json_arguments=json.dumps(payload)

@@ -63,7 +63,7 @@ class LazyPersonalContext:
     def _query_projection(self):
         return getattr(self._inner, "_query_projection", None)
 
-    async def query_for_question(self, requests):
+    async def query_for_question(self, requests, page_token=None):
         from jarvis.voice.personal_context import annotate_lookup
 
         if self._closed:
@@ -83,7 +83,9 @@ class LazyPersonalContext:
             if self._closed:
                 return annotate_lookup({"status": "denied", "facts": []}, requests)
             self._inner = self._build(self._session.issuer, grant)
-        return await self._inner.query_for_question(requests)
+        if page_token is None:
+            return await self._inner.query_for_question(requests)
+        return await self._inner.query_for_question(requests, page_token)
 
     async def _facts_current(self):
         return True if self._inner is None else await self._inner._facts_current()

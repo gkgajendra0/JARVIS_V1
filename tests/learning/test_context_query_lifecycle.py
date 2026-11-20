@@ -37,7 +37,7 @@ QUERY = [{"scope_key": "owned_item.vehicle", "target_quote": "City"}]
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "change", ["duplicate", "suppression", "source", "correction", "forget", "overflow"]
+    "change", ["duplicate", "suppression", "source", "correction", "forget"]
 )
 async def test_scope_changes_block_queued_audio_even_if_selected_record_survives(
     learning, change
@@ -87,9 +87,6 @@ async def test_scope_changes_block_queued_audio_even_if_selected_record_survives
                 await learning.service.forget_exact(
                     predicate=selected.predicate, source=source
                 )
-        else:
-            for i in range(32):
-                await seed_item(learning, f"phone{i}", "device")
         await output.capture_frame(frame)
         assert len(sink.frames) == 1 and sink.clears and retired
         assert not await s.allow_audio()
@@ -102,6 +99,11 @@ async def test_unrelated_scope_change_does_not_invalidate_evidence(learning):
     async with context_session(learning, "My City?") as (s, _, _):
         await s.query_for_question(QUERY)
         await seed_item(learning, "Phone", "device")
+        assert await s.allow_audio()
+        # Slice 1 PR C: storage beyond 32 rows is no longer a global
+        # failure; many rows in another scope leave this answer valid.
+        for i in range(32):
+            await seed_item(learning, f"phone{i}", "device")
         assert await s.allow_audio()
 
 
@@ -144,7 +146,7 @@ async def test_cancelled_snapshot_closes_session_and_releases_serialization_lock
     async with context_session(learning, "My City?") as (s, _, retired):
         entered = asyncio.Event()
 
-        async def paused():
+        async def paused(*args):
             entered.set()
             await asyncio.Event().wait()
 
@@ -191,8 +193,8 @@ async def test_revocation_during_snapshot_cannot_forward_a_frame(
         await asyncio.gather(s._watchdog, return_exceptions=True)
         original = s._retrieval.learning_context_snapshot
 
-        async def changed_during_read():
-            snapshot = await original()
+        async def changed_during_read(*args):
+            snapshot = await original(*args)
             if change == "expiry":
                 clock.advance(901)
             elif change == "lock":
