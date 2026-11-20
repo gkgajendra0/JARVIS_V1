@@ -106,6 +106,16 @@ def test_the_voice_agent_in_this_mode_carries_the_pr_328_guidance():
             "--personal-learning needs --personal-context",
         ),
         (
+            "jarvis.voice.project_voice_lab",
+            ["--speaker-evidence"],
+            "--speaker-evidence needs --personal-context",
+        ),
+        (
+            "jarvis.voice.project_voice_lab",
+            ["--speaker-evidence-observe"],
+            "--speaker-evidence-observe needs --personal-context",
+        ),
+        (
             "jarvis.voice.project_memory_lab",
             ["--seed-voice-eval", "--context-eval", "--model", "m"],
             "voice evaluation seeding requires a fresh standalone lab",
@@ -245,3 +255,58 @@ def test_a_newly_learned_fact_in_a_requested_empty_scope_changes_the_release():
     assert context_scope_signature(before, both) != context_scope_signature(after, both)
     only = ("owned_item.vehicle",)
     assert context_scope_signature(before, only) == context_scope_signature(after, only)
+
+
+def test_speaker_evidence_lab_config_enforces_the_candidates_in_the_lab_only():
+    from jarvis.config import JarvisConfig
+    from jarvis.voice.project_voice_lab import voice_lab_config
+
+    base = JarvisConfig(ai_provider="gemini")
+    plain = voice_lab_config(base, personal=True)
+    assert not plain.speaker_shadow_enabled
+    assert not plain.speaker_evidence_enforcement and not plain.follow_up_window_bounded
+    lab = voice_lab_config(base, personal=True, speaker_evidence=True)
+    assert lab.speaker_shadow_enabled and not lab.active_speaker_shadow_enabled
+    assert lab.speaker_evidence_enforcement and lab.follow_up_window_bounded
+    assert lab.speaker_owner_min_cosine == 0.45
+    assert not lab.vision_enabled
+    # Normal Jarvis defaults are untouched.
+    assert not JarvisConfig().speaker_evidence_enforcement
+    assert not JarvisConfig().follow_up_window_bounded
+
+
+def test_speaker_evidence_copies_the_identity_store_and_leaves_the_live_one(tmp_path):
+    import hashlib
+
+    from jarvis.identity.speaker_assets import CAMPP_MODEL_FILENAME
+    from jarvis.voice.project_voice_lab import prepare_speaker_evidence
+
+    state = tmp_path / "LocalState"
+    (state / "identity").mkdir(parents=True)
+    (state / "models" / "speaker").mkdir(parents=True)
+    live = state / "identity" / "owner_identity.db"
+    live.write_bytes(b"enrolled template")
+    (state / "models" / "speaker" / CAMPP_MODEL_FILENAME).write_bytes(b"model")
+    before = hashlib.sha256(live.read_bytes()).hexdigest()
+    env = {}
+    lab = tmp_path / "lab" / "profile"
+    paths = prepare_speaker_evidence(state / "machine.json", lab, environ=env)
+    assert paths["identity_copy"] == (lab / "identity" / "owner_identity.db").resolve()
+    assert paths["identity_copy"].read_bytes() == b"enrolled template"
+    assert env["JARVIS_IDENTITY_DATA_DIR"] == str((lab / "identity").resolve())
+    assert env["JARVIS_SPEAKER_MODEL_PATH"].endswith(CAMPP_MODEL_FILENAME)
+    assert hashlib.sha256(live.read_bytes()).hexdigest() == before
+    (state / "models" / "speaker" / CAMPP_MODEL_FILENAME).unlink()
+    with pytest.raises(RuntimeError, match="speaker model not found"):
+        prepare_speaker_evidence(state / "machine.json", tmp_path / "lab2", environ={})
+
+
+def test_speaker_evidence_observe_scores_without_enforcing():
+    from jarvis.config import JarvisConfig
+    from jarvis.voice.project_voice_lab import voice_lab_config
+
+    lab = voice_lab_config(
+        JarvisConfig(ai_provider="gemini"), personal=True, speaker_evidence_observe=True
+    )
+    assert lab.speaker_shadow_enabled and lab.speaker_owner_min_cosine == 0.45
+    assert not lab.speaker_evidence_enforcement and not lab.follow_up_window_bounded

@@ -273,6 +273,8 @@ class VoiceProjectMetrics:
     delivered: int = 0
     clarifications: int = 0
     not_saved: int = 0
+    # Later turns kept out of history on non-owner speaker evidence.
+    speaker_not_owner: int = 0
     failed: int = 0
     duplicate_calls: int = 0
     false_claims: int = 0
@@ -818,6 +820,7 @@ class VoiceProjectTurns:
         self._canonical_forget_epochs: set[int] = set()
         self._nudged_epochs: set[int] = set()
         self._retire = None
+        self._speaker_evidence = None
         self._played = 0  # audible response segments allowed so far
         self._played_epochs: set[int] = set()
         # Grant renewal pending at wake: turns wait (bounded) for Hello.
@@ -1226,6 +1229,29 @@ class VoiceProjectTurns:
 
     async def _prepare_turn(self, turn, future) -> None:
         owner = self._owner
+        evidence_book = self._speaker_evidence
+        if evidence_book is not None and evidence_book.enforcing:
+            # A later turn waits (bounded) for its speaker evidence; positive
+            # non-owner evidence keeps it out of project history and routing.
+            evidence = await evidence_book.wait(turn.turn_id)
+            if evidence_book.withholds(evidence):
+                owner.metrics.speaker_not_owner += 1
+                if not future.done():
+                    future.set_result(_Outcome("not_saved", reason="speaker_not_owner"))
+                LOGGER.info(
+                    "Project voice turn not saved | reason=speaker_not_owner | "
+                    "score=%.4f | turn_id=%s",
+                    evidence.score,
+                    turn.turn_id,
+                )
+                self._diag(
+                    "prepared",
+                    epoch=turn.user_activity_epoch,
+                    turn_id=turn.turn_id,
+                    status="not_saved",
+                    reason="speaker_not_owner",
+                )
+                return
         if not await self._ready():
             # Paused: nothing is saved without a current grant.
             if not future.done():
@@ -2190,6 +2216,10 @@ class VoiceProjectTurns:
     def bind_retire(self, retire) -> None:
         """Ends this wake session, so forgotten words leave the model context."""
         self._retire = retire
+
+    def bind_speaker_evidence(self, evidence) -> None:
+        """Speaker evidence for this wake's accepted turns (or None)."""
+        self._speaker_evidence = evidence
 
     def _pending_forget_confirmation(self) -> int | None:
         """The forget epoch whose confirmation is due, if no newer request has

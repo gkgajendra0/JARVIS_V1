@@ -1046,8 +1046,10 @@ async def test_speaker_shadow_submits_only_after_committed_user_item() -> None:
     submitted = asyncio.Event()
     observed_turns = []
 
-    async def inspect_shadow_turn(turn, *, audio_turn_id: str) -> None:
-        del audio_turn_id
+    async def inspect_shadow_turn(
+        turn, *, audio_turn_id: str, conversation_turn_id=None
+    ) -> None:
+        del audio_turn_id, conversation_turn_id
         observed_turns.append(turn)
         submitted.set()
 
@@ -1214,8 +1216,9 @@ async def test_active_speaker_shadow_uses_separate_paired_audio_window() -> None
         *,
         audio_turn_id: str,
         active_speaker_turn=None,
+        conversation_turn_id=None,
     ) -> None:
-        del audio_turn_id
+        del audio_turn_id, conversation_turn_id
         observed.append((turn, active_speaker_turn))
         submitted.set()
 
