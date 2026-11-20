@@ -77,6 +77,7 @@ async def test_scope_changes_block_queued_audio_even_if_selected_record_survives
                 source_id="explicit-change",
                 source_class=MemorySourceClass.OWNER_EXPLICIT,
                 authority_class=AuthorityClass.OWNER_EXPLICIT,
+                evidence_text=None,
             )
             if change == "correction":
                 await learning.service.correct_text(

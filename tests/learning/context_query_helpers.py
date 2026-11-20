@@ -19,6 +19,7 @@ async def seed_item(h, label="City", kind="vehicle", **changes):
         source_id=str(uuid4()),
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     return await h.lifecycle.create(draft, source)
 

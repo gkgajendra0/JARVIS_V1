@@ -89,6 +89,7 @@ async def test_plan_suppression_tombstones_checkpoints_in_same_transaction(learn
         source_id=str(uuid4()),
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     await learning.service.reenable_learning_category(
         "plan",
@@ -137,6 +138,7 @@ async def test_legacy_plan_fact_forget_invalidates_any_checkpoint_replay(learnin
         source_id=str(uuid4()),
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     await learning.service.forget_exact(predicate=first.predicate, source=explicit)
 
@@ -187,6 +189,7 @@ async def test_runtime_caches_authoritative_plan_epoch_for_nonblocking_voice(lea
         source_id=str(uuid4()),
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     await learning.service.reenable_learning_category(
         "plan",
@@ -231,6 +234,7 @@ async def test_legacy_plan_correction_invalidates_old_checkpoint_and_epoch(learn
         source_id=str(uuid4()),
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
     await learning.service.correct_text(
         predicate=old.predicate,

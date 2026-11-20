@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import unicodedata
 
 from livekit.agents import RunContext, function_tool
@@ -100,6 +101,7 @@ class MemoryAgentTools:
         semantic_query_coordinator: ProviderVerifiedMemoryQueryCoordinator
         | None = None,
         personal_context=None,
+        split_owned_item_lists: bool = True,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
@@ -113,6 +115,9 @@ class MemoryAgentTools:
             )
         self._service = service
         self._conversation = conversation
+        # False only for harnesses that reproduce runs recorded before lists
+        # were split (their stored state must match the recording).
+        self._split_owned_item_lists = split_owned_item_lists
         self._semantic_query_coordinator = semantic_query_coordinator
         self._personal_context = personal_context
 
@@ -149,6 +154,14 @@ class MemoryAgentTools:
         _require_grounded_value(turn, value)
         resolved_sensitivity = parse_memory_sensitivity(sensitivity)
         reject_prohibited_secret(predicate=predicate, value=value)
+        items, kind = (
+            _owned_item_list(predicate, value, turn.text)
+            if self._split_owned_item_lists
+            else ((), "")
+        )
+        if items and resolved_sensitivity.value == "standard":
+            # One approval, showing every item, then one fact per item.
+            return await self._remember_items(turn, predicate, kind, items)
         if self._personal_context is not None:
             await self._personal_context.authorize_mutation(
                 "remember",
@@ -189,6 +202,54 @@ class MemoryAgentTools:
             "predicate": result.predicate,
             "memory_id": result.record.assertion_id,
             "sensitivity": result.record.sensitivity.value,
+        }
+
+    async def _remember_items(self, turn, predicate, kind, items):
+        """One approval showing every item; one owned-item fact per item."""
+        shown = "; ".join(items)
+        if self._personal_context is not None:
+            await self._personal_context.authorize_mutation(
+                "remember",
+                canonical_memory_predicate(predicate),
+                shown,
+                sensitivity="standard",
+            )
+        source = build_owner_explicit_source(
+            conversation=self._conversation,
+            turn=turn,
+            sensitivity=parse_memory_sensitivity("standard"),
+        )
+        try:
+            records = await self._service.remember_owned_items(
+                kind=kind, items=items, source=source, **self._commit_guard()
+            )
+        except (Exception, asyncio.CancelledError):
+            if self._personal_context is not None:
+                self._personal_context.mutation_failed()
+            LOGGER.info(
+                "Memory change | operation=remember_items | status=failed | turn_id=%s",
+                turn.turn_id,
+            )
+            raise
+        if self._personal_context is not None:
+            self._personal_context.mutation_committed()
+        LOGGER.info(
+            "Memory change | operation=remember_items | status=committed | items=%d"
+            " | saved=%d | turn_id=%s",
+            len(items),
+            len(records),
+            turn.turn_id,
+        )
+        return {
+            "ok": True,
+            "operation": "remember",
+            "items": list(items),
+            "saved": [r.value["label"] for r in records],
+            "already_saved": [
+                i for i in items if i not in {r.value["label"] for r in records}
+            ],
+            "memory_ids": [r.assertion_id for r in records],
+            "sensitivity": "standard",
         }
 
     async def correct(
@@ -613,3 +674,34 @@ class MemoryAgentTools:
             return await operation
         except _EXPECTED_MEMORY_ERRORS as exc:
             raise ToolError(str(exc)) from exc
+
+
+_LIST_SEPARATORS = re.compile(r"\s*(?:,|;|&|\band\b|\baur\b)\s*", re.IGNORECASE)
+_LEADING_ARTICLE = re.compile(r"^(?:a|an|the|my|one|ek)\s+", re.IGNORECASE)
+
+
+def _owned_item_list(predicate, value, turn_text):
+    """A newly supplied list of possessions ("a Dell XPS and an iPad Air")
+    for a vehicles/devices memory, as separate items. Anything that does not
+    split cleanly keeps the existing single-record behaviour."""
+    from jarvis.memory.learning_values import has_identifier
+    from jarvis.personal_learning_scope import LEGACY_FACETS
+
+    facet = LEGACY_FACETS.get(canonical_memory_predicate(predicate), "")
+    if not facet.startswith("owned_item."):
+        return (), ""
+    items = []
+    for part in _LIST_SEPARATORS.split(value):
+        item = _LEADING_ARTICLE.sub("", part.strip()).strip(" .")
+        if item:
+            items.append(item)
+    items = list(dict.fromkeys(items))
+    if not 2 <= len(items) <= 8:
+        return (), ""
+    lowered = turn_text.casefold()
+    if any(
+        len(item) > 120 or has_identifier(item) or item.casefold() not in lowered
+        for item in items
+    ):
+        return (), ""
+    return tuple(items), facet.split(".", 1)[1]

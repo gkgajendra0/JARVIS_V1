@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from jarvis.conversation import (
     ConversationRole,
@@ -80,6 +80,33 @@ class EvidenceSpan(BaseModel):
     end: int = Field(gt=0, strict=True)
 
 
+ShortText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
+]
+
+
+class SlotValue(BaseModel):
+    """One detail of a plan: a decided value, or the alternatives still open.
+
+    Options are alternatives the owner is weighing for this detail only; they
+    never say whether the plan itself will happen (``plan_status`` does)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+    value: str | None = Field(default=None, min_length=1, max_length=240)
+    options: list[ShortText] = Field(default_factory=list, max_length=4)
+    certainty: Literal["confirmed", "tentative", "uncertain"] = "confirmed"
+
+
+class PlanSlots(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    destination: SlotValue | None = None
+    when: SlotValue | None = None
+    vehicle: SlotValue | None = None
+    stay: SlotValue | None = None
+    companions: SlotValue | None = None
+    other: SlotValue | None = None
+
+
 class LearningCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
     category: Category
@@ -94,7 +121,15 @@ class LearningCandidate(BaseModel):
         "standard"
     )
     state: Literal[
-        "owned", "not_owned", "active", "completed", "planned", "cancelled"
+        "owned",
+        "not_owned",
+        "sold",
+        "gave_away",
+        "lost",
+        "active",
+        "completed",
+        "planned",
+        "cancelled",
     ] = "active"
     certainty: Literal["confirmed", "tentative", "uncertain"] = "confirmed"
     time_expression: str | None = Field(default=None, min_length=1, max_length=240)
@@ -104,6 +139,13 @@ class LearningCandidate(BaseModel):
         Literal["diet_preference", "response_language", "response_style"] | None
     ) = None
     confidence: float = Field(default=0, ge=0, le=1)
+    # Personal memory slice 1 (all optional; absent means "not said").
+    aliases: list[ShortText] = Field(default_factory=list, max_length=4)
+    details: str | None = Field(default=None, min_length=1, max_length=240)
+    acquired_expression: str | None = Field(default=None, min_length=1, max_length=240)
+    disposed_expression: str | None = Field(default=None, min_length=1, max_length=240)
+    plan_status: Literal["considering", "planned", "cancelled", "done"] | None = None
+    slots: PlanSlots | None = None
 
     @property
     def suppression_key(self):

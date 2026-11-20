@@ -19,6 +19,7 @@ def explicit_source(h):
         source_id=str(uuid4()),
         source_class=MemorySourceClass.OWNER_EXPLICIT,
         authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
     )
 
 

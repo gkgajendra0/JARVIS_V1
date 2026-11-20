@@ -151,6 +151,7 @@ async def test_late_provider_audio_and_context_restore_remain_blocked_after_revo
                     source_id="fictional-forget",
                     source_class=MemorySourceClass.OWNER_EXPLICIT,
                     authority_class=AuthorityClass.OWNER_EXPLICIT,
+                    evidence_text=None,
                 )
                 await learning.service.forget_exact(
                     predicate=selected.predicate, source=source

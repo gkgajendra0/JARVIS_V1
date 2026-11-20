@@ -23,6 +23,16 @@ from .learning_contracts import (
 from .learning_diagnostics import log_learning
 from .learning_policy import SCALAR_FACETS, LearningPolicy
 from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_context
+from .learning_values import (
+    DISPOSED_STATES,
+    PLAN_STATE,
+    has_identifier,
+    item_time,
+    minimal_quote,
+    normalized_slots,
+    refine_merge,
+)
+from .personal_time import day_boundary
 from .provenance import MemorySource
 from .service import normalize_memory_surface
 from .types import (
@@ -50,10 +60,22 @@ class PlannedLearningMutation:
 
 
 @dataclass(frozen=True)
+class LearningOutcome:
+    """A candidate that passed policy but was not saved, and why. Content-free:
+    candidate ordinal, category key and reason code only."""
+
+    ordinal: int
+    category_key: str
+    category: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class LearningPlan:
     source: AcceptedLearningSource
     mutations: tuple[PlannedLearningMutation, ...]
     suppression_epochs: tuple[tuple[str, int], ...] = ()
+    outcomes: tuple[LearningOutcome, ...] = ()
 
     @property
     def digest(self):
@@ -91,6 +113,7 @@ class LearningPlan:
                     "turn": self.source.turn_id,
                     "epochs": self.suppression_epochs,
                     "mutations": rows,
+                    "outcomes": [asdict(o) for o in self.outcomes],
                 }
             ).encode()
         ).hexdigest()
@@ -117,7 +140,12 @@ class LearningPlan:
             "admit",
             self.source.receipt_id,
             self.digest,
-            tuple(sorted({m.category for m in self.mutations})),
+            tuple(
+                sorted(
+                    {m.category for m in self.mutations}
+                    | {o.category for o in self.outcomes}
+                )
+            ),
             tuple((m.predicate, m.expected_assertion_id) for m in self.mutations),
             self.suppression_epochs,
         )
@@ -204,10 +232,12 @@ class LearningReconciler:
                 duplicate_indices.add(choice.candidate_index)
             choices[choice.candidate_index] = choice
         mutations = []
+        outcomes = []
         used = set()
+        trip_choices = _trip_choices(batch)
         for index, candidate in enumerate(batch.candidates):
 
-            def skip(reason, *, index=index, candidate=candidate):
+            def skip(reason, *, index=index, candidate=candidate, record=True):
                 log_learning(
                     self.diagnostics,
                     source,
@@ -217,9 +247,32 @@ class LearningReconciler:
                     reason=reason,
                     fact=candidate.model_dump(mode="json"),
                 )
+                if record and reason not in {"already_stored", "duplicate"}:
+                    # Never silently lost, never claimed saved: a content-free
+                    # record of an eligible candidate that was not saved.
+                    outcomes.append(
+                        LearningOutcome(
+                            index,
+                            candidate.suppression_key,
+                            candidate.category,
+                            reason,
+                        )
+                    )
 
             if LearningPolicy().evaluate(source, candidate).status != "eligible":
-                skip("policy_rejected")
+                skip("policy_rejected", record=False)
+                continue
+            if (
+                candidate.category == "owned_item"
+                and normalize_memory_surface(candidate.label) in trip_choices
+                and (
+                    candidate.intent in {"change", "correction", "retraction"}
+                    or candidate.state in DISPOSED_STATES
+                )
+            ):
+                # Taking a vehicle on a trip is a plan detail, never a change
+                # to what the owner owns.
+                skip("trip_choice_not_ownership")
                 continue
             choice = choices.get(index)
             if (
@@ -251,6 +304,59 @@ class LearningReconciler:
             ]
             if len(same) > 1:
                 skip("ambiguous_existing_fact")
+                continue
+            refine_target = None
+            added = (
+                _added_detail(candidate, source)
+                if candidate.intent == "new" and candidate.category not in SCALAR_FACETS
+                else {}
+            )
+            if added:
+                if same:
+                    refine_target = same[0]
+                elif (
+                    choice.decision in {"match", "duplicate"}
+                    and entry is not None
+                    and entry.category == candidate.category
+                    and entry.kind == candidate.kind
+                    and _label(entry) == normalize_memory_surface(candidate.label)
+                ):
+                    refine_target = entry
+            if refine_target is not None:
+                try:
+                    old_value = json.loads(refine_target.value)
+                except (TypeError, ValueError):
+                    old_value = None
+                if not isinstance(old_value, dict):
+                    skip("already_stored")
+                    continue
+                merged, reason = refine_merge(old_value, added)
+                if merged is None:
+                    skip(reason)
+                    continue
+                predicate, expected = (
+                    refine_target.predicate,
+                    refine_target.assertion_id,
+                )
+                if predicate in used:
+                    skip("conflicting_mutations")
+                    continue
+                used.add(predicate)
+                mutations.append(
+                    self._mutation(
+                        index,
+                        candidate,
+                        source,
+                        "refine",
+                        predicate,
+                        expected,
+                        merged,
+                        valid_from=day_boundary(merged.get("acquired"))
+                        if candidate.category == "owned_item"
+                        else None,
+                        others=_other_labels(batch, index),
+                    )
+                )
                 continue
             if choice.decision == "duplicate":
                 skip("duplicate")
@@ -310,7 +416,6 @@ class LearningReconciler:
                 continue
             used.add(predicate)
             value = candidate.value
-            value_type = ValueType.TEXT
             if candidate.category not in SCALAR_FACETS:
                 if entry is not None and action == "change":
                     try:
@@ -318,75 +423,247 @@ class LearningReconciler:
                     except (TypeError, ValueError):
                         skip("invalid_existing_value")
                         continue
-                    value = {**old, "state": candidate.state}
-                    if candidate.category != "owned_item":
-                        value["value"] = candidate.value
+                    value = _changed_value(old, candidate, source)
                 else:
-                    value = {
-                        "schema": POLICY_VERSION,
-                        "category": candidate.category,
-                        "kind": candidate.kind,
-                        "label": candidate.label,
-                        "value": candidate.value,
-                        "state": candidate.state,
-                    }
-                if candidate.category in HISTORY_CATEGORIES:
-                    value["label"] = candidate.label
-                    value["certainty"] = candidate.certainty
-                    if candidate.time_expression is not None or "temporal" not in value:
-                        value["temporal"] = temporal_context(source, candidate)
-                    for key in ("location", "reason"):
-                        detail = getattr(candidate, key)
-                        if detail is not None:
-                            value[key] = detail
-                value_type = ValueType.JSON
-            normalized = f"{candidate.category}: {candidate.value}"
-            if isinstance(value, dict):
-                normalized = f"{candidate.category}.{candidate.kind}: {value['label']}; value={value['value']}; state={value['state']}"
-            draft = (
-                None
-                if action == "retract"
-                else SemanticAssertionDraft(
-                    "personal",
-                    "owner",
-                    predicate,
-                    value_type,
-                    value,
-                    normalized,
-                    FreshnessClass.CHANGEABLE,
-                    Sensitivity.STANDARD,
-                )
-            )
-            fact_digest = hashlib.sha256(
-                canonical_json(
-                    {
-                        "value": candidate.value,
-                        "evidence": [e.model_dump() for e in candidate.evidence],
-                    }
-                ).encode()
-            ).hexdigest()
-            source_record = MemorySource(
-                str(uuid4()),
-                MemorySourceClass.OWNER_DIRECT,
-                f"conversation:{source.session_id}:turn:{source.turn_id}",
-                source.turns[-1].accepted_at,
-                AuthorityClass.OWNER_DIRECT,
-                Sensitivity.STANDARD,
-                source.turns[-1].accepted_at,
-                evidence_hash=fact_digest,
-            )
+                    value = _new_value(candidate, source)
+            effective_at = None
+            valid_from = None
+            if candidate.category == "owned_item" and isinstance(value, dict):
+                if action == "change" and value.get("state") in DISPOSED_STATES:
+                    # Only a stated day becomes the change boundary; week,
+                    # month or year leaves it unknown (never the told time).
+                    effective_at = day_boundary(value.get("disposed"))
+                elif action == "create":
+                    valid_from = day_boundary(value.get("acquired"))
             mutations.append(
-                PlannedLearningMutation(
+                self._mutation(
                     index,
+                    candidate,
+                    source,
                     action,
-                    candidate.suppression_key,
-                    candidate.category,
                     predicate,
                     expected,
-                    draft,
-                    source_record,
+                    value,
+                    effective_at=effective_at,
+                    valid_from=valid_from,
+                    others=_other_labels(batch, index),
                 )
             )
         return LearningPlan(
-            source, tuple(mutations), tuple(sorted(catalog.suppression_epochs.items()))
+            source,
+            tuple(mutations),
+            tuple(sorted(catalog.suppression_epochs.items())),
+            tuple(outcomes),
         )
+
+    @staticmethod
+    def _mutation(
+        index,
+        candidate,
+        source,
+        action,
+        predicate,
+        expected,
+        value,
+        *,
+        effective_at=None,
+        valid_from=None,
+        others=(),
+    ):
+        value_type = ValueType.TEXT if isinstance(value, str) else ValueType.JSON
+        normalized = f"{candidate.category}: {candidate.value}"
+        if isinstance(value, dict):
+            normalized = (
+                f"{candidate.category}.{candidate.kind}: {value['label']}; "
+                f"value={value['value']}; state={value['state']}"
+            )
+        draft = (
+            None
+            if action == "retract"
+            else SemanticAssertionDraft(
+                "personal",
+                "owner",
+                predicate,
+                value_type,
+                value,
+                normalized,
+                FreshnessClass.CHANGEABLE,
+                Sensitivity.STANDARD,
+                valid_from=valid_from,
+            )
+        )
+        fact_digest = hashlib.sha256(
+            canonical_json(
+                {
+                    "value": candidate.value,
+                    "evidence": [e.model_dump() for e in candidate.evidence],
+                }
+            ).encode()
+        ).hexdigest()
+        source_record = MemorySource(
+            str(uuid4()),  # one source per fact, never shared
+            MemorySourceClass.OWNER_DIRECT,
+            f"conversation:{source.session_id}:turn:{source.turn_id}",
+            source.turns[-1].accepted_at,
+            AuthorityClass.OWNER_DIRECT,
+            Sensitivity.STANDARD,
+            source.turns[-1].accepted_at,
+            evidence_text=evidence_quote(source, candidate, others),
+            evidence_hash=fact_digest,
+        )
+        return PlannedLearningMutation(
+            index,
+            action,
+            candidate.suppression_key,
+            candidate.category,
+            predicate,
+            expected,
+            draft,
+            source_record,
+            effective_at=effective_at,
+        )
+
+
+def _anchor(source, candidate):
+    from .learning_temporal import temporal_context
+
+    return temporal_context(source, candidate)["anchor_at"]
+
+
+def _item_fields(candidate, source):
+    """Slice-1 fields for an owned item: aliases, details (identifiers
+    removed), acquired/disposed time objects at their stated precision."""
+    from datetime import datetime
+
+    anchor = datetime.fromisoformat(_anchor(source, candidate))
+    fields = {}
+    aliases = [a for a in candidate.aliases if not has_identifier(a)]
+    if aliases:
+        fields["aliases"] = aliases
+    if candidate.details and not has_identifier(candidate.details):
+        fields["details"] = candidate.details
+    for key, expression in (
+        ("acquired", candidate.acquired_expression),
+        ("disposed", candidate.disposed_expression),
+    ):
+        stated = item_time(expression, anchor)
+        if stated:
+            fields[key] = stated
+    return fields
+
+
+def _plan_fields(candidate):
+    fields = {}
+    if candidate.plan_status is not None:
+        fields["plan_status"] = candidate.plan_status
+    slots = normalized_slots(candidate.slots)
+    if slots:
+        fields["slots"] = slots
+    return fields
+
+
+def _added_detail(candidate, source):
+    if candidate.category == "owned_item":
+        return _item_fields(candidate, source)
+    if candidate.category == "plan":
+        return _plan_fields(candidate)
+    return {}
+
+
+def _plan_state_and_certainty(candidate):
+    if candidate.category != "plan" or candidate.plan_status is None:
+        return candidate.state, candidate.certainty
+    certainty = (
+        "tentative" if candidate.plan_status == "considering" else candidate.certainty
+    )
+    return PLAN_STATE[candidate.plan_status], certainty
+
+
+def _new_value(candidate, source):
+    state, certainty = _plan_state_and_certainty(candidate)
+    value = {
+        "schema": POLICY_VERSION,
+        "category": candidate.category,
+        "kind": candidate.kind,
+        "label": candidate.label,
+        "value": candidate.value,
+        "state": state,
+    }
+    if candidate.category == "owned_item":
+        value.update(_item_fields(candidate, source))
+    if candidate.category in HISTORY_CATEGORIES:
+        value["certainty"] = certainty
+        value["temporal"] = temporal_context(source, candidate)
+        for key in ("location", "reason"):
+            detail = getattr(candidate, key)
+            if detail is not None:
+                value[key] = detail
+        if candidate.category == "plan":
+            value.update(_plan_fields(candidate))
+    return value
+
+
+def _changed_value(old, candidate, source):
+    """A real-world change to the same thing: keep its identity, update what
+    the owner said changed."""
+    state, certainty = _plan_state_and_certainty(candidate)
+    value = {**old, "state": state}
+    if candidate.category != "owned_item":
+        value["value"] = candidate.value
+    else:
+        fields = _item_fields(candidate, source)
+        for key in ("aliases", "details", "disposed"):
+            if key in fields:
+                value[key] = fields[key]
+        if "acquired" in fields and "acquired" not in value:
+            value["acquired"] = fields["acquired"]
+    if candidate.category in HISTORY_CATEGORIES:
+        value["label"] = candidate.label
+        value["certainty"] = certainty
+        if candidate.time_expression is not None or "temporal" not in value:
+            value["temporal"] = temporal_context(source, candidate)
+        for key in ("location", "reason"):
+            detail = getattr(candidate, key)
+            if detail is not None:
+                value[key] = detail
+        if candidate.category == "plan":
+            fields = _plan_fields(candidate)
+            if "plan_status" in fields:
+                value["plan_status"] = fields["plan_status"]
+            if "slots" in fields:
+                value["slots"] = {**(old.get("slots") or {}), **fields["slots"]}
+    return value
+
+
+def _other_labels(batch, index):
+    return [c.label for i, c in enumerate(batch.candidates) if i != index and c.label]
+
+
+def _trip_choices(batch):
+    """Vehicles/stays named as plan details in this batch (normalized)."""
+    names = set()
+    for candidate in batch.candidates:
+        if candidate.category != "plan" or candidate.slots is None:
+            continue
+        for slot in (candidate.slots.vehicle, candidate.slots.stay):
+            if slot is None:
+                continue
+            for text in (slot.value, *slot.options):
+                if text:
+                    names.add(normalize_memory_surface(text))
+    return names
+
+
+def evidence_quote(source, candidate, others=()):
+    """The minimum supporting owner quote for one admitted standard fact
+    (docs/policy/personal-memory-evidence-retention.md)."""
+    if candidate.sensitivity != "standard" or candidate.qualification != "direct":
+        return None
+    turns = {t.turn_id: t.text for t in source.turns}
+    fragments = [
+        turns[e.turn_id][e.start : e.end]
+        for e in candidate.evidence
+        if e.turn_id in turns
+    ]
+    needles = [candidate.value, candidate.label, *candidate.aliases]
+    return minimal_quote(fragments, needles, list(others))

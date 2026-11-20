@@ -895,7 +895,10 @@ def _erase_personal_facts(conn, facts, checkpoints, now):
     to forget one thing, not to stop learning a kind of fact."""
     from uuid import uuid4
 
+    from .forget_residuals import collect_forget_targets, scrub_forgotten_evidence
+
     stamp = now.isoformat(timespec="microseconds")
+    forgotten_terms, forgotten_refs = collect_forget_targets(conn, facts)
     for start in range(0, len(facts), 256):
         chunk = facts[start : start + 256]
         marks = ",".join("?" for _ in chunk)
@@ -935,6 +938,7 @@ def _erase_personal_facts(conn, facts, checkpoints, now):
                 "'conversation_forget','forgotten',NULL)",
                 (str(uuid4()), assertion_id, stamp),
             )
+    scrub_forgotten_evidence(conn, forgotten_terms, forgotten_refs, stamp)
     for key in checkpoints:
         conn.execute(
             "DELETE FROM conversation_topic_checkpoint WHERE topic_key=?", (key,)

@@ -407,7 +407,14 @@ async def _mutate(memory, capability, operation, predicate, value):
     print("FICTIONAL MEMORY COMMAND: " + text, flush=True)
     conversation.accept_turn(ConversationRole.USER, text)
     session = build_project_personal_session(conversation, memory, capability)
-    tools = MemoryAgentTools(memory.service, conversation, personal_context=session)
+    # The evaluation cases (context-eval-1..7, voice-eval) were recorded with
+    # one combined vehicles record; keep that stored shape so replays match.
+    tools = MemoryAgentTools(
+        memory.service,
+        conversation,
+        personal_context=session,
+        split_owned_item_lists=False,
+    )
     try:
         receipt = await getattr(tools, operation)(predicate=predicate, value=value)
         if receipt.get("ok") is not True:
