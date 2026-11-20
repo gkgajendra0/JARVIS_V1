@@ -65,3 +65,4 @@ class MemoryOperationType(str, Enum):
     VERIFY = "verify"
     EXPIRE = "expire"
     FORGET = "forget"
+    REFINE = "refine"

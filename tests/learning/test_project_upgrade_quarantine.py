@@ -95,7 +95,7 @@ async def open_lab(tmp_path, parts):
     path = tmp_path / "history.db"
     legacy_database(path)
     with sqlite3.connect(path) as connection:
-        assert MemoryMigrationRunner().apply(connection) == 7
+        assert MemoryMigrationRunner().apply(connection) == 8
     writer = SerialConnectionWorker(lambda: sqlite3.connect(path), thread_name="w")
     reader = SerialConnectionWorker(lambda: sqlite3.connect(path), thread_name="r")
     issuer = ConversationHistoryAuthority(parts.broker)
@@ -295,7 +295,7 @@ async def test_approval_binds_the_exact_quarantine_shown(tmp_path, authority_par
 
 def test_fresh_database_has_nothing_to_quarantine(tmp_path):
     with sqlite3.connect(tmp_path / "fresh.db") as connection:
-        assert MemoryMigrationRunner().apply(connection) == 7
+        assert MemoryMigrationRunner().apply(connection) == 8
         assert not connection.execute(
             "SELECT 1 FROM conversation_event_quarantine"
         ).fetchall()

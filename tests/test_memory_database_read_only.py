@@ -40,7 +40,7 @@ def test_encrypted_inspection_denies_writes_and_preserves_bytes_and_schema(tmp_p
         assert c.execute("SELECT value FROM inspection_probe").fetchone() == (
             "preserve me",
         )
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 8
         with pytest.raises(driver.OperationalError):
             c.execute("DELETE FROM inspection_probe")
         c.execute("PRAGMA query_only = OFF")

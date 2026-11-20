@@ -5,6 +5,7 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 
 from number_parser import parse as parse_number_words
 
@@ -170,7 +171,16 @@ class MemoryService:
         for m in plan.mutations:
             if (
                 m.ordinal in seen
-                or m.action not in {"create", "correct", "change", "retract"}
+                or m.action not in {"create", "correct", "change", "retract", "refine"}
+                or (m.action == "create") != (m.expected_assertion_id is None)
+                or (m.action != "change" and m.effective_at is not None)
+                or (
+                    m.effective_at is not None
+                    and (
+                        not isinstance(m.effective_at, datetime)
+                        or m.effective_at.tzinfo is None
+                    )
+                )
                 or m.category not in CATEGORIES
                 or m.source.source_class is not MemorySourceClass.OWNER_DIRECT
                 or m.source.authority_class is not AuthorityClass.OWNER_DIRECT
