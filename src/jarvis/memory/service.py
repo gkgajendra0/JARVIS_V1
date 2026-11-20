@@ -289,6 +289,13 @@ class MemoryService:
         self._invalidate_learning()
         return ExplicitMemoryResult(predicate=key, record=record)
 
+    async def current_owned_item_labels(self) -> set[str]:
+        return {
+            str(r.value.get("label", "")).casefold()
+            for r in await self._reader.learning_current()
+            if isinstance(r.value, dict) and r.value.get("category") == "owned_item"
+        }
+
     async def remember_owned_items(
         self,
         *,
@@ -305,22 +312,21 @@ class MemoryService:
 
         from jarvis.personal_learning_scope import POLICY_VERSION
 
-        if kind not in {"vehicle", "device", "other"} or not 2 <= len(items) <= 8:
-            raise MemoryServiceError("owned item list must have 2 to 8 items")
+        if kind not in {"vehicle", "device", "other"} or not 1 <= len(items) <= 8:
+            raise MemoryServiceError("owned item list must have 1 to 8 items")
+        if len({i.casefold() for i in items}) != len(items):
+            raise MemoryServiceError("owned item list repeats an item")
         self._validate_write_policy(
             source, Sensitivity.STANDARD, FreshnessClass.CHANGEABLE
         )
-        current = {
-            str(r.value.get("label", "")).casefold()
-            for r in await self._reader.learning_current()
-            if isinstance(r.value, dict) and r.value.get("category") == "owned_item"
-        }
+        current = await self.current_owned_item_labels()
+        if any(i.casefold() in current for i in items):
+            # The approval showed exactly these items; never commit a
+            # different set than the owner reviewed.
+            raise MemoryServiceError("reviewed items changed before commit")
         drafts = []
         for item in items:
             text = _text_value(item)
-            if text.casefold() in current:
-                continue
-            current.add(text.casefold())
             drafts.append(
                 SemanticAssertionDraft(
                     "personal",
@@ -340,8 +346,6 @@ class MemoryService:
                     Sensitivity.STANDARD,
                 )
             )
-        if not drafts:
-            return ()
         records = await self._lifecycle.create_many(
             tuple(drafts),
             source,

@@ -934,3 +934,186 @@ async def test_voice_forget_path_also_scrubs_quotes(learning):
     assert all("Tigor" not in (r["quote"] or "") for r in current(after))
     report = await learning.reader.run(lambda c: residual_report(c, ["Tata Tigor"]))
     assert report["evidence_quotes"] == report["search_index"] == 0
+
+
+# Explicit-list splitter (owner review 2026-11-20 19:32) ------------------------
+
+
+@pytest.mark.parametrize(
+    "predicate,value,status,items,reason",
+    [
+        # Genuine lists of separate items.
+        (
+            "devices",
+            "a Dell XPS and an iPad Air",
+            "items",
+            ("Dell XPS", "iPad Air"),
+            "",
+        ),
+        (
+            "vehicles",
+            "a Hero Splendor, an Ola S1 and a Bajaj Pulsar",
+            "items",
+            ("Hero Splendor", "Ola S1", "Bajaj Pulsar"),
+            "",
+        ),
+        (
+            "vehicles",
+            "a Bajaj Chetak; a TVS Jupiter",
+            "items",
+            ("Bajaj Chetak", "TVS Jupiter"),
+            "",
+        ),
+        ("vehicles", "ek Chetak aur ek Pulsar", "items", ("Chetak", "Pulsar"), ""),
+        # A conjunction inside a name or description is kept.
+        ("vehicle", "a black and white Vespa", "single", (), ""),
+        ("device", "a Bang and Olufsen speaker", "single", (), ""),
+        (
+            "devices",
+            "a Bang and Olufsen speaker",
+            "ambiguous",
+            (),
+            "one_or_several_items",
+        ),
+        (
+            "devices",
+            "a Bang and Olufsen speaker and an iPad Air",
+            "items",
+            ("Bang and Olufsen speaker", "iPad Air"),
+            "",
+        ),
+        (
+            "vehicles",
+            "a black and white Vespa and a Bajaj Pulsar",
+            "items",
+            ("black and white Vespa", "Bajaj Pulsar"),
+            "",
+        ),
+        # Shared wording across items cannot stand alone.
+        ("vehicles", "a red Chetak and a blue one", "ambiguous", (), "shared_wording"),
+        ("devices", "Dell and HP laptops", "ambiguous", (), "one_or_several_items"),
+        # Ambiguous boundaries: refuse rather than guess.
+        ("vehicles", "a Pulsar and Chetak", "ambiguous", (), "one_or_several_items"),
+        (
+            "vehicles",
+            "a Pulsar, Chetak and Jupiter",
+            "ambiguous",
+            (),
+            "item_boundaries_unclear",
+        ),
+        # Not a list at all.
+        ("vehicles", "a Bajaj Pulsar", "single", (), ""),
+        ("home_city", "Pune and Mumbai", "not_a_list", (), ""),
+    ],
+)
+def test_explicit_list_split_only_at_unambiguous_boundaries(
+    predicate, value, status, items, reason
+):
+    from jarvis.voice.memory_tools import _parse_item_list
+
+    parsed = _parse_item_list(predicate, value, f"Remember my {predicate} are {value}.")
+    assert (parsed.status, parsed.items, parsed.reason) == (status, items, reason)
+
+
+class _Approvals:
+    def __init__(self):
+        self.approvals = []
+
+    def reserve_mutation(self, operation):
+        pass
+
+    async def authorize_mutation(self, operation, predicate, value=None, **kw):
+        self.approvals.append((operation, predicate, value))
+
+    def validate_mutation_commit(self):
+        pass
+
+    def mutation_committed(self):
+        pass
+
+    def mutation_failed(self):
+        pass
+
+
+def _tools(learning, text):
+    from jarvis.voice.memory_tools import MemoryAgentTools
+
+    conversation = ConversationSession()
+    conversation.start()
+    conversation.accept_turn(ConversationRole.USER, text)
+    personal = _Approvals()
+    return MemoryAgentTools(
+        learning.service, conversation, personal_context=personal
+    ), personal
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "value,reason",
+    [
+        ("a Pulsar and Chetak", "one_or_several_items"),
+        ("a red Chetak and a blue one", "shared_wording"),
+    ],
+)
+async def test_ambiguous_list_asks_and_saves_nothing(learning, value, reason):
+    before = await rows(learning)
+    tools, personal = _tools(learning, f"Remember my vehicles are {value}.")
+    receipt = await tools.remember(predicate="vehicles", value=value)
+    assert receipt["ok"] is False
+    assert receipt["status"] == "clarification_required"
+    assert receipt["reason"] == reason and receipt["saved"] == []
+    assert personal.approvals == []  # no Windows Hello prompt for a guess
+    assert await rows(learning) == before
+
+
+@pytest.mark.asyncio
+async def test_hello_review_shows_exactly_what_is_committed(learning):
+    tools, personal = _tools(
+        learning, "Remember my vehicles are a Bajaj Chetak and a TVS Jupiter."
+    )
+    await tools.remember(predicate="vehicles", value="a Bajaj Chetak and a TVS Jupiter")
+    tools, personal = _tools(
+        learning,
+        "Remember my vehicles are a TVS Jupiter, a Bang and Olufsen bike and an Ola S1.",
+    )
+    receipt = await tools.remember(
+        predicate="vehicles",
+        value="a TVS Jupiter, a Bang and Olufsen bike and an Ola S1",
+    )
+    # Already saved items are left out before the review, not after it.
+    assert personal.approvals == [
+        ("remember", "vehicles", "Bang and Olufsen bike; Ola S1")
+    ]
+    assert receipt["saved"] == ["Bang and Olufsen bike", "Ola S1"]
+    assert receipt["already_saved"] == ["TVS Jupiter"]
+    labels = sorted(
+        r["value"]["label"]
+        for r in current(await rows(learning))
+        if isinstance(r["value"], dict)
+    )
+    assert labels == ["Bajaj Chetak", "Bang and Olufsen bike", "Ola S1", "TVS Jupiter"]
+
+
+@pytest.mark.asyncio
+async def test_commit_refuses_a_set_that_changed_after_review(learning):
+    from dataclasses import replace
+
+    from jarvis.memory.service import MemoryServiceError
+    from jarvis.memory.types import AuthorityClass, MemorySourceClass
+
+    source = replace(
+        learning.plan.mutations[0].source,
+        source_id="explicit-items",
+        source_class=MemorySourceClass.OWNER_EXPLICIT,
+        authority_class=AuthorityClass.OWNER_EXPLICIT,
+        evidence_text=None,
+    )
+    await learning.service.remember_owned_items(
+        kind="vehicle", items=("Ola S1",), source=source
+    )
+    before = await rows(learning)
+    with pytest.raises(MemoryServiceError, match="changed before commit"):
+        await learning.service.remember_owned_items(
+            kind="vehicle", items=("Bajaj Pulsar", "Ola S1"), source=source
+        )
+    assert await rows(learning) == before  # nothing partial

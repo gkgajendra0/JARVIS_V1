@@ -6,6 +6,7 @@ import asyncio
 import logging
 import re
 import unicodedata
+from dataclasses import dataclass
 
 from livekit.agents import RunContext, function_tool
 from livekit.agents.llm import ToolError
@@ -154,14 +155,36 @@ class MemoryAgentTools:
         _require_grounded_value(turn, value)
         resolved_sensitivity = parse_memory_sensitivity(sensitivity)
         reject_prohibited_secret(predicate=predicate, value=value)
-        items, kind = (
-            _owned_item_list(predicate, value, turn.text)
+        parsed = (
+            _parse_item_list(predicate, value, turn.text)
             if self._split_owned_item_lists
-            else ((), "")
+            else _ItemList("not_a_list")
         )
-        if items and resolved_sensitivity.value == "standard":
-            # One approval, showing every item, then one fact per item.
-            return await self._remember_items(turn, predicate, kind, items)
+        if parsed.status == "ambiguous":
+            # Never save guessed items: ask the owner to name each one.
+            LOGGER.info(
+                "Memory change | operation=remember_items | status=clarification_required"
+                " | reason=%s | turn_id=%s",
+                parsed.reason,
+                turn.turn_id,
+            )
+            return {
+                "ok": False,
+                "operation": "remember",
+                "status": "clarification_required",
+                "reason": parsed.reason,
+                "saved": [],
+                "message": (
+                    "Nothing was saved. The items in this list are not clearly"
+                    " separated. Ask the owner to name each item on its own, for"
+                    " example 'a <first item> and a <second item>'."
+                ),
+            }
+        if parsed.status == "items" and resolved_sensitivity.value == "standard":
+            # One approval showing exactly what will be committed.
+            return await self._remember_items(
+                turn, predicate, parsed.kind, parsed.items
+            )
         if self._personal_context is not None:
             await self._personal_context.authorize_mutation(
                 "remember",
@@ -205,8 +228,23 @@ class MemoryAgentTools:
         }
 
     async def _remember_items(self, turn, predicate, kind, items):
-        """One approval showing every item; one owned-item fact per item."""
-        shown = "; ".join(items)
+        """One approval showing exactly the items that will be committed; one
+        owned-item fact per item. Items already saved are left out before the
+        review, and the write refuses if that changed after the review."""
+        existing = await self._service.current_owned_item_labels()
+        already = tuple(i for i in items if i.casefold() in existing)
+        new_items = tuple(i for i in items if i.casefold() not in existing)
+        if not new_items:
+            return {
+                "ok": True,
+                "operation": "remember",
+                "items": list(items),
+                "saved": [],
+                "already_saved": list(already),
+                "memory_ids": [],
+                "sensitivity": "standard",
+            }
+        shown = "; ".join(new_items)
         if self._personal_context is not None:
             await self._personal_context.authorize_mutation(
                 "remember",
@@ -221,7 +259,7 @@ class MemoryAgentTools:
         )
         try:
             records = await self._service.remember_owned_items(
-                kind=kind, items=items, source=source, **self._commit_guard()
+                kind=kind, items=new_items, source=source, **self._commit_guard()
             )
         except (Exception, asyncio.CancelledError):
             if self._personal_context is not None:
@@ -245,9 +283,7 @@ class MemoryAgentTools:
             "operation": "remember",
             "items": list(items),
             "saved": [r.value["label"] for r in records],
-            "already_saved": [
-                i for i in items if i not in {r.value["label"] for r in records}
-            ],
+            "already_saved": list(already),
             "memory_ids": [r.assertion_id for r in records],
             "sensitivity": "standard",
         }
@@ -676,32 +712,74 @@ class MemoryAgentTools:
             raise ToolError(str(exc)) from exc
 
 
-_LIST_SEPARATORS = re.compile(r"\s*(?:,|;|&|\band\b|\baur\b)\s*", re.IGNORECASE)
-_LEADING_ARTICLE = re.compile(r"^(?:a|an|the|my|one|ek)\s+", re.IGNORECASE)
+_HARD_SEPARATORS = re.compile(r"\s*[,;]\s*")
+# "and"/"aur" separates items only when the next word starts a new item.
+_ITEM_BOUNDARY = re.compile(
+    r"\s+(?:and|aur)\s+(?=(?:a|an|the|my|one|another|ek)\s)", re.IGNORECASE
+)
+_INNER_CONJUNCTION = re.compile(r"\b(?:and|aur)\b|&", re.IGNORECASE)
+_LEADING_CONJUNCTION = re.compile(r"^(?:and|aur)\s+", re.IGNORECASE)
+_LEADING_ARTICLE = re.compile(r"^(?:a|an|the|my|one|another|ek)\s+", re.IGNORECASE)
+# Wording shared with another item ("a red one", "HP ones") cannot stand alone.
+_SHARED_WORDING = re.compile(r"(?:^|\s)(?:one|ones|wala|wali|wale)$", re.IGNORECASE)
+_PLURAL_ITEM_PREDICATES = frozenset({"vehicles", "devices"})
 
 
-def _owned_item_list(predicate, value, turn_text):
-    """A newly supplied list of possessions ("a Dell XPS and an iPad Air")
-    for a vehicles/devices memory, as separate items. Anything that does not
-    split cleanly keeps the existing single-record behaviour."""
+@dataclass(frozen=True)
+class _ItemList:
+    status: str  # "items" | "single" | "ambiguous" | "not_a_list"
+    items: tuple[str, ...] = ()
+    kind: str = ""
+    reason: str = ""
+
+
+def _parse_item_list(predicate, value, turn_text):
+    """Split a newly supplied possessions list only at unambiguous item
+    boundaries. Conjunctions inside a name or description are kept ("a black
+    and white Vespa"); when the boundaries cannot be told apart ("a Thar and
+    Ather", "Dell and HP laptops"), nothing is guessed."""
     from jarvis.memory.learning_values import has_identifier
     from jarvis.personal_learning_scope import LEGACY_FACETS
 
-    facet = LEGACY_FACETS.get(canonical_memory_predicate(predicate), "")
+    canonical = canonical_memory_predicate(predicate)
+    facet = LEGACY_FACETS.get(canonical, "")
     if not facet.startswith("owned_item."):
-        return (), ""
+        return _ItemList("not_a_list")
+    kind = facet.split(".", 1)[1]
+    plural = canonical in _PLURAL_ITEM_PREDICATES
     items = []
-    for part in _LIST_SEPARATORS.split(value):
-        item = _LEADING_ARTICLE.sub("", part.strip()).strip(" .")
-        if item:
+    inner = False
+    all_marked = True  # every item introduced by a/an/the/my/one/ek...
+    for segment in _HARD_SEPARATORS.split(value.strip().strip(".")):
+        segment = _LEADING_CONJUNCTION.sub("", segment.strip())
+        for part in _ITEM_BOUNDARY.split(segment):
+            part = part.strip()
+            item = _LEADING_ARTICLE.sub("", part).strip(" .")
+            if not item:
+                continue
+            all_marked = all_marked and item != part.strip(" .")
+            inner = inner or _INNER_CONJUNCTION.search(item) is not None
             items.append(item)
     items = list(dict.fromkeys(items))
-    if not 2 <= len(items) <= 8:
-        return (), ""
+    # With every item explicitly introduced, an unmarked "and" belongs to a
+    # name ("a Bang and Olufsen speaker and an iPad Air"); otherwise it could
+    # be either, so nothing is guessed.
+    unclear = inner and not all_marked
+    if len(items) < 2:
+        # A plural memory ("vehicles") holding one phrase with an unmarked
+        # "and" could be one named item or two ("a Pulsar and Chetak").
+        if plural and inner:
+            return _ItemList("ambiguous", reason="one_or_several_items")
+        return _ItemList("single")
+    if unclear:
+        return _ItemList("ambiguous", reason="item_boundaries_unclear")
+    if any(_SHARED_WORDING.search(item) for item in items):
+        return _ItemList("ambiguous", reason="shared_wording")
+    if len(items) > 8:
+        return _ItemList("ambiguous", reason="too_many_items")
     lowered = turn_text.casefold()
-    if any(
-        len(item) > 120 or has_identifier(item) or item.casefold() not in lowered
-        for item in items
-    ):
-        return (), ""
-    return tuple(items), facet.split(".", 1)[1]
+    if any(len(item) > 120 or item.casefold() not in lowered for item in items):
+        return _ItemList("ambiguous", reason="items_not_in_request")
+    if any(has_identifier(item) for item in items):
+        return _ItemList("ambiguous", reason="identifier_not_allowed")
+    return _ItemList("items", tuple(items), kind)
