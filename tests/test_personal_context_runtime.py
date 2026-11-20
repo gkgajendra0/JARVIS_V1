@@ -138,16 +138,36 @@ async def test_untrusted_selection_is_strict(personal, indices):
 
 
 @pytest.mark.asyncio
-async def test_late_consent_after_activity_never_releases(personal):
+async def test_late_consent_after_a_new_turn_never_releases(personal):
     session, _, conversation, authority, _ = personal
     authority.wait.clear()
     task = asyncio.create_task(session.catalog())
     await asyncio.to_thread(authority.entered.wait, 1)
     conversation.begin_user_activity()
     session.observe_activity()
+    session.observe_turn(
+        conversation.accept_turn(ConversationRole.USER, "Actually, never mind.")
+    )
     authority.wait.set()
     assert (await task)["status"] == "denied"
     assert not await session.allow_audio()
+
+
+@pytest.mark.asyncio
+async def test_late_consent_after_voice_activity_alone_serves_the_same_question(
+    personal,
+):
+    """Raw voice activity with no transcript is not a new question
+    (speaker-eval-2): consent given afterwards still serves the asked one."""
+    session, _, conversation, authority, retired = personal
+    authority.wait.clear()
+    task = asyncio.create_task(session.catalog())
+    await asyncio.to_thread(authority.entered.wait, 1)
+    conversation.begin_user_activity()
+    session.observe_activity()
+    authority.wait.set()
+    assert (await task)["status"] == "available"
+    assert await session.allow_audio() and not retired
 
 
 @pytest.mark.asyncio
@@ -353,6 +373,9 @@ async def test_no_release_after_last_storage_await_is_interrupted(
     await asyncio.wait_for(entered.wait(), timeout=1)
     conversation.begin_user_activity()
     session.observe_activity()
+    session.observe_turn(
+        conversation.accept_turn(ConversationRole.USER, "Actually, never mind.")
+    )
     resume.set()
     result = await task
     assert result is False if release == "audio" else result["status"] == "denied"

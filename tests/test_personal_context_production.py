@@ -109,6 +109,9 @@ async def test_normal_factory_shares_tools_output_and_pending_consent_guard(pers
         "user_state_changed",
         SimpleNamespace(old_state="listening", new_state="speaking"),
     )
+    # Voice activity alone is not a new request: the answer is kept.
+    assert not runtime._active_end.is_set()
+    bridge._accept_canonical_turn(ConversationRole.USER, "Actually, never mind.")
     assert runtime._active_end.is_set()
     output.detach()
     runtime._cancel_timeout()
@@ -370,6 +373,9 @@ async def test_only_completed_or_interrupted_answer_requests_clean_followup(
     elif retirement == "user_activity":
         bridge.conversation.begin_user_activity()
         context.observe_activity()
+        context.observe_turn(
+            bridge.conversation.accept_turn(ConversationRole.USER, "Never mind.")
+        )
     else:
         context.close()
     assert runtime._active_end.is_set()

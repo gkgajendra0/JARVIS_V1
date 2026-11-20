@@ -159,6 +159,7 @@ class PersonalContextSession:
         self._release_observers: list[Callable[[], None]] = []
         self._read_renewals = 0
         self._renewing = False
+        self._activity_logged = None
 
     @property
     def busy(self):
@@ -181,7 +182,19 @@ class PersonalContextSession:
             None,
         )
 
-    def _current(self):
+    def _current(self, *, activity=True):
+        """The request a permit is bound to.
+
+        A READ is bound to the accepted question (session, turn, generation):
+        raw local voice activity with no transcript (a cough, a TV line, VAD
+        noise) does not change the question, so it neither revokes released
+        facts nor discards the pending answer (speaker-eval-2, 2026-11-19: a
+        90 ms burst ended the session before the answer played). A genuine new
+        accepted turn changes the binding and revokes it at once.
+
+        A MUTATION (explicit remember / correct / forget) stays bound to the
+        activity epoch as well: any new speech before commit still voids it.
+        """
         if self._closed or self._conversation.status is not ConversationStatus.ACTIVE:
             return None
         turn = self._latest_turn()
@@ -191,11 +204,14 @@ class PersonalContextSession:
             self._conversation.session_id,
             turn.turn_id,
             self._conversation.user_utterance_generation,
-            self._conversation.user_activity_epoch,
+            self._conversation.user_activity_epoch if activity else None,
         )
 
     def _same(self, binding):
-        return binding is not None and self._current() == binding
+        return (
+            binding is not None
+            and self._current(activity=binding[3] is not None) == binding
+        )
 
     async def _validate(self):
         if await self._validate_strict():
@@ -309,7 +325,7 @@ class PersonalContextSession:
         return self._same(self._binding)
 
     async def _authorize(self, operation="read", mutation=None):
-        binding = self._current()
+        binding = self._current(activity=operation != "read")
         if binding is None or self._busy:
             return False
         if self._permit is not None:
@@ -1052,8 +1068,24 @@ class PersonalContextSession:
             self.observe_activity()
 
     def observe_activity(self):
-        if self._binding is not None and not self._same(self._binding):
+        """Local voice activity or a newly accepted USER turn.
+
+        Retires the session only when the bound request is no longer current:
+        a new accepted turn (any operation) or, for a mutation, any new speech.
+        Owner barge-in is handled separately: an interrupted protected answer
+        closes the session in ``personal_speech_finished``.
+        """
+        if self._binding is None:
+            return
+        if not self._same(self._binding):
             self.close(reason="user_activity")
+            return
+        epoch = self._conversation.user_activity_epoch
+        if self._protected and epoch != self._activity_logged:
+            self._activity_logged = epoch
+            LOGGER.info(
+                "Personal context kept through voice activity | reason=no_new_turn"
+            )
 
     def _same_authorization(self, permit, binding, operation):
         return (

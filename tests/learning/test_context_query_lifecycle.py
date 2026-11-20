@@ -105,7 +105,7 @@ async def test_unrelated_scope_change_does_not_invalidate_evidence(learning):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change", ["lock", "expiry", "new_turn", "activity"])
+@pytest.mark.parametrize("change", ["lock", "expiry", "new_turn", "activity_then_turn"])
 async def test_question_and_owner_lifecycle_always_revokes_query_audio(
     learning, authority_parts, clock, change
 ):
@@ -120,7 +120,20 @@ async def test_question_and_owner_lifecycle_always_revokes_query_audio(
             c.accept_turn(ConversationRole.USER, "What now?")
         else:
             c.begin_user_activity()
+            assert await s.allow_audio() and not retired
+            c.accept_turn(ConversationRole.USER, "What now?")
         assert not await s.allow_audio() and retired
+
+
+@pytest.mark.asyncio
+async def test_voice_activity_without_a_transcript_keeps_query_audio(learning):
+    """speaker-eval-2: VAD activity with no accepted turn is not a new question."""
+    await seed_item(learning)
+    async with context_session(learning, "My City?") as (s, c, retired):
+        await s.query_for_question(QUERY)
+        c.begin_user_activity()
+        s.observe_activity()
+        assert await s.allow_audio() and not retired
 
 
 @pytest.mark.asyncio
