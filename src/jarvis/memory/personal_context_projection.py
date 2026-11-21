@@ -206,7 +206,7 @@ RELEASED_STATES = frozenset(
         "cancelled",
     }
 )
-_ITEM_TIME_KEYS = ("expression", "precision", "earliest", "latest")
+_ITEM_TIME_KEYS = ("expression", "precision", "earliest", "latest", "basis")
 OVERSIZED = "item_exceeds_page_budget"
 
 

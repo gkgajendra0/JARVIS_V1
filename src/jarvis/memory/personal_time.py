@@ -13,11 +13,15 @@ turn's local date and the owner's timezone (the turn's UTC offset). "Last
 week" is the previous Monday-Sunday calendar week. Ambiguous phrases ("kal",
 a bare month name, "around ...") stay ``unresolved`` with the expression.
 
-One exception, for times that are past by definition (when an item was bought
-or got, or sold, given away or lost): with ``direction="past"`` a bare month
-name ("in October") is its most recent occurrence on or before the told date
-(told 2026-11-20: October -> 2026-10; November -> 2026-11). Plans and events
-never use it, so "January" for a plan stays unresolved.
+One exception, only where the caller has supporting context that the time is
+already past (see ``learning_reconciliation._item_fields``): with
+``direction="past"`` a bare month name ("in October") is its most recent
+occurrence on or before the told date (told 2026-11-20: October -> 2026-10;
+November -> 2026-11). The wording is kept verbatim in ``expression`` and the
+object's ``basis`` is ``"inferred_year"`` instead of ``"stated"``, so an
+inferred year is never presented as one the owner said. A year the owner said
+("October 2026") is ``basis="stated"`` with or without a direction. Plans and
+events never use it, so "January" for a plan stays unresolved.
 
 Only ``day`` precision maps to the timestamp validity columns, through
 :func:`day_boundary` (start of that local day in UTC). That instant is an
@@ -202,16 +206,16 @@ def time_object(
         return None
     if anchor_at.tzinfo is None:
         raise ValueError("anchor_at must be timezone-aware")
-    precision, earliest, latest = _resolve(
-        _normalize(expression), anchor_at.date(), direction
-    )
+    normalized = _normalize(expression)
+    precision, earliest, latest = _resolve(normalized, anchor_at.date(), direction)
+    inferred = direction == "past" and re.fullmatch(_MONTH, normalized) is not None
     return {
         "expression": expression,
         "precision": precision,
         "earliest": earliest.isoformat() if earliest else None,
         "latest": latest.isoformat() if latest else None,
         "anchor_at": anchor_at.isoformat(),
-        "basis": "stated",
+        "basis": "inferred_year" if inferred else "stated",
     }
 
 

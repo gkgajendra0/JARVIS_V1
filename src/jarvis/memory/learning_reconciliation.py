@@ -343,6 +343,9 @@ class LearningReconciler:
                 if not isinstance(old_value, dict):
                     skip("already_stored")
                     continue
+                # Recomputed with the stored value as context (a restated
+                # acquired month may then get its inferred year).
+                added = _added_detail(candidate, source, old_value) or added
                 merged, reason = refine_merge(old_value, added)
                 if merged is None:
                     skip(reason)
@@ -437,6 +440,12 @@ class LearningReconciler:
                         skip("invalid_existing_value")
                         continue
                     value = _changed_value(old, candidate, source)
+                elif entry is not None and action == "correct":
+                    try:
+                        old = json.loads(entry.value)
+                    except (TypeError, ValueError):
+                        old = None
+                    value = _new_value(candidate, source, old)
                 else:
                     value = _new_value(candidate, source)
             effective_at = None
@@ -543,12 +552,28 @@ def _anchor(source, candidate):
     return temporal_context(source, candidate)["anchor_at"]
 
 
-def _item_fields(candidate, source):
+def _item_fields(candidate, source, context=None):
     """Slice-1 fields for an owned item: aliases, details (identifiers
-    removed), acquired/disposed time objects at their stated precision."""
+    removed), acquired/disposed time objects at their stated precision.
+
+    A bare month ("from September") gets an inferred year only with
+    supporting context that the time is already past:
+    - disposed: the owner said the item is gone (sold, given away, lost or
+      no longer owned), so the disposal already happened;
+    - acquired: ``context`` (the stored value being corrected, changed or
+      refined) already holds an acquired time, so the owner is restating
+      that same past time.
+    Without that context (for example a new item "from September") the month
+    stays unresolved with its wording; it is never turned into a purchase
+    date."""
     from datetime import datetime
 
     anchor = datetime.fromisoformat(_anchor(source, candidate))
+    context = context if isinstance(context, dict) else {}
+    past = {
+        "disposed": candidate.state in DISPOSED_STATES,
+        "acquired": isinstance(context.get("acquired"), dict),
+    }
     fields = {}
     aliases = [a for a in candidate.aliases if not has_identifier(a)]
     if aliases:
@@ -559,7 +584,7 @@ def _item_fields(candidate, source):
         ("acquired", candidate.acquired_expression),
         ("disposed", candidate.disposed_expression),
     ):
-        stated = item_time(expression, anchor)
+        stated = item_time(expression, anchor, past=past[key])
         if stated:
             fields[key] = stated
     return fields
@@ -575,9 +600,9 @@ def _plan_fields(candidate):
     return fields
 
 
-def _added_detail(candidate, source):
+def _added_detail(candidate, source, context=None):
     if candidate.category == "owned_item":
-        return _item_fields(candidate, source)
+        return _item_fields(candidate, source, context)
     if candidate.category == "plan":
         return _plan_fields(candidate)
     return {}
@@ -592,7 +617,7 @@ def _plan_state_and_certainty(candidate):
     return PLAN_STATE[candidate.plan_status], certainty
 
 
-def _new_value(candidate, source):
+def _new_value(candidate, source, context=None):
     state, certainty = _plan_state_and_certainty(candidate)
     value = {
         "schema": POLICY_VERSION,
@@ -603,7 +628,7 @@ def _new_value(candidate, source):
         "state": state,
     }
     if candidate.category == "owned_item":
-        value.update(_item_fields(candidate, source))
+        value.update(_item_fields(candidate, source, context))
     if candidate.category in HISTORY_CATEGORIES:
         value["certainty"] = certainty
         value["temporal"] = temporal_context(source, candidate)
@@ -624,7 +649,7 @@ def _changed_value(old, candidate, source):
     if candidate.category != "owned_item":
         value["value"] = candidate.value
     else:
-        fields = _item_fields(candidate, source)
+        fields = _item_fields(candidate, source, old)
         for key in ("aliases", "details", "disposed"):
             if key in fields:
                 value[key] = fields[key]

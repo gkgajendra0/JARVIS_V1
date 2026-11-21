@@ -171,6 +171,7 @@ def test_bare_month_for_a_past_item_time_is_its_latest_occurrence(
         latest,
     )
     assert stated["expression"] == expression  # wording kept verbatim
+    assert stated["basis"] == "inferred_year"  # the year was not said
 
 
 @pytest.mark.parametrize("expression", ["January", "October", "around March", "kal"])
@@ -186,3 +187,28 @@ def test_past_direction_never_changes_other_wording():
         )
     with pytest.raises(ValueError):
         time_object("October", anchor, direction="future")
+
+
+@pytest.mark.parametrize(
+    "expression,precision",
+    [
+        ("October 2025", "month"),
+        ("2021", "year"),
+        ("last week", "week"),
+        ("March 2017", "month"),
+    ],
+)
+def test_a_stated_year_or_relative_time_is_never_marked_inferred(expression, precision):
+    stated = time_object(expression, at(2026, 11, 20), direction="past")
+    assert stated["basis"] == "stated" and stated["precision"] == precision
+
+
+def test_bare_month_without_past_context_keeps_wording_and_no_year():
+    stated = time_object("September", at(2026, 11, 20))
+    assert stated["expression"] == "September"
+    assert (stated["precision"], stated["earliest"], stated["latest"]) == (
+        "unresolved",
+        None,
+        None,
+    )
+    assert stated["basis"] == "stated"

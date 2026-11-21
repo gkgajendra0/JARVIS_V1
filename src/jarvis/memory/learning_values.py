@@ -70,10 +70,16 @@ def normalized_slots(slots) -> dict[str, dict]:
     return stored
 
 
-def item_time(expression: str | None, anchor) -> dict | None:
-    """When an item was acquired or disposed of: past by definition, so a bare
-    month resolves to its most recent occurrence (personal_time module)."""
-    return time_object(expression, anchor, direction="past") if expression else None
+def item_time(expression: str | None, anchor, *, past: bool = False) -> dict | None:
+    """When an item was acquired or disposed of, at the precision said.
+
+    ``past=True`` only when the caller has supporting context that the time
+    already happened; a bare month then gets an inferred year, marked
+    ``basis="inferred_year"`` (personal_time module). Otherwise a bare month
+    stays unresolved with its wording."""
+    if not expression:
+        return None
+    return time_object(expression, anchor, direction="past" if past else None)
 
 
 def _clauses(fragment: str) -> list[str]:

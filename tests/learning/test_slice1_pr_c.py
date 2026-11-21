@@ -383,7 +383,9 @@ async def test_sold_items_precision_and_passed_plans_are_released_as_held(learni
             "precision",
             "earliest",
             "latest",
+            "basis",
         }
+        assert falcon[0]["disposed"]["basis"] == "stated"  # "March 2024" said
         assert "T" not in json.dumps(falcon[0]["disposed"])  # no clock time
 
 
@@ -817,6 +819,8 @@ async def test_frozen_d23_wording_stores_the_month_of_the_sale(learning):
         f"{year}-10-01",
     )
     assert value["disposed"]["latest"] == f"{year}-10-31"
+    assert value["disposed"]["expression"] == "October"  # the owner's words
+    assert value["disposed"]["basis"] == "inferred_year"  # year not said
     assert valid_from is None  # the effective day is still unknown
 
 
@@ -908,3 +912,133 @@ async def test_explicit_list_gives_each_item_its_own_source_and_forgets_one(lear
         ).fetchall()
     )
     assert left == [("active", records[1].source_id)]
+
+
+# Month without a year: inferred only with supporting context ------------------
+# (owner check 2026-11-21; examples outside the frozen files)
+
+
+async def _stored_items(learning):
+    rows = await learning.reader.run(
+        lambda c: c.execute(
+            "SELECT value_json, state, valid_from FROM semantic_assertion"
+            " WHERE predicate LIKE 'owned_item%' ORDER BY system_from"
+        ).fetchall()
+    )
+    return [(json.loads(v), state, valid_from) for v, state, valid_from in rows]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "text,label,expression",
+    [
+        ("I have a Gypsy from September.", "Gypsy", "September"),
+        ("I bought a Duster in September.", "Duster", "September"),
+        ("My Nexon is from March.", "Nexon", "March"),
+    ],
+)
+async def test_new_item_bare_month_is_never_turned_into_a_purchase_date(
+    learning, text, label, expression
+):
+    owner = Owner(learning)
+    _plan, result, _ = await owner.say(
+        text,
+        [item(label, [text.rstrip(".")], acquired_expression=expression)],
+        [("new", None)],
+    )
+    assert result.status == "committed"
+    value, _state, valid_from = (await _stored_items(learning))[-1]
+    assert value["acquired"]["expression"] == expression  # wording kept
+    assert value["acquired"]["precision"] == "unresolved"
+    assert value["acquired"]["earliest"] is None and value["acquired"]["latest"] is None
+    assert value["acquired"]["basis"] == "stated"
+    assert valid_from is None
+
+
+@pytest.mark.asyncio
+async def test_correction_without_a_stored_purchase_time_infers_no_year(learning):
+    owner = Owner(learning)
+    await owner.say(
+        "I have a Hector.", [item("Hector", ["I have a Hector"])], [("new", None)]
+    )
+    plan, _result, _ = await owner.say(
+        "Actually, the Hector is from September.",
+        [
+            item(
+                "Hector",
+                ["the Hector is from September"],
+                intent="correction",
+                acquired_expression="September",
+            )
+        ],
+        [("match", "Hector")],
+    )
+    assert [m.action for m in plan.mutations] == ["correct"]
+    value, _state, _ = (await _stored_items(learning))[-1]
+    assert value["acquired"]["precision"] == "unresolved"
+    assert value["acquired"]["expression"] == "September"
+
+
+@pytest.mark.asyncio
+async def test_correction_of_a_stored_purchase_month_infers_and_marks_the_year(
+    learning,
+):
+    from test_slice1_pr_b import seed_d1
+
+    owner, _ = await seed_d1(learning)  # Jimny acquired "last month"
+    plan, _result, _ = await owner.say(
+        "I misspoke, the Jimny is from September, not October.",
+        [
+            item(
+                "Jimny",
+                ["the Jimny is from September, not October"],
+                intent="correction",
+                acquired_expression="September",
+            )
+        ],
+        [("match", "Jimny")],
+    )
+    assert [m.action for m in plan.mutations] == ["correct"], plan.outcomes
+    value, _state, _ = (await _stored_items(learning))[-1]
+    acquired = value["acquired"]
+    today = datetime.now().astimezone().date()
+    year = today.year if today.month >= 9 else today.year - 1
+    assert (acquired["precision"], acquired["earliest"]) == ("month", f"{year}-09-01")
+    assert acquired["expression"] == "September"
+    assert acquired["basis"] == "inferred_year"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "state,expression,basis,precision",
+    [
+        ("sold", "October", "inferred_year", "month"),
+        ("sold", "October 2025", "stated", "month"),
+        ("lost", "in March", "inferred_year", "month"),
+        ("owned", "October", "stated", "unresolved"),  # not gone: no context
+    ],
+)
+async def test_disposal_month_infers_a_year_only_when_the_item_is_gone(
+    learning, state, expression, basis, precision
+):
+    owner = Owner(learning)
+    text = f"The Ertiga, {expression}."
+    _plan, result, _ = await owner.say(
+        text,
+        [
+            item(
+                "Ertiga",
+                [text.rstrip(".")],
+                state=state,
+                disposed_expression=expression,
+            )
+        ],
+        [("new", None)],
+    )
+    assert result.status == "committed"
+    value, _state, _ = (await _stored_items(learning))[-1]
+    assert value["disposed"]["expression"] == expression
+    assert (value["disposed"]["basis"], value["disposed"]["precision"]) == (
+        basis,
+        precision,
+    )
