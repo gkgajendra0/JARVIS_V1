@@ -22,17 +22,26 @@ Wed 2026-11-18"). The lab sets each accepted turn's time to that told time so
 relative dates anchor exactly as specified. ``recorded_at`` in releases is the
 real time the lab wrote the fact.
 
-No automatic retry: every model call is made once. A provider failure (for
-example quota) interrupts the run after recording that step; completed steps
-and their results are kept, and ``--resume-lab`` continues from the next step
-that never started. An interrupted step is rerun only with the explicit
-``--retry-interrupted`` owner option and is then recorded as attempt 2.
+Provider failures (owner policy 2026-11-21, ``jarvis.provider_retry``): a
+temporary provider failure (503/502/500, lost connection) is retried at most
+twice, inside the existing deadline. Learning retries are made by Jarvis's
+learning runtime itself (the product behaviour); answer steps use the same
+policy here, with one owner per call. Every attempt is recorded. 429, quota,
+permission, invalid-request, invalid-output and stall failures are never
+retried. A failure that remains interrupts the run after recording that step;
+completed steps and their results are kept, and ``--resume-lab`` continues from
+the next step that never started. An interrupted step is rerun only with the
+explicit ``--retry-interrupted`` owner option and is then recorded as attempt 2.
+The summary reports first-attempt reliability separately from eventual
+completion; stalls stay explicitly unresolved.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -43,6 +52,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.provider_retry import policy_summary
 
 KIND = "personal-memory-slice1-dev-acceptance-v1"
 ACCEPTANCE_FILE = "docs/evals/personal-memory-acceptance.md"
@@ -554,14 +564,27 @@ class ResultLog:
 
 
 class RecordingAdapter:
-    """Wraps the real learning adapter: records proposals and decisions and
-    whether a provider failure happened (no retry is ever added)."""
+    """Wraps the real learning adapter: records every provider attempt
+    (proposals, decisions, failures). It never retries; retries of temporary
+    failures are made by the learning runtime, the single retry owner."""
 
     def __init__(self, inner, log, group, pacer=None):
         self.inner, self.log, self.group = inner, log, group
         self.pacer = pacer
         self.step_id = None
         self.provider_failures = []
+        self.stage_attempts = {}
+        self.stage_final = {}
+
+    def unrecovered(self):
+        """Stages whose last attempt this step was a provider failure."""
+        return [s for s, status in self.stage_final.items() if status != "ok"]
+
+    def start_step(self, step_id):
+        self.step_id = step_id
+        self.provider_failures = []
+        self.stage_attempts = {}
+        self.stage_final = {}
 
     def bind_source_validator(self, validator):
         binder = getattr(self.inner, "bind_source_validator", None)
@@ -580,6 +603,8 @@ class RecordingAdapter:
         # Never wait here: this runs inside Jarvis's learning deadline. The
         # harness waited for a pacing slot before the turn was observed.
         attempts = getattr(self.inner, "attempts", None)
+        attempt = self.stage_attempts.get(stage, 0) + 1
+        self.stage_attempts[stage] = attempt
         started = time.perf_counter()
         try:
             result = await operation(*args)
@@ -593,6 +618,7 @@ class RecordingAdapter:
                         "group": self.group,
                         "step_id": self.step_id,
                         "kind": "learning_" + stage,
+                        "attempt": attempt,
                         "status": "cancelled_at_deadline",
                         "latency_ms": round((time.perf_counter() - started) * 1000),
                     }
@@ -600,14 +626,27 @@ class RecordingAdapter:
                 raise
             failure = getattr(self.inner, "last_failure", None)
             provider = str(exc) == "learning_provider_unavailable"
+            self.stage_final[stage] = "provider_failure" if provider else "ok"
+            kind = getattr(
+                getattr(getattr(exc, "failure", None), "kind", None), "value", None
+            )
             if provider:
-                self.provider_failures.append({"stage": stage, **(failure or {})})
+                self.provider_failures.append(
+                    {
+                        "stage": stage,
+                        "attempt": attempt,
+                        "failure_kind": kind,
+                        **(failure or {}),
+                    }
+                )
             self.log.event(
                 {
                     "group": self.group,
                     "step_id": self.step_id,
                     "kind": "learning_" + stage,
+                    "attempt": attempt,
                     "status": "provider_failure" if provider else "failed",
+                    "failure_kind": kind,
                     "error": str(exc)
                     if str(exc).startswith("learning_")
                     else type(exc).__name__,
@@ -617,11 +656,13 @@ class RecordingAdapter:
             )
             raise
         self._count(attempts)
+        self.stage_final[stage] = "ok"
         self.log.event(
             {
                 "group": self.group,
                 "step_id": self.step_id,
                 "kind": "learning_" + stage,
+                "attempt": attempt,
                 "status": "ok",
                 "output": result.model_dump(mode="json"),
                 "latency_ms": round((time.perf_counter() - started) * 1000),
@@ -770,12 +811,124 @@ def tool_descriptions(names):
     return {name: known[name] for name in names}
 
 
-class TextDriver:
-    """One Jarvis reply: model steps with real tool calls, no retry."""
+class FreeLaneDriverClient:
+    """Answer-model client for the lab: the Free credential only, SDK retries
+    off, no router and no Paid credential, so a Paid request is impossible.
+    The single retry owner for answer calls is :class:`TextDriver`."""
 
-    def __init__(self, client, log, *, model, pacer=None):
+    def __init__(self, client):
+        self._client = client
+        self.model_name = getattr(client, "model_name", None)
+
+    async def parse_with_telemetry(
+        self, *, system_prompt, input_payload, response_model, **_routing_ids
+    ):
+        return await self._client.parse_with_telemetry(
+            system_prompt=system_prompt,
+            input_payload=input_payload,
+            response_model=response_model,
+        )
+
+    async def aclose(self):
+        close = getattr(self._client, "aclose", None)
+        if callable(close):
+            await close()
+
+
+def _invalid_output(exc) -> bool:
+    from pydantic import ValidationError
+
+    from jarvis.hands.provider_adapters import StructuredOutputError
+
+    return isinstance(exc, StructuredOutputError | ValidationError | ValueError)
+
+
+class TextDriver:
+    """One Jarvis reply: model steps with real tool calls.
+
+    Each model step may retry a temporary provider failure under
+    ``jarvis.provider_retry`` (at most two retries) inside a step budget equal
+    to learning's processing budget; each attempt's timeout is limited by the
+    time remaining. Tool calls run once, only after a successful model
+    response, so no tool, approval or memory write is ever repeated. A stall
+    (no response before the timeout), invalid output, 429 or any other
+    non-temporary failure is never retried and interrupts the run."""
+
+    def __init__(
+        self, client, log, *, model, pacer=None, sleep=None, rng=random.random
+    ):
         self.client, self.log, self.model = client, log, model
         self.pacer = pacer
+        self._sleep = sleep or asyncio.sleep
+        self._rng = rng
+
+    async def _model_step(self, *, group, step, index, request):
+        from jarvis.memory.learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
+        from jarvis.provider_resilience import classify_provider_failure
+        from jarvis.provider_retry import RetryDecision, decide_retry
+
+        step_started = time.monotonic()
+        attempt = 0
+        while True:
+            attempt += 1
+            remaining = PROCESSING_BUDGET - (time.monotonic() - step_started)
+            started = time.perf_counter()
+            base = {
+                "group": group,
+                "step_id": step.id,
+                "kind": "driver_step",
+                "index": index,
+                "attempt": attempt,
+            }
+            try:
+                telemetry = await asyncio.wait_for(
+                    request(), min(INFERENCE_TIMEOUT, remaining)
+                )
+                return telemetry, attempt, started
+            except TimeoutError:
+                self.log.event(
+                    {
+                        **base,
+                        "status": "stall_unresolved",
+                        "latency_ms": round((time.perf_counter() - started) * 1000),
+                    }
+                )
+                raise AcceptanceInterrupted(
+                    "answer call stalled (no provider response before the "
+                    "timeout; unresolved, not retried)"
+                ) from None
+            except Exception as exc:  # noqa: BLE001 - classified, never retried blindly
+                remaining = PROCESSING_BUDGET - (time.monotonic() - step_started)
+                if _invalid_output(exc):
+                    failure, decision = None, RetryDecision(False, "invalid_output")
+                else:
+                    failure = classify_provider_failure(exc, provider="gemini")
+                    decision = decide_retry(
+                        failure, attempt=attempt, remaining=remaining, rng=self._rng
+                    )
+                status = getattr(failure, "status_code", None)
+                self.log.event(
+                    {
+                        **base,
+                        "status": "invalid_output"
+                        if failure is None
+                        else "provider_failure",
+                        "error": type(exc).__name__,
+                        "failure_kind": getattr(
+                            getattr(failure, "kind", None), "value", None
+                        ),
+                        "status_code": status if type(status) is int else None,
+                        "decision": decision.reason,
+                        "delay_seconds": decision.delay,
+                        "remaining_seconds": round(remaining, 3),
+                        "latency_ms": round((time.perf_counter() - started) * 1000),
+                    }
+                )
+                if not decision.retry:
+                    raise AcceptanceInterrupted(type(exc).__name__) from None
+            await self._sleep(decision.delay)
+            if self.pacer is not None:
+                self.pacer.note(1)  # the retry is a provider call too
 
     def system_prompt(self):
         from jarvis.voice.agent import PERSONAL_LEARNING_QUERY_INSTRUCTIONS
@@ -813,33 +966,26 @@ class TextDriver:
             }
             if self.pacer is not None:
                 await self.pacer.wait()
-            started = time.perf_counter()
-            try:
-                telemetry = await self.client.parse_with_telemetry(
+
+            def request(payload=payload, names=names, index=index):
+                return self.client.parse_with_telemetry(
                     system_prompt=self.system_prompt(),
                     input_payload=payload,
                     response_model=_driver_model(names),
                     scope_id=f"{group}:{step.id}",
                     operation_id=f"reply-{index}",
                 )
-            except Exception as exc:  # noqa: BLE001 - any model-call failure stops the run (no retry)
-                self.log.event(
-                    {
-                        "group": group,
-                        "step_id": step.id,
-                        "kind": "driver_step",
-                        "index": index,
-                        "status": "provider_failure",
-                        "error": type(exc).__name__,
-                    }
-                )
-                raise AcceptanceInterrupted(type(exc).__name__) from None
+
+            telemetry, attempt, started = await self._model_step(
+                group=group, step=step, index=index, request=request
+            )
             action = telemetry.parsed.response
             row = {
                 "group": group,
                 "step_id": step.id,
                 "kind": "driver_step",
                 "index": index,
+                "attempt": attempt,
                 "status": "ok",
                 "input": payload,
                 "output": action.model_dump(mode="json"),
@@ -1080,6 +1226,10 @@ class AcceptanceRunner:
                 None,
             ),
             "answer_quality": "manual_review_required",
+            "retry_policy": policy_summary(),
+            "provider_reliability": provider_reliability(
+                self.log.read(self.log.events)
+            ),
             "limits": (
                 "Controlled text through the Free-lane answer model with the voice "
                 "agent's personal-context instructions and the real tools, not Gemini "
@@ -1094,6 +1244,73 @@ class AcceptanceRunner:
         )
         tmp.replace(self.log.summary)
         return summary
+
+
+_CALL_KINDS = {"learning_extraction", "learning_resolution", "driver_step"}
+_STALLS = {"stall_unresolved", "cancelled_at_deadline"}
+
+
+def provider_reliability(events):
+    """First-attempt reliability, kept separate from eventual completion.
+
+    A *call* is one model request of one step (a learning stage, or one answer
+    step) with all its attempts. Successful recovery never hides the failed
+    attempts before it; stalls are reported as unresolved."""
+    calls = []
+    current = {}
+    for row in events:
+        kind = row.get("kind")
+        if kind not in _CALL_KINDS:
+            continue
+        key = (row.get("group"), row.get("step_id"), kind, row.get("index"))
+        attempt = row.get("attempt") or 1
+        if attempt == 1 or key not in current:
+            current[key] = {"key": key, "attempts": []}
+            calls.append(current[key])
+        current[key]["attempts"].append(row)
+    by_kind = {}
+    summary = {
+        "calls": len(calls),
+        "attempts": sum(len(c["attempts"]) for c in calls),
+        "first_attempt_ok": 0,
+        "completed_after_retry": 0,
+        "unrecovered_provider_failures": 0,
+        "stalls_unresolved": 0,
+        "failed_attempts_by_kind": by_kind,
+        "steps_completed_only_after_retry": [],
+        "steps_with_unrecovered_failure": [],
+        "steps_with_unresolved_stall": [],
+    }
+    for call in calls:
+        attempts = call["attempts"]
+        for row in attempts:
+            if row.get("status") == "provider_failure":
+                name = row.get("failure_kind") or "unclassified"
+                by_kind[name] = by_kind.get(name, 0) + 1
+        first, last = attempts[0].get("status"), attempts[-1].get("status")
+        step = attempts[-1].get("step_id")
+        responded = {"ok", "failed", "invalid_output"}
+        if first in responded:
+            summary["first_attempt_ok"] += 1
+        elif last in responded:
+            summary["completed_after_retry"] += 1
+            summary["steps_completed_only_after_retry"].append(step)
+        if last == "provider_failure":
+            summary["unrecovered_provider_failures"] += 1
+            summary["steps_with_unrecovered_failure"].append(step)
+        elif last in _STALLS:
+            summary["stalls_unresolved"] += 1
+            summary["steps_with_unresolved_stall"].append(step)
+    if calls:
+        summary["first_attempt_ok_rate"] = round(
+            summary["first_attempt_ok"] / len(calls), 4
+        )
+        summary["eventual_completion_rate"] = round(
+            (summary["first_attempt_ok"] + summary["completed_after_retry"])
+            / len(calls),
+            4,
+        )
+    return summary
 
 
 def _overall(checks):
@@ -1146,7 +1363,21 @@ class _GroupContext:
             self.resolver,
             self.reconciler,
             diagnostics=False,
+            retry_observer=self._record_learning_retry,
         )
+
+    def _record_learning_retry(self, record):
+        # The learning runtime's content-free decision for a failed attempt.
+        log = getattr(self, "_log", None)
+        if log is not None:
+            log.event(
+                {
+                    "group": self.group,
+                    "step_id": self.extractor.step_id,
+                    "kind": "learning_retry_decision",
+                    **record,
+                }
+            )
 
     async def restart_now(self):
         from jarvis.memory.learning_reconciliation import LearningReconciler
@@ -1312,12 +1543,12 @@ class _GroupContext:
         turn = self.conversation.accept_at(
             ConversationRole.USER, step.text, step.told_at
         )
+        self._log = log
         for adapter in {
             id(self.extractor): self.extractor,
             id(self.resolver): self.resolver,
         }.values():
-            adapter.step_id = step.id
-            adapter.provider_failures = []
+            adapter.start_step(step.id)
         before = self.learning.status()
         outcome_sql = (
             "SELECT receipt_id, candidate_ordinal, category_key, reason_code"
@@ -1346,6 +1577,7 @@ class _GroupContext:
             "dropped": after.dropped - before.dropped,
             "reason": after.reason,
             "skipped": [{"category": c, "reason": r} for c, r in skipped],
+            "failed_provider_attempts": len(failures),
         }
         log.event(
             {
@@ -1355,15 +1587,22 @@ class _GroupContext:
                 **learning,
             }
         )
-        if failures:
+        if learning["dropped"] and after.reason in {"timeout", "cancelled"}:
+            # A turn whose learning did not finish is not completed setup:
+            # stop here (stalls are not retried, no reseeding); later cases
+            # would test missing prerequisites. Rerun only with
+            # --retry-interrupted.
+            raise AcceptanceInterrupted(f"learning incomplete: {after.reason}")
+        unrecovered = self.extractor.unrecovered() + (
+            self.resolver.unrecovered() if self.resolver is not self.extractor else []
+        )
+        if unrecovered and learning["dropped"]:
+            # The learning runtime's bounded retries did not recover it.
             raise AcceptanceInterrupted(
                 "learning provider failure: " + json.dumps(failures)
             )
-        if learning["dropped"] and after.reason in {"timeout", "cancelled"}:
-            # A turn whose learning did not finish is not completed setup:
-            # stop here (no retry, no reseeding); later cases would test
-            # missing prerequisites. Rerun only with --retry-interrupted.
-            raise AcceptanceInterrupted(f"learning incomplete: {after.reason}")
+        # Failed attempts followed by a successful retry are recorded above
+        # and counted in the summary's first-attempt reliability.
         personal = PersonalContextSession(
             conversation=self.conversation,
             retrieval=self.memory.retrieval,

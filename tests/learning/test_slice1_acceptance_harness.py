@@ -214,12 +214,21 @@ RESOLVE = {
 }
 
 
+class Http503(Exception):
+    status_code = 503
+
+
+class Http429(Exception):
+    status_code = 429
+
+
 class FakeGenai:
     """Scripted Gemini for the learning adapter (extraction + resolution)."""
 
     def __init__(self):
         self.calls = []
         self.fail_on = set()
+        self.transient = {}  # (stage, text) -> number of 503s still to return
         self.aio = SimpleNamespace(interactions=SimpleNamespace(create=self.create))
 
     async def create(self, *, model, input, system_instruction, **_):
@@ -234,6 +243,9 @@ class FakeGenai:
         self.calls.append((stage, text))
         if text in self.fail_on:
             raise RuntimeError("fictional 429 quota")
+        if self.transient.get((stage, text)):
+            self.transient[(stage, text)] -= 1
+            raise Http503("fictional overload")
         if stage == "extraction":
             proposals = []
             for proposal in EXTRACT.get(text, []):
@@ -347,6 +359,7 @@ class FakeDriver:
         self.holder = holder
         self.calls = []
         self.fail_on = set()
+        self.errors = {}  # utterance -> list of exceptions/actions to return first
 
     async def parse_with_telemetry(
         self, *, system_prompt, input_payload, response_model, **_
@@ -356,6 +369,20 @@ class FakeDriver:
         assert "read_personal_context_for_question" in system_prompt
         if utterance in self.fail_on:
             raise RuntimeError("fictional 429 quota")
+        queued = self.errors.get(utterance)
+        if queued:
+            first = queued.pop(0)
+            if isinstance(first, BaseException):
+                raise first
+            if first == "stall":
+                import asyncio
+
+                await asyncio.sleep(5)
+            if first == "invalid":
+                return SimpleNamespace(
+                    parsed=response_model.model_validate({"response": {"x": 1}}),
+                    usage={},
+                )
         action = await self._decide(utterance, input_payload)
         return SimpleNamespace(
             parsed=response_model.model_validate({"response": action}), usage={}
@@ -784,9 +811,14 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
     monkeypatch.setattr(
         "jarvis.model_routing.runtime.build_routing_runtime", lambda **_: Routing()
     )
+    built = {}
+
+    def free_client(**kwargs):
+        built.update(kwargs)
+        return lab.driver
+
     monkeypatch.setattr(
-        "jarvis.hands.provider_adapters.RoutedStructuredOutputClient",
-        lambda **_: lab.driver,
+        "jarvis.hands.provider_adapters.build_structured_output_client", free_client
     )
     monkeypatch.setattr(
         "jarvis.memory.learning_extractors.build_learning_adapters",
@@ -819,6 +851,10 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
     assert {row["source_commit"] for row in steps} == {"1" * 40}
     assert {row["lane"] for row in steps} == {"free"}
     assert {row["call_spacing_seconds"] for row in steps} == {0.5}
+    # Answer calls: Free credential only, SDK retries off, no router.
+    assert built["credential_ref"] == "GOOGLE_API_KEY"
+    assert built["provider_retries"] is False and built["provider"] == "gemini"
+    assert summary["retry_policy"]["max_attempts"] == 3
 
 
 # D17 stage diagnosis (owner check 2026-11-21) ---------------------------------
@@ -1064,3 +1100,215 @@ async def test_a_learning_timeout_stops_the_run_and_is_not_completed_setup(
     ]
     assert len(cancelled) == 1 and cancelled[0]["kind"] == "learning_extraction"
     assert adapter.attempts == 1  # one provider call, no retry
+
+
+# Bounded retries for temporary provider failures (owner policy 2026-11-21) ----
+
+
+@pytest.fixture
+def fast_retries(monkeypatch):
+    from jarvis import provider_retry
+
+    monkeypatch.setattr(provider_retry, "RETRY_DELAYS", (0.01, 0.02))
+
+
+def _events(log, kind=None, step=None):
+    return [
+        e
+        for e in log.read(log.events)
+        if (kind is None or e.get("kind") == kind)
+        and (step is None or e.get("step_id") == step)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_learning_503_then_success_continues_and_is_reported(lab, fast_retries):
+    text = "We're going to Spiti in January, Thar or no Thar."
+    lab.genai.transient[("extraction", text)] = 1
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("idiom",))
+    assert summary["cases"]["D9"]["status"] == acceptance.PASS
+    attempts = _events(log, "learning_extraction", "idiom-01")
+    assert [(e["attempt"], e["status"]) for e in attempts] == [
+        (1, "provider_failure"),
+        (2, "ok"),
+    ]
+    assert attempts[0]["failure_kind"] == "service_unavailable"
+    decisions = _events(log, "learning_retry_decision", "idiom-01")
+    assert [d["decision"] for d in decisions] == ["transient_retry"]
+    reliability = summary["provider_reliability"]
+    assert reliability["completed_after_retry"] == 1
+    assert reliability["unrecovered_provider_failures"] == 0
+    assert reliability["first_attempt_ok"] == reliability["calls"] - 1
+    assert reliability["first_attempt_ok_rate"] < 1
+    assert reliability["eventual_completion_rate"] == 1
+    assert reliability["steps_completed_only_after_retry"] == ["idiom-01"]
+    assert reliability["failed_attempts_by_kind"] == {"service_unavailable": 1}
+    status = _events(log, "learning_status", "idiom-01")[0]
+    assert status["committed"] >= 1 and status["failed_provider_attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_learning_repeated_503_stops_after_two_retries_without_saving(
+    lab, fast_retries
+):
+    text = "We're going to Spiti in January, Thar or no Thar."
+    lab.genai.transient[("extraction", text)] = 3
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted, match="provider failure"):
+        await runner.run(groups=("idiom",))
+    attempts = _events(log, "learning_extraction", "idiom-01")
+    assert [e["status"] for e in attempts] == ["provider_failure"] * 3
+    decisions = [d["decision"] for d in _events(log, "learning_retry_decision")]
+    assert decisions == ["transient_retry", "transient_retry", "attempts_exhausted"]
+    status = _events(log, "learning_status", "idiom-01")[0]
+    assert (status["committed"], status["dropped"]) == (0, 1)
+    assert log.step_states()["idiom-01"]["status"] == "interrupted"
+    summary = json.loads(log.summary.read_text(encoding="utf-8"))
+    assert summary["provider_reliability"]["unrecovered_provider_failures"] == 1
+    assert summary["provider_reliability"]["steps_with_unrecovered_failure"] == [
+        "idiom-01"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_learning_429_is_never_retried(lab, fast_retries, monkeypatch):
+    text = "We're going to Spiti in January, Thar or no Thar."
+
+    async def rate_limited(**kwargs):
+        raise Http429("fictional rate limit")
+
+    original = lab.genai.create
+
+    async def create(**kwargs):
+        if text in kwargs["input"]:
+            lab.genai.calls.append(("extraction", text))
+            return await rate_limited(**kwargs)
+        return await original(**kwargs)
+
+    lab.genai.aio.interactions.create = create
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted):
+        await runner.run(groups=("idiom",))
+    assert len(_events(log, "learning_extraction", "idiom-01")) == 1
+    decisions = [d["decision"] for d in _events(log, "learning_retry_decision")]
+    assert decisions == ["not_transient"]
+
+
+@pytest.mark.asyncio
+async def test_driver_503_then_success_runs_each_tool_once(lab, fast_retries):
+    utterance = "Which vehicles do I own?"
+    lab.driver.errors[utterance] = [Http503("fictional overload")]
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("scale-11",))
+    assert summary["cases"]["D18"]["status"] in {acceptance.PASS, acceptance.REVIEW}
+    steps = _events(log, "driver_step", "s11-01")
+    assert [(e["index"], e["attempt"], e["status"]) for e in steps] == [
+        (0, 1, "provider_failure"),
+        (0, 2, "ok"),
+        (1, 1, "ok"),
+        (2, 1, "ok"),
+    ][: len(steps)]
+    assert steps[0]["decision"] == "transient_retry"
+    assert steps[0]["status_code"] == 503
+    reads = [e for e in _events(log, "tool_result", "s11-01")]
+    first_reads = [r for r in reads if "page_token" not in r["arguments"]]
+    assert len(first_reads) == 1  # the tool ran once despite the retry
+    reliability = summary["provider_reliability"]
+    assert reliability["completed_after_retry"] == 1
+    assert reliability["steps_completed_only_after_retry"] == ["s11-01"]
+
+
+@pytest.mark.asyncio
+async def test_driver_repeated_503_stops_after_two_retries(lab, fast_retries):
+    utterance = "Which vehicles do I own?"
+    lab.driver.errors[utterance] = [Http503("x"), Http503("x"), Http503("x")]
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted):
+        await runner.run(groups=("scale-11",))
+    steps = _events(log, "driver_step", "s11-01")
+    assert [e["decision"] for e in steps] == [
+        "transient_retry",
+        "transient_retry",
+        "attempts_exhausted",
+    ]
+    assert _events(log, "tool_result", "s11-01") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error,decision",
+    [
+        (Http429("fictional rate limit"), "not_transient"),
+        (PermissionError("denied"), "not_transient"),
+        ("invalid", "invalid_output"),
+    ],
+)
+async def test_driver_non_transient_failures_and_invalid_output_are_final(
+    lab, fast_retries, error, decision
+):
+    utterance = "Which vehicles do I own?"
+    lab.driver.errors[utterance] = [error]
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted):
+        await runner.run(groups=("scale-11",))
+    steps = _events(log, "driver_step", "s11-01")
+    assert len(steps) == 1 and steps[0]["decision"] == decision
+    assert lab.driver.calls.count(utterance) == 1
+
+
+@pytest.mark.asyncio
+async def test_driver_stall_is_unresolved_and_not_retried(lab, monkeypatch):
+    from jarvis.memory import learning_limits
+
+    monkeypatch.setattr(learning_limits, "INFERENCE_TIMEOUT", 0.05)
+    utterance = "Which vehicles do I own?"
+    lab.driver.errors[utterance] = ["stall"]
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted, match="stalled"):
+        await runner.run(groups=("scale-11",))
+    steps = _events(log, "driver_step", "s11-01")
+    assert [e["status"] for e in steps] == ["stall_unresolved"]
+    assert lab.driver.calls.count(utterance) == 1
+    summary = json.loads(log.summary.read_text(encoding="utf-8"))
+    assert summary["provider_reliability"]["stalls_unresolved"] == 1
+
+
+@pytest.mark.asyncio
+async def test_driver_retry_needs_room_in_the_step_budget(lab, monkeypatch):
+    from jarvis.memory import learning_limits
+
+    monkeypatch.setattr(learning_limits, "PROCESSING_BUDGET", 7.0)
+    utterance = "Which vehicles do I own?"
+    lab.driver.errors[utterance] = [Http503("x")]
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted):
+        await runner.run(groups=("scale-11",))
+    steps = _events(log, "driver_step", "s11-01")
+    assert [e["decision"] for e in steps] == ["deadline_insufficient"]
+
+
+def test_free_lane_driver_client_drops_routing_ids_only():
+    import asyncio
+
+    seen = {}
+
+    class Inner:
+        model_name = "m"
+
+        async def parse_with_telemetry(self, **kwargs):
+            seen.update(kwargs)
+            return "ok"
+
+    client = acceptance.FreeLaneDriverClient(Inner())
+    result = asyncio.run(
+        client.parse_with_telemetry(
+            system_prompt="p",
+            input_payload={},
+            response_model=dict,
+            scope_id="s",
+            operation_id="o",
+        )
+    )
+    assert result == "ok"
+    assert set(seen) == {"system_prompt", "input_payload", "response_model"}

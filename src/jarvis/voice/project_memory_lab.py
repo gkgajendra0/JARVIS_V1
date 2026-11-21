@@ -686,15 +686,18 @@ async def run_slice1_acceptance(
     import msvcrt
     from uuid import uuid4
 
+    from jarvis.ai_provider import gemini_credential_ref
     from jarvis.capabilities.authority_bridge import CapabilityAuthorityBroker
     from jarvis.capabilities.discovery import CapabilityResolver
     from jarvis.capabilities.runtime import CapabilityRuntime
-    from jarvis.hands.provider_adapters import RoutedStructuredOutputClient
+    from jarvis.hands.provider_adapters import build_structured_output_client
     from jarvis.memory.learning_extractors import build_learning_adapters
     from jarvis.memory.runtime import build_default_memory_runtime
     from jarvis.model_routing.runtime import build_routing_runtime
+    from jarvis.provider_retry import policy_summary
     from jarvis.voice.personal_memory_acceptance import (
         AcceptanceRunner,
+        FreeLaneDriverClient,
         FreeLanePacer,
         LabDeps,
         ResultLog,
@@ -717,6 +720,7 @@ async def run_slice1_acceptance(
     )
     routing = None
     grant = None
+    driver = None
     try:
         path = root / "routing.sqlite3"
         work_store = SQLiteWorkStore(
@@ -729,28 +733,37 @@ async def run_slice1_acceptance(
             model=model,
             config=replace(config.gemini_fallback, enabled=False),
         )
-        driver = RoutedStructuredOutputClient(
-            routing_runtime=routing,
-            role="memory.recall",
-            model=model,
-            max_output_tokens=2048,
-            free_output_tokens=2048,
+        # Answer calls: the Free credential only, SDK retries off, no router
+        # and no Paid credential (a Paid request is impossible). The text
+        # driver is the single retry owner for these calls.
+        driver = FreeLaneDriverClient(
+            build_structured_output_client(
+                provider="gemini",
+                model=model,
+                provider_retries=False,
+                credential_ref=gemini_credential_ref("free"),
+                max_output_tokens=2048,
+            )
         )
         # With paid routing disabled the learning adapters use the Free key
-        # directly, with the SDK's own retries off (one attempt per call).
+        # directly, with the SDK's own retries off; Jarvis's learning runtime
+        # is their single retry owner (bounded, temporary failures only).
         extractor, resolver = build_learning_adapters("gemini", routing_runtime=routing)
         models = {
             "answer_model": model,
             "learning_model": getattr(extractor, "model_name", None),
             "lane": "free",
             "call_spacing_seconds": float(call_spacing_seconds),
+            "retry_policy": policy_summary(),
         }
         # One limiter shared by learning and answer calls (same Free key).
         pacer = FreeLanePacer(call_spacing_seconds)
         print(
             "SLICE-1 DEVELOPMENT ACCEPTANCE (D1-D27, fictional data, isolated lab). "
             f"Answer model {model}; learning model {models['learning_model']}. Free "
-            f"lane only, no automatic retry; model calls start at least "
+            f"lane only; a temporary provider error (503/500) is retried at most "
+            "twice inside its deadline, never a 429, stall or wrong answer; model "
+            f"calls start at least "
             f"{float(call_spacing_seconds):g} s apart. Windows Hello: (1) now, to open the "
             "owner learning session used for learning and reads; (2) at D3, to save "
             "'Dell XPS; iPad Air'; (3) at D17, to forget the Classic 350. Progress: "
@@ -803,6 +816,8 @@ async def run_slice1_acceptance(
         if grant is not None:
             capability.close_personal_learning(grant)
         capability.close()
+        if driver is not None:
+            await driver.aclose()
         if routing is not None:
             await routing.aclose()
         lock.seek(0)
@@ -849,9 +864,9 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
             )
         except AcceptanceInterrupted as exc:
             print(
-                f"INTERRUPTED (no retry was attempted): {exc}. Completed steps are "
-                "kept. Continue later with the same command plus -ResumeLab; an "
-                "interrupted step reruns only with -RetryInterrupted.",
+                f"INTERRUPTED (any bounded retries are recorded; none remain): {exc}. "
+                "Completed steps are kept. Continue later with the same command plus "
+                "-ResumeLab; an interrupted step reruns only with -RetryInterrupted.",
                 flush=True,
             )
             raise SystemExit(2) from None
