@@ -400,6 +400,10 @@ class FakeDriver:
             if not results:
                 return {"remember_memory": {"predicate": spec[1], "value": spec[2]}}
             return {"answer": spec[3]}
+        if spec[0] == "catalog_only":
+            if not results:
+                return {"personal_context_catalog": {}}
+            return {"answer": spec[1]}
         if spec[0] == "forget":
             if not results:
                 return {"personal_context_catalog": {}}
@@ -586,9 +590,12 @@ async def test_full_scripted_run_passes_every_automatic_check(lab):
         for case, row in summary["cases"].items()
         if row["status"] in {acceptance.FAIL, acceptance.UNTESTED}
     }
-    # D3 keeps one owner-observed check (the Hello count) open by design.
-    assert set(failed) == {"D3"}, json.dumps(failed, indent=1, default=str)[:4000]
-    assert [c["check"] for c in failed["D3"]] == ["one Hello"]
+    assert failed == {}, json.dumps(failed, indent=1, default=str)[:4000]
+    assert summary["automatic_verdict"] == "PASS_PENDING_MANUAL_REVIEW"
+    assert summary["d17_failed_stage"] is None
+    assert "D17" in summary["required_gates"]
+    hello = [c for c in summary["cases"]["D3"]["checks"] if c["check"] == "one Hello"]
+    assert hello[0]["status"] == acceptance.REVIEW  # owner observation
     assert summary["untested"] == []
     assert summary["interrupted_at"] is None
     assert summary["not_run_here"]["D27"].startswith("Recorded from the owner-run")
@@ -809,3 +816,121 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
     ]
     assert {row["source_commit"] for row in steps} == {"1" * 40}
     assert {row["lane"] for row in steps} == {"free"}
+
+
+# D17 stage diagnosis (owner check 2026-11-21) ---------------------------------
+
+TARGET = "owned_item_classic"
+
+
+def _catalog(facets, catalog_id="cat-1"):
+    return {
+        "tool": "personal_context_catalog",
+        "arguments": {},
+        "result": {"catalog_id": catalog_id, "facets": facets},
+    }
+
+
+def _forget(index, ok=True, catalog_id="cat-1"):
+    return {
+        "tool": "forget_memory",
+        "arguments": {
+            "predicate": "Classic 350",
+            "catalog_id": catalog_id,
+            "facet_index": index,
+        },
+        "result": {"ok": ok},
+    }
+
+
+CLEAN = {"evidence_quotes": 0, "search_index": 0}
+
+
+@pytest.mark.parametrize(
+    "tools,remaining,residual,stage",
+    [
+        ([], 1, CLEAN, "item_absent_from_available_catalog"),
+        (
+            [_catalog(["owned_item_jimny", "plan_goa"])],
+            1,
+            CLEAN,
+            "item_absent_from_available_catalog",
+        ),
+        (
+            [_catalog(["owned_item_jimny", TARGET])],
+            1,
+            CLEAN,
+            "model_did_not_select_available_item",
+        ),
+        (
+            [_catalog(["owned_item_jimny", TARGET]), _forget(0)],
+            1,
+            CLEAN,
+            "model_did_not_select_available_item",
+        ),
+        (
+            [_catalog(["owned_item_jimny", TARGET]), _forget(7)],
+            1,
+            CLEAN,
+            "model_did_not_select_available_item",
+        ),
+        (
+            [_catalog(["owned_item_jimny", TARGET]), _forget(1, ok=False)],
+            1,
+            CLEAN,
+            "forget_operation_failed",
+        ),
+        (
+            [_catalog(["owned_item_jimny", TARGET]), _forget(1)],
+            1,
+            CLEAN,
+            "forget_operation_failed",
+        ),
+        (
+            [_catalog(["owned_item_jimny", TARGET]), _forget(1)],
+            0,
+            {"evidence_quotes": 1, "search_index": 0},
+            "deleted_but_residual_remains",
+        ),
+        ([_catalog(["owned_item_jimny", TARGET]), _forget(1)], 0, CLEAN, None),
+    ],
+    ids=[
+        "no_catalog",
+        "not_listed",
+        "listed_no_forget",
+        "forgot_another_item",
+        "bad_index",
+        "forget_refused",
+        "ok_but_rows_remain",
+        "residual",
+        "passed",
+    ],
+)
+def test_d17_failure_stage_is_diagnosed(tools, remaining, residual, stage):
+    found, detail = acceptance.diagnose_forget(tools, [TARGET], remaining, residual)
+    assert found == stage
+    assert detail["lineage_remaining"] == remaining
+
+
+@pytest.mark.asyncio
+async def test_d17_without_a_forget_fails_the_gate_with_its_stage(lab, monkeypatch):
+    driver = dict(DRIVER)
+    driver["Forget the Classic 350."] = ("answer", "Done.")  # claims, never calls
+    monkeypatch.setattr(sys.modules[__name__], "DRIVER", driver)
+    runner, _ = lab.runner()
+    summary = await runner.run(groups=("story",))
+    assert summary["cases"]["D17"]["status"] == acceptance.FAIL
+    assert summary["d17_failed_stage"] == "item_absent_from_available_catalog"
+    assert summary["cases"]["D26"]["status"] == acceptance.UNTESTED
+    assert summary["automatic_verdict"] == acceptance.FAIL
+
+
+@pytest.mark.asyncio
+async def test_d17_catalog_without_a_forget_is_a_selection_failure(lab, monkeypatch):
+    driver = dict(DRIVER)
+    driver["Forget the Classic 350."] = ("catalog_only", "I couldn't find it.")
+    monkeypatch.setattr(sys.modules[__name__], "DRIVER", driver)
+    runner, _ = lab.runner()
+    summary = await runner.run(groups=("story",))
+    assert summary["d17_failed_stage"] == "model_did_not_select_available_item"
+    assert summary["cases"]["D17"]["status"] == acceptance.FAIL
