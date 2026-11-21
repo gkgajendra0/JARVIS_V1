@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from number_parser import parse as parse_number_words
@@ -346,9 +346,13 @@ class MemoryService:
                     Sensitivity.STANDARD,
                 )
             )
+        # One source per item: the same owner turn and times, distinct IDs.
+        sources = (source,) + tuple(
+            replace(source, source_id=str(uuid4())) for _ in drafts[1:]
+        )
         records = await self._lifecycle.create_many(
             tuple(drafts),
-            source,
+            sources,
             reason_code="explicit_owner_remember",
             commit_guard=commit_guard,
         )

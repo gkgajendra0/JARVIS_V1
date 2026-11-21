@@ -13,7 +13,7 @@ from jarvis.authority.proposal import canonical_json
 from jarvis.personal_learning_scope import CATEGORIES
 
 from .assertions import SemanticAssertionDraft
-from .learning_catalog_page import PAGE_AMBIGUOUS, bounded_entries
+from .learning_catalog_page import PAGE_AMBIGUOUS, bounded_entries, unique_reference
 from .learning_contracts import (
     AcceptedLearningSource,
     LearningBatch,
@@ -327,7 +327,12 @@ class LearningReconciler:
                     and entry is not None
                     and entry.category == candidate.category
                     and entry.kind == candidate.kind
-                    and _label(entry) == normalize_memory_surface(candidate.label)
+                    and (
+                        _label(entry) == normalize_memory_surface(candidate.label)
+                        # A shorter name for exactly one item ("the Tigor"
+                        # for "Tata Tigor"); never between two plausible items.
+                        or unique_reference(entry, candidate.label, catalog.entries)
+                    )
                 ):
                     refine_target = entry
             if refine_target is not None:

@@ -145,3 +145,44 @@ def test_presentation_states_only_the_precision_held(expression, wording):
 def test_elapsed_dates_are_never_assumed_done_or_upcoming(expression, today, status):
     assert date_status(time_object(expression, at(2026, 11, 18)), today) == status
     assert date_status(None, today) == "unknown"
+
+
+@pytest.mark.parametrize(
+    "expression,anchor,earliest,latest",
+    [
+        # Frozen D23: "I sold the Classic 350 in October." told 2026-11-20.
+        ("October", at(2026, 11, 20), "2026-10-01", "2026-10-31"),
+        ("in October", at(2026, 11, 20), "2026-10-01", "2026-10-31"),
+        # Frozen D12: "the Jimny is from September" told 2026-11-19.
+        ("September", at(2026, 11, 19), "2026-09-01", "2026-09-30"),
+        # The told month itself, and a later month name means last year.
+        ("November", at(2026, 11, 20), "2026-11-01", "2026-11-30"),
+        ("December", at(2026, 11, 20), "2025-12-01", "2025-12-31"),
+        ("Sept", at(2026, 1, 5), "2025-09-01", "2025-09-30"),
+    ],
+)
+def test_bare_month_for_a_past_item_time_is_its_latest_occurrence(
+    expression, anchor, earliest, latest
+):
+    stated = time_object(expression, anchor, direction="past")
+    assert (stated["precision"], stated["earliest"], stated["latest"]) == (
+        "month",
+        earliest,
+        latest,
+    )
+    assert stated["expression"] == expression  # wording kept verbatim
+
+
+@pytest.mark.parametrize("expression", ["January", "October", "around March", "kal"])
+def test_bare_month_stays_unresolved_without_a_past_direction(expression):
+    assert time_object(expression, at(2026, 11, 20))["precision"] == "unresolved"
+
+
+def test_past_direction_never_changes_other_wording():
+    anchor = at(2026, 11, 18)
+    for expression in ("last week", "2021", "March 2017", "around March", "kal"):
+        assert time_object(expression, anchor, direction="past") == time_object(
+            expression, anchor
+        )
+    with pytest.raises(ValueError):
+        time_object("October", anchor, direction="future")

@@ -44,6 +44,45 @@ def _words(text) -> set[str]:
     }
 
 
+def _loaded(entry):
+    try:
+        value = json.loads(entry.value)
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def identity_words(entry) -> list[set[str]]:
+    """Word sets of a stored fact's names: its label and each alias."""
+    value = _loaded(entry)
+    if value is None:
+        return []
+    names = [value.get("label")] + list(value.get("aliases") or ())
+    return [w for w in (_words(n) for n in names if isinstance(n, str)) if w]
+
+
+def unique_reference(entry, label, entries) -> bool:
+    """True when ``label`` names ``entry`` and no other fact of its category
+    and kind: the label's words are all contained in one of the entry's names
+    ("Tigor" -> "Tata Tigor"), and in no other entry's names."""
+    wanted = _words(label)
+    if not wanted:
+        return False
+
+    def names(e):
+        return any(wanted <= words for words in identity_words(e))
+
+    if not names(entry):
+        return False
+    return not any(
+        names(other)
+        for other in entries
+        if other.assertion_id != entry.assertion_id
+        and other.category == entry.category
+        and other.kind == entry.kind
+    )
+
+
 def entry_words(entry) -> set[str]:
     try:
         value = json.loads(entry.value)

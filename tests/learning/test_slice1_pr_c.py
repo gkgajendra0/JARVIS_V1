@@ -783,3 +783,128 @@ async def test_lease_renewal_keeps_every_refusal_for_the_next_page(
     finally:
         personal.close()
         session.close()
+
+
+@pytest.mark.asyncio
+async def test_frozen_d23_wording_stores_the_month_of_the_sale(learning):
+    """Found by the acceptance harness: "in October" (no year) told in
+    November is October of that year, not an unresolved time."""
+    owner = Owner(learning)
+    _plan, result, _ = await owner.say(
+        "I sold the Classic 350 in October.",
+        [
+            item(
+                "Classic 350",
+                ["I sold the Classic 350 in October"],
+                state="sold",
+                disposed_expression="October",
+            )
+        ],
+        [("new", None)],
+    )
+    assert result.status == "committed"
+    rows = await learning.reader.run(
+        lambda c: c.execute(
+            "SELECT value_json, valid_from FROM semantic_assertion WHERE state='active'"
+            " AND predicate LIKE 'owned_item%'"
+        ).fetchall()
+    )
+    value, valid_from = json.loads(rows[-1][0]), rows[-1][1]
+    today = datetime.now().astimezone().date()
+    year = today.year if today.month >= 10 else today.year - 1
+    assert (value["disposed"]["precision"], value["disposed"]["earliest"]) == (
+        "month",
+        f"{year}-10-01",
+    )
+    assert value["disposed"]["latest"] == f"{year}-10-31"
+    assert valid_from is None  # the effective day is still unknown
+
+
+@pytest.mark.asyncio
+async def test_frozen_d2_wording_refines_by_a_unique_shorter_name(learning):
+    """Found by the acceptance harness: "the Tigor" for the stored "Tata
+    Tigor" is the same item, so the added detail refines it."""
+    from test_slice1_pr_b import current, labelled, rows, seed_d1
+
+    owner, _ = await seed_d1(learning)
+    before = labelled(await rows(learning), "Tata Tigor")[0]
+    plan, result, _ = await owner.say(
+        "I bought the Tigor in March 2017, it's the diesel one.",
+        [
+            item(
+                "Tigor",
+                ["I bought the Tigor in March 2017, it's the diesel one"],
+                details="diesel",
+                acquired_expression="March 2017",
+            )
+        ],
+        [("match", "Tata Tigor")],
+    )
+    assert [m.action for m in plan.mutations] == ["refine"] and not plan.outcomes
+    assert result.status == "committed"
+    all_rows = await rows(learning)
+    old = next(r for r in all_rows if r["id"] == before["id"])
+    new = labelled(all_rows, "Tata Tigor")[0]
+    assert old["state"] == "superseded" and new["supersedes"] == old["id"]
+    assert new["value"]["label"] == "Tata Tigor"  # the stored name is kept
+    assert new["value"]["details"] == "diesel"
+    assert len(current(all_rows)) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_shorter_name_shared_by_two_items_never_refines(learning):
+    from test_slice1_pr_b import rows
+
+    owner = Owner(learning)
+    for label in ("Classic 350 bike", "Pulsar 150 bike"):
+        await owner.say(
+            f"I have a {label}.", [item(label, [f"I have a {label}"])], [("new", None)]
+        )
+    plan, result, _ = await owner.say(
+        "My bike is red.",
+        [item("bike", ["My bike is red"], details="red")],
+        [("match", "Classic 350 bike")],
+    )
+    assert not plan.mutations
+    assert [o.reason for o in plan.outcomes] == ["new_fact_cannot_mutate_target"]
+    assert result.status == "recorded"
+    assert all("red" not in str(r["value"]) for r in await rows(learning))
+
+
+@pytest.mark.asyncio
+async def test_explicit_list_gives_each_item_its_own_source_and_forgets_one(learning):
+    """Found by the acceptance harness (frozen D3: 2 rows, 2 sources). With a
+    shared source, forgetting one listed item would touch the other's
+    provenance."""
+    from jarvis.memory.explicit import build_owner_explicit_source
+    from jarvis.memory.types import Sensitivity
+
+    conversation = Owner(learning).conversation
+    turn = conversation.accept_turn(
+        ConversationRole.USER, "Remember my devices are a Dell XPS and an iPad Air."
+    )
+    source = build_owner_explicit_source(
+        conversation=conversation, turn=turn, sensitivity=Sensitivity.STANDARD
+    )
+    records = await learning.service.remember_owned_items(
+        kind="device", items=("Dell XPS", "iPad Air"), source=source
+    )
+    assert len({r.source_id for r in records}) == 2
+    stored = await learning.reader.run(
+        lambda c: c.execute(
+            "SELECT s.canonical_ref, s.observed_at FROM semantic_assertion a JOIN"
+            " memory_source s ON s.source_id = a.source_id WHERE a.assertion_id IN (?, ?)",
+            (records[0].assertion_id, records[1].assertion_id),
+        ).fetchall()
+    )
+    assert len(set(stored)) == 1  # same owner turn and time
+    forget_source = replace(source, source_id=str(uuid4()))
+    await learning.lifecycle.forget(records[0].assertion_id, forget_source)
+    left = await learning.reader.run(
+        lambda c: c.execute(
+            "SELECT a.state, s.source_id FROM semantic_assertion a JOIN memory_source"
+            " s ON s.source_id = a.source_id WHERE a.assertion_id = ?",
+            (records[1].assertion_id,),
+        ).fetchall()
+    )
+    assert left == [("active", records[1].source_id)]

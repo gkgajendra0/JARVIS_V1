@@ -71,7 +71,9 @@ def normalized_slots(slots) -> dict[str, dict]:
 
 
 def item_time(expression: str | None, anchor) -> dict | None:
-    return time_object(expression, anchor) if expression else None
+    """When an item was acquired or disposed of: past by definition, so a bare
+    month resolves to its most recent occurrence (personal_time module)."""
+    return time_object(expression, anchor, direction="past") if expression else None
 
 
 def _clauses(fragment: str) -> list[str]:

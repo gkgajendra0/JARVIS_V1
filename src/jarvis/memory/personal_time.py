@@ -13,6 +13,12 @@ turn's local date and the owner's timezone (the turn's UTC offset). "Last
 week" is the previous Monday-Sunday calendar week. Ambiguous phrases ("kal",
 a bare month name, "around ...") stay ``unresolved`` with the expression.
 
+One exception, for times that are past by definition (when an item was bought
+or got, or sold, given away or lost): with ``direction="past"`` a bare month
+name ("in October") is its most recent occurrence on or before the told date
+(told 2026-11-20: October -> 2026-10; November -> 2026-11). Plans and events
+never use it, so "January" for a plan stays unresolved.
+
 Only ``day`` precision maps to the timestamp validity columns, through
 :func:`day_boundary` (start of that local day in UTC). That instant is an
 internal boundary, not a known time of day: callers must present it with the
@@ -111,9 +117,17 @@ def _valid_day(year: int, month: int, day: int) -> date | None:
         return None
 
 
-def _resolve(text: str, anchor: date) -> tuple[str, date | None, date | None]:
+def _resolve(
+    text: str, anchor: date, direction: str | None = None
+) -> tuple[str, date | None, date | None]:
     if not text or any(text == h or text.startswith(h + " ") for h in _HEDGES):
         return "unresolved", None, None
+    if direction == "past":
+        match = re.fullmatch(_MONTH, text)
+        if match:
+            month = _MONTHS[match.group(1)]
+            year = anchor.year if month <= anchor.month else anchor.year - 1
+            return ("month", *_month_bounds(year, month))
     if text in _DAY_WORDS:
         day = anchor + timedelta(days=_DAY_WORDS[text])
         return "day", day, day
@@ -176,13 +190,21 @@ def _resolve(text: str, anchor: date) -> tuple[str, date | None, date | None]:
     return "unresolved", None, None
 
 
-def time_object(expression: str | None, anchor_at: datetime) -> dict | None:
-    """The owner-stated time with its actual precision, or None if none was said."""
+def time_object(
+    expression: str | None, anchor_at: datetime, *, direction: str | None = None
+) -> dict | None:
+    """The owner-stated time with its actual precision, or None if none was said.
+
+    ``direction="past"`` only for times that already happened (see module)."""
+    if direction not in (None, "past"):
+        raise ValueError("direction must be None or 'past'")
     if expression is None or not expression.strip():
         return None
     if anchor_at.tzinfo is None:
         raise ValueError("anchor_at must be timezone-aware")
-    precision, earliest, latest = _resolve(_normalize(expression), anchor_at.date())
+    precision, earliest, latest = _resolve(
+        _normalize(expression), anchor_at.date(), direction
+    )
     return {
         "expression": expression,
         "precision": precision,
