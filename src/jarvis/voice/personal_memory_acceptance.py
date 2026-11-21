@@ -62,12 +62,19 @@ DEFAULT_CALL_SPACING_SECONDS = 6.0
 
 
 class FreeLanePacer:
-    """One shared spacing for every model call of the run (learning
+    """One shared budget for every model call of the run (learning
     extraction, learning resolution and answer steps all use the same Free
-    key). Calls start at least ``spacing`` seconds apart. This lowers the
-    chance of a per-minute limit; it cannot rule out every limit (daily
-    quota, token limits, provider-side bursts), and a refusal still stops
-    the run without a retry."""
+    key): on average one call per ``spacing`` seconds.
+
+    It never waits inside Jarvis's learning deadline (run 2: waiting there
+    consumed up to 6 s of the 25 s inference budget). Instead the harness
+    waits for a free slot (:meth:`ready`) before an owner turn is observed;
+    the learning calls then run as production would, and are counted
+    afterwards (:meth:`note`), pushing the next slot later. Answer steps wait
+    as usual (:meth:`wait`). At most the turn's two learning calls run back
+    to back. This lowers the chance of a per-minute limit; it cannot rule
+    out every limit (daily quota, token limits, provider-side bursts), and a
+    refusal still stops the run without a retry."""
 
     def __init__(self, spacing, *, clock=time.monotonic, sleep=None):
         import asyncio
@@ -78,20 +85,35 @@ class FreeLanePacer:
         self._clock = clock
         self._sleep = sleep or asyncio.sleep
         self._lock = asyncio.Lock()
-        self._last = None
+        self._next = None  # earliest start of the next paced call
         self.calls = 0
         self.waited = 0.0
 
-    async def wait(self):
+    def _advance(self):
+        now = self._clock()
+        base = self._next if self._next is not None and self._next > now else now
+        self._next = base + self.spacing
+        self.calls += 1
+
+    async def ready(self):
+        """Wait until the next call may start, without using the slot."""
         async with self._lock:
-            now = self._clock()
-            if self._last is not None:
-                delay = self._last + self.spacing - now
+            if self._next is not None:
+                delay = self._next - self._clock()
                 if delay > 0:
                     self.waited += delay
                     await self._sleep(delay)
-            self._last = self._clock()
-            self.calls += 1
+
+    def note(self, count=1):
+        """Count calls that ran without waiting (inside a learning turn)."""
+        for _ in range(max(0, int(count))):
+            self._advance()
+
+    async def wait(self):
+        """Wait for a slot and use it (answer steps)."""
+        await self.ready()
+        async with self._lock:
+            self._advance()
 
 
 class AcceptanceInterrupted(RuntimeError):
@@ -555,12 +577,27 @@ class RecordingAdapter:
         )
 
     async def _call(self, stage, operation, *args):
-        if self.pacer is not None:
-            await self.pacer.wait()
+        # Never wait here: this runs inside Jarvis's learning deadline. The
+        # harness waited for a pacing slot before the turn was observed.
+        attempts = getattr(self.inner, "attempts", None)
         started = time.perf_counter()
         try:
             result = await operation(*args)
-        except Exception as exc:
+        except BaseException as exc:
+            self._count(attempts)
+            if not isinstance(exc, Exception):
+                # Cancelled at the learning deadline: the call was still
+                # waiting for the provider (no retry follows).
+                self.log.event(
+                    {
+                        "group": self.group,
+                        "step_id": self.step_id,
+                        "kind": "learning_" + stage,
+                        "status": "cancelled_at_deadline",
+                        "latency_ms": round((time.perf_counter() - started) * 1000),
+                    }
+                )
+                raise
             failure = getattr(self.inner, "last_failure", None)
             provider = str(exc) == "learning_provider_unavailable"
             if provider:
@@ -579,6 +616,7 @@ class RecordingAdapter:
                 }
             )
             raise
+        self._count(attempts)
         self.log.event(
             {
                 "group": self.group,
@@ -590,6 +628,17 @@ class RecordingAdapter:
             }
         )
         return result
+
+    def _count(self, attempts_before):
+        """Count the provider calls this adapter call made (none when the
+        resolver decided deterministically)."""
+        if self.pacer is None:
+            return
+        after = getattr(self.inner, "attempts", None)
+        if isinstance(attempts_before, int) and isinstance(after, int):
+            self.pacer.note(after - attempts_before)
+        else:
+            self.pacer.note(1)
 
 
 # ------------------------------------------------------------ text driver --
@@ -1275,6 +1324,10 @@ class _GroupContext:
             " FROM personal_learning_outcome"
         )
         outcomes_before = set(await _query(self.memory, outcome_sql))
+        if self.deps.pacer is not None:
+            # Outside the learning deadline: the turn's learning calls then
+            # start as soon as Jarvis makes them.
+            await self.deps.pacer.ready()
         self.observer(turn)
         await self.learning.drain()
         after = self.learning.status()
@@ -1306,6 +1359,11 @@ class _GroupContext:
             raise AcceptanceInterrupted(
                 "learning provider failure: " + json.dumps(failures)
             )
+        if learning["dropped"] and after.reason in {"timeout", "cancelled"}:
+            # A turn whose learning did not finish is not completed setup:
+            # stop here (no retry, no reseeding); later cases would test
+            # missing prerequisites. Rerun only with --retry-interrupted.
+            raise AcceptanceInterrupted(f"learning incomplete: {after.reason}")
         personal = PersonalContextSession(
             conversation=self.conversation,
             retrieval=self.memory.retrieval,
@@ -1506,8 +1564,9 @@ def _answer_check(context, step_id, name, flags=()):
 
 
 def _learning_happened(context, step_id):
+    """Learning finished for that turn (it was processed and not dropped)."""
     learning = (_reply(context, step_id) or {}).get("learning") or {}
-    return learning.get("processed", 0) > 0
+    return learning.get("processed", 0) > 0 and not learning.get("dropped", 0)
 
 
 # ------------------------------------------------------------------ checks --
