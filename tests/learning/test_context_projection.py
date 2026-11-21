@@ -177,15 +177,20 @@ def test_all_scopes_empty_is_no_match_with_each_scope_named():
     }
 
 
-def test_unavailable_and_over_budget_name_no_scope_outcomes():
-    over = [record("v" + str(i), str(i)) for i in range(5)]
-    assert project(snap(*over)).scope_results == ()
+def test_unavailable_names_no_scope_outcomes_and_a_long_list_pages():
+    # Slice 1 PR C: more facts than one page is a partial page, not a failure.
+    over = [record("v" + str(i), str(i)) for i in range(9)]
+    paged = project(snap(*over))
+    assert paged.status == "selected"
+    assert paged.scope_results == (("owned_item.vehicle", "selected"),)
+    assert (paged.total, len(paged.facts), paged.next_offset) == (9, 8, 8)
+    assert not paged.complete
     broken = replace(record(), normalized_text="")
     assert project(snap(broken)).status == "unavailable"
     assert project(snap(broken)).scope_results == ()
 
 
-def test_deduplicate_overlapping_requests_and_do_not_truncate_five_facts():
+def test_deduplicate_overlapping_requests_and_never_truncate_a_page():
     assert (
         len(
             project(
@@ -196,18 +201,16 @@ def test_deduplicate_overlapping_requests_and_do_not_truncate_five_facts():
         )
         == 1
     )
-    assert (
-        project(snap(*[record(str(i), str(i)) for i in range(4)])).status == "selected"
-    )
-    result = project(snap(*[record(str(i), str(i)) for i in range(5)]))
-    assert result.status == "clarification_required" and not result.facts
+    five = project(snap(*[record(str(i), str(i)) for i in range(5)]))
+    assert five.status == "selected" and len(five.facts) == 5 and five.complete
+    nine = project(snap(*[record(str(i), str(i)) for i in range(9)]))
+    assert len(nine.facts) == 8 and nine.next_offset == 8 and not nine.complete
+    assert [f["evidence_ref"] for f in nine.facts] == list(range(1, 9))
 
 
-@pytest.mark.parametrize(
-    "size,status", [(1800, "selected"), (1801, "clarification_required")]
-)
+@pytest.mark.parametrize("size,whole", [(3000, True), (3001, False)])
 def test_full_serialized_evidence_budget_includes_multibyte_text_and_metadata(
-    size, status
+    size, whole
 ):
     wire = [
         {
@@ -222,19 +225,17 @@ def test_full_serialized_evidence_budget_includes_multibyte_text_and_metadata(
     overhead = len(json.dumps(wire, ensure_ascii=False, separators=(",", ":")).encode())
     text = "अ" * 20 + "x" * (size - overhead - 60)
     result = project(snap(record(normalized_text=text)))
-    assert result.status == status
-    if status == "selected":
-        assert (
-            len(
-                json.dumps(
-                    result.facts, ensure_ascii=False, separators=(",", ":")
-                ).encode()
-            )
-            == 1800
-        )
-        assert result.facts[0]["text"] == text
+    assert result.status == "selected" and result.total == 1
+    encoded = json.dumps(result.facts, ensure_ascii=False, separators=(",", ":"))
+    if whole:
+        assert len(encoded.encode()) == 3000
+        assert result.facts[0]["text"] == text and result.complete
     else:
-        assert not result.facts
+        # Larger than a whole page: explicitly marked, never cut, never empty,
+        # and the list is not complete.
+        assert result.facts[0]["omitted"] == "item_exceeds_page_budget"
+        assert "text" not in result.facts[0] and text[:40] not in encoded
+        assert result.next_offset is None and not result.complete
 
 
 @pytest.mark.parametrize("state", ["not_owned", "completed"])

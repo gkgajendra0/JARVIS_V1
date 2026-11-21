@@ -201,6 +201,21 @@ def _gemini_output_schema(node):
     }
 
 
+class LearningProviderUnavailable(RuntimeError):
+    """A sanitized provider failure (no provider body or payload).
+
+    ``failure`` is the classified provider failure. ``retry_owner`` names the
+    single component allowed to retry it: "runtime" for a direct call (the SDK's
+    own retries are off), "router" when the model router already applies its
+    retry policy, so the learning runtime must not add another layer.
+    """
+
+    def __init__(self, failure, retry_owner):
+        super().__init__("learning_provider_unavailable")
+        self.failure = failure
+        self.retry_owner = retry_owner
+
+
 class LearningProviderAdapter:
     def __init__(
         self, provider, client, model, *, routing_runtime=None, diagnostics=False
@@ -346,7 +361,10 @@ class LearningProviderAdapter:
                     reason="learning_provider_unavailable",
                     **self.last_failure,
                 )
-            raise RuntimeError("learning_provider_unavailable") from None
+            raise LearningProviderUnavailable(
+                self.last_provider_failure,
+                "router" if self.routing_runtime is not None else "runtime",
+            ) from None
         finally:
             if source is not None:
                 log_learning(

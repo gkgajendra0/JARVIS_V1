@@ -20,6 +20,28 @@ from .learning_values import SLOT_NAMES, has_identifier
 from .project_routing import is_project_control_command
 
 
+def ground_plan_label(source, candidate):
+    """A plan's label is only its display name. When the model composed one
+    that the owner never said ("Goa trip" for "Maybe we'll do Goa this
+    winter.") but the plan's value is the owner's own words, the value becomes
+    the label instead of the whole plan being dropped. Plans only; every other
+    category and every other gate is unchanged, and nothing unsaid is stored."""
+    if getattr(candidate, "category", None) != "plan" or not candidate.value:
+        return candidate
+    turns = {t.turn_id: t.text for t in source.turns}
+    fragments = []
+    for span in candidate.evidence:
+        text = turns.get(span.turn_id)
+        if text is None or not 0 <= span.start < span.end <= len(text):
+            return candidate
+        fragments.append(text[span.start : span.end])
+    if any(candidate.label in f for f in fragments) or not any(
+        candidate.value in f for f in fragments
+    ):
+        return candidate
+    return candidate.model_copy(update={"label": candidate.value})
+
+
 class LearningPolicy:
     @staticmethod
     def source_allowed(source: AcceptedLearningSource) -> bool:

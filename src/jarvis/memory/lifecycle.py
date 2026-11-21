@@ -164,14 +164,20 @@ class MemoryLifecycleService:
     async def create_many(
         self,
         drafts: tuple[SemanticAssertionDraft, ...],
-        source: MemorySource,
+        sources: tuple[MemorySource, ...],
         *,
         reason_code: str | None = None,
         commit_guard: Callable[[], None] | None = None,
     ) -> tuple[SemanticAssertionRecord, ...]:
         """Create several independent facts from one approved owner statement
-        in a single transaction (all or nothing)."""
+        in a single transaction (all or nothing). Each fact has its own source
+        (same turn reference and times), so forgetting one fact removes only
+        its own provenance."""
         reason = _reason_code(reason_code)
+        if len(sources) != len(drafts) or len(
+            {source.source_id for source in sources}
+        ) != len(sources):
+            raise MemoryLifecycleError("one distinct source per fact required")
 
         def run(connection):
             def mutation():
@@ -179,7 +185,7 @@ class MemoryLifecycleService:
                     self._create_sync(
                         connection, draft, source, reason, True, join_existing=True
                     )
-                    for draft in drafts
+                    for draft, source in zip(drafts, sources, strict=True)
                 )
 
             return self._transaction(connection, mutation, commit_guard)

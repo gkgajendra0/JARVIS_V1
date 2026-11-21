@@ -173,8 +173,11 @@ class LearningCatalogEntry(BaseModel):
 
 class LearningCatalog(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    entries: list[LearningCatalogEntry] = Field(default_factory=list, max_length=32)
+    entries: list[LearningCatalogEntry] = Field(default_factory=list, max_length=96)
     suppression_epochs: dict[str, int] = Field(default_factory=dict)
+    # Proposal indices whose identity could not be resolved from a bounded
+    # page (PR C). Never sent to the model; each is skipped and recorded.
+    page_ambiguous: list[int] = Field(default_factory=list, exclude=True)
 
 
 class LearningResolution(BaseModel):

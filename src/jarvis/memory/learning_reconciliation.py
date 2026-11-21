@@ -13,6 +13,7 @@ from jarvis.authority.proposal import canonical_json
 from jarvis.personal_learning_scope import CATEGORIES
 
 from .assertions import SemanticAssertionDraft
+from .learning_catalog_page import PAGE_AMBIGUOUS, bounded_entries, unique_reference
 from .learning_contracts import (
     AcceptedLearningSource,
     LearningBatch,
@@ -26,6 +27,7 @@ from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_
 from .learning_values import (
     DISPOSED_STATES,
     PLAN_STATE,
+    decides_stated_options,
     has_identifier,
     item_time,
     minimal_quote,
@@ -215,7 +217,11 @@ class LearningReconciler:
                 )
             )
         self.authority.validate_read(permit)
-        return LearningCatalog(entries=entries)
+        # Only the proposed categories, bounded per proposal (PR C); a proposal
+        # whose identity cannot be resolved from a bounded page is skipped and
+        # recorded instead of failing the whole turn.
+        supplied, ambiguous = bounded_entries(entries, batch.candidates, SCALAR_FACETS)
+        return LearningCatalog(entries=supplied, page_ambiguous=list(ambiguous))
 
     def plan(
         self,
@@ -261,6 +267,9 @@ class LearningReconciler:
 
             if LearningPolicy().evaluate(source, candidate).status != "eligible":
                 skip("policy_rejected", record=False)
+                continue
+            if index in catalog.page_ambiguous:
+                skip(PAGE_AMBIGUOUS)
                 continue
             if (
                 candidate.category == "owned_item"
@@ -319,7 +328,12 @@ class LearningReconciler:
                     and entry is not None
                     and entry.category == candidate.category
                     and entry.kind == candidate.kind
-                    and _label(entry) == normalize_memory_surface(candidate.label)
+                    and (
+                        _label(entry) == normalize_memory_surface(candidate.label)
+                        # A shorter name for exactly one item ("the Tigor"
+                        # for "Tata Tigor"); never between two plausible items.
+                        or unique_reference(entry, candidate.label, catalog.entries)
+                    )
                 ):
                     refine_target = entry
             if refine_target is not None:
@@ -330,14 +344,41 @@ class LearningReconciler:
                 if not isinstance(old_value, dict):
                     skip("already_stored")
                     continue
+                # Recomputed with the stored value as context (a restated
+                # acquired month may then get its inferred year).
+                added = _added_detail(candidate, source, old_value) or added
                 merged, reason = refine_merge(old_value, added)
-                if merged is None:
-                    skip(reason)
-                    continue
                 predicate, expected = (
                     refine_target.predicate,
                     refine_target.assertion_id,
                 )
+                if (
+                    merged is None
+                    and candidate.category == "plan"
+                    and decides_stated_options(old_value, added)
+                ):
+                    # Choosing one of the owner's stated alternatives changes
+                    # the same plan (D10); the earlier row keeps the options.
+                    if predicate in used:
+                        skip("conflicting_mutations")
+                        continue
+                    used.add(predicate)
+                    mutations.append(
+                        self._mutation(
+                            index,
+                            candidate,
+                            source,
+                            "change",
+                            predicate,
+                            expected,
+                            _changed_value(old_value, candidate, source),
+                            others=_other_labels(batch, index),
+                        )
+                    )
+                    continue
+                if merged is None:
+                    skip(reason)
+                    continue
                 if predicate in used:
                     skip("conflicting_mutations")
                     continue
@@ -424,6 +465,12 @@ class LearningReconciler:
                         skip("invalid_existing_value")
                         continue
                     value = _changed_value(old, candidate, source)
+                elif entry is not None and action == "correct":
+                    try:
+                        old = json.loads(entry.value)
+                    except (TypeError, ValueError):
+                        old = None
+                    value = _new_value(candidate, source, old)
                 else:
                     value = _new_value(candidate, source)
             effective_at = None
@@ -530,12 +577,28 @@ def _anchor(source, candidate):
     return temporal_context(source, candidate)["anchor_at"]
 
 
-def _item_fields(candidate, source):
+def _item_fields(candidate, source, context=None):
     """Slice-1 fields for an owned item: aliases, details (identifiers
-    removed), acquired/disposed time objects at their stated precision."""
+    removed), acquired/disposed time objects at their stated precision.
+
+    A bare month ("from September") gets an inferred year only with
+    supporting context that the time is already past:
+    - disposed: the owner said the item is gone (sold, given away, lost or
+      no longer owned), so the disposal already happened;
+    - acquired: ``context`` (the stored value being corrected, changed or
+      refined) already holds an acquired time, so the owner is restating
+      that same past time.
+    Without that context (for example a new item "from September") the month
+    stays unresolved with its wording; it is never turned into a purchase
+    date."""
     from datetime import datetime
 
     anchor = datetime.fromisoformat(_anchor(source, candidate))
+    context = context if isinstance(context, dict) else {}
+    past = {
+        "disposed": candidate.state in DISPOSED_STATES,
+        "acquired": isinstance(context.get("acquired"), dict),
+    }
     fields = {}
     aliases = [a for a in candidate.aliases if not has_identifier(a)]
     if aliases:
@@ -546,7 +609,7 @@ def _item_fields(candidate, source):
         ("acquired", candidate.acquired_expression),
         ("disposed", candidate.disposed_expression),
     ):
-        stated = item_time(expression, anchor)
+        stated = item_time(expression, anchor, past=past[key])
         if stated:
             fields[key] = stated
     return fields
@@ -562,9 +625,9 @@ def _plan_fields(candidate):
     return fields
 
 
-def _added_detail(candidate, source):
+def _added_detail(candidate, source, context=None):
     if candidate.category == "owned_item":
-        return _item_fields(candidate, source)
+        return _item_fields(candidate, source, context)
     if candidate.category == "plan":
         return _plan_fields(candidate)
     return {}
@@ -579,7 +642,7 @@ def _plan_state_and_certainty(candidate):
     return PLAN_STATE[candidate.plan_status], certainty
 
 
-def _new_value(candidate, source):
+def _new_value(candidate, source, context=None):
     state, certainty = _plan_state_and_certainty(candidate)
     value = {
         "schema": POLICY_VERSION,
@@ -590,7 +653,7 @@ def _new_value(candidate, source):
         "state": state,
     }
     if candidate.category == "owned_item":
-        value.update(_item_fields(candidate, source))
+        value.update(_item_fields(candidate, source, context))
     if candidate.category in HISTORY_CATEGORIES:
         value["certainty"] = certainty
         value["temporal"] = temporal_context(source, candidate)
@@ -611,7 +674,7 @@ def _changed_value(old, candidate, source):
     if candidate.category != "owned_item":
         value["value"] = candidate.value
     else:
-        fields = _item_fields(candidate, source)
+        fields = _item_fields(candidate, source, old)
         for key in ("aliases", "details", "disposed"):
             if key in fields:
                 value[key] = fields[key]

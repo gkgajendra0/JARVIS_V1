@@ -38,9 +38,9 @@ async def test_three_invalid_or_empty_queries_exhaust_turn_without_extra_read(
         original = s._retrieval.learning_context_snapshot
         calls = []
 
-        async def counted():
+        async def counted(*args):
             calls.append(True)
-            return await original()
+            return await original(*args)
 
         monkeypatch.setattr(s._retrieval, "learning_context_snapshot", counted)
         assert (await s.query_for_question(None))["status"] == "invalid_selection"
@@ -77,10 +77,10 @@ async def test_concurrent_queries_cannot_expand_release(learning, monkeypatch):
         original = s._retrieval.learning_context_snapshot
         entered, release = asyncio.Event(), asyncio.Event()
 
-        async def paused():
+        async def paused(*args):
             entered.set()
             await release.wait()
-            return await original()
+            return await original(*args)
 
         monkeypatch.setattr(s._retrieval, "learning_context_snapshot", paused)
         first = asyncio.create_task(s.query_for_question(VEHICLES))
@@ -98,7 +98,7 @@ async def test_unavailable_and_invalid_diagnostics_do_not_echo_owner_data(
 ):
     async with context_session(learning) as (s, _, _):
 
-        async def broken():
+        async def broken(*args):
             raise RuntimeError("PRIVATE-CANARY")
 
         monkeypatch.setattr(s._retrieval, "learning_context_snapshot", broken)
@@ -129,8 +129,8 @@ async def test_replaced_permit_cannot_release_waiting_query(learning, monkeypatc
     async with context_session(learning) as (s, _, retired):
         original = s._retrieval.learning_context_snapshot
 
-        async def replaced():
-            result = await original()
+        async def replaced(*args):
+            result = await original(*args)
             s._operation = "correct"
             s._permit = object()
             return result

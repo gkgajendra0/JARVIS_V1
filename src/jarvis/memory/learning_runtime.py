@@ -6,15 +6,18 @@ import asyncio
 import hashlib
 import json
 import logging
+import random
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from time import monotonic, perf_counter
+
+from jarvis.provider_retry import decide_retry
 
 from .learning_contracts import AcceptedLearningSource, LearningBatch
 from .learning_controls import category_veto, suppression_binding
 from .learning_diagnostics import log_learning
 from .learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
-from .learning_policy import LearningPolicy
+from .learning_policy import LearningPolicy, ground_plan_label
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,10 +45,17 @@ class PersonalLearningRuntime:
         clock=monotonic,
         status_observer=None,
         diagnostics=False,
+        retry_observer=None,
+        sleep=asyncio.sleep,
+        rng=random.random,
     ):
         self.authority, self.service = authority, service
         self.extractor, self.resolver, self.reconciler = extractor, resolver, reconciler
         self.clock, self.status_observer = clock, status_observer
+        # Content-free record of every provider attempt that failed and what
+        # the bounded retry policy decided (jarvis.provider_retry).
+        self.retry_observer = retry_observer
+        self._sleep, self._rng = sleep, rng
         self.diagnostics = diagnostics
         self._stage = "source_validation"
         self._queue = asyncio.Queue(maxsize=32)
@@ -233,30 +243,101 @@ class PersonalLearningRuntime:
             raise PermissionError("Learning source no longer registered")
         self._require(source.receipt_id, source, item[1])
 
-    async def _infer(self, source, operation):
-        remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
-        if remaining <= 0:
-            raise TimeoutError("source processing budget exhausted")
-        timeout = min(INFERENCE_TIMEOUT, remaining)
-        started = perf_counter()
-        log_learning(
-            self.diagnostics,
-            source,
-            self._stage,
-            "started",
-            timeout_seconds=round(timeout, 3),
-            source_age_ms=round((self.clock() - source.created_monotonic) * 1000, 1),
-        )
-        try:
-            return await asyncio.wait_for(operation(), timeout)
-        finally:
+    async def _infer(self, source, operation, receipt=None, grant=None):
+        """Run one provider stage inside the source's existing processing budget.
+
+        This runtime is the single retry owner for direct provider calls: a
+        temporary provider failure (503/500/lost connection) may be retried at
+        most twice, after a growing randomized wait, only when the wait plus a
+        useful attempt still fits in the remaining budget. Source validity and
+        the learning grant are rechecked before every retry. Each attempt's
+        timeout is the smaller of INFERENCE_TIMEOUT and the remaining budget, so
+        retries never extend the budget or the 30-second source lease. A stall
+        (no response before the timeout) is never retried. Failures from the
+        model router are not retried here: the router owns its retries.
+        """
+        from .learning_extractors import LearningProviderUnavailable
+
+        attempt = 0
+        while True:
+            attempt += 1
+            remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+            if remaining <= 0:
+                raise TimeoutError("source processing budget exhausted")
+            timeout = min(INFERENCE_TIMEOUT, remaining)
+            started = perf_counter()
             log_learning(
                 self.diagnostics,
                 source,
                 self._stage,
-                "finished_wait",
-                elapsed_ms=round((perf_counter() - started) * 1000, 1),
+                "started",
+                attempt=attempt,
+                timeout_seconds=round(timeout, 3),
+                source_age_ms=round(
+                    (self.clock() - source.created_monotonic) * 1000, 1
+                ),
             )
+            try:
+                return await asyncio.wait_for(operation(), timeout)
+            except LearningProviderUnavailable as exc:
+                failure = exc.failure
+                remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+                if exc.retry_owner != "runtime":
+                    decision_reason, delay, retry = "retry_owned_by_router", 0.0, False
+                else:
+                    decision = decide_retry(
+                        failure, attempt=attempt, remaining=remaining, rng=self._rng
+                    )
+                    decision_reason = decision.reason
+                    delay, retry = decision.delay, decision.retry
+                self._observe_retry(
+                    source,
+                    attempt=attempt,
+                    failure=failure,
+                    decision=decision_reason,
+                    delay=delay,
+                    remaining=remaining,
+                )
+                if not retry:
+                    raise
+            finally:
+                log_learning(
+                    self.diagnostics,
+                    source,
+                    self._stage,
+                    "finished_wait",
+                    attempt=attempt,
+                    elapsed_ms=round((perf_counter() - started) * 1000, 1),
+                )
+            await self._sleep(delay)
+            # The wait may have outlived a revocation, a privacy control or the
+            # session: recheck before dispatching again.
+            self._require(receipt, source, grant)
+
+    def _observe_retry(self, source, *, attempt, failure, decision, delay, remaining):
+        kind = getattr(getattr(failure, "kind", None), "value", None)
+        status = getattr(failure, "status_code", None)
+        record = {
+            "stage": self._stage,
+            "attempt": attempt,
+            "failure_kind": kind,
+            "status": status if type(status) is int else None,
+            "decision": decision,
+            "delay_seconds": delay,
+            "remaining_seconds": round(remaining, 3),
+        }
+        log_learning(
+            self.diagnostics,
+            source,
+            self._stage,
+            "attempt_failed",
+            **{k: v for k, v in record.items() if k != "stage"},
+        )
+        if self.retry_observer is not None:
+            try:
+                self.retry_observer(record)
+            except Exception:
+                LOGGER.debug("learning retry observer failed", exc_info=True)
 
     async def _process(self, receipt, source, grant):
         self._stage = "source_validation"
@@ -271,7 +352,9 @@ class PersonalLearningRuntime:
             self._report("category_suppressed")
             return
         self._stage = "extraction"
-        batch = await self._infer(source, lambda: self.extractor.extract(source))
+        batch = await self._infer(
+            source, lambda: self.extractor.extract(source), receipt, grant
+        )
         self._require(receipt, source, grant)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
@@ -279,6 +362,16 @@ class PersonalLearningRuntime:
         eligible = []
         grounded_count = len(batch.candidates)
         for index, candidate in enumerate(batch.candidates):
+            grounded = ground_plan_label(source, candidate)
+            if grounded is not candidate:
+                log_learning(
+                    self.diagnostics,
+                    source,
+                    "eligibility",
+                    "label_from_value",
+                    grounded_index=index,
+                )
+                candidate = grounded
             decision = LearningPolicy().evaluate(
                 source, candidate, suppression.suppressed
             )
@@ -318,7 +411,10 @@ class PersonalLearningRuntime:
         catalog = catalog.model_copy(update={"suppression_epochs": suppression.epochs})
         self._stage = "resolution"
         resolutions = await self._infer(
-            source, lambda: self.resolver.resolve(source, batch, catalog)
+            source,
+            lambda: self.resolver.resolve(source, batch, catalog),
+            receipt,
+            grant,
         )
         self._require(receipt, source, grant)
         log_learning(
