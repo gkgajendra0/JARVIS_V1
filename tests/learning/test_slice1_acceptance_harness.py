@@ -525,6 +525,19 @@ def test_frozen_case_files_are_verified_and_heldout_is_never_read():
     assert not [u for u in utterances if u in heldout]
 
 
+def test_windows_line_endings_are_not_a_change_but_an_edit_is(tmp_path):
+    for name in acceptance.FROZEN_SHA256:
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        content = (REPO / name).read_bytes().replace(b"\r\n", b"\n")
+        target.write_bytes(content.replace(b"\n", b"\r\n"))
+    assert acceptance.frozen_hashes(tmp_path) == acceptance.FROZEN_SHA256
+    path = tmp_path / acceptance.ACCEPTANCE_FILE
+    path.write_bytes(path.read_bytes().replace(b"D23", b"D99", 1))
+    with pytest.raises(ValueError, match="frozen case file changed"):
+        acceptance.frozen_hashes(tmp_path)
+
+
 def test_frozen_case_file_change_refuses_to_run(tmp_path):
     for name in acceptance.FROZEN_SHA256:
         target = tmp_path / name

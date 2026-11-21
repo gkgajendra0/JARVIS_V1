@@ -67,10 +67,14 @@ def told(day, hour=10, minute=0, month=11):
 
 
 def frozen_hashes(repo: Path) -> dict[str, str]:
-    """Refuse to run unless both frozen case files are byte-identical."""
+    """Refuse to run unless both frozen case files are unchanged.
+
+    The hash is of the committed content: a Windows checkout's CRLF line
+    endings are normalized back to LF first, so only a real edit differs."""
     observed = {}
     for name, expected in FROZEN_SHA256.items():
-        digest = hashlib.sha256((repo / name).read_bytes()).hexdigest()
+        content = (repo / name).read_bytes().replace(b"\r\n", b"\n")
+        digest = hashlib.sha256(content).hexdigest()
         if digest != expected:
             raise ValueError(f"frozen case file changed: {name}")
         observed[name] = digest
