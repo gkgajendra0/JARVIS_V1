@@ -313,10 +313,14 @@ def build_default_self_model() -> SelfModelRegistry:
             "Deterministic provider failure classification and bounded survival behavior.",
             (
                 "src/jarvis/provider_resilience.py",
+                "src/jarvis/provider_retry.py",
                 "src/jarvis/voice/provider_resilience.py",
             ),
             parent_component_id="runtime.provider",
-            tests=("tests/test_provider_resilience.py",),
+            tests=(
+                "tests/test_provider_resilience.py",
+                "tests/learning/test_learning_provider_retry.py",
+            ),
             logger_prefixes=(
                 "jarvis.provider_resilience",
                 "jarvis.voice.provider_resilience",
