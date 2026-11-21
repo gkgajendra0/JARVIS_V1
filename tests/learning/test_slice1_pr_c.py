@@ -1042,3 +1042,135 @@ async def test_disposal_month_infers_a_year_only_when_the_item_is_gone(
         basis,
         precision,
     )
+
+
+# Pronoun follow-ups (owner check 2026-11-21, from run-1 D5) -------------------
+
+
+async def _follow_up(learning, earlier, question, requests):
+    """A follow-up question in the same session as earlier owner turns
+    (sentences of ``earlier`` become separate turns)."""
+    turns = [t.strip() + "." for t in earlier.rstrip(".").split(". ")]
+    async with context_session(learning, turns[0]) as (s, c, _):
+        for text in turns[1:]:
+            c.accept_turn(ConversationRole.ASSISTANT, "Okay.")
+            c.accept_turn(ConversationRole.USER, text)
+        c.accept_turn(ConversationRole.ASSISTANT, "Okay.")
+        c.accept_turn(ConversationRole.USER, question)
+        return await s.query_for_question(requests)
+
+
+@pytest.mark.asyncio
+async def test_d5_reproduction_pronoun_follow_up_with_a_name_from_the_last_turn(
+    learning,
+):
+    """Run 1: "When did I sell it?" with target_quote "Tigor" (named only in
+    the previous owner turn) was refused as invalid_selection."""
+    await seed_item(learning, "Tata Tigor")
+    await seed_item(learning, "Jimny")
+    result = await _follow_up(
+        learning,
+        "I sold the Tigor last week.",
+        "When did I sell it?",
+        [{"scope_key": "owned_item.vehicle", "target_quote": "Tigor"}],
+    )
+    assert result["status"] == "selected", result
+    assert [f["text"].split(";")[0] for f in result["facts"]] == ["Tata Tigor"]
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_pronoun_follow_up_asks_which_item_and_releases_nothing(
+    learning,
+):
+    await seed_item(learning, "Tata Tigor")
+    await seed_item(learning, "Royal Enfield Classic 350")
+    result = await _follow_up(
+        learning,
+        "I sold the Tigor and the Classic 350.",
+        "When did I sell it?",
+        [{"scope_key": "owned_item.vehicle", "target_quote": "Tigor"}],
+    )
+    assert result["status"] == "clarification_required", result
+    assert not result.get("facts")
+
+
+@pytest.mark.asyncio
+async def test_pronoun_follow_up_prefers_the_category_lookup_without_a_target(learning):
+    await seed_item(learning, "Tata Tigor")
+    await seed_item(learning, "Jimny")
+    result = await _follow_up(
+        learning,
+        "I sold the Tigor last week.",
+        "When did I sell it?",
+        [{"scope_key": "owned_item.vehicle"}],
+    )
+    assert result["status"] == "selected"
+    assert len(result["facts"]) == 2  # the permitted category; the answer picks
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "earlier,question,quote,status",
+    [
+        # No referring word: the target must still quote the current question.
+        (
+            "I sold the Tigor last week.",
+            "When did I buy the Jimny?",
+            "Tigor",
+            "invalid_selection",
+        ),
+        # A name the owner never said in this session is never accepted.
+        (
+            "I sold the Tigor last week.",
+            "When did I sell it?",
+            "Pulsar",
+            "invalid_selection",
+        ),
+        # The quote names an item, but the most recent naming turn meant another.
+        (
+            "I love my Jimny. I sold the Tigor last week.",
+            "When did I sell it?",
+            "Jimny",
+            "clarification_required",
+        ),
+    ],
+    ids=["no_referring_word", "never_said", "quote_not_the_referent"],
+)
+async def test_pronoun_follow_up_keeps_grounding(
+    learning, earlier, question, quote, status
+):
+    await seed_item(learning, "Tata Tigor")
+    await seed_item(learning, "Jimny")
+    result = await _follow_up(
+        learning,
+        earlier,
+        question,
+        [{"scope_key": "owned_item.vehicle", "target_quote": quote}],
+    )
+    assert result["status"] == status, result
+    assert not result.get("facts")
+
+
+def test_the_model_cannot_supply_a_reference():
+    with pytest.raises(ValueError):
+        parse_context_requests(
+            [
+                {
+                    "scope_key": "owned_item.vehicle",
+                    "target_quote": "Tigor",
+                    "reference": ["x"],
+                }
+            ],
+            question="When did I sell it?",
+            context=("I sold the Tigor.",),
+        )
+
+
+def test_reference_turns_are_only_the_last_four_earlier_owner_turns():
+    old = ("I sold the Tigor.", "a", "b", "c", "d")
+    with pytest.raises(ValueError):
+        parse_context_requests(
+            [{"scope_key": "owned_item.vehicle", "target_quote": "Tigor"}],
+            question="When did I sell it?",
+            context=old,
+        )

@@ -44,6 +44,11 @@ def _words(text) -> set[str]:
     }
 
 
+def name_words(text) -> set[str]:
+    """Normalized words of a name or utterance (public form of _words)."""
+    return _words(text)
+
+
 def _loaded(entry):
     try:
         value = json.loads(entry.value)

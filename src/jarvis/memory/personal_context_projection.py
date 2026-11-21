@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -36,14 +37,31 @@ ScopeKey = Literal[
 ]
 
 
+# A current question that refers back ("When did I sell it?") may name its
+# target from the owner's earlier turns in the same authorised session. A
+# closed list of referring words gates that; anything else must still quote
+# the current question.
+_REFERRING = re.compile(
+    r"\b(?:it|its|that|this|these|those|them|one|woh|wo|vo|voh|use|usko|"
+    r"uska|isko|iska|ye|yeh)\b",
+    re.IGNORECASE,
+)
+_REFERENCE_TURNS = 4
+
+
 class PersonalContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     scope_key: ScopeKey
     target_quote: str | None = None
+    # Set only by parse_context_requests (never by the model): the earlier
+    # owner turns of the bound session that the target was quoted from.
+    reference: tuple[str, ...] | None = None
 
     @model_validator(mode="before")
     @classmethod
     def validate_target(cls, value):
+        if isinstance(value, dict) and "reference" in value:
+            raise ValueError("invalid context request")
         if isinstance(value, dict) and "target_quote" in value:
             quote = value["target_quote"]
             if (
@@ -57,8 +75,16 @@ class PersonalContextRequest(BaseModel):
 
 
 def parse_context_requests(
-    requests: object, *, question: str
+    requests: object, *, question: str, context: tuple[str, ...] = ()
 ) -> tuple[PersonalContextRequest, ...]:
+    """Validate the model's requests against the current question.
+
+    A target must be quoted from the current question, except when the
+    question refers back (closed referring-word list) and the target is
+    quoted from one of the owner's earlier turns in ``context`` (the bound
+    session's previous USER turns). Such a request carries those turns; the
+    projection then releases the item only if it is the one unambiguous
+    referent there, and otherwise asks which item was meant."""
     if type(requests) is not list or not 1 <= len(requests) <= 4:
         raise ValueError("invalid context requests")
     if not isinstance(question, str):
@@ -70,10 +96,20 @@ def parse_context_requests(
     for item in requests:
         if isinstance(item, PersonalContextRequest):
             item = item.model_dump(exclude_unset=True)
+        if isinstance(item, dict) and "reference" in item:
+            raise ValueError("invalid context request")
         request = PersonalContextRequest.model_validate(item, strict=True)
         quote = request.target_quote
         if quote is not None and quote not in question:
-            raise ValueError("context target is not current question text")
+            earlier = tuple(t for t in context if isinstance(t, str))[
+                -_REFERENCE_TURNS:
+            ]
+            if not (
+                _REFERRING.search(question)
+                and any(quote.casefold() in t.casefold() for t in earlier)
+            ):
+                raise ValueError("context target is not current question text")
+            request = request.model_copy(update={"reference": earlier})
         key = (request.scope_key, quote)
         if key in seen:
             raise ValueError("duplicate context request")
@@ -234,6 +270,57 @@ def _normalize_label(text):
     return " ".join(unicodedata.normalize("NFKC", text).casefold().split())
 
 
+def _name_words(record, scope):
+    """Word sets of a fact's names (its label and aliases)."""
+    from .learning_catalog_page import name_words
+
+    names = [_current_label(record, scope)]
+    if isinstance(record.value, dict):
+        names += [a for a in record.value.get("aliases") or () if isinstance(a, str)]
+    return [w for w in (name_words(n) for n in names if n) if w]
+
+
+def _referent(candidates, scope, quote, turns):
+    """The single item a referring question means, from the owner's earlier
+    turns only. Returns (items, None) or ([], reason).
+
+    The referent is what the most recent earlier owner turn that names any
+    item of this scope names (by a word that belongs to that item's names
+    and to no other item's). It is released only when that turn names exactly
+    one item and the model's quote names that same item; two named items ask
+    which one was meant."""
+    from .learning_catalog_page import name_words
+
+    names = {r.assertion_id: _name_words(r, scope) for r in candidates}
+    every = {r.assertion_id: set().union(*names[r.assertion_id]) for r in candidates}
+    distinct = {
+        r.assertion_id: {
+            w
+            for w in every[r.assertion_id]
+            if len(w) >= 3
+            and not any(w in every[o.assertion_id] for o in candidates if o is not r)
+        }
+        for r in candidates
+    }
+    mentioned = []
+    for text in reversed(turns):
+        words = name_words(text)
+        mentioned = [r for r in candidates if distinct[r.assertion_id] & words]
+        if mentioned:
+            break
+    wanted = name_words(quote)
+    quoted = [
+        r
+        for r in candidates
+        if wanted and any(wanted <= n for n in names[r.assertion_id])
+    ]
+    if len(mentioned) > 1:
+        return [], "ambiguous_reference"
+    if len(mentioned) == 1 and quoted == mentioned:
+        return mentioned, None
+    return [], "unresolved_target"
+
+
 def _encoded_size(facts) -> int:
     return len(
         json.dumps(
@@ -376,7 +463,18 @@ def project_personal_context(
             candidates = [
                 r for r, scope in snapshot.entries if scope == request.scope_key
             ]
-            if request.target_quote is not None:
+            if request.reference is not None:
+                candidates, unclear = _referent(
+                    candidates,
+                    request.scope_key,
+                    request.target_quote,
+                    request.reference,
+                )
+                if unclear:
+                    clarification = clarification or unclear
+                    settle(request.scope_key, "clarification_required")
+                    continue
+            elif request.target_quote is not None:
                 labels = [(r, _current_label(r, request.scope_key)) for r in candidates]
                 candidates = [
                     r

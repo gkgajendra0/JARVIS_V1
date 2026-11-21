@@ -761,8 +761,14 @@ class PersonalContextSession:
                         return {"status": "invalid_selection"}
                     self._query_attempts += 1
                 try:
+                    latest = self._latest_turn()
+                    earlier = tuple(
+                        t.text
+                        for t in self._conversation.turns
+                        if t.role is ConversationRole.USER and t is not latest
+                    )
                     parsed = parse_context_requests(
-                        requests, question=self._latest_turn().text
+                        requests, question=latest.text, context=earlier
                     )
                 except ValueError:
                     return {"status": "invalid_selection"}
