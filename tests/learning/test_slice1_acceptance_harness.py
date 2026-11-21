@@ -1312,3 +1312,67 @@ def test_free_lane_driver_client_drops_routing_ids_only():
     )
     assert result == "ok"
     assert set(seen) == {"system_prompt", "input_payload", "response_model"}
+
+
+# Run 4 D7 / D10: the recorded model outputs, replayed offline ------------------
+
+RUN4_EXTRACT = {
+    # Recorded verbatim in run 4 (lab 67967242), evidence = whole turn.
+    "I'm planning a Ladakh or winter Spiti trip in January.": [
+        plan(
+            "Ladakh or winter Spiti trip",
+            "I'm planning a Ladakh or winter Spiti trip in January.",
+            importance="transient",
+            time_expression="January",
+            plan_status="planned",
+            slots={
+                "destination": slot(options=("Ladakh", "winter Spiti")),
+                "when": slot("January"),
+            },
+        )
+    ],
+    "Maybe we'll do Goa this winter.": [
+        plan(
+            "Goa trip",
+            "Maybe we'll do Goa this winter.",
+            value="Goa",
+            importance="transient",
+            certainty="tentative",
+            time_expression="this winter",
+            location="Goa",
+            plan_status="considering",
+            slots={"destination": slot("Goa"), "when": slot("this winter")},
+        )
+    ],
+    "We're going with winter Spiti, and we'll take the Jimny.": [
+        plan(
+            "winter Spiti",
+            "We're going with winter Spiti, and we'll take the Jimny.",
+            importance="transient",
+            plan_status="planned",
+            slots={"destination": slot("winter Spiti"), "vehicle": slot("Jimny")},
+        )
+    ],
+}
+
+
+@pytest.mark.asyncio
+async def test_run4_recorded_outputs_now_pass_d7_and_d10(lab, monkeypatch):
+    """Run 4 recorded D7 FAIL (no eligible fact: label "Goa trip" not said)
+    and D10 FAIL (decision skipped as refine_conflicts_existing_detail). The
+    same model outputs, replayed through the fixed product code, pass; the
+    frozen checks are unchanged."""
+    for text, proposals in RUN4_EXTRACT.items():
+        monkeypatch.setitem(EXTRACT, text, proposals)
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    assert summary["cases"]["D7"]["status"] == acceptance.PASS, summary["cases"]["D7"]
+    assert summary["cases"]["D10"]["status"] == acceptance.PASS, summary["cases"]["D10"]
+    assert summary["cases"]["D11"]["status"] in {acceptance.PASS, acceptance.REVIEW}
+    status = {
+        e["step_id"]: e
+        for e in log.read(log.events)
+        if e.get("kind") == "learning_status"
+    }
+    assert status["story-08"]["committed"] == 1
+    assert status["story-10"]["committed"] == 1 and status["story-10"]["skipped"] == []
