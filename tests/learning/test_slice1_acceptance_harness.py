@@ -38,7 +38,12 @@ REPO = Path(__file__).resolve().parents[2]
 
 @pytest.fixture(autouse=True)
 def owner_timezone(monkeypatch):
-    # The PC runs in IST; "local" dates in the learning input use it.
+    # The PC runs in IST; "local" dates in the learning input use it. Where
+    # the process zone cannot be switched (Windows CI), the frozen told times
+    # (10:00-15:00 IST) fall on the same calendar date in UTC anyway.
+    if not hasattr(time, "tzset"):
+        yield
+        return
     monkeypatch.setenv("TZ", "Asia/Kolkata")
     time.tzset()
     yield
@@ -684,6 +689,7 @@ async def test_driver_quota_interruption_is_recorded(lab):
     assert len(events) == 1
 
 
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="process zone fixed on Windows")
 def test_offline_suite_runs_in_owner_timezone():
     assert time.strftime("%z") == "+0530"
     assert os.environ["TZ"] == "Asia/Kolkata"
