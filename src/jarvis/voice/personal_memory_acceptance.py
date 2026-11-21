@@ -1,0 +1,2434 @@
+"""Personal memory slice 1: frozen development acceptance (D1-D27), text lab.
+
+Runs the frozen development cases in ``docs/evals/personal-memory-acceptance.md``
+(never the sealed held-out file) through the real slice-1 code with fictional
+data in isolated lab databases:
+
+- every owner utterance is accepted into a conversation and observed by the
+  real learning runtime (Gemini extraction and resolution, deterministic
+  policy, reconciler, admission), exactly as live Jarvis does;
+- Jarvis's reply is produced by a text driver: the Free-lane answer model
+  receives the voice agent's own personal-context instructions
+  (``PERSONAL_LEARNING_QUERY_INSTRUCTIONS``) and calls the real
+  ``read_personal_context_for_question`` (with paging) and, on explicit
+  memory-command turns only (D3, D17), the real catalog and memory tools.
+  This is controlled text, not Gemini Live voice;
+- each case is graded at (a) stored record and (b) release automatically;
+  (c) answers are recorded for manual grading (keyword flags only locate
+  problems, they never pass an answer).
+
+Told dates: the frozen cases state when things were said (for example "told
+Wed 2026-11-18"). The lab sets each accepted turn's time to that told time so
+relative dates anchor exactly as specified. ``recorded_at`` in releases is the
+real time the lab wrote the fact.
+
+No automatic retry: every model call is made once. A provider failure (for
+example quota) interrupts the run after recording that step; completed steps
+and their results are kept, and ``--resume-lab`` continues from the next step
+that never started. An interrupted step is rerun only with the explicit
+``--retry-interrupted`` owner option and is then recorded as attempt 2.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import time
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
+from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field, create_model
+
+from jarvis.conversation import ConversationRole, ConversationSession
+
+KIND = "personal-memory-slice1-dev-acceptance-v1"
+ACCEPTANCE_FILE = "docs/evals/personal-memory-acceptance.md"
+HELDOUT_FILE = "docs/evals/personal-memory-heldout.md"
+FROZEN_SHA256 = {
+    ACCEPTANCE_FILE: "ed249d688826a18263fd578ff7980a2619057845a674c28d94763bbd5cb3823b",
+    HELDOUT_FILE: "fb2c36a4f29eb4638b863d9e1db142599b3c7b265ffbab6db360195dd21d08a1",
+}
+OWNER_TZ = timezone(timedelta(hours=5, minutes=30), "IST")
+MAX_DRIVER_STEPS = 8
+SEED_BATCH = 40
+CHILD_LEASE_SECONDS = 31
+PASS, FAIL, REVIEW, UNTESTED = "PASS", "FAIL", "REVIEW", "UNTESTED"
+
+
+class AcceptanceInterrupted(RuntimeError):
+    """A provider failure stopped the run; completed steps are preserved."""
+
+
+def told(day, hour=10, minute=0, month=11):
+    return datetime(2026, month, day, hour, minute, tzinfo=OWNER_TZ)
+
+
+def frozen_hashes(repo: Path) -> dict[str, str]:
+    """Refuse to run unless both frozen case files are byte-identical."""
+    observed = {}
+    for name, expected in FROZEN_SHA256.items():
+        digest = hashlib.sha256((repo / name).read_bytes()).hexdigest()
+        if digest != expected:
+            raise ValueError(f"frozen case file changed: {name}")
+        observed[name] = digest
+    return observed
+
+
+# ---------------------------------------------------------------- script --
+
+
+@dataclass(frozen=True)
+class SeedFact:
+    """A harness seed admitted through the real learning admission path with
+    a fixed proposal (no model call). Seeds are setup, never graded."""
+
+    category: str
+    label: str
+    kind: str = "other"
+    details: str | None = None
+    aliases: tuple[str, ...] = ()
+    plan_status: str | None = None
+    state: str = "owned"
+    told_at: datetime = field(default_factory=lambda: told(10))
+
+    def sentence(self):
+        if self.category == "plan":
+            return f"We are planning the {self.label}."
+        text = f"I have a {self.label}"
+        if self.details:
+            text += f", {self.details}"
+        if self.aliases:
+            text += ", which I also call " + " or ".join(self.aliases)
+        return text + "."
+
+
+@dataclass(frozen=True)
+class Seed:
+    id: str
+    facts: tuple[SeedFact, ...]
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class Say:
+    id: str
+    case: str
+    text: str
+    told_at: datetime
+    new_session: bool = True
+    explicit_tools: bool = False
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class SeedExplicit:
+    """A legacy explicit record written through the explicit service path
+    (harness setup, no Hello): used for D3's pre-existing combined record."""
+
+    id: str
+    predicate: str
+    value: str
+    told_at: datetime
+
+
+@dataclass(frozen=True)
+class Restart:
+    id: str
+    note: str = "Restart: the encrypted database is closed and reopened, with a new conversation and learning runtime."
+
+
+@dataclass(frozen=True)
+class Check:
+    id: str
+    case: str
+
+
+def _vehicles(prefix, count, *, kind="vehicle", **extra):
+    return tuple(
+        SeedFact("owned_item", f"{prefix} {i:02d}", kind=kind, **extra)
+        for i in range(1, count + 1)
+    )
+
+
+_LONG = (
+    "a fictional long-distance touring build with aluminium panniers, crash"
+    " guards, a tall adjustable screen, heated grips, auxiliary fog lamps, a"
+    " luggage rack and two spare fuel cans strapped behind the pillion seat"
+)
+
+GROUPS = {
+    # One continuing owner story. Cases run in an order consistent with the
+    # frozen text: D13's plan is stated first (told September); D23 sells the
+    # Classic 350 after D14-D16 rely on it; D17 forgets it last.
+    "story": (
+        Say(
+            "story-01",
+            "D13",
+            "We're planning a Rishikesh trip in October 2026.",
+            told(15, month=9),
+            note="D13 setup: the plan is stored before it elapses (harness-chosen fictional wording)",
+        ),
+        Say(
+            "story-02",
+            "D1",
+            "I have a Royal Enfield Classic 350 from 2021, a Tata Tigor I bought in March 2017, and last month I got a Jimny.",
+            told(17),
+        ),
+        Check("story-02c", "D1"),
+        Say(
+            "story-03",
+            "D2",
+            "I bought the Tigor in March 2017, it's the diesel one.",
+            told(17, 15),
+        ),
+        Check("story-03c", "D2"),
+        Say("story-04", "D5", "I sold the Tigor last week.", told(18)),
+        Say(
+            "story-05",
+            "D5",
+            "When did I sell it?",
+            told(18, 10, 1),
+            new_session=False,
+        ),
+        Check("story-05c", "D5"),
+        Say("story-06", "D22", "Which vehicles do I own?", told(18, 11)),
+        Check("story-06c", "D22"),
+        Say(
+            "story-07",
+            "D6",
+            "I'm planning a Ladakh or winter Spiti trip in January.",
+            told(18, 12),
+        ),
+        Check("story-07c", "D6"),
+        Say("story-08", "D7", "Maybe we'll do Goa this winter.", told(18, 13)),
+        Check("story-08c", "D7"),
+        Say(
+            "story-09",
+            "D8",
+            "Kaza or Manali, which has better fuel stations?",
+            told(18, 14),
+        ),
+        Check("story-09c", "D8"),
+        Say(
+            "story-10",
+            "D10",
+            "We're going with winter Spiti, and we'll take the Jimny.",
+            told(19),
+        ),
+        Check("story-10c", "D10"),
+        Say("story-11", "D11", "Cancel the Goa plan.", told(19, 11)),
+        Check("story-11c", "D11"),
+        Say(
+            "story-12",
+            "D12",
+            "I misspoke, the Jimny is from September, not October.",
+            told(19, 12),
+        ),
+        Check("story-12c", "D12"),
+        Say("story-13", "D13", "What's coming up?", told(20)),
+        Check("story-13c", "D13"),
+        Restart("story-restart"),
+        Say(
+            "story-14",
+            "D14",
+            "Which vehicles do I own and since when?",
+            told(20, 10, 5),
+        ),
+        Check("story-14c", "D14"),
+        Say(
+            "story-15",
+            "D15",
+            "Which of my vehicles is best for a snowy Spiti trip?",
+            told(20, 10, 10),
+        ),
+        Check("story-15c", "D15"),
+        Say(
+            "story-16",
+            "D16",
+            "How do you know I have a Jimny, and when did I tell you?",
+            told(20, 10, 15),
+        ),
+        Check("story-16c", "D16"),
+        Say("story-17", "D23", "I sold the Classic 350 in October.", told(20, 11)),
+        Check("story-17c", "D23"),
+        Say(
+            "story-18",
+            "D17",
+            "Forget the Classic 350.",
+            told(20, 12),
+            explicit_tools=True,
+        ),
+        Check("story-18c", "D17"),
+        Check("story-18d", "D26"),
+        Check("story-18e", "D21"),
+    ),
+    "explicit-list": (
+        SeedExplicit("list-00", "devices", "a Kindle and a Fitbit", told(10)),
+        Say(
+            "list-01",
+            "D3",
+            "Remember my devices are a Dell XPS and an iPad Air.",
+            told(17),
+            explicit_tools=True,
+        ),
+        Check("list-01c", "D3"),
+    ),
+    "ambiguous-bike": (
+        Seed(
+            "bike-00",
+            (
+                SeedFact("owned_item", "Classic 350", kind="vehicle"),
+                SeedFact("owned_item", "Pulsar 150", kind="vehicle"),
+                SeedFact(
+                    "plan",
+                    "Spiti trip in January",
+                    plan_status="planned",
+                    state="planned",
+                ),
+            ),
+            note="D4 setup: two bikes saved (and one trip)",
+        ),
+        Say(
+            "bike-01",
+            "D4",
+            "Should I service my bike before the trip?",
+            told(17),
+        ),
+        Check("bike-01c", "D4"),
+    ),
+    "idiom": (
+        Say(
+            "idiom-01",
+            "D9",
+            "We're going to Spiti in January, Thar or no Thar.",
+            told(18),
+        ),
+        Say(
+            "idiom-02",
+            "D9",
+            "Either way, January.",
+            told(18, 10, 1),
+            new_session=False,
+        ),
+        Check("idiom-02c", "D9"),
+    ),
+    "scale-11": (
+        Seed("s11-00", _vehicles("Vehicle", 11), note="D18 setup: 11 vehicles"),
+        Say("s11-01", "D18", "Which vehicles do I own?", told(17)),
+        Check("s11-01c", "D18"),
+    ),
+    "scale-90": (
+        Seed(
+            "s90-00",
+            tuple(
+                SeedFact(
+                    "plan",
+                    f"Weekend trip to Harbourtown {i:02d}",
+                    plan_status="planned",
+                    state="planned",
+                )
+                for i in range(1, 46)
+            )
+            + _vehicles("Gadget", 45, kind="device"),
+            note="D19 setup: 45 plans and 45 devices (90 standard rows)",
+        ),
+        Say(
+            "s90-01",
+            "D19",
+            "I just bought a Hero Xoom scooter.",
+            told(17),
+            note="D19 learning (harness-chosen fictional wording)",
+        ),
+        Say(
+            "s90-02",
+            "D19",
+            "What trips am I planning?",
+            told(17, 10, 5),
+            note="D19 lookup (harness-chosen fictional wording)",
+        ),
+        Check("s90-02c", "D19"),
+    ),
+    "bytes": (
+        Seed(
+            "bytes-00",
+            tuple(
+                SeedFact(
+                    "owned_item",
+                    f"Tourer {i:02d}",
+                    kind="vehicle",
+                    details=f"{_LONG} number {i:02d}",
+                    aliases=(
+                        f"the long-haul highway tourer for mountain passes {i:02d}",
+                        f"the big adventure machine with the tall screen {i:02d}",
+                        f"the mountain expedition ride with heated grips {i:02d}",
+                        f"the fully loaded touring motorcycle for Spiti {i:02d}",
+                    ),
+                )
+                for i in range(1, 7)
+            ),
+            note="D20 setup: 6 vehicles with long details (over 3,000 bytes)",
+        ),
+        Say(
+            "bytes-01",
+            "D20",
+            "Which vehicles do I own?",
+            told(17),
+            note="D20 question (harness-chosen fictional wording)",
+        ),
+        Check("bytes-01c", "D20"),
+    ),
+    "ambiguous-plan": (
+        Seed(
+            "plan40-00",
+            tuple(
+                SeedFact(
+                    "plan",
+                    f"paragliding trip {i:02d}",
+                    plan_status="planned",
+                    state="planned",
+                )
+                for i in range(1, 41)
+            ),
+            note="D24 setup: 40 near-identical trip plans",
+        ),
+        Say("plan40-01", "D24", "Add Bir to the paragliding trip.", told(17)),
+        Check("plan40-01c", "D24"),
+    ),
+    "pages": (
+        Seed("p40-00", _vehicles("Vehicle", 40), note="D25 setup: 40 vehicles"),
+        Say("p40-01", "D25", "List all my vehicles.", told(17)),
+        Check("p40-01c", "D25"),
+    ),
+}
+
+GROUP_ORDER = tuple(GROUPS)
+CASES_RUN = tuple(
+    sorted(
+        {s.case for g in GROUPS.values() for s in g if hasattr(s, "case")},
+        key=lambda c: int(c[1:]),
+    )
+)
+NOT_RUN_HERE = {
+    "D27": "Recorded from the owner-run migration rehearsal on the real encrypted database (commit 40211ad5, 2026-11-21): PASS. Not rerun in this lab.",
+}
+
+
+# ----------------------------------------------------------- lab clock ----
+
+
+class LabConversation(ConversationSession):
+    """A conversation whose accepted turns carry the frozen case's told time."""
+
+    def accept_at(self, role, text, at):
+        turn = self.accept_turn(role, text)
+        stamped = dc_replace(turn, accepted_at=at.astimezone(UTC))
+        self._turns[-1] = stamped
+        return stamped
+
+
+# --------------------------------------------------------- results files --
+
+
+class ResultLog:
+    """Append-only JSONL files; a step is complete only once its row is written."""
+
+    def __init__(self, root: Path, *, commit, hashes, models, echo=False):
+        self.root = root
+        self.echo = echo
+        self.events = root / "acceptance-events.jsonl"
+        self.steps = root / "acceptance-steps.jsonl"
+        self.cases = root / "acceptance-cases.jsonl"
+        self.summary = root / "acceptance-summary.json"
+        self.meta = {
+            "kind": KIND,
+            "source_commit": commit,
+            "case_files": hashes,
+            **models,
+        }
+
+    def _append(self, path, row):
+        row = {**row, "at": datetime.now(UTC).isoformat()}
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            stream.flush()
+
+    def event(self, row):
+        self._append(self.events, row)
+
+    def step(self, row):
+        self._append(self.steps, {**self.meta, **row})
+        if self.echo and row["status"] != "checked":
+            extra = row.get("learning") or row.get("reason") or row.get("seeded") or ""
+            print(
+                f"[{row['group']}] {row['step_id']} {row['status']} {extra}", flush=True
+            )
+
+    def case(self, row):
+        self._append(self.cases, {**self.meta, **row})
+        if self.echo:
+            print(f"[{row['group']}] {row['case']} {row['status']}", flush=True)
+
+    def read(self, path):
+        if not path.is_file():
+            return []
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def step_states(self):
+        """Latest recorded status per step id."""
+        states = {}
+        for row in self.read(self.steps):
+            states[row["step_id"]] = row
+        return states
+
+
+# ------------------------------------------------------- recording model --
+
+
+class RecordingAdapter:
+    """Wraps the real learning adapter: records proposals and decisions and
+    whether a provider failure happened (no retry is ever added)."""
+
+    def __init__(self, inner, log, group):
+        self.inner, self.log, self.group = inner, log, group
+        self.step_id = None
+        self.provider_failures = []
+
+    def bind_source_validator(self, validator):
+        binder = getattr(self.inner, "bind_source_validator", None)
+        if callable(binder):
+            binder(validator)
+
+    async def extract(self, source):
+        return await self._call("extraction", self.inner.extract, source)
+
+    async def resolve(self, source, batch, catalog):
+        return await self._call(
+            "resolution", self.inner.resolve, source, batch, catalog
+        )
+
+    async def _call(self, stage, operation, *args):
+        started = time.perf_counter()
+        try:
+            result = await operation(*args)
+        except Exception as exc:
+            failure = getattr(self.inner, "last_failure", None)
+            provider = str(exc) == "learning_provider_unavailable"
+            if provider:
+                self.provider_failures.append({"stage": stage, **(failure or {})})
+            self.log.event(
+                {
+                    "group": self.group,
+                    "step_id": self.step_id,
+                    "kind": "learning_" + stage,
+                    "status": "provider_failure" if provider else "failed",
+                    "error": str(exc)
+                    if str(exc).startswith("learning_")
+                    else type(exc).__name__,
+                    "failure": failure,
+                    "latency_ms": round((time.perf_counter() - started) * 1000),
+                }
+            )
+            raise
+        self.log.event(
+            {
+                "group": self.group,
+                "step_id": self.step_id,
+                "kind": "learning_" + stage,
+                "status": "ok",
+                "output": result.model_dump(mode="json"),
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+            }
+        )
+        return result
+
+
+# ------------------------------------------------------------ text driver --
+
+
+DRIVER_PREAMBLE = """You are Jarvis, the owner's personal assistant, in a controlled TEXT test with
+fictional data. Reply to the latest owner utterance. Each response is exactly one
+JSON action matching the schema: either call one tool or give the final spoken
+answer. Tool results so far are in tool_results; never repeat an identical call.
+Tools available on this turn are listed in available_tools with their exact
+descriptions. Answer in short natural speech, in the owner's language.
+"""
+
+
+class _Answer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    answer: str = Field(min_length=1, max_length=4000)
+
+
+def _driver_model(tools):
+    from jarvis.voice.project_answer_provider import _ProjectPersonalRequest
+
+    class _ReadArgs(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        requests: list[_ProjectPersonalRequest] = Field(min_length=1, max_length=4)
+        page_token: str | None = Field(default=None, min_length=1, max_length=512)
+
+    class _Read(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        read_personal_context_for_question: _ReadArgs
+
+    class _CatalogArgs(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+    class _Catalog(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        personal_context_catalog: _CatalogArgs
+
+    class _FacetArgs(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        catalog_id: str = Field(min_length=1, max_length=128)
+        facet_indices: list[int] = Field(min_length=1, max_length=4)
+
+    class _Facets(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        read_personal_context: _FacetArgs
+
+    class _RememberArgs(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        predicate: str = Field(min_length=1, max_length=128)
+        value: str = Field(min_length=1, max_length=1000)
+
+    class _Remember(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        remember_memory: _RememberArgs
+
+    class _ChangeArgs(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        predicate: str = Field(min_length=1, max_length=128)
+        value: str | None = Field(default=None, max_length=1000)
+        catalog_id: str | None = Field(default=None, max_length=128)
+        facet_index: int | None = Field(default=None, ge=0, le=127)
+
+    class _Correct(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        correct_memory: _ChangeArgs
+
+    class _Forget(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        forget_memory: _ChangeArgs
+
+    variants = [_Answer]
+    table = {
+        "read_personal_context_for_question": _Read,
+        "personal_context_catalog": _Catalog,
+        "read_personal_context": _Facets,
+        "remember_memory": _Remember,
+        "correct_memory": _Correct,
+        "forget_memory": _Forget,
+    }
+    variants += [table[name] for name in tools]
+    payload = variants[0]
+    for variant in variants[1:]:
+        payload = payload | variant
+    return create_model("JarvisTextStep", response=(payload, ...))
+
+
+def tool_descriptions(names):
+    """The live tools' own descriptions (from their definitions)."""
+    from jarvis.voice import personal_context
+    from jarvis.voice.memory_tools import MemoryAgentTools
+
+    def doc(obj):
+        for candidate in (
+            getattr(getattr(obj, "info", None), "description", None),
+            getattr(obj, "__doc__", None),
+            getattr(getattr(obj, "__wrapped__", None), "__doc__", None),
+        ):
+            if isinstance(candidate, str) and candidate.strip():
+                return " ".join(candidate.split())
+        return ""
+
+    known = {
+        "read_personal_context_for_question": personal_context._QUESTION_QUERY_SCHEMA[
+            "description"
+        ]
+        + " Arguments: requests (one to four {scope_key, optional target_quote}); "
+        + personal_context._QUESTION_QUERY_SCHEMA["parameters"]["properties"][
+            "page_token"
+        ]["description"],
+        "personal_context_catalog": doc(
+            getattr(
+                personal_context.PersonalContextAgentTools,
+                "personal_context_catalog",
+                None,
+            )
+        ),
+        "read_personal_context": doc(
+            getattr(
+                personal_context.PersonalContextAgentTools,
+                "read_personal_context",
+                None,
+            )
+        ),
+        "remember_memory": doc(MemoryAgentTools.remember_memory),
+        "correct_memory": doc(MemoryAgentTools.correct_memory),
+        "forget_memory": doc(MemoryAgentTools.forget_memory),
+    }
+    return {name: known[name] for name in names}
+
+
+class TextDriver:
+    """One Jarvis reply: model steps with real tool calls, no retry."""
+
+    def __init__(self, client, log, *, model):
+        self.client, self.log, self.model = client, log, model
+
+    def system_prompt(self):
+        from jarvis.voice.agent import PERSONAL_LEARNING_QUERY_INSTRUCTIONS
+
+        return DRIVER_PREAMBLE + PERSONAL_LEARNING_QUERY_INSTRUCTIONS
+
+    async def reply(
+        self, *, group, step, conversation, personal, memory_tools, explicit
+    ):
+        tools = ["read_personal_context_for_question"]
+        if explicit:
+            tools += [
+                "personal_context_catalog",
+                "read_personal_context",
+                "remember_memory",
+                "correct_memory",
+                "forget_memory",
+            ]
+        descriptions = tool_descriptions(tools)
+        results = []
+        session_turns = [
+            {"role": t.role.value, "text": t.text} for t in conversation.turns[-8:]
+        ]
+        for index in range(MAX_DRIVER_STEPS):
+            remaining = MAX_DRIVER_STEPS - index
+            names = tools if remaining > 1 else []
+            payload = {
+                "conversation": session_turns,
+                "latest_owner_utterance": step.text,
+                "tool_results": results,
+                "available_tools": [
+                    {"name": n, "description": descriptions[n]} for n in names
+                ],
+                "remaining_steps": remaining,
+            }
+            started = time.perf_counter()
+            try:
+                telemetry = await self.client.parse_with_telemetry(
+                    system_prompt=self.system_prompt(),
+                    input_payload=payload,
+                    response_model=_driver_model(names),
+                    scope_id=f"{group}:{step.id}",
+                    operation_id=f"reply-{index}",
+                )
+            except Exception as exc:  # noqa: BLE001 - any model-call failure stops the run (no retry)
+                self.log.event(
+                    {
+                        "group": group,
+                        "step_id": step.id,
+                        "kind": "driver_step",
+                        "index": index,
+                        "status": "provider_failure",
+                        "error": type(exc).__name__,
+                    }
+                )
+                raise AcceptanceInterrupted(type(exc).__name__) from None
+            action = telemetry.parsed.response
+            row = {
+                "group": group,
+                "step_id": step.id,
+                "kind": "driver_step",
+                "index": index,
+                "status": "ok",
+                "input": payload,
+                "output": action.model_dump(mode="json"),
+                "usage": dict(getattr(telemetry, "usage", {}) or {}),
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+            }
+            self.log.event(row)
+            if isinstance(action, _Answer):
+                return action.answer, results
+            # Omitted optional arguments are absent, as in a live tool call.
+            name, arguments = next(
+                iter(action.model_dump(mode="json", exclude_none=True).items())
+            )
+            result = await self._dispatch(name, arguments, personal, memory_tools)
+            results.append({"tool": name, "arguments": arguments, "result": result})
+            self.log.event(
+                {
+                    "group": group,
+                    "step_id": step.id,
+                    "kind": "tool_result",
+                    "tool": name,
+                    "arguments": arguments,
+                    "result": result,
+                }
+            )
+        return None, results
+
+    async def _dispatch(self, name, arguments, personal, memory_tools):
+        from jarvis.voice.memory_tools import _EXPECTED_MEMORY_ERRORS
+
+        try:
+            if name == "read_personal_context_for_question":
+                requests = arguments["requests"]
+                token = arguments.get("page_token")
+                if token is None:
+                    return await personal.query_for_question(requests)
+                return await personal.query_for_question(requests, token)
+            if name == "personal_context_catalog":
+                return await personal.catalog()
+            if name == "read_personal_context":
+                return await personal.read(
+                    arguments["catalog_id"], arguments["facet_indices"]
+                )
+            clean = {k: v for k, v in arguments.items() if v is not None}
+            if name == "remember_memory":
+                return await memory_tools.remember(**clean)
+            if name == "correct_memory":
+                return await memory_tools.correct(**clean)
+            if name == "forget_memory":
+                clean.pop("value", None)
+                return await memory_tools.forget(**clean)
+        except _EXPECTED_MEMORY_ERRORS as exc:
+            return {"ok": False, "error": type(exc).__name__, "message": str(exc)}
+        except PermissionError as exc:
+            return {"ok": False, "error": "PermissionError", "message": str(exc)}
+        raise ValueError("unknown tool")
+
+
+# ----------------------------------------------------------------- runner --
+
+
+@dataclass
+class LabDeps:
+    """What the runner needs; the Windows lab and the offline test supply it."""
+
+    open_memory: object  # async callable(path) -> started MemoryRuntime
+    capability: object
+    learning_authority: object
+    learning_grant: object
+    extractor: object
+    resolver: object
+    driver_client: object
+    models: dict
+    # Seeding issues two short-lived learning child permits per fact; the
+    # authority allows 128 live at once (30 s lease). The lab waits out the
+    # lease every SEED_BATCH facts; the offline test advances its clock.
+    pause: object = None
+
+
+class AcceptanceRunner:
+    def __init__(
+        self, root: Path, deps: LabDeps, log: ResultLog, *, retry_interrupted=False
+    ):
+        self.root, self.deps, self.log = root, deps, log
+        self.retry_interrupted = retry_interrupted
+
+    async def run(self, groups=GROUP_ORDER):
+        states = self.log.step_states()
+        for group in groups:
+            await self._run_group(group, GROUPS[group], states)
+        return self.write_summary()
+
+    async def _run_group(self, group, steps, states):
+        from jarvis.memory.learning_reconciliation import LearningReconciler
+        from jarvis.memory.learning_runtime import PersonalLearningRuntime
+
+        pending = [s for s in steps if not self._done(states.get(s.id))]
+        if not pending:
+            return
+        memory = await self.deps.open_memory(self.root / group / "memory.db")
+        extractor = RecordingAdapter(self.deps.extractor, self.log, group)
+        resolver = (
+            extractor
+            if self.deps.resolver is self.deps.extractor
+            else RecordingAdapter(self.deps.resolver, self.log, group)
+        )
+        context = _GroupContext(group, memory, self.deps, extractor, resolver)
+        context._path = self.root / group / "memory.db"
+        context.restore(self.log)
+        try:
+            context.start_learning(PersonalLearningRuntime, LearningReconciler)
+            for step in steps:
+                if self._done(states.get(step.id)):
+                    if isinstance(step, Restart):
+                        await context.restart(
+                            PersonalLearningRuntime, LearningReconciler
+                        )
+                    continue
+                prior = states.get(step.id)
+                if (
+                    prior is not None
+                    and prior["status"] == "interrupted"
+                    and not self.retry_interrupted
+                ):
+                    raise AcceptanceInterrupted(
+                        f"step {step.id} was interrupted earlier; rerun only with --retry-interrupted"
+                    )
+                attempt = 1 if prior is None else int(prior.get("attempt", 1)) + 1
+                await self._run_step(context, group, step, attempt)
+        finally:
+            await context.close()
+
+    @staticmethod
+    def _done(state):
+        return state is not None and state["status"] in {"completed", "checked"}
+
+    async def _run_step(self, context, group, step, attempt):
+        self.log.step(
+            {
+                "group": group,
+                "step_id": step.id,
+                "status": "started",
+                "attempt": attempt,
+            }
+        )
+        try:
+            if isinstance(step, Seed):
+                count = await context.seed(step)
+                record = {"seeded": count}
+            elif isinstance(step, SeedExplicit):
+                record = await context.seed_explicit(step, self.log)
+            elif isinstance(step, Restart):
+                await context.restart_now()
+                record = {}
+            elif isinstance(step, Say):
+                record = await context.say(step, self.log)
+            else:
+                checks = await CHECKS[step.case](context, self.log)
+                status = _overall(checks)
+                self.log.case(
+                    {
+                        "group": group,
+                        "step_id": step.id,
+                        "case": step.case,
+                        "status": status,
+                        "checks": checks,
+                    }
+                )
+                self.log.step(
+                    {
+                        "group": group,
+                        "step_id": step.id,
+                        "status": "checked",
+                        "attempt": attempt,
+                        "case": step.case,
+                        "case_status": status,
+                    }
+                )
+                return
+        except AcceptanceInterrupted as exc:
+            self.log.step(
+                {
+                    "group": group,
+                    "step_id": step.id,
+                    "status": "interrupted",
+                    "attempt": attempt,
+                    "reason": str(exc),
+                }
+            )
+            self.write_summary(interrupted=step.id)
+            raise
+        self.log.step(
+            {
+                "group": group,
+                "step_id": step.id,
+                "status": "completed",
+                "attempt": attempt,
+                **record,
+            }
+        )
+
+    def write_summary(self, interrupted=None):
+        cases = {}
+        for row in self.log.read(self.log.cases):
+            cases[row["case"]] = {
+                "status": row["status"],
+                "step_id": row["step_id"],
+                "checks": row["checks"],
+            }
+        summary = {
+            **self.log.meta,
+            "planned_cases": list(CASES_RUN),
+            "not_run_here": NOT_RUN_HERE,
+            "cases": cases,
+            "untested": [c for c in CASES_RUN if c not in cases],
+            "interrupted_at": interrupted,
+            "answer_quality": "manual_review_required",
+            "limits": (
+                "Controlled text through the Free-lane answer model with the voice "
+                "agent's personal-context instructions and the real tools, not Gemini "
+                "Live voice. Told dates are simulated per the frozen cases; recorded_at "
+                "is real lab time. Keyword flags only locate problems."
+            ),
+        }
+        tmp = self.log.summary.with_suffix(".tmp")
+        tmp.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        tmp.replace(self.log.summary)
+        return summary
+
+
+def _overall(checks):
+    statuses = {c["status"] for c in checks}
+    if FAIL in statuses:
+        return FAIL
+    if UNTESTED in statuses:
+        return UNTESTED
+    if REVIEW in statuses:
+        return REVIEW
+    return PASS
+
+
+class _GroupContext:
+    def __init__(self, group, memory, deps, extractor, resolver):
+        self.group, self.memory, self.deps = group, memory, deps
+        self.extractor, self.resolver = extractor, resolver
+        self.learning = None
+        self.conversation = None
+        self.replies = {}  # step id -> {"answer", "tools"}
+        self.marks = {}  # named snapshots for checks
+        self._path = None
+
+    def restore(self, log):
+        """On resume: replies, snapshots and marks of completed steps."""
+        for row in log.read(log.events):
+            if row.get("group") != self.group:
+                continue
+            if row.get("kind") == "reply":
+                self.replies[row["step_id"]] = {
+                    "answer": row.get("answer"),
+                    "tools": row.get("tools") or [],
+                    "learning": row.get("learning") or {},
+                }
+            elif row.get("kind") == "before_snapshot":
+                self.marks.setdefault("before", {})[row["step_id"]] = row["snapshot"]
+            elif row.get("kind") == "mark":
+                self.marks[row["name"]] = row["value"]
+
+    # learning runtime -----------------------------------------------------
+    def start_learning(self, runtime_cls, reconciler_cls):
+        self.memory.bind_learning_authority(self.deps.learning_authority)
+        self.reconciler = reconciler_cls(
+            self.memory.service.canonical_reader, self.deps.learning_authority
+        )
+        self.learning = runtime_cls(
+            self.deps.learning_authority,
+            self.memory.service,
+            self.extractor,
+            self.resolver,
+            self.reconciler,
+            diagnostics=False,
+        )
+
+    async def restart_now(self):
+        from jarvis.memory.learning_reconciliation import LearningReconciler
+        from jarvis.memory.learning_runtime import PersonalLearningRuntime
+
+        await self.restart(PersonalLearningRuntime, LearningReconciler)
+
+    async def restart(self, runtime_cls, reconciler_cls):
+        path = self.memory_path
+        await self.close()
+        self.memory = await self.deps.open_memory(path)
+        self.conversation = None
+        self.start_learning(runtime_cls, reconciler_cls)
+
+    @property
+    def memory_path(self):
+        return self._path
+
+    async def close(self):
+        if self.learning is not None:
+            await self.learning.close()
+            self.learning = None
+        if self.conversation is not None:
+            self.conversation.close()
+            self.conversation = None
+        await self.memory.close()
+
+    # setup ----------------------------------------------------------------
+    async def seed(self, step):
+        from time import monotonic
+
+        from jarvis.memory.learning_contracts import (
+            AcceptedLearningSource,
+            EvidenceSpan,
+            LearningBatch,
+            LearningCandidate,
+            LearningResolution,
+            LearningResolutionBatch,
+        )
+
+        authority, grant = self.deps.learning_authority, self.deps.learning_grant
+        count = 0
+        for fact in step.facts:
+            if count and count % SEED_BATCH == 0:
+                await self._pause(CHILD_LEASE_SECONDS)
+            conversation = LabConversation()
+            conversation.start()
+            text = fact.sentence()
+            turn = conversation.accept_at(ConversationRole.USER, text, fact.told_at)
+            source = AcceptedLearningSource.from_turn(
+                authority.runtime_id_for(grant), conversation, turn, now=monotonic()
+            )
+            authority.register_source(grant, source.receipt_id, source=source)
+            try:
+                candidate = LearningCandidate(
+                    category=fact.category,
+                    kind=fact.kind,
+                    intent="new",
+                    label=fact.label,
+                    value=fact.label,
+                    state=fact.state,
+                    certainty="confirmed",
+                    details=fact.details,
+                    aliases=list(fact.aliases),
+                    plan_status=fact.plan_status,
+                    evidence=[
+                        EvidenceSpan(turn_id=turn.turn_id, start=0, end=len(text))
+                    ],
+                )
+                batch = LearningBatch(candidates=[candidate])
+                catalog = await self.reconciler.catalog(source, batch, grant)
+                plan = self.reconciler.plan(
+                    source,
+                    batch,
+                    catalog,
+                    LearningResolutionBatch(
+                        resolutions=[
+                            LearningResolution(candidate_index=0, decision="new")
+                        ]
+                    ),
+                )
+                if not plan.mutations or plan.outcomes:
+                    raise RuntimeError("seed was not admissible")
+                result = await self.memory.service.admit_learning(
+                    plan, authority.issue_child(grant, plan.binding())
+                )
+                if result.status != "committed":
+                    raise RuntimeError("seed did not commit")
+                count += 1
+            finally:
+                authority.release_source(grant, source.receipt_id)
+                conversation.close()
+        return count
+
+    async def _pause(self, seconds):
+        import asyncio
+
+        pause = self.deps.pause or asyncio.sleep
+        await pause(seconds)
+
+    async def seed_explicit(self, step, log=None):
+        from jarvis.memory.explicit import build_owner_explicit_source
+        from jarvis.memory.types import Sensitivity
+
+        conversation = LabConversation()
+        conversation.start()
+        turn = conversation.accept_at(
+            ConversationRole.USER,
+            f"Remember that my {step.predicate} are {step.value}.",
+            step.told_at,
+        )
+        source = build_owner_explicit_source(
+            conversation=conversation, turn=turn, sensitivity=Sensitivity.STANDARD
+        )
+        result = await self.memory.service.remember_text(
+            predicate=step.predicate,
+            value=step.value,
+            source=source,
+            sensitivity=Sensitivity.STANDARD,
+        )
+        conversation.close()
+        self.marks["combined_record"] = {
+            "assertion_id": result.record.assertion_id,
+            "predicate": result.predicate,
+            "value": result.record.value,
+        }
+        if log is not None:
+            log.event(
+                {
+                    "group": self.group,
+                    "step_id": step.id,
+                    "kind": "mark",
+                    "name": "combined_record",
+                    "value": self.marks["combined_record"],
+                }
+            )
+        return {"seeded_explicit": result.predicate}
+
+    # one owner utterance --------------------------------------------------
+    async def say(self, step, log):
+        from jarvis.voice.memory_tools import MemoryAgentTools
+        from jarvis.voice.personal_context import PersonalContextSession
+
+        resumed_follow_up = not step.new_session and self.conversation is None
+        if step.new_session or self.conversation is None:
+            if self.conversation is not None:
+                self.conversation.close()
+            self.conversation = LabConversation()
+            self.conversation.start()
+            self.observer = self.learning.bind(
+                self.conversation, self.deps.learning_grant
+            )
+        before_snapshot = await snapshot_counts(self.memory)
+        self.marks.setdefault("before", {})[step.id] = before_snapshot
+        log.event(
+            {
+                "group": self.group,
+                "step_id": step.id,
+                "kind": "before_snapshot",
+                "snapshot": before_snapshot,
+            }
+        )
+        turn = self.conversation.accept_at(
+            ConversationRole.USER, step.text, step.told_at
+        )
+        for adapter in {
+            id(self.extractor): self.extractor,
+            id(self.resolver): self.resolver,
+        }.values():
+            adapter.step_id = step.id
+            adapter.provider_failures = []
+        before = self.learning.status()
+        outcome_sql = (
+            "SELECT receipt_id, candidate_ordinal, category_key, reason_code"
+            " FROM personal_learning_outcome"
+        )
+        outcomes_before = set(await _query(self.memory, outcome_sql))
+        self.observer(turn)
+        await self.learning.drain()
+        after = self.learning.status()
+        skipped = sorted(
+            (row[2], row[3])
+            for row in set(await _query(self.memory, outcome_sql)) - outcomes_before
+        )
+        failures = self.extractor.provider_failures + (
+            self.resolver.provider_failures
+            if self.resolver is not self.extractor
+            else []
+        )
+        learning = {
+            "processed": after.processed - before.processed,
+            "committed": after.committed - before.committed,
+            "dropped": after.dropped - before.dropped,
+            "reason": after.reason,
+            "skipped": [{"category": c, "reason": r} for c, r in skipped],
+        }
+        log.event(
+            {
+                "group": self.group,
+                "step_id": step.id,
+                "kind": "learning_status",
+                **learning,
+            }
+        )
+        if failures:
+            raise AcceptanceInterrupted(
+                "learning provider failure: " + json.dumps(failures)
+            )
+        personal = PersonalContextSession(
+            conversation=self.conversation,
+            retrieval=self.memory.retrieval,
+            authority=self.deps.capability,
+            retire=lambda: None,
+            learning_authority=self.deps.learning_authority,
+            learning_grant=self.deps.learning_grant,
+        )
+        tools = MemoryAgentTools(
+            self.memory.service, self.conversation, personal_context=personal
+        )
+        driver = TextDriver(
+            self.deps.driver_client, log, model=self.deps.models.get("answer_model")
+        )
+        try:
+            answer, results = await driver.reply(
+                group=self.group,
+                step=step,
+                conversation=self.conversation,
+                personal=personal,
+                memory_tools=tools,
+                explicit=step.explicit_tools,
+            )
+        finally:
+            personal.close()
+        if answer:
+            self.conversation.accept_at(
+                ConversationRole.ASSISTANT, answer, step.told_at + timedelta(seconds=5)
+            )
+        self.replies[step.id] = {
+            "answer": answer,
+            "tools": results,
+            "learning": learning,
+        }
+        log.event(
+            {
+                "group": self.group,
+                "step_id": step.id,
+                "case": step.case,
+                "kind": "reply",
+                "utterance": step.text,
+                "told_at": step.told_at.isoformat(),
+                "answer": answer,
+                "tools": results,
+                "learning": learning,
+            }
+        )
+        return {
+            "case": step.case,
+            "learning": learning,
+            "answered": answer is not None,
+            # A follow-up resumed after an interruption has no earlier turn.
+            "follow_up_context_lost": resumed_follow_up,
+        }
+
+
+# ------------------------------------------------------------ db helpers --
+
+
+async def _rows(memory):
+    def read(connection):
+        rows = connection.execute(
+            "SELECT a.assertion_id, a.predicate, a.state, a.valid_from, a.valid_to,"
+            " a.system_from, a.system_to, a.supersedes_id, a.value_json,"
+            " a.normalized_text, a.source_id, s.evidence_text, s.observed_at,"
+            " s.source_class FROM semantic_assertion a"
+            " LEFT JOIN memory_source s ON s.source_id = a.source_id"
+            " WHERE a.subject_scope = 'personal' AND a.subject = 'owner'"
+        ).fetchall()
+        keys = [
+            "assertion_id",
+            "predicate",
+            "state",
+            "valid_from",
+            "valid_to",
+            "system_from",
+            "system_to",
+            "supersedes_id",
+            "value_json",
+            "normalized_text",
+            "source_id",
+            "evidence_text",
+            "observed_at",
+            "source_class",
+        ]
+        out = []
+        for row in rows:
+            item = dict(zip(keys, row, strict=True))
+            try:
+                item["value"] = json.loads(item["value_json"])
+            except (TypeError, ValueError):
+                item["value"] = item["value_json"]
+            item["current"] = (
+                item["state"] == "active"
+                and item["system_to"] is None
+                and item["valid_to"] is None
+            )
+            out.append(item)
+        return out
+
+    return await memory._reader.run(read)
+
+
+async def _query(memory, sql, args=()):
+    return await memory._reader.run(lambda c: c.execute(sql, args).fetchall())
+
+
+async def snapshot_counts(memory):
+    rows = await _rows(memory)
+    return {
+        "current_ids": sorted(r["assertion_id"] for r in rows if r["current"]),
+        "all_ids": sorted(r["assertion_id"] for r in rows),
+    }
+
+
+def _value(row):
+    return row["value"] if isinstance(row["value"], dict) else {}
+
+
+def _label(row):
+    value = _value(row)
+    return str(value.get("label") or value.get("value") or row["value"] or "")
+
+
+def _items(rows, kind=None, *, current=True):
+    return [
+        r
+        for r in rows
+        if _value(r).get("category") == "owned_item"
+        and (kind is None or _value(r).get("kind") == kind)
+        and (r["current"] or not current)
+    ]
+
+
+def _plans(rows, *, current=True):
+    return [
+        r
+        for r in rows
+        if _value(r).get("category") == "plan" and (r["current"] or not current)
+    ]
+
+
+def _named(rows, needle):
+    needle = needle.casefold()
+    return [
+        r
+        for r in rows
+        if needle in _label(r).casefold()
+        or any(needle in str(a).casefold() for a in _value(r).get("aliases") or ())
+    ]
+
+
+def _check(name, level, ok, detail=None, *, review=False):
+    status = (REVIEW if review else PASS) if ok else FAIL
+    return {"check": name, "level": level, "status": status, "detail": detail}
+
+
+def _untested(name, level, detail):
+    return {"check": name, "level": level, "status": UNTESTED, "detail": detail}
+
+
+def _reply(context, step_id):
+    return context.replies.get(step_id) or {}
+
+
+def _reads(reply):
+    return [
+        t
+        for t in reply.get("tools") or ()
+        if t["tool"] == "read_personal_context_for_question"
+    ]
+
+
+def _time(value, key):
+    stated = value.get(key) or {}
+    return (stated.get("precision"), stated.get("earliest"), stated.get("latest"))
+
+
+def _answer_check(context, step_id, name, flags=()):
+    reply = _reply(context, step_id)
+    answer = reply.get("answer")
+    if not answer:
+        return _untested(name, "c", "no answer was produced")
+    found = {
+        flag: bool(re.search(pattern, answer, re.IGNORECASE)) for flag, pattern in flags
+    }
+    return {
+        "check": name,
+        "level": "c",
+        "status": REVIEW,
+        "detail": {"answer": answer, "keyword_flags": found},
+    }
+
+
+def _learning_happened(context, step_id):
+    learning = (_reply(context, step_id) or {}).get("learning") or {}
+    return learning.get("processed", 0) > 0
+
+
+# ------------------------------------------------------------------ checks --
+
+
+async def check_d1(context, log):
+    rows = await _rows(context.memory)
+    if not _learning_happened(context, "story-02"):
+        return [_untested("learning ran", "a", "no learning happened for D1")]
+    items = _items(rows, "vehicle")
+    classic, tigor, jimny = (
+        _named(items, n) for n in ("classic 350", "tigor", "jimny")
+    )
+    checks = [
+        _check(
+            "3 vehicle rows",
+            "a",
+            len(classic) == len(tigor) == len(jimny) == 1,
+            [_label(r) for r in items],
+        ),
+        _check(
+            "3 distinct sources",
+            "a",
+            len({r["source_id"] for r in classic + tigor + jimny}) == 3,
+        ),
+        _check(
+            "valid_from NULL on all",
+            "a",
+            all(r["valid_from"] is None for r in classic + tigor + jimny),
+        ),
+    ]
+    expected = {
+        "classic 350": ("year", "2021-01-01", "2021-12-31"),
+        "tigor": ("month", "2017-03-01", "2017-03-31"),
+        "jimny": ("month", "2026-10-01", "2026-10-31"),
+    }
+    for name, rows_for in (
+        ("classic 350", classic),
+        ("tigor", tigor),
+        ("jimny", jimny),
+    ):
+        got = _time(_value(rows_for[0]), "acquired") if rows_for else None
+        checks.append(_check(f"acquired {name}", "a", got == expected[name], got))
+    others = {
+        "classic 350": ("tigor", "jimny"),
+        "tigor": ("classic", "jimny"),
+        "jimny": ("classic", "tigor"),
+    }
+    for name, rows_for in (
+        ("classic 350", classic),
+        ("tigor", tigor),
+        ("jimny", jimny),
+    ):
+        quote = (rows_for[0]["evidence_text"] or "") if rows_for else ""
+        checks.append(
+            _check(
+                f"evidence names only {name}",
+                "a",
+                bool(quote) and not any(o in quote.casefold() for o in others[name]),
+                quote,
+            )
+        )
+    return checks
+
+
+async def check_d2(context, log):
+    if not _learning_happened(context, "story-03"):
+        return [_untested("learning ran", "a", "no learning happened for D2")]
+    rows = await _rows(context.memory)
+    vehicles = _items(rows, "vehicle")
+    tigors_current = _named(vehicles, "tigor")
+    history = _named(_items(rows, "vehicle", current=False), "tigor")
+    ops = await _query(
+        context.memory,
+        "SELECT operation_type, target_id FROM memory_operation WHERE operation_type = 'refine'",
+    )
+    refined = [r for r in tigors_current if r["supersedes_id"]]
+    old = next(
+        (
+            r
+            for r in history
+            if refined and r["assertion_id"] == refined[0]["supersedes_id"]
+        ),
+        None,
+    )
+    return [
+        _check(
+            "one current Tigor",
+            "a",
+            len(tigors_current) == 1,
+            [_label(r) for r in tigors_current],
+        ),
+        _check("Tigor B supersedes A", "a", bool(refined) and old is not None),
+        _check(
+            "operation is refine",
+            "a",
+            any(t == refined[0]["assertion_id"] for _, t in ops) if refined else False,
+            ops,
+        ),
+        _check(
+            "A not retracted", "a", old is not None and old["state"] == "superseded"
+        ),
+        _check(
+            "A validity unchanged",
+            "a",
+            old is not None
+            and old["valid_to"] is None
+            and old["valid_from"] == (refined[0]["valid_from"] if refined else None),
+        ),
+        _check(
+            "diesel detail added",
+            "a",
+            bool(refined)
+            and "diesel" in str(_value(refined[0]).get("details", "")).casefold(),
+            _value(refined[0]).get("details") if refined else None,
+        ),
+        _check("no new item", "a", len(vehicles) == 3, [_label(r) for r in vehicles]),
+    ]
+
+
+async def check_d3(context, log):
+    rows = await _rows(context.memory)
+    reply = _reply(context, "list-01")
+    remember = [t for t in reply.get("tools") or () if t["tool"] == "remember_memory"]
+    if not remember:
+        return [
+            _untested(
+                "explicit remember called",
+                "a",
+                "the model did not call remember_memory",
+            )
+        ]
+    devices = _items(rows, "device")
+    dell, ipad = _named(devices, "dell xps"), _named(devices, "ipad air")
+    combined = context.marks.get("combined_record") or {}
+    current_ids = {r["assertion_id"] for r in rows if r["current"]}
+    plural = [
+        r
+        for r in rows
+        if r["current"]
+        and r["assertion_id"] != combined.get("assertion_id")
+        and "dell" in str(r["value"]).casefold()
+        and "ipad" in str(r["value"]).casefold()
+    ]
+    return [
+        _check(
+            "remember succeeded",
+            "a",
+            any(t["result"].get("ok") for t in remember),
+            [t["result"] for t in remember],
+        ),
+        _check(
+            "2 device rows",
+            "a",
+            len(dell) == 1 and len(ipad) == 1,
+            [_label(r) for r in devices],
+        ),
+        _check("2 sources", "a", len({r["source_id"] for r in dell + ipad}) == 2),
+        _check("no plural record", "a", not plural, [r["value"] for r in plural]),
+        _check(
+            "seeded combined record unchanged",
+            "a",
+            combined.get("assertion_id") in current_ids,
+        ),
+        _untested(
+            "one Hello",
+            "a",
+            "count the Windows Hello prompts during D3 (owner observation)",
+        ),
+    ]
+
+
+async def check_d4(context, log):
+    reply = _reply(context, "bike-01")
+    reads = _reads(reply)
+    return [
+        _check(
+            "vehicles looked up",
+            "b",
+            any(r["result"].get("status") == "selected" for r in reads),
+            [r["result"].get("status") for r in reads],
+        )
+        if reads
+        else _untested("vehicles looked up", "b", "no lookup happened"),
+        _answer_check(
+            context,
+            "bike-01",
+            "clarifies or names both bikes",
+            (
+                ("names Classic", r"classic"),
+                ("names Pulsar", r"pulsar"),
+                ("asks which", r"which|kaun"),
+            ),
+        ),
+    ]
+
+
+async def check_d5(context, log):
+    if not _learning_happened(context, "story-04"):
+        return [_untested("learning ran", "a", "no learning happened for D5")]
+    rows = await _rows(context.memory)
+    current = _named(_items(rows, "vehicle"), "tigor")
+    history = _named(_items(rows, "vehicle", current=False), "tigor")
+    sold = current[0] if current else None
+    old = next(
+        (r for r in history if sold and r["assertion_id"] == sold["supersedes_id"]),
+        None,
+    )
+    ops = await _query(
+        context.memory,
+        "SELECT operation_type FROM memory_operation WHERE target_id = ?",
+        (sold["assertion_id"] if sold else "",),
+    )
+    observed = sold["observed_at"] if sold else None
+    observed_day = (
+        datetime.fromisoformat(observed).astimezone(OWNER_TZ).date().isoformat()
+        if observed
+        else None
+    )
+    return [
+        _check(
+            "new state sold",
+            "a",
+            sold is not None and _value(sold).get("state") == "sold",
+            _value(sold).get("state") if sold else None,
+        ),
+        _check("historical_change", "a", ("historical_change",) in ops, ops),
+        _check(
+            "old row superseded, valid_to NULL",
+            "a",
+            old is not None
+            and old["state"] == "superseded"
+            and old["valid_to"] is None,
+        ),
+        _check(
+            "unknown effective time (valid_from NULL)",
+            "a",
+            sold is not None and sold["valid_from"] is None,
+        ),
+        _check(
+            "disposed week 2026-11-09..15",
+            "a",
+            sold is not None
+            and _time(_value(sold), "disposed") == ("week", "2026-11-09", "2026-11-15"),
+            _time(_value(sold), "disposed") if sold else None,
+        ),
+        _check("observed_at 2026-11-18", "a", observed_day == "2026-11-18", observed),
+        _answer_check(
+            context,
+            "story-05",
+            "when did I sell it",
+            (
+                ("last week", r"last week|pichhle hafte"),
+                ("9-15 Nov", r"\b9\b.*\b15\b|9.?.?15"),
+                ("claims exact day", r"\bon (?:the )?\d{1,2}(?:st|nd|rd|th)? nov"),
+            ),
+        ),
+    ]
+
+
+async def check_d22(context, log):
+    rows = await _rows(context.memory)
+    owned = [r for r in _items(rows, "vehicle") if _value(r).get("state") == "owned"]
+    sold = _named(_items(rows, "vehicle"), "tigor")
+    reads = _reads(_reply(context, "story-06"))
+    return [
+        _check(
+            "current owned list excludes Tigor",
+            "a",
+            not _named(owned, "tigor"),
+            [_label(r) for r in owned],
+        ),
+        _check(
+            "sold row: valid_from NULL, week precision, no exact day",
+            "a",
+            bool(sold)
+            and sold[0]["valid_from"] is None
+            and _time(_value(sold[0]), "disposed")[0] == "week",
+        ),
+        _check(
+            "lookup released",
+            "b",
+            any(r["result"].get("status") == "selected" for r in reads),
+        )
+        if reads
+        else _untested("lookup released", "b", "no lookup happened"),
+        _answer_check(
+            context,
+            "story-06",
+            "owned vehicles",
+            (("mentions Tigor", r"tigor"), ("says sold", r"sold|bech")),
+        ),
+    ]
+
+
+async def check_d6(context, log):
+    if not _learning_happened(context, "story-07"):
+        return [_untested("learning ran", "a", "no learning happened for D6")]
+    rows = await _rows(context.memory)
+    plans = [p for p in _plans(rows) if "ladakh" in json.dumps(_value(p)).casefold()]
+    plan = _value(plans[0]) if plans else {}
+    destination = (plan.get("slots") or {}).get("destination") or {}
+    when = (plan.get("slots") or {}).get("when") or {}
+    options = [o.casefold() for o in destination.get("options") or ()]
+    return [
+        _check("one plan", "a", len(plans) == 1, len(plans)),
+        _check(
+            "status planned",
+            "a",
+            plan.get("plan_status") == "planned",
+            plan.get("plan_status"),
+        ),
+        _check(
+            "destination options [Ladakh, winter Spiti]",
+            "a",
+            destination.get("value") is None
+            and any("ladakh" in o for o in options)
+            and any("spiti" in o for o in options),
+            destination,
+        ),
+        _check(
+            "when January",
+            "a",
+            "january" in str(when.get("value", "")).casefold(),
+            when,
+        ),
+    ]
+
+
+async def check_d7(context, log):
+    if not _learning_happened(context, "story-08"):
+        return [_untested("learning ran", "a", "no learning happened for D7")]
+    rows = await _rows(context.memory)
+    goa = [p for p in _plans(rows) if "goa" in json.dumps(_value(p)).casefold()]
+    return [
+        _check("one Goa plan", "a", len(goa) == 1, len(goa)),
+        _check(
+            "status considering",
+            "a",
+            bool(goa) and _value(goa[0]).get("plan_status") == "considering",
+            _value(goa[0]).get("plan_status") if goa else None,
+        ),
+    ]
+
+
+async def check_d8(context, log):
+    if not _learning_happened(context, "story-09"):
+        return [_untested("learning ran", "a", "no learning happened for D8")]
+    rows = await _rows(context.memory)
+    before = set(context.marks["before"]["story-09"]["all_ids"])
+    new = [r for r in rows if r["assertion_id"] not in before]
+    return [
+        _check(
+            "no plan written",
+            "a",
+            not [r for r in new if _value(r).get("category") == "plan"],
+            [_label(r) for r in new],
+        ),
+        _check("no fact written", "a", not new, [_label(r) for r in new]),
+    ]
+
+
+async def check_d9(context, log):
+    if not _learning_happened(context, "idiom-01"):
+        return [_untested("learning ran", "a", "no learning happened for D9")]
+    rows = await _rows(context.memory)
+    plans = [p for p in _plans(rows) if "spiti" in json.dumps(_value(p)).casefold()]
+    plan = _value(plans[0]) if plans else {}
+    slots = plan.get("slots") or {}
+    vehicle = slots.get("vehicle") or {}
+    when = slots.get("when") or {}
+    return [
+        _check("one Spiti plan", "a", len(plans) == 1, len(plans)),
+        _check(
+            "status planned",
+            "a",
+            plan.get("plan_status") == "planned",
+            plan.get("plan_status"),
+        ),
+        _check(
+            "destination Spiti",
+            "a",
+            "spiti"
+            in str((slots.get("destination") or {}).get("value", "")).casefold(),
+            slots.get("destination"),
+        ),
+        _check(
+            "no vehicle options",
+            "a",
+            not vehicle.get("options") and "thar" not in json.dumps(vehicle).casefold(),
+            vehicle,
+        ),
+        _check(
+            "when January confirmed",
+            "a",
+            "january" in str(when.get("value", "")).casefold()
+            and when.get("certainty") == "confirmed",
+            when,
+        ),
+        _check("no owned Thar", "a", not _named(_items(rows), "thar")),
+    ]
+
+
+async def check_d10(context, log):
+    if not _learning_happened(context, "story-10"):
+        return [_untested("learning ran", "a", "no learning happened for D10")]
+    rows = await _rows(context.memory)
+    spiti = [p for p in _plans(rows) if "spiti" in json.dumps(_value(p)).casefold()]
+    plan = _value(spiti[0]) if spiti else {}
+    slots = plan.get("slots") or {}
+    history = [
+        p
+        for p in _plans(rows, current=False)
+        if not p["current"] and "ladakh" in json.dumps(_value(p)).casefold()
+    ]
+    before_items = {r for r in context.marks["before"]["story-10"]["current_ids"]}
+    items_now = {r["assertion_id"] for r in _items(rows)}
+    items_before = {
+        r["assertion_id"]
+        for r in _items(rows, current=False)
+        if r["assertion_id"] in before_items
+    }
+    return [
+        _check(
+            "same plan changed (one current Spiti plan, superseding)",
+            "a",
+            len(spiti) == 1 and spiti[0]["supersedes_id"] is not None,
+            len(spiti),
+        ),
+        _check(
+            "destination winter Spiti",
+            "a",
+            "spiti" in str((slots.get("destination") or {}).get("value", "")).casefold()
+            and not (slots.get("destination") or {}).get("options"),
+            slots.get("destination"),
+        ),
+        _check(
+            "vehicle slot Jimny",
+            "a",
+            "jimny" in str((slots.get("vehicle") or {}).get("value", "")).casefold(),
+            slots.get("vehicle"),
+        ),
+        _check(
+            "owned items unchanged",
+            "a",
+            items_now == items_before,
+            sorted(items_now ^ items_before),
+        ),
+        _check("history row keeps the options", "a", bool(history), len(history)),
+    ]
+
+
+async def check_d11(context, log):
+    if not _learning_happened(context, "story-11"):
+        return [_untested("learning ran", "a", "no learning happened for D11")]
+    rows = await _rows(context.memory)
+    goa = [p for p in _plans(rows) if "goa" in json.dumps(_value(p)).casefold()]
+    return [
+        _check(
+            "Goa status cancelled",
+            "a",
+            bool(goa) and _value(goa[0]).get("plan_status") == "cancelled",
+            _value(goa[0]).get("plan_status") if goa else None,
+        ),
+        _answer_check(
+            context,
+            "story-11",
+            "reply does not assume Goa",
+            (("claims saved", r"saved|noted|updated my memory"),),
+        ),
+    ]
+
+
+async def check_d12(context, log):
+    if not _learning_happened(context, "story-12"):
+        return [_untested("learning ran", "a", "no learning happened for D12")]
+    rows = await _rows(context.memory)
+    jimny = _named(_items(rows, "vehicle"), "jimny")
+    history = _named(_items(rows, "vehicle", current=False), "jimny")
+    current = jimny[0] if jimny else None
+    old = next(
+        (
+            r
+            for r in history
+            if current and r["assertion_id"] == current["supersedes_id"]
+        ),
+        None,
+    )
+    ops = await _query(
+        context.memory,
+        "SELECT operation_type FROM memory_operation WHERE target_id = ?",
+        (current["assertion_id"] if current else "",),
+    )
+    return [
+        _check(
+            "acquired month 2026-09",
+            "a",
+            current is not None
+            and _time(_value(current), "acquired")
+            == ("month", "2026-09-01", "2026-09-30"),
+            _time(_value(current), "acquired") if current else None,
+        ),
+        _check(
+            "old row retracted",
+            "a",
+            old is not None and old["state"] == "retracted",
+            old["state"] if old else None,
+        ),
+        _check(
+            "correction (not refine or change)",
+            "a",
+            ("correct",) in ops
+            and ("refine",) not in ops
+            and ("historical_change",) not in ops,
+            ops,
+        ),
+    ]
+
+
+async def check_d13(context, log):
+    reads = _reads(_reply(context, "story-13"))
+    statuses = [
+        f.get("temporal", {}).get("date_status")
+        for r in reads
+        for f in r["result"].get("facts") or ()
+        if "rishikesh" in json.dumps(f).casefold()
+    ]
+    return [
+        _check(
+            "release date_status passed_outcome_unknown",
+            "b",
+            "passed_outcome_unknown" in statuses,
+            statuses,
+        )
+        if reads
+        else _untested("release date_status", "b", "no lookup happened"),
+        _answer_check(
+            context,
+            "story-13",
+            "elapsed plan not called done/cancelled/upcoming",
+            (
+                ("mentions Rishikesh", r"rishikesh"),
+                (
+                    "done/cancelled/upcoming wording",
+                    r"completed|you went|cancel|upcoming|coming up next",
+                ),
+            ),
+        ),
+    ]
+
+
+async def check_d14(context, log):
+    return [
+        _answer_check(
+            context,
+            "story-14",
+            "restart recall",
+            (
+                ("Classic 2021", r"classic.*2021|2021.*classic"),
+                ("Jimny September", r"jimny.*sept|sept.*jimny"),
+                ("added a day", r"\b\d{1,2}(?:st|nd|rd|th)? (?:sept|march|jan)"),
+                ("Tigor", r"tigor"),
+            ),
+        )
+    ]
+
+
+async def check_d15(context, log):
+    reads = _reads(_reply(context, "story-15"))
+    scopes = {
+        req.get("scope_key")
+        for r in reads
+        for req in r["arguments"].get("requests") or ()
+    }
+    return [
+        _check(
+            "used owned vehicles and plans",
+            "b",
+            {"owned_item.vehicle"} <= scopes,
+            sorted(scopes),
+        )
+        if reads
+        else _untested("lookup", "b", "no lookup happened"),
+        _answer_check(
+            context,
+            "story-15",
+            "useful advice",
+            (
+                ("mentions Jimny", r"jimny"),
+                ("re-asks", r"which vehicles do you|what vehicles do you"),
+            ),
+        ),
+    ]
+
+
+async def check_d16(context, log):
+    return [
+        _answer_check(
+            context,
+            "story-16",
+            "evidence and told time",
+            (
+                (
+                    "quotes/paraphrases",
+                    r"you (?:said|told|mentioned)|last month I got a Jimny",
+                ),
+                ("purchase month", r"sept|october"),
+            ),
+        )
+    ]
+
+
+async def check_d23(context, log):
+    if not _learning_happened(context, "story-17"):
+        return [_untested("learning ran", "a", "no learning happened for D23")]
+    rows = await _rows(context.memory)
+    classic = _named(_items(rows, "vehicle"), "classic 350")
+    row = classic[0] if classic else None
+    return [
+        _check(
+            "state sold",
+            "a",
+            row is not None and _value(row).get("state") == "sold",
+            _value(row).get("state") if row else None,
+        ),
+        _check(
+            "disposed month 2026-10",
+            "a",
+            row is not None
+            and _time(_value(row), "disposed") == ("month", "2026-10-01", "2026-10-31"),
+            _time(_value(row), "disposed") if row else None,
+        ),
+        _check(
+            "effective time unknown", "a", row is not None and row["valid_from"] is None
+        ),
+        _check(
+            "not currently owned",
+            "a",
+            row is not None and _value(row).get("state") != "owned",
+        ),
+    ]
+
+
+async def check_d17(context, log):
+    from jarvis.memory.forget_residuals import residual_report
+
+    reply = _reply(context, "story-18")
+    forgets = [t for t in reply.get("tools") or () if t["tool"] == "forget_memory"]
+    if not any(t["result"].get("ok") for t in forgets):
+        return [
+            _untested(
+                "forget committed",
+                "a",
+                [t["result"] for t in forgets]
+                or "the model did not call forget_memory",
+            )
+        ]
+    rows = await _rows(context.memory)
+    report = await context.memory._reader.run(
+        lambda c: residual_report(c, ["Classic 350"])
+    )
+    others = [
+        r
+        for r in rows
+        if r["current"] and any(n in _label(r).casefold() for n in ("tigor", "jimny"))
+    ]
+    context.marks["residual"] = report
+    return [
+        _check(
+            "lineage gone", "a", not _named(_items(rows, current=False), "classic 350")
+        ),
+        _check(
+            "no evidence text names Classic 350",
+            "a",
+            report["evidence_quotes"] == 0,
+            report,
+        ),
+        _check(
+            "Tigor and Jimny facts and evidence intact",
+            "a",
+            len(others) >= 2 and all(r["evidence_text"] for r in others),
+            [(_label(r), bool(r["evidence_text"])) for r in others],
+        ),
+        {
+            "check": "project-history whole-row redaction",
+            "level": "a",
+            "status": PASS,
+            "detail": "known limitation recorded (project history not used in this lab)",
+        },
+    ]
+
+
+async def check_d26(context, log):
+    from jarvis.memory.forget_residuals import residual_report
+
+    report = context.marks.get("residual") or await context.memory._reader.run(
+        lambda c: residual_report(c, ["Classic 350"])
+    )
+    return [
+        _check(
+            "no residual in any personal-memory store",
+            "a",
+            all(v == 0 for v in report.values()),
+            report,
+        ),
+        {
+            "check": "diagnostic logs and backups",
+            "level": "a",
+            "status": PASS,
+            "detail": "listed as retained (known limits); this lab keeps no diagnostic text logs",
+        },
+    ]
+
+
+async def check_d21(context, log):
+    rows = await _rows(context.memory)
+    by_id = {r["assertion_id"]: r for r in rows}
+    ops = await _query(
+        context.memory, "SELECT operation_type, target_id FROM memory_operation"
+    )
+    refines = [by_id.get(t) for kind, t in ops if kind == "refine" and t in by_id]
+    corrects = [by_id.get(t) for kind, t in ops if kind == "correct" and t in by_id]
+    changes = [
+        by_id.get(t) for kind, t in ops if kind == "historical_change" and t in by_id
+    ]
+
+    def predecessor(row):
+        return by_id.get(row["supersedes_id"]) if row and row["supersedes_id"] else None
+
+    orphans = await _query(
+        context.memory,
+        "SELECT count(*) FROM memory_source s WHERE NOT EXISTS (SELECT 1 FROM semantic_assertion a WHERE a.source_id = s.source_id) AND NOT EXISTS (SELECT 1 FROM memory_operation o WHERE o.source_id = s.source_id)",
+    )
+    current = [r for r in rows if r["current"]]
+    return [
+        _check(
+            "refine predecessors superseded, validity untouched",
+            "a",
+            bool(refines)
+            and all(
+                predecessor(r)
+                and predecessor(r)["state"] == "superseded"
+                and predecessor(r)["valid_to"] is None
+                for r in refines
+            ),
+            len(refines),
+        ),
+        _check(
+            "corrections retracted",
+            "a",
+            bool(corrects)
+            and all(
+                predecessor(r) and predecessor(r)["state"] == "retracted"
+                for r in corrects
+            ),
+            len(corrects),
+        ),
+        _check(
+            "changes superseded with unknown or known effective time",
+            "a",
+            bool(changes)
+            and all(
+                predecessor(r) and predecessor(r)["state"] == "superseded"
+                for r in changes
+            ),
+            len(changes),
+        ),
+        _check("no orphan sources", "a", orphans[0][0] == 0, orphans[0][0]),
+        _check(
+            "every current row has a source",
+            "a",
+            all(r["source_id"] and r["source_class"] for r in current),
+        ),
+    ]
+
+
+async def check_d18(context, log):
+    reads = _reads(_reply(context, "s11-01"))
+    if not reads:
+        return [_untested("lookup", "b", "no lookup happened")]
+    first = reads[0]["result"].get("paging") or {}
+    released = {
+        _label({"value": f, "current": True}) or f.get("text", "")
+        for r in reads
+        for f in r["result"].get("facts") or ()
+    }
+    answer = _reply(context, "s11-01").get("answer") or ""
+    named = [
+        f"Vehicle {i:02d}"
+        for i in range(1, 12)
+        if f"vehicle {i:02d}" in answer.casefold()
+    ]
+    return [
+        _check("total 11", "b", first.get("total") == 11, first.get("total")),
+        _check(
+            "first page released <= 8",
+            "b",
+            (first.get("this_page") or {}).get("to", 99) <= 8,
+            first.get("this_page"),
+        ),
+        _check("complete false on first page", "b", first.get("complete") is False),
+        _check(
+            "paged on to all 11",
+            "b",
+            len(reads) >= 2
+            and (reads[-1]["result"].get("paging") or {}).get("complete") is True,
+            [len(r["result"].get("facts") or ()) for r in reads],
+            review=False,
+        ),
+        _answer_check(
+            context,
+            "s11-01",
+            "partial or all 11 named",
+            (("says partial/11", r"\b11\b|partial|more"),),
+        )
+        | {
+            "detail": {
+                "answer": answer,
+                "named_count": len(named),
+                "released_count": len(released),
+            }
+        },
+    ]
+
+
+async def check_d19(context, log):
+    rows = await _rows(context.memory)
+    scooter = _named(_items(rows, "vehicle"), "xoom")
+    reads = _reads(_reply(context, "s90-02"))
+    first = (reads[0]["result"].get("paging") or {}) if reads else {}
+    checks = [
+        _check(
+            "90+ standard rows, no overflow",
+            "a",
+            len([r for r in rows if r["current"]]) >= 90,
+        ),
+        _check(
+            "learning candidate resolved (scooter saved)",
+            "a",
+            len(scooter) == 1,
+            [_label(r) for r in scooter],
+        )
+        if _learning_happened(context, "s90-01")
+        else _untested("learning", "a", "no learning happened"),
+    ]
+    if reads:
+        checks += [
+            _check(
+                "lookup selected",
+                "b",
+                reads[0]["result"].get("status") == "selected",
+                reads[0]["result"].get("status"),
+            ),
+            _check(
+                "total 45 plans, complete reported truthfully",
+                "b",
+                first.get("total") == 45 and first.get("complete") is False,
+                {"total": first.get("total"), "complete": first.get("complete")},
+            ),
+        ]
+    else:
+        checks.append(_untested("lookup", "b", "no lookup happened"))
+    checks.append(
+        _answer_check(
+            context,
+            "s90-02",
+            "partial truthfully",
+            (("says 45/partial", r"\b45\b|partial|more"),),
+        )
+    )
+    return checks
+
+
+async def check_d20(context, log):
+    reads = _reads(_reply(context, "bytes-01"))
+    if not reads:
+        return [_untested("lookup", "b", "no lookup happened")]
+    first = reads[0]["result"]
+    facts = first.get("facts") or ()
+    encoded = len(json.dumps(facts, ensure_ascii=False, separators=(",", ":")).encode())
+    return [
+        _check(
+            "page ends by bytes (fewer than 6, <= 3000 bytes)",
+            "b",
+            0 < len(facts) < 6 and encoded <= 3000,
+            {"facts": len(facts), "bytes": encoded},
+        ),
+        _check(
+            "complete false", "b", (first.get("paging") or {}).get("complete") is False
+        ),
+        _check(
+            "no truncated item",
+            "b",
+            all(
+                "omitted" not in f and str(f.get("details", "")).startswith(_LONG)
+                for f in facts
+            ),
+        ),
+        _answer_check(
+            context,
+            "bytes-01",
+            "partial list",
+            (("says partial/6", r"\b6\b|six|partial|more"),),
+        ),
+    ]
+
+
+async def check_d24(context, log):
+    if not _learning_happened(context, "plan40-01"):
+        return [_untested("learning ran", "a", "no learning happened for D24")]
+    rows = await _rows(context.memory)
+    before = context.marks["before"]["plan40-01"]
+    outcomes = await _query(
+        context.memory, "SELECT reason_code FROM personal_learning_outcome"
+    )
+    reasons = [r[0] for r in outcomes]
+    new = [r for r in rows if r["assertion_id"] not in set(before["all_ids"])]
+    return [
+        _check(
+            "skip recorded with reason",
+            "a",
+            any(
+                r in {"catalog_page_ambiguous", "ambiguous_existing_fact"}
+                for r in reasons
+            ),
+            reasons,
+        ),
+        _check("no new or changed fact", "a", not new, [_label(r) for r in new]),
+        _answer_check(
+            context,
+            "plan40-01",
+            "does not claim saved",
+            (("claims saved/added", r"\b(?:added|saved|updated|noted)\b"),),
+        ),
+    ]
+
+
+async def check_d25(context, log):
+    reads = _reads(_reply(context, "p40-01"))
+    if not reads:
+        return [_untested("lookup", "b", "no lookup happened")]
+    released = sum(len(r["result"].get("facts") or ()) for r in reads)
+    last = reads[-1]["result"].get("paging") or {}
+    return [
+        _check(
+            "first page plus 3 extra pages (32 items)",
+            "b",
+            len(reads) == 4 and released == 32,
+            {"pages": len(reads), "released": released},
+        ),
+        _check(
+            "more_remaining with total 40",
+            "b",
+            last.get("more_remaining") is True and last.get("total") == 40,
+            {k: last.get(k) for k in ("more_remaining", "total", "complete")},
+        ),
+        _check(
+            "every page bound to the same question permit",
+            "b",
+            all(r["result"].get("status") == "selected" for r in reads),
+        ),
+        _answer_check(
+            context,
+            "p40-01",
+            "says more exist (40)",
+            (("says 40/more", r"\b40\b|more"),),
+        ),
+    ]
+
+
+CHECKS = {
+    "D1": check_d1,
+    "D2": check_d2,
+    "D3": check_d3,
+    "D4": check_d4,
+    "D5": check_d5,
+    "D6": check_d6,
+    "D7": check_d7,
+    "D8": check_d8,
+    "D9": check_d9,
+    "D10": check_d10,
+    "D11": check_d11,
+    "D12": check_d12,
+    "D13": check_d13,
+    "D14": check_d14,
+    "D15": check_d15,
+    "D16": check_d16,
+    "D17": check_d17,
+    "D18": check_d18,
+    "D19": check_d19,
+    "D20": check_d20,
+    "D21": check_d21,
+    "D22": check_d22,
+    "D23": check_d23,
+    "D24": check_d24,
+    "D25": check_d25,
+    "D26": check_d26,
+}
