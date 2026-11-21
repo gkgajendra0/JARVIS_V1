@@ -14,6 +14,7 @@ import os
 import sqlite3
 import sys
 import time
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -807,6 +808,7 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
         hashes=dict(acceptance.FROZEN_SHA256),
         groups=("idiom",),
         retry_interrupted=False,
+        call_spacing_seconds=0.5,
     )
     assert summary["cases"]["D9"]["status"] == acceptance.PASS
     assert (root / "acceptance-summary.json").is_file()
@@ -816,6 +818,7 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
     ]
     assert {row["source_commit"] for row in steps} == {"1" * 40}
     assert {row["lane"] for row in steps} == {"free"}
+    assert {row["call_spacing_seconds"] for row in steps} == {0.5}
 
 
 # D17 stage diagnosis (owner check 2026-11-21) ---------------------------------
@@ -934,3 +937,62 @@ async def test_d17_catalog_without_a_forget_is_a_selection_failure(lab, monkeypa
     summary = await runner.run(groups=("story",))
     assert summary["d17_failed_stage"] == "model_did_not_select_available_item"
     assert summary["cases"]["D17"]["status"] == acceptance.FAIL
+
+
+# Shared Free-lane pacing (owner check 2026-11-21) -----------------------------
+
+
+class _FakeTime:
+    def __init__(self):
+        self.now = 0.0
+        self.starts = []
+
+    def clock(self):
+        return self.now
+
+    async def sleep(self, seconds):
+        self.now += seconds
+
+
+@pytest.mark.asyncio
+async def test_pacer_spaces_call_starts_and_never_retries():
+    t = _FakeTime()
+    pacer = acceptance.FreeLanePacer(6.0, clock=t.clock, sleep=t.sleep)
+    for gap in (0.0, 1.0, 10.0, 0.5):
+        t.now += gap
+        await pacer.wait()
+        t.starts.append(t.now)
+    deltas = [b - a for a, b in pairwise(t.starts)]
+    assert all(d >= 6.0 for d in deltas), deltas
+    assert pacer.calls == 4
+    with pytest.raises(ValueError):
+        acceptance.FreeLanePacer(0)
+
+
+@pytest.mark.asyncio
+async def test_one_pacer_is_shared_by_learning_and_answer_calls(lab):
+    t = _FakeTime()
+    starts = []
+    pacer = acceptance.FreeLanePacer(6.0, clock=t.clock, sleep=t.sleep)
+    original = pacer.wait
+
+    async def recorded():
+        await original()
+        starts.append(t.now)
+
+    pacer.wait = recorded
+    lab.deps.pacer = pacer
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("idiom",))
+    assert summary["cases"]["D9"]["status"] == acceptance.PASS
+    events = log.read(log.events)
+    model_calls = [
+        e
+        for e in events
+        if e.get("kind")
+        in {"learning_extraction", "learning_resolution", "driver_step"}
+    ]
+    kinds = {e["kind"] for e in model_calls}
+    assert {"learning_extraction", "driver_step"} <= kinds  # both paths paced
+    assert pacer.calls == len(model_calls) == len(starts)
+    assert all(b - a >= 6.0 for a, b in pairwise(starts))

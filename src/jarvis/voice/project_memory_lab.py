@@ -671,7 +671,15 @@ def run_context_eval_mode(args, repo, tool_paths):
 
 
 async def run_slice1_acceptance(
-    config, root: Path, *, model, source_commit, hashes, groups, retry_interrupted
+    config,
+    root: Path,
+    *,
+    model,
+    source_commit,
+    hashes,
+    groups,
+    retry_interrupted,
+    call_spacing_seconds,
 ):
     """Frozen D1-D27 development acceptance in this isolated lab profile."""
     import asyncio
@@ -687,6 +695,7 @@ async def run_slice1_acceptance(
     from jarvis.model_routing.runtime import build_routing_runtime
     from jarvis.voice.personal_memory_acceptance import (
         AcceptanceRunner,
+        FreeLanePacer,
         LabDeps,
         ResultLog,
     )
@@ -734,11 +743,15 @@ async def run_slice1_acceptance(
             "answer_model": model,
             "learning_model": getattr(extractor, "model_name", None),
             "lane": "free",
+            "call_spacing_seconds": float(call_spacing_seconds),
         }
+        # One limiter shared by learning and answer calls (same Free key).
+        pacer = FreeLanePacer(call_spacing_seconds)
         print(
             "SLICE-1 DEVELOPMENT ACCEPTANCE (D1-D27, fictional data, isolated lab). "
             f"Answer model {model}; learning model {models['learning_model']}. Free "
-            "lane only, no automatic retry. Windows Hello: (1) now, to open the "
+            f"lane only, no automatic retry; model calls start at least "
+            f"{float(call_spacing_seconds):g} s apart. Windows Hello: (1) now, to open the "
             "owner learning session used for learning and reads; (2) at D3, to save "
             "'Dell XPS; iPad Air'; (3) at D17, to forget the Classic 350. Progress: "
             "one line per step below and in acceptance-steps.jsonl.",
@@ -772,6 +785,7 @@ async def run_slice1_acceptance(
             resolver=resolver,
             driver_client=driver,
             models=models,
+            pacer=pacer,
         )
         log = ResultLog(
             root, commit=source_commit, hashes=hashes, models=models, echo=True
@@ -830,6 +844,7 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
                     hashes=hashes,
                     groups=groups,
                     retry_interrupted=args.retry_interrupted,
+                    call_spacing_seconds=args.call_spacing_seconds,
                 )
             )
         except AcceptanceInterrupted as exc:
@@ -872,6 +887,7 @@ def main():
         choices=SLICE1_GROUPS,
     )
     parser.add_argument("--retry-interrupted", action="store_true")
+    parser.add_argument("--call-spacing-seconds", type=float, default=None)
     args = parser.parse_args()
     if args.slice1_acceptance and (
         args.seed_acceptance
@@ -884,6 +900,17 @@ def main():
         parser.error("slice-1 acceptance runs alone in its own lab")
     if (args.slice1_group or args.retry_interrupted) and not args.slice1_acceptance:
         parser.error("--slice1-group/--retry-interrupted require --slice1-acceptance")
+    if args.call_spacing_seconds is not None and not args.slice1_acceptance:
+        parser.error("--call-spacing-seconds requires --slice1-acceptance")
+    if args.slice1_acceptance:
+        from jarvis.voice.personal_memory_acceptance import (
+            DEFAULT_CALL_SPACING_SECONDS,
+        )
+
+        if args.call_spacing_seconds is None:
+            args.call_spacing_seconds = DEFAULT_CALL_SPACING_SECONDS
+        if not 0 < args.call_spacing_seconds <= 120:
+            parser.error("--call-spacing-seconds must be in (0, 120]")
     if args.retry_interrupted and not args.resume_lab:
         parser.error(
             "--retry-interrupted only continues an existing lab (--resume-lab)"

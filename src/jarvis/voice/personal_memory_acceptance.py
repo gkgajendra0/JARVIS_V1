@@ -58,6 +58,42 @@ CHILD_LEASE_SECONDS = 31
 PASS, FAIL, REVIEW, UNTESTED = "PASS", "FAIL", "REVIEW", "UNTESTED"
 
 
+DEFAULT_CALL_SPACING_SECONDS = 6.0
+
+
+class FreeLanePacer:
+    """One shared spacing for every model call of the run (learning
+    extraction, learning resolution and answer steps all use the same Free
+    key). Calls start at least ``spacing`` seconds apart. This lowers the
+    chance of a per-minute limit; it cannot rule out every limit (daily
+    quota, token limits, provider-side bursts), and a refusal still stops
+    the run without a retry."""
+
+    def __init__(self, spacing, *, clock=time.monotonic, sleep=None):
+        import asyncio
+
+        if not 0 < float(spacing) <= 120:
+            raise ValueError("call spacing must be in (0, 120] seconds")
+        self.spacing = float(spacing)
+        self._clock = clock
+        self._sleep = sleep or asyncio.sleep
+        self._lock = asyncio.Lock()
+        self._last = None
+        self.calls = 0
+        self.waited = 0.0
+
+    async def wait(self):
+        async with self._lock:
+            now = self._clock()
+            if self._last is not None:
+                delay = self._last + self.spacing - now
+                if delay > 0:
+                    self.waited += delay
+                    await self._sleep(delay)
+            self._last = self._clock()
+            self.calls += 1
+
+
 class AcceptanceInterrupted(RuntimeError):
     """A provider failure stopped the run; completed steps are preserved."""
 
@@ -499,8 +535,9 @@ class RecordingAdapter:
     """Wraps the real learning adapter: records proposals and decisions and
     whether a provider failure happened (no retry is ever added)."""
 
-    def __init__(self, inner, log, group):
+    def __init__(self, inner, log, group, pacer=None):
         self.inner, self.log, self.group = inner, log, group
+        self.pacer = pacer
         self.step_id = None
         self.provider_failures = []
 
@@ -518,6 +555,8 @@ class RecordingAdapter:
         )
 
     async def _call(self, stage, operation, *args):
+        if self.pacer is not None:
+            await self.pacer.wait()
         started = time.perf_counter()
         try:
             result = await operation(*args)
@@ -685,8 +724,9 @@ def tool_descriptions(names):
 class TextDriver:
     """One Jarvis reply: model steps with real tool calls, no retry."""
 
-    def __init__(self, client, log, *, model):
+    def __init__(self, client, log, *, model, pacer=None):
         self.client, self.log, self.model = client, log, model
+        self.pacer = pacer
 
     def system_prompt(self):
         from jarvis.voice.agent import PERSONAL_LEARNING_QUERY_INSTRUCTIONS
@@ -722,6 +762,8 @@ class TextDriver:
                 ],
                 "remaining_steps": remaining,
             }
+            if self.pacer is not None:
+                await self.pacer.wait()
             started = time.perf_counter()
             try:
                 telemetry = await self.client.parse_with_telemetry(
@@ -826,6 +868,8 @@ class LabDeps:
     # authority allows 128 live at once (30 s lease). The lab waits out the
     # lease every SEED_BATCH facts; the offline test advances its clock.
     pause: object = None
+    # Shared spacing for every model call (FreeLanePacer); None = unpaced.
+    pacer: object = None
 
 
 class AcceptanceRunner:
@@ -849,11 +893,12 @@ class AcceptanceRunner:
         if not pending:
             return
         memory = await self.deps.open_memory(self.root / group / "memory.db")
-        extractor = RecordingAdapter(self.deps.extractor, self.log, group)
+        pacer = self.deps.pacer
+        extractor = RecordingAdapter(self.deps.extractor, self.log, group, pacer)
         resolver = (
             extractor
             if self.deps.resolver is self.deps.extractor
-            else RecordingAdapter(self.deps.resolver, self.log, group)
+            else RecordingAdapter(self.deps.resolver, self.log, group, pacer)
         )
         context = _GroupContext(group, memory, self.deps, extractor, resolver)
         context._path = self.root / group / "memory.db"
@@ -1273,7 +1318,10 @@ class _GroupContext:
             self.memory.service, self.conversation, personal_context=personal
         )
         driver = TextDriver(
-            self.deps.driver_client, log, model=self.deps.models.get("answer_model")
+            self.deps.driver_client,
+            log,
+            model=self.deps.models.get("answer_model"),
+            pacer=self.deps.pacer,
         )
         try:
             answer, results = await driver.reply(
@@ -1708,6 +1756,22 @@ async def check_d5(context, log):
             _time(_value(sold), "disposed") if sold else None,
         ),
         _check("observed_at 2026-11-18", "a", observed_day == "2026-11-18", observed),
+        (
+            _check(
+                "follow-up lookup completed",
+                "b",
+                any(
+                    r["result"].get("status") == "selected"
+                    for r in _reads(_reply(context, "story-05"))
+                ),
+                [
+                    r["result"].get("status")
+                    for r in _reads(_reply(context, "story-05"))
+                ],
+            )
+            if _reads(_reply(context, "story-05"))
+            else _untested("follow-up lookup completed", "b", "no lookup happened")
+        ),
         _answer_check(
             context,
             "story-05",
