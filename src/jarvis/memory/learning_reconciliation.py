@@ -27,6 +27,7 @@ from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_
 from .learning_values import (
     DISPOSED_STATES,
     PLAN_STATE,
+    decides_stated_options,
     has_identifier,
     item_time,
     minimal_quote,
@@ -347,13 +348,37 @@ class LearningReconciler:
                 # acquired month may then get its inferred year).
                 added = _added_detail(candidate, source, old_value) or added
                 merged, reason = refine_merge(old_value, added)
-                if merged is None:
-                    skip(reason)
-                    continue
                 predicate, expected = (
                     refine_target.predicate,
                     refine_target.assertion_id,
                 )
+                if (
+                    merged is None
+                    and candidate.category == "plan"
+                    and decides_stated_options(old_value, added)
+                ):
+                    # Choosing one of the owner's stated alternatives changes
+                    # the same plan (D10); the earlier row keeps the options.
+                    if predicate in used:
+                        skip("conflicting_mutations")
+                        continue
+                    used.add(predicate)
+                    mutations.append(
+                        self._mutation(
+                            index,
+                            candidate,
+                            source,
+                            "change",
+                            predicate,
+                            expected,
+                            _changed_value(old_value, candidate, source),
+                            others=_other_labels(batch, index),
+                        )
+                    )
+                    continue
+                if merged is None:
+                    skip(reason)
+                    continue
                 if predicate in used:
                     skip("conflicting_mutations")
                     continue

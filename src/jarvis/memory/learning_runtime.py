@@ -17,7 +17,7 @@ from .learning_contracts import AcceptedLearningSource, LearningBatch
 from .learning_controls import category_veto, suppression_binding
 from .learning_diagnostics import log_learning
 from .learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
-from .learning_policy import LearningPolicy
+from .learning_policy import LearningPolicy, ground_plan_label
 
 LOGGER = logging.getLogger(__name__)
 
@@ -362,6 +362,16 @@ class PersonalLearningRuntime:
         eligible = []
         grounded_count = len(batch.candidates)
         for index, candidate in enumerate(batch.candidates):
+            grounded = ground_plan_label(source, candidate)
+            if grounded is not candidate:
+                log_learning(
+                    self.diagnostics,
+                    source,
+                    "eligibility",
+                    "label_from_value",
+                    grounded_index=index,
+                )
+                candidate = grounded
             decision = LearningPolicy().evaluate(
                 source, candidate, suppression.suppressed
             )

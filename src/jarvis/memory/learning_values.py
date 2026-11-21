@@ -149,6 +149,37 @@ def _within(new: dict, old: dict) -> bool:
     return old["earliest"] <= new["earliest"] and new["latest"] <= old["latest"]
 
 
+def _option_key(text) -> str:
+    return " ".join(str(text).casefold().split())
+
+
+def decides_stated_options(old: dict, added: dict) -> bool:
+    """True when the only disagreement between a stored plan and new detail is
+    a decision among alternatives the owner already stated: a stored slot with
+    no value and options, and a new value that is one of those options ("Ladakh
+    or winter Spiti" -> "winter Spiti"). That is a real change of the plan
+    (the earlier row, with its options, stays in history), never a refine and
+    never a conflict. Any other disagreement keeps its existing handling."""
+    old_slots = old.get("slots") or {}
+    rest = {}
+    decided = False
+    for name, slot in (added.get("slots") or {}).items():
+        current = old_slots.get(name)
+        if current is None or current == slot:
+            rest[name] = slot
+            continue
+        options = {_option_key(o) for o in current.get("options") or () if o}
+        value = slot.get("value")
+        if not current.get("value") and value and _option_key(value) in options:
+            decided = True
+            continue
+        return False
+    if not decided:
+        return False
+    merged, reason = refine_merge(old, {**added, "slots": rest})
+    return merged is not None or reason == "already_stored"
+
+
 def refine_merge(old: dict, added: dict) -> tuple[dict | None, str]:
     """Merge detail into a true-but-less-complete stored value.
 
