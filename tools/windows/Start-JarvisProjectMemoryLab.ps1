@@ -12,6 +12,10 @@ param(
     [switch]$PersonalAcceptance,
     [switch]$ContextEval,
     [switch]$SeedVoiceEval,
+    [switch]$Slice1Acceptance,
+    [switch]$RetryInterrupted,
+    [ValidateRange(0.5, 120)][double]$CallSpacingSeconds = 0,
+    [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','pages')][string[]]$Slice1Group,
     [ValidateSet('without','with')][string]$ContextEvalArm,
     [ValidateSet('travel','diet','device')][string]$ContextEvalCase,
     [ValidateSet('p0-q0','p1-q1','p2-q2','p3-q3','p4-q4','p5-q5')][string]$DevelopmentCase
@@ -23,6 +27,10 @@ if ($ContextEval -and ($ResumeLab -or $SeedAcceptance -or $DevelopmentBatch -or 
 if (($ContextEvalArm -or $ContextEvalCase) -and -not $ContextEval) { throw "ContextEvalArm/ContextEvalCase require ContextEval." }
 if ($SeedVoiceEval -and ($ResumeLab -or $SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase -or $PersonalAcceptance -or $ContextEval)) { throw "Voice evaluation seeding requires a fresh standalone lab." }
 if ($DevelopmentCase -and -not $DevelopmentBatch) { throw "DevelopmentCase requires DevelopmentBatch." }
+if ($Slice1Acceptance -and ($SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase -or $PersonalAcceptance -or $ContextEval -or $SeedVoiceEval)) { throw "Slice-1 acceptance runs alone in its own lab." }
+if (($Slice1Group -or $RetryInterrupted) -and -not $Slice1Acceptance) { throw "Slice1Group/RetryInterrupted require Slice1Acceptance." }
+if ($RetryInterrupted -and -not $ResumeLab) { throw "RetryInterrupted only continues an existing lab (ResumeLab)." }
+if ($CallSpacingSeconds -and -not $Slice1Acceptance) { throw "CallSpacingSeconds requires Slice1Acceptance." }
 if ($DevelopmentBatch -and ($SeedAcceptance -or $ResumeLab)) { throw "Development batch requires a new isolated lab, without acceptance seeding or resume." }
 if ($SeedAcceptance -and $ResumeLab) { throw "Acceptance seeding requires a new isolated lab." }
 $git = (Get-Command git -ErrorAction Stop).Source
@@ -57,6 +65,10 @@ try {
     if ($ContextEvalArm) { $arguments += @("--context-eval-arm", $ContextEvalArm) }
     if ($ContextEvalCase) { $arguments += @("--context-eval-case", $ContextEvalCase) }
     if ($DevelopmentCase) { $arguments += @("--development-case", $DevelopmentCase) }
+    if ($Slice1Acceptance) { $arguments += "--slice1-acceptance" }
+    if ($RetryInterrupted) { $arguments += "--retry-interrupted" }
+    if ($CallSpacingSeconds) { $arguments += @("--call-spacing-seconds", $CallSpacingSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)) }
+    foreach ($group in @($Slice1Group | Where-Object { $_ })) { $arguments += @("--slice1-group", $group) }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }

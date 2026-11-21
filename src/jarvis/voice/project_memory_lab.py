@@ -670,12 +670,215 @@ def run_context_eval_mode(args, repo, tool_paths):
             )
 
 
+async def run_slice1_acceptance(
+    config,
+    root: Path,
+    *,
+    model,
+    source_commit,
+    hashes,
+    groups,
+    retry_interrupted,
+    call_spacing_seconds,
+):
+    """Frozen D1-D27 development acceptance in this isolated lab profile."""
+    import asyncio
+    import msvcrt
+    from uuid import uuid4
+
+    from jarvis.ai_provider import gemini_credential_ref
+    from jarvis.capabilities.authority_bridge import CapabilityAuthorityBroker
+    from jarvis.capabilities.discovery import CapabilityResolver
+    from jarvis.capabilities.runtime import CapabilityRuntime
+    from jarvis.hands.provider_adapters import build_structured_output_client
+    from jarvis.memory.learning_extractors import build_learning_adapters
+    from jarvis.memory.runtime import build_default_memory_runtime
+    from jarvis.model_routing.runtime import build_routing_runtime
+    from jarvis.provider_retry import policy_summary
+    from jarvis.voice.personal_memory_acceptance import (
+        AcceptanceRunner,
+        FreeLaneDriverClient,
+        FreeLanePacer,
+        LabDeps,
+        ResultLog,
+    )
+    from jarvis.work.privacy import build_default_work_payload_codec
+    from jarvis.work.store import SQLiteWorkStore
+
+    lock = (root / "project-memory.lock").open("a+b")
+    lock.write(b"0")
+    lock.flush()
+    lock.seek(0)
+    try:
+        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        lock.close()
+        raise RuntimeError("another process owns this lab") from None
+    broker = CapabilityAuthorityBroker()
+    capability = CapabilityRuntime(
+        executors=(), resolver=CapabilityResolver((), builtins=()), authority=broker
+    )
+    routing = None
+    grant = None
+    driver = None
+    try:
+        path = root / "routing.sqlite3"
+        work_store = SQLiteWorkStore(
+            path, payload_codec=build_default_work_payload_codec(path)
+        )
+        # Free credential lane only: paid targets are disabled for this lab.
+        routing = build_routing_runtime(
+            work_store=work_store,
+            provider="gemini",
+            model=model,
+            config=replace(config.gemini_fallback, enabled=False),
+        )
+        # Answer calls: the Free credential only, SDK retries off, no router
+        # and no Paid credential (a Paid request is impossible). The text
+        # driver is the single retry owner for these calls.
+        driver = FreeLaneDriverClient(
+            build_structured_output_client(
+                provider="gemini",
+                model=model,
+                provider_retries=False,
+                credential_ref=gemini_credential_ref("free"),
+                max_output_tokens=2048,
+            )
+        )
+        # With paid routing disabled the learning adapters use the Free key
+        # directly, with the SDK's own retries off; Jarvis's learning runtime
+        # is their single retry owner (bounded, temporary failures only).
+        extractor, resolver = build_learning_adapters("gemini", routing_runtime=routing)
+        models = {
+            "answer_model": model,
+            "learning_model": getattr(extractor, "model_name", None),
+            "lane": "free",
+            "call_spacing_seconds": float(call_spacing_seconds),
+            "retry_policy": policy_summary(),
+        }
+        # One limiter shared by learning and answer calls (same Free key).
+        pacer = FreeLanePacer(call_spacing_seconds)
+        print(
+            "SLICE-1 DEVELOPMENT ACCEPTANCE (D1-D27, fictional data, isolated lab). "
+            f"Answer model {model}; learning model {models['learning_model']}. Free "
+            f"lane only; a temporary provider error (503/500) is retried at most "
+            "twice inside its deadline, never a 429, stall or wrong answer; model "
+            f"calls start at least "
+            f"{float(call_spacing_seconds):g} s apart. Windows Hello: (1) now, to open the "
+            "owner learning session used for learning and reads; (2) at D3, to save "
+            "'Dell XPS; iPad Air'; (3) at D17, to forget the Classic 350. Progress: "
+            "one line per step below and in acceptance-steps.jsonl.",
+            flush=True,
+        )
+        learning_authority = capability.personal_learning_authority
+        try:
+            grant = await asyncio.to_thread(
+                capability.open_personal_learning, str(uuid4()), "gemini"
+            )
+        except PermissionError:
+            print(
+                "NOT STARTED: the learning session was not approved. Nothing was "
+                "run; rerun the same command to try again.",
+                flush=True,
+            )
+            raise SystemExit(1) from None
+
+        async def open_memory(db_path):
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            memory = build_default_memory_runtime(db_path)
+            await memory.start()
+            return memory
+
+        deps = LabDeps(
+            open_memory=open_memory,
+            capability=capability,
+            learning_authority=learning_authority,
+            learning_grant=grant,
+            extractor=extractor,
+            resolver=resolver,
+            driver_client=driver,
+            models=models,
+            pacer=pacer,
+        )
+        log = ResultLog(
+            root, commit=source_commit, hashes=hashes, models=models, echo=True
+        )
+        runner = AcceptanceRunner(root, deps, log, retry_interrupted=retry_interrupted)
+        summary = await runner.run(groups)
+        print(
+            "DEVELOPMENT ACCEPTANCE COMPLETE: "
+            + json.dumps({c: r["status"] for c, r in summary["cases"].items()})
+            + f" | untested={summary['untested']} | results in {root}",
+            flush=True,
+        )
+        return summary
+    finally:
+        if grant is not None:
+            capability.close_personal_learning(grant)
+        capability.close()
+        if driver is not None:
+            await driver.aclose()
+        if routing is not None:
+            await routing.aclose()
+        lock.seek(0)
+        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+        lock.close()
+
+
+def run_slice1_acceptance_mode(args, repo, tool_paths):
+    import asyncio
+
+    from jarvis.config import JarvisConfig
+    from jarvis.voice.personal_memory_acceptance import (
+        GROUP_ORDER,
+        AcceptanceInterrupted,
+        frozen_hashes,
+    )
+
+    # Verify the frozen case files before any profile, approval or model call.
+    hashes = frozen_hashes(repo)
+    groups = tuple(args.slice1_group) if args.slice1_group else GROUP_ORDER
+    profile = prepare_project_profile(
+        args.profile,
+        args.lab_root,
+        resume=args.resume_lab,
+        commit=args.source_commit,
+        tool_paths=tool_paths,
+    )
+    with project_lab_environment(profile, repo):
+        config = JarvisConfig.from_environment()
+        if config.ai_provider != "gemini":
+            raise ValueError("existing Gemini configuration required")
+        try:
+            return asyncio.run(
+                run_slice1_acceptance(
+                    config,
+                    profile.parent,
+                    model=args.model,
+                    source_commit=args.source_commit,
+                    hashes=hashes,
+                    groups=groups,
+                    retry_interrupted=args.retry_interrupted,
+                    call_spacing_seconds=args.call_spacing_seconds,
+                )
+            )
+        except AcceptanceInterrupted as exc:
+            print(
+                f"INTERRUPTED (any bounded retries are recorded; none remain): {exc}. "
+                "Completed steps are kept. Continue later with the same command plus "
+                "-ResumeLab; an interrupted step reruns only with -RetryInterrupted.",
+                flush=True,
+            )
+            raise SystemExit(2) from None
+
+
 def main():
     import argparse
     import asyncio
 
     from jarvis.config import JarvisConfig
     from jarvis.machine_config import default_machine_config_path
+    from jarvis.voice.personal_memory_acceptance import GROUP_ORDER as SLICE1_GROUPS
     from jarvis.voice.project_memory_development import CASE_IDS
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -692,7 +895,41 @@ def main():
     parser.add_argument("--context-eval-arm", choices=("without", "with"))
     parser.add_argument("--context-eval-case", choices=("travel", "diet", "device"))
     parser.add_argument("--seed-voice-eval", action="store_true")
+    parser.add_argument("--slice1-acceptance", action="store_true")
+    parser.add_argument(
+        "--slice1-group",
+        action="append",
+        choices=SLICE1_GROUPS,
+    )
+    parser.add_argument("--retry-interrupted", action="store_true")
+    parser.add_argument("--call-spacing-seconds", type=float, default=None)
     args = parser.parse_args()
+    if args.slice1_acceptance and (
+        args.seed_acceptance
+        or args.development_batch
+        or args.development_case
+        or args.personal_acceptance
+        or args.context_eval
+        or args.seed_voice_eval
+    ):
+        parser.error("slice-1 acceptance runs alone in its own lab")
+    if (args.slice1_group or args.retry_interrupted) and not args.slice1_acceptance:
+        parser.error("--slice1-group/--retry-interrupted require --slice1-acceptance")
+    if args.call_spacing_seconds is not None and not args.slice1_acceptance:
+        parser.error("--call-spacing-seconds requires --slice1-acceptance")
+    if args.slice1_acceptance:
+        from jarvis.voice.personal_memory_acceptance import (
+            DEFAULT_CALL_SPACING_SECONDS,
+        )
+
+        if args.call_spacing_seconds is None:
+            args.call_spacing_seconds = DEFAULT_CALL_SPACING_SECONDS
+        if not 0 < args.call_spacing_seconds <= 120:
+            parser.error("--call-spacing-seconds must be in (0, 120]")
+    if args.retry_interrupted and not args.resume_lab:
+        parser.error(
+            "--retry-interrupted only continues an existing lab (--resume-lab)"
+        )
     if args.seed_voice_eval and (
         args.resume_lab
         or args.seed_acceptance
@@ -748,6 +985,9 @@ def main():
             "JARVIS_OPA_PATH": resolve_opa_binary(machine_settings=settings).resolve(),
         }
     )
+    if args.slice1_acceptance:
+        run_slice1_acceptance_mode(args, repo, tool_paths)
+        return
     if args.context_eval:
         run_context_eval_mode(args, repo, tool_paths)
         return
