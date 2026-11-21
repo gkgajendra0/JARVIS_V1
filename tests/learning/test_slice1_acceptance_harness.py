@@ -972,27 +972,95 @@ async def test_pacer_spaces_call_starts_and_never_retries():
 @pytest.mark.asyncio
 async def test_one_pacer_is_shared_by_learning_and_answer_calls(lab):
     t = _FakeTime()
-    starts = []
     pacer = acceptance.FreeLanePacer(6.0, clock=t.clock, sleep=t.sleep)
-    original = pacer.wait
+    lab.deps.pacer = pacer
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("idiom", "scale-11"))
+    assert summary["cases"]["D9"]["status"] == acceptance.PASS
+    driver_steps = [e for e in log.read(log.events) if e.get("kind") == "driver_step"]
+    # Every provider call is counted once: learning calls (only real
+    # provider calls, not deterministic resolutions) and answer steps.
+    assert pacer.calls == len(lab.genai.calls) + len(driver_steps)
+    # On average one call per spacing (two learning calls may run together).
+    assert t.now >= (pacer.calls - 2) * 6.0
 
-    async def recorded():
-        await original()
-        starts.append(t.now)
 
-    pacer.wait = recorded
+@pytest.mark.asyncio
+async def test_pacer_ready_waits_outside_and_note_never_waits():
+    t = _FakeTime()
+    pacer = acceptance.FreeLanePacer(6.0, clock=t.clock, sleep=t.sleep)
+    await pacer.wait()  # answer call at 0
+    await pacer.ready()  # owner turn observed only at 6
+    assert t.now == 6.0
+    pacer.note(2)  # extraction + resolution inside learning: no waiting
+    assert t.now == 6.0
+    await pacer.wait()  # next answer waits for both counted calls
+    assert t.now == 18.0 and pacer.calls == 4
+
+
+# Run 2: pacing must not consume the learning deadline (owner check) -----------
+
+
+class _SlowGenai(FakeGenai):
+    """Each provider call takes ``latency`` real seconds."""
+
+    def __init__(self, latency):
+        super().__init__()
+        self.latency = latency
+
+    async def create(self, **kwargs):
+        import asyncio
+
+        await asyncio.sleep(self.latency)
+        return await super().create(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_run2_reproduction_pacer_wait_must_not_eat_the_learning_deadline(
+    lab, monkeypatch
+):
+    """Run 2: learning waited for the shared pacer inside its own 25 s
+    inference deadline. Scaled down: deadline 1.0 s, provider latency 0.2 s,
+    spacing 2.0 s, the previous call just started. A provider that answers
+    well within its own budget must not time out because of harness pacing."""
+    from jarvis.memory import learning_runtime
+
+    monkeypatch.setattr(learning_runtime, "INFERENCE_TIMEOUT", 1.0)
+    monkeypatch.setattr(learning_runtime, "PROCESSING_BUDGET", 1.5)
+    slow = LearningProviderAdapter("gemini", _SlowGenai(0.2), "fictional-model")
+    lab.deps.extractor = lab.deps.resolver = slow
+    pacer = acceptance.FreeLanePacer(2.0)
+    await pacer.wait()  # a call has just started
     lab.deps.pacer = pacer
     runner, log = lab.runner()
     summary = await runner.run(groups=("idiom",))
+    statuses = [e for e in log.read(log.events) if e.get("kind") == "learning_status"]
+    assert [s["reason"] for s in statuses][:1] == ["committed"], statuses
     assert summary["cases"]["D9"]["status"] == acceptance.PASS
-    events = log.read(log.events)
-    model_calls = [
-        e
-        for e in events
-        if e.get("kind")
-        in {"learning_extraction", "learning_resolution", "driver_step"}
+
+
+@pytest.mark.asyncio
+async def test_a_learning_timeout_stops_the_run_and_is_not_completed_setup(
+    lab, monkeypatch
+):
+    """Run 2: timed-out learning turns were treated as completed setup and
+    their dependent cases were graded as FAIL. Now the run stops at that
+    turn: no checks of it, no retry, no reseeding."""
+    from jarvis.memory import learning_runtime
+
+    monkeypatch.setattr(learning_runtime, "INFERENCE_TIMEOUT", 0.3)
+    monkeypatch.setattr(learning_runtime, "PROCESSING_BUDGET", 0.5)
+    adapter = LearningProviderAdapter("gemini", _SlowGenai(1.0), "fictional-model")
+    lab.deps.extractor = lab.deps.resolver = adapter
+    runner, log = lab.runner()
+    with pytest.raises(acceptance.AcceptanceInterrupted, match="learning incomplete"):
+        await runner.run(groups=("idiom",))
+    states = log.step_states()
+    assert states["idiom-01"]["status"] == "interrupted"
+    assert "idiom-02" not in states and "idiom-02c" not in states
+    assert log.read(log.cases) == []  # nothing graded on missing setup
+    cancelled = [
+        e for e in log.read(log.events) if e.get("status") == "cancelled_at_deadline"
     ]
-    kinds = {e["kind"] for e in model_calls}
-    assert {"learning_extraction", "driver_step"} <= kinds  # both paths paced
-    assert pacer.calls == len(model_calls) == len(starts)
-    assert all(b - a >= 6.0 for a, b in pairwise(starts))
+    assert len(cancelled) == 1 and cancelled[0]["kind"] == "learning_extraction"
+    assert adapter.attempts == 1  # one provider call, no retry
