@@ -965,6 +965,26 @@ class AcceptanceRunner:
             "cases": cases,
             "untested": [c for c in CASES_RUN if c not in cases],
             "interrupted_at": interrupted,
+            # Every planned case is a required gate (D17 included); D27 is
+            # recorded from the rehearsal. REVIEW = automatic checks passed
+            # and the answer awaits manual grading.
+            "required_gates": list(CASES_RUN),
+            "automatic_verdict": (
+                FAIL
+                if any(c["status"] == FAIL for c in cases.values())
+                else UNTESTED
+                if [c for c in CASES_RUN if c not in cases]
+                or any(c["status"] == UNTESTED for c in cases.values())
+                else "PASS_PENDING_MANUAL_REVIEW"
+            ),
+            "d17_failed_stage": next(
+                (
+                    c["detail"].get("failed_stage")
+                    for c in (cases.get("D17") or {}).get("checks", ())
+                    if c["check"] == "forget gate (stage diagnosis)"
+                ),
+                None,
+            ),
             "answer_quality": "manual_review_required",
             "limits": (
                 "Controlled text through the Free-lane answer model with the voice "
@@ -1353,6 +1373,8 @@ async def snapshot_counts(memory):
     return {
         "current_ids": sorted(r["assertion_id"] for r in rows if r["current"]),
         "all_ids": sorted(r["assertion_id"] for r in rows),
+        # Predicate and label of every current row (D17 target diagnosis).
+        "current_labels": {r["predicate"]: _label(r) for r in rows if r["current"]},
     }
 
 
@@ -1602,11 +1624,12 @@ async def check_d3(context, log):
             "a",
             combined.get("assertion_id") in current_ids,
         ),
-        _untested(
-            "one Hello",
-            "a",
-            "count the Windows Hello prompts during D3 (owner observation)",
-        ),
+        {
+            "check": "one Hello",
+            "level": "a",
+            "status": REVIEW,
+            "detail": "owner observation: count the Windows Hello prompts during D3",
+        },
     ]
 
 
@@ -1941,6 +1964,17 @@ async def check_d12(context, log):
             _time(_value(current), "acquired") if current else None,
         ),
         _check(
+            "year marked inferred, owner's month wording kept",
+            "a",
+            current is not None
+            and _value(current).get("acquired", {}).get("basis") == "inferred_year"
+            and "september"
+            in str(
+                _value(current).get("acquired", {}).get("expression", "")
+            ).casefold(),
+            _value(current).get("acquired") if current else None,
+        ),
+        _check(
             "old row retracted",
             "a",
             old is not None and old["state"] == "retracted",
@@ -2071,6 +2105,15 @@ async def check_d23(context, log):
             _time(_value(row), "disposed") if row else None,
         ),
         _check(
+            "year marked inferred, owner's month wording kept",
+            "a",
+            row is not None
+            and _value(row).get("disposed", {}).get("basis") == "inferred_year"
+            and "october"
+            in str(_value(row).get("disposed", {}).get("expression", "")).casefold(),
+            _value(row).get("disposed") if row else None,
+        ),
+        _check(
             "effective time unknown", "a", row is not None and row["valid_from"] is None
         ),
         _check(
@@ -2081,34 +2124,122 @@ async def check_d23(context, log):
     ]
 
 
+FORGET_STAGES = (
+    "item_absent_from_available_catalog",
+    "model_did_not_select_available_item",
+    "forget_operation_failed",
+    "deleted_but_residual_remains",
+)
+
+
+def diagnose_forget(tools, target_predicates, lineage_remaining, residual):
+    """Which stage of D17 failed, or None when it fully passed.
+
+    ``tools`` are the driver's tool calls with results for the D17 turn;
+    ``target_predicates`` are the predicates that held the Classic 350 just
+    before the turn; ``lineage_remaining`` counts its rows left afterwards;
+    ``residual`` is the residual report. Stages, in order:
+    1. item_absent_from_available_catalog: no catalog result the model
+       received listed the item's predicate (or no catalog was obtained);
+    2. model_did_not_select_available_item: it was listed, but no
+       forget_memory call targeted it (no call, another facet, bad index);
+    3. forget_operation_failed: a call targeted it, but none succeeded
+       (refused, Hello declined, error) or rows of it remain;
+    4. deleted_but_residual_remains: it was deleted, but a personal-memory
+       store still holds the term.
+    """
+    targets = set(target_predicates)
+    catalogs = {}
+    for call in tools:
+        result = call.get("result") or {}
+        if call["tool"] == "personal_context_catalog" and result.get("catalog_id"):
+            catalogs[result["catalog_id"]] = list(result.get("facets") or ())
+    listed = targets & {f for facets in catalogs.values() for f in facets}
+    shown = any(
+        "classic 350" in json.dumps(call.get("result"), default=str).casefold()
+        for call in tools
+        if call["tool"] == "read_personal_context"
+    )
+    forgets = [call for call in tools if call["tool"] == "forget_memory"]
+
+    def target_of(call):
+        arguments = call.get("arguments") or {}
+        facets = catalogs.get(arguments.get("catalog_id"), [])
+        index = arguments.get("facet_index")
+        if isinstance(index, int) and 0 <= index < len(facets):
+            return facets[index]
+        return arguments.get("predicate")
+
+    aimed = [call for call in forgets if target_of(call) in targets]
+    detail = {
+        "catalogs_received": len(catalogs),
+        "listed_in_catalog": bool(listed),
+        "shown_by_read": shown,
+        "forget_calls": [
+            {
+                "target": target_of(c),
+                "targets_item": target_of(c) in targets,
+                "result": c.get("result"),
+            }
+            for c in forgets
+        ],
+        "lineage_remaining": lineage_remaining,
+        "residual": residual,
+    }
+    if not listed:
+        return FORGET_STAGES[0], detail
+    if not aimed:
+        return FORGET_STAGES[1], detail
+    if not any((c.get("result") or {}).get("ok") for c in aimed) or lineage_remaining:
+        return FORGET_STAGES[2], detail
+    if any(residual.values()):
+        return FORGET_STAGES[3], detail
+    return None, detail
+
+
 async def check_d17(context, log):
+    """D17 is a required gate: any failing stage fails the case."""
     from jarvis.memory.forget_residuals import residual_report
 
     reply = _reply(context, "story-18")
-    forgets = [t for t in reply.get("tools") or () if t["tool"] == "forget_memory"]
-    if not any(t["result"].get("ok") for t in forgets):
+    before = (context.marks.get("before") or {}).get("story-18") or {}
+    targets = [
+        predicate
+        for predicate, label in (before.get("current_labels") or {}).items()
+        if "classic 350" in label.casefold()
+    ]
+    if not reply or not targets:
         return [
             _untested(
-                "forget committed",
+                "forget gate",
                 "a",
-                [t["result"] for t in forgets]
-                or "the model did not call forget_memory",
+                "the D17 turn did not run"
+                if not reply
+                else "no Classic 350 fact existed before D17",
             )
         ]
     rows = await _rows(context.memory)
+    remaining = len([r for r in rows if r["predicate"] in set(targets)])
     report = await context.memory._reader.run(
         lambda c: residual_report(c, ["Classic 350"])
+    )
+    context.marks["residual"] = report
+    stage, detail = diagnose_forget(
+        reply.get("tools") or (), targets, remaining, report
     )
     others = [
         r
         for r in rows
         if r["current"] and any(n in _label(r).casefold() for n in ("tigor", "jimny"))
     ]
-    context.marks["residual"] = report
     return [
-        _check(
-            "lineage gone", "a", not _named(_items(rows, current=False), "classic 350")
-        ),
+        {
+            "check": "forget gate (stage diagnosis)",
+            "level": "a",
+            "status": PASS if stage is None else FAIL,
+            "detail": {"failed_stage": stage, **detail},
+        },
+        _check("lineage gone", "a", remaining == 0, remaining),
         _check(
             "no evidence text names Classic 350",
             "a",
@@ -2133,6 +2264,15 @@ async def check_d17(context, log):
 async def check_d26(context, log):
     from jarvis.memory.forget_residuals import residual_report
 
+    rows = await _rows(context.memory)
+    if _named(_items(rows, current=False), "classic 350"):
+        return [
+            _untested(
+                "no residual after forget",
+                "a",
+                "D17 did not delete the Classic 350, so there is nothing to check yet (D17 fails the gate)",
+            )
+        ]
     report = context.marks.get("residual") or await context.memory._reader.run(
         lambda c: residual_report(c, ["Classic 350"])
     )
