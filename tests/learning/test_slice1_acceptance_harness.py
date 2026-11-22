@@ -1437,3 +1437,65 @@ async def test_run5_recorded_outputs_now_pass_d10(lab, monkeypatch):
         if e.get("kind") == "learning_status"
     }
     assert status["story-10"]["committed"] == 1 and status["story-10"]["skipped"] == []
+
+
+@pytest.mark.asyncio
+async def test_run5_recorded_outputs_pass_d10_d12_and_release_d16_evidence(
+    lab, monkeypatch
+):
+    """Run 5's recorded D10 and D12 proposals together (D12 put "September"
+    in the Jimny's value). Through the fixed code: D10 and D12 pass,
+    including the new identity check; D14/D15 still read the Jimny as the
+    Jimny; D16's lookup now releases the owner's words, the told dates and
+    recorded_at separately."""
+    for text, proposals in RUN5_EXTRACT.items():
+        monkeypatch.setitem(EXTRACT, text, proposals)
+    monkeypatch.setitem(
+        RESOLVE,
+        "We're going with winter Spiti, and we'll take the Jimny.",
+        [("match", "=trip")],
+    )
+    d12 = "I misspoke, the Jimny is from September, not October."
+    monkeypatch.setitem(
+        EXTRACT,
+        d12,
+        [
+            item(
+                "Jimny",
+                d12,
+                intent="correction",
+                value="September",
+                time_expression="September",
+                acquired_expression="September",
+            )
+        ],
+    )
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    cases = summary["cases"]
+    for case in ("D10", "D12"):
+        assert cases[case]["status"] == acceptance.PASS, cases[case]
+    events = log.read(log.events)
+
+    def reads(step):
+        return [
+            fact
+            for e in events
+            if e.get("kind") == "tool_result" and e.get("step_id") == step
+            for fact in (e.get("result") or {}).get("facts", [])
+        ]
+
+    for step in ("story-14", "story-15", "story-16"):
+        jimny = [f for f in reads(step) if "Jimny" in f["text"]]
+        assert jimny and all("value=September" not in f["text"] for f in jimny)
+    (fact,) = [f for f in reads("story-16") if "Jimny" in f["text"]]
+    assert fact["told"]["how"] == "owner_said" and fact["told"]["quote"]
+    assert fact["told"]["date"] == "2026-11-19"  # the correction's telling
+    assert fact["first_told"]["date"] == "2026-11-17"  # D1's telling
+    assert fact["acquired"]["expression"] == "September"
+    assert "recorded_at" in fact  # the system's time, released separately
+    d16 = {c["check"]: c for c in cases["D16"]["checks"]}
+    evidence = d16[
+        "released evidence: owner's words and told date, apart from recorded_at"
+    ]
+    assert evidence["status"] == acceptance.PASS

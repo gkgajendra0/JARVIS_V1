@@ -2350,6 +2350,14 @@ async def check_d12(context, log):
             and ("historical_change",) not in ops,
             ops,
         ),
+        # Run 5: the correction replaced the Jimny's value with "September".
+        _check(
+            "item identity kept (value is still the Jimny)",
+            "a",
+            current is not None
+            and "jimny" in str(_value(current).get("value", "")).casefold(),
+            _value(current).get("value") if current else None,
+        ),
     ]
 
 
@@ -2430,7 +2438,37 @@ async def check_d15(context, log):
 
 
 async def check_d16(context, log):
+    jimny = [
+        f
+        for r in _reads(_reply(context, "story-16"))
+        for f in (r.get("result") or {}).get("facts") or ()
+        if "jimny" in str(f.get("text", "")).casefold()
+    ]
+    told = [(f.get("told") or {}, f.get("first_told") or {}) for f in jimny]
+    evidence = (
+        _check(
+            "released evidence: owner's words and told date, apart from recorded_at",
+            "b",
+            any(t.get("quote") and t.get("date") and t.get("how") for t, _ in told),
+            [
+                {
+                    "told": t,
+                    "first_told": first,
+                    "acquired": f.get("acquired"),
+                    "recorded_at": f.get("recorded_at"),
+                }
+                for (t, first), f in zip(told, jimny, strict=True)
+            ],
+        )
+        if jimny
+        else _untested(
+            "released evidence: owner's words and told date, apart from recorded_at",
+            "b",
+            "the Jimny was not looked up",
+        )
+    )
     return [
+        evidence,
         _answer_check(
             context,
             "story-16",
@@ -2442,7 +2480,7 @@ async def check_d16(context, log):
                 ),
                 ("purchase month", r"sept|october"),
             ),
-        )
+        ),
     ]
 
 
