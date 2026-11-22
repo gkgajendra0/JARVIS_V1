@@ -657,6 +657,19 @@ def _item_identity(candidate) -> str:
     return value
 
 
+_ARTICLES = ("the ", "my ", "our ", "a ", "an ")
+
+
+def _without_article(label):
+    """'the Tigor' names the Tigor: a leading article is not part of a name."""
+    text = (label or "").strip()
+    lowered = text.casefold()
+    for article in _ARTICLES:
+        if lowered.startswith(article) and len(text) > len(article):
+            return text[len(article) :].strip()
+    return text
+
+
 def _corrected_item_value(old, fresh, candidate, entry, entries):
     """A correction of one owned item changes only what the owner corrected.
 
@@ -667,9 +680,10 @@ def _corrected_item_value(old, fresh, candidate, entry, entries):
     correction naming a different item ("it's a Jimny, not a Thar") corrects
     the identity and still keeps the unrelated attributes. A state corrected
     back to owned drops the disposal time."""
-    names_item = _label(entry) == normalize_memory_surface(
-        candidate.label
-    ) or unique_reference(entry, candidate.label, entries)
+    label = _without_article(candidate.label)
+    names_item = _label(entry) == normalize_memory_surface(label) or unique_reference(
+        entry, label, entries
+    )
     value = {**old, "schema": fresh["schema"], "state": fresh["state"]}
     if not names_item:
         value["label"], value["value"] = fresh["label"], fresh["value"]
