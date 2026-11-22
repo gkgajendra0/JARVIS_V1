@@ -99,6 +99,47 @@ def _learning_current_scoped_sync(connection, scopes=None):
     return tuple(scoped)
 
 
+_LINEAGE_DEPTH = 64
+
+
+def _provenance_sync(connection, assertion_ids):
+    """How each current fact was learned, read in the snapshot transaction.
+
+    For each assertion: its own source (class, when the owner said it, the
+    retained minimal quote) and the sources of the rows it supersedes
+    (corrections, refines and changes of the same item), nearest first.
+    Returns ((assertion_id, ((source_class, observed_at, evidence_text), ...)),
+    ...) with the fact's own source first. Forgotten lineage is already gone."""
+    rows = []
+    ids = list(dict.fromkeys(assertion_ids))
+    for start in range(0, len(ids), 400):
+        chunk = ids[start : start + 400]
+        rows += connection.execute(
+            "WITH RECURSIVE chain(root, aid, sid, sup, depth) AS ("
+            " SELECT assertion_id, assertion_id, source_id, supersedes_id, 0"
+            " FROM semantic_assertion WHERE assertion_id IN ("
+            + ",".join("?" for _ in chunk)
+            + ") UNION ALL"
+            " SELECT c.root, a.assertion_id, a.source_id, a.supersedes_id,"
+            " c.depth + 1 FROM semantic_assertion a JOIN chain c"
+            " ON a.assertion_id = c.sup WHERE c.depth < ?)"
+            " SELECT c.root, c.depth, s.source_class, s.observed_at,"
+            " s.evidence_text FROM chain c JOIN memory_source s"
+            " ON s.source_id = c.sid ORDER BY c.root, c.depth",
+            [*chunk, _LINEAGE_DEPTH],
+        ).fetchall()
+    lineage = {}
+    for root, _depth, source_class, observed_at, evidence in rows:
+        lineage.setdefault(str(root), []).append(
+            (
+                str(source_class),
+                None if observed_at is None else str(observed_at),
+                evidence if isinstance(evidence, str) and evidence else None,
+            )
+        )
+    return tuple((root, tuple(chain)) for root, chain in sorted(lineage.items()))
+
+
 class CanonicalMemoryReader:
     """Deterministic read-only query surface over a dedicated reader worker."""
 
@@ -161,6 +202,9 @@ class CanonicalMemoryReader:
                         for k in sorted(SUPPRESSION_KEYS)
                     ),
                     tuple((str(a), str(b)) for a, b in sources),
+                    _provenance_sync(
+                        connection, [record.assertion_id for record, _ in entries]
+                    ),
                 )
                 connection.execute("RELEASE personal_context_snapshot")
                 return snapshot

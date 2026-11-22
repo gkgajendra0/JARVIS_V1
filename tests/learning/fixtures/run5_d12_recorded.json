@@ -1,0 +1,174 @@
+{
+ "source": "Run 5, E:/Jarvis/Temp/slice1-acceptance-5/profile/acceptance-events.jsonl: the ok learning_extraction and learning_resolution outputs of story-02 and story-12, copied unmodified",
+ "lab_commit": "7a0a29e2038bcf5cc3a99ed4ca4911983dbf97cc",
+ "owner_said": {
+  "story-02": "I have a Royal Enfield Classic 350 from 2021, a Tata Tigor I bought in March 2017, and last month I got a Jimny.",
+  "story-12": "I misspoke, the Jimny is from September, not October."
+ },
+ "told_at": {
+  "story-02": "2026-11-17",
+  "story-12": "2026-11-19"
+ },
+ "steps": {
+  "story-02": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "owned_item",
+      "kind": "vehicle",
+      "intent": "new",
+      "label": "Royal Enfield Classic 350",
+      "value": "Royal Enfield Classic 350",
+      "evidence": [
+       {
+        "turn_id": "c8fd0f6e-4369-4d86-b6d0-c468ede01481",
+        "start": 0,
+        "end": 112
+       }
+      ],
+      "qualification": "direct",
+      "importance": "stable",
+      "sensitivity": "standard",
+      "state": "owned",
+      "certainty": "confirmed",
+      "time_expression": null,
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": "2021",
+      "disposed_expression": null,
+      "plan_status": null,
+      "slots": null
+     },
+     {
+      "category": "owned_item",
+      "kind": "vehicle",
+      "intent": "new",
+      "label": "Tata Tigor",
+      "value": "Tata Tigor",
+      "evidence": [
+       {
+        "turn_id": "c8fd0f6e-4369-4d86-b6d0-c468ede01481",
+        "start": 0,
+        "end": 112
+       }
+      ],
+      "qualification": "direct",
+      "importance": "stable",
+      "sensitivity": "standard",
+      "state": "owned",
+      "certainty": "confirmed",
+      "time_expression": null,
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": "March 2017",
+      "disposed_expression": null,
+      "plan_status": null,
+      "slots": null
+     },
+     {
+      "category": "owned_item",
+      "kind": "vehicle",
+      "intent": "new",
+      "label": "Jimny",
+      "value": "Jimny",
+      "evidence": [
+       {
+        "turn_id": "c8fd0f6e-4369-4d86-b6d0-c468ede01481",
+        "start": 0,
+        "end": 112
+       }
+      ],
+      "qualification": "direct",
+      "importance": "stable",
+      "sensitivity": "standard",
+      "state": "owned",
+      "certainty": "confirmed",
+      "time_expression": null,
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": "last month",
+      "disposed_expression": null,
+      "plan_status": null,
+      "slots": null
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     },
+     {
+      "candidate_index": 1,
+      "decision": "new",
+      "target_id": null
+     },
+     {
+      "candidate_index": 2,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   }
+  },
+  "story-12": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "owned_item",
+      "kind": "vehicle",
+      "intent": "correction",
+      "label": "Jimny",
+      "value": "September",
+      "evidence": [
+       {
+        "turn_id": "6656a001-3794-4ded-a2f1-9fb8d8f16a00",
+        "start": 0,
+        "end": 53
+       }
+      ],
+      "qualification": "direct",
+      "importance": "stable",
+      "sensitivity": "standard",
+      "state": "owned",
+      "certainty": "confirmed",
+      "time_expression": "September",
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": "September",
+      "disposed_expression": null,
+      "plan_status": null,
+      "slots": null
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "match",
+      "target_id": "1cc0ff61-5888-4015-9666-44ee7caf8694"
+     }
+    ]
+   }
+  }
+ }
+}

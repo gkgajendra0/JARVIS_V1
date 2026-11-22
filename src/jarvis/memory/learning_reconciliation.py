@@ -487,6 +487,10 @@ class LearningReconciler:
                     except (TypeError, ValueError):
                         old = None
                     value = _new_value(candidate, source, old)
+                    if candidate.category == "owned_item" and isinstance(old, dict):
+                        value = _corrected_item_value(
+                            old, value, candidate, entry, catalog.entries
+                        )
                 else:
                     value = _new_value(candidate, source)
             effective_at = None
@@ -631,6 +635,53 @@ def _item_fields(candidate, source, context=None):
     return fields
 
 
+def _time_words(candidate) -> set[str]:
+    return {
+        normalize_memory_surface(t)
+        for t in (
+            candidate.acquired_expression,
+            candidate.disposed_expression,
+            candidate.time_expression,
+        )
+        if t
+    }
+
+
+def _item_identity(candidate) -> str:
+    """An owned item's value is the item, never one of its times: a proposal
+    that put the time in ``value`` ("Jimny", value "September") keeps the
+    item's name instead."""
+    value = candidate.value
+    if not value or normalize_memory_surface(value) in _time_words(candidate):
+        return candidate.label
+    return value
+
+
+def _corrected_item_value(old, fresh, candidate, entry, entries):
+    """A correction of one owned item changes only what the owner corrected.
+
+    When the correction names the stored item (same label, or a unique
+    shorter name), its identity - label, value and aliases - and every
+    attribute the correction does not restate are kept; only the restated
+    attributes (acquired, disposed, details, aliases, state) are replaced. A
+    correction naming a different item ("it's a Jimny, not a Thar") corrects
+    the identity and still keeps the unrelated attributes. A state corrected
+    back to owned drops the disposal time."""
+    names_item = _label(entry) == normalize_memory_surface(
+        candidate.label
+    ) or unique_reference(entry, candidate.label, entries)
+    value = {**old, "schema": fresh["schema"], "state": fresh["state"]}
+    if not names_item:
+        value["label"], value["value"] = fresh["label"], fresh["value"]
+        value.pop("aliases", None)
+    for key in ("aliases", "details", "acquired", "disposed"):
+        if key in fresh:
+            value[key] = fresh[key]
+    if value["state"] not in DISPOSED_STATES:
+        value.pop("disposed", None)
+    return value
+
+
 def _plan_fields(candidate):
     fields = {}
     if candidate.plan_status is not None:
@@ -698,7 +749,11 @@ def _new_value(candidate, source, context=None):
         "category": candidate.category,
         "kind": candidate.kind,
         "label": candidate.label,
-        "value": candidate.value,
+        "value": (
+            _item_identity(candidate)
+            if candidate.category == "owned_item"
+            else candidate.value
+        ),
         "state": state,
     }
     if candidate.category == "owned_item":

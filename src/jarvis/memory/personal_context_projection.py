@@ -124,6 +124,11 @@ class ScopedContextSnapshot:
     suppression: tuple[tuple[str, int, bool], ...]
     # (source_id, canonical_ref) for the entries, read in the same transaction.
     sources: tuple[tuple[str, str], ...] = ()
+    # (assertion_id, ((source_class, observed_at, evidence_text), ...)): the
+    # fact's own source first, then the sources of the rows it supersedes.
+    provenance: tuple[
+        tuple[str, tuple[tuple[str, str | None, str | None], ...]], ...
+    ] = ()
 
 
 @dataclass(frozen=True)
@@ -340,7 +345,60 @@ def _sort_label(record, scope):
     return _normalize_label(label if label is not None else record.normalized_text)
 
 
-def _released_fact(r, scope, ordinal, now):
+_OWNER_SOURCES = {
+    "owner_direct": "owner_said",
+    "owner_explicit": "owner_asked_to_remember",
+}
+
+
+def _told_date(observed_at):
+    """The owner's local date for a source's observed time, or None when it is
+    missing or unreadable (never guessed)."""
+    if not isinstance(observed_at, str) or not observed_at:
+        return None
+    try:
+        moment = datetime.fromisoformat(observed_at)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        return None
+    return moment.astimezone().date().isoformat()
+
+
+def _learned(chain):
+    """How and when the owner told Jarvis this fact.
+
+    ``told.date`` is the owner's local date of the turn the current row came
+    from; ``first_told`` is the earliest owner turn in the same item's lineage
+    when that is a different telling (for example the original statement
+    before a correction). A date that is unknown is null, never inferred from
+    the recording time. Only owner sources carry a told date; other sources
+    are named by class with an unknown date."""
+    if not chain:
+        return {"told": {"how": "unknown", "date": None}}
+    source_class, observed_at, quote = chain[0]
+    how = _OWNER_SOURCES.get(source_class)
+    told = {
+        "how": how or source_class,
+        "date": _told_date(observed_at) if how else None,
+    }
+    if quote and how:
+        told["quote"] = quote
+    learned = {"told": told}
+    earlier = [
+        (c, o, q) for c, o, q in chain[1:] if c in _OWNER_SOURCES and _told_date(o)
+    ]
+    if earlier:
+        c, o, q = earlier[-1]
+        if _told_date(o) != told["date"] or (q and q != told.get("quote")):
+            first = {"how": _OWNER_SOURCES[c], "date": _told_date(o)}
+            if q:
+                first["quote"] = q
+            learned["first_told"] = first
+    return learned
+
+
+def _released_fact(r, scope, ordinal, now, chain=None):
     """One fact as released, or None when the stored row is not releasable."""
     from .personal_time import date_status
 
@@ -368,6 +426,8 @@ def _released_fact(r, scope, ordinal, now):
         "recorded_at": _json_default(r.system_from),
         "freshness": "last_known",
     }
+    if chain is not None:
+        fact.update(_learned(chain))
     if isinstance(r.value, dict) and r.value.get("schema") == POLICY_VERSION:
         state = r.value.get("state")
         if state not in RELEASED_STATES:
@@ -431,6 +491,7 @@ def project_personal_context(
     never presented as complete."""
     scopes = tuple(sorted({r.scope_key for r in requests}))
     now = now or datetime.now(UTC)
+    provenance = dict(snapshot.provenance)
 
     outcome = {}
 
@@ -518,7 +579,9 @@ def project_personal_context(
         for ordinal, (r, scope) in enumerate(ordered[offset:], start=offset + 1):
             if len(facts) >= PAGE_ITEMS:
                 break
-            fact = _released_fact(r, scope, ordinal, now)
+            fact = _released_fact(
+                r, scope, ordinal, now, provenance.get(r.assertion_id)
+            )
             if fact is None:
                 return result("unavailable", "storage_unavailable")
             if _encoded_size([*facts, fact]) > PAGE_BYTES:
