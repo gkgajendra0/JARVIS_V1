@@ -153,16 +153,32 @@ def _option_key(text) -> str:
     return " ".join(str(text).casefold().split())
 
 
-def decides_stated_options(old: dict, added: dict) -> bool:
-    """True when the only disagreement between a stored plan and new detail is
-    a decision among alternatives the owner already stated: a stored slot with
-    no value and options, and a new value that is one of those options ("Ladakh
-    or winter Spiti" -> "winter Spiti"). That is a real change of the plan
-    (the earlier row, with its options, stays in history), never a refine and
-    never a conflict. Any other disagreement keeps its existing handling."""
+def option_keys(value) -> set[str]:
+    """Normalized options of every undecided slot of a stored plan value."""
+    keys = set()
+    if not isinstance(value, dict):
+        return keys
+    for slot in (value.get("slots") or {}).values():
+        if isinstance(slot, dict) and not slot.get("value"):
+            keys |= {_option_key(o) for o in slot.get("options") or () if o}
+    return keys
+
+
+def decided_options(old: dict, added: dict) -> dict[str, str]:
+    """The slots a new statement decides among the owner's stated alternatives,
+    as {slot: normalized chosen option}; empty when it is not such a decision.
+
+    A decision is: a stored slot with no value and options, and a new value
+    that is one of those options ("Ladakh or winter Spiti" -> "winter Spiti"),
+    stated with confirmed certainty in a plan that is not merely being
+    considered. Any other disagreement (a value never offered, an
+    already-decided slot, a tentative choice, conflicting details) means it is
+    not a decision and keeps its existing handling."""
+    if added.get("plan_status") in {"considering", "cancelled", "done"}:
+        return {}
     old_slots = old.get("slots") or {}
     rest = {}
-    decided = False
+    decided = {}
     for name, slot in (added.get("slots") or {}).items():
         current = old_slots.get(name)
         if current is None or current == slot:
@@ -170,14 +186,27 @@ def decides_stated_options(old: dict, added: dict) -> bool:
             continue
         options = {_option_key(o) for o in current.get("options") or () if o}
         value = slot.get("value")
-        if not current.get("value") and value and _option_key(value) in options:
-            decided = True
+        if (
+            not current.get("value")
+            and value
+            and _option_key(value) in options
+            and slot.get("certainty") == "confirmed"
+        ):
+            decided[name] = _option_key(value)
             continue
-        return False
+        return {}
     if not decided:
-        return False
+        return {}
     merged, reason = refine_merge(old, {**added, "slots": rest})
-    return merged is not None or reason == "already_stored"
+    return decided if merged is not None or reason == "already_stored" else {}
+
+
+def decides_stated_options(old: dict, added: dict) -> bool:
+    """True when ``added`` decides among the plan's stated alternatives
+    (see :func:`decided_options`). That is a real change of the plan (the
+    earlier row, with its options, stays in history), never a refine and never
+    a conflict."""
+    return bool(decided_options(old, added))
 
 
 def refine_merge(old: dict, added: dict) -> tuple[dict | None, str]:

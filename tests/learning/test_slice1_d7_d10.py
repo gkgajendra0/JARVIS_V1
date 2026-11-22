@@ -282,3 +282,195 @@ def test_a_destination_that_was_never_an_option_is_not_changed():
     plan, _, _ = _plan_story_10("Kerala")
     assert plan.mutations == ()
     assert [o.reason for o in plan.outcomes] == ["new_fact_cannot_mutate_target"]
+
+
+# -- Run 5 D10: the recorded outputs, unmodified ---------------------------------
+#
+# Run 5 (lab 7a0a29e2) stored story-07 with label "trip" (the model's name; it
+# is in the owner's words) and value "Ladakh or winter Spiti trip". story-10
+# was proposed as label "winter Spiti" and matched by the resolver to that
+# plan. The run-4 fix lived inside the refine route, which first requires the
+# new label to name the stored plan ("winter Spiti" is not contained in
+# "trip"), so it was never reached and the turn fell through to
+# new_fact_cannot_mutate_target.
+
+from pathlib import Path
+
+from jarvis.memory.learning_catalog_page import unique_reference
+from jarvis.memory.learning_contracts import (
+    LearningResolutionBatch as _RB,
+)
+
+RUN5 = json.loads(
+    (Path(__file__).parent / "fixtures" / "run5_d10_recorded.json").read_text(
+        encoding="utf-8"
+    )
+)
+RUN5_TARGET = RUN5["steps"]["story-10"]["resolution"]["resolutions"][0]["target_id"]
+
+
+def _replayed(step, text=None, **changes):
+    """The recorded proposal for ``step``. Only the evidence turn id is rebound
+    to the replay conversation's turn (an identifier of the lab conversation,
+    not model content); ``changes`` exist only for negative cases."""
+    source = _source(text or RUN5["owner_said"][step])
+    (raw,) = RUN5["steps"][step]["extraction"]["candidates"]
+    raw = {**json.loads(json.dumps(raw)), **changes}
+    for span in raw["evidence"]:
+        span["turn_id"] = source.turn_id
+    return source, LearningCandidate.model_validate(raw)
+
+
+def _run5_entry(assertion_id=RUN5_TARGET, step="story-07", **changes):
+    source, candidate = _replayed(step, **changes)
+    reconciler = LearningReconciler(None, None)
+    plan = reconciler.plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(),
+        _RB.model_validate(RUN5["steps"]["story-07"]["resolution"]),
+    )
+    (mutation,) = plan.mutations
+    return LearningCatalogEntry(
+        assertion_id=assertion_id,
+        predicate=mutation.predicate,
+        category="plan",
+        text=mutation.draft.normalized_text,
+        value=json.dumps(mutation.draft.value, ensure_ascii=False),
+        kind="other",
+    )
+
+
+def _run5_story_10(entries, resolution=None, text=None, **changes):
+    source, candidate = _replayed("story-10", text, **changes)
+    return LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(entries=list(entries)),
+        _RB.model_validate(resolution or RUN5["steps"]["story-10"]["resolution"]),
+    )
+
+
+def test_run5_recorded_proposals_are_eligible_as_recorded():
+    for step in ("story-07", "story-10"):
+        source, candidate = _replayed(step)
+        assert ground_plan_label(source, candidate) is candidate  # labels said
+        assert LearningPolicy().evaluate(source, candidate).status == "eligible"
+
+
+def test_run5_why_the_run4_fix_was_not_reached():
+    entry = _run5_entry()
+    assert json.loads(entry.value)["label"] == "trip"
+    # The refine route needs the new label to name the stored plan.
+    assert not unique_reference(entry, "winter Spiti", [entry])
+
+
+def test_run5_d10_recorded_decision_changes_the_matched_plan():
+    entry = _run5_entry()
+    old = json.loads(entry.value)
+    plan = _run5_story_10([entry])
+    assert plan.outcomes == ()  # run 5: new_fact_cannot_mutate_target
+    (mutation,) = plan.mutations
+    assert mutation.action == "change"
+    assert (mutation.predicate, mutation.expected_assertion_id) == (
+        entry.predicate,
+        RUN5_TARGET,
+    )
+    assert mutation.effective_at is None
+    value = mutation.draft.value
+    assert value["slots"]["destination"] == {
+        "value": "winter Spiti",
+        "options": [],
+        "certainty": "confirmed",
+    }
+    assert value["slots"]["vehicle"]["value"] == "Jimny"
+    assert value["slots"]["when"] == old["slots"]["when"]  # January kept
+    assert old["slots"]["destination"]["options"] == ["Ladakh", "winter Spiti"]
+
+
+def test_run5_route_refuses_when_another_plan_offers_the_same_option():
+    entry = _run5_entry()
+    other = _run5_entry(assertion_id="another-plan")
+    plan = _run5_story_10([entry, other])
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["new_fact_cannot_mutate_target"]
+
+
+def _slots_with(**destination):
+    (raw,) = RUN5["steps"]["story-10"]["extraction"]["candidates"]
+    slots = json.loads(json.dumps(raw["slots"]))
+    slots["destination"].update(destination)
+    return slots
+
+
+def test_run5_route_refuses_a_tentative_choice_or_a_plan_only_considered():
+    entry = _run5_entry()
+    tentative = _run5_story_10([entry], slots=_slots_with(certainty="tentative"))
+    considered = _run5_story_10([entry], plan_status="considering")
+    for plan in (tentative, considered):
+        assert plan.mutations == ()
+        assert [o.reason for o in plan.outcomes] == ["new_fact_cannot_mutate_target"]
+
+
+def test_run5_route_refuses_a_value_that_was_never_an_option():
+    entry = _run5_entry()
+    text = "We're going with Kerala, and we'll take the Jimny."
+    plan = _run5_story_10(
+        [entry],
+        text=text,
+        label="Kerala",
+        value=text,
+        slots=_slots_with(value="Kerala"),
+        evidence=[{"turn_id": "replaced", "start": 0, "end": len(text)}],
+    )
+    assert plan.mutations == ()
+
+
+def test_run5_route_refuses_a_matched_plan_without_that_option():
+    # The resolver points at a stored plan that never offered "winter Spiti".
+    entry = _run5_entry()
+    value = json.loads(entry.value)
+    value["slots"]["destination"] = {
+        "value": "Goa",
+        "options": [],
+        "certainty": "confirmed",
+    }
+    goa = entry.model_copy(update={"value": json.dumps(value)})
+    plan = _run5_story_10([goa])
+    assert plan.mutations == ()
+
+
+def test_run5_route_never_applies_to_an_unknown_target_or_a_new_decision():
+    entry = _run5_entry()
+    unknown = _run5_story_10(
+        [entry],
+        resolution={
+            "resolutions": [
+                {"candidate_index": 0, "decision": "match", "target_id": "missing"}
+            ]
+        },
+    )
+    assert unknown.mutations == ()
+    assert [o.reason for o in unknown.outcomes] == [
+        "target_missing_or_category_mismatch"
+    ]
+    new = _run5_story_10(
+        [entry],
+        resolution={"resolutions": [{"candidate_index": 0, "decision": "new"}]},
+    )
+    assert all(m.action == "create" for m in new.mutations)
+
+
+def test_run5_invented_or_questioned_decisions_never_reach_reconciliation():
+    # A decision the owner did not say is refused by the grounding gate.
+    source, invented = _replayed("story-10", slots=_slots_with(value="Ladakh"))
+    assert LearningPolicy().evaluate(source, invented).reason == "unsupported_detail"
+    # A question is not a decision.
+    question = "Should we go with winter Spiti, and take the Jimny?"
+    source, asked = _replayed(
+        "story-10",
+        question,
+        value=question,
+        evidence=[{"turn_id": "replaced", "start": 0, "end": len(question)}],
+    )
+    assert LearningPolicy().evaluate(source, asked).status == "drop"

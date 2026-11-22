@@ -27,11 +27,13 @@ from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_
 from .learning_values import (
     DISPOSED_STATES,
     PLAN_STATE,
+    decided_options,
     decides_stated_options,
     has_identifier,
     item_time,
     minimal_quote,
     normalized_slots,
+    option_keys,
     refine_merge,
 )
 from .personal_time import day_boundary
@@ -315,6 +317,7 @@ class LearningReconciler:
                 skip("ambiguous_existing_fact")
                 continue
             refine_target = None
+            decision_only = False
             added = (
                 _added_detail(candidate, source)
                 if candidate.intent == "new" and candidate.category not in SCALAR_FACETS
@@ -336,6 +339,16 @@ class LearningReconciler:
                     )
                 ):
                     refine_target = entry
+                elif candidate.category == "plan" and _option_decision_target(
+                    choice, entry, candidate, added, catalog.entries
+                ):
+                    # The new words name the decision, not the stored plan
+                    # (run 5: stored label "trip", new label "winter Spiti").
+                    # The chosen option itself identifies the plan: it must be
+                    # one of this plan's stated alternatives and of no other
+                    # current plan. Only the option-decision change is allowed
+                    # through this route, never a refine.
+                    refine_target, decision_only = entry, True
             if refine_target is not None:
                 try:
                     old_value = json.loads(refine_target.value)
@@ -375,6 +388,9 @@ class LearningReconciler:
                             others=_other_labels(batch, index),
                         )
                     )
+                    continue
+                if decision_only:
+                    skip("new_fact_cannot_mutate_target")
                     continue
                 if merged is None:
                     skip(reason)
@@ -623,6 +639,39 @@ def _plan_fields(candidate):
     if slots:
         fields["slots"] = slots
     return fields
+
+
+def _option_decision_target(choice, entry, candidate, added, entries) -> bool:
+    """True when the resolver's matched plan is identified by the decision
+    itself: a current plan of the same kind, supplied in this catalog page,
+    whose stated alternatives include every chosen option, while no other
+    current plan in the page offers any of them."""
+    if (
+        choice.decision not in {"match", "duplicate"}
+        or entry is None
+        or entry.category != "plan"
+        or entry.kind != candidate.kind
+    ):
+        return False
+    try:
+        old = json.loads(entry.value)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(old, dict):
+        return False
+    chosen = set(decided_options(old, added).values())
+    if not chosen:
+        return False
+    for other in entries:
+        if other.assertion_id == entry.assertion_id or other.category != "plan":
+            continue
+        try:
+            other_value = json.loads(other.value)
+        except (TypeError, ValueError):
+            continue
+        if chosen & option_keys(other_value):
+            return False
+    return True
 
 
 def _added_detail(candidate, source, context=None):
