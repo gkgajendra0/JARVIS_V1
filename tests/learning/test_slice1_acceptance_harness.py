@@ -265,10 +265,16 @@ class FakeGenai:
             for index, (decision, needle) in enumerate(RESOLVE.get(text, [])):
                 target = None
                 if needle:
+                    exact = needle.startswith("=")  # "=trip": the label exactly
+
+                    def names(label, needle=needle, exact=exact):
+                        label = label.casefold()
+                        return label == needle[1:] if exact else needle in label
+
                     target = next(
                         e["assertion_id"]
                         for e in entries
-                        if needle in json.loads(e["value"]).get("label", "").casefold()
+                        if names(json.loads(e["value"]).get("label", ""))
                     )
                 resolutions.append(
                     {
@@ -1375,4 +1381,59 @@ async def test_run4_recorded_outputs_now_pass_d7_and_d10(lab, monkeypatch):
         if e.get("kind") == "learning_status"
     }
     assert status["story-08"]["committed"] == 1
+    assert status["story-10"]["committed"] == 1 and status["story-10"]["skipped"] == []
+
+
+RUN5_EXTRACT = {
+    # Recorded verbatim in run 5 (lab 7a0a29e2): stored label "trip".
+    "I'm planning a Ladakh or winter Spiti trip in January.": [
+        plan(
+            "trip",
+            "I'm planning a Ladakh or winter Spiti trip in January.",
+            value="Ladakh or winter Spiti trip",
+            importance="transient",
+            time_expression="January",
+            plan_status="planned",
+            slots={
+                "destination": slot(options=("Ladakh", "winter Spiti")),
+                "when": slot("January"),
+            },
+        )
+    ],
+    "We're going with winter Spiti, and we'll take the Jimny.": [
+        plan(
+            "winter Spiti",
+            "We're going with winter Spiti, and we'll take the Jimny.",
+            value="We're going with winter Spiti, and we'll take the Jimny.",
+            importance="transient",
+            location="Spiti",
+            plan_status="planned",
+            slots={"destination": slot("winter Spiti"), "vehicle": slot("Jimny")},
+        )
+    ],
+}
+
+
+@pytest.mark.asyncio
+async def test_run5_recorded_outputs_now_pass_d10(lab, monkeypatch):
+    """Run 5 recorded D10 FAIL (new_fact_cannot_mutate_target: the decision's
+    label "winter Spiti" does not name the stored plan "trip"). The same model
+    outputs, replayed through the fixed code, pass the unchanged frozen
+    checks."""
+    for text, proposals in RUN5_EXTRACT.items():
+        monkeypatch.setitem(EXTRACT, text, proposals)
+    # As recorded: the resolver matched the stored plan labelled "trip".
+    monkeypatch.setitem(
+        RESOLVE,
+        "We're going with winter Spiti, and we'll take the Jimny.",
+        [("match", "=trip")],
+    )
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    assert summary["cases"]["D10"]["status"] == acceptance.PASS, summary["cases"]["D10"]
+    status = {
+        e["step_id"]: e
+        for e in log.read(log.events)
+        if e.get("kind") == "learning_status"
+    }
     assert status["story-10"]["committed"] == 1 and status["story-10"]["skipped"] == []
