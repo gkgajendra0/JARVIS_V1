@@ -187,19 +187,25 @@ async def test_d1_separate_items_keep_partial_dates_and_their_own_quotes(learnin
     assert len(stored) == 3
     assert len({r["source_id"] for r in stored}) == 3  # one source per fact
     anchor = turn.accepted_at.astimezone()
+    # "have a Royal Enfield Classic 350 from 2021" is ambiguous (since 2021, or
+    # a 2021 model): owner decision 2026-11-23, no purchase date is stored.
     expected = {
-        "Royal Enfield Classic 350": ("year", time_object("2021", anchor)),
+        "Royal Enfield Classic 350": None,
         "Tata Tigor": ("month", time_object("March 2017", anchor)),
         "Jimny": ("month", time_object("last month", anchor)),
     }
     for row in stored:
-        precision, obj = expected[row["value"]["label"]]
-        acquired = row["value"]["acquired"]
-        assert acquired["precision"] == precision
-        assert (acquired["earliest"], acquired["latest"]) == (
-            obj["earliest"],
-            obj["latest"],
-        )
+        want = expected[row["value"]["label"]]
+        if want is None:
+            assert "acquired" not in row["value"]
+        else:
+            precision, obj = want
+            acquired = row["value"]["acquired"]
+            assert acquired["precision"] == precision
+            assert (acquired["earliest"], acquired["latest"]) == (
+                obj["earliest"],
+                obj["latest"],
+            )
         assert row["valid_from"] is None  # no invented day
         others = set(expected) - {row["value"]["label"]}
         assert row["value"]["label"].split()[-1] in row["quote"]
