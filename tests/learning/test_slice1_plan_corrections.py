@@ -227,3 +227,47 @@ def test_explicit_purchase_or_since_wording_still_establishes_the_date():
 
 def test_d1_text_is_the_frozen_wording():
     assert D1_TEXT.startswith("I have a Royal Enfield Classic 350 from 2021,")
+
+
+# Proposed amendment 1 (not frozen, not yet approved): D1 with explicit
+# purchase wording. Assessed in code with lab 7's recorded proposals.
+AMENDED_D1 = (
+    "I have a Royal Enfield Classic 350 I bought in 2021, a Tata Tigor I bought"
+    " in March 2017, and last month I got a Jimny."
+)
+
+
+def test_proposed_amended_d1_wording_establishes_all_three_dates():
+    from test_slice1_lab7 import S
+
+    source = _source(AMENDED_D1, "2026-11-17")
+    candidates = [
+        LearningCandidate.model_validate(
+            {
+                **json.loads(json.dumps(S["story-02"]["extraction"]["candidates"][i])),
+                "evidence": [
+                    {"turn_id": source.turn_id, "start": 0, "end": len(AMENDED_D1)}
+                ],
+            }
+        )
+        for i in range(3)
+    ]
+    plan = LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=candidates),
+        LearningCatalog(),
+        LearningResolutionBatch.model_validate(S["story-02"]["resolution"]),
+    )
+    got = {
+        m.draft.value["label"]: (
+            m.draft.value["acquired"]["precision"],
+            m.draft.value["acquired"]["earliest"],
+            m.draft.value["acquired"]["latest"],
+        )
+        for m in plan.mutations
+    }
+    assert got == {
+        "Royal Enfield Classic 350": ("year", "2021-01-01", "2021-12-31"),
+        "Tata Tigor": ("month", "2017-03-01", "2017-03-31"),
+        "Jimny": ("month", "2026-10-01", "2026-10-31"),
+    }
