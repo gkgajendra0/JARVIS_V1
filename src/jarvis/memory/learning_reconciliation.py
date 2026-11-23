@@ -272,6 +272,15 @@ class LearningReconciler:
                 skip("policy_rejected", record=False)
                 continue
             candidate = _settled_item_times(candidate)
+            candidate, role_conflict = _without_conflicting_date_roles(
+                candidate, source
+            )
+            if role_conflict and _restates_nothing(candidate):
+                # "the Jimny is a 2024 model, not 2023": a dated fact that is
+                # not about buying or disposing of the item; nothing else was
+                # said, so the item stays unchanged and the reason is recorded.
+                skip("date_role_conflict")
+                continue
             if index in catalog.page_ambiguous:
                 skip(PAGE_AMBIGUOUS)
                 continue
@@ -325,6 +334,16 @@ class LearningReconciler:
                 if candidate.intent == "new" and candidate.category not in SCALAR_FACETS
                 else {}
             )
+            if (
+                role_conflict
+                and not added
+                and candidate.state == "owned"
+                and choice.decision in {"match", "duplicate"}
+            ):
+                # The only new detail for a known item was a date with another
+                # role: nothing to apply, recorded rather than silently dropped.
+                skip("date_role_conflict")
+                continue
             if added:
                 if same:
                     refine_target = same[0]
@@ -771,17 +790,35 @@ def _attributed_correction(candidate, old, source):
     ) == normalize_memory_surface(phrase)
     if details and not time_only_details:
         return candidate, None  # real details; the date is not this field's
+    if _date_role(source, candidate, phrase):
+        return candidate, "date_role_conflict"
     anchor = datetime.fromisoformat(_anchor(source, candidate))
     replaced = [
         (m.group(1) or m.group(2)).strip()
         for m in _REPLACED_TIME.finditer(source.text)
         if (m.group(1) or m.group(2))
     ]
+    stored_keys = [
+        k
+        for k in ("acquired", "disposed")
+        if isinstance(old.get(k), dict) and old[k].get("expression")
+    ]
+    named = [
+        t
+        for t in (time_object(w, anchor, direction="past") for w in replaced)
+        if t and t.get("earliest")
+    ]
+    if not named:
+        # The owner did not name the replaced date: only an item with exactly
+        # one stored date identifies which one is corrected.
+        if len(stored_keys) != 1:
+            return candidate, "time_meaning_unclear"
+        update = {stored_keys[0] + "_expression": phrase}
+        if time_only_details:
+            update["details"] = None
+        return candidate.model_copy(update=update), None
     matches = set()
-    for words in replaced:
-        old_time = time_object(words, anchor, direction="past")
-        if not old_time or not old_time.get("earliest"):
-            continue
+    for old_time in named:
         for key in ("acquired", "disposed"):
             stored = old.get(key)
             if (
@@ -799,6 +836,74 @@ def _attributed_correction(candidate, old, source):
     if time_only_details:
         update["details"] = None
     return candidate.model_copy(update=update), None
+
+
+# Wording that gives a date another role on the same item. A date in the same
+# clause as one of these is never the item's purchase or disposal date.
+_OTHER_DATE_ROLES = re.compile(
+    r"\bmodel\b|\bmanufactur\w*|\bmfg\b"
+    r"|\bservic\w*"
+    r"|\bwarrant\w*|\bguarantee\w*"
+    r"|\binsur\w*|\bbima\b|\bpolicy\b|\brenew\w*",
+    re.IGNORECASE,
+)
+_CLAUSE_BREAK = re.compile(r"[,;.!?]|\b(?:and|aur|but|lekin|par)\b", re.IGNORECASE)
+
+
+def _evidence_text(source, candidate):
+    turns = {t.turn_id: t.text for t in source.turns}
+    parts = []
+    for span in candidate.evidence:
+        text = turns.get(span.turn_id)
+        if text is not None and 0 <= span.start < span.end <= len(text):
+            parts.append(text[span.start : span.end])
+    return " ".join(parts) or source.text
+
+
+def _date_role(source, candidate, phrase):
+    """The other role the owner's own words give this date, or None: a clause
+    of the evidence that contains the date phrase also says model, service,
+    warranty or insurance. Checked on the owner's words, never the model's."""
+    if not phrase:
+        return None
+    wanted = phrase.casefold()
+    for clause in _CLAUSE_BREAK.split(_evidence_text(source, candidate)):
+        if wanted in clause.casefold():
+            found = _OTHER_DATE_ROLES.search(clause)
+            if found:
+                return found.group(0).casefold()
+    return None
+
+
+def _without_conflicting_date_roles(candidate, source):
+    """Purchase/disposal dates, whether the model supplied them or not, are
+    kept only when the owner's words do not give that date another role.
+    Returns (candidate, conflict) with any such date removed."""
+    if candidate.category != "owned_item":
+        return candidate, None
+    update, conflict = {}, None
+    for key in ("acquired_expression", "disposed_expression"):
+        role = _date_role(source, candidate, getattr(candidate, key))
+        if role:
+            update[key] = None
+            conflict = conflict or role
+    if not update:
+        return candidate, None
+    return candidate.model_copy(update=update), conflict
+
+
+def _restates_nothing(candidate):
+    """A correction or change left with nothing to apply once a conflicting
+    date was removed (a different ownership state still counts as content)."""
+    if candidate.intent not in {"correction", "change"}:
+        return False
+    return not (
+        candidate.acquired_expression
+        or candidate.disposed_expression
+        or candidate.details
+        or candidate.aliases
+        or (candidate.intent == "change" and candidate.state in DISPOSED_STATES)
+    )
 
 
 def _item_inconsistency(mutation):

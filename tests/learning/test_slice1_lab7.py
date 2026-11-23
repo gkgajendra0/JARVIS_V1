@@ -419,11 +419,11 @@ def test_other_dates_are_never_made_purchase_or_disposal_dates(text, phrase):
     before = json.loads(entries["Jimny"].value)
     plan = _correction(entries, _target("story-12"), text, phrase)
     assert plan.mutations == ()
-    assert [o.reason for o in plan.outcomes] == ["time_meaning_unclear"]
+    assert [o.reason for o in plan.outcomes] == ["date_role_conflict"]
     assert json.loads(entries["Jimny"].value) == before
 
 
-def test_a_correction_that_names_no_replaced_date_is_unclear():
+def test_an_unnamed_replaced_date_uses_the_item_s_only_stored_date():
     entries = _stored_items()
     plan = _correction(
         entries,
@@ -431,8 +431,56 @@ def test_a_correction_that_names_no_replaced_date_is_unclear():
         "Correction: the Jimny is from September.",
         "September",
     )
+    (mutation,) = plan.mutations
+    assert mutation.draft.value["acquired"]["earliest"] == "2026-09-01"
+
+
+def test_an_unnamed_replaced_date_with_two_stored_dates_is_unclear():
+    entries = _stored_items()
+    tigor = json.loads(entries["Tata Tigor"].value)
+    tigor.update(
+        state="sold",
+        disposed={
+            "expression": "last week",
+            "precision": "week",
+            "earliest": "2026-11-09",
+            "latest": "2026-11-15",
+            "basis": "stated",
+        },
+    )
+    entries["Tata Tigor"] = LearningCatalogEntry(
+        assertion_id="tigor",
+        predicate="owned_item_tigor",
+        category="owned_item",
+        text="owned_item.vehicle: Tata Tigor",
+        value=json.dumps(tigor),
+        kind="vehicle",
+    )
+    plan = _correction(
+        entries,
+        "tigor",
+        "Correction: the Tigor is October.",
+        "October",
+        label="Tigor",
+        value="Tigor",
+        state="sold",
+    )
     assert plan.mutations == ()
     assert [o.reason for o in plan.outcomes] == ["time_meaning_unclear"]
+
+
+def test_conflicting_wording_blocks_the_unique_date_fallback():
+    entries = _stored_items()
+    before = json.loads(entries["Jimny"].value)
+    plan = _correction(
+        entries,
+        _target("story-12"),
+        "Correction: the Jimny's service is from September.",
+        "September",
+    )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["date_role_conflict"]
+    assert json.loads(entries["Jimny"].value) == before
 
 
 def test_a_replaced_date_matching_two_stored_dates_is_unclear():
@@ -504,3 +552,145 @@ def test_a_corrected_sale_date_is_placed_when_it_replaces_the_stored_one():
         "2026-10-31",
     )
     assert value["acquired"] == tigor["acquired"] and "details" not in value
+
+
+# -- collisions: another date role that matches a stored date, or sits in the
+# purchase/disposal field itself (owner check 2026-11-23 15:15) -------------------
+
+
+def _jimny_bought(year_expression="2024", earliest="2024-01-01", latest="2024-12-31"):
+    entries = _stored_items()
+    jimny = json.loads(entries["Jimny"].value)
+    jimny["acquired"] = {
+        "expression": year_expression,
+        "precision": "year",
+        "earliest": earliest,
+        "latest": latest,
+        "basis": "stated",
+    }
+    entries["Jimny"] = LearningCatalogEntry(
+        assertion_id=_target("story-12"),
+        predicate=f"owned_item_{_target('story-12')}",
+        category="owned_item",
+        text="owned_item.vehicle: Jimny",
+        value=json.dumps(jimny),
+        kind="vehicle",
+    )
+    return entries, jimny
+
+
+def test_model_year_equal_to_the_purchase_year_never_updates_the_purchase():
+    entries, _jimny = _jimny_bought()
+    plan = _correction(
+        entries,
+        _target("story-12"),
+        "I misspoke, the Jimny is a 2025 model, not 2024.",
+        "2025",
+    )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["date_role_conflict"]
+
+
+@pytest.mark.parametrize(
+    "text,phrase",
+    [
+        ("Correction: the Jimny was serviced in March, not February.", "March"),
+        ("I misspoke, the Jimny's warranty runs to 2029, not 2024.", "2029"),
+        ("I misspoke, the Jimny is a 2025 model, not 2024.", "2025"),
+    ],
+    ids=["service_in_acquired", "warranty_in_acquired", "model_year_in_acquired"],
+)
+def test_a_model_supplied_purchase_date_with_another_role_is_refused(text, phrase):
+    entries, _jimny = _jimny_bought()
+    plan = _correction(
+        entries,
+        _target("story-12"),
+        text,
+        phrase,
+        details=None,
+        acquired_expression=phrase,
+    )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["date_role_conflict"]
+
+
+def test_a_model_supplied_disposal_date_with_another_role_is_not_kept():
+    entries = _stored_items()
+    text = "I sold the Tigor; its warranty ended in March."
+    source, candidate = _recorded(
+        "story-17",
+        text=text,
+        intent="change",
+        label="Tigor",
+        value="Tigor",
+        state="sold",
+        time_expression="March",
+        disposed_expression="March",
+    )
+    (mutation,) = _plan(entries.values(), source, candidate, "tigor").mutations
+    value = mutation.draft.value
+    assert value["state"] == "sold" and "disposed" not in value
+
+
+def test_a_new_item_s_model_year_in_the_purchase_field_is_not_kept():
+    text = "I have a 2024 model Duster."
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        label="Duster",
+        value="Duster",
+        details=None,
+        time_expression="2024",
+        acquired_expression="2024",
+    )
+    plan = LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(),
+        LearningResolutionBatch(
+            resolutions=[{"candidate_index": 0, "decision": "new"}]
+        ),
+    )
+    (mutation,) = plan.mutations
+    assert "acquired" not in mutation.draft.value
+
+
+def test_a_purchase_date_in_its_own_clause_is_kept_beside_a_service_date():
+    text = "I bought the Duster in March and serviced it in June."
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        label="Duster",
+        value="Duster",
+        details=None,
+        time_expression="March",
+        acquired_expression="March",
+    )
+    plan = LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(),
+        LearningResolutionBatch(
+            resolutions=[{"candidate_index": 0, "decision": "new"}]
+        ),
+    )
+    (mutation,) = plan.mutations
+    assert mutation.draft.value["acquired"]["expression"] == "March"
+
+
+def test_matching_a_known_item_with_only_a_conflicting_date_is_recorded():
+    entries = _stored_items()
+    text = "The Jimny is a 2024 model."
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        details=None,
+        time_expression="2024",
+        acquired_expression="2024",
+    )
+    plan = _plan(entries.values(), source, candidate, _target("story-12"))
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["date_role_conflict"]
