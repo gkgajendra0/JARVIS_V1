@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from uuid import uuid4
@@ -36,7 +37,7 @@ from .learning_values import (
     option_keys,
     refine_merge,
 )
-from .personal_time import day_boundary
+from .personal_time import day_boundary, time_object
 from .provenance import MemorySource
 from .service import normalize_memory_surface
 from .types import (
@@ -524,6 +525,13 @@ class LearningReconciler:
                         old = json.loads(entry.value)
                     except (TypeError, ValueError):
                         old = None
+                    if candidate.category == "owned_item" and isinstance(old, dict):
+                        candidate, unclear = _attributed_correction(
+                            candidate, old, source
+                        )
+                        if unclear:
+                            skip(unclear)
+                            continue
                     value = _new_value(candidate, source, old)
                     if candidate.category == "owned_item" and isinstance(old, dict):
                         value = _corrected_item_value(
@@ -713,40 +721,84 @@ OWNERSHIP_STATES = frozenset({"owned"}) | frozenset(DISPOSED_STATES)
 
 
 def _settled_item_times(candidate):
-    """Put an owned item's stated time where it belongs.
+    """Drop details that only repeat a time the proposal already placed in
+    its acquired or disposed field ("March 2024" twice). Nothing is moved:
+    what a date means is never inferred from where the model put it."""
+    if candidate.category != "owned_item" or not candidate.details:
+        return candidate
+    placed = {
+        normalize_memory_surface(t)
+        for t in (candidate.acquired_expression, candidate.disposed_expression)
+        if t
+    }
+    if normalize_memory_surface(candidate.details) in placed:
+        return candidate.model_copy(update={"details": None})
+    return candidate
 
-    Models sometimes place the owner's time phrase in ``details`` or only in
-    ``time_expression`` (run 7 D12: correction with details "September",
-    time_expression "September", no acquired_expression). When the details
-    are nothing but that time phrase, or a correction states only a time,
-    the phrase becomes the disposal time for a no-longer-owned state and the
-    acquisition time otherwise, and the details are cleared. Anything else is
-    left exactly as proposed."""
-    if candidate.category != "owned_item":
-        return candidate
-    times = _time_words(candidate)
+
+# "X, not Y" / "Y nahi, X": the owner names the stored time being replaced.
+_REPLACED_TIME = re.compile(
+    r"(?:\bnot\b|\binstead of\b|\brather than\b)\s+([^,.;!?]+)"
+    r"|([^,.;!?]+?)\s+(?:nahi|nahin)\b",
+    re.IGNORECASE,
+)
+
+
+def _attributed_correction(candidate, old, source):
+    """A correction that states a date without saying it is the purchase or
+    disposal date (run 7 D12: the month only in details/time_expression).
+
+    The date is placed only when the owner's own words identify which stored
+    date it replaces: the correction names the old time ("from September,
+    not October"), and that time falls inside exactly one of the item's
+    stored acquired/disposed periods. Service dates, warranty dates, model
+    years or anything else that matches no stored date are never turned into
+    a purchase or disposal date. Returns (candidate, None), or
+    (candidate, reason) when the date's meaning stays unclear."""
+    if (
+        candidate.category != "owned_item"
+        or candidate.intent != "correction"
+        or candidate.acquired_expression
+        or candidate.disposed_expression
+    ):
+        return candidate, None
     details = candidate.details
-    time_only_details = bool(details) and normalize_memory_surface(details) in times
-    stated = candidate.acquired_expression or candidate.disposed_expression
-    restates_only_time = (
-        candidate.intent == "correction"
-        and candidate.time_expression
-        and not stated
-        and not details
-        and not candidate.aliases
-    )
-    if not (time_only_details or restates_only_time):
-        return candidate
-    update = {"details": None} if time_only_details else {}
-    phrase = candidate.time_expression or details
-    if not stated and phrase:
-        key = (
-            "disposed_expression"
-            if candidate.state in DISPOSED_STATES
-            else "acquired_expression"
-        )
-        update[key] = phrase
-    return candidate.model_copy(update=update)
+    phrase = candidate.time_expression
+    if not phrase:
+        return candidate, None  # no stated time: nothing to place
+    time_only_details = bool(details) and normalize_memory_surface(
+        details
+    ) == normalize_memory_surface(phrase)
+    if details and not time_only_details:
+        return candidate, None  # real details; the date is not this field's
+    anchor = datetime.fromisoformat(_anchor(source, candidate))
+    replaced = [
+        (m.group(1) or m.group(2)).strip()
+        for m in _REPLACED_TIME.finditer(source.text)
+        if (m.group(1) or m.group(2))
+    ]
+    matches = set()
+    for words in replaced:
+        old_time = time_object(words, anchor, direction="past")
+        if not old_time or not old_time.get("earliest"):
+            continue
+        for key in ("acquired", "disposed"):
+            stored = old.get(key)
+            if (
+                isinstance(stored, dict)
+                and stored.get("earliest")
+                and stored.get("latest")
+                and stored["earliest"] <= old_time["latest"]
+                and old_time["earliest"] <= stored["latest"]
+            ):
+                matches.add(key)
+    if len(matches) != 1:
+        return candidate, "time_meaning_unclear"
+    key = matches.pop() + "_expression"
+    update = {key: phrase}
+    if time_only_details:
+        update["details"] = None
+    return candidate.model_copy(update=update), None
 
 
 def _item_inconsistency(mutation):

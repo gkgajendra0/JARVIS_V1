@@ -239,8 +239,11 @@ def test_an_owned_item_is_never_written_with_a_disposal_time():
     assert [o.reason for o in plan.outcomes] == ["inconsistent_item_state"]
 
 
-def test_time_phrase_details_on_a_new_item_go_to_the_purchase_time():
-    text = "I bought a Duster in March 2024."
+def test_a_date_in_a_new_item_s_details_is_never_made_a_purchase_date():
+    # Owner-evidence rule (2026-11-23): nothing says this date is the
+    # purchase; it stays the owner's words in details, no relationship is
+    # invented.
+    text = "I have a Duster, March 2024."
     source, candidate = _recorded(
         "story-12",
         text=text,
@@ -260,8 +263,32 @@ def test_time_phrase_details_on_a_new_item_go_to_the_purchase_time():
     )
     (mutation,) = plan.mutations
     value = mutation.draft.value
-    assert "details" not in value
-    assert value["acquired"]["earliest"] == "2024-03-01"
+    assert "acquired" not in value and value["details"] == "March 2024"
+
+
+def test_details_repeating_a_placed_purchase_time_are_dropped():
+    text = "I bought a Duster in March 2024."
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        label="Duster",
+        value="Duster",
+        details="March 2024",
+        time_expression=None,
+        acquired_expression="March 2024",
+    )
+    plan = LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(),
+        LearningResolutionBatch(
+            resolutions=[{"candidate_index": 0, "decision": "new"}]
+        ),
+    )
+    (mutation,) = plan.mutations
+    value = mutation.draft.value
+    assert "details" not in value and value["acquired"]["earliest"] == "2024-03-01"
 
 
 def test_a_time_only_statement_that_is_not_a_correction_is_not_moved():
@@ -360,3 +387,120 @@ def test_head_nouns_are_only_ignored_for_plans_and_events():
     )
     (fact,) = result.facts
     assert fact["text"] == "Trip Master"
+
+
+# -- a correction's date is placed only from the owner's words and the stored item --
+
+
+def _correction(entries, target, text, phrase, **changes):
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        details=changes.pop("details", phrase),
+        time_expression=phrase,
+        **changes,
+    )
+    assert LearningPolicy().evaluate(source, candidate).status == "eligible", text
+    return _plan(entries.values(), source, candidate, target)
+
+
+@pytest.mark.parametrize(
+    "text,phrase",
+    [
+        ("Correction: the Jimny was serviced in March, not February.", "March"),
+        ("I misspoke, the Jimny's warranty runs to 2029, not 2028.", "2029"),
+        ("I misspoke, the Jimny is a 2024 model, not 2023.", "2024"),
+        ("Correction: the Jimny's insurance renews in June, not May.", "June"),
+    ],
+    ids=["service_date", "warranty_date", "model_year", "insurance_date"],
+)
+def test_other_dates_are_never_made_purchase_or_disposal_dates(text, phrase):
+    entries = _stored_items()
+    before = json.loads(entries["Jimny"].value)
+    plan = _correction(entries, _target("story-12"), text, phrase)
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["time_meaning_unclear"]
+    assert json.loads(entries["Jimny"].value) == before
+
+
+def test_a_correction_that_names_no_replaced_date_is_unclear():
+    entries = _stored_items()
+    plan = _correction(
+        entries,
+        _target("story-12"),
+        "Correction: the Jimny is from September.",
+        "September",
+    )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["time_meaning_unclear"]
+
+
+def test_a_replaced_date_matching_two_stored_dates_is_unclear():
+    entries = _stored_items()
+    tigor = json.loads(entries["Tata Tigor"].value)
+    october = {
+        "expression": "October",
+        "precision": "month",
+        "earliest": "2026-10-01",
+        "latest": "2026-10-31",
+        "basis": "stated",
+    }
+    tigor.update(state="sold", acquired=october, disposed=october)
+    entries["Tata Tigor"] = LearningCatalogEntry(
+        assertion_id="tigor",
+        predicate="owned_item_tigor",
+        category="owned_item",
+        text="owned_item.vehicle: Tata Tigor",
+        value=json.dumps(tigor),
+        kind="vehicle",
+    )
+    plan = _correction(
+        entries,
+        "tigor",
+        "I misspoke, the Tigor is September, not October.",
+        "September",
+        label="Tigor",
+        value="Tigor",
+        state="sold",
+    )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["time_meaning_unclear"]
+
+
+def test_a_corrected_sale_date_is_placed_when_it_replaces_the_stored_one():
+    entries = _stored_items()
+    tigor = json.loads(entries["Tata Tigor"].value)
+    tigor.update(
+        state="sold",
+        disposed={
+            "expression": "last week",
+            "precision": "week",
+            "earliest": "2026-11-09",
+            "latest": "2026-11-15",
+            "basis": "stated",
+        },
+    )
+    entries["Tata Tigor"] = LearningCatalogEntry(
+        assertion_id="tigor",
+        predicate="owned_item_tigor",
+        category="owned_item",
+        text="owned_item.vehicle: Tata Tigor",
+        value=json.dumps(tigor),
+        kind="vehicle",
+    )
+    plan = _correction(
+        entries,
+        "tigor",
+        "I misspoke, I sold the Tigor in October, not November.",
+        "October",
+        label="Tigor",
+        value="Tigor",
+        state="sold",
+    )
+    (mutation,) = plan.mutations
+    value = mutation.draft.value
+    assert (value["disposed"]["earliest"], value["disposed"]["latest"]) == (
+        "2026-10-01",
+        "2026-10-31",
+    )
+    assert value["acquired"] == tigor["acquired"] and "details" not in value
