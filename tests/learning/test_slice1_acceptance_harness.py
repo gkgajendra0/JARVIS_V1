@@ -933,6 +933,7 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
     assert summary["retry_policy"]["max_attempts"] == 3
 
 
+@pytest.mark.asyncio
 async def test_windows_entry_wiring_paid_lane_uses_only_the_paid_key_and_ledger(
     lab, monkeypatch, authority_parts, tmp_path
 ):

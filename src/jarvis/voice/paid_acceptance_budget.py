@@ -26,7 +26,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-PAID_CREDENTIAL_REF = "JARVIS_GEMINI_PAID_API_KEY"
+from jarvis.ai_provider import gemini_credential_ref
+
+PAID_CREDENTIAL_REF = gemini_credential_ref("paid")
 BUDGET_ID = "slice1-paid-dev-acceptance-2026-11-23"
 CEILING_MICRO_USD = 1_000_000  # USD 1.00, owner-approved; never raised here
 

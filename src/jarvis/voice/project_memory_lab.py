@@ -701,7 +701,7 @@ async def run_slice1_acceptance(
 ):
     """Frozen D1-D27 development acceptance in this isolated lab profile.
 
-    lane "free" (default) uses GOOGLE_API_KEY only. lane "paid" (owner
+    lane "free" (default) uses the Free credential only. lane "paid" (owner
     approval 2026-11-23, USD 1, development acceptance only) uses
     JARVIS_GEMINI_PAID_API_KEY only, for extraction, resolution and answers,
     with every request reserved in the shared durable ledger ``paid_ledger``.
@@ -768,7 +768,7 @@ async def run_slice1_acceptance(
             adapter, answer = build_paid_clients(model, ledger, lab=str(root))
             # The Free credential is withheld from this process for the whole
             # run, so no code path can reach the Free lane by accident.
-            withheld_free_key = os.environ.pop("GOOGLE_API_KEY", None)
+            withheld_free_key = os.environ.pop(gemini_credential_ref("free"), None)
             extractor = resolver = adapter
             driver = PaidLaneDriverClient(answer)
             lane_fields = {
@@ -810,7 +810,10 @@ async def run_slice1_acceptance(
             extractor, resolver = build_learning_adapters(
                 "gemini", routing_runtime=routing
             )
-            lane_fields = {"lane": "free", "credential_ref": "GOOGLE_API_KEY"}
+            lane_fields = {
+                "lane": "free",
+                "credential_ref": gemini_credential_ref("free"),
+            }
         models = {
             "answer_model": model,
             "learning_model": getattr(extractor, "model_name", None),
@@ -825,7 +828,7 @@ async def run_slice1_acceptance(
             f"and answers; shared budget USD {CEILING_MICRO_USD / 1e6:.2f}, ledger "
             f"{paid_ledger}; no Free fallback)"
             if lane == "paid"
-            else "Free lane only (GOOGLE_API_KEY; no Paid fallback)"
+            else f"Free lane only ({gemini_credential_ref('free')}; no Paid fallback)"
         )
         if ledger is not None:
             print(
@@ -888,7 +891,7 @@ async def run_slice1_acceptance(
         return summary
     finally:
         if withheld_free_key is not None:
-            os.environ["GOOGLE_API_KEY"] = withheld_free_key
+            os.environ[gemini_credential_ref("free")] = withheld_free_key
         if ledger is not None:
             snapshot = ledger.snapshot()
             (root / "paid-budget-snapshot.json").write_text(
