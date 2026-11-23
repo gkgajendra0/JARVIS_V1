@@ -325,8 +325,8 @@ DRIVER = {
     ),
     "Which of my vehicles is best for a snowy Spiti trip?": (
         "read",
-        ["owned_item.vehicle", "plan"],
-        "The Jimny, for winter Spiti.",
+        ["owned_item.vehicle", "plan=Spiti"],
+        "The Jimny: you're already taking it on your winter Spiti trip.",
     ),
     "How do you know I have a Jimny, and when did I tell you?": (
         "read",
@@ -401,17 +401,19 @@ class FakeDriver:
             return {"answer": spec[1]}
         if spec[0] == "read":
             scopes, answer = spec[1], spec[2]
+            requests = [
+                {"scope_key": s.split("=")[0], "target_quote": s.split("=", 1)[1]}
+                if "=" in s
+                else {"scope_key": s}
+                for s in scopes
+            ]
             if not results:
-                return {
-                    "read_personal_context_for_question": {
-                        "requests": [{"scope_key": s} for s in scopes]
-                    }
-                }
+                return {"read_personal_context_for_question": {"requests": requests}}
             paging = results[-1]["result"].get("paging") or {}
             if paging.get("next_page"):
                 return {
                     "read_personal_context_for_question": {
-                        "requests": [{"scope_key": s} for s in scopes],
+                        "requests": requests,
                         "page_token": paging["next_page"],
                     }
                 }
@@ -1499,3 +1501,89 @@ async def test_run5_recorded_outputs_pass_d10_d12_and_release_d16_evidence(
         "released evidence: owner's words and told date, apart from recorded_at"
     ]
     assert evidence["status"] == acceptance.PASS
+
+
+# Run 6 D15: the new grading against the recorded behaviour ----------------------
+
+RUN6 = json.loads(
+    (Path(__file__).parent / "fixtures" / "run6_d11_d15_recorded.json").read_text(
+        encoding="utf-8"
+    )
+)
+D15 = "Which of my vehicles is best for a snowy Spiti trip?"
+
+
+def _d15_checks(summary):
+    return {c["check"]: c["status"] for c in summary["cases"]["D15"]["checks"]}
+
+
+@pytest.mark.asyncio
+async def test_run6_d15_recorded_behaviour_now_fails_the_decided_plan_check(
+    lab, monkeypatch
+):
+    """Run 6: only vehicles were requested and the plan was not in context.
+    The old check passed; the new one records that the decided plan never
+    reached the model (consistency cannot be judged)."""
+    (recorded,) = RUN6["steps"]["story-15"]["tool_results"]
+    scopes = [r["scope_key"] for r in recorded["arguments"]["requests"]]
+    assert scopes == ["owned_item.vehicle"]
+    monkeypatch.setitem(
+        DRIVER, D15, ("read", scopes, RUN6["steps"]["story-15"]["answer"])
+    )
+    runner, _log = lab.runner()
+    checks = _d15_checks(await runner.run(groups=("story",)))
+    assert (
+        checks["decided plan reached the model (released this turn or in context)"]
+        == acceptance.FAIL
+    )
+    assert checks["answer consistent with the decided plan"] == acceptance.UNTESTED
+    assert checks["unrelated plans left out"] == acceptance.PASS
+
+
+@pytest.mark.asyncio
+async def test_d15_unrelated_plans_in_the_lookup_fail(lab, monkeypatch):
+    monkeypatch.setitem(
+        DRIVER, D15, ("read", ["owned_item.vehicle", "plan"], "The Jimny.")
+    )
+    runner, _log = lab.runner()
+    checks = _d15_checks(await runner.run(groups=("story",)))
+    assert checks["unrelated plans left out"] == acceptance.FAIL
+    assert (
+        checks["decided plan reached the model (released this turn or in context)"]
+        == acceptance.PASS
+    )
+
+
+@pytest.mark.asyncio
+async def test_d15_answer_contradicting_the_decided_plan_fails(lab, monkeypatch):
+    monkeypatch.setitem(
+        DRIVER,
+        D15,
+        (
+            "read",
+            ["owned_item.vehicle", "plan=Spiti"],
+            "Take the Classic 350, it is the best for snow.",
+        ),
+    )
+    runner, _log = lab.runner()
+    checks = _d15_checks(await runner.run(groups=("story",)))
+    assert checks["answer consistent with the decided plan"] == acceptance.FAIL
+
+
+@pytest.mark.asyncio
+async def test_run6_d11_goa_lookup_by_word_finds_the_cancelled_plan(lab, monkeypatch):
+    (recorded,) = RUN6["steps"]["story-11"]["tool_results"]
+    assert recorded["result"]["status"] == "no_match"  # run 6
+    monkeypatch.setitem(
+        DRIVER, "Cancel the Goa plan.", ("read", ["plan=Goa"], "Done, cancelled.")
+    )
+    runner, log = lab.runner()
+    await runner.run(groups=("story",))
+    (result,) = [
+        e["result"]
+        for e in log.read(log.events)
+        if e.get("kind") == "tool_result" and e.get("step_id") == "story-11"
+    ]
+    assert result["status"] == "selected"
+    (fact,) = result["facts"]
+    assert fact["plan_status"] == "cancelled" and "Goa" in fact["text"]

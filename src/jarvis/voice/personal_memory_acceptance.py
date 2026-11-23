@@ -2409,22 +2409,80 @@ async def check_d14(context, log):
     ]
 
 
+_D15_CONTEXT_STEPS = ("story-14",)  # the conversation since the restart
+
+
 async def check_d15(context, log):
-    reads = _reads(_reply(context, "story-15"))
-    scopes = {
-        req.get("scope_key")
-        for r in reads
-        for req in r["arguments"].get("requests") or ()
-    }
+    """D15 needs the decided plan (D10) to reach the answer model - released
+    in this turn, or already in this turn's authorised conversation - and an
+    answer consistent with it. A lookup alone is not proof the advice used it;
+    unrelated plans must stay out. (Run 6's check, "used owned vehicles and
+    plans", tested only the vehicle scope; that recorded PASS stands as it
+    was.)"""
+    rows = await _rows(context.memory)
+    decided = [
+        p
+        for p in _plans(rows)
+        if "spiti" in json.dumps(_value(p)).casefold()
+        and ((_value(p).get("slots") or {}).get("vehicle") or {}).get("value")
+        and ((_value(p).get("slots") or {}).get("destination") or {}).get("value")
+    ]
+    if not decided:
+        return [
+            _untested("decided plan", "b", "no decided Spiti plan (D10 not met)"),
+            _answer_check(context, "story-15", "useful advice"),
+        ]
+    vehicle = _value(decided[0])["slots"]["vehicle"]["value"]
+    reply = _reply(context, "story-15")
+    released = [
+        f
+        for r in _reads(reply)
+        for f in (r.get("result") or {}).get("facts") or ()
+        if f.get("scope_key") == "plan"
+    ]
+    plan_released = [
+        f
+        for f in released
+        if "spiti" in json.dumps(f).casefold()
+        and ((f.get("slots") or {}).get("vehicle") or {}).get("value")
+    ]
+    earlier = [_reply(context, s).get("answer") or "" for s in _D15_CONTEXT_STEPS]
+    in_context = any(
+        "spiti" in a.casefold() and vehicle.casefold() in a.casefold() for a in earlier
+    )
+    reached = bool(plan_released) or in_context
+    unrelated = [f.get("text") for f in released if f not in plan_released]
+    answer = reply.get("answer") or ""
+    recommends_other = re.search(
+        r"\b(classic|enfield|tigor)\b[^.]*\b(best|better|behtar|recommend)",
+        answer,
+        re.IGNORECASE,
+    )
     return [
         _check(
-            "used owned vehicles and plans",
+            "decided plan reached the model (released this turn or in context)",
             "b",
-            {"owned_item.vehicle"} <= scopes,
-            sorted(scopes),
+            reached,
+            {
+                "released_plans": [f.get("text") for f in plan_released],
+                "in_conversation": in_context,
+            },
+        ),
+        _check("unrelated plans left out", "b", not unrelated, unrelated),
+        _check(
+            "answer consistent with the decided plan",
+            "b",
+            reached
+            and vehicle.casefold() in answer.casefold()
+            and not recommends_other,
+            {"decided_vehicle": vehicle, "answer": answer},
         )
-        if reads
-        else _untested("lookup", "b", "no lookup happened"),
+        if reached
+        else _untested(
+            "answer consistent with the decided plan",
+            "b",
+            "the decided plan never reached the model",
+        ),
         _answer_check(
             context,
             "story-15",
