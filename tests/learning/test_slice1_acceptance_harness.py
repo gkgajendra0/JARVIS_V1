@@ -626,7 +626,7 @@ def test_amendment_1_is_verified_and_a_changed_file_refuses_to_run(tmp_path):
     assert active["id"] == "amendment-1" and active["status"] == "active"
     target = tmp_path / acceptance.AMENDMENT_1_FILE
     target.parent.mkdir(parents=True, exist_ok=True)
-    content = (REPO / acceptance.AMENDMENT_1_FILE).read_bytes()
+    content = (REPO / acceptance.AMENDMENT_1_FILE).read_bytes().replace(b"\r\n", b"\n")
     target.write_bytes(content.replace(b"\n", b"\r\n"))  # CRLF is not a change
     assert acceptance.active_amendments(tmp_path)[0]["sha256"] == active["sha256"]
     target.write_bytes(content.replace(b"APPROVED", b"PROPOSED", 1))
