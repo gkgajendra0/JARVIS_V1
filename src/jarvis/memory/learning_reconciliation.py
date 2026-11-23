@@ -272,14 +272,12 @@ class LearningReconciler:
                 skip("policy_rejected", record=False)
                 continue
             candidate = _settled_item_times(candidate)
-            candidate, role_conflict = _without_conflicting_date_roles(
-                candidate, source
-            )
-            if role_conflict and _restates_nothing(candidate):
-                # "the Jimny is a 2024 model, not 2023": a dated fact that is
-                # not about buying or disposing of the item; nothing else was
-                # said, so the item stays unchanged and the reason is recorded.
-                skip("date_role_conflict")
+            candidate, date_issue = _evidenced_item_dates(candidate, source, batch)
+            if date_issue and _restates_nothing(candidate):
+                # A date with no positive evidence of being the purchase or
+                # disposal date (or with another role): nothing else was said,
+                # so the item stays unchanged and the reason is recorded.
+                skip(date_issue)
                 continue
             if index in catalog.page_ambiguous:
                 skip(PAGE_AMBIGUOUS)
@@ -335,14 +333,14 @@ class LearningReconciler:
                 else {}
             )
             if (
-                role_conflict
+                date_issue
                 and not added
                 and candidate.state == "owned"
                 and choice.decision in {"match", "duplicate"}
             ):
-                # The only new detail for a known item was a date with another
-                # role: nothing to apply, recorded rather than silently dropped.
-                skip("date_role_conflict")
+                # The only new detail for a known item was an unevidenced date:
+                # nothing to apply, recorded rather than silently dropped.
+                skip(date_issue)
                 continue
             if added:
                 if same:
@@ -546,7 +544,7 @@ class LearningReconciler:
                         old = None
                     if candidate.category == "owned_item" and isinstance(old, dict):
                         candidate, unclear = _attributed_correction(
-                            candidate, old, source
+                            candidate, old, source, batch
                         )
                         if unclear:
                             skip(unclear)
@@ -763,79 +761,89 @@ _REPLACED_TIME = re.compile(
 )
 
 
-def _attributed_correction(candidate, old, source):
-    """A correction that states a date without saying it is the purchase or
-    disposal date (run 7 D12: the month only in details/time_expression).
-
-    The date is placed only when the owner's own words identify which stored
-    date it replaces: the correction names the old time ("from September,
-    not October"), and that time falls inside exactly one of the item's
-    stored acquired/disposed periods. Service dates, warranty dates, model
-    years or anything else that matches no stored date are never turned into
-    a purchase or disposal date. Returns (candidate, None), or
-    (candidate, reason) when the date's meaning stays unclear."""
-    if (
-        candidate.category != "owned_item"
-        or candidate.intent != "correction"
-        or candidate.acquired_expression
-        or candidate.disposed_expression
-    ):
-        return candidate, None
-    details = candidate.details
-    phrase = candidate.time_expression
-    if not phrase:
-        return candidate, None  # no stated time: nothing to place
-    time_only_details = bool(details) and normalize_memory_surface(
-        details
-    ) == normalize_memory_surface(phrase)
-    if details and not time_only_details:
-        return candidate, None  # real details; the date is not this field's
-    if _date_role(source, candidate, phrase):
-        return candidate, "date_role_conflict"
+def _corrected_reference(candidate, old, source):
+    """The stored date a correction refers to: the owner names the replaced
+    time ("from September, not October") and it falls inside exactly one of
+    the item's stored acquired/disposed periods. Returns "acquired",
+    "disposed" or None."""
     anchor = datetime.fromisoformat(_anchor(source, candidate))
-    replaced = [
-        (m.group(1) or m.group(2)).strip()
-        for m in _REPLACED_TIME.finditer(source.text)
-        if (m.group(1) or m.group(2))
-    ]
-    stored_keys = [
-        k
-        for k in ("acquired", "disposed")
-        if isinstance(old.get(k), dict) and old[k].get("expression")
-    ]
-    named = [
-        t
-        for t in (time_object(w, anchor, direction="past") for w in replaced)
-        if t and t.get("earliest")
-    ]
-    if not named:
-        # The owner did not name the replaced date: only an item with exactly
-        # one stored date identifies which one is corrected.
-        if len(stored_keys) != 1:
-            return candidate, "time_meaning_unclear"
-        update = {stored_keys[0] + "_expression": phrase}
-        if time_only_details:
-            update["details"] = None
-        return candidate.model_copy(update=update), None
+    # "April 2017, not March": the replaced month shares the stated year.
+    years = {
+        y
+        for t in (
+            candidate.acquired_expression,
+            candidate.disposed_expression,
+            candidate.time_expression,
+        )
+        if t
+        for y in re.findall(r"\b(?:19|20)\d{2}\b", t)
+    }
     matches = set()
-    for old_time in named:
+    for m in _REPLACED_TIME.finditer(source.text):
+        words = (m.group(1) or m.group(2) or "").strip()
+        if words and len(years) == 1 and not re.search(r"\b\d{4}\b", words):
+            words = f"{words} {next(iter(years))}"
+        named = time_object(words, anchor, direction="past") if words else None
+        if not named or not named.get("earliest"):
+            continue
         for key in ("acquired", "disposed"):
             stored = old.get(key)
             if (
                 isinstance(stored, dict)
                 and stored.get("earliest")
                 and stored.get("latest")
-                and stored["earliest"] <= old_time["latest"]
-                and old_time["earliest"] <= stored["latest"]
+                and stored["earliest"] <= named["latest"]
+                and named["earliest"] <= stored["latest"]
             ):
                 matches.add(key)
-    if len(matches) != 1:
+    return matches.pop() if len(matches) == 1 else None
+
+
+def _attributed_correction(candidate, old, source, batch):
+    """Positive evidence for a correction's purchase/disposal date.
+
+    A date stays (or is placed) as the acquired/disposed time only with
+    acquisition/disposal wording for that item and date in the owner's words,
+    or when the correction unambiguously refers to that stored date (it names
+    the replaced time, which falls inside exactly that stored period). A
+    lone stored date is not enough, and wording giving the date another role
+    blocks it. Otherwise the date is not applied, and the correction is
+    skipped with a recorded reason when nothing else remains. Returns
+    (candidate, None) or (candidate, reason)."""
+    if candidate.category != "owned_item" or candidate.intent != "correction":
+        return candidate, None
+    reference = _corrected_reference(candidate, old, source)
+    update = {}
+    for key in ("acquired", "disposed"):
+        field = key + "_expression"
+        phrase = getattr(candidate, field)
+        if (
+            phrase
+            and not _has_date_evidence(source, candidate, phrase, key, batch)
+            and reference != key
+        ):
+            update[field] = None
+    if update:
+        candidate = candidate.model_copy(update=update)
+    if candidate.acquired_expression or candidate.disposed_expression:
+        return candidate, None
+    details = candidate.details
+    phrase = candidate.time_expression
+    time_only_details = bool(details and phrase) and normalize_memory_surface(
+        details
+    ) == normalize_memory_surface(phrase)
+    if not phrase or (details and not time_only_details):
+        if update and _restates_nothing(candidate):
+            return candidate, "date_evidence_missing"
+        return candidate, None
+    if _date_role(source, candidate, phrase):
+        return candidate, "date_role_conflict"
+    if reference is None:
         return candidate, "time_meaning_unclear"
-    key = matches.pop() + "_expression"
-    update = {key: phrase}
+    placed = {reference + "_expression": phrase}
     if time_only_details:
-        update["details"] = None
-    return candidate.model_copy(update=update), None
+        placed["details"] = None
+    return candidate.model_copy(update=placed), None
 
 
 # Wording that gives a date another role on the same item. A date in the same
@@ -875,21 +883,83 @@ def _date_role(source, candidate, phrase):
     return None
 
 
-def _without_conflicting_date_roles(candidate, source):
-    """Purchase/disposal dates, whether the model supplied them or not, are
-    kept only when the owner's words do not give that date another role.
-    Returns (candidate, conflict) with any such date removed."""
+_ACQUISITION_WORDING = re.compile(
+    r"\b(?:bought|buy|buying|purchas\w*|got|get|getting|acquired|picked up"
+    r"|took delivery|liya|liye|kharid\w*)\b"
+    r"|\b(?:have|has|had|having|own|owns|owned|rakh\w*)\b[^,;.]*\b(?:since|from)\b",
+    re.IGNORECASE,
+)
+_DISPOSAL_WORDING = re.compile(
+    r"\b(?:sold|sell|selling|gave|give|given|lost|lose|scrapp?\w*|traded"
+    r"|exchanged|stolen|bech\w*|kho\w*)\b",
+    re.IGNORECASE,
+)
+_REFERRING_ITEM = re.compile(
+    r"\b(?:it|its|this|that|woh|wo|use|usko|isko|ise)\b", re.IGNORECASE
+)
+
+
+def _names_this_item(clause, candidate, batch):
+    from .learning_catalog_page import name_words
+
+    words = name_words(clause)
+    own = (name_words(candidate.label) | name_words(candidate.value or "")) - {
+        "the",
+        "my",
+        "an",
+    }
+    if own & words:
+        return True
+    items = [c for c in batch.candidates if c.category == "owned_item"]
+    return len(items) == 1 and bool(_REFERRING_ITEM.search(clause))
+
+
+def _has_date_evidence(source, candidate, phrase, key, batch):
+    """Positive evidence that ``phrase`` is this item's acquisition (or
+    disposal) time: one clause of the owner's evidence contains the date,
+    acquisition (disposal) wording and the item (or, when the turn has a
+    single item, a referring word)."""
+    wording = _ACQUISITION_WORDING if key == "acquired" else _DISPOSAL_WORDING
+    wanted = phrase.casefold()
+    for clause in _CLAUSE_BREAK.split(_evidence_text(source, candidate)):
+        if (
+            wanted in clause.casefold()
+            and wording.search(clause)
+            and _names_this_item(clause, candidate, batch)
+        ):
+            return True
+    return False
+
+
+def _evidenced_item_dates(candidate, source, batch):
+    """Purchase/disposal dates need positive evidence, whoever supplied them.
+
+    Kept when the owner's words give acquisition/disposal wording linked to
+    the item and date. A correction's date is decided against the stored item
+    (``_attributed_correction``). Removed when the words give the date another
+    role (a veto, not the rule) or nothing positive supports it, so an
+    unfamiliar date role never defaults to purchase or sale. Returns
+    (candidate, reason or None)."""
     if candidate.category != "owned_item":
         return candidate, None
-    update, conflict = {}, None
-    for key in ("acquired_expression", "disposed_expression"):
-        role = _date_role(source, candidate, getattr(candidate, key))
-        if role:
-            update[key] = None
-            conflict = conflict or role
+    update, reason = {}, None
+    for key in ("acquired", "disposed"):
+        field = key + "_expression"
+        phrase = getattr(candidate, field)
+        if not phrase:
+            continue
+        if _date_role(source, candidate, phrase):
+            update[field], reason = None, "date_role_conflict"
+        elif _has_date_evidence(source, candidate, phrase, key, batch):
+            continue
+        elif candidate.intent == "correction":
+            continue  # decided against the stored item
+        else:
+            update[field] = None
+            reason = reason or "date_evidence_missing"
     if not update:
         return candidate, None
-    return candidate.model_copy(update=update), conflict
+    return candidate.model_copy(update=update), reason
 
 
 def _restates_nothing(candidate):

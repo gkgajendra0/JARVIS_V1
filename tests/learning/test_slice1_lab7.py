@@ -229,6 +229,23 @@ def test_a_new_item_with_the_same_state_still_refines_or_creates_as_before():
 
 
 def test_an_owned_item_is_never_written_with_a_disposal_time():
+    # The disposal wording supports the date, but the proposal keeps the
+    # item owned: the record-level gate refuses the contradiction.
+    entries = _stored_items()
+    text = "I sold my Classic 350 in October."
+    source, candidate = _recorded(
+        "story-17",
+        text=text,
+        state="owned",
+        intent="new",
+        disposed_expression="October",
+    )
+    plan = _plan(entries.values(), source, candidate, _target("story-17"))
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["inconsistent_item_state"]
+
+
+def test_an_unsupported_disposal_date_is_never_applied():
     entries = _stored_items()
     text = "My Classic 350, October."
     source, candidate = _recorded(
@@ -236,7 +253,7 @@ def test_an_owned_item_is_never_written_with_a_disposal_time():
     )
     plan = _plan(entries.values(), source, candidate, _target("story-17"))
     assert plan.mutations == ()
-    assert [o.reason for o in plan.outcomes] == ["inconsistent_item_state"]
+    assert [o.reason for o in plan.outcomes] == ["date_evidence_missing"]
 
 
 def test_a_date_in_a_new_item_s_details_is_never_made_a_purchase_date():
@@ -423,16 +440,36 @@ def test_other_dates_are_never_made_purchase_or_disposal_dates(text, phrase):
     assert json.loads(entries["Jimny"].value) == before
 
 
-def test_an_unnamed_replaced_date_uses_the_item_s_only_stored_date():
+def test_a_lone_stored_date_is_not_enough_for_an_unclear_correction():
+    # Positive-evidence rule (2026-11-23 16:19): "is from September" names no
+    # replaced date and has no acquisition wording; the item's only stored
+    # date does not decide what September is.
     entries = _stored_items()
+    before = json.loads(entries["Jimny"].value)
     plan = _correction(
         entries,
         _target("story-12"),
         "Correction: the Jimny is from September.",
         "September",
     )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["time_meaning_unclear"]
+    assert json.loads(entries["Jimny"].value) == before
+
+
+def test_a_correction_with_acquisition_wording_is_positive_evidence():
+    entries = _stored_items()
+    plan = _correction(
+        entries,
+        _target("story-12"),
+        "Correction: I bought the Jimny in September.",
+        "September",
+        details=None,
+        acquired_expression="September",
+    )
     (mutation,) = plan.mutations
-    assert mutation.draft.value["acquired"]["earliest"] == "2026-09-01"
+    acquired = mutation.draft.value["acquired"]
+    assert (acquired["earliest"], acquired["precision"]) == ("2026-09-01", "month")
 
 
 def test_an_unnamed_replaced_date_with_two_stored_dates_is_unclear():
@@ -694,3 +731,105 @@ def test_matching_a_known_item_with_only_a_conflicting_date_is_recorded():
     plan = _plan(entries.values(), source, candidate, _target("story-12"))
     assert plan.mutations == ()
     assert [o.reason for o in plan.outcomes] == ["date_role_conflict"]
+
+
+# -- unfamiliar date roles: no positive evidence, never purchase/sale ------------------
+
+
+@pytest.mark.parametrize(
+    "text,phrase",
+    [
+        ("My Jimny's registration is from September.", "September"),
+        ("The Jimny's PUC is valid till March 2027.", "March 2027"),
+        ("The Jimny's EMI ends in 2028.", "2028"),
+        ("The Jimny's tyres were changed in June.", "June"),
+    ],
+    ids=["registration", "puc", "emi", "tyres"],
+)
+def test_an_unfamiliar_date_role_never_becomes_the_purchase_date(text, phrase):
+    entries = _stored_items()
+    before = json.loads(entries["Jimny"].value)
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        details=None,
+        time_expression=phrase,
+        acquired_expression=phrase,
+    )
+    plan = _plan(entries.values(), source, candidate, _target("story-12"))
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["date_evidence_missing"]
+    assert json.loads(entries["Jimny"].value) == before
+
+
+def test_an_unfamiliar_role_in_a_correction_is_recorded_not_applied():
+    entries = _stored_items()
+    before = json.loads(entries["Jimny"].value)
+    plan = _correction(
+        entries,
+        _target("story-12"),
+        "Correction: the Jimny's registration is from September.",
+        "September",
+        details=None,
+        acquired_expression="September",
+    )
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] in (
+        ["date_evidence_missing"],
+        ["time_meaning_unclear"],
+    )
+    assert json.loads(entries["Jimny"].value) == before
+
+
+def test_a_new_item_keeps_an_evidenced_purchase_date_at_its_precision():
+    text = "I got a Duster in March 2024."
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        label="Duster",
+        value="Duster",
+        details=None,
+        time_expression="March 2024",
+        acquired_expression="March 2024",
+    )
+    plan = LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(),
+        LearningResolutionBatch(
+            resolutions=[{"candidate_index": 0, "decision": "new"}]
+        ),
+    )
+    (mutation,) = plan.mutations
+    acquired = mutation.draft.value["acquired"]
+    assert (acquired["precision"], acquired["earliest"], acquired["latest"]) == (
+        "month",
+        "2024-03-01",
+        "2024-03-31",
+    )
+
+
+def test_a_new_item_with_an_unfamiliar_date_role_is_saved_without_that_date():
+    text = "I have a Duster, registration March 2024."
+    source, candidate = _recorded(
+        "story-12",
+        text=text,
+        intent="new",
+        label="Duster",
+        value="Duster",
+        details=None,
+        time_expression="March 2024",
+        acquired_expression="March 2024",
+    )
+    plan = LearningReconciler(None, None).plan(
+        source,
+        LearningBatch(candidates=[candidate]),
+        LearningCatalog(),
+        LearningResolutionBatch(
+            resolutions=[{"candidate_index": 0, "decision": "new"}]
+        ),
+    )
+    (mutation,) = plan.mutations
+    assert "acquired" not in mutation.draft.value

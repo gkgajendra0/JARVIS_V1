@@ -134,6 +134,14 @@ def test_a_name_that_refers_to_the_item_never_replaces_its_identity(
         "value": stored_label,
         "aliases": [],
         "details": "diesel",
+        # The stored purchase month the correction replaces ("not March").
+        "acquired": {
+            "expression": "March 2017",
+            "precision": "month",
+            "earliest": "2017-03-01",
+            "latest": "2017-03-31",
+            "basis": "stated",
+        },
     }
     entry = _entry(stored, "tigor")
     text = f"Sorry, {label} is from April 2017, not March."
