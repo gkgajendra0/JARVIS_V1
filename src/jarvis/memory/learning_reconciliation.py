@@ -554,6 +554,13 @@ class LearningReconciler:
                         value = _corrected_item_value(
                             old, value, candidate, entry, catalog.entries
                         )
+                    elif candidate.category == "plan" and isinstance(old, dict):
+                        value = _corrected_plan_value(
+                            old, value, candidate, entry, catalog.entries
+                        )
+                        if value is None:
+                            skip("correction_unclear")
+                            continue
                 else:
                     value = _new_value(candidate, source)
             effective_at = None
@@ -887,7 +894,10 @@ def _date_role(source, candidate, phrase):
 _ACQUISITION_WORDING = re.compile(
     r"\b(?:bought|buy|buying|purchas\w*|got|get|getting|acquired|picked up"
     r"|took delivery|liya|liye|kharid\w*)\b"
-    r"|\b(?:have|has|had|having|own|owns|owned|rakh\w*)\b[^,;.]*\b(?:since|from)\b",
+    # "since" only: "I have X from 2021" may name a model year or vintage,
+    # so "from" alone never establishes when the owner got it (owner decision
+    # 2026-11-23 on frozen D1's ambiguous wording).
+    r"|\b(?:have|has|had|having|own|owns|owned|rakh\w*)\b[^,;.]*\bsince\b",
     re.IGNORECASE,
 )
 _DISPOSAL_WORDING = re.compile(
@@ -1030,7 +1040,7 @@ def _names_entry(candidate, entry, entries) -> bool:
     a unique shorter reference ("Tigor" -> "Tata Tigor"), or a label that
     wholly contains the stored name of exactly one fact of that category and
     kind ("Goa plan" -> "Goa"). A leading article is ignored."""
-    from .learning_catalog_page import identity_words, name_words
+    from .learning_catalog_page import PLAN_HEAD_NOUNS, identity_words, name_words
 
     label = _without_article(candidate.label)
     if _label(entry) == normalize_memory_surface(label):
@@ -1038,6 +1048,20 @@ def _names_entry(candidate, entry, entries) -> bool:
     if unique_reference(entry, label, entries):
         return True
     words = name_words(label)
+    if entry.category in {"plan", "event"}:
+        # "Spiti trip" names "winter Spiti": the head noun says what kind of
+        # plan it is, not which one; the remaining words must name one plan.
+        wanted = words - PLAN_HEAD_NOUNS
+        named = [
+            e.assertion_id
+            for e in entries
+            if e.category == entry.category
+            and e.kind == entry.kind
+            and wanted
+            and any(wanted <= w for w in identity_words(e))
+        ]
+        if named == [entry.assertion_id]:
+            return True
     inside = [
         e.assertion_id
         for e in entries
@@ -1069,6 +1093,47 @@ def _corrected_item_value(old, fresh, candidate, entry, entries):
     if value["state"] not in DISPOSED_STATES:
         value.pop("disposed", None)
     return value
+
+
+def _corrected_plan_value(old, fresh, candidate, entry, entries):
+    """A correction of one plan changes only what it restates.
+
+    Shared update rule (as for owned items): the plan's identity and every
+    detail the correction does not restate are kept. Replaced when restated
+    and different: plan status (with its state), individual slots (merged,
+    never dropped), the time (temporal), location, reason, certainty. The
+    name changes only when the correction names a different plan ("the
+    Kerala trip, not the Goa trip"). A correction that restates nothing
+    different is unclear: None (skipped and recorded). An unstated detail is
+    never removed; the slice-1 schema has no way to state a removal."""
+    value = {**old, "schema": fresh["schema"]}
+    restated = False
+    if candidate.plan_status is not None and fresh.get("plan_status") != old.get(
+        "plan_status"
+    ):
+        value["plan_status"], value["state"] = fresh["plan_status"], fresh["state"]
+        restated = True
+    old_slots = old.get("slots") or {}
+    changed = {
+        k: v for k, v in (fresh.get("slots") or {}).items() if old_slots.get(k) != v
+    }
+    if changed:
+        value["slots"] = {**old_slots, **changed}
+        restated = True
+    old_time = (old.get("temporal") or {}).get("expression")
+    if candidate.time_expression and fresh["temporal"].get("expression") != old_time:
+        value["temporal"] = fresh["temporal"]
+        restated = True
+    for key in ("location", "reason"):
+        if fresh.get(key) is not None and fresh[key] != old.get(key):
+            value[key] = fresh[key]
+            restated = True
+    if restated and fresh.get("certainty") is not None:
+        value["certainty"] = fresh["certainty"]
+    if not _names_entry(candidate, entry, entries):
+        value["label"], value["value"] = fresh["label"], fresh["value"]
+        restated = True
+    return value if restated else None
 
 
 def _plan_fields(candidate):

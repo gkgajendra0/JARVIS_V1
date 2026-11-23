@@ -286,27 +286,6 @@ def _name_words(record, scope):
 
 
 _ARTICLES = frozenset({"the", "my", "our", "a", "an", "mera", "meri", "mere"})
-# Head nouns that say what kind of plan or event something is, not which one
-# ("the Spiti trip" names the plan called "winter Spiti"). Ignored only in
-# plan and event lookups, and only as quoted words; a quote of nothing else
-# matches nothing.
-_PLAN_HEAD_NOUNS = frozenset(
-    {
-        "plan",
-        "plans",
-        "trip",
-        "trips",
-        "journey",
-        "holiday",
-        "holidays",
-        "vacation",
-        "tour",
-        "visit",
-        "outing",
-        "yatra",
-        "safar",
-    }
-)
 
 
 def _word_reference(candidates, scope, quote):
@@ -318,9 +297,9 @@ def _word_reference(candidates, scope, quote):
     every quoted word ("Goa" -> "Goa plan", "Tigor" -> "Tata Tigor"); failing
     that, an item whose whole name is inside the quote ("Goa plan" -> "Goa").
     Exactly one item is released; two or more ask which one was meant."""
-    from .learning_catalog_page import name_words
+    from .learning_catalog_page import PLAN_HEAD_NOUNS, name_words
 
-    ignored = _ARTICLES | (_PLAN_HEAD_NOUNS if scope in {"plan", "event"} else set())
+    ignored = _ARTICLES | (PLAN_HEAD_NOUNS if scope in {"plan", "event"} else set())
     wanted = name_words(quote) - ignored
     if not wanted:
         return [], None

@@ -30,6 +30,26 @@ from .service import normalize_memory_surface
 CANDIDATE_LIMIT = 32
 CATALOG_LIMIT = 96
 PAGE_AMBIGUOUS = "catalog_page_ambiguous"
+# Head nouns that say what kind of plan or event something is, not which one
+# ("the Spiti trip" names the plan called "winter Spiti"). Shared by learning
+# (does a proposal name a stored plan?) and retrieval (target lookups).
+PLAN_HEAD_NOUNS = frozenset(
+    {
+        "plan",
+        "plans",
+        "trip",
+        "trips",
+        "journey",
+        "holiday",
+        "holidays",
+        "vacation",
+        "tour",
+        "visit",
+        "outing",
+        "yatra",
+        "safar",
+    }
+)
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 

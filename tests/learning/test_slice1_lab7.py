@@ -201,10 +201,10 @@ def test_lab7_d23_sale_of_the_named_item_is_a_change_not_a_refine():
         "2026-10-01",
         "2026-10-31",
     )
-    assert (
-        value["acquired"]
-        == json.loads(entries["Royal Enfield Classic 350"].value)["acquired"]
-    )
+    # Kept as stored (since D1's "from 2021" is ambiguous, there is none).
+    assert value.get("acquired") == json.loads(
+        entries["Royal Enfield Classic 350"].value
+    ).get("acquired")
 
 
 def test_a_new_item_with_the_same_state_still_refines_or_creates_as_before():

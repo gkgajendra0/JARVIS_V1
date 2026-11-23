@@ -272,10 +272,23 @@ def test_a_label_that_does_not_name_the_plan_still_takes_the_new_name():
 
 
 def test_two_plans_inside_the_label_keep_existing_behaviour():
+    # "plan" is a head noun, so "Goa plan" names the stored "Goa" plan alone
+    # when nothing else is called Goa. With two plans both called Goa the words
+    # no longer pick one out, and the proposal's label is used as before.
+    goa = _goa_entry()
+    other = _goa_entry(assertion_id="plan-2", label="Goa")
+    (mutation,) = _cancel([goa, other]).mutations
+    assert mutation.draft.value["label"] == "Goa plan"
+
+
+def test_a_head_noun_alone_never_names_another_plan():
     goa = _goa_entry()
     other = _goa_entry(assertion_id="plan-2", label="plan")
     (mutation,) = _cancel([goa, other]).mutations
-    assert mutation.draft.value["label"] == "Goa plan"
+    assert (mutation.draft.value["label"], mutation.draft.value["value"]) == (
+        "Goa",
+        "Goa",
+    )
 
 
 # -- D15: guidance -----------------------------------------------------------------
