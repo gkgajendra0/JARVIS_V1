@@ -1,6 +1,8 @@
 # Personal memory slice 1: acceptance amendment 1 (D1 wording)
 
-**Status: PROPOSED — not approved, not in force.** Proposed 2026-11-23.
+**Status: APPROVED — active.** Proposed 2026-11-23; approved by the owner
+2026-11-23 18:51 IST, together with frozen implementation `5f57de48`, for
+isolated lab 8 onward.
 
 This file is separate from the frozen case files. Neither
 `docs/evals/personal-memory-acceptance.md` (sha256
@@ -61,13 +63,25 @@ Classic purchase year:
 No other case depends on the Classic's purchase date (D17 forgets the Classic;
 D23 sells it in October and keeps its stored acquisition as it is).
 
-## How it would run (if approved)
+## How it runs
 
-- The lab uses D1-A1 for the story step and adds D1-R as a separate step on
-  its own isolated memory, both recorded in separate result files with this
-  file's sha256 next to the frozen hashes.
-- The frozen D1 check stays in the harness unchanged and keeps reporting its
-  result against the original wording.
+- The story group uses D1-A1 at step `story-02` (case `D1-A1`). D14 is graded
+  against D1-A1, exactly as frozen.
+- D1-R runs as its own group (`d1-regression`) on its own isolated memory,
+  with the frozen wording verbatim (case `D1-R`).
+- The original frozen purchase-date expectation for "from 2021" is reported in
+  D1-R as **SUPERSEDED** (by amendment 1), with the frozen expectation and the
+  observed value side by side. SUPERSEDED is neither PASS nor FAIL and does not
+  affect any verdict. The current requirement, "no purchase date invented",
+  is graded PASS or FAIL as usual.
+- Every result row and the summary record this file's sha256 and "amendment 1:
+  active". The lab refuses to start if this file differs from the approved
+  version.
+- Earlier labs (1–7) and their results are preserved unchanged. Their D1
+  results were graded against the frozen D1 wording and expectation of the
+  time. The harness at `5f57de48` (offline only, never run live) reported the
+  frozen Classic purchase-year check as FAIL; that was the superseded
+  expectation, not a current failure.
 
 ## Current evidence (assessed in code, not live-verified)
 
@@ -78,5 +92,6 @@ D23 sells it in October and keeps its stored acquisition as it is).
   lab harness check `regression: ambiguous 'from 2021' stores no Classic
   purchase date`: the original wording stores no Classic acquisition date;
   Tigor and Jimny keep theirs.
-- The scripted harness run reports D1 as FAIL on exactly the frozen
-  `acquired classic 350` check, with the regression check PASS.
+- The scripted harness run (with amendment 1 active) passes D1-A1, and in
+  D1-R passes "no Classic purchase date invented" with the frozen
+  expectation shown as SUPERSEDED.

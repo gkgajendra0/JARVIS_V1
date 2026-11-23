@@ -107,6 +107,19 @@ EXTRACT = {
         ),
         item("Jimny", "last month I got a Jimny", acquired_expression="last month"),
     ],
+    acceptance.D1_A1_TEXT: [
+        item(
+            "Royal Enfield Classic 350",
+            "I have a Royal Enfield Classic 350 I bought in 2021",
+            acquired_expression="2021",
+        ),
+        item(
+            "Tata Tigor",
+            "a Tata Tigor I bought in March 2017",
+            acquired_expression="March 2017",
+        ),
+        item("Jimny", "last month I got a Jimny", acquired_expression="last month"),
+    ],
     "I bought the Tigor in March 2017, it's the diesel one.": [
         item(
             "Tigor",
@@ -293,6 +306,7 @@ DRIVER = {
         "answer",
         "Understood.",
     ),
+    acceptance.D1_A1_TEXT: ("answer", "Understood."),
     "I bought the Tigor in March 2017, it's the diesel one.": ("answer", "Got it."),
     "I sold the Tigor last week.": ("answer", "Understood."),
     "When did I sell it?": (
@@ -590,14 +604,44 @@ def test_frozen_case_file_change_refuses_to_run(tmp_path):
 
 def test_every_development_case_is_planned_or_recorded():
     planned = set(acceptance.CASES_RUN) | set(acceptance.NOT_RUN_HERE)
-    assert planned == {f"D{i}" for i in range(1, 28)}
+    # Amendment 1: D1 runs as D1-A1 (amended wording) plus D1-R (regression).
+    assert planned == {f"D{i}" for i in range(2, 28)} | {"D1-A1", "D1-R"}
     assert set(acceptance.CASES_RUN) == set(acceptance.CHECKS)
     # The frozen wording is used verbatim wherever the case gives it.
     frozen = (REPO / acceptance.ACCEPTANCE_FILE).read_text(encoding="utf-8")
+    amended = (REPO / acceptance.AMENDMENT_1_FILE).read_text(encoding="utf-8")
     for group in acceptance.GROUPS.values():
         for step in group:
-            if isinstance(step, acceptance.Say) and "harness-chosen" not in step.note:
+            if not isinstance(step, acceptance.Say) or "harness-chosen" in step.note:
+                continue
+            if "amendment-1 wording" in step.note:
+                assert step.text in amended and step.text not in frozen, step.text
+            else:
                 assert step.text.casefold() in frozen.casefold(), step.text
+    assert acceptance.D1_FROZEN_TEXT in frozen
+
+
+def test_amendment_1_is_verified_and_a_changed_file_refuses_to_run(tmp_path):
+    (active,) = acceptance.active_amendments(REPO)
+    assert active["id"] == "amendment-1" and active["status"] == "active"
+    target = tmp_path / acceptance.AMENDMENT_1_FILE
+    target.parent.mkdir(parents=True, exist_ok=True)
+    content = (REPO / acceptance.AMENDMENT_1_FILE).read_bytes()
+    target.write_bytes(content.replace(b"\n", b"\r\n"))  # CRLF is not a change
+    assert acceptance.active_amendments(tmp_path)[0]["sha256"] == active["sha256"]
+    target.write_bytes(content.replace(b"APPROVED", b"PROPOSED", 1))
+    with pytest.raises(ValueError, match="approved amendment file changed"):
+        acceptance.active_amendments(tmp_path)
+
+
+def test_a_superseded_expectation_never_decides_a_case_status():
+    checks = [
+        {"check": "a", "level": "a", "status": acceptance.PASS},
+        {"check": "old", "level": "a", "status": acceptance.SUPERSEDED},
+    ]
+    assert acceptance._overall(checks) == acceptance.PASS
+    checks[0]["status"] = acceptance.FAIL
+    assert acceptance._overall(checks) == acceptance.FAIL
 
 
 def test_live_tool_descriptions_are_available():
@@ -626,18 +670,32 @@ async def test_full_scripted_run_passes_every_automatic_check(lab):
         for case, row in summary["cases"].items()
         if row["status"] in {acceptance.FAIL, acceptance.UNTESTED}
     }
-    # The one known failure: the frozen D1 expectation reads the ambiguous
-    # "have ... from 2021" as a purchase year. By owner decision (2026-11-23)
-    # it stores no Classic purchase date, so that frozen check FAILS and is
-    # reported as such (proposed amendment 1); its regression check passes.
-    assert {case: [c["check"] for c in checks] for case, checks in failed.items()} == {
-        "D1": ["acquired classic 350"]
-    }, json.dumps(failed, indent=1, default=str)[:4000]
-    d1 = {c["check"]: c["status"] for c in summary["cases"]["D1"]["checks"]}
-    assert d1["regression: ambiguous 'from 2021' stores no Classic purchase date"] == (
-        acceptance.PASS
+    assert failed == {}, json.dumps(failed, indent=1, default=str)[:4000]
+    assert summary["automatic_verdict"] == "PASS_PENDING_MANUAL_REVIEW"
+    # Amendment 1 is active and identified in the report and on every row.
+    (amendment,) = summary["acceptance_amendments"]
+    assert amendment["id"] == "amendment-1" and amendment["status"] == "active"
+    assert amendment["sha256"] == acceptance.ACCEPTANCE_AMENDMENTS[0]["sha256"]
+    for row in log.read(log.cases):
+        assert row["acceptance_amendments"] == summary["acceptance_amendments"]
+    # D1-A1 passes on the amended wording (Classic bought in 2021).
+    assert summary["cases"]["D1-A1"]["status"] == acceptance.PASS
+    assert "D1" not in summary["cases"]
+    # D1-R: the current requirement passes; the frozen purchase-year
+    # expectation is SUPERSEDED, not PASS or FAIL, and not in any verdict.
+    d1r = {c["check"]: c for c in summary["cases"]["D1-R"]["checks"]}
+    assert (
+        d1r["no Classic purchase date invented from 'from 2021'"]["status"]
+        == acceptance.PASS
     )
-    assert summary["automatic_verdict"] == acceptance.FAIL
+    superseded = d1r["frozen D1 expectation: Classic acquired year 2021"]
+    assert superseded["status"] == acceptance.SUPERSEDED
+    assert superseded["detail"]["superseded_by"] == "amendment-1"
+    assert superseded["detail"]["observed"] == [None, None, None]
+    assert summary["cases"]["D1-R"]["status"] == acceptance.PASS
+    assert [e["check"] for e in summary["superseded_expectations"]] == [
+        "frozen D1 expectation: Classic acquired year 2021"
+    ]
     assert summary["d17_failed_stage"] is None
     assert "D17" in summary["required_gates"]
     hello = [c for c in summary["cases"]["D3"]["checks"] if c["check"] == "one Hello"]
@@ -715,7 +773,7 @@ async def test_quota_interruption_preserves_completed_steps_and_resume_never_rep
     assert states["story-06c"]["status"] == "checked"
     summary = json.loads(log.summary.read_text(encoding="utf-8"))
     assert summary["interrupted_at"] == "story-07"
-    assert set(summary["cases"]) >= {"D1", "D2", "D5", "D22"}
+    assert set(summary["cases"]) >= {"D1-A1", "D2", "D5", "D22"}
     done_before = list(lab.genai.calls)
 
     # Resume without the owner's explicit retry option refuses to rerun it.
@@ -737,9 +795,7 @@ async def test_quota_interruption_preserves_completed_steps_and_resume_never_rep
     assert not [text for _, text in later if text in earlier_texts]
     assert log.step_states()["story-07"]["attempt"] == 2
     assert summary["cases"]["D6"]["status"] == acceptance.PASS
-    # D1 keeps the result recorded before the interruption (its frozen
-    # Classic purchase-year check fails by owner decision; see amendment 1).
-    assert summary["cases"]["D1"]["status"] == acceptance.FAIL  # preserved
+    assert summary["cases"]["D1-A1"]["status"] == acceptance.PASS  # preserved
 
 
 @pytest.mark.asyncio

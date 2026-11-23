@@ -832,11 +832,19 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
     from jarvis.voice.personal_memory_acceptance import (
         GROUP_ORDER,
         AcceptanceInterrupted,
+        active_amendments,
         frozen_hashes,
     )
 
-    # Verify the frozen case files before any profile, approval or model call.
+    # Verify the frozen case files and the approved amendments before any
+    # profile, approval or model call.
     hashes = frozen_hashes(repo)
+    for amendment in active_amendments(repo):
+        print(
+            f"Acceptance {amendment['id']}: ACTIVE ({amendment['file']},"
+            f" sha256 {amendment['sha256']})",
+            flush=True,
+        )
     groups = tuple(args.slice1_group) if args.slice1_group else GROUP_ORDER
     profile = prepare_project_profile(
         args.profile,

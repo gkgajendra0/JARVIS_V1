@@ -61,11 +61,41 @@ FROZEN_SHA256 = {
     ACCEPTANCE_FILE: "ed249d688826a18263fd578ff7980a2619057845a674c28d94763bbd5cb3823b",
     HELDOUT_FILE: "fb2c36a4f29eb4638b863d9e1db142599b3c7b265ffbab6db360195dd21d08a1",
 }
+# Owner-approved amendments (2026-11-23 18:51 IST). Kept in their own file;
+# the frozen case files above are never edited. The lab refuses to start if an
+# active amendment's file differs from the approved version.
+AMENDMENT_1_FILE = "docs/evals/personal-memory-acceptance-amendment-1.md"
+ACCEPTANCE_AMENDMENTS = (
+    {
+        "id": "amendment-1",
+        "status": "active",
+        "approved": "2026-11-23 18:51 IST",
+        "file": AMENDMENT_1_FILE,
+        "sha256": "003f2fedca2b6c02a528d1158ecc4e012be1526aa3424348317605f94c0ba2d5",
+        "replaces": {"D1": "D1-A1"},
+        "adds": ["D1-R"],
+        "supersedes": (
+            "frozen D1 expectation that 'have a Royal Enfield Classic 350 from"
+            " 2021' sets purchase year 2021"
+        ),
+    },
+)
+D1_FROZEN_TEXT = (
+    "I have a Royal Enfield Classic 350 from 2021, a Tata Tigor I bought in"
+    " March 2017, and last month I got a Jimny."
+)
+D1_A1_TEXT = (
+    "I have a Royal Enfield Classic 350 I bought in 2021, a Tata Tigor I bought"
+    " in March 2017, and last month I got a Jimny."
+)
 OWNER_TZ = timezone(timedelta(hours=5, minutes=30), "IST")
 MAX_DRIVER_STEPS = 8
 SEED_BATCH = 40
 CHILD_LEASE_SECONDS = 31
 PASS, FAIL, REVIEW, UNTESTED = "PASS", "FAIL", "REVIEW", "UNTESTED"
+# An expectation an approved amendment replaced: reported with the observed
+# value for the record, never PASS or FAIL, and never part of any verdict.
+SUPERSEDED = "SUPERSEDED"
 
 
 DEFAULT_CALL_SPACING_SECONDS = 6.0
@@ -147,6 +177,18 @@ def frozen_hashes(repo: Path) -> dict[str, str]:
             raise ValueError(f"frozen case file changed: {name}")
         observed[name] = digest
     return observed
+
+
+def active_amendments(repo: Path) -> list[dict]:
+    """Refuse to run unless every active amendment file is the approved one
+    (CRLF normalized, as for the frozen files)."""
+    out = []
+    for amendment in ACCEPTANCE_AMENDMENTS:
+        content = (repo / amendment["file"]).read_bytes().replace(b"\r\n", b"\n")
+        if hashlib.sha256(content).hexdigest() != amendment["sha256"]:
+            raise ValueError(f"approved amendment file changed: {amendment['file']}")
+        out.append(dict(amendment))
+    return out
 
 
 # ---------------------------------------------------------------- script --
@@ -245,11 +287,12 @@ GROUPS = {
         ),
         Say(
             "story-02",
-            "D1",
-            "I have a Royal Enfield Classic 350 from 2021, a Tata Tigor I bought in March 2017, and last month I got a Jimny.",
+            "D1-A1",
+            D1_A1_TEXT,
             told(17),
+            note="amendment-1 wording (D1-A1 replaces the frozen D1 wording)",
         ),
-        Check("story-02c", "D1"),
+        Check("story-02c", "D1-A1"),
         Say(
             "story-03",
             "D2",
@@ -469,6 +512,12 @@ GROUPS = {
         Say("plan40-01", "D24", "Add Bir to the paragliding trip.", told(17)),
         Check("plan40-01c", "D24"),
     ),
+    # Amendment 1: the frozen D1 wording verbatim, on its own isolated memory.
+    # "from 2021" is ambiguous and must never invent a purchase date.
+    "d1-regression": (
+        Say("d1r-01", "D1-R", D1_FROZEN_TEXT, told(17)),
+        Check("d1r-01c", "D1-R"),
+    ),
     "pages": (
         Seed("p40-00", _vehicles("Vehicle", 40), note="D25 setup: 40 vehicles"),
         Say("p40-01", "D25", "List all my vehicles.", told(17)),
@@ -480,7 +529,7 @@ GROUP_ORDER = tuple(GROUPS)
 CASES_RUN = tuple(
     sorted(
         {s.case for g in GROUPS.values() for s in g if hasattr(s, "case")},
-        key=lambda c: int(c[1:]),
+        key=lambda c: (int(re.match(r"D(\d+)", c).group(1)), c),
     )
 )
 NOT_RUN_HERE = {
@@ -518,6 +567,10 @@ class ResultLog:
             "kind": KIND,
             "source_commit": commit,
             "case_files": hashes,
+            "acceptance_amendments": [
+                {k: a[k] for k in ("id", "status", "file", "sha256")}
+                for a in ACCEPTANCE_AMENDMENTS
+            ],
             **models,
         }
 
@@ -1225,6 +1278,12 @@ class AcceptanceRunner:
                 ),
                 None,
             ),
+            "superseded_expectations": [
+                {"case": case, **c}
+                for case, row in cases.items()
+                for c in row["checks"]
+                if c["status"] == SUPERSEDED
+            ],
             "answer_quality": "manual_review_required",
             "retry_policy": policy_summary(),
             "provider_reliability": provider_reliability(
@@ -1314,7 +1373,7 @@ def provider_reliability(events):
 
 
 def _overall(checks):
-    statuses = {c["status"] for c in checks}
+    statuses = {c["status"] for c in checks} - {SUPERSEDED}
     if FAIL in statuses:
         return FAIL
     if UNTESTED in statuses:
@@ -1846,15 +1905,13 @@ def _learning_happened(context, step_id):
 # ------------------------------------------------------------------ checks --
 
 
-async def check_d1(context, log):
-    rows = await _rows(context.memory)
-    if not _learning_happened(context, "story-02"):
-        return [_untested("learning ran", "a", "no learning happened for D1")]
+def _d1_items(rows):
     items = _items(rows, "vehicle")
-    classic, tigor, jimny = (
-        _named(items, n) for n in ("classic 350", "tigor", "jimny")
-    )
-    checks = [
+    return items, tuple(_named(items, n) for n in ("classic 350", "tigor", "jimny"))
+
+
+def _d1_shape_checks(items, classic, tigor, jimny):
+    return [
         _check(
             "3 vehicle rows",
             "a",
@@ -1872,33 +1929,67 @@ async def check_d1(context, log):
             all(r["valid_from"] is None for r in classic + tigor + jimny),
         ),
     ]
-    expected = {
-        "classic 350": ("year", "2021-01-01", "2021-12-31"),
-        "tigor": ("month", "2017-03-01", "2017-03-31"),
-        "jimny": ("month", "2026-10-01", "2026-10-31"),
-    }
+
+
+_D1_ACQUIRED = {
+    "classic 350": ("year", "2021-01-01", "2021-12-31"),
+    "tigor": ("month", "2017-03-01", "2017-03-31"),
+    "jimny": ("month", "2026-10-01", "2026-10-31"),
+}
+
+
+async def check_d1_r(context, log):
+    """Amendment 1, D1-R: the frozen D1 wording verbatim. The Classic must be
+    stored without a purchase date; the frozen year-2021 expectation is
+    reported as SUPERSEDED (never PASS or FAIL)."""
+    rows = await _rows(context.memory)
+    if not _learning_happened(context, "d1r-01"):
+        return [_untested("learning ran", "a", "no learning happened for D1-R")]
+    items, (classic, tigor, jimny) = _d1_items(rows)
+    checks = _d1_shape_checks(items, classic, tigor, jimny)
+    classic_acquired = _value(classic[0]).get("acquired") if classic else None
+    checks.append(
+        _check(
+            "no Classic purchase date invented from 'from 2021'",
+            "a",
+            bool(classic) and not classic_acquired,
+            classic_acquired,
+        )
+    )
+    checks.append(
+        {
+            "check": "frozen D1 expectation: Classic acquired year 2021",
+            "level": "a",
+            "status": SUPERSEDED,
+            "detail": {
+                "superseded_by": "amendment-1",
+                "frozen_expected": list(_D1_ACQUIRED["classic 350"]),
+                "observed": _time(_value(classic[0]), "acquired") if classic else None,
+                "current_requirement": "no Classic purchase date invented",
+            },
+        }
+    )
+    for name, rows_for in (("tigor", tigor), ("jimny", jimny)):
+        got = _time(_value(rows_for[0]), "acquired") if rows_for else None
+        checks.append(_check(f"acquired {name}", "a", got == _D1_ACQUIRED[name], got))
+    return checks
+
+
+async def check_d1(context, log):
+    """D1-A1 (amendment 1): the frozen D1 expectations, unchanged, on the
+    amended wording with explicit purchase words."""
+    rows = await _rows(context.memory)
+    if not _learning_happened(context, "story-02"):
+        return [_untested("learning ran", "a", "no learning happened for D1-A1")]
+    items, (classic, tigor, jimny) = _d1_items(rows)
+    checks = _d1_shape_checks(items, classic, tigor, jimny)
     for name, rows_for in (
         ("classic 350", classic),
         ("tigor", tigor),
         ("jimny", jimny),
     ):
         got = _time(_value(rows_for[0]), "acquired") if rows_for else None
-        checks.append(_check(f"acquired {name}", "a", got == expected[name], got))
-    # Owner decision 2026-11-23: the frozen D1 wording "have a Royal Enfield
-    # Classic 350 from 2021" is ambiguous (since 2021, or a 2021 model) and must
-    # not establish a purchase date. The frozen "acquired classic 350" check
-    # above is kept and reported as it is (it is expected to FAIL against the
-    # frozen expectation); proposed amendment 1 rewords D1 with explicit
-    # purchase wording. This regression check keeps the original ambiguity.
-    classic_acquired = _value(classic[0]).get("acquired") if classic else None
-    checks.append(
-        _check(
-            "regression: ambiguous 'from 2021' stores no Classic purchase date",
-            "a",
-            bool(classic) and not classic_acquired,
-            classic_acquired,
-        )
-    )
+        checks.append(_check(f"acquired {name}", "a", got == _D1_ACQUIRED[name], got))
     others = {
         "classic 350": ("tigor", "jimny"),
         "tigor": ("classic", "jimny"),
@@ -2444,9 +2535,8 @@ async def check_d13(context, log):
 
 
 async def check_d14(context, log):
-    # Depends on D1: with the conservative reading of "from 2021" no Classic
-    # purchase year is stored, so "Classic 2021" can only come from the
-    # released quote (see proposed amendment 1). Graded as frozen.
+    # Graded against D1-A1 (amendment 1): the story states the Classic was
+    # bought in 2021, so "Classic 2021" is expected exactly as frozen.
     return [
         _answer_check(
             context,
@@ -3107,7 +3197,8 @@ async def check_d25(context, log):
 
 
 CHECKS = {
-    "D1": check_d1,
+    "D1-A1": check_d1,
+    "D1-R": check_d1_r,
     "D2": check_d2,
     "D3": check_d3,
     "D4": check_d4,
