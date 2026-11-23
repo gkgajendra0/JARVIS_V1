@@ -670,6 +670,22 @@ def run_context_eval_mode(args, repo, tool_paths):
             )
 
 
+def check_lane(root: Path, lane: str, paid_ledger) -> None:
+    """A lab runs on exactly one lane; a resumed lab never changes lane."""
+    if lane not in {"free", "paid"}:
+        raise ValueError("lane must be free or paid")
+    if (lane == "paid") != (paid_ledger is not None):
+        raise ValueError("the paid lane requires its ledger, and only it")
+    steps_file = root / "acceptance-steps.jsonl"
+    if steps_file.exists():
+        first = steps_file.read_text(encoding="utf-8").splitlines()[:1]
+        recorded = json.loads(first[0]).get("lane") if first else None
+        if recorded is not None and recorded != lane:
+            raise ValueError(
+                f"this lab ran on the {recorded} lane; it cannot continue on {lane}"
+            )
+
+
 async def run_slice1_acceptance(
     config,
     root: Path,
@@ -680,8 +696,16 @@ async def run_slice1_acceptance(
     groups,
     retry_interrupted,
     call_spacing_seconds,
+    lane="free",
+    paid_ledger=None,
 ):
-    """Frozen D1-D27 development acceptance in this isolated lab profile."""
+    """Frozen D1-D27 development acceptance in this isolated lab profile.
+
+    lane "free" (default) uses GOOGLE_API_KEY only. lane "paid" (owner
+    approval 2026-11-23, USD 1, development acceptance only) uses
+    JARVIS_GEMINI_PAID_API_KEY only, for extraction, resolution and answers,
+    with every request reserved in the shared durable ledger ``paid_ledger``.
+    A lab never changes lane and never falls back between lanes."""
     import asyncio
     import msvcrt
     from uuid import uuid4
@@ -705,6 +729,7 @@ async def run_slice1_acceptance(
     from jarvis.work.privacy import build_default_work_payload_codec
     from jarvis.work.store import SQLiteWorkStore
 
+    check_lane(root, lane, paid_ledger)
     lock = (root / "project-memory.lock").open("a+b")
     lock.write(b"0")
     lock.flush()
@@ -721,47 +746,96 @@ async def run_slice1_acceptance(
     routing = None
     grant = None
     driver = None
+    ledger = None
+    withheld_free_key = None
     try:
-        path = root / "routing.sqlite3"
-        work_store = SQLiteWorkStore(
-            path, payload_codec=build_default_work_payload_codec(path)
-        )
-        # Free credential lane only: paid targets are disabled for this lab.
-        routing = build_routing_runtime(
-            work_store=work_store,
-            provider="gemini",
-            model=model,
-            config=replace(config.gemini_fallback, enabled=False),
-        )
-        # Answer calls: the Free credential only, SDK retries off, no router
-        # and no Paid credential (a Paid request is impossible). The text
-        # driver is the single retry owner for these calls.
-        driver = FreeLaneDriverClient(
-            build_structured_output_client(
+        if lane == "paid":
+            from jarvis.voice.paid_acceptance_budget import (
+                BUDGET_ID,
+                CEILING_MICRO_USD,
+                PAID_CREDENTIAL_REF,
+                PaidBudgetLedger,
+                PaidLaneDriverClient,
+                build_paid_clients,
+            )
+
+            # Paid lane only: no router, no Free credential. Learning uses the
+            # Paid key directly with SDK retries off (Jarvis's learning runtime
+            # stays the single, bounded retry owner); answers likewise, with
+            # the text driver as retry owner. Every request is reserved in the
+            # shared ledger before it is sent.
+            ledger = PaidBudgetLedger(paid_ledger)
+            adapter, answer = build_paid_clients(model, ledger, lab=str(root))
+            # The Free credential is withheld from this process for the whole
+            # run, so no code path can reach the Free lane by accident.
+            withheld_free_key = os.environ.pop("GOOGLE_API_KEY", None)
+            extractor = resolver = adapter
+            driver = PaidLaneDriverClient(answer)
+            lane_fields = {
+                "lane": "paid",
+                "credential_ref": PAID_CREDENTIAL_REF,
+                "paid_budget": {
+                    "budget_id": BUDGET_ID,
+                    "ceiling_usd": CEILING_MICRO_USD / 1e6,
+                    "ledger": str(paid_ledger),
+                },
+            }
+        else:
+            path = root / "routing.sqlite3"
+            work_store = SQLiteWorkStore(
+                path, payload_codec=build_default_work_payload_codec(path)
+            )
+            # Free credential lane only: paid targets are disabled for this lab.
+            routing = build_routing_runtime(
+                work_store=work_store,
                 provider="gemini",
                 model=model,
-                provider_retries=False,
-                credential_ref=gemini_credential_ref("free"),
-                max_output_tokens=2048,
+                config=replace(config.gemini_fallback, enabled=False),
             )
-        )
-        # With paid routing disabled the learning adapters use the Free key
-        # directly, with the SDK's own retries off; Jarvis's learning runtime
-        # is their single retry owner (bounded, temporary failures only).
-        extractor, resolver = build_learning_adapters("gemini", routing_runtime=routing)
+            # Answer calls: the Free credential only, SDK retries off, no router
+            # and no Paid credential (a Paid request is impossible). The text
+            # driver is the single retry owner for these calls.
+            driver = FreeLaneDriverClient(
+                build_structured_output_client(
+                    provider="gemini",
+                    model=model,
+                    provider_retries=False,
+                    credential_ref=gemini_credential_ref("free"),
+                    max_output_tokens=2048,
+                )
+            )
+            # With paid routing disabled the learning adapters use the Free key
+            # directly, with the SDK's own retries off; Jarvis's learning runtime
+            # is their single retry owner (bounded, temporary failures only).
+            extractor, resolver = build_learning_adapters(
+                "gemini", routing_runtime=routing
+            )
+            lane_fields = {"lane": "free", "credential_ref": "GOOGLE_API_KEY"}
         models = {
             "answer_model": model,
             "learning_model": getattr(extractor, "model_name", None),
-            "lane": "free",
+            **lane_fields,
             "call_spacing_seconds": float(call_spacing_seconds),
             "retry_policy": policy_summary(),
         }
-        # One limiter shared by learning and answer calls (same Free key).
+        # One limiter shared by learning and answer calls (same key).
         pacer = FreeLanePacer(call_spacing_seconds)
+        lane_text = (
+            "PAID lane only (JARVIS_GEMINI_PAID_API_KEY for extraction, resolution "
+            f"and answers; shared budget USD {CEILING_MICRO_USD / 1e6:.2f}, ledger "
+            f"{paid_ledger}; no Free fallback)"
+            if lane == "paid"
+            else "Free lane only (GOOGLE_API_KEY; no Paid fallback)"
+        )
+        if ledger is not None:
+            print(
+                "PAID BUDGET BEFORE RUN: " + json.dumps(ledger.snapshot()), flush=True
+            )
         print(
-            "SLICE-1 DEVELOPMENT ACCEPTANCE (D1-D27, fictional data, isolated lab). "
-            f"Answer model {model}; learning model {models['learning_model']}. Free "
-            f"lane only; a temporary provider error (503/500) is retried at most "
+            f"SLICE-1 DEVELOPMENT ACCEPTANCE [{lane.upper()} LANE] (D1-D27, "
+            "fictional data, isolated lab). "
+            f"Answer model {model}; learning model {models['learning_model']}. "
+            f"{lane_text}; a temporary provider error (503/500) is retried at most "
             "twice inside its deadline, never a 429, stall or wrong answer; model "
             f"calls start at least "
             f"{float(call_spacing_seconds):g} s apart. Windows Hello: (1) now, to open the "
@@ -806,13 +880,22 @@ async def run_slice1_acceptance(
         runner = AcceptanceRunner(root, deps, log, retry_interrupted=retry_interrupted)
         summary = await runner.run(groups)
         print(
-            "DEVELOPMENT ACCEPTANCE COMPLETE: "
+            f"DEVELOPMENT ACCEPTANCE COMPLETE [{lane.upper()} LANE]: "
             + json.dumps({c: r["status"] for c, r in summary["cases"].items()})
             + f" | untested={summary['untested']} | results in {root}",
             flush=True,
         )
         return summary
     finally:
+        if withheld_free_key is not None:
+            os.environ["GOOGLE_API_KEY"] = withheld_free_key
+        if ledger is not None:
+            snapshot = ledger.snapshot()
+            (root / "paid-budget-snapshot.json").write_text(
+                json.dumps({**snapshot, "lab": str(root)}, indent=2), encoding="utf-8"
+            )
+            print("PAID BUDGET AFTER RUN: " + json.dumps(snapshot), flush=True)
+            ledger.close()
         if grant is not None:
             capability.close_personal_learning(grant)
         capability.close()
@@ -868,11 +951,13 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
                     groups=groups,
                     retry_interrupted=args.retry_interrupted,
                     call_spacing_seconds=args.call_spacing_seconds,
+                    lane="paid" if args.paid_lane else "free",
+                    paid_ledger=args.paid_budget_ledger,
                 )
             )
         except AcceptanceInterrupted as exc:
             print(
-                f"INTERRUPTED (any bounded retries are recorded; none remain): {exc}. "
+                f"[{'PAID' if args.paid_lane else 'FREE'} LANE] INTERRUPTED (any bounded retries are recorded; none remain): {exc}. "
                 "Completed steps are kept. Continue later with the same command plus "
                 "-ResumeLab; an interrupted step reruns only with -RetryInterrupted.",
                 flush=True,
@@ -911,7 +996,13 @@ def main():
     )
     parser.add_argument("--retry-interrupted", action="store_true")
     parser.add_argument("--call-spacing-seconds", type=float, default=None)
+    parser.add_argument("--paid-lane", action="store_true")
+    parser.add_argument("--paid-budget-ledger", type=Path, default=None)
     args = parser.parse_args()
+    if (args.paid_lane or args.paid_budget_ledger) and not args.slice1_acceptance:
+        parser.error("--paid-lane is only for --slice1-acceptance")
+    if args.paid_lane != (args.paid_budget_ledger is not None):
+        parser.error("--paid-lane and --paid-budget-ledger go together")
     if args.slice1_acceptance and (
         args.seed_acceptance
         or args.development_batch

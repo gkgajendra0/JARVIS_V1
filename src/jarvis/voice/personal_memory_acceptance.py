@@ -581,7 +581,7 @@ class ResultLog:
             stream.flush()
 
     def event(self, row):
-        self._append(self.events, row)
+        self._append(self.events, {"lane": self.meta.get("lane"), **row})
 
     def step(self, row):
         self._append(self.steps, {**self.meta, **row})

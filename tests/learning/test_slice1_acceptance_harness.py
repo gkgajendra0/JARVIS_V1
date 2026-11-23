@@ -933,6 +933,109 @@ async def test_windows_entry_wiring_runs_offline_with_fakes(
     assert summary["retry_policy"]["max_attempts"] == 3
 
 
+async def test_windows_entry_wiring_paid_lane_uses_only_the_paid_key_and_ledger(
+    lab, monkeypatch, authority_parts, tmp_path
+):
+    """The Paid lane through the real entry point: no Free client or router is
+    built, the Free key is withheld for the run, every row says paid, and the
+    ledger snapshot is written."""
+    import os
+    import types
+
+    from jarvis.voice import paid_acceptance_budget, project_memory_lab
+
+    fake_msvcrt = types.SimpleNamespace(locking=lambda *a: None, LK_NBLCK=1, LK_UNLCK=0)
+    monkeypatch.setitem(sys.modules, "msvcrt", fake_msvcrt)
+    monkeypatch.setattr(
+        authority_parts.broker._audit, "close", lambda: None, raising=False
+    )
+    monkeypatch.setattr(
+        "jarvis.capabilities.authority_bridge.CapabilityAuthorityBroker",
+        lambda: authority_parts.broker,
+    )
+
+    def fake_memory(path):
+        class Deferred:
+            async def start(self_inner):
+                self_inner.__dict__.update({"real": await lab.deps.open_memory(path)})
+
+            def __getattr__(self_inner, name):
+                return getattr(self_inner.__dict__["real"], name)
+
+        return Deferred()
+
+    monkeypatch.setattr(
+        "jarvis.memory.runtime.build_default_memory_runtime", fake_memory
+    )
+
+    def never(*_a, **_k):
+        raise AssertionError("a Free-lane client or router was built")
+
+    monkeypatch.setattr("jarvis.model_routing.runtime.build_routing_runtime", never)
+    monkeypatch.setattr(
+        "jarvis.hands.provider_adapters.build_structured_output_client", never
+    )
+    monkeypatch.setattr(
+        "jarvis.memory.learning_extractors.build_learning_adapters", never
+    )
+    seen = {}
+
+    def paid_clients(model, ledger, *, lab):
+        seen["ledger"] = ledger.path
+        return lab_deps.extractor, lab_driver
+
+    lab_deps, lab_driver = lab.deps, lab.driver
+    monkeypatch.setattr(paid_acceptance_budget, "build_paid_clients", paid_clients)
+    monkeypatch.setenv("GOOGLE_API_KEY", "free-must-not-be-used")
+    original_reply = lab_driver.parse_with_telemetry
+
+    async def reply(**kwargs):
+        seen.setdefault("free_key_during_run", os.environ.get("GOOGLE_API_KEY"))
+        return await original_reply(**kwargs)
+
+    monkeypatch.setattr(lab_driver, "parse_with_telemetry", reply)
+    config = types.SimpleNamespace(gemini_fallback=types.SimpleNamespace(enabled=True))
+    root = lab.root / "entry-paid"
+    root.mkdir()
+    ledger_path = tmp_path / "shared-paid-ledger" / "ledger.sqlite3"
+    summary = await project_memory_lab.run_slice1_acceptance(
+        config,
+        root,
+        model="fictional-answer",
+        source_commit="1" * 40,
+        hashes=dict(acceptance.FROZEN_SHA256),
+        groups=("idiom",),
+        retry_interrupted=False,
+        call_spacing_seconds=0.5,
+        lane="paid",
+        paid_ledger=ledger_path,
+    )
+    assert summary["cases"]["D9"]["status"] == acceptance.PASS
+    assert summary["lane"] == "paid"
+    assert summary["credential_ref"] == "JARVIS_GEMINI_PAID_API_KEY"
+    assert summary["paid_budget"]["ceiling_usd"] == 1.0
+    assert seen["ledger"] == ledger_path
+    assert seen["free_key_during_run"] is None  # withheld while running
+    assert os.environ["GOOGLE_API_KEY"] == "free-must-not-be-used"  # restored
+    for name in ("acceptance-steps.jsonl", "acceptance-events.jsonl"):
+        rows = [json.loads(x) for x in (root / name).read_text().splitlines()]
+        assert {row["lane"] for row in rows} == {"paid"}, name
+    snapshot = json.loads((root / "paid-budget-snapshot.json").read_text())
+    assert snapshot["ceiling_usd"] == 1.0 and snapshot["ledger"] == str(ledger_path)
+    # The lab can never continue on the Free lane.
+    with pytest.raises(ValueError, match="cannot continue on free"):
+        await project_memory_lab.run_slice1_acceptance(
+            config,
+            root,
+            model="fictional-answer",
+            source_commit="1" * 40,
+            hashes=dict(acceptance.FROZEN_SHA256),
+            groups=("idiom",),
+            retry_interrupted=False,
+            call_spacing_seconds=0.5,
+        )
+
+
 # D17 stage diagnosis (owner check 2026-11-21) ---------------------------------
 
 TARGET = "owned_item_classic"

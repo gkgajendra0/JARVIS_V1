@@ -15,7 +15,9 @@ param(
     [switch]$Slice1Acceptance,
     [switch]$RetryInterrupted,
     [ValidateRange(0.5, 120)][double]$CallSpacingSeconds = 0,
-    [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','pages')][string[]]$Slice1Group,
+    [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','d1-regression','pages')][string[]]$Slice1Group,
+    [switch]$PaidLane,
+    [string]$PaidBudgetLedger = "",
     [ValidateSet('without','with')][string]$ContextEvalArm,
     [ValidateSet('travel','diet','device')][string]$ContextEvalCase,
     [ValidateSet('p0-q0','p1-q1','p2-q2','p3-q3','p4-q4','p5-q5')][string]$DevelopmentCase
@@ -29,6 +31,8 @@ if ($SeedVoiceEval -and ($ResumeLab -or $SeedAcceptance -or $DevelopmentBatch -o
 if ($DevelopmentCase -and -not $DevelopmentBatch) { throw "DevelopmentCase requires DevelopmentBatch." }
 if ($Slice1Acceptance -and ($SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase -or $PersonalAcceptance -or $ContextEval -or $SeedVoiceEval)) { throw "Slice-1 acceptance runs alone in its own lab." }
 if (($Slice1Group -or $RetryInterrupted) -and -not $Slice1Acceptance) { throw "Slice1Group/RetryInterrupted require Slice1Acceptance." }
+if ($PaidLane -and -not $Slice1Acceptance) { throw "PaidLane is only for Slice1Acceptance (owner-approved USD 1 development acceptance)." }
+if ([bool]$PaidLane -ne [bool]$PaidBudgetLedger) { throw "PaidLane and PaidBudgetLedger go together." }
 if ($RetryInterrupted -and -not $ResumeLab) { throw "RetryInterrupted only continues an existing lab (ResumeLab)." }
 if ($CallSpacingSeconds -and -not $Slice1Acceptance) { throw "CallSpacingSeconds requires Slice1Acceptance." }
 if ($DevelopmentBatch -and ($SeedAcceptance -or $ResumeLab)) { throw "Development batch requires a new isolated lab, without acceptance seeding or resume." }
@@ -39,6 +43,10 @@ if (-not (Test-Path $python -PathType Leaf)) { throw "Existing Python unavailabl
 & $git -C $RepoRoot cat-file -e ($Commit + '^{commit}')
 if ($LASTEXITCODE -ne 0) { throw "Exact commit is not local. Fetch it explicitly before this launcher; no implicit network retry." }
 $resolvedLab = [IO.Path]::GetFullPath($LabRoot)
+if ($PaidLane) {
+    $resolvedLedger = [IO.Path]::GetFullPath($PaidBudgetLedger)
+    if ($resolvedLedger.StartsWith($resolvedLab.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "The shared Paid ledger must live outside any lab root." }
+}
 $source = Join-Path $resolvedLab "source"
 $profile = Join-Path $resolvedLab "profile"
 if ($ResumeLab) {
@@ -69,6 +77,7 @@ try {
     if ($RetryInterrupted) { $arguments += "--retry-interrupted" }
     if ($CallSpacingSeconds) { $arguments += @("--call-spacing-seconds", $CallSpacingSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)) }
     foreach ($group in @($Slice1Group | Where-Object { $_ })) { $arguments += @("--slice1-group", $group) }
+    if ($PaidLane) { $arguments += @("--paid-lane", "--paid-budget-ledger", $resolvedLedger) }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }
