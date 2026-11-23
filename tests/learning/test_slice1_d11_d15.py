@@ -133,8 +133,8 @@ def test_a_word_shared_by_several_plans_asks_which_one():
     assert result.status == "clarification_required" and result.facts == ()
     assert result.reason == "ambiguous_target"
     # Two plans whose whole names are inside the quote: also ambiguous.
-    both = [_plan_record("Goa", "a"), _plan_record("plan", "b")]
-    assert _lookup(both, "Goa plan", "Cancel the Goa plan.").status == (
+    both = [_plan_record("Goa", "a"), _plan_record("Beach", "b")]
+    assert _lookup(both, "Goa beach plan", "Cancel the Goa beach plan.").status == (
         "clarification_required"
     )
 

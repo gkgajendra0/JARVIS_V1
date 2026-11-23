@@ -286,6 +286,27 @@ def _name_words(record, scope):
 
 
 _ARTICLES = frozenset({"the", "my", "our", "a", "an", "mera", "meri", "mere"})
+# Head nouns that say what kind of plan or event something is, not which one
+# ("the Spiti trip" names the plan called "winter Spiti"). Ignored only in
+# plan and event lookups, and only as quoted words; a quote of nothing else
+# matches nothing.
+_PLAN_HEAD_NOUNS = frozenset(
+    {
+        "plan",
+        "plans",
+        "trip",
+        "trips",
+        "journey",
+        "holiday",
+        "holidays",
+        "vacation",
+        "tour",
+        "visit",
+        "outing",
+        "yatra",
+        "safar",
+    }
+)
 
 
 def _word_reference(candidates, scope, quote):
@@ -299,13 +320,14 @@ def _word_reference(candidates, scope, quote):
     Exactly one item is released; two or more ask which one was meant."""
     from .learning_catalog_page import name_words
 
-    wanted = name_words(quote) - _ARTICLES
+    ignored = _ARTICLES | (_PLAN_HEAD_NOUNS if scope in {"plan", "event"} else set())
+    wanted = name_words(quote) - ignored
     if not wanted:
         return [], None
     names = {r.assertion_id: _name_words(r, scope) for r in candidates}
     for test in (
         lambda n: wanted <= n,
-        lambda n: bool(n - _ARTICLES) and (n - _ARTICLES) <= wanted,
+        lambda n: bool(n - ignored) and (n - ignored) <= wanted,
     ):
         matched = [r for r in candidates if any(test(n) for n in names[r.assertion_id])]
         if len(matched) > 1:

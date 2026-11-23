@@ -270,6 +270,7 @@ class LearningReconciler:
             if LearningPolicy().evaluate(source, candidate).status != "eligible":
                 skip("policy_rejected", record=False)
                 continue
+            candidate = _settled_item_times(candidate)
             if index in catalog.page_ambiguous:
                 skip(PAGE_AMBIGUOUS)
                 continue
@@ -365,6 +366,36 @@ class LearningReconciler:
                     refine_target.predicate,
                     refine_target.assertion_id,
                 )
+                if (
+                    candidate.category == "owned_item"
+                    and not decision_only
+                    and candidate.state in OWNERSHIP_STATES
+                    and old_value.get("state") in OWNERSHIP_STATES
+                    and candidate.state != old_value.get("state")
+                ):
+                    # "I sold the Classic 350 in October." proposed as new
+                    # detail (run 7 D23): a different ownership state of the
+                    # named item is a real change of that item, never a
+                    # refine that would keep it owned.
+                    if predicate in used:
+                        skip("conflicting_mutations")
+                        continue
+                    used.add(predicate)
+                    value = _changed_value(old_value, candidate, source)
+                    mutations.append(
+                        self._mutation(
+                            index,
+                            candidate,
+                            source,
+                            "change",
+                            predicate,
+                            expected,
+                            value,
+                            effective_at=day_boundary(value.get("disposed")),
+                            others=_other_labels(batch, index),
+                        )
+                    )
+                    continue
                 if (
                     merged is None
                     and candidate.category == "plan"
@@ -523,6 +554,30 @@ class LearningReconciler:
                     others=_other_labels(batch, index),
                 )
             )
+        kept = []
+        for mutation in mutations:
+            problem = _item_inconsistency(mutation)
+            if problem is None:
+                kept.append(mutation)
+                continue
+            candidate = batch.candidates[mutation.ordinal]
+            log_learning(
+                self.diagnostics,
+                source,
+                "reconciliation",
+                "skipped",
+                candidate_index=mutation.ordinal,
+                reason=problem,
+            )
+            outcomes.append(
+                LearningOutcome(
+                    mutation.ordinal,
+                    candidate.suppression_key,
+                    candidate.category,
+                    problem,
+                )
+            )
+        mutations = kept
         return LearningPlan(
             source,
             tuple(mutations),
@@ -652,6 +707,71 @@ def _time_words(candidate) -> set[str]:
         )
         if t
     }
+
+
+OWNERSHIP_STATES = frozenset({"owned"}) | frozenset(DISPOSED_STATES)
+
+
+def _settled_item_times(candidate):
+    """Put an owned item's stated time where it belongs.
+
+    Models sometimes place the owner's time phrase in ``details`` or only in
+    ``time_expression`` (run 7 D12: correction with details "September",
+    time_expression "September", no acquired_expression). When the details
+    are nothing but that time phrase, or a correction states only a time,
+    the phrase becomes the disposal time for a no-longer-owned state and the
+    acquisition time otherwise, and the details are cleared. Anything else is
+    left exactly as proposed."""
+    if candidate.category != "owned_item":
+        return candidate
+    times = _time_words(candidate)
+    details = candidate.details
+    time_only_details = bool(details) and normalize_memory_surface(details) in times
+    stated = candidate.acquired_expression or candidate.disposed_expression
+    restates_only_time = (
+        candidate.intent == "correction"
+        and candidate.time_expression
+        and not stated
+        and not details
+        and not candidate.aliases
+    )
+    if not (time_only_details or restates_only_time):
+        return candidate
+    update = {"details": None} if time_only_details else {}
+    phrase = candidate.time_expression or details
+    if not stated and phrase:
+        key = (
+            "disposed_expression"
+            if candidate.state in DISPOSED_STATES
+            else "acquired_expression"
+        )
+        update[key] = phrase
+    return candidate.model_copy(update=update)
+
+
+def _item_inconsistency(mutation):
+    """Record-level invariants for an owned item about to be written; a
+    violation is skipped with a reason instead of stored:
+    - a disposal time only for a no-longer-owned state;
+    - details are never just one of the item's own time phrases;
+    - the value is never one of the item's own time phrases."""
+    value = getattr(mutation.draft, "value", None)
+    if not isinstance(value, dict) or value.get("category") != "owned_item":
+        return None
+    if value.get("disposed") and value.get("state") not in DISPOSED_STATES:
+        return "inconsistent_item_state"
+    times = {
+        normalize_memory_surface(t.get("expression"))
+        for t in (value.get("acquired"), value.get("disposed"))
+        if isinstance(t, dict) and t.get("expression")
+    }
+    details = value.get("details")
+    if isinstance(details, str) and normalize_memory_surface(details) in times:
+        return "time_in_item_details"
+    item = value.get("value")
+    if isinstance(item, str) and normalize_memory_surface(item) in times:
+        return "time_as_item_value"
+    return None
 
 
 def _item_identity(candidate) -> str:
