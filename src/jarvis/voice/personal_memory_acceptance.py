@@ -1884,6 +1884,21 @@ async def check_d1(context, log):
     ):
         got = _time(_value(rows_for[0]), "acquired") if rows_for else None
         checks.append(_check(f"acquired {name}", "a", got == expected[name], got))
+    # Owner decision 2026-11-23: the frozen D1 wording "have a Royal Enfield
+    # Classic 350 from 2021" is ambiguous (since 2021, or a 2021 model) and must
+    # not establish a purchase date. The frozen "acquired classic 350" check
+    # above is kept and reported as it is (it is expected to FAIL against the
+    # frozen expectation); proposed amendment 1 rewords D1 with explicit
+    # purchase wording. This regression check keeps the original ambiguity.
+    classic_acquired = _value(classic[0]).get("acquired") if classic else None
+    checks.append(
+        _check(
+            "regression: ambiguous 'from 2021' stores no Classic purchase date",
+            "a",
+            bool(classic) and not classic_acquired,
+            classic_acquired,
+        )
+    )
     others = {
         "classic 350": ("tigor", "jimny"),
         "tigor": ("classic", "jimny"),
@@ -2429,6 +2444,9 @@ async def check_d13(context, log):
 
 
 async def check_d14(context, log):
+    # Depends on D1: with the conservative reading of "from 2021" no Classic
+    # purchase year is stored, so "Classic 2021" can only come from the
+    # released quote (see proposed amendment 1). Graded as frozen.
     return [
         _answer_check(
             context,

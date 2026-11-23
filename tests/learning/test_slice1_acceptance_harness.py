@@ -626,8 +626,18 @@ async def test_full_scripted_run_passes_every_automatic_check(lab):
         for case, row in summary["cases"].items()
         if row["status"] in {acceptance.FAIL, acceptance.UNTESTED}
     }
-    assert failed == {}, json.dumps(failed, indent=1, default=str)[:4000]
-    assert summary["automatic_verdict"] == "PASS_PENDING_MANUAL_REVIEW"
+    # The one known failure: the frozen D1 expectation reads the ambiguous
+    # "have ... from 2021" as a purchase year. By owner decision (2026-11-23)
+    # it stores no Classic purchase date, so that frozen check FAILS and is
+    # reported as such (proposed amendment 1); its regression check passes.
+    assert {case: [c["check"] for c in checks] for case, checks in failed.items()} == {
+        "D1": ["acquired classic 350"]
+    }, json.dumps(failed, indent=1, default=str)[:4000]
+    d1 = {c["check"]: c["status"] for c in summary["cases"]["D1"]["checks"]}
+    assert d1["regression: ambiguous 'from 2021' stores no Classic purchase date"] == (
+        acceptance.PASS
+    )
+    assert summary["automatic_verdict"] == acceptance.FAIL
     assert summary["d17_failed_stage"] is None
     assert "D17" in summary["required_gates"]
     hello = [c for c in summary["cases"]["D3"]["checks"] if c["check"] == "one Hello"]
@@ -727,7 +737,9 @@ async def test_quota_interruption_preserves_completed_steps_and_resume_never_rep
     assert not [text for _, text in later if text in earlier_texts]
     assert log.step_states()["story-07"]["attempt"] == 2
     assert summary["cases"]["D6"]["status"] == acceptance.PASS
-    assert summary["cases"]["D1"]["status"] == acceptance.PASS  # preserved
+    # D1 keeps the result recorded before the interruption (its frozen
+    # Classic purchase-year check fails by owner decision; see amendment 1).
+    assert summary["cases"]["D1"]["status"] == acceptance.FAIL  # preserved
 
 
 @pytest.mark.asyncio
