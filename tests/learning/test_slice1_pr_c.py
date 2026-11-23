@@ -1015,7 +1015,6 @@ async def test_correction_of_a_stored_purchase_month_infers_and_marks_the_year(
         ("sold", "October", "inferred_year", "month"),
         ("sold", "October 2025", "stated", "month"),
         ("lost", "in March", "inferred_year", "month"),
-        ("owned", "October", "stated", "unresolved"),  # not gone: no context
     ],
 )
 async def test_disposal_month_infers_a_year_only_when_the_item_is_gone(
@@ -1042,6 +1041,29 @@ async def test_disposal_month_infers_a_year_only_when_the_item_is_gone(
         basis,
         precision,
     )
+
+
+@pytest.mark.asyncio
+async def test_a_disposal_time_on_an_item_still_owned_is_never_stored(learning):
+    # Not gone: no year is inferred, and since lab 7 the consistency gate
+    # refuses an owned item carrying a disposal time at all.
+    owner = Owner(learning)
+    text = "The Ertiga, October."
+    plan, result, _ = await owner.say(
+        text,
+        [
+            item(
+                "Ertiga",
+                [text.rstrip(".")],
+                state="owned",
+                disposed_expression="October",
+            )
+        ],
+        [("new", None)],
+    )
+    assert result.status != "committed" and plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["inconsistent_item_state"]
+    assert await _stored_items(learning) == []
 
 
 # Pronoun follow-ups (owner check 2026-11-21, from run-1 D5) -------------------
