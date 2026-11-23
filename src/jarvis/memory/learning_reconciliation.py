@@ -481,6 +481,13 @@ class LearningReconciler:
                         skip("invalid_existing_value")
                         continue
                     value = _changed_value(old, candidate, source)
+                    if candidate.category == "plan" and _names_entry(
+                        candidate, entry, catalog.entries
+                    ):
+                        # "Cancel the Goa plan": a status change of the plan
+                        # it names keeps that plan's name.
+                        value["label"] = old.get("label", value["label"])
+                        value["value"] = old.get("value", value["value"])
                 elif entry is not None and action == "correct":
                     try:
                         old = json.loads(entry.value)
@@ -670,6 +677,29 @@ def _without_article(label):
     return text
 
 
+def _names_entry(candidate, entry, entries) -> bool:
+    """True when the proposal's label names the stored fact: the same label,
+    a unique shorter reference ("Tigor" -> "Tata Tigor"), or a label that
+    wholly contains the stored name of exactly one fact of that category and
+    kind ("Goa plan" -> "Goa"). A leading article is ignored."""
+    from .learning_catalog_page import identity_words, name_words
+
+    label = _without_article(candidate.label)
+    if _label(entry) == normalize_memory_surface(label):
+        return True
+    if unique_reference(entry, label, entries):
+        return True
+    words = name_words(label)
+    inside = [
+        e.assertion_id
+        for e in entries
+        if e.category == entry.category
+        and e.kind == entry.kind
+        and any(w and w <= words for w in identity_words(e))
+    ]
+    return inside == [entry.assertion_id]
+
+
 def _corrected_item_value(old, fresh, candidate, entry, entries):
     """A correction of one owned item changes only what the owner corrected.
 
@@ -680,10 +710,7 @@ def _corrected_item_value(old, fresh, candidate, entry, entries):
     correction naming a different item ("it's a Jimny, not a Thar") corrects
     the identity and still keeps the unrelated attributes. A state corrected
     back to owned drops the disposal time."""
-    label = _without_article(candidate.label)
-    names_item = _label(entry) == normalize_memory_surface(label) or unique_reference(
-        entry, label, entries
-    )
+    names_item = _names_entry(candidate, entry, entries)
     value = {**old, "schema": fresh["schema"], "state": fresh["state"]}
     if not names_item:
         value["label"], value["value"] = fresh["label"], fresh["value"]

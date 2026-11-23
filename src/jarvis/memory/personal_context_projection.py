@@ -285,6 +285,36 @@ def _name_words(record, scope):
     return [w for w in (name_words(n) for n in names if n) if w]
 
 
+_ARTICLES = frozenset({"the", "my", "our", "a", "an", "mera", "meri", "mere"})
+
+
+def _word_reference(candidates, scope, quote):
+    """Conservative fallback after an exact-label miss, within one permitted
+    scope. Returns (items, None) or ([], reason).
+
+    Words are compared whole (the same normalized words learning uses), never
+    as substrings; articles are ignored. First, an item whose name contains
+    every quoted word ("Goa" -> "Goa plan", "Tigor" -> "Tata Tigor"); failing
+    that, an item whose whole name is inside the quote ("Goa plan" -> "Goa").
+    Exactly one item is released; two or more ask which one was meant."""
+    from .learning_catalog_page import name_words
+
+    wanted = name_words(quote) - _ARTICLES
+    if not wanted:
+        return [], None
+    names = {r.assertion_id: _name_words(r, scope) for r in candidates}
+    for test in (
+        lambda n: wanted <= n,
+        lambda n: bool(n - _ARTICLES) and (n - _ARTICLES) <= wanted,
+    ):
+        matched = [r for r in candidates if any(test(n) for n in names[r.assertion_id])]
+        if len(matched) > 1:
+            return [], "ambiguous_target"
+        if matched:
+            return matched, None
+    return [], None
+
+
 def _referent(candidates, scope, quote, turns):
     """The single item a referring question means, from the owner's earlier
     turns only. Returns (items, None) or ([], reason).
@@ -547,8 +577,16 @@ def project_personal_context(
                 unclear = None
                 if len(candidates) > 1:
                     unclear = "ambiguous_target"
-                elif not candidates and any(label is None for _, label in labels):
-                    unclear = "unresolved_target"
+                elif not candidates:
+                    candidates, unclear = _word_reference(
+                        [r for r, _ in labels], request.scope_key, request.target_quote
+                    )
+                    if (
+                        not candidates
+                        and not unclear
+                        and any(label is None for _, label in labels)
+                    ):
+                        unclear = "unresolved_target"
                 if unclear:
                     # That scope releases nothing; matched scopes still do.
                     clarification = clarification or unclear
