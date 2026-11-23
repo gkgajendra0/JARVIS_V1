@@ -859,13 +859,14 @@ _CLAUSE_BREAK = re.compile(r"[,;.!?]|\b(?:and|aur|but|lekin|par)\b", re.IGNORECA
 
 
 def _evidence_text(source, candidate):
+    """The owner turns the evidence comes from, whole: a minimal quote such as
+    "a Royal Enfield Classic 350 from 2021" shares its verb ("I have ...")
+    with the rest of the owner's sentence."""
     turns = {t.turn_id: t.text for t in source.turns}
-    parts = []
-    for span in candidate.evidence:
-        text = turns.get(span.turn_id)
-        if text is not None and 0 <= span.start < span.end <= len(text):
-            parts.append(text[span.start : span.end])
-    return " ".join(parts) or source.text
+    cited = dict.fromkeys(
+        turns[span.turn_id] for span in candidate.evidence if span.turn_id in turns
+    )
+    return " ".join(cited) or source.text
 
 
 def _date_role(source, candidate, phrase):

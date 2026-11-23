@@ -239,16 +239,24 @@ async def test_d2_added_detail_refines_the_same_item(learning):
 
 
 @pytest.mark.asyncio
-async def test_refine_never_overrides_a_contradicting_detail(learning):
+@pytest.mark.parametrize(
+    "text,reason",
+    [
+        ("I bought the Jimny in 2019.", "refine_conflicts_existing_detail"),
+        # No acquisition wording: the date is not applied at all (owner rule
+        # 2026-11-23, positive evidence for purchase/disposal dates).
+        ("The Jimny is from 2019.", "date_evidence_missing"),
+    ],
+)
+async def test_refine_never_overrides_a_contradicting_detail(learning, text, reason):
     owner, _ = await seed_d1(learning)
-    text = "The Jimny is from 2019."
     plan, result, _ = await owner.say(
         text,
-        [item("Jimny", ["The Jimny is from 2019"], acquired_expression="2019")],
+        [item("Jimny", [text.rstrip(".")], acquired_expression="2019")],
         [("match", "Jimny")],
     )
     assert plan.mutations == ()
-    assert [o.reason for o in plan.outcomes] == ["refine_conflicts_existing_detail"]
+    assert [o.reason for o in plan.outcomes] == [reason]
     assert result.status == "recorded"
 
 

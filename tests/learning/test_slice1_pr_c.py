@@ -934,7 +934,6 @@ async def _stored_items(learning):
     [
         ("I have a Gypsy from September.", "Gypsy", "September"),
         ("I bought a Duster in September.", "Duster", "September"),
-        ("My Nexon is from March.", "Nexon", "March"),
     ],
 )
 async def test_new_item_bare_month_is_never_turned_into_a_purchase_date(
@@ -956,6 +955,21 @@ async def test_new_item_bare_month_is_never_turned_into_a_purchase_date(
 
 
 @pytest.mark.asyncio
+async def test_a_date_without_acquisition_wording_is_not_a_purchase_date(learning):
+    # "My Nexon is from March." says nothing about buying it.
+    owner = Owner(learning)
+    text = "My Nexon is from March."
+    _plan, result, _ = await owner.say(
+        text,
+        [item("Nexon", [text.rstrip(".")], acquired_expression="March")],
+        [("new", None)],
+    )
+    assert result.status == "committed"
+    value, _state, _ = (await _stored_items(learning))[-1]
+    assert value["label"] == "Nexon" and "acquired" not in value
+
+
+@pytest.mark.asyncio
 async def test_correction_without_a_stored_purchase_time_infers_no_year(learning):
     owner = Owner(learning)
     await owner.say(
@@ -973,10 +987,12 @@ async def test_correction_without_a_stored_purchase_time_infers_no_year(learning
         ],
         [("match", "Hector")],
     )
-    assert [m.action for m in plan.mutations] == ["correct"]
+    # No acquisition wording and no stored date it replaces: not applied,
+    # recorded (owner rule 2026-11-23, positive evidence).
+    assert plan.mutations == ()
+    assert [o.reason for o in plan.outcomes] == ["date_evidence_missing"]
     value, _state, _ = (await _stored_items(learning))[-1]
-    assert value["acquired"]["precision"] == "unresolved"
-    assert value["acquired"]["expression"] == "September"
+    assert "acquired" not in value
 
 
 @pytest.mark.asyncio
@@ -1021,7 +1037,8 @@ async def test_disposal_month_infers_a_year_only_when_the_item_is_gone(
     learning, state, expression, basis, precision
 ):
     owner = Owner(learning)
-    text = f"The Ertiga, {expression}."
+    verb = {"sold": "I sold the Ertiga", "lost": "I lost the Ertiga"}[state]
+    text = f"{verb} {expression}."
     _plan, result, _ = await owner.say(
         text,
         [
@@ -1048,7 +1065,7 @@ async def test_a_disposal_time_on_an_item_still_owned_is_never_stored(learning):
     # Not gone: no year is inferred, and since lab 7 the consistency gate
     # refuses an owned item carrying a disposal time at all.
     owner = Owner(learning)
-    text = "The Ertiga, October."
+    text = "I sold the Ertiga in October."
     plan, result, _ = await owner.say(
         text,
         [
