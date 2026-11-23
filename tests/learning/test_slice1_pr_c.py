@@ -947,6 +947,11 @@ async def test_new_item_bare_month_is_never_turned_into_a_purchase_date(
     )
     assert result.status == "committed"
     value, _state, valid_from = (await _stored_items(learning))[-1]
+    if "bought" not in text:
+        # "have ... from <time>" is not acquisition wording (owner decision on
+        # D1, 2026-11-23): the item is saved without any purchase date.
+        assert "acquired" not in value and valid_from is None
+        return
     assert value["acquired"]["expression"] == expression  # wording kept
     assert value["acquired"]["precision"] == "unresolved"
     assert value["acquired"]["earliest"] is None and value["acquired"]["latest"] is None
