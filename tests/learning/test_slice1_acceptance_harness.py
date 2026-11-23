@@ -1587,3 +1587,127 @@ async def test_run6_d11_goa_lookup_by_word_finds_the_cancelled_plan(lab, monkeyp
     assert result["status"] == "selected"
     (fact,) = result["facts"]
     assert fact["plan_status"] == "cancelled" and "Goa" in fact["text"]
+
+
+# Lab 7 D17: refused consent is kept apart from deletion correctness -------------
+
+
+def test_d17_refused_consent_is_its_own_stage():
+    refused = _forget(1, ok=False)
+    refused["result"] = {
+        "ok": False,
+        "error": "PermissionError",
+        "message": "Fresh owner consent was not granted for this request",
+    }
+    found, _ = acceptance.diagnose_forget(
+        [_catalog(["owned_item_jimny", TARGET]), refused], [TARGET], 1, CLEAN
+    )
+    assert found == "owner_consent_not_granted"
+    other = _forget(1, ok=False)
+    other["result"] = {"ok": False, "error": "PermissionError", "message": "stale"}
+    found, _ = acceptance.diagnose_forget(
+        [_catalog(["owned_item_jimny", TARGET]), other], [TARGET], 1, CLEAN
+    )
+    assert found == "forget_operation_failed"
+
+
+@pytest.mark.asyncio
+async def test_d17_consent_refusal_is_recorded_and_deletion_left_untested(lab):
+    from jarvis.capabilities.authority_bridge import CapabilityAuthorizationError
+
+    real = lab.deps.capability.authorize_personal_context
+
+    def refuse_forget(**kwargs):
+        if kwargs.get("operation") == "forget":
+            raise CapabilityAuthorizationError("owner did not approve")
+        return real(**kwargs)
+
+    lab.deps.capability.authorize_personal_context = refuse_forget
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    checks = {c["check"]: c for c in summary["cases"]["D17"]["checks"]}
+    assert summary["d17_failed_stage"] == "owner_consent_not_granted"
+    assert checks["fresh owner consent granted (Windows Hello)"]["status"] == (
+        acceptance.FAIL
+    )
+    for name in ("forget gate (stage diagnosis)", "lineage gone"):
+        assert checks[name]["status"] == acceptance.UNTESTED
+    outcomes = [
+        e
+        for e in log.read(log.events)
+        if e.get("kind") == "consent_outcome" and e.get("step_id") == "story-18"
+    ]
+    assert [(e["operation"], e["outcome"]) for e in outcomes] == [
+        ("forget", "CapabilityAuthorizationError")
+    ]
+    assert summary["cases"]["D26"]["status"] == acceptance.UNTESTED
+
+
+@pytest.mark.asyncio
+async def test_granted_consent_is_recorded(lab):
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    outcomes = [
+        (e["operation"], e["outcome"])
+        for e in log.read(log.events)
+        if e.get("kind") == "consent_outcome" and e.get("step_id") == "story-18"
+    ]
+    assert outcomes == [("forget", "granted")]
+    assert summary["cases"]["D17"]["status"] == acceptance.PASS
+
+
+@pytest.mark.asyncio
+async def test_lab7_recorded_outputs_now_pass_d12_d23_and_d15(lab, monkeypatch):
+    """Lab 7's recorded proposals (D12 month in details/time_expression; D23
+    sale proposed as intent new) and its recorded D15 request ("Spiti trip")
+    through the repaired code: D12, D23 and D15's automatic checks pass."""
+    d12 = "I misspoke, the Jimny is from September, not October."
+    d23 = "I sold the Classic 350 in October."
+    monkeypatch.setitem(
+        EXTRACT,
+        d12,
+        [
+            item(
+                "Jimny",
+                d12,
+                intent="correction",
+                details="September",
+                time_expression="September",
+            )
+        ],
+    )
+    monkeypatch.setitem(
+        EXTRACT,
+        d23,
+        [
+            item(
+                "Classic 350",
+                d23,
+                intent="new",
+                state="sold",
+                time_expression="October",
+                disposed_expression="October",
+            )
+        ],
+    )
+    monkeypatch.setitem(
+        DRIVER,
+        D15,
+        (
+            "read",
+            ["owned_item.vehicle", "plan=Spiti trip"],
+            "The Jimny: you're already taking it on your winter Spiti trip.",
+        ),
+    )
+    runner, _log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    cases = summary["cases"]
+    for case in ("D12", "D23"):
+        assert cases[case]["status"] == acceptance.PASS, cases[case]
+    checks = _d15_checks(summary)
+    assert (
+        checks["decided plan reached the model (released this turn or in context)"]
+        == acceptance.PASS
+    )
+    assert checks["answer consistent with the decided plan"] == acceptance.PASS
+    assert checks["unrelated plans left out"] == acceptance.PASS

@@ -1324,6 +1324,41 @@ def _overall(checks):
     return PASS
 
 
+class ConsentRecorder:
+    """Lab-only, content-free record of each fresh-consent request: operation,
+    duration and outcome ("granted", or the exception class when consent was
+    not granted). It calls the real authority unchanged and never alters,
+    retries or bypasses consent."""
+
+    def __init__(self, inner, log, group, step_id):
+        self._inner, self._log = inner, log
+        self._group, self._step_id = group, step_id
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def authorize_personal_context(self, **kwargs):
+        started = time.monotonic()
+        outcome = "granted"
+        try:
+            return self._inner.authorize_personal_context(**kwargs)
+        except BaseException as exc:
+            outcome = type(exc).__name__
+            raise
+        finally:
+            if kwargs.get("operation") != "read":
+                self._log.event(
+                    {
+                        "group": self._group,
+                        "step_id": self._step_id,
+                        "kind": "consent_outcome",
+                        "operation": kwargs.get("operation"),
+                        "outcome": outcome,
+                        "seconds": round(time.monotonic() - started, 1),
+                    }
+                )
+
+
 class _GroupContext:
     def __init__(self, group, memory, deps, extractor, resolver):
         self.group, self.memory, self.deps = group, memory, deps
@@ -1606,7 +1641,7 @@ class _GroupContext:
         personal = PersonalContextSession(
             conversation=self.conversation,
             retrieval=self.memory.retrieval,
-            authority=self.deps.capability,
+            authority=ConsentRecorder(self.deps.capability, log, self.group, step.id),
             retire=lambda: None,
             learning_authority=self.deps.learning_authority,
             learning_grant=self.deps.learning_grant,
@@ -2587,7 +2622,12 @@ FORGET_STAGES = (
     "model_did_not_select_available_item",
     "forget_operation_failed",
     "deleted_but_residual_remains",
+    # Kept apart from deletion correctness: the forget was correctly aimed,
+    # but fresh owner consent (Windows Hello) was not granted, so nothing was
+    # attempted. Consent is never weakened to get past this.
+    "owner_consent_not_granted",
 )
+CONSENT_REFUSED = "Fresh owner consent was not granted"
 
 
 def diagnose_forget(tools, target_predicates, lineage_remaining, residual):
@@ -2648,6 +2688,11 @@ def diagnose_forget(tools, target_predicates, lineage_remaining, residual):
         return FORGET_STAGES[0], detail
     if not aimed:
         return FORGET_STAGES[1], detail
+    if not any((c.get("result") or {}).get("ok") for c in aimed) and all(
+        CONSENT_REFUSED in str((c.get("result") or {}).get("message", ""))
+        for c in aimed
+    ):
+        return FORGET_STAGES[4], detail
     if not any((c.get("result") or {}).get("ok") for c in aimed) or lineage_remaining:
         return FORGET_STAGES[2], detail
     if any(residual.values()):
@@ -2690,7 +2735,44 @@ async def check_d17(context, log):
         for r in rows
         if r["current"] and any(n in _label(r).casefold() for n in ("tigor", "jimny"))
     ]
+    consent = [
+        e
+        for e in log.read(log.events)
+        if e.get("kind") == "consent_outcome" and e.get("step_id") == "story-18"
+    ]
+    if stage == "owner_consent_not_granted":
+        # Deletion was never attempted, so its correctness is untested here.
+        return [
+            _check(
+                "fresh owner consent granted (Windows Hello)",
+                "a",
+                False,
+                {"consent_outcomes": consent, **detail},
+            ),
+            {
+                "check": "forget gate (stage diagnosis)",
+                "level": "a",
+                "status": UNTESTED,
+                "detail": {"failed_stage": stage, **detail},
+            },
+            _untested("lineage gone", "a", "deletion not attempted"),
+            _untested(
+                "no evidence text names Classic 350", "a", "deletion not attempted"
+            ),
+            _check(
+                "Tigor and Jimny facts and evidence intact",
+                "a",
+                len(others) >= 2 and all(r["evidence_text"] for r in others),
+                [(_label(r), bool(r["evidence_text"])) for r in others],
+            ),
+        ]
     return [
+        _check(
+            "fresh owner consent granted (Windows Hello)",
+            "a",
+            not consent or any(e.get("outcome") == "granted" for e in consent),
+            consent,
+        ),
         {
             "check": "forget gate (stage diagnosis)",
             "level": "a",
