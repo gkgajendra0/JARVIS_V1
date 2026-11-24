@@ -68,6 +68,17 @@ ABSENCE_RULE = (
     "it says nothing about any other category. Never claim the owner's records "
     "lack something outside a no_match category."
 )
+NAMED_MISS_RULE = (
+    "no_named_match means no saved item in that category is named by the "
+    "target_quote; the category still holds saved items. It is not absence: "
+    "never say nothing is saved there. To answer, request that category again "
+    "without target_quote, or ask the owner which item they mean."
+)
+GENERIC_TARGET_NOTE = (
+    "The target_quote only described the category, so no item was singled "
+    "out: every saved item of the category is listed. If more than one could "
+    "be meant, name them and ask which one."
+)
 NOT_CHECKED_RULE = (
     "The lookup did not complete, so saved facts were not checked. Say you could "
     "not check them; never say they are missing from the owner's records."
@@ -92,6 +103,8 @@ def annotate_lookup(result, requests):
             scope: found.get(scope, status) for scope in scopes
         } or found
         result["absence_rule"] = ABSENCE_RULE
+        if "no_named_match" in result["scopes"].values():
+            result["named_miss_rule"] = NAMED_MISS_RULE
     else:
         result.pop("scopes", None)
         result["lookup"] = "not_completed"
@@ -691,6 +704,16 @@ class PersonalContextSession:
             "status": "selected",
             "facts": deepcopy(list(projection.facts)),
             "scopes": dict(projection.scope_results),
+            **(
+                {
+                    "generic_targets": {
+                        scope: GENERIC_TARGET_NOTE
+                        for scope in projection.generic_targets
+                    }
+                }
+                if projection.generic_targets
+                else {}
+            ),
             "paging": paging_section(
                 projection,
                 page=self._extra_pages,

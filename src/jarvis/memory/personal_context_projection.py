@@ -139,8 +139,9 @@ class ContextProjection:
     selected: tuple[SemanticAssertionRecord, ...]
     scope_keys: tuple[str, ...]
     signature: str
-    # Every requested scope's own outcome: "selected", "no_match" or
-    # "clarification_required". A mixed request releases the matched scopes and
+    # Every requested scope's own outcome: "selected", "no_match",
+    # "no_named_match" (a target_quote named no saved item, though the scope
+    # holds facts: not absence) or "clarification_required". A mixed request releases the matched scopes and
     # names the rest, so a partial result is never presented as complete.
     scope_results: tuple[tuple[str, str], ...] = ()
     # Paging (slice 1 PR C). ``total`` facts match the request; this page
@@ -152,6 +153,9 @@ class ContextProjection:
     next_offset: int | None = None
     omitted: int = 0
     scope_counts: tuple[tuple[str, int, int], ...] = ()
+    # Scopes whose target_quote only described the category ("my bike"):
+    # nothing was narrowed and every item of that scope was considered.
+    generic_targets: tuple[str, ...] = ()
 
     @property
     def complete(self) -> bool:
@@ -288,21 +292,30 @@ def _name_words(record, scope):
 _ARTICLES = frozenset({"the", "my", "our", "a", "an", "mera", "meri", "mere"})
 
 
+GENERIC_TARGET = "generic_target"
+
+
 def _word_reference(candidates, scope, quote):
     """Conservative fallback after an exact-label miss, within one permitted
     scope. Returns (items, None) or ([], reason).
 
     Words are compared whole (the same normalized words learning uses), never
-    as substrings; articles are ignored. First, an item whose name contains
-    every quoted word ("Goa" -> "Goa plan", "Tigor" -> "Tata Tigor"); failing
-    that, an item whose whole name is inside the quote ("Goa plan" -> "Goa").
-    Exactly one item is released; two or more ask which one was meant."""
-    from .learning_catalog_page import PLAN_HEAD_NOUNS, name_words
+    as substrings; articles and the scope's category words ("bike", "trip")
+    are ignored. A quote of only those names no item: every item of the scope
+    is returned with GENERIC_TARGET (the category is not narrowed). Otherwise
+    first an item whose name contains every quoted word ("Goa" -> "Goa plan",
+    "Tigor" -> "Tata Tigor"); failing that, an item whose whole name is inside
+    the quote ("Goa plan" -> "Goa"). Exactly one item is released; two or more
+    ask which one was meant."""
+    from .learning_catalog_page import CATEGORY_HEAD_NOUNS, name_words
 
-    ignored = _ARTICLES | (PLAN_HEAD_NOUNS if scope in {"plan", "event"} else set())
-    wanted = name_words(quote) - ignored
+    ignored = _ARTICLES | CATEGORY_HEAD_NOUNS.get(scope, frozenset())
+    words = name_words(quote)
+    if not words:
+        return [], None  # nothing recognisable was quoted: names no item
+    wanted = words - ignored
     if not wanted:
-        return [], None
+        return list(candidates), GENERIC_TARGET
     names = {r.assertion_id: _name_words(r, scope) for r in candidates}
     for test in (
         lambda n: wanted <= n,
@@ -538,11 +551,19 @@ def project_personal_context(
             if status == "unavailable"  # nothing was reliably checked
             else tuple((scope, outcome[scope]) for scope in scopes if scope in outcome),
             **paging,
+            generic_targets=tuple(sorted(set(generic))),
         )
+
+    generic = []
 
     def settle(scope, status):
         # Within one scope: clarification outranks a match, a match outranks none.
-        rank = {"no_match": 0, "selected": 1, "clarification_required": 2}
+        rank = {
+            "no_match": 0,
+            "no_named_match": 0,
+            "selected": 1,
+            "clarification_required": 2,
+        }
         if rank[status] >= rank.get(outcome.get(scope), -1):
             outcome[scope] = status
 
@@ -582,12 +603,21 @@ def project_personal_context(
                     candidates, unclear = _word_reference(
                         [r for r, _ in labels], request.scope_key, request.target_quote
                     )
-                    if (
+                    if unclear == GENERIC_TARGET:
+                        # Only a description of the category: not narrowed.
+                        unclear = None
+                        generic.append(request.scope_key)
+                    elif (
                         not candidates
                         and not unclear
                         and any(label is None for _, label in labels)
                     ):
                         unclear = "unresolved_target"
+                    elif not candidates and not unclear and labels:
+                        # The quote named no saved item, but the category is
+                        # not empty: never report that as absence.
+                        settle(request.scope_key, "no_named_match")
+                        continue
                 if unclear:
                     # That scope releases nothing; matched scopes still do.
                     clarification = clarification or unclear

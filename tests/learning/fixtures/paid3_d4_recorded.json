@@ -1,0 +1,32 @@
+{
+ "source": "E:/Jarvis/Temp/slice1-acceptance-paid-3-regression (lab 5e2ce9c7, Paid lane, 2026-11-24), step bike-01, recorded outputs unmodified",
+ "utterance": "Should I service my bike before the trip?",
+ "stored_labels": {
+  "owned_item.vehicle": [
+   "Pulsar 150",
+   "Classic 350"
+  ],
+  "plan": [
+   "Spiti trip in January"
+  ]
+ },
+ "requests": [
+  {
+   "scope_key": "owned_item.vehicle",
+   "target_quote": "bike"
+  },
+  {
+   "scope_key": "plan",
+   "target_quote": "trip"
+  }
+ ],
+ "result": {
+  "status": "no_match",
+  "facts": [],
+  "scopes": {
+   "owned_item.vehicle": "no_match",
+   "plan": "no_match"
+  }
+ },
+ "answer": "Aapki bike ya trip ke baare mein koi jaankari saved nahi hai. Kya aap batana chahenge ki aapka kaun sa trip hai aur konsi bike ki service karni hai?"
+}

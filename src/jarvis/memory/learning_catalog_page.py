@@ -51,6 +51,50 @@ PLAN_HEAD_NOUNS = frozenset(
     }
 )
 
+# Words that describe a whole category rather than name an item in it ("my
+# bike", "the trip"). Retrieval ignores them when narrowing to a named item; a
+# quote made only of them names no item and so does not narrow the category.
+# General category vocabulary, not aliases of any stored item.
+CATEGORY_HEAD_NOUNS = {
+    "plan": PLAN_HEAD_NOUNS,
+    "event": PLAN_HEAD_NOUNS | {"event", "events"},
+    "owned_item.vehicle": frozenset(
+        {
+            "vehicle",
+            "vehicles",
+            "car",
+            "cars",
+            "bike",
+            "bikes",
+            "motorbike",
+            "motorbikes",
+            "motorcycle",
+            "motorcycles",
+            "scooter",
+            "scooters",
+            "scooty",
+            "gaadi",
+            "gadi",
+        }
+    ),
+    "owned_item.device": frozenset(
+        {
+            "device",
+            "devices",
+            "gadget",
+            "gadgets",
+            "phone",
+            "phones",
+            "mobile",
+            "laptop",
+            "laptops",
+            "tablet",
+            "tablets",
+            "computer",
+        }
+    ),
+}
+
 _WORD = re.compile(r"\w+", re.UNICODE)
 
 

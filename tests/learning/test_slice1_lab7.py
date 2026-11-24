@@ -382,8 +382,14 @@ def test_lab7_d15_recorded_request_now_releases_only_the_decided_plan():
         ("the trip", "Is the trip on?"),
     ],
 )
-def test_head_nouns_alone_never_match(quote, question):
-    assert _lookup(_plans(), quote, question).status == "no_match"
+def test_head_nouns_alone_never_single_out_a_plan(quote, question):
+    # Paid lab 3 D4: a quote of only category words names no plan. It used to
+    # match nothing, which read as "no plan saved"; now the category is not
+    # narrowed: every plan is listed and the reply must ask which one.
+    result = _lookup(_plans(), quote, question)
+    assert result.status == "selected"
+    assert len(result.facts) == len(_plans()) > 1
+    assert result.generic_targets == ("plan",)
 
 
 def test_head_nouns_do_not_hide_ambiguity():

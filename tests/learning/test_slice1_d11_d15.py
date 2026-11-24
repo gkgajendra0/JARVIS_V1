@@ -149,9 +149,12 @@ def test_no_substring_or_partial_word_matches():
         assert _lookup(plans, quote, question).status == "no_match", quote
 
 
-def test_articles_alone_never_match_and_never_count():
+def test_articles_alone_never_single_out_and_never_count():
     plans = [_plan_record("Goa trip", "a")]
-    assert _lookup(plans, "the", "Cancel the plan.").status == "no_match"
+    # An article names no item: the plan category is not narrowed (Paid lab 3
+    # D4); the reply sees it as a generic target.
+    result = _lookup(plans, "the", "Cancel the plan.")
+    assert result.generic_targets == ("plan",)
     (fact,) = _lookup(plans, "the Goa", "Cancel the Goa plan.").facts
     assert fact["text"] == "Goa trip"
 
