@@ -55,6 +55,20 @@ $source = Join-Path $resolvedLab "source"
 $profile = Join-Path $resolvedLab "profile"
 if ($ResumeLab) {
     if (-not (Test-Path (Join-Path $profile "project-memory.marker") -PathType Leaf)) { throw "Marked profile unavailable." }
+    # The lab's original source checkout is never changed. A resume on a
+    # different commit is allowed only for the D17 consent recovery (and its
+    # continuation), from a separate checkout named after that commit.
+    $labHead = (& $git -C $source rev-parse HEAD).Trim()
+    if ($labHead -ne $Commit) {
+        $source = Join-Path $resolvedLab ("source-" + $Commit.Substring(0, 8))
+        if (-not (Test-Path $source)) {
+            if (-not $RecoverD17Consent) { throw "This lab ran on commit $labHead; a different commit is only for -RecoverD17Consent." }
+            & $git -C $RepoRoot worktree add --detach $source $Commit
+            if ($LASTEXITCODE -ne 0) { throw "Recovery worktree creation failed." }
+        }
+        if ((& $git -C $source rev-parse HEAD).Trim() -ne $Commit) { throw "Checkout $source is not at $Commit." }
+        Write-Host "Resuming lab (original source $labHead) from $source at $Commit"
+    }
 } else {
     if (Test-Path $resolvedLab) { throw "New lab root must not exist." }
     New-Item -ItemType Directory -Path $resolvedLab | Out-Null
