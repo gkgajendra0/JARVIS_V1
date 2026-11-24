@@ -160,6 +160,21 @@ class AcceptanceInterrupted(RuntimeError):
     """A provider failure stopped the run; completed steps are preserved."""
 
 
+class AcceptanceStoppedOnFailure(RuntimeError):
+    """A definite acceptance failure (FAIL, or UNTESTED from a broken
+    prerequisite) was recorded; dependent cases are not run."""
+
+
+class _CheckpointReached(Exception):
+    pass
+
+
+# Paid checkpoint (owner instruction 2026-11-24): learning (story-01..04),
+# a lookup and an answer (story-05, "When did I sell it?"), with the D1-A1,
+# D2 and D5 checks; then pause for review.
+CHECKPOINT_STOP_AFTER = "story-05c"
+
+
 def told(day, hour=10, minute=0, month=11):
     return datetime(2026, month, day, hour, minute, tzinfo=OWNER_TZ)
 
@@ -1122,15 +1137,42 @@ class LabDeps:
 
 class AcceptanceRunner:
     def __init__(
-        self, root: Path, deps: LabDeps, log: ResultLog, *, retry_interrupted=False
+        self,
+        root: Path,
+        deps: LabDeps,
+        log: ResultLog,
+        *,
+        retry_interrupted=False,
+        stop_after=None,
+        stop_on_failure=False,
     ):
         self.root, self.deps, self.log = root, deps, log
         self.retry_interrupted = retry_interrupted
+        self.stop_after = stop_after
+        self.stop_on_failure = stop_on_failure
+
+    def _recorded_failure(self):
+        for row in self.log.read(self.log.cases):
+            if row["status"] in {FAIL, UNTESTED}:
+                return row
+        return None
 
     async def run(self, groups=GROUP_ORDER):
+        if self.stop_on_failure and (failed := self._recorded_failure()):
+            # Never resume into cases that depend on a failed prerequisite.
+            self.write_summary(stopped=failed)
+            raise AcceptanceStoppedOnFailure(
+                f"{failed['case']} was recorded {failed['status']} at"
+                f" {failed['step_id']}; the run does not continue"
+            )
         states = self.log.step_states()
-        for group in groups:
-            await self._run_group(group, GROUPS[group], states)
+        if self.stop_after and self._done(states.get(self.stop_after)):
+            return self.write_summary(paused_after=self.stop_after)
+        try:
+            for group in groups:
+                await self._run_group(group, GROUPS[group], states)
+        except _CheckpointReached:
+            return self.write_summary(paused_after=self.stop_after)
         return self.write_summary()
 
     async def _run_group(self, group, steps, states):
@@ -1171,6 +1213,8 @@ class AcceptanceRunner:
                     )
                 attempt = 1 if prior is None else int(prior.get("attempt", 1)) + 1
                 await self._run_step(context, group, step, attempt)
+                if step.id == self.stop_after:
+                    raise _CheckpointReached
         finally:
             await context.close()
 
@@ -1220,6 +1264,12 @@ class AcceptanceRunner:
                         "case_status": status,
                     }
                 )
+                if self.stop_on_failure and status in {FAIL, UNTESTED}:
+                    failed = {"case": step.case, "step_id": step.id, "status": status}
+                    self.write_summary(stopped=failed)
+                    raise AcceptanceStoppedOnFailure(
+                        f"{step.case} {status} at {step.id}; dependent cases not run"
+                    )
                 return
         except AcceptanceInterrupted as exc:
             self.log.step(
@@ -1243,7 +1293,7 @@ class AcceptanceRunner:
             }
         )
 
-    def write_summary(self, interrupted=None):
+    def write_summary(self, interrupted=None, paused_after=None, stopped=None):
         cases = {}
         for row in self.log.read(self.log.cases):
             cases[row["case"]] = {
@@ -1258,6 +1308,23 @@ class AcceptanceRunner:
             "cases": cases,
             "untested": [c for c in CASES_RUN if c not in cases],
             "interrupted_at": interrupted,
+            "run_state": (
+                "interrupted"
+                if interrupted
+                else "stopped_on_failure"
+                if stopped
+                else "checkpoint_paused_for_review"
+                if paused_after
+                else "complete"
+                if not [c for c in CASES_RUN if c not in cases]
+                else "partial"
+            ),
+            "checkpoint_paused_after": paused_after,
+            "stopped_on_failure": (
+                {k: stopped[k] for k in ("case", "step_id", "status")}
+                if stopped
+                else None
+            ),
             # Every planned case is a required gate (D17 included); D27 is
             # recorded from the rehearsal. REVIEW = automatic checks passed
             # and the answer awaits manual grading.
@@ -1290,7 +1357,8 @@ class AcceptanceRunner:
                 self.log.read(self.log.events)
             ),
             "limits": (
-                "Controlled text through the Free-lane answer model with the voice "
+                f"Controlled text through the {self.log.meta.get('lane', 'free')}"
+                "-lane answer model with the voice "
                 "agent's personal-context instructions and the real tools, not Gemini "
                 "Live voice. Told dates are simulated per the frozen cases; recorded_at "
                 "is real lab time. Keyword flags only locate problems."

@@ -17,6 +17,7 @@ param(
     [ValidateRange(0.5, 120)][double]$CallSpacingSeconds = 0,
     [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','d1-regression','pages')][string[]]$Slice1Group,
     [switch]$PaidLane,
+    [switch]$PaidCheckpoint,
     [string]$PaidBudgetLedger = "",
     [ValidateSet('without','with')][string]$ContextEvalArm,
     [ValidateSet('travel','diet','device')][string]$ContextEvalCase,
@@ -32,6 +33,7 @@ if ($DevelopmentCase -and -not $DevelopmentBatch) { throw "DevelopmentCase requi
 if ($Slice1Acceptance -and ($SeedAcceptance -or $DevelopmentBatch -or $DevelopmentCase -or $PersonalAcceptance -or $ContextEval -or $SeedVoiceEval)) { throw "Slice-1 acceptance runs alone in its own lab." }
 if (($Slice1Group -or $RetryInterrupted) -and -not $Slice1Acceptance) { throw "Slice1Group/RetryInterrupted require Slice1Acceptance." }
 if ($PaidLane -and -not $Slice1Acceptance) { throw "PaidLane is only for Slice1Acceptance (owner-approved USD 1 development acceptance)." }
+if ($PaidCheckpoint -and -not $PaidLane) { throw "PaidCheckpoint requires PaidLane." }
 if ([bool]$PaidLane -ne [bool]$PaidBudgetLedger) { throw "PaidLane and PaidBudgetLedger go together." }
 if ($RetryInterrupted -and -not $ResumeLab) { throw "RetryInterrupted only continues an existing lab (ResumeLab)." }
 if ($CallSpacingSeconds -and -not $Slice1Acceptance) { throw "CallSpacingSeconds requires Slice1Acceptance." }
@@ -78,6 +80,7 @@ try {
     if ($CallSpacingSeconds) { $arguments += @("--call-spacing-seconds", $CallSpacingSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)) }
     foreach ($group in @($Slice1Group | Where-Object { $_ })) { $arguments += @("--slice1-group", $group) }
     if ($PaidLane) { $arguments += @("--paid-lane", "--paid-budget-ledger", $resolvedLedger) }
+    if ($PaidCheckpoint) { $arguments += "--paid-checkpoint" }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }

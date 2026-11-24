@@ -11,6 +11,11 @@ timeout, cancellation, crash, missing usage) keeps its full reservation; it is
 never counted as zero. The ceiling is fixed at creation: there is no reset and
 no increase. A settled cost above its reservation halts the budget.
 
+Every request is checked before anything is reserved or sent: the model must
+be the priced model and only the request options the slice-1 clients use are
+accepted (an unpriced model or option is refused). A named allowance (for
+example the checkpoint's USD 0.10) caps a slice of the shared budget.
+
 Nothing here is used by Jarvis outside the acceptance lab.
 """
 
@@ -43,12 +48,26 @@ PRICING = {
     "source": "https://ai.google.dev/pricing (paid tier, checked 2026-11-23)",
 }
 # Input is bounded by the UTF-8 byte length of everything sent (system
-# instruction, input and response schema): a token is never shorter than one
-# byte. Output is bounded by the request's own max_output_tokens plus a
-# thinking allowance, because the provider documentation does not state
-# whether max_output_tokens also bounds thinking tokens.
+# instruction, input and response schema), plus overhead: a token is never
+# shorter than one byte. Output is bounded by the request's own
+# max_output_tokens, which Google documents as the combined total of thinking
+# and output tokens ("max_output_tokens applies to the combined total of
+# thinking tokens and output tokens"; thinking is billed as output:
+# https://ai.google.dev/gemini-api/docs/thinking). A settled cost above its
+# reservation still halts the ledger, so a wrong bound cannot keep spending.
 INPUT_OVERHEAD_TOKENS = 256
-THINKING_ALLOWANCE_TOKENS = 8192
+MAX_OUTPUT_TOKENS_LIMIT = 8192
+ALLOWED_REQUEST_KEYS = frozenset(
+    {
+        "model",
+        "input",
+        "system_instruction",
+        "response_format",
+        "store",
+        "generation_config",
+    }
+)
+ALLOWED_RESPONSE_FORMAT_KEYS = frozenset({"type", "mime_type", "schema"})
 
 
 class PaidBudgetExhausted(RuntimeError):
@@ -59,6 +78,48 @@ class PaidBudgetHalted(RuntimeError):
     """The ledger is halted (a cost exceeded its reservation); nothing sent."""
 
 
+class PaidAllowanceExhausted(PaidBudgetExhausted):
+    """The next request does not fit in the named allowance; nothing sent."""
+
+
+class PaidRequestRefused(RuntimeError):
+    """Unpriced model or request option; nothing reserved or sent."""
+
+
+def check_request(kwargs: dict) -> int:
+    """Refuse anything the pricing does not cover. Returns max_output_tokens."""
+    extra = set(kwargs) - ALLOWED_REQUEST_KEYS
+    if extra:
+        raise PaidRequestRefused(f"unpriced request options refused: {sorted(extra)}")
+    if kwargs.get("model") != PRICING["model"]:
+        raise PaidRequestRefused(
+            f"model {kwargs.get('model')!r} is not the priced {PRICING['model']!r}"
+        )
+    if not isinstance(kwargs.get("input"), str) or not isinstance(
+        kwargs.get("system_instruction"), str
+    ):
+        raise PaidRequestRefused("paid requests send text input and instruction only")
+    if kwargs.get("store", False) is not False:
+        raise PaidRequestRefused("stored interactions are refused")
+    response_format = kwargs.get("response_format")
+    if response_format is not None and (
+        not isinstance(response_format, dict)
+        or set(response_format) - ALLOWED_RESPONSE_FORMAT_KEYS
+        or response_format.get("type") != "text"
+    ):
+        raise PaidRequestRefused("unpriced response format refused")
+    config = kwargs.get("generation_config")
+    if not isinstance(config, dict) or set(config) != {"max_output_tokens"}:
+        raise PaidRequestRefused(
+            "generation_config must be exactly {max_output_tokens}; other options"
+            " (thinking, tools, caching, media) are refused"
+        )
+    bound = config["max_output_tokens"]
+    if type(bound) is not int or not 0 < bound <= MAX_OUTPUT_TOKENS_LIMIT:
+        raise PaidRequestRefused("max_output_tokens must be 1..8192")
+    return bound
+
+
 def _micro(tokens: int, usd_per_million: float) -> int:
     """tokens x (USD per million tokens) is micro-USD; rounded up."""
     return math.ceil(tokens * usd_per_million)
@@ -66,7 +127,7 @@ def _micro(tokens: int, usd_per_million: float) -> int:
 
 def worst_case(input_bytes: int, max_output_tokens: int) -> tuple[int, int, int]:
     input_bound = input_bytes + INPUT_OVERHEAD_TOKENS
-    output_bound = max_output_tokens + THINKING_ALLOWANCE_TOKENS
+    output_bound = max_output_tokens  # includes thinking (Google docs)
     cost = _micro(input_bound, PRICING["input_usd_per_million"]) + _micro(
         output_bound, PRICING["output_usd_per_million"]
     )
@@ -78,6 +139,8 @@ def usage_cost(usage: dict[str, int] | None) -> int | None:
     if not usage or type(usage.get("input_tokens")) is not int:
         return None
     inp = usage["input_tokens"]
+    if type(usage.get("tool_use_tokens")) is int:
+        inp += usage["tool_use_tokens"]  # billed as input
     out = usage.get("output_tokens")
     thoughts = usage.get("reasoning_tokens") or 0
     total = usage.get("total_tokens")
@@ -131,8 +194,17 @@ class PaidBudgetLedger:
                 reserved_at TEXT NOT NULL,
                 finished_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS allowance (
+                allowance_id TEXT PRIMARY KEY,
+                budget_id TEXT NOT NULL REFERENCES budget(budget_id),
+                cap_micro_usd INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
+        columns = {r[1] for r in self._db.execute("PRAGMA table_info(request)")}
+        if "allowance_id" not in columns:  # ledgers created before allowances
+            self._db.execute("ALTER TABLE request ADD COLUMN allowance_id TEXT")
         self._db.execute("BEGIN IMMEDIATE")
         row = self._db.execute(
             "SELECT ceiling_micro_usd FROM budget WHERE budget_id = ?", (BUDGET_ID,)
@@ -166,6 +238,16 @@ class PaidBudgetLedger:
         ).fetchone()
         return settled + held
 
+    def _allowance_used(self, allowance_id: str) -> int:
+        settled, held = self._db.execute(
+            "SELECT"
+            " coalesce(sum(CASE WHEN status = 'settled' THEN charged_micro_usd END), 0),"
+            " coalesce(sum(CASE WHEN status != 'settled' THEN reserved_micro_usd END), 0)"
+            " FROM request WHERE budget_id = ? AND allowance_id = ?",
+            (BUDGET_ID, allowance_id),
+        ).fetchone()
+        return settled + held
+
     def reserve(
         self,
         *,
@@ -174,10 +256,34 @@ class PaidBudgetLedger:
         model: str,
         input_bytes: int,
         max_output_tokens: int,
+        allowance: tuple[str, int] | None = None,
     ) -> str:
         input_bound, output_bound, cost = worst_case(input_bytes, max_output_tokens)
         self._db.execute("BEGIN IMMEDIATE")
         try:
+            allowance_id = None
+            if allowance is not None:
+                allowance_id, cap = allowance
+                row = self._db.execute(
+                    "SELECT cap_micro_usd FROM allowance WHERE allowance_id = ?",
+                    (allowance_id,),
+                ).fetchone()
+                if row is None:
+                    self._db.execute(
+                        "INSERT INTO allowance VALUES (?, ?, ?, ?)",
+                        (allowance_id, BUDGET_ID, cap, _now()),
+                    )
+                elif row[0] != cap:
+                    raise ValueError(
+                        f"allowance {allowance_id} was fixed at {row[0]} micro-USD"
+                    )
+                used = self._allowance_used(allowance_id)
+                if used + cost > cap:
+                    raise PaidAllowanceExhausted(
+                        f"next {call_path} request needs up to {cost / 1e6:.6f} USD;"
+                        f" allowance {allowance_id} has"
+                        f" {(cap - used) / 1e6:.6f} of {cap / 1e6:.2f} USD left"
+                    )
             halted = self._db.execute(
                 "SELECT halted_reason FROM budget WHERE budget_id = ?", (BUDGET_ID,)
             ).fetchone()[0]
@@ -193,8 +299,8 @@ class PaidBudgetLedger:
             request_id = str(uuid4())
             self._db.execute(
                 "INSERT INTO request (request_id, budget_id, lab, call_path, model,"
-                " status, input_bound, output_bound, reserved_micro_usd, reserved_at)"
-                " VALUES (?, ?, ?, ?, ?, 'reserved', ?, ?, ?, ?)",
+                " status, input_bound, output_bound, reserved_micro_usd, reserved_at,"
+                " allowance_id) VALUES (?, ?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)",
                 (
                     request_id,
                     BUDGET_ID,
@@ -205,6 +311,7 @@ class PaidBudgetLedger:
                     output_bound,
                     cost,
                     _now(),
+                    allowance_id,
                 ),
             )
             self._db.execute("COMMIT")
@@ -262,6 +369,16 @@ class PaidBudgetLedger:
             "SELECT halted_reason FROM budget WHERE budget_id = ?", (BUDGET_ID,)
         ).fetchone()[0]
         committed = self._committed()
+        allowances = [
+            {
+                "allowance_id": a,
+                "cap_usd": cap / 1e6,
+                "used_usd": self._allowance_used(a) / 1e6,
+            }
+            for a, cap in self._db.execute(
+                "SELECT allowance_id, cap_micro_usd FROM allowance ORDER BY created_at"
+            )
+        ]
         return {
             "budget_id": BUDGET_ID,
             "ledger": str(self.path),
@@ -270,7 +387,8 @@ class PaidBudgetLedger:
             "remaining_usd": (CEILING_MICRO_USD - committed) / 1e6,
             "halted_reason": halted,
             "pricing": PRICING,
-            "thinking_allowance_tokens": THINKING_ALLOWANCE_TOKENS,
+            "output_bound": "max_output_tokens (includes thinking, per Google docs)",
+            "allowances": allowances,
             "requests": [
                 {
                     "call_path": p,
@@ -318,11 +436,14 @@ class BudgetedGeminiClient:
     """A google-genai client whose every interactions.create is reserved in
     the shared ledger first, then settled from the reported usage."""
 
-    def __init__(self, inner, ledger: PaidBudgetLedger, *, lab: str, classify):
+    def __init__(
+        self, inner, ledger: PaidBudgetLedger, *, lab: str, classify, allowance=None
+    ):
         self._inner = inner
         self._ledger = ledger
         self._lab = lab
         self._classify = classify
+        self._allowance = allowance
         self.aio = _Aio(self)
 
     async def _create(self, **kwargs):
@@ -337,15 +458,14 @@ class BudgetedGeminiClient:
             ensure_ascii=False,
             default=str,
         ).encode()
-        max_output = (kwargs.get("generation_config") or {}).get("max_output_tokens")
-        if type(max_output) is not int or max_output <= 0:
-            raise PaidBudgetExhausted("paid request without an output bound refused")
+        max_output = check_request(kwargs)
         request_id = self._ledger.reserve(
             lab=self._lab,
             call_path=self._classify(kwargs),
             model=str(kwargs.get("model")),
             input_bytes=len(sent),
             max_output_tokens=max_output,
+            allowance=self._allowance,
         )
         usage, outcome = None, "unknown"
         try:
@@ -401,7 +521,9 @@ class PaidLaneDriverClient:
             await close()
 
 
-def build_paid_clients(model: str, ledger: PaidBudgetLedger, *, lab: str):
+def build_paid_clients(
+    model: str, ledger: PaidBudgetLedger, *, lab: str, allowance=None
+):
     """(learning adapter, answer client), both on JARVIS_GEMINI_PAID_API_KEY
     only, SDK retries off, each request reserved in ``ledger``. The learning
     adapter is configured exactly as build_learning_adapters configures the
@@ -418,6 +540,14 @@ def build_paid_clients(model: str, ledger: PaidBudgetLedger, *, lab: str):
     from jarvis.memory.learning_extractors import LearningProviderAdapter
     from jarvis.memory.learning_limits import INFERENCE_TIMEOUT
 
+    learning_model = resolve_ai_role_model(
+        "gemini", "memory_candidate_extraction", configured_model=None
+    )
+    for role, name in (("answer", model), ("learning", learning_model)):
+        if name != PRICING["model"]:
+            raise PaidRequestRefused(
+                f"{role} model {name!r} is not the priced {PRICING['model']!r}"
+            )
     key = resolve_credential_api_key("gemini", PAID_CREDENTIAL_REF)
     learning_inner = genai.Client(
         api_key=key,
@@ -427,13 +557,14 @@ def build_paid_clients(model: str, ledger: PaidBudgetLedger, *, lab: str):
         },
     )
     learning_inner.aio.interactions.sdk_configuration.retry_config = None
-    learning_model = resolve_ai_role_model(
-        "gemini", "memory_candidate_extraction", configured_model=None
-    )
     adapter = LearningProviderAdapter(
         "gemini",
         BudgetedGeminiClient(
-            learning_inner, ledger, lab=lab, classify=learning_call_path
+            learning_inner,
+            ledger,
+            lab=lab,
+            classify=learning_call_path,
+            allowance=allowance,
         ),
         learning_model,
     )
@@ -443,7 +574,11 @@ def build_paid_clients(model: str, ledger: PaidBudgetLedger, *, lab: str):
     answer_inner.aio.interactions.sdk_configuration.retry_config = None
     answer = GeminiStructuredOutputClient(
         client=BudgetedGeminiClient(
-            answer_inner, ledger, lab=lab, classify=answer_call_path
+            answer_inner,
+            ledger,
+            lab=lab,
+            classify=answer_call_path,
+            allowance=allowance,
         ),
         model=model,
         max_output_tokens=2048,

@@ -104,10 +104,11 @@ def _rows(ledger):
 # -- pricing and bounds -----------------------------------------------------------
 
 
-def test_worst_case_reservation_bounds_input_bytes_output_and_thinking():
+def test_worst_case_reservation_bounds_input_bytes_and_output_with_thinking():
+    # Google: max_output_tokens is the combined total of thinking and output.
     input_bound, output_bound, cost = paid.worst_case(10_000, 2048)
     assert input_bound == 10_000 + paid.INPUT_OVERHEAD_TOKENS
-    assert output_bound == 2048 + paid.THINKING_ALLOWANCE_TOKENS
+    assert output_bound == 2048
     expected = input_bound * 0.30 + output_bound * 2.50  # micro-USD
     assert cost >= expected and cost - expected < 2
 
@@ -126,6 +127,8 @@ def test_usage_cost_never_undercounts_thinking_and_unknown_is_none():
     assert paid.usage_cost({}) is None
     assert paid.usage_cost({"output_tokens": 5}) is None
     assert paid.usage_cost({"input_tokens": 5}) is None
+    tools = {"input_tokens": 1000, "output_tokens": 0, "tool_use_tokens": 500}
+    assert paid.usage_cost(tools) == 1500 * 0.30  # tool-use tokens bill as input
 
 
 # -- reservation and settlement ---------------------------------------------------
@@ -191,16 +194,56 @@ def test_a_crash_mid_request_leaves_the_reservation_held_after_restart(tmp_path)
     assert reopened.snapshot()["committed_usd"] == reserved / 1e6
 
 
-def test_a_request_without_an_output_bound_is_refused_and_never_sent(tmp_path):
+GOOD = {
+    "model": "gemini-3.5-flash-lite",
+    "input": "{}",
+    "system_instruction": "fictional",
+    "response_format": {"type": "text", "mime_type": "application/json", "schema": {}},
+    "store": False,
+    "generation_config": {"max_output_tokens": 2048},
+}
+
+
+@pytest.mark.parametrize(
+    "change,reason",
+    [
+        ({"model": "gemini-3.8-flash"}, "unpriced model"),
+        ({"model": None}, "missing model"),
+        ({"generation_config": None}, "no output bound"),
+        ({"generation_config": {}}, "no output bound"),
+        ({"generation_config": {"max_output_tokens": 0}}, "zero bound"),
+        ({"generation_config": {"max_output_tokens": 65536}}, "bound too large"),
+        (
+            {
+                "generation_config": {
+                    "max_output_tokens": 2048,
+                    "thinking_level": "high",
+                }
+            },
+            "thinking option",
+        ),
+        ({"tools": [{"type": "google_search"}]}, "tool (billed separately)"),
+        ({"store": True}, "stored interaction"),
+        ({"response_format": {"type": "image"}}, "media output"),
+        ({"input": [{"type": "image", "data": "x"}]}, "media input"),
+        ({"previous_interaction_id": "x"}, "unpriced option"),
+    ],
+)
+def test_unpriced_models_and_options_are_refused_before_anything_is_reserved(
+    tmp_path, change, reason
+):
     ledger = _ledger(tmp_path)
     inner, client = _budgeted(ledger, [Response("{}", Usage())])
+    kwargs = {**GOOD, **change}
+    if change.get("model", "") is None:
+        kwargs.pop("model")
+    with pytest.raises(paid.PaidRequestRefused):
+        asyncio.run(client.aio.interactions.create(**kwargs))
+    assert inner.aio.interactions.calls == [] and _rows(ledger) == [], reason
 
-    async def unbounded():
-        await client.aio.interactions.create(model="m", input="x")
 
-    with pytest.raises(PaidBudgetExhausted):
-        asyncio.run(unbounded())
-    assert inner.aio.interactions.calls == [] and _rows(ledger) == []
+def test_the_clients_own_requests_pass_the_check():
+    assert paid.check_request(dict(GOOD)) == 2048
 
 
 # -- exhaustion, resume, no reset ---------------------------------------------------
@@ -291,7 +334,9 @@ def test_answer_retries_are_each_reserved_and_exhaustion_is_not_retried(tmp_path
         ledger, [ServerError(503), Response('{"response": {}}', Usage(2000, 50))]
     )
     client = paid.PaidLaneDriverClient(
-        GeminiStructuredOutputClient(client=budgeted, model="m", max_output_tokens=2048)
+        GeminiStructuredOutputClient(
+            client=budgeted, model="gemini-3.5-flash-lite", max_output_tokens=2048
+        )
     )
     log = _Log()
     driver = TextDriver(client, log, model="m", sleep=lambda _s: asyncio.sleep(0))
@@ -411,3 +456,101 @@ def test_events_carry_the_lane(tmp_path):
     log.event({"kind": "x"})
     row = json.loads((tmp_path / "acceptance-events.jsonl").read_text())
     assert row["lane"] == "paid"
+
+
+def test_the_paid_clients_refuse_an_unpriced_model(tmp_path, monkeypatch):
+    fake = types.ModuleType("google.genai")
+    fake.Client = lambda **_k: (_ for _ in ()).throw(AssertionError("built a client"))
+    google = sys.modules.get("google") or types.ModuleType("google")
+    monkeypatch.setitem(sys.modules, "google", google)
+    monkeypatch.setattr(google, "genai", fake, raising=False)
+    monkeypatch.setitem(sys.modules, "google.genai", fake)
+    monkeypatch.setenv("JARVIS_GEMINI_PAID_API_KEY", "paid-test")
+    with pytest.raises(paid.PaidRequestRefused, match="answer model"):
+        paid.build_paid_clients("gemini-3.8-flash", _ledger(tmp_path), lab="L")
+
+
+# -- the checkpoint allowance ------------------------------------------------------
+
+CHECKPOINT = ("checkpoint-test", 100_000)  # USD 0.10
+
+
+def test_an_allowance_caps_its_slice_and_refuses_unsent(tmp_path):
+    ledger = _ledger(tmp_path)
+    inner = FakeGenai([Response("{}", Usage(100, 2000))] * 40)  # ~USD 0.005 each
+    client = BudgetedGeminiClient(
+        inner, ledger, lab="L", classify=paid.answer_call_path, allowance=CHECKPOINT
+    )
+    sent = 0
+    with pytest.raises(paid.PaidAllowanceExhausted, match="checkpoint-test"):
+        for _ in range(40):
+            asyncio.run(_request(client))
+            sent += 1
+    used = ledger.snapshot()["allowances"][0]
+    assert used["cap_usd"] == 0.10 and used["used_usd"] <= 0.10
+    assert len(inner.aio.interactions.calls) == sent  # the refused one was not sent
+    # Spending outside the allowance still draws on the shared budget.
+    free = BudgetedGeminiClient(
+        FakeGenai([Response("{}", Usage(3000, 200))]),
+        ledger,
+        lab="L",
+        classify=paid.answer_call_path,
+    )
+    asyncio.run(_request(free))
+    assert ledger.snapshot()["committed_usd"] > used["used_usd"]
+
+
+def test_an_allowance_is_durable_and_its_cap_is_fixed(tmp_path):
+    ledger = _ledger(tmp_path)
+    _inner, client = _budgeted(ledger, [ServerError(503)])
+    client._allowance = CHECKPOINT
+    with pytest.raises(ServerError):
+        asyncio.run(_request(client))
+    held = ledger.snapshot()["allowances"][0]["used_usd"]
+    ledger.close()
+    reopened = _ledger(tmp_path)
+    assert reopened.snapshot()["allowances"][0]["used_usd"] == held > 0
+    with pytest.raises(ValueError, match="was fixed"):
+        reopened.reserve(
+            lab="L",
+            call_path="answer",
+            model="m",
+            input_bytes=10,
+            max_output_tokens=10,
+            allowance=("checkpoint-test", 200_000),
+        )
+
+
+def test_a_ledger_created_before_allowances_keeps_its_rows(tmp_path):
+    path = tmp_path / "old" / "ledger.sqlite3"
+    path.parent.mkdir()
+    db = sqlite3.connect(path)
+    db.executescript(
+        """
+        CREATE TABLE budget (budget_id TEXT PRIMARY KEY, ceiling_micro_usd INTEGER
+            NOT NULL, pricing TEXT NOT NULL, created_at TEXT NOT NULL,
+            halted_reason TEXT);
+        CREATE TABLE request (seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id TEXT NOT NULL UNIQUE, budget_id TEXT NOT NULL,
+            lab TEXT NOT NULL, call_path TEXT NOT NULL, model TEXT NOT NULL,
+            status TEXT NOT NULL, input_bound INTEGER NOT NULL,
+            output_bound INTEGER NOT NULL, reserved_micro_usd INTEGER NOT NULL,
+            charged_micro_usd INTEGER, usage TEXT, outcome TEXT,
+            reserved_at TEXT NOT NULL, finished_at TEXT);
+        """
+    )
+    db.execute(
+        "INSERT INTO budget VALUES (?, 1000000, '{}', 'then', NULL)", (paid.BUDGET_ID,)
+    )
+    db.execute(
+        "INSERT INTO request (request_id, budget_id, lab, call_path, model, status,"
+        " input_bound, output_bound, reserved_micro_usd, charged_micro_usd,"
+        " reserved_at) VALUES ('r1', ?, 'L', 'answer', 'm', 'settled', 1, 1, 50, 40,"
+        " 'then')",
+        (paid.BUDGET_ID,),
+    )
+    db.commit()
+    db.close()
+    ledger = PaidBudgetLedger(path)
+    snap = ledger.snapshot()
+    assert snap["committed_usd"] == 40 / 1e6 and snap["ceiling_usd"] == 1.0

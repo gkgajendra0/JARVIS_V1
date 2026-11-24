@@ -799,6 +799,82 @@ async def test_quota_interruption_preserves_completed_steps_and_resume_never_rep
 
 
 @pytest.mark.asyncio
+async def test_checkpoint_pauses_after_learning_lookup_and_answer_and_resume_never_repeats(
+    lab,
+):
+    runner, log = lab.runner(
+        stop_after=acceptance.CHECKPOINT_STOP_AFTER, stop_on_failure=True
+    )
+    summary = await runner.run(groups=("story",))
+    assert summary["run_state"] == "checkpoint_paused_for_review"
+    assert summary["checkpoint_paused_after"] == "story-05c"
+    assert set(summary["cases"]) == {"D1-A1", "D2", "D5"}
+    states = log.step_states()
+    assert "story-06" not in states
+    # It covered learning (extraction), a lookup and an answer.
+    assert any(stage == "extraction" for stage, _ in lab.genai.calls)
+    d5 = {c["check"]: c["status"] for c in summary["cases"]["D5"]["checks"]}
+    assert d5["follow-up lookup completed"] == acceptance.PASS
+    assert "When did I sell it?" in lab.driver.calls
+    learning_before, answers_before = list(lab.genai.calls), list(lab.driver.calls)
+    d5_case = summary["cases"]["D5"]
+
+    # Running the checkpoint again sends nothing.
+    runner, log = lab.runner(
+        stop_after=acceptance.CHECKPOINT_STOP_AFTER, stop_on_failure=True
+    )
+    again = await runner.run(groups=("story",))
+    assert again["run_state"] == "checkpoint_paused_for_review"
+    assert lab.genai.calls == learning_before and lab.driver.calls == answers_before
+
+    # Continuing without the checkpoint never repeats a completed step's calls.
+    runner, log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("story",))
+    assert lab.genai.calls[: len(learning_before)] == learning_before
+    later = lab.genai.calls[len(learning_before) :]
+    assert not set(later) & set(learning_before)
+    later_answers = lab.driver.calls[len(answers_before) :]
+    assert not set(later_answers) & set(answers_before)
+    assert summary["run_state"] in {"complete", "partial"}
+    assert summary["cases"]["D5"] == d5_case  # checkpoint results preserved
+    assert summary["cases"]["D6"]["status"] == acceptance.PASS
+    started = [r["step_id"] for r in log.read(log.steps) if r["status"] == "started"]
+    assert len(started) == len(set(started))  # no step ran twice
+
+
+@pytest.mark.asyncio
+async def test_a_definite_failure_stops_the_run_and_resume_refuses(lab, monkeypatch):
+    wrong = dict(EXTRACT)
+    wrong["I'm planning a Ladakh or winter Spiti trip in January."] = [
+        plan(
+            "Ladakh",
+            "I'm planning a Ladakh or winter Spiti trip in January.",
+            plan_status="planned",
+            slots={"destination": slot("Ladakh"), "when": slot("January")},
+        )
+    ]
+    monkeypatch.setattr(sys.modules[__name__], "EXTRACT", wrong)
+    runner, log = lab.runner(stop_on_failure=True)
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure, match="D6 FAIL"):
+        await runner.run(groups=("story",))
+    states = log.step_states()
+    assert states["story-07c"]["case_status"] == acceptance.FAIL
+    assert "story-08" not in states  # no dependent case was run
+    summary = json.loads(log.summary.read_text(encoding="utf-8"))
+    assert summary["run_state"] == "stopped_on_failure"
+    assert summary["stopped_on_failure"]["case"] == "D6"
+    calls = (list(lab.genai.calls), list(lab.driver.calls))
+
+    # Resuming refuses before any model call; the failed answer is not retried.
+    runner, log = lab.runner(stop_on_failure=True, retry_interrupted=True)
+    with pytest.raises(
+        acceptance.AcceptanceStoppedOnFailure, match="does not continue"
+    ):
+        await runner.run(groups=("story",))
+    assert (lab.genai.calls, lab.driver.calls) == calls
+
+
+@pytest.mark.asyncio
 async def test_driver_quota_interruption_is_recorded(lab):
     lab.driver.fail_on.add("When did I sell it?")
     runner, log = lab.runner()
@@ -981,8 +1057,9 @@ async def test_windows_entry_wiring_paid_lane_uses_only_the_paid_key_and_ledger(
     )
     seen = {}
 
-    def paid_clients(model, ledger, *, lab):
+    def paid_clients(model, ledger, *, lab, allowance=None):
         seen["ledger"] = ledger.path
+        seen["allowance"] = allowance
         return lab_deps.extractor, lab_driver
 
     lab_deps, lab_driver = lab.deps, lab.driver
@@ -1010,8 +1087,14 @@ async def test_windows_entry_wiring_paid_lane_uses_only_the_paid_key_and_ledger(
         call_spacing_seconds=0.5,
         lane="paid",
         paid_ledger=ledger_path,
+        checkpoint=True,
     )
     assert summary["cases"]["D9"]["status"] == acceptance.PASS
+    assert seen["allowance"] == project_memory_lab.CHECKPOINT_ALLOWANCE
+    assert summary["paid_budget"]["allowance"] == {
+        "allowance_id": "slice1-paid-checkpoint-1",
+        "cap_usd": 0.10,
+    }
     assert summary["lane"] == "paid"
     assert summary["credential_ref"] == "JARVIS_GEMINI_PAID_API_KEY"
     assert summary["paid_budget"]["ceiling_usd"] == 1.0

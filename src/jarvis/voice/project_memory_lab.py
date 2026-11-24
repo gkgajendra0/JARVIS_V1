@@ -670,6 +670,11 @@ def run_context_eval_mode(args, repo, tool_paths):
             )
 
 
+# Owner instruction 2026-11-24: the checkpoint may use at most USD 0.10 of the
+# shared USD 1 budget.
+CHECKPOINT_ALLOWANCE = ("slice1-paid-checkpoint-1", 100_000)
+
+
 def check_lane(root: Path, lane: str, paid_ledger) -> None:
     """A lab runs on exactly one lane; a resumed lab never changes lane."""
     if lane not in {"free", "paid"}:
@@ -698,6 +703,7 @@ async def run_slice1_acceptance(
     call_spacing_seconds,
     lane="free",
     paid_ledger=None,
+    checkpoint=False,
 ):
     """Frozen D1-D27 development acceptance in this isolated lab profile.
 
@@ -720,6 +726,7 @@ async def run_slice1_acceptance(
     from jarvis.model_routing.runtime import build_routing_runtime
     from jarvis.provider_retry import policy_summary
     from jarvis.voice.personal_memory_acceptance import (
+        CHECKPOINT_STOP_AFTER,
         AcceptanceRunner,
         FreeLaneDriverClient,
         FreeLanePacer,
@@ -730,6 +737,8 @@ async def run_slice1_acceptance(
     from jarvis.work.store import SQLiteWorkStore
 
     check_lane(root, lane, paid_ledger)
+    if checkpoint and lane != "paid":
+        raise ValueError("the checkpoint is a Paid-lane control")
     lock = (root / "project-memory.lock").open("a+b")
     lock.write(b"0")
     lock.flush()
@@ -765,7 +774,10 @@ async def run_slice1_acceptance(
             # the text driver as retry owner. Every request is reserved in the
             # shared ledger before it is sent.
             ledger = PaidBudgetLedger(paid_ledger)
-            adapter, answer = build_paid_clients(model, ledger, lab=str(root))
+            allowance = CHECKPOINT_ALLOWANCE if checkpoint else None
+            adapter, answer = build_paid_clients(
+                model, ledger, lab=str(root), allowance=allowance
+            )
             # The Free credential is withheld from this process for the whole
             # run, so no code path can reach the Free lane by accident.
             withheld_free_key = os.environ.pop(gemini_credential_ref("free"), None)
@@ -778,6 +790,14 @@ async def run_slice1_acceptance(
                     "budget_id": BUDGET_ID,
                     "ceiling_usd": CEILING_MICRO_USD / 1e6,
                     "ledger": str(paid_ledger),
+                    "allowance": (
+                        {
+                            "allowance_id": allowance[0],
+                            "cap_usd": allowance[1] / 1e6,
+                        }
+                        if allowance
+                        else None
+                    ),
                 },
             }
         else:
@@ -880,8 +900,27 @@ async def run_slice1_acceptance(
         log = ResultLog(
             root, commit=source_commit, hashes=hashes, models=models, echo=True
         )
-        runner = AcceptanceRunner(root, deps, log, retry_interrupted=retry_interrupted)
+        # The Paid lane always stops on a definite failure (FAIL, or UNTESTED
+        # from a broken prerequisite); the checkpoint pauses after story-05c.
+        runner = AcceptanceRunner(
+            root,
+            deps,
+            log,
+            retry_interrupted=retry_interrupted,
+            stop_after=CHECKPOINT_STOP_AFTER if checkpoint else None,
+            stop_on_failure=lane == "paid",
+        )
         summary = await runner.run(groups)
+        if summary.get("run_state") == "checkpoint_paused_for_review":
+            print(
+                f"CHECKPOINT PAUSED FOR REVIEW [{lane.upper()} LANE] after "
+                f"{CHECKPOINT_STOP_AFTER}: "
+                + json.dumps({c: r["status"] for c, r in summary["cases"].items()})
+                + f" | results in {root}. Completed steps are kept; continuing "
+                "with -ResumeLab does not repeat them.",
+                flush=True,
+            )
+            return summary
         print(
             f"DEVELOPMENT ACCEPTANCE COMPLETE [{lane.upper()} LANE]: "
             + json.dumps({c: r["status"] for c, r in summary["cases"].items()})
@@ -918,6 +957,7 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
     from jarvis.voice.personal_memory_acceptance import (
         GROUP_ORDER,
         AcceptanceInterrupted,
+        AcceptanceStoppedOnFailure,
         active_amendments,
         frozen_hashes,
     )
@@ -956,8 +996,17 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
                     call_spacing_seconds=args.call_spacing_seconds,
                     lane="paid" if args.paid_lane else "free",
                     paid_ledger=args.paid_budget_ledger,
+                    checkpoint=args.paid_checkpoint,
                 )
             )
+        except AcceptanceStoppedOnFailure as exc:
+            print(
+                f"[{'PAID' if args.paid_lane else 'FREE'} LANE] STOPPED ON A DEFINITE "
+                f"ACCEPTANCE FAILURE: {exc}. No dependent case was run; review "
+                "before any further spending.",
+                flush=True,
+            )
+            raise SystemExit(3) from None
         except AcceptanceInterrupted as exc:
             print(
                 f"[{'PAID' if args.paid_lane else 'FREE'} LANE] INTERRUPTED (any bounded retries are recorded; none remain): {exc}. "
@@ -1001,9 +1050,12 @@ def main():
     parser.add_argument("--call-spacing-seconds", type=float, default=None)
     parser.add_argument("--paid-lane", action="store_true")
     parser.add_argument("--paid-budget-ledger", type=Path, default=None)
+    parser.add_argument("--paid-checkpoint", action="store_true")
     args = parser.parse_args()
     if (args.paid_lane or args.paid_budget_ledger) and not args.slice1_acceptance:
         parser.error("--paid-lane is only for --slice1-acceptance")
+    if args.paid_checkpoint and not args.paid_lane:
+        parser.error("--paid-checkpoint requires --paid-lane")
     if args.paid_lane != (args.paid_budget_ledger is not None):
         parser.error("--paid-lane and --paid-budget-ledger go together")
     if args.slice1_acceptance and (
