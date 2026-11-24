@@ -169,6 +169,19 @@ class _CheckpointReached(Exception):
     pass
 
 
+class AcceptanceRecoveryRefused(RuntimeError):
+    """The requested recovery's preconditions do not hold; nothing was run."""
+
+
+# D17 consent recovery (owner instruction 2026-11-24 14:48): only when D17
+# stopped because fresh owner consent (Windows Hello) was not granted, the
+# correct item was selected and deletion was never attempted. Reruns only the
+# forget turn and its check, as a new attempt; the original attempt stays in
+# the logs, Windows Hello stays mandatory, and the run pauses after the check.
+D17_RECOVERY_ID = "d17-consent-recovery-1"
+D17_RECOVERY_STEPS = ("story-18", "story-18c")
+
+
 # Paid checkpoint (owner instruction 2026-11-24): learning (story-01..04),
 # a lookup and an answer (story-05, "When did I sell it?"), with the D1-A1,
 # D2 and D5 checks; then pause for review.
@@ -1145,20 +1158,107 @@ class AcceptanceRunner:
         retry_interrupted=False,
         stop_after=None,
         stop_on_failure=False,
+        recover_d17_consent=False,
     ):
         self.root, self.deps, self.log = root, deps, log
         self.retry_interrupted = retry_interrupted
         self.stop_after = stop_after
         self.stop_on_failure = stop_on_failure
+        self.recover_d17_consent = recover_d17_consent
+        if recover_d17_consent:
+            self.stop_after = D17_RECOVERY_STEPS[-1]
 
-    def _recorded_failure(self):
+    def _latest_cases(self):
+        latest = {}
         for row in self.log.read(self.log.cases):
-            if row["status"] in {FAIL, UNTESTED}:
+            latest[row["case"]] = row
+        return latest
+
+    def _recorded_failure(self, ignore=()):
+        # The latest result per case decides. A case can only have a newer
+        # result than a recorded failure through an explicit recovery.
+        for case, row in self._latest_cases().items():
+            if case not in ignore and row["status"] in {FAIL, UNTESTED}:
                 return row
         return None
 
+    def _check_d17_recovery(self):
+        """Refuse unless D17's latest result is exactly the consent failure
+        with the correct item selected and no deletion attempted, and nothing
+        else has failed."""
+        d17 = self._latest_cases().get("D17")
+        if d17 is None or d17["status"] != FAIL or d17["step_id"] != "story-18c":
+            raise AcceptanceRecoveryRefused("D17 has no recorded failure to recover")
+        checks = {c["check"]: c for c in d17["checks"]}
+        stage = (checks.get("forget gate (stage diagnosis)") or {}).get("detail") or {}
+        if stage.get("failed_stage") != "owner_consent_not_granted":
+            raise AcceptanceRecoveryRefused(
+                f"D17 failed at {stage.get('failed_stage')!r}, not at consent"
+            )
+        calls = stage.get("forget_calls") or []
+        if not stage.get("listed_in_catalog") or not stage.get("shown_by_read"):
+            raise AcceptanceRecoveryRefused("the item was not selected correctly")
+        if not calls or not all(
+            c.get("targets_item")
+            and (c.get("result") or {}).get("error") == "PermissionError"
+            for c in calls
+        ):
+            raise AcceptanceRecoveryRefused(
+                "a forget call ran past consent or aimed at another item"
+            )
+        if not stage.get("lineage_remaining"):
+            raise AcceptanceRecoveryRefused("the item is no longer stored")
+        if other := self._recorded_failure(ignore={"D17"}):
+            raise AcceptanceRecoveryRefused(
+                f"{other['case']} is also recorded {other['status']}"
+            )
+        if any(
+            r.get("recovery") == D17_RECOVERY_ID for r in self.log.read(self.log.steps)
+        ):
+            raise AcceptanceRecoveryRefused(f"{D17_RECOVERY_ID} was already used")
+        return d17
+
+    def _reopen_for_d17_recovery(self, failed):
+        """Append (never rewrite) a reopening row for the forget turn and its
+        check; the original attempt's rows stay in every log."""
+        states = self.log.step_states()
+        self.log.event(
+            {
+                "group": "story",
+                "step_id": D17_RECOVERY_STEPS[0],
+                "kind": "recovery_started",
+                "recovery": D17_RECOVERY_ID,
+                "reason": "fresh owner consent (Windows Hello) was not granted;"
+                " the correct item was selected and deletion was never attempted",
+                "original_case_result": {
+                    "status": failed["status"],
+                    "step_id": failed["step_id"],
+                },
+            }
+        )
+        for step_id in D17_RECOVERY_STEPS:
+            prior = states[step_id]
+            self.log.step(
+                {
+                    "group": "story",
+                    "step_id": step_id,
+                    "status": "reopened_for_recovery",
+                    "attempt": int(prior.get("attempt", 1)),
+                    "recovery": D17_RECOVERY_ID,
+                    "original_status": prior["status"],
+                }
+            )
+
     async def run(self, groups=GROUP_ORDER):
-        if self.stop_on_failure and (failed := self._recorded_failure()):
+        if self.recover_d17_consent:
+            if tuple(groups) != ("story",):
+                raise AcceptanceRecoveryRefused(
+                    "the D17 recovery runs the story group only"
+                )
+            failed = self._check_d17_recovery()
+            self._reopen_for_d17_recovery(failed)
+        ignore = {"D17"} if self.recover_d17_consent else set()
+        if self.stop_on_failure and (failed := self._recorded_failure(ignore)):
             # Never resume into cases that depend on a failed prerequisite.
             self.write_summary(stopped=failed)
             raise AcceptanceStoppedOnFailure(
@@ -1212,6 +1312,12 @@ class AcceptanceRunner:
                         f"step {step.id} was interrupted earlier; rerun only with --retry-interrupted"
                     )
                 attempt = 1 if prior is None else int(prior.get("attempt", 1)) + 1
+                if self.recover_d17_consent and step.id == D17_RECOVERY_STEPS[0]:
+                    rows = await _rows(context.memory)
+                    if not _named(_items(rows, current=False), "classic 350"):
+                        raise AcceptanceRecoveryRefused(
+                            "the Classic 350 is no longer stored; nothing to recover"
+                        )
                 await self._run_step(context, group, step, attempt)
                 if step.id == self.stop_after:
                     raise _CheckpointReached
@@ -1294,13 +1400,20 @@ class AcceptanceRunner:
         )
 
     def write_summary(self, interrupted=None, paused_after=None, stopped=None):
-        cases = {}
+        cases, history = {}, {}
         for row in self.log.read(self.log.cases):
             cases[row["case"]] = {
                 "status": row["status"],
                 "step_id": row["step_id"],
                 "checks": row["checks"],
             }
+            history.setdefault(row["case"], []).append(
+                {
+                    "status": row["status"],
+                    "step_id": row["step_id"],
+                    "at": row.get("at"),
+                }
+            )
         summary = {
             **self.log.meta,
             "planned_cases": list(CASES_RUN),
@@ -1320,6 +1433,16 @@ class AcceptanceRunner:
                 else "partial"
             ),
             "checkpoint_paused_after": paused_after,
+            # Every earlier result of a case that was rerun by a recovery is
+            # kept here and in acceptance-cases.jsonl; "cases" shows the latest.
+            "earlier_case_results": {
+                c: h[:-1] for c, h in history.items() if len(h) > 1
+            },
+            "recoveries": [
+                {k: r.get(k) for k in ("recovery", "step_id", "original_status", "at")}
+                for r in self.log.read(self.log.steps)
+                if r.get("status") == "reopened_for_recovery"
+            ],
             "stopped_on_failure": (
                 {k: stopped[k] for k in ("case", "step_id", "status")}
                 if stopped
@@ -2911,10 +3034,19 @@ async def check_d17(context, log):
         for r in rows
         if r["current"] and any(n in _label(r).casefold() for n in ("tigor", "jimny"))
     ]
+    # Only the latest attempt's consent requests (a recovery reruns the turn;
+    # the earlier attempt's outcomes stay in the log and the case history).
+    started = [
+        r.get("at")
+        for r in log.read(log.steps)
+        if r["step_id"] == "story-18" and r["status"] == "started"
+    ]
     consent = [
         e
         for e in log.read(log.events)
-        if e.get("kind") == "consent_outcome" and e.get("step_id") == "story-18"
+        if e.get("kind") == "consent_outcome"
+        and e.get("step_id") == "story-18"
+        and (not started or (e.get("at") or "") >= (started[-1] or ""))
     ]
     if stage == "owner_consent_not_granted":
         # Deletion was never attempted, so its correctness is untested here.

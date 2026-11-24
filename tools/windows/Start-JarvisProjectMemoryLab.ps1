@@ -18,6 +18,7 @@ param(
     [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','d1-regression','pages')][string[]]$Slice1Group,
     [switch]$PaidLane,
     [switch]$PaidCheckpoint,
+    [switch]$RecoverD17Consent,
     [string]$PaidBudgetLedger = "",
     [ValidateSet('without','with')][string]$ContextEvalArm,
     [ValidateSet('travel','diet','device')][string]$ContextEvalCase,
@@ -34,6 +35,7 @@ if ($Slice1Acceptance -and ($SeedAcceptance -or $DevelopmentBatch -or $Developme
 if (($Slice1Group -or $RetryInterrupted) -and -not $Slice1Acceptance) { throw "Slice1Group/RetryInterrupted require Slice1Acceptance." }
 if ($PaidLane -and -not $Slice1Acceptance) { throw "PaidLane is only for Slice1Acceptance (owner-approved USD 1 development acceptance)." }
 if ($PaidCheckpoint -and -not $PaidLane) { throw "PaidCheckpoint requires PaidLane." }
+if ($RecoverD17Consent -and -not ($Slice1Acceptance -and $ResumeLab)) { throw "RecoverD17Consent continues an existing acceptance lab (ResumeLab)." }
 if ([bool]$PaidLane -ne [bool]$PaidBudgetLedger) { throw "PaidLane and PaidBudgetLedger go together." }
 if ($RetryInterrupted -and -not $ResumeLab) { throw "RetryInterrupted only continues an existing lab (ResumeLab)." }
 if ($CallSpacingSeconds -and -not $Slice1Acceptance) { throw "CallSpacingSeconds requires Slice1Acceptance." }
@@ -81,6 +83,7 @@ try {
     foreach ($group in @($Slice1Group | Where-Object { $_ })) { $arguments += @("--slice1-group", $group) }
     if ($PaidLane) { $arguments += @("--paid-lane", "--paid-budget-ledger", $resolvedLedger) }
     if ($PaidCheckpoint) { $arguments += "--paid-checkpoint" }
+    if ($RecoverD17Consent) { $arguments += "--recover-d17-consent" }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }

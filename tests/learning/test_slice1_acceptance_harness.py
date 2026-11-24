@@ -1898,6 +1898,152 @@ async def test_d17_consent_refusal_is_recorded_and_deletion_left_untested(lab):
     assert summary["cases"]["D26"]["status"] == acceptance.UNTESTED
 
 
+def _refuse_forget_consent(lab):
+    from jarvis.capabilities.authority_bridge import CapabilityAuthorizationError
+
+    real = lab.deps.capability.authorize_personal_context
+
+    def refuse_forget(**kwargs):
+        if kwargs.get("operation") == "forget":
+            raise CapabilityAuthorizationError("owner did not approve")
+        return real(**kwargs)
+
+    lab.deps.capability.authorize_personal_context = refuse_forget
+    return real
+
+
+@pytest.mark.asyncio
+async def test_d17_consent_recovery_reruns_only_the_forget_turn_and_keeps_the_original(
+    lab,
+):
+    real = _refuse_forget_consent(lab)
+    runner, log = lab.runner(stop_on_failure=True)
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure, match="D17 FAIL"):
+        await runner.run(groups=("story",))
+    before = {
+        name: (lab.root / name).read_text(encoding="utf-8")
+        for name in (
+            "acceptance-cases.jsonl",
+            "acceptance-steps.jsonl",
+            "acceptance-events.jsonl",
+        )
+    }
+    learning_calls, answer_calls = list(lab.genai.calls), list(lab.driver.calls)
+    # Without the recovery the lock still refuses; nothing is sent.
+    runner, log = lab.runner(stop_on_failure=True)
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure):
+        await runner.run(groups=("story",))
+    assert lab.driver.calls == answer_calls
+
+    # Windows Hello stays mandatory: the recovered attempt is approved.
+    lab.deps.capability.authorize_personal_context = real
+    runner, log = lab.runner(stop_on_failure=True, recover_d17_consent=True)
+    summary = await runner.run(groups=("story",))
+    assert summary["run_state"] == "checkpoint_paused_for_review"
+    assert summary["checkpoint_paused_after"] == "story-18c"
+    assert summary["cases"]["D17"]["status"] == acceptance.PASS
+    assert [r["status"] for r in summary["earlier_case_results"]["D17"]] == [
+        acceptance.FAIL
+    ]
+    assert [r["step_id"] for r in summary["recoveries"]] == ["story-18", "story-18c"]
+    # The original attempt's rows are kept byte for byte, before the new ones.
+    for name, text in before.items():
+        assert (lab.root / name).read_text(encoding="utf-8").startswith(text), name
+    # Only the forget turn ran again: no learning call, one forget question.
+    assert lab.genai.calls == learning_calls
+    new_answers = lab.driver.calls[len(answer_calls) :]
+    assert set(new_answers) == {"Forget the Classic 350."}
+    states = log.step_states()
+    assert states["story-18"]["attempt"] == 2
+    assert "story-18d" not in states  # paused before D26/D21
+    outcomes = [
+        e["outcome"]
+        for e in log.read(log.events)
+        if e.get("kind") == "consent_outcome" and e.get("step_id") == "story-18"
+    ]
+    assert outcomes == ["CapabilityAuthorizationError", "granted"]
+
+    # A normal resume then continues after D17 without repeating it.
+    runner, log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("story",))
+    assert summary["cases"]["D26"]["status"] == acceptance.PASS
+    assert lab.driver.calls.count("Forget the Classic 350.") == 2
+
+    # The recovery is single-use.
+    runner, log = lab.runner(stop_on_failure=True, recover_d17_consent=True)
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused):
+        await runner.run(groups=("story",))
+
+
+@pytest.mark.asyncio
+async def test_d17_recovery_refused_for_any_other_failure_and_sends_nothing(
+    lab, monkeypatch
+):
+    # A run where D17 passed: nothing to recover.
+    runner, _log = lab.runner(stop_on_failure=True)
+    await runner.run(groups=("story",))
+    calls = list(lab.driver.calls)
+    runner, _log = lab.runner(stop_on_failure=True, recover_d17_consent=True)
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused, match="no recorded"):
+        await runner.run(groups=("story",))
+    assert lab.driver.calls == calls
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused, match="story group"):
+        await lab.runner(recover_d17_consent=True)[0].run(groups=("idiom",))
+
+
+def test_d17_recovery_preconditions_refuse_a_non_consent_stage(tmp_path):
+    log = acceptance.ResultLog(tmp_path, commit="c", hashes={}, models={})
+
+    def record(stage, error="PermissionError", remaining=2, extra=None):
+        log._append(
+            log.cases,
+            {
+                "case": "D17",
+                "step_id": "story-18c",
+                "status": acceptance.FAIL,
+                "checks": [
+                    {
+                        "check": "forget gate (stage diagnosis)",
+                        "status": acceptance.UNTESTED,
+                        "detail": {
+                            "failed_stage": stage,
+                            "listed_in_catalog": True,
+                            "shown_by_read": True,
+                            "forget_calls": [
+                                {"targets_item": True, "result": {"error": error}}
+                            ],
+                            "lineage_remaining": remaining,
+                        },
+                    }
+                ],
+            },
+        )
+        if extra:
+            log._append(log.cases, extra)
+
+    runner = acceptance.AcceptanceRunner(tmp_path, None, log, recover_d17_consent=True)
+    record("model_did_not_select_available_item")
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused, match="not at consent"):
+        runner._check_d17_recovery()
+    record("owner_consent_not_granted", error="ValueError")
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused, match="past consent"):
+        runner._check_d17_recovery()
+    record("owner_consent_not_granted", remaining=0)
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused, match="no longer stored"):
+        runner._check_d17_recovery()
+    record(
+        "owner_consent_not_granted",
+        extra={
+            "case": "D23",
+            "step_id": "story-17c",
+            "status": acceptance.FAIL,
+            "checks": [],
+        },
+    )
+    with pytest.raises(acceptance.AcceptanceRecoveryRefused, match="D23"):
+        runner._check_d17_recovery()
+
+
 @pytest.mark.asyncio
 async def test_granted_consent_is_recorded(lab):
     runner, log = lab.runner()

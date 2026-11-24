@@ -72,3 +72,33 @@ unchanged; this is the lab runner (`src/jarvis/voice/paid_acceptance_budget.py`,
 - **Provider failures:** exhausted bounded retries stop the run as an
   interruption.
 - **Answers:** incorrect answers and invalid output are never retried.
+
+## D17 consent recovery (owner instruction 2026-11-24 14:48)
+
+- **When:** only when D17's latest result is a FAIL at stage
+  `owner_consent_not_granted` and all of the following hold:
+  - the item was listed and read correctly;
+  - every forget call aimed at it and was stopped by consent;
+  - the item is still stored, which is checked again live before the turn
+    runs;
+  - no other case has failed;
+  - the recovery has not been used before (it is single-use).
+
+  Otherwise the recovery is refused (exit code 4) and nothing is sent.
+- **What it does:** `-ResumeLab -RecoverD17Consent` reruns only `story-18`
+  ("Forget the Classic 350.") and its check `story-18c`, as attempt 2. It
+  then pauses for review before D26 and D21.
+  - Windows Hello is still required.
+  - The turn starts a new conversation, recorded as a resumed follow-up.
+- **Records:**
+  - The original attempt's rows stay in every log.
+  - New `reopened_for_recovery` rows and a `recovery_started` event mark
+    the recovery.
+  - The summary lists `recoveries` and `earlier_case_results`.
+  - D17's check counts only the latest attempt's consent requests.
+- **Cap:** allowance `slice1-paid-d17-recovery-1`, at most USD 0.05 of the
+  shared USD 1.
+- **After the recovery:**
+  - If D17 passes, a normal `-ResumeLab` continues with D26, D21 and the
+    remaining groups, without repeating completed steps.
+  - If it fails again, the failure lock stays.

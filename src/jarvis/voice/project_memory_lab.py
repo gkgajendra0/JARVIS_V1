@@ -673,6 +673,9 @@ def run_context_eval_mode(args, repo, tool_paths):
 # Owner instruction 2026-11-24: the checkpoint may use at most USD 0.10 of the
 # shared USD 1 budget.
 CHECKPOINT_ALLOWANCE = ("slice1-paid-checkpoint-1", 100_000)
+# Owner instruction 2026-11-24 14:48: the D17 consent recovery reruns one
+# turn; it may use at most USD 0.05 of the same shared budget.
+D17_RECOVERY_ALLOWANCE = ("slice1-paid-d17-recovery-1", 50_000)
 
 
 def check_lane(root: Path, lane: str, paid_ledger) -> None:
@@ -704,6 +707,7 @@ async def run_slice1_acceptance(
     lane="free",
     paid_ledger=None,
     checkpoint=False,
+    recover_d17_consent=False,
 ):
     """Frozen D1-D27 development acceptance in this isolated lab profile.
 
@@ -739,6 +743,8 @@ async def run_slice1_acceptance(
     check_lane(root, lane, paid_ledger)
     if checkpoint and lane != "paid":
         raise ValueError("the checkpoint is a Paid-lane control")
+    if recover_d17_consent and (checkpoint or tuple(groups or ()) != ("story",)):
+        raise ValueError("the D17 recovery runs alone, on the story group")
     lock = (root / "project-memory.lock").open("a+b")
     lock.write(b"0")
     lock.flush()
@@ -774,7 +780,13 @@ async def run_slice1_acceptance(
             # the text driver as retry owner. Every request is reserved in the
             # shared ledger before it is sent.
             ledger = PaidBudgetLedger(paid_ledger)
-            allowance = CHECKPOINT_ALLOWANCE if checkpoint else None
+            allowance = (
+                CHECKPOINT_ALLOWANCE
+                if checkpoint
+                else D17_RECOVERY_ALLOWANCE
+                if recover_d17_consent
+                else None
+            )
             adapter, answer = build_paid_clients(
                 model, ledger, lab=str(root), allowance=allowance
             )
@@ -909,12 +921,14 @@ async def run_slice1_acceptance(
             retry_interrupted=retry_interrupted,
             stop_after=CHECKPOINT_STOP_AFTER if checkpoint else None,
             stop_on_failure=lane == "paid",
+            recover_d17_consent=recover_d17_consent,
         )
         summary = await runner.run(groups)
         if summary.get("run_state") == "checkpoint_paused_for_review":
             print(
-                f"CHECKPOINT PAUSED FOR REVIEW [{lane.upper()} LANE] after "
-                f"{CHECKPOINT_STOP_AFTER}: "
+                f"{'D17 RECOVERY' if recover_d17_consent else 'CHECKPOINT'} "
+                f"PAUSED FOR REVIEW [{lane.upper()} LANE] after "
+                f"{runner.stop_after}: "
                 + json.dumps({c: r["status"] for c, r in summary["cases"].items()})
                 + f" | results in {root}. Completed steps are kept; continuing "
                 "with -ResumeLab does not repeat them.",
@@ -957,6 +971,7 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
     from jarvis.voice.personal_memory_acceptance import (
         GROUP_ORDER,
         AcceptanceInterrupted,
+        AcceptanceRecoveryRefused,
         AcceptanceStoppedOnFailure,
         active_amendments,
         frozen_hashes,
@@ -997,8 +1012,12 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
                     lane="paid" if args.paid_lane else "free",
                     paid_ledger=args.paid_budget_ledger,
                     checkpoint=args.paid_checkpoint,
+                    recover_d17_consent=args.recover_d17_consent,
                 )
             )
+        except AcceptanceRecoveryRefused as exc:
+            print(f"RECOVERY REFUSED (nothing was run): {exc}", flush=True)
+            raise SystemExit(4) from None
         except AcceptanceStoppedOnFailure as exc:
             print(
                 f"[{'PAID' if args.paid_lane else 'FREE'} LANE] STOPPED ON A DEFINITE "
@@ -1051,9 +1070,12 @@ def main():
     parser.add_argument("--paid-lane", action="store_true")
     parser.add_argument("--paid-budget-ledger", type=Path, default=None)
     parser.add_argument("--paid-checkpoint", action="store_true")
+    parser.add_argument("--recover-d17-consent", action="store_true")
     args = parser.parse_args()
     if (args.paid_lane or args.paid_budget_ledger) and not args.slice1_acceptance:
         parser.error("--paid-lane is only for --slice1-acceptance")
+    if args.recover_d17_consent and not (args.resume_lab and args.slice1_acceptance):
+        parser.error("--recover-d17-consent continues an existing acceptance lab")
     if args.paid_checkpoint and not args.paid_lane:
         parser.error("--paid-checkpoint requires --paid-lane")
     if args.paid_lane != (args.paid_budget_ledger is not None):
