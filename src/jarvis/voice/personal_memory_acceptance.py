@@ -1219,7 +1219,31 @@ class AcceptanceRunner:
 
     def _reopen_for_d17_recovery(self, failed):
         """Append (never rewrite) a reopening row for the forget turn and its
-        check; the original attempt's rows stay in every log."""
+        check; the original attempt's rows stay in every log. When the lab's
+        marker records an earlier build, record which build runs the recovery
+        (and may continue it); the marker itself is never changed."""
+        marker = self.root / "project-memory.marker"
+        commit = self.log.meta.get("source_commit")
+        if marker.is_file():
+            original = json.loads(marker.read_text()).get("commit")
+            if original != commit:
+                path = self.root / "recovery-source.json"
+                if path.exists():
+                    raise AcceptanceRecoveryRefused(
+                        "a recovery source is already recorded"
+                    )
+                path.write_text(
+                    json.dumps(
+                        {
+                            "recovery": D17_RECOVERY_ID,
+                            "original_commit": original,
+                            "recovery_commit": commit,
+                            "at": datetime.now(UTC).isoformat(),
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
         states = self.log.step_states()
         self.log.event(
             {

@@ -554,3 +554,24 @@ def test_a_ledger_created_before_allowances_keeps_its_rows(tmp_path):
     ledger = PaidBudgetLedger(path)
     snap = ledger.snapshot()
     assert snap["committed_usd"] == 40 / 1e6 and snap["ceiling_usd"] == 1.0
+
+
+def test_resume_marker_rule_allows_only_the_recorded_recovery_build(tmp_path):
+    from jarvis.voice.project_memory_lab import MARKER, RECOVERY_SOURCE, _resume_allowed
+
+    marker = tmp_path / "project-memory.marker"
+    original, recovery, other = "0" * 40, "7" * 40, "9" * 40
+    marker.write_text(json.dumps({"kind": MARKER, "commit": original}, sort_keys=True))
+    assert _resume_allowed(tmp_path, marker, original, False)  # same build
+    assert not _resume_allowed(tmp_path, marker, recovery, False)  # ordinary resume
+    assert _resume_allowed(tmp_path, marker, recovery, True)  # explicit recovery entry
+    (tmp_path / RECOVERY_SOURCE).write_text(
+        json.dumps({"original_commit": original, "recovery_commit": recovery})
+    )
+    assert _resume_allowed(tmp_path, marker, recovery, False)  # its continuation
+    assert not _resume_allowed(tmp_path, marker, other, False)
+    assert not _resume_allowed(tmp_path, marker, other, True)  # one recovery only
+    marker.write_text("not json")
+    assert not _resume_allowed(tmp_path, marker, recovery, True)
+    marker.unlink()
+    assert not _resume_allowed(tmp_path, marker, recovery, True)

@@ -1993,6 +1993,228 @@ async def test_d17_recovery_refused_for_any_other_failure_and_sends_nothing(
         await lab.runner(recover_d17_consent=True)[0].run(groups=("idiom",))
 
 
+ORIGINAL_BUILD = "0" * 40  # the lab fixture's commit: the build that failed
+RECOVERY_BUILD = "7" * 40
+UNRELATED_BUILD = "9" * 40
+
+
+def _entry_point(lab, monkeypatch, authority_parts, tmp_path):
+    """The real CLI entry (main -> prepare_project_profile -> slice-1 mode ->
+    run_slice1_acceptance -> runner) with only the machine-bound parts faked:
+    Windows check, source checkout check, machine profile, SQLCipher memory,
+    the authority broker and the Paid clients (scripted fakes, no network)."""
+    import contextlib
+    import types
+
+    from jarvis.voice import paid_acceptance_budget, project_memory_lab
+
+    monkeypatch.setitem(
+        sys.modules,
+        "msvcrt",
+        types.SimpleNamespace(locking=lambda *a: None, LK_NBLCK=1, LK_UNLCK=0),
+    )
+    monkeypatch.setattr(
+        authority_parts.broker._audit, "close", lambda: None, raising=False
+    )
+    monkeypatch.setattr(
+        "jarvis.capabilities.authority_bridge.CapabilityAuthorityBroker",
+        lambda: authority_parts.broker,
+    )
+
+    def fake_memory(path):
+        class Deferred:
+            async def start(self_inner):
+                self_inner.__dict__.update({"real": await lab.deps.open_memory(path)})
+
+            def __getattr__(self_inner, name):
+                return getattr(self_inner.__dict__["real"], name)
+
+        return Deferred()
+
+    monkeypatch.setattr(
+        "jarvis.memory.runtime.build_default_memory_runtime", fake_memory
+    )
+    verified = []
+    monkeypatch.setattr(project_memory_lab, "_require_windows", lambda _p: None)
+    monkeypatch.setattr(
+        project_memory_lab, "verify_source", lambda _repo, c: verified.append(c)
+    )
+    monkeypatch.setattr(
+        project_memory_lab,
+        "project_lab_environment",
+        lambda *_a: contextlib.nullcontext(),
+    )
+    monkeypatch.setattr(
+        "jarvis.machine_config.load_machine_settings", lambda *_a, **_k: {}
+    )
+    monkeypatch.setattr(
+        "jarvis.config.JarvisConfig.from_environment",
+        staticmethod(
+            lambda: types.SimpleNamespace(
+                ai_provider="gemini",
+                gemini_fallback=types.SimpleNamespace(enabled=False),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        paid_acceptance_budget,
+        "build_paid_clients",
+        lambda model, ledger, *, lab, allowance=None: (
+            lab_deps.extractor,
+            lab_driver,
+        ),
+    )
+    lab_deps, lab_driver = lab.deps, lab.driver
+    source_profile = tmp_path / "machine-source.json"
+    source_profile.write_text("{}", encoding="utf-8")
+    ledger = tmp_path / "shared-ledger" / "ledger.sqlite3"
+
+    def run(commit, *extra):
+        project_memory_lab.main(
+            [
+                "--lab-root",
+                str(lab.root),
+                "--profile",
+                str(source_profile),
+                "--model",
+                "fictional-answer",
+                "--source-commit",
+                commit,
+                "--resume-lab",
+                "--slice1-acceptance",
+                "--slice1-group",
+                "story",
+                "--call-spacing-seconds",
+                "0.01",
+                "--paid-lane",
+                "--paid-budget-ledger",
+                str(ledger),
+                *extra,
+            ]
+        )
+
+    return run, verified
+
+
+def _original_build_lab_with_d17_consent_failure(lab):
+    """The original build's lab: its marker, profile and a story run that
+    stopped at D17 because fresh owner consent was not granted."""
+    import asyncio
+
+    from jarvis.voice import project_memory_lab
+
+    (lab.root / "project-memory.marker").write_text(
+        json.dumps(
+            {"kind": project_memory_lab.MARKER, "commit": ORIGINAL_BUILD},
+            sort_keys=True,
+        )
+    )
+    (lab.root / "machine.json").write_text("{}", encoding="utf-8")
+    real = _refuse_forget_consent(lab)
+    runner, _log = lab.runner(stop_on_failure=True)
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure, match="D17 FAIL"):
+        asyncio.run(runner.run(groups=("story",)))
+    lab.deps.capability.authorize_personal_context = real
+    return (lab.root / "project-memory.marker").read_bytes()
+
+
+def test_d17_recovery_through_the_entry_point_on_an_original_build_lab(
+    lab, monkeypatch, authority_parts, tmp_path
+):
+    from jarvis.capabilities.runtime import CapabilityRuntime
+
+    marker = _original_build_lab_with_d17_consent_failure(lab)
+    original_logs = {
+        n: (lab.root / n).read_text(encoding="utf-8")
+        for n in ("acceptance-cases.jsonl", "acceptance-steps.jsonl")
+    }
+    run, verified = _entry_point(lab, monkeypatch, authority_parts, tmp_path)
+    consents = []
+    real_authorize = CapabilityRuntime.authorize_personal_context
+
+    def recorded(self, **kwargs):  # mocked Windows Hello: the owner approves
+        consents.append(kwargs.get("operation"))
+        return real_authorize(self, **kwargs)
+
+    monkeypatch.setattr(CapabilityRuntime, "authorize_personal_context", recorded)
+    learning_before, answers_before = list(lab.genai.calls), list(lab.driver.calls)
+
+    # An ordinary resume on another build is refused before anything runs.
+    with pytest.raises(ValueError, match="exact-source marked lab"):
+        run(RECOVERY_BUILD)
+    assert lab.driver.calls == answers_before and consents == []
+
+    # The explicit recovery on the recovery build reaches consent and recovers.
+    run(RECOVERY_BUILD, "--recover-d17-consent")
+    assert verified[-1] == RECOVERY_BUILD
+    assert "forget" in consents
+    assert lab.genai.calls == learning_before  # no learning call
+    assert set(lab.driver.calls[len(answers_before) :]) == {"Forget the Classic 350."}
+    summary = json.loads((lab.root / "acceptance-summary.json").read_text())
+    assert summary["run_state"] == "checkpoint_paused_for_review"
+    assert summary["cases"]["D17"]["status"] == acceptance.PASS
+    assert summary["lane"] == "paid" and summary["source_commit"] == RECOVERY_BUILD
+    assert summary["paid_budget"]["allowance"]["allowance_id"] == (
+        "slice1-paid-d17-recovery-1"
+    )
+    assert [r["status"] for r in summary["earlier_case_results"]["D17"]] == ["FAIL"]
+    assert (lab.root / "project-memory.marker").read_bytes() == marker  # unchanged
+    for name, text in original_logs.items():
+        assert (lab.root / name).read_text(encoding="utf-8").startswith(text), name
+    recovery = json.loads((lab.root / "recovery-source.json").read_text())
+    assert (recovery["original_commit"], recovery["recovery_commit"]) == (
+        ORIGINAL_BUILD,
+        RECOVERY_BUILD,
+    )
+
+    # Its recorded continuation is allowed on the recovery build only.
+    with pytest.raises(ValueError, match="exact-source marked lab"):
+        run(UNRELATED_BUILD)
+    with pytest.raises(ValueError, match="exact-source marked lab"):
+        run(UNRELATED_BUILD, "--recover-d17-consent")
+    calls = list(lab.driver.calls)
+    run(RECOVERY_BUILD)
+    summary = json.loads((lab.root / "acceptance-summary.json").read_text())
+    assert summary["cases"]["D26"]["status"] == acceptance.PASS
+    assert summary["cases"]["D21"]["status"] == acceptance.PASS
+    assert lab.driver.calls == calls  # D26/D21 are checks; nothing repeated
+    # The recovery cannot be used again (exit 4, nothing sent).
+    with pytest.raises(SystemExit) as refused:
+        run(RECOVERY_BUILD, "--recover-d17-consent")
+    assert refused.value.code == 4 and lab.driver.calls == calls
+
+
+def test_an_unrelated_build_never_resumes_an_original_build_lab(
+    lab, monkeypatch, authority_parts, tmp_path
+):
+    import asyncio
+
+    from jarvis.voice import project_memory_lab
+
+    (lab.root / "project-memory.marker").write_text(
+        json.dumps(
+            {"kind": project_memory_lab.MARKER, "commit": ORIGINAL_BUILD},
+            sort_keys=True,
+        )
+    )
+    (lab.root / "machine.json").write_text("{}", encoding="utf-8")
+    runner, _log = lab.runner(stop_on_failure=True)
+    asyncio.run(runner.run(groups=("idiom",)))  # a lab whose D17 never failed
+    run, _verified = _entry_point(lab, monkeypatch, authority_parts, tmp_path)
+    calls = list(lab.driver.calls)
+    with pytest.raises(ValueError, match="exact-source marked lab"):
+        run(UNRELATED_BUILD)
+    # The recovery flag lets the entry reach validation, which refuses: D17
+    # has no consent failure. Nothing is sent and no recovery is recorded.
+    with pytest.raises(SystemExit) as refused:
+        run(UNRELATED_BUILD, "--recover-d17-consent")
+    assert refused.value.code == 4
+    assert lab.driver.calls == calls
+    assert not (lab.root / "recovery-source.json").exists()
+    with pytest.raises(ValueError, match="exact-source marked lab"):
+        run(UNRELATED_BUILD)
+
+
 def test_d17_recovery_preconditions_refuse_a_non_consent_stage(tmp_path):
     log = acceptance.ResultLog(tmp_path, commit="c", hashes={}, models={})
 

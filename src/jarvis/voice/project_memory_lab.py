@@ -60,8 +60,47 @@ def verify_source(repo: Path, expected: str):
     return head
 
 
+RECOVERY_SOURCE = "recovery-source.json"
+
+
+def _resume_allowed(lab: Path, marker: Path, commit, recovery_resume: bool) -> bool:
+    """A lab resumes on the commit its marker records. The only exception is
+    the slice-1 D17 consent recovery: its first entry may run a later commit
+    (the runner then validates the recovery before anything is sent and
+    records recovery-source.json), and only that recorded recovery commit may
+    continue afterwards. The marker itself is never rewritten."""
+    if not marker.is_file():
+        return False
+    text = marker.read_text()
+    if text == json.dumps({"kind": MARKER, "commit": commit}, sort_keys=True):
+        return True
+    try:
+        recorded = json.loads(text)
+    except ValueError:
+        return False
+    if recorded.get("kind") != MARKER or recorded.get("commit") == commit:
+        return False
+    path = lab / RECOVERY_SOURCE
+    if path.is_file():
+        try:
+            recovery = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            return False
+        return (
+            recovery.get("original_commit") == recorded.get("commit")
+            and recovery.get("recovery_commit") == commit
+        )
+    return recovery_resume
+
+
 def prepare_project_profile(
-    source: Path, lab: Path, *, resume: bool, commit=None, tool_paths=None
+    source: Path,
+    lab: Path,
+    *,
+    resume: bool,
+    commit=None,
+    tool_paths=None,
+    recovery_resume=False,
 ):
     source = source.resolve(strict=True)
     lab = lab.resolve()
@@ -69,9 +108,7 @@ def prepare_project_profile(
         raise ValueError("profile must be isolated")
     marker = lab / "project-memory.marker"
     if resume:
-        if not marker.is_file() or marker.read_text() != json.dumps(
-            {"kind": MARKER, "commit": commit}, sort_keys=True
-        ):
+        if not _resume_allowed(lab, marker, commit, recovery_resume):
             raise ValueError("only this exact-source marked lab can resume")
         profile = (lab / "machine.json").resolve(strict=True)
         if profile.parent != lab:
@@ -993,6 +1030,7 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
         resume=args.resume_lab,
         commit=args.source_commit,
         tool_paths=tool_paths,
+        recovery_resume=args.recover_d17_consent,
     )
     with project_lab_environment(profile, repo):
         config = JarvisConfig.from_environment()
@@ -1036,7 +1074,14 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
             raise SystemExit(2) from None
 
 
-def main():
+def _require_windows(parser):
+    if os.name != "nt":
+        parser.error(
+            "requires Windows SQLCipher, DPAPI and Hello; this is a text lab, not native voice acceptance"
+        )
+
+
+def main(argv=None):
     import argparse
     import asyncio
 
@@ -1071,7 +1116,7 @@ def main():
     parser.add_argument("--paid-budget-ledger", type=Path, default=None)
     parser.add_argument("--paid-checkpoint", action="store_true")
     parser.add_argument("--recover-d17-consent", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if (args.paid_lane or args.paid_budget_ledger) and not args.slice1_acceptance:
         parser.error("--paid-lane is only for --slice1-acceptance")
     if args.recover_d17_consent and not (args.resume_lab and args.slice1_acceptance):
@@ -1142,10 +1187,7 @@ def main():
         parser.error(
             "acceptance seeding requires a new isolated lab, never --resume-lab"
         )
-    if os.name != "nt":
-        parser.error(
-            "requires Windows SQLCipher, DPAPI and Hello; this is a text lab, not native voice acceptance"
-        )
+    _require_windows(parser)
     repo = Path(__file__).resolve().parents[3]
     verify_source(repo, args.source_commit)
     from jarvis.authority.tooling import (
