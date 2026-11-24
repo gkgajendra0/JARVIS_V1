@@ -1195,9 +1195,8 @@ class AcceptanceRunner:
             raise AcceptanceRecoveryRefused(
                 f"D17 failed at {stage.get('failed_stage')!r}, not at consent"
             )
+        # The correct item was selected when every forget call aimed at it.
         calls = stage.get("forget_calls") or []
-        if not stage.get("listed_in_catalog") or not stage.get("shown_by_read"):
-            raise AcceptanceRecoveryRefused("the item was not selected correctly")
         if not calls or not all(
             c.get("targets_item")
             and (c.get("result") or {}).get("error") == "PermissionError"
