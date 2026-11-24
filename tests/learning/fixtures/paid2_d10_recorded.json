@@ -1,0 +1,282 @@
+{
+ "source": "E:/Jarvis/Temp/slice1-acceptance-paid-2 (lab 05f059d1, Paid lane, 2026-11-24)",
+ "note": "Recorded Paid-lane lab outputs, unmodified (fictional data). Plans in the catalog at story-10: story-01 (Rishikesh), story-07 (Ladakh or winter Spiti), story-08 (Goa).",
+ "steps": {
+  "story-01": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "Rishikesh trip",
+      "value": "We're planning a Rishikesh trip in October 2026.",
+      "evidence": [
+       {
+        "turn_id": "ad382c9a-b8a4-49e8-9480-cbb238589914",
+        "start": 0,
+        "end": 48
+       }
+      ],
+      "qualification": "direct",
+      "importance": "stable",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": "October 2026",
+      "location": "Rishikesh",
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "Rishikesh",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "October 2026",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": null,
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   },
+   "status": {
+    "committed": 1,
+    "skipped": [],
+    "reason": "committed"
+   },
+   "utterance": "We're planning a Rishikesh trip in October 2026.",
+   "told_at": "2026-09-15T10:00:00+05:30"
+  },
+  "story-07": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "Ladakh or winter Spiti trip",
+      "value": "Ladakh or winter Spiti trip",
+      "evidence": [
+       {
+        "turn_id": "3654ad53-de54-4f9b-a2e0-6de4fd088c39",
+        "start": 0,
+        "end": 54
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": "January",
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": null,
+        "options": [
+         "Ladakh",
+         "winter Spiti"
+        ],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "January",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": null,
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   },
+   "status": {
+    "committed": 1,
+    "skipped": [],
+    "reason": "committed"
+   },
+   "utterance": "I'm planning a Ladakh or winter Spiti trip in January.",
+   "told_at": "2026-11-18T12:00:00+05:30"
+  },
+  "story-08": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "Goa trip",
+      "value": "Goa",
+      "evidence": [
+       {
+        "turn_id": "115e31e6-aa57-4837-b6ce-9025555b96c9",
+        "start": 0,
+        "end": 31
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "tentative",
+      "time_expression": "this winter",
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 0.9,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "considering",
+      "slots": {
+       "destination": {
+        "value": "Goa",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "this winter",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": null,
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   },
+   "status": {
+    "committed": 1,
+    "skipped": [],
+    "reason": "committed"
+   },
+   "utterance": "Maybe we'll do Goa this winter.",
+   "told_at": "2026-11-18T13:00:00+05:30"
+  },
+  "story-10": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "vehicle",
+      "intent": "new",
+      "label": "winter Spiti trip",
+      "value": "winter Spiti",
+      "evidence": [
+       {
+        "turn_id": "53662fb5-6b7d-4bdb-960b-5f8237cdf597",
+        "start": 0,
+        "end": 56
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": null,
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 0.95,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "winter Spiti",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": null,
+       "vehicle": {
+        "value": "Jimny",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "match",
+      "target_id": "6a3abbec-0f6b-432c-a071-28bf6d681a50"
+     }
+    ]
+   },
+   "status": {
+    "committed": 0,
+    "skipped": [
+     {
+      "category": "plan",
+      "reason": "new_fact_cannot_mutate_target"
+     }
+    ],
+    "reason": "recorded"
+   },
+   "utterance": "We're going with winter Spiti, and we'll take the Jimny.",
+   "told_at": "2026-11-19T10:00:00+05:30"
+  }
+ }
+}

@@ -366,8 +366,13 @@ class LearningReconciler:
                     # The chosen option itself identifies the plan: it must be
                     # one of this plan's stated alternatives and of no other
                     # current plan. Only the option-decision change is allowed
-                    # through this route, never a refine.
+                    # through this route, never a refine. The plan keeps its
+                    # own kind: a plan's kind is not part of what identifies
+                    # it (Paid lab D10: the decision naming a vehicle was
+                    # proposed as kind "vehicle").
                     refine_target, decision_only = entry, True
+                    if candidate.kind != entry.kind:
+                        candidate = candidate.model_copy(update={"kind": entry.kind})
             if refine_target is not None:
                 try:
                     old_value = json.loads(refine_target.value)
@@ -1148,14 +1153,16 @@ def _plan_fields(candidate):
 
 def _option_decision_target(choice, entry, candidate, added, entries) -> bool:
     """True when the resolver's matched plan is identified by the decision
-    itself: a current plan of the same kind, supplied in this catalog page,
-    whose stated alternatives include every chosen option, while no other
-    current plan in the page offers any of them."""
+    itself: a current plan, supplied in this catalog page, whose stated
+    alternatives include every chosen option, while no other current plan in
+    the page (of any kind) offers any of them. The proposal's plan kind is not
+    required to match: it does not identify a plan, and the change keeps the
+    stored plan's kind."""
     if (
         choice.decision not in {"match", "duplicate"}
         or entry is None
         or entry.category != "plan"
-        or entry.kind != candidate.kind
+        or candidate.category != "plan"
     ):
         return False
     try:
