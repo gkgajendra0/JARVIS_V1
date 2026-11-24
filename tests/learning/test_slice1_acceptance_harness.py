@@ -1998,7 +1998,7 @@ RECOVERY_BUILD = "7" * 40
 UNRELATED_BUILD = "9" * 40
 
 
-def _entry_point(lab, monkeypatch, authority_parts, tmp_path):
+def _entry_point(lab, monkeypatch, authority_parts, tmp_path, clock):
     """The real CLI entry (main -> prepare_project_profile -> slice-1 mode ->
     run_slice1_acceptance -> runner) with only the machine-bound parts faked:
     Windows check, source checkout check, machine profile, SQLCipher memory,
@@ -2013,9 +2013,10 @@ def _entry_point(lab, monkeypatch, authority_parts, tmp_path):
         "msvcrt",
         types.SimpleNamespace(locking=lambda *a: None, LK_NBLCK=1, LK_UNLCK=0),
     )
-    monkeypatch.setattr(
-        authority_parts.broker._audit, "close", lambda: None, raising=False
-    )
+    # Each launch is its own process in real use, with its own broker; here
+    # the test broker (fake Hello, test policy) serves every launch, so a
+    # launch's closing must not shut it down for the next one.
+    monkeypatch.setattr(authority_parts.broker, "close", lambda: None)
     monkeypatch.setattr(
         "jarvis.capabilities.authority_bridge.CapabilityAuthorityBroker",
         lambda: authority_parts.broker,
@@ -2070,6 +2071,9 @@ def _entry_point(lab, monkeypatch, authority_parts, tmp_path):
     ledger = tmp_path / "shared-ledger" / "ledger.sqlite3"
 
     def run(commit, *extra):
+        # Each launch is a separate process in real use: a later moment, so
+        # its fresh learning-session approval is not a replay of the last one.
+        clock.advance(120)
         project_memory_lab.main(
             [
                 "--lab-root",
@@ -2119,7 +2123,7 @@ def _original_build_lab_with_d17_consent_failure(lab):
 
 
 def test_d17_recovery_through_the_entry_point_on_an_original_build_lab(
-    lab, monkeypatch, authority_parts, tmp_path
+    lab, monkeypatch, authority_parts, tmp_path, clock
 ):
     from jarvis.capabilities.runtime import CapabilityRuntime
 
@@ -2128,7 +2132,7 @@ def test_d17_recovery_through_the_entry_point_on_an_original_build_lab(
         n: (lab.root / n).read_text(encoding="utf-8")
         for n in ("acceptance-cases.jsonl", "acceptance-steps.jsonl")
     }
-    run, verified = _entry_point(lab, monkeypatch, authority_parts, tmp_path)
+    run, verified = _entry_point(lab, monkeypatch, authority_parts, tmp_path, clock)
     consents = []
     real_authorize = CapabilityRuntime.authorize_personal_context
 
@@ -2185,7 +2189,7 @@ def test_d17_recovery_through_the_entry_point_on_an_original_build_lab(
 
 
 def test_an_unrelated_build_never_resumes_an_original_build_lab(
-    lab, monkeypatch, authority_parts, tmp_path
+    lab, monkeypatch, authority_parts, tmp_path, clock
 ):
     import asyncio
 
@@ -2200,7 +2204,7 @@ def test_an_unrelated_build_never_resumes_an_original_build_lab(
     (lab.root / "machine.json").write_text("{}", encoding="utf-8")
     runner, _log = lab.runner(stop_on_failure=True)
     asyncio.run(runner.run(groups=("idiom",)))  # a lab whose D17 never failed
-    run, _verified = _entry_point(lab, monkeypatch, authority_parts, tmp_path)
+    run, _verified = _entry_point(lab, monkeypatch, authority_parts, tmp_path, clock)
     calls = list(lab.driver.calls)
     with pytest.raises(ValueError, match="exact-source marked lab"):
         run(UNRELATED_BUILD)
