@@ -1967,7 +1967,9 @@ async def test_d17_consent_recovery_reruns_only_the_forget_turn_and_keeps_the_or
     runner, log = lab.runner(stop_on_failure=True)
     summary = await runner.run(groups=("story",))
     assert summary["cases"]["D26"]["status"] == acceptance.PASS
-    assert lab.driver.calls.count("Forget the Classic 350.") == 2
+    # Each attempt made the same model steps; the resume added none.
+    first = answer_calls.count("Forget the Classic 350.")
+    assert lab.driver.calls.count("Forget the Classic 350.") == 2 * first
 
     # The recovery is single-use.
     runner, log = lab.runner(stop_on_failure=True, recover_d17_consent=True)
