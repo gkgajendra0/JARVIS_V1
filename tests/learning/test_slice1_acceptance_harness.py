@@ -2340,3 +2340,48 @@ async def test_lab7_recorded_outputs_now_pass_d12_d23_and_d15(lab, monkeypatch):
     )
     assert checks["answer consistent with the decided plan"] == acceptance.PASS
     assert checks["unrelated plans left out"] == acceptance.PASS
+
+
+# Paid lab 4 D9: the recorded model outputs, replayed offline ---------------------
+
+PAID4_D9 = json.loads(
+    (Path(__file__).parent / "fixtures" / "paid4_d9_recorded.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+def _recorded_as_scripted(step):
+    """The recorded proposal unmodified, with its cited span given as the
+    quote it covered (the scripted provider re-binds quotes to turns)."""
+    st = PAID4_D9["steps"]
+    first = st["idiom-01"]["utterance"]
+    out = []
+    for raw in st[step]["extraction"]["candidates"]:
+        raw = json.loads(json.dumps(raw))
+        (span,) = raw.pop("evidence")
+        # Both recorded proposals cite the first turn's 49 characters.
+        assert (span["start"], span["end"]) == (0, len(first))
+        out.append({**raw, "quote": first})
+    return out
+
+
+@pytest.mark.asyncio
+async def test_paid4_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
+    """Paid lab 4 recorded D9 FAIL ("no vehicle options": ["Thar", "no Thar"]
+    stored as an undecided vehicle). The same model outputs, replayed through
+    the fixed code, pass the unchanged frozen checks."""
+    st = PAID4_D9["steps"]
+    for step in ("idiom-01", "idiom-02"):
+        monkeypatch.setitem(EXTRACT, st[step]["utterance"], _recorded_as_scripted(step))
+    runner, _log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("idiom",))
+    d9 = {c["check"]: c["status"] for c in summary["cases"]["D9"]["checks"]}
+    assert d9 == {
+        "one Spiti plan": acceptance.PASS,
+        "status planned": acceptance.PASS,
+        "destination Spiti": acceptance.PASS,
+        "no vehicle options": acceptance.PASS,
+        "when January confirmed": acceptance.PASS,
+        "no owned Thar": acceptance.PASS,
+    }, summary["cases"]["D9"]
