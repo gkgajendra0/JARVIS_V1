@@ -1017,7 +1017,15 @@ class TextDriver:
         return DRIVER_PREAMBLE + PERSONAL_LEARNING_QUERY_INSTRUCTIONS
 
     async def reply(
-        self, *, group, step, conversation, personal, memory_tools, explicit
+        self,
+        *,
+        group,
+        step,
+        conversation,
+        personal,
+        memory_tools,
+        explicit,
+        learning_notes=(),
     ):
         tools = ["read_personal_context_for_question"]
         if explicit:
@@ -1045,6 +1053,11 @@ class TextDriver:
                 ],
                 "remaining_steps": remaining,
             }
+            if learning_notes:
+                # "Meaning unclear" learning outcomes (from Jarvis, not the
+                # owner). Live voice asks about them after the reply; here
+                # learning has already finished, so the reply receives them.
+                payload["learning_notes"] = list(learning_notes)
             if self.pacer is not None:
                 await self.pacer.wait()
 
@@ -1911,6 +1924,13 @@ class _GroupContext:
             )
         # Failed attempts followed by a successful retry are recorded above
         # and counted in the summary's first-attempt reliability.
+        notes = [
+            n.model_view()
+            for n in self.learning.clarifications.take(
+                self.conversation.session_id, turn.turn_id
+            )
+        ]
+        learning["clarification_notes"] = notes
         personal = PersonalContextSession(
             conversation=self.conversation,
             retrieval=self.memory.retrieval,
@@ -1936,6 +1956,7 @@ class _GroupContext:
                 personal=personal,
                 memory_tools=tools,
                 explicit=step.explicit_tools,
+                learning_notes=notes,
             )
         finally:
             personal.close()

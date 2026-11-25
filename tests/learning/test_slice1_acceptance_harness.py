@@ -2432,7 +2432,7 @@ async def test_paid6_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
         "match"
     ]
     monkeypatch.setitem(RESOLVE, st["idiom-02"]["utterance"], [("match", "spiti")])
-    runner, _log = lab.runner(stop_on_failure=True)
+    runner, log = lab.runner(stop_on_failure=True)
     summary = await runner.run(groups=("idiom",))
     d9 = {c["check"]: c["status"] for c in summary["cases"]["D9"]["checks"]}
     assert d9 == {
@@ -2443,3 +2443,16 @@ async def test_paid6_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
         "when January confirmed": acceptance.PASS,
         "no owned Thar": acceptance.PASS,
     }, summary["cases"]["D9"]
+    # The unclear vehicle reached the reply of the first turn, with what is
+    # already known; the second turn (nothing unclear) carries no note.
+    first = [
+        e["input"]
+        for e in _events(log, "driver_step", "idiom-01")
+        if e.get("status") == "ok"
+    ]
+    (note,) = first[0]["learning_notes"]
+    assert note["unclear"] == ["vehicle"] and "Thar" in note["owner_words"]
+    assert note["already_known"] == {"destination": "Spiti", "when": "January"}
+    assert not {"saved", "stored", "status"} & set(note)
+    later = [e["input"] for e in _events(log, "driver_step", "idiom-02")]
+    assert later and all("learning_notes" not in p for p in later)
