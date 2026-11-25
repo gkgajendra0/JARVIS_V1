@@ -501,7 +501,11 @@ remember_memory directly; do not open the catalog first.
 For a natural request to change/delete an EXISTING saved fact, first use
 personal_context_catalog. Read the exact accepted request from catalog.request.text
 and choose its actual catalog_id and zero-based facet_index, then call
-correct_memory or forget_memory with those selection fields. The user need not
+correct_memory or forget_memory with those selection fields. Facet names are
+opaque: read the plausible facets (together if you can; one answer may read up
+to four facts in total, also over several reads) and use the index whose
+returned fact names the item. On read_budget_exhausted, ask which item the
+owner means instead of reading more. The user need not
 say the stored key, a fixed phrase or the word 'correct'. Examples: 'Update my
 diet preference to vegan', 'Meri diet preference badal do', and 'मेरी खाने की पसंद
 वीगन कर दो' can express correction. Copy a corrected value directly from the
