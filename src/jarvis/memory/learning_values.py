@@ -38,10 +38,62 @@ def has_identifier(text: str | None) -> bool:
     )
 
 
+_NEGATORS_BEFORE = ("no ", "not ", "without ", "bina ", "na ", "non ", "non-")
+_NEGATORS_AFTER = (" nahi", " nahin", " na", " not")
+_BARE_NEGATIONS = frozenset({"no", "not", "none", "nothing", "nahi", "nahin", "na"})
+_POSITIVE_MARKERS = ("with ", "the ", "a ", "an ", "my ", "our ")
+
+
+def _option_core(text: str) -> str:
+    core = " ".join(text.casefold().split()).strip(" .,!?")
+    changed = True
+    while changed:
+        changed = False
+        for marker in _POSITIVE_MARKERS:
+            if core.startswith(marker):
+                core, changed = core[len(marker) :], True
+    return core
+
+
+def _negated_core(text: str) -> str | None:
+    """The thing an option negates ("no Thar" -> "thar"), or None."""
+    core = " ".join(text.casefold().split()).strip(" .,!?")
+    for marker in _NEGATORS_BEFORE:
+        if core.startswith(marker):
+            return _option_core(core[len(marker) :])
+    for marker in _NEGATORS_AFTER:
+        if core.endswith(marker):
+            return _option_core(core[: -len(marker)])
+    return None
+
+
+def complementary_options(options) -> set[str]:
+    """Options that only state something and its own negation ("Thar or no
+    Thar", "with or without the Jimny", "Thar ya Thar nahi", "Thar or not").
+    That is an idiom of indifference ("regardless of the Thar"), not a choice
+    between alternatives, so these options are not stored. Genuine
+    alternatives ("Thar or Jimny", "Ladakh or winter Spiti") are untouched."""
+    cores = {o: _option_core(o) for o in options}
+    bare = {o for o in options if cores[o] in _BARE_NEGATIONS}
+    paired = set()
+    for option in options:
+        negated = _negated_core(option)
+        if negated is None:
+            continue
+        partners = {o for o in options if o != option and cores[o] == negated}
+        if partners:
+            paired |= partners | {option}
+    if bare and len(options) - len(bare) == 1:
+        paired |= set(options)  # "Thar or not": one thing, or its absence
+    return paired
+
+
 def normalized_slots(slots) -> dict[str, dict]:
     """Slots as stored. A slot with two or more options is undecided: its value
     is cleared and its certainty can never be confirmed. Options never touch
-    the plan's own status."""
+    the plan's own status. Options that are only something and its negation
+    are an idiom, not alternatives (see :func:`complementary_options`): they
+    are not stored, and what remains is never promoted to a decided value."""
     stored = {}
     if slots is None:
         return stored
@@ -50,6 +102,18 @@ def normalized_slots(slots) -> dict[str, dict]:
         if slot is None:
             continue
         options = list(dict.fromkeys(o for o in slot.options if o))
+        idiom = complementary_options(options)
+        if idiom:
+            options = [o for o in options if o not in idiom]
+            value = slot.value if slot.value not in idiom else None
+            if len(options) < 2:
+                if value:
+                    stored[name] = {
+                        "value": value,
+                        "options": [],
+                        "certainty": slot.certainty,
+                    }
+                continue
         if len(options) >= 2:
             entry = {
                 "value": None,
