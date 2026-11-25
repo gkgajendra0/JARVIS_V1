@@ -89,7 +89,11 @@ Plans: plan_status says whether the plan itself stands: considering (the user is
 unsure it will happen), planned (they intend it), cancelled, done. slots hold
 details: destination, when, vehicle, stay, companions, other. A detail the user
 is still choosing between goes in that slot's options (each copied verbatim) with
-no value; options never change plan_status. Taking a vehicle or staying
+no value; options never change plan_status. Options are only alternatives the
+user is deciding between (at least two); something mentioned only to say it
+does not affect the plan is neither an option nor a value. A slot has a value
+only when the user states that detail. If you cannot tell what the user means
+about a detail, set that slot's certainty uncertain instead of guessing. Taking a vehicle or staying
 somewhere on a trip is a plan slot, never a change to owned items. A question
 asking for information or advice is not a plan.
 Slice examples (illustrations only, never input facts):

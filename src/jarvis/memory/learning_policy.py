@@ -72,6 +72,10 @@ class LearningPolicy:
             not episodic and (c.intent == "transient" or c.importance == "transient")
         ):
             return LearningEligibility("transient", "not_durable")
+        if c.certainty == "uncertain":
+            # The proposal itself says the meaning is unclear: nothing is
+            # saved as a guessed fact (the reply asks what the owner meant).
+            return LearningEligibility("drop", "meaning_unclear")
         if (
             c.category in suppressed_categories
             or c.suppression_key in suppressed_categories
