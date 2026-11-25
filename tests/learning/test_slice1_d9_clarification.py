@@ -23,6 +23,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import pytest_asyncio
 
 from jarvis.conversation import ConversationRole, ConversationSession
 from jarvis.memory.learning_clarification import (
@@ -132,7 +133,7 @@ class MatchPlan:
         return LearningResolutionBatch(resolutions=out)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def lab(learning):
     from jarvis.memory.learning_reconciliation import LearningReconciler
     from jarvis.memory.learning_runtime import PersonalLearningRuntime
