@@ -408,6 +408,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         bridge.conversation, self._learning_grant
                     )
                 )
+                if self._session_purpose == "conversation":
+                    self._attach_learning_follow_up(session, bridge)
             # Explicit opt-in only. No model dispatch, memory persistence, or
             # model-visible release without a separately provided, trusted gate.
             # The bridge closes and invalidates this state on session retirement.
@@ -1058,6 +1060,41 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 error, "__context__", None
             )
         return "unclassified"
+
+    def _attach_learning_follow_up(self, session, bridge):
+        """Ask about a "meaning unclear" learning note in this live
+        conversation once Jarvis's reply has finished (learning_followup)."""
+        from jarvis.voice.learning_followup import (
+            LearningFollowUp,
+            inject_learning_note,
+        )
+
+        learning = self._personal_learning
+
+        def idle():
+            return (
+                self._live_session is session
+                and not self._user_is_speaking
+                and self._agent_state in {"listening", "idle"}
+                and bridge.conversation.status is ConversationStatus.ACTIVE
+            )
+
+        follow_up = LearningFollowUp(
+            learning.clarifications,
+            bridge.conversation,
+            lambda notes: inject_learning_note(
+                session, notes, register=bridge.register_restored_context
+            ),
+            idle=idle,
+        )
+        learning.clarification_observer = follow_up.offer
+
+        def detach():
+            if learning.clarification_observer == follow_up.offer:
+                learning.clarification_observer = None
+            asyncio.ensure_future(follow_up.close())
+
+        bridge.add_close_observer(detach)
 
     async def _start_personal_learning(self):
         if (

@@ -13,6 +13,11 @@ from time import monotonic, perf_counter
 
 from jarvis.provider_retry import decide_retry
 
+from .learning_clarification import (
+    ClarificationBoard,
+    clarification_for,
+    stated_details,
+)
 from .learning_contracts import AcceptedLearningSource, LearningBatch
 from .learning_controls import category_veto, suppression_binding
 from .learning_diagnostics import log_learning
@@ -48,6 +53,7 @@ class PersonalLearningRuntime:
         retry_observer=None,
         sleep=asyncio.sleep,
         rng=random.random,
+        clarification_observer=None,
     ):
         self.authority, self.service = authority, service
         self.extractor, self.resolver, self.reconciler = extractor, resolver, reconciler
@@ -56,6 +62,10 @@ class PersonalLearningRuntime:
         # the bounded retry policy decided (jarvis.provider_retry).
         self.retry_observer = retry_observer
         self._sleep, self._rng = sleep, rng
+        # "Meaning unclear" outcomes for the reply path (learning_clarification):
+        # session-bound, offered once per detail, cleared on invalidation.
+        self.clarifications = ClarificationBoard()
+        self.clarification_observer = clarification_observer
         self.diagnostics = diagnostics
         self._stage = "source_validation"
         self._queue = asyncio.Queue(maxsize=32)
@@ -201,6 +211,7 @@ class PersonalLearningRuntime:
             )
 
     def invalidate_sources(self, category=None, turn_id=None):
+        self.clarifications.clear()
         if turn_id is None:
             self._window_cutoff = datetime.now(UTC)
         for receipt, (source, grant) in tuple(self._pending.items()):
@@ -360,6 +371,7 @@ class PersonalLearningRuntime:
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
+        notes, settled = [], []
         grounded_count = len(batch.candidates)
         for index, candidate in enumerate(batch.candidates):
             grounded = ground_plan_label(source, candidate)
@@ -389,6 +401,10 @@ class PersonalLearningRuntime:
             )
             if decision.status == "eligible":
                 eligible.append(candidate)
+                notes.append(clarification_for(source, candidate))
+                settled.append(candidate)
+            elif decision.reason == "meaning_unclear":
+                notes.append(clarification_for(source, candidate, dropped_unclear=True))
         batch = LearningBatch(candidates=eligible)
         if not batch.candidates:
             log_learning(
@@ -400,6 +416,7 @@ class PersonalLearningRuntime:
                 if grounded_count == 0
                 else "all_candidates_rejected",
             )
+            self._publish(source, notes, settled)
             self._report("no_eligible_fact")
             return
         self._stage = "catalog"
@@ -428,6 +445,7 @@ class PersonalLearningRuntime:
         plan = self.reconciler.plan(source, batch, catalog, resolutions)
         if not plan.mutations and not plan.outcomes:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
+            self._publish(source, notes, settled)
             self._report("no_change")
             return
         self._stage = "storage"
@@ -455,7 +473,41 @@ class PersonalLearningRuntime:
                 for m in plan.mutations
             ],
         )
+        self._publish(source, notes, settled)
         self._report(result.status)
+
+    def _publish(self, source, notes, settled):
+        """After the turn's learning completed: details stated clearly settle
+        earlier notes about them; new "meaning unclear" notes go to the reply
+        path. Nothing here is a storage receipt."""
+        for candidate in settled:
+            details = stated_details(candidate)
+            if details:
+                self.clarifications.resolve(
+                    source.session_id,
+                    candidate.category,
+                    candidate.label or candidate.value,
+                    details,
+                )
+        for note in notes:
+            if note is None or not self.clarifications.offer(note):
+                continue
+            log_learning(
+                self.diagnostics,
+                source,
+                "clarification",
+                "offered",
+                category=note.category,
+                details=list(note.details),
+            )
+            if self.clarification_observer is not None:
+                try:
+                    self.clarification_observer(note)
+                except Exception as exc:  # noqa: BLE001 - reply path never breaks learning
+                    LOGGER.warning(
+                        "Learning clarification observer failed | error=%s",
+                        type(exc).__name__,
+                    )
 
     async def _run(self):
         while not self._closed:
