@@ -56,7 +56,10 @@ statement of tentative intention has qualification direct, not hypothetical.
 Do not turn a possible purchase into ownership, a plan into completed travel,
 or another person's activities into the user's own. Jokes, quoted claims and
 hypothetical scenarios are not actual personal history. No medical/financial
-data, credentials/secrets, inferred personality or unrelated third-party profiles.
+data, credentials/secrets, inferred personality or unrelated third-party profiles;
+health information of any kind (conditions, allergies, medicines) is medical
+data. A question the user asks is not a fact about them: propose only what they
+assert, also when a turn mixes a statement and a question.
 Relationships and shared activities directly relevant to the user are allowed.
 Changed employment, rescheduling and cancelled plans are change; correction of
 an earlier false statement is correction. Keep distinct dated events separate.

@@ -24,7 +24,12 @@ from .learning_contracts import (
 )
 from .learning_diagnostics import log_learning
 from .learning_policy import SCALAR_FACETS, LearningPolicy
-from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_context
+from .learning_temporal import (
+    HISTORY_CATEGORIES,
+    POSSIBILITY_CATEGORIES,
+    occurrence_matches,
+    temporal_context,
+)
 from .learning_values import (
     DISPOSED_STATES,
     PLAN_STATE,
@@ -593,11 +598,13 @@ class LearningReconciler:
             )
         kept = []
         for mutation in mutations:
-            problem = _item_inconsistency(mutation)
+            candidate = batch.candidates[mutation.ordinal]
+            problem = _item_inconsistency(mutation) or _possibility_overrides_fact(
+                mutation, candidate, by_id
+            )
             if problem is None:
                 kept.append(mutation)
                 continue
-            candidate = batch.candidates[mutation.ordinal]
             log_learning(
                 self.diagnostics,
                 source,
@@ -1228,6 +1235,40 @@ def _new_value(candidate, source, context=None):
                 value[key] = detail
         if candidate.category == "plan":
             value.update(_plan_fields(candidate))
+    return _record_certainty(value, candidate, certainty)
+
+
+def _possibility_overrides_fact(mutation, candidate, by_id):
+    """A possibility never changes, corrects or withdraws a stored fact, in
+    any category: "maybe we'll cancel Goa" leaves the plan as it is, and
+    "I might move my swim to 7" leaves 6. It may update a stored possibility.
+    Adding a detail (refine) is not affected; a detail keeps its own
+    certainty."""
+    # The owner's own certainty about what they said, not the plan's status:
+    # "the trip is only being considered now" is a stated change.
+    if candidate.certainty != "tentative" or mutation.action not in {
+        "change",
+        "correct",
+        "retract",
+    }:
+        return None
+    entry = by_id.get(mutation.expected_assertion_id)
+    try:
+        old = json.loads(entry.value) if entry is not None else None
+    except (TypeError, ValueError):
+        old = None
+    if isinstance(old, dict) and old.get("certainty") == "tentative":
+        return None
+    return "possibility_cannot_change_fact"
+
+
+def _record_certainty(value, candidate, certainty):
+    """Routines and goals record a possibility (absent means confirmed, as in
+    rows stored before this rule); history categories always record it."""
+    if candidate.category in POSSIBILITY_CATEGORIES - HISTORY_CATEGORIES:
+        value.pop("certainty", None)
+        if certainty == "tentative":
+            value["certainty"] = "tentative"
     return value
 
 
@@ -1235,7 +1276,7 @@ def _changed_value(old, candidate, source):
     """A real-world change to the same thing: keep its identity, update what
     the owner said changed."""
     state, certainty = _plan_state_and_certainty(candidate)
-    value = {**old, "state": state}
+    value = _record_certainty({**old, "state": state}, candidate, certainty)
     if candidate.category != "owned_item":
         value["value"] = candidate.value
     else:
