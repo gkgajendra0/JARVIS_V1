@@ -63,6 +63,11 @@ def _stored_plans(extra=()):
     entries = []
     for step, assertion_id in STORED + tuple(extra):
         source, candidate = _replay(step)
+        if step == "story-07":
+            # Amendment 2: the plan after the owner confirmed the alternatives.
+            candidate = candidate.model_copy(
+                update={"owner_confirmed": ("destination",)}
+            )
         (mutation,) = _plan(source, candidate, entries, S[step]["resolution"]).mutations
         value = mutation.draft.value
         entries.append(

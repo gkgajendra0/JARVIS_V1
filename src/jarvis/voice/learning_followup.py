@@ -33,8 +33,9 @@ LOGGER = logging.getLogger(__name__)
 NOTE_PREFIX = "[From Jarvis, not speech from the owner.] learning_note: "
 FOLLOW_UP_REQUEST = (
     "[From Jarvis, not speech from the owner.] Ask the owner, in one short "
-    "natural question, what they meant about the unclear detail in the "
-    "learning note above. Do not ask about anything already known, and do not "
+    "natural question, the open question in the learning note above: what they "
+    "meant about the unclear detail, or whether they are still choosing between "
+    "the listed choices. Do not ask about anything already known, and do not "
     "mention memory or saving."
 )
 ACK = "Noted."

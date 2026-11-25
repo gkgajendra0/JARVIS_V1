@@ -425,7 +425,10 @@ def plan_spec(label, quotes, **extra):
 
 
 @pytest.mark.asyncio
-async def test_d6_destination_options_leave_the_trip_planned(learning):
+@pytest.mark.parametrize("owner_confirmed", [(), ("destination",)])
+async def test_d6_destination_options_leave_the_trip_planned(learning, owner_confirmed):
+    # Amendment 2: alternatives are stored (undecided) only once the owner
+    # confirmed them; until then the plan keeps its clear parts only.
     owner = Owner(learning)
     text = "I'm planning a Ladakh or winter Spiti trip in January."
     _plan, _result, _ = await owner.say(
@@ -443,16 +446,20 @@ async def test_d6_destination_options_leave_the_trip_planned(learning):
                     ),
                     when=SlotValue(value="January"),
                 ),
+                owner_confirmed=owner_confirmed,
             )
         ],
         [("new", None)],
     )
     value = current(await rows(learning))[0]["value"]
     assert value["plan_status"] == "planned" and value["state"] == "planned"
+    assert value["slots"]["when"]["value"] == "January"
+    if not owner_confirmed:
+        assert "destination" not in value["slots"]
+        return
     destination = value["slots"]["destination"]
     assert destination["options"] == ["Ladakh", "winter Spiti"]
     assert destination["value"] is None and destination["certainty"] != "confirmed"
-    assert value["slots"]["when"]["value"] == "January"
 
 
 @pytest.mark.asyncio
@@ -563,6 +570,7 @@ async def test_d10_decision_and_trip_vehicle_never_change_ownership(learning):
                 slots=PlanSlots(
                     destination=SlotValue(options=["Ladakh", "winter Spiti"])
                 ),
+                owner_confirmed=("destination",),  # amendment 2 (story-07b)
             )
         ],
         [("new", None)],

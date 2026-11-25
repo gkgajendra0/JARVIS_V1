@@ -38,22 +38,41 @@ def has_identifier(text: str | None) -> bool:
     )
 
 
-def normalized_slots(slots) -> dict[str, dict]:
+def normalized_slots(slots, confirmed=()) -> dict[str, dict]:
     """Slots as stored. General evidence rules, whatever the wording:
 
     - A detail is decided only by a value the proposal states. Options are
       never promoted to a value: mentioning something is not choosing it.
-    - Alternatives need at least two distinct options; a lone option is a
-      mention, not a choice, and is not stored.
+    - Alternatives (two or more distinct options) are the model's reading of
+      the owner's words, so they are stored only for details the owner
+      confirmed in answer to Jarvis's question (``confirmed``, set by the
+      learning runtime); until then they stay pending in the conversation,
+      whatever certainty the model gave them.
+    - A lone option is a mention, not a choice, and is not stored.
     - A slot whose meaning the proposal marks uncertain is not stored: an
       unclear detail is asked about, never saved as a guessed fact.
 
-    A slot with two or more options is undecided: its value is cleared and its
-    certainty can never be confirmed. Options never touch the plan's own
-    status."""
+    Confirmed alternatives are undecided: no value, certainty tentative.
+    Options never touch the plan's own status."""
     stored = {}
     if slots is None:
         return stored
+    for name in SLOT_NAMES:
+        slot = getattr(slots, name)
+        if slot is None:
+            continue
+        options = list(dict.fromkeys(o for o in slot.options if o))
+        if name in confirmed and len(options) >= 2:
+            stored[name] = {"value": None, "options": options, "certainty": "tentative"}
+        elif slot.certainty == "uncertain" or len(options) >= 2:
+            continue
+        elif slot.value:
+            stored[name] = {
+                "value": slot.value,
+                "options": [],
+                "certainty": slot.certainty,
+            }
+    return stored
     for name in SLOT_NAMES:
         slot = getattr(slots, name)
         if slot is None or slot.certainty == "uncertain":

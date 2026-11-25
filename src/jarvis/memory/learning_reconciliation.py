@@ -1145,7 +1145,7 @@ def _plan_fields(candidate):
     fields = {}
     if candidate.plan_status is not None:
         fields["plan_status"] = candidate.plan_status
-    slots = normalized_slots(candidate.slots)
+    slots = normalized_slots(candidate.slots, candidate.owner_confirmed)
     if slots:
         fields["slots"] = slots
     return fields

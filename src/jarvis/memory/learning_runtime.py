@@ -14,8 +14,11 @@ from time import monotonic, perf_counter
 from jarvis.provider_retry import decide_retry
 
 from .learning_clarification import (
+    ALTERNATIVES,
     ClarificationBoard,
+    alternatives_question,
     clarification_for,
+    confirmation_candidate,
     stated_details,
 )
 from .learning_contracts import AcceptedLearningSource, LearningBatch
@@ -36,6 +39,27 @@ class LearningRuntimeStatus:
     committed: int
     dropped: int
     reason: str
+
+
+def _already_held(note, catalog) -> bool:
+    """Alternatives already stored on a plan in this catalog page (the owner
+    confirmed them earlier) are not asked about again."""
+    if note is None or note.kind != ALTERNATIVES:
+        return False
+    for entry in catalog.entries:
+        if entry.category != "plan":
+            continue
+        try:
+            slots = json.loads(entry.value).get("slots") or {}
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if all(
+            {o.casefold() for o in (slots.get(name) or {}).get("options") or ()}
+            == {o.casefold() for o in options}
+            for name, options in note.choices
+        ):
+            return True
+    return False
 
 
 class PersonalLearningRuntime:
@@ -363,17 +387,34 @@ class PersonalLearningRuntime:
             self._report("category_suppressed")
             return
         self._stage = "extraction"
-        batch = await self._infer(
-            source, lambda: self.extractor.extract(source), receipt, grant
-        )
+        window = {t.turn_id for t in source.turns}
+        open_questions = [
+            n
+            for n in self.clarifications.pending(source.session_id)
+            if n.turn_id in window and n.turn_id != source.turn_id
+        ]
+        if open_questions:
+            views = [n.model_view() for n in open_questions]
+            batch = await self._infer(
+                source,
+                lambda: self.extractor.extract(source, open_questions=views),
+                receipt,
+                grant,
+            )
+        else:
+            batch = await self._infer(
+                source, lambda: self.extractor.extract(source), receipt, grant
+            )
         self._require(receipt, source, grant)
+        answered, confirmations = self._answered(source, batch, open_questions)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
         notes, settled = [], []
-        grounded_count = len(batch.candidates)
-        for index, candidate in enumerate(batch.candidates):
+        proposals = list(batch.candidates) + confirmations
+        grounded_count = len(proposals)
+        for index, candidate in enumerate(proposals):
             grounded = ground_plan_label(source, candidate)
             if grounded is not candidate:
                 log_learning(
@@ -402,6 +443,7 @@ class PersonalLearningRuntime:
             if decision.status == "eligible":
                 eligible.append(candidate)
                 notes.append(clarification_for(source, candidate))
+                notes.append(alternatives_question(source, candidate))
                 settled.append(candidate)
             elif decision.reason == "meaning_unclear":
                 notes.append(clarification_for(source, candidate, dropped_unclear=True))
@@ -416,7 +458,7 @@ class PersonalLearningRuntime:
                 if grounded_count == 0
                 else "all_candidates_rejected",
             )
-            self._publish(source, notes, settled)
+            self._publish(source, notes, settled, answered)
             self._report("no_eligible_fact")
             return
         self._stage = "catalog"
@@ -426,6 +468,7 @@ class PersonalLearningRuntime:
         )
         self._require(receipt, source, grant)
         catalog = catalog.model_copy(update={"suppression_epochs": suppression.epochs})
+        notes = [n for n in notes if not _already_held(n, catalog)]
         self._stage = "resolution"
         resolutions = await self._infer(
             source,
@@ -445,7 +488,7 @@ class PersonalLearningRuntime:
         plan = self.reconciler.plan(source, batch, catalog, resolutions)
         if not plan.mutations and not plan.outcomes:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
-            self._publish(source, notes, settled)
+            self._publish(source, notes, settled, answered)
             self._report("no_change")
             return
         self._stage = "storage"
@@ -473,13 +516,49 @@ class PersonalLearningRuntime:
                 for m in plan.mutations
             ],
         )
-        self._publish(source, notes, settled)
+        self._publish(source, notes, settled, answered)
         self._report(result.status)
 
-    def _publish(self, source, notes, settled):
-        """After the turn's learning completed: details stated clearly settle
-        earlier notes about them; new "meaning unclear" notes go to the reply
-        path. Nothing here is a storage receipt."""
+    def _answered(self, source, batch, open_questions):
+        """The owner's answers to open questions, as the extractor read them.
+        Code decides what each allows: a confirmation of alternatives becomes
+        an ordinary proposal from the owner's original words (then policy,
+        resolution and reconciliation as usual); "chosen" and "doesnt_matter"
+        close the question (a chosen value is the extractor's own proposal).
+        Nothing changes for a question the turn does not answer."""
+        by_id = {n.question_id: n for n in open_questions}
+        answered, confirmations = [], []
+        for answer in batch.answers:
+            note = by_id.pop(answer.question_id, None)
+            if note is None:
+                continue
+            answered.append((note, answer.answer))
+            if answer.answer == "confirmed" and note.kind == ALTERNATIVES:
+                candidate = confirmation_candidate(source, note)
+                if (
+                    candidate is not None
+                    and len(batch.candidates) + len(confirmations) < 8
+                ):
+                    confirmations.append(candidate)
+            log_learning(
+                self.diagnostics,
+                source,
+                "clarification",
+                "answered",
+                question=note.kind,
+                answer=answer.answer,
+                details=list(note.details),
+            )
+        return answered, confirmations
+
+    def _publish(self, source, notes, settled, answered=()):
+        """After the turn's learning completed: answered questions close;
+        details stated clearly settle earlier questions about them; new
+        questions go to the reply path. Nothing here is a storage receipt."""
+        closed = set()
+        for note, _answer in answered:
+            self.clarifications.close(note)
+            closed.add(note.key)
         for candidate in settled:
             details = stated_details(candidate)
             if details:
@@ -490,7 +569,11 @@ class PersonalLearningRuntime:
                     details,
                 )
         for note in notes:
-            if note is None or not self.clarifications.offer(note):
+            if (
+                note is None
+                or note.key in closed
+                or not self.clarifications.offer(note)
+            ):
                 continue
             log_learning(
                 self.diagnostics,

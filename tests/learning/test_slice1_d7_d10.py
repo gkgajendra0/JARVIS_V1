@@ -212,7 +212,11 @@ def test_decision_among_stated_options_is_recognized_narrowly():
 def _stored_story_07():
     reconciler = LearningReconciler(None, None)
     source = _source(STORY_07)
-    batch = LearningBatch(candidates=[story_07(source)])
+    # Amendment 2: the owner confirmed the alternatives (story-07b).
+    confirmed = story_07(source).model_copy(
+        update={"owner_confirmed": ("destination",)}
+    )
+    batch = LearningBatch(candidates=[confirmed])
     plan = reconciler.plan(
         source,
         batch,
@@ -323,6 +327,9 @@ def _replayed(step, text=None, **changes):
 
 def _run5_entry(assertion_id=RUN5_TARGET, step="story-07", **changes):
     source, candidate = _replayed(step, **changes)
+    if step == "story-07":
+        # Amendment 2: the plan after the owner confirmed the alternatives.
+        candidate = candidate.model_copy(update={"owner_confirmed": ("destination",)})
     reconciler = LearningReconciler(None, None)
     plan = reconciler.plan(
         source,

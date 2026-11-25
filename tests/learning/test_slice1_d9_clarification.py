@@ -37,6 +37,7 @@ from jarvis.memory.learning_contracts import (
     LearningCandidate,
     LearningResolution,
     LearningResolutionBatch,
+    QuestionAnswer,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -94,14 +95,23 @@ def _said(text, label, *, slots=None, quote=None, **fields):
 
 
 class Script:
-    """Extractor: the proposals for each owner utterance."""
+    """Extractor: the proposals for each owner utterance, and how it reads an
+    answer to an open question (``answers[text] = [(answer, detail)]``)."""
 
     def __init__(self):
-        self.by_text = {}
+        self.by_text, self.answers, self.questions_seen = {}, {}, []
 
-    async def extract(self, source):
+    async def extract(self, source, open_questions=()):
+        self.questions_seen.append(list(open_questions))
         build = self.by_text.get(source.text)
-        return LearningBatch(candidates=build(source) if build else [])
+        answers = []
+        for answer, detail in self.answers.get(source.text, []):
+            for q in open_questions:
+                if detail in q.get("choices", {}) or detail in q.get("unclear", []):
+                    answers.append(
+                        QuestionAnswer(question_id=q["question_id"], answer=answer)
+                    )
+        return LearningBatch(candidates=build(source) if build else [], answers=answers)
 
 
 class MatchPlan:
@@ -318,74 +328,312 @@ async def test_a_later_clear_answer_updates_the_same_plan_and_settles_the_note(l
     assert len(lab.seen) == 1  # nothing new to ask
 
 
-# genuine tentative plans and alternatives -----------------------------------
+# plan alternatives wait for the owner (amendment 2) -------------------------
+
+CHOICE = "We're going to Spiti in January, Thar or Jimny."
+
+
+def _choice(text=CHOICE, options=("Thar", "Jimny"), certainty="confirmed"):
+    return _said(
+        text,
+        "Spiti",
+        slots={
+            "destination": {"value": "Spiti", "options": [], "certainty": "confirmed"},
+            "when": {"value": "January", "options": [], "certainty": "confirmed"},
+            "vehicle": {
+                "value": None,
+                "options": list(options),
+                "certainty": certainty,
+            },
+        },
+    )
+
+
+def _decision(text, value):
+    """A follow-up stating the vehicle: label cited from the plan's first turn,
+    the value from the current turn."""
+
+    def build(source):
+        first = next(t for t in source.turns if "Spiti" in t.text)
+        current = source.turns[-1]
+        at = first.text.index("Spiti")
+        return [
+            LearningCandidate(
+                category="plan",
+                kind="other",
+                intent="new",
+                label="Spiti",
+                value="Spiti",
+                state="planned",
+                plan_status="planned",
+                slots={
+                    "vehicle": {"value": value, "options": [], "certainty": "confirmed"}
+                },
+                evidence=[
+                    EvidenceSpan(turn_id=first.turn_id, start=at, end=at + 5),
+                    EvidenceSpan(
+                        turn_id=current.turn_id, start=0, end=len(current.text)
+                    ),
+                ],
+            )
+        ]
+
+    return build
+
+
+async def _rows(learning_reader):
+    rows = await learning_reader.run(
+        lambda c: c.execute(
+            "SELECT state, value_json FROM semantic_assertion"
+            " WHERE predicate LIKE 'plan%' ORDER BY assertion_rowid"
+        ).fetchall()
+    )
+    return [(r[0], json.loads(r[1])) for r in rows]
 
 
 @pytest.mark.asyncio
-async def test_genuine_alternatives_and_tentative_plans_are_stored_silently(lab):
-    choice = "We're going to Spiti, Thar or Jimny."
-    lab.script.by_text[choice] = _said(
-        choice,
-        "Spiti",
-        slots={
-            "vehicle": {
-                "value": None,
-                "options": ["Thar", "Jimny"],
-                "certainty": "tentative",
-            }
-        },
-    )
+@pytest.mark.parametrize("certainty", ["confirmed", "tentative"])
+async def test_alternatives_wait_for_the_owner_whatever_the_certainty(lab, certainty):
+    lab.script.by_text[CHOICE] = _choice(certainty=certainty)
+    await lab.say(CHOICE)
+    (plan,) = await lab.plans()
+    assert "vehicle" not in plan["slots"]  # pending, not stored
+    assert plan["slots"]["when"]["value"] == "January"  # clear parts saved
+    assert plan["slots"]["destination"]["value"] == "Spiti"
+    (note,) = lab.seen
+    view = note.model_view()
+    assert view["question"] == "confirm_alternatives"
+    assert view["choices"] == {"vehicle": ["Thar", "Jimny"]}
+    assert view["already_known"] == {"destination": "Spiti", "when": "January"}
+    assert not {"saved", "stored", "status"} & set(view)
+
+
+@pytest.mark.asyncio
+async def test_tentative_plans_and_stated_details_save_without_a_question(lab):
     maybe = "Maybe we'll do Goa this winter."
     lab.script.by_text[maybe] = _said(
-        maybe,
-        "Goa",
-        quote="Goa",
-        certainty="tentative",
-        plan_status="considering",
+        maybe, "Goa", quote="Goa", certainty="tentative", plan_status="considering"
     )
-    await lab.say(choice)
+    stated = "We're going to Spiti in January in the Jimny."
+    lab.script.by_text[stated] = _said(
+        stated,
+        "Spiti",
+        slots={"vehicle": {"value": "Jimny", "options": [], "certainty": "confirmed"}},
+    )
     await lab.say(maybe)
+    await lab.say(stated)
     plans = {p["label"]: p for p in await lab.plans()}
-    assert plans["Spiti"]["slots"]["vehicle"] == {
+    assert plans["Goa"]["plan_status"] == "considering"
+    assert plans["Spiti"]["slots"]["vehicle"]["value"] == "Jimny"
+    assert lab.seen == []
+
+
+@pytest.mark.asyncio
+async def test_confirmation_saves_the_alternatives_undecided_on_the_same_plan(
+    lab, learning
+):
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    (question,) = lab.seen
+    yes = "Yes, still deciding."
+    lab.script.answers[yes] = [("confirmed", "vehicle")]
+    lab.resolver.targets[yes] = "Spiti"
+    await lab.say(yes)
+    # The extractor was told the open question, in the owner's words.
+    assert lab.script.questions_seen[-1] == [question.model_view()]
+    (plan,) = await lab.plans()
+    assert plan["slots"]["vehicle"] == {
         "value": None,
         "options": ["Thar", "Jimny"],
         "certainty": "tentative",
     }
-    assert plans["Goa"]["plan_status"] == "considering"
-    assert lab.seen == []
-
-
-# the admitted limitation ------------------------------------------------------
+    assert plan["slots"]["when"]["value"] == "January"  # unrelated kept
+    assert plan["slots"]["destination"]["value"] == "Spiti"
+    # The same plan: the earlier row is superseded (history), not retracted.
+    states = [state for state, value in await _rows(learning.reader)]
+    assert states == ["superseded", "active"]
+    assert lab.runtime.clarifications.pending(question.session_id) == []
+    assert len(lab.seen) == 1  # nothing asked again
+    # Restating confirmed alternatives does not ask again.
+    lab.resolver.targets[CHOICE] = "Spiti"
+    await lab.say(CHOICE)
+    assert len(lab.seen) == 1
 
 
 @pytest.mark.asyncio
-async def test_known_limitation_a_confident_idiom_pair_is_an_undecided_choice(lab):
-    """Unresolved: when the model confidently proposes the idiom's two halves
-    as alternatives (as Paid lab 6's second turn did: ["Thar", "no Thar"],
-    tentative), code cannot tell them from a real choice without sentence
-    rules. They are stored as an undecided choice and nothing is asked. Never
-    a decision or ownership - but D9's "no vehicle options" would FAIL."""
-    first = LAB6["steps"]["idiom-02"]["extraction"]["candidates"][0]
-    pair = first["slots"]["vehicle"]
+async def test_a_final_choice_saves_the_decision_on_the_same_plan(lab, learning):
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    (question,) = lab.seen
+    take = "We'll take the Jimny."
+    lab.script.by_text[take] = _decision(take, "Jimny")
+    lab.script.answers[take] = [("chosen", "vehicle")]
+    lab.resolver.targets[take] = "Spiti"
+    await lab.say(take)
+    (plan,) = await lab.plans()
+    assert plan["slots"]["vehicle"] == {
+        "value": "Jimny",
+        "options": [],
+        "certainty": "confirmed",
+    }
+    assert plan["slots"]["when"]["value"] == "January"
+    assert [s for s, _ in await _rows(learning.reader)] == ["superseded", "active"]
+    assert lab.runtime.clarifications.pending(question.session_id) == []
+
+
+@pytest.mark.asyncio
+async def test_doesnt_matter_discards_the_pending_detail(lab):
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    (question,) = lab.seen
+    whatever = "Doesn't matter, either is fine."
+    lab.script.answers[whatever] = [("doesnt_matter", "vehicle")]
+    await lab.say(whatever)
+    assert lab.runtime.clarifications.pending(question.session_id) == []
+    # A later "yes" has nothing left to confirm.
+    yes = "Yes, still deciding."
+    lab.script.answers[yes] = [("confirmed", "vehicle")]
+    await lab.say(yes)
+    assert lab.script.questions_seen[-1] == []
+    (plan,) = await lab.plans()
+    assert "vehicle" not in plan["slots"]
+    assert plan["slots"]["when"]["value"] == "January"
+
+
+@pytest.mark.asyncio
+async def test_an_unrelated_reply_or_conversation_end_leaves_it_unsaved(lab, learning):
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    (question,) = lab.seen
+    await lab.say("What's the weather like there in January?")
+    (plan,) = await lab.plans()
+    assert "vehicle" not in plan["slots"]
+    # Still open in this conversation, never asked twice.
+    assert lab.runtime.clarifications.pending(question.session_id) == [question]
+    assert lab.runtime.clarifications.take(question.session_id) == [question]
+    assert lab.runtime.clarifications.take(question.session_id) == []
+    # A new conversation does not carry the question: a "yes" there saves nothing.
+    other = ConversationSession()
+    other.start()
+    observe = lab.runtime.bind(other, learning.grant)
+    yes = "Yes, still deciding."
+    lab.script.answers[yes] = [("confirmed", "vehicle")]
+    observe(other.accept_turn(ConversationRole.USER, yes))
+    await lab.runtime.drain()
+    assert lab.script.questions_seen[-1] == []
+    (plan,) = await lab.plans()
+    assert "vehicle" not in plan["slots"]
+
+
+@pytest.mark.asyncio
+async def test_a_confident_idiom_pair_is_held_and_either_way_discards_it(lab):
+    """Paid lab 6's second-turn shape (["Thar", "no Thar"], tentative) proposed
+    on the first turn: it is no longer stored. Jarvis asks once; "Either way,
+    January." read as doesnt_matter discards it."""
+    pair = LAB6["steps"]["idiom-02"]["extraction"]["candidates"][0]["slots"]["vehicle"]
     assert pair == {
         "value": None,
         "options": ["Thar", "no Thar"],
         "certainty": "tentative",
     }
+    lab.script.by_text[FIRST] = _choice(FIRST, ("Thar", "no Thar"), "tentative")
+    await lab.say(FIRST)
+    (plan,) = await lab.plans()
+    assert "vehicle" not in plan["slots"]
+    (question,) = lab.seen
+    assert question.model_view()["choices"] == {"vehicle": ["Thar", "no Thar"]}
+    either = "Either way, January."
+    lab.script.answers[either] = [("doesnt_matter", "vehicle")]
+    await lab.say(either)
+    (plan,) = await lab.plans()
+    assert "vehicle" not in plan["slots"]
+    assert plan["slots"]["when"]["value"] == "January"
+    assert lab.runtime.clarifications.pending(question.session_id) == []
+
+
+@pytest.mark.asyncio
+async def test_d9_understood_needs_no_question(lab):
     lab.script.by_text[FIRST] = _said(
         FIRST,
         "Spiti",
-        slots={
-            "destination": {"value": "Spiti", "options": [], "certainty": "confirmed"},
-            "when": {"value": "January", "options": [], "certainty": "confirmed"},
-            "vehicle": pair,
-        },
+        slots={"when": {"value": "January", "options": [], "certainty": "confirmed"}},
     )
     await lab.say(FIRST)
     (plan,) = await lab.plans()
-    assert plan["slots"]["vehicle"]["options"] == ["Thar", "no Thar"]
-    assert plan["slots"]["vehicle"]["value"] is None
+    assert "vehicle" not in plan["slots"]
     assert lab.seen == []
+
+
+@pytest.mark.asyncio
+async def test_the_model_cannot_confirm_alternatives_itself():
+    from jarvis.memory.learning_extractors import (
+        LearningProviderAdapter,
+        _ProviderBatch,
+        _ProviderBatchWithAnswers,
+    )
+
+    assert "owner_confirmed" not in json.dumps(_ProviderBatch.model_json_schema())
+    assert "owner_confirmed" not in json.dumps(
+        _ProviderBatchWithAnswers.model_json_schema()
+    )
+    c = ConversationSession()
+    c.start()
+    turn = c.accept_turn(ConversationRole.USER, CHOICE)
+    from jarvis.memory.learning_contracts import AcceptedLearningSource
+
+    source = AcceptedLearningSource.from_turn("runtime", c, turn, now=100)
+    adapter = LearningProviderAdapter("gemini", object(), "model")
+    sent = []
+
+    async def request(prompt, payload, schema, **_):
+        sent.append((prompt, payload, schema))
+        out = {
+            "candidates": [
+                {
+                    "category": "plan",
+                    "intent": "new",
+                    "label": "Spiti",
+                    "value": "Spiti",
+                    "state": "planned",
+                    "plan_status": "planned",
+                    "slots": {
+                        "vehicle": {
+                            "options": ["Thar", "Jimny"],
+                            "certainty": "confirmed",
+                        }
+                    },
+                    # A model cannot confirm on the owner's behalf: dropped.
+                    "owner_confirmed": ["vehicle"],
+                    "evidence": [{"turn_id": turn.turn_id, "quote": CHOICE}],
+                }
+            ]
+        }
+        if "open_questions" in payload:
+            out["open_question_answers"] = [
+                {"question_id": "q-known", "answer": "confirmed"},
+                {"question_id": "q-unknown", "answer": "confirmed"},
+            ]
+        return out
+
+    adapter._request = request
+    plain = await adapter.extract(source)
+    assert plain.candidates[0].owner_confirmed == () and plain.answers == []
+    prompt, payload, schema = sent[0]
+    assert (
+        "open_questions" not in payload
+        and "open_question_answers" not in json.dumps(schema)
+    )
+    asked = await adapter.extract(
+        source, open_questions=[{"question_id": "q-known", "question": "x"}]
+    )
+    prompt2, payload, schema = sent[1]
+    assert "open_questions lists details" in prompt2
+    assert "open_questions lists details" not in prompt
+    assert payload["open_questions"] == [{"question_id": "q-known", "question": "x"}]
+    answer_schema = schema["$defs"]["_ProviderAnswer"]["properties"]["question_id"]
+    assert answer_schema["enum"] == ["q-known"]
+    assert [a.answer for a in asked.answers] == ["confirmed"]
+    assert asked.candidates[0].owner_confirmed == ()
 
 
 # structure (no wording) -------------------------------------------------------
@@ -623,3 +871,31 @@ async def test_live_session_wiring_offers_notes_only_while_that_session_is_open(
         close()
     await asyncio.sleep(0)
     assert learning.clarification_observer is None
+
+
+def test_one_open_question_per_detail():
+    board = ClarificationBoard()
+    unclear = _note()
+    assert board.offer(unclear)
+    alternatives = LearningClarification(
+        "s1",
+        "t2",
+        "plan",
+        "Spiti",
+        ("vehicle",),
+        ("Thar", "no Thar"),
+        kind="confirm_alternatives",
+        choices=(("vehicle", ("Thar", "no Thar")),),
+    )
+    assert not board.offer(alternatives)  # the vehicle is already being asked
+    other = LearningClarification(
+        "s1",
+        "t2",
+        "plan",
+        "Spiti",
+        ("stay",),
+        ("hotel", "homestay"),
+        kind="confirm_alternatives",
+        choices=(("stay", ("hotel", "homestay")),),
+    )
+    assert board.offer(other)

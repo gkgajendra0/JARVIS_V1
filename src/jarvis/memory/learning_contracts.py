@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from jarvis.conversation import (
     ConversationRole,
@@ -146,6 +147,19 @@ class LearningCandidate(BaseModel):
     disposed_expression: str | None = Field(default=None, min_length=1, max_length=240)
     plan_status: Literal["considering", "planned", "cancelled", "done"] | None = None
     slots: PlanSlots | None = None
+    # Plan details whose alternatives the OWNER confirmed in answer to Jarvis's
+    # question (learning_clarification). Set only by the learning runtime from
+    # an open question, never by a model: hidden from the provider schema and
+    # dropped from every dump. Without it, alternatives are not stored.
+    owner_confirmed: SkipJsonSchema[tuple[str, ...]] = Field(default=(), exclude=True)
+
+    @field_validator("owner_confirmed")
+    @classmethod
+    def _plan_detail_names(cls, names):
+        allowed = {"destination", "when", "vehicle", "stay", "companions", "other"}
+        if not set(names) <= allowed:
+            raise ValueError("owner_confirmed names plan details only")
+        return tuple(names)
 
     @property
     def suppression_key(self):
@@ -156,9 +170,19 @@ class LearningCandidate(BaseModel):
         )
 
 
+class QuestionAnswer(BaseModel):
+    """How the current turn answers one of Jarvis's open questions (the
+    extractor's reading of the owner's words; code decides what it allows)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    question_id: str = Field(min_length=1, max_length=64)
+    answer: Literal["confirmed", "chosen", "doesnt_matter"]
+
+
 class LearningBatch(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     candidates: list[LearningCandidate] = Field(default_factory=list, max_length=8)
+    answers: list[QuestionAnswer] = Field(default_factory=list, max_length=8)
 
 
 class LearningCatalogEntry(BaseModel):

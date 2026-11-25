@@ -159,8 +159,9 @@ def _say(text, slots, *, label, certainty="confirmed", category="plan", **extra)
     return source, LearningCandidate(**fields)
 
 
-def _stored_slots(text, slots, label="Spiti"):
+def _stored_slots(text, slots, label="Spiti", owner_confirmed=()):
     source, candidate = _say(text, slots, label=label)
+    candidate = candidate.model_copy(update={"owner_confirmed": owner_confirmed})
     assert LearningPolicy().evaluate(source, candidate).status == "eligible", text
     (mutation,) = _plan(source, candidate).mutations
     return mutation.draft.value.get("slots", {})
@@ -206,8 +207,16 @@ def test_a_mention_or_an_unclear_detail_is_never_stored(text, vehicle):
         ("Spiti, Thar ya Gypsy ya Jimny.", ["Thar", "Gypsy", "Jimny"], "tentative"),
     ],
 )
-def test_genuine_alternatives_stay_undecided_choices(text, options, certainty):
-    slots = _stored_slots(text, {"vehicle": (None, options, certainty)})
+def test_genuine_alternatives_wait_for_the_owner_then_stay_undecided(
+    text, options, certainty
+):
+    # Amendment 2: whatever certainty the model gives, alternatives are not
+    # stored until the owner confirms them; then they are an undecided choice.
+    pending = _stored_slots(text, {"vehicle": (None, options, certainty)})
+    assert "vehicle" not in pending
+    slots = _stored_slots(
+        text, {"vehicle": (None, options, certainty)}, owner_confirmed=("vehicle",)
+    )
     assert slots["vehicle"] == {
         "value": None,
         "options": options,
@@ -228,10 +237,13 @@ def test_a_stated_detail_is_stored_with_its_own_certainty(text, value, certainty
     assert slots["vehicle"] == {"value": value, "options": [], "certainty": certainty}
 
 
-def test_a_value_beside_options_is_still_an_undecided_choice():
+def test_a_value_beside_options_is_never_a_decision():
     # Two options and a value: the proposal is inconsistent; nothing is decided.
+    # Unconfirmed it is not stored; confirmed it is an undecided choice.
+    proposal = {"vehicle": ("Thar", ["Thar", "Jimny"], "confirmed")}
+    assert "vehicle" not in _stored_slots("Spiti, Thar or Jimny.", proposal)
     slots = _stored_slots(
-        "Spiti, Thar or Jimny.", {"vehicle": ("Thar", ["Thar", "Jimny"], "confirmed")}
+        "Spiti, Thar or Jimny.", proposal, owner_confirmed=("vehicle",)
     )
     assert slots["vehicle"]["value"] is None
 
