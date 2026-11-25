@@ -2721,3 +2721,157 @@ async def test_paid_entry_runs_the_targeted_d9_and_alternatives_groups(
         for x in (root / "acceptance-steps.jsonl").read_text().splitlines()
     ]
     assert {row["lane"] for row in rows} == {"paid"}
+
+
+# Held-out execution method (lab only; the sealed file is never read) ----------
+
+FICTIONAL_SCRIPT = {
+    "cases": [
+        {
+            "id": "H1",
+            "steps": [
+                {
+                    "seed": [
+                        {
+                            "category": "owned_item",
+                            "label": "Pulsar 150",
+                            "kind": "vehicle",
+                        }
+                    ]
+                },
+                {
+                    "say": "Which vehicles do I own?",
+                    "told_at": "2026-11-17T10:00:00+05:30",
+                },
+            ],
+        },
+        {
+            "id": "H2",
+            "steps": [
+                {
+                    "say": "We're going to Spiti in January, Thar or Jimny.",
+                    "told_at": "2026-11-18T10:00:00+05:30",
+                },
+                {
+                    "say": "We'll take the Jimny.",
+                    "told_at": "2026-11-18T10:01:00+05:30",
+                    "same_conversation": True,
+                },
+                {"restart": True},
+            ],
+        },
+    ]
+}
+
+
+def test_heldout_script_is_validated_without_any_case_content(tmp_path):
+    from jarvis.voice import heldout_player
+
+    path = tmp_path / "script.json"
+    path.write_text(json.dumps(FICTIONAL_SCRIPT), encoding="utf-8")
+    groups, checks, planned, sha = heldout_player.load_script(path)
+    assert planned == ("H1", "H2") and set(checks) == {"H1", "H2"}
+    assert [type(s).__name__ for s in groups["H2"]] == [
+        "Say",
+        "Say",
+        "Restart",
+        "Check",
+    ]
+    assert groups["H2"][1].new_session is False
+    assert len(sha) == 64
+    for bad in (
+        {"cases": []},
+        {
+            "cases": [
+                {
+                    "id": "D9",
+                    "steps": [{"say": "x", "told_at": "2026-11-17T10:00:00+05:30"}],
+                }
+            ]
+        },
+        {
+            "cases": [
+                {"id": "H1", "steps": [{"say": "x", "told_at": "2026-11-17T10:00:00"}]}
+            ]
+        },
+        {
+            "cases": [
+                {
+                    "id": "H1",
+                    "steps": [
+                        {
+                            "say": "x",
+                            "told_at": "2026-11-17T10:00:00+05:30",
+                            "same_conversation": True,
+                        }
+                    ],
+                }
+            ]
+        },
+        {
+            "cases": [
+                {
+                    "id": "H1",
+                    "steps": [{"seed": [{"category": "routine", "label": "x"}]}],
+                }
+            ]
+        },
+        {"cases": [{"id": "H1", "steps": [{"restart": True}]}]},
+    ):
+        path.write_text(json.dumps(bad), encoding="utf-8")
+        with pytest.raises(heldout_player.HeldoutScriptError):
+            heldout_player.load_script(path)
+
+
+@pytest.mark.asyncio
+async def test_heldout_player_records_every_case_for_manual_grading(lab, tmp_path):
+    from jarvis.voice import heldout_player
+
+    path = tmp_path / "script.json"
+    path.write_text(json.dumps(FICTIONAL_SCRIPT), encoding="utf-8")
+    groups, checks, planned, _sha = heldout_player.load_script(path)
+    # The fictional turns use the scripted driver's existing answers.
+    assert "Which vehicles do I own?" in DRIVER
+    runner, _log = lab.runner(
+        groups_map=groups, checks_map=checks, planned_cases=planned, not_run_here={}
+    )
+    summary = await runner.run()
+    assert set(summary["cases"]) == {"H1", "H2"} and summary["untested"] == []
+    for case in ("H1", "H2"):
+        statuses = {c["status"] for c in summary["cases"][case]["checks"]}
+        assert statuses == {acceptance.REVIEW}
+    h2 = {c["check"]: c["detail"] for c in summary["cases"]["H2"]["checks"]}
+    stored = h2["stored records (current and history), for manual grading"]
+    current = [r for r in stored if r["current"]]
+    assert [r["slots"]["vehicle"]["value"] for r in current] == ["Jimny"]
+    replies = h2["lookups, learning outcomes and answers, for manual grading"]
+    assert set(replies) == {"H2-01", "H2-02"}
+    assert "D9" not in summary["cases"] and summary["planned_cases"] == ["H1", "H2"]
+
+
+def test_heldout_mode_refuses_the_paid_lane_and_other_modes(tmp_path):
+    from jarvis.voice import project_memory_lab
+
+    base = [
+        "--lab-root",
+        str(tmp_path / "lab"),
+        "--model",
+        "m",
+        "--source-commit",
+        "0" * 40,
+        "--slice1-acceptance",
+        "--slice1-heldout-script",
+        str(tmp_path / "s.json"),
+    ]
+    for extra in (
+        ["--paid-lane", "--paid-budget-ledger", str(tmp_path / "l.sqlite3")],
+        ["--slice1-group", "idiom"],
+        ["--resume-lab"],
+    ):
+        with pytest.raises(SystemExit) as exc:
+            project_memory_lab.main(base + extra)
+        assert exc.value.code == 2
+    launcher = (REPO / "tools/windows/Start-JarvisProjectMemoryLab.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "--slice1-heldout-script" in launcher and "Free lane only" in launcher

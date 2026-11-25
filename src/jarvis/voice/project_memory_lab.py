@@ -745,8 +745,13 @@ async def run_slice1_acceptance(
     paid_ledger=None,
     checkpoint=False,
     recover_d17_consent=False,
+    heldout=None,
 ):
     """Frozen D1-D27 development acceptance in this isolated lab profile.
+
+    ``heldout`` (heldout_player.load_script result plus its path) runs a
+    transcribed held-out script instead, Free lane only: the approved Paid
+    budget is for development acceptance only.
 
     lane "free" (default) uses the Free credential only. lane "paid" (owner
     approval 2026-11-23, USD 1, development acceptance only) uses
@@ -951,6 +956,32 @@ async def run_slice1_acceptance(
         )
         # The Paid lane always stops on a definite failure (FAIL, or UNTESTED
         # from a broken prerequisite); the checkpoint pauses after story-05c.
+        held = {}
+        if heldout is not None:
+            groups_map, checks_map, planned, script_sha, script_path = heldout
+            groups = planned
+            held = {
+                "groups_map": groups_map,
+                "checks_map": checks_map,
+                "planned_cases": planned,
+                "not_run_here": {},
+            }
+            log.event(
+                {
+                    "kind": "heldout_script",
+                    "path": str(script_path),
+                    "sha256": script_sha,
+                    "cases": list(planned),
+                }
+            )
+            print(
+                f"HELD-OUT EXECUTION (once, frozen code): {len(planned)} cases from"
+                f" {script_path} (sha256 {script_sha}); every case is recorded for"
+                " manual grading against the sealed expectations. Windows Hello:"
+                " now (owner learning session) and at any turn marked"
+                " explicit_tools; the development-case prompts above do not apply.",
+                flush=True,
+            )
         runner = AcceptanceRunner(
             root,
             deps,
@@ -959,6 +990,7 @@ async def run_slice1_acceptance(
             stop_after=CHECKPOINT_STOP_AFTER if checkpoint else None,
             stop_on_failure=lane == "paid",
             recover_d17_consent=recover_d17_consent,
+            **held,
         )
         summary = await runner.run(groups)
         if summary.get("run_state") == "checkpoint_paused_for_review":
@@ -1024,6 +1056,11 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
             flush=True,
         )
     groups = tuple(args.slice1_group) if args.slice1_group else GROUP_ORDER
+    heldout = None
+    if args.slice1_heldout_script is not None:
+        from jarvis.voice.heldout_player import load_script
+
+        heldout = (*load_script(args.slice1_heldout_script), args.slice1_heldout_script)
     profile = prepare_project_profile(
         args.profile,
         args.lab_root,
@@ -1051,6 +1088,7 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
                     paid_ledger=args.paid_budget_ledger,
                     checkpoint=args.paid_checkpoint,
                     recover_d17_consent=args.recover_d17_consent,
+                    heldout=heldout,
                 )
             )
         except AcceptanceRecoveryRefused as exc:
@@ -1116,7 +1154,20 @@ def main(argv=None):
     parser.add_argument("--paid-budget-ledger", type=Path, default=None)
     parser.add_argument("--paid-checkpoint", action="store_true")
     parser.add_argument("--recover-d17-consent", action="store_true")
+    parser.add_argument("--slice1-heldout-script", type=Path, default=None)
     args = parser.parse_args(argv)
+    if args.slice1_heldout_script is not None and (
+        not args.slice1_acceptance
+        or args.slice1_group
+        or args.paid_lane
+        or args.paid_checkpoint
+        or args.recover_d17_consent
+        or args.resume_lab
+    ):
+        parser.error(
+            "--slice1-heldout-script runs once in a fresh lab with --slice1-acceptance,"
+            " Free lane only (the approved Paid budget excludes held-out)"
+        )
     if (args.paid_lane or args.paid_budget_ledger) and not args.slice1_acceptance:
         parser.error("--paid-lane is only for --slice1-acceptance")
     if args.recover_d17_consent and not (args.resume_lab and args.slice1_acceptance):

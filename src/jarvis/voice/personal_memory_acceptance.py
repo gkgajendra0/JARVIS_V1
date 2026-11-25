@@ -1246,8 +1246,18 @@ class AcceptanceRunner:
         stop_after=None,
         stop_on_failure=False,
         recover_d17_consent=False,
+        groups_map=None,
+        checks_map=None,
+        planned_cases=None,
+        not_run_here=None,
     ):
         self.root, self.deps, self.log = root, deps, log
+        # The development set by default; a held-out script supplies its own
+        # steps, record checks and planned cases (heldout_player).
+        self.groups = GROUPS if groups_map is None else groups_map
+        self.checks = CHECKS if checks_map is None else checks_map
+        self.planned = CASES_RUN if planned_cases is None else tuple(planned_cases)
+        self.not_run_here = NOT_RUN_HERE if not_run_here is None else not_run_here
         self.retry_interrupted = retry_interrupted
         self.stop_after = stop_after
         self.stop_on_failure = stop_on_failure
@@ -1359,7 +1369,8 @@ class AcceptanceRunner:
                 }
             )
 
-    async def run(self, groups=GROUP_ORDER):
+    async def run(self, groups=None):
+        groups = tuple(self.groups) if groups is None else groups
         if self.recover_d17_consent:
             if tuple(groups) != ("story",):
                 raise AcceptanceRecoveryRefused(
@@ -1380,7 +1391,7 @@ class AcceptanceRunner:
             return self.write_summary(paused_after=self.stop_after)
         try:
             for group in groups:
-                await self._run_group(group, GROUPS[group], states)
+                await self._run_group(group, self.groups[group], states)
         except _CheckpointReached:
             return self.write_summary(paused_after=self.stop_after)
         return self.write_summary()
@@ -1459,7 +1470,7 @@ class AcceptanceRunner:
             elif isinstance(step, Say):
                 record = await context.say(step, self.log)
             else:
-                checks = await CHECKS[step.case](context, self.log)
+                checks = await self.checks[step.case](context, self.log)
                 status = _overall(checks)
                 self.log.case(
                     {
@@ -1526,10 +1537,10 @@ class AcceptanceRunner:
             )
         summary = {
             **self.log.meta,
-            "planned_cases": list(CASES_RUN),
-            "not_run_here": NOT_RUN_HERE,
+            "planned_cases": list(self.planned),
+            "not_run_here": self.not_run_here,
             "cases": cases,
-            "untested": [c for c in CASES_RUN if c not in cases],
+            "untested": [c for c in self.planned if c not in cases],
             "interrupted_at": interrupted,
             "run_state": (
                 "interrupted"
@@ -1539,7 +1550,7 @@ class AcceptanceRunner:
                 else "checkpoint_paused_for_review"
                 if paused_after
                 else "complete"
-                if not [c for c in CASES_RUN if c not in cases]
+                if not [c for c in self.planned if c not in cases]
                 else "partial"
             ),
             "checkpoint_paused_after": paused_after,
@@ -1561,12 +1572,12 @@ class AcceptanceRunner:
             # Every planned case is a required gate (D17 included); D27 is
             # recorded from the rehearsal. REVIEW = automatic checks passed
             # and the answer awaits manual grading.
-            "required_gates": list(CASES_RUN),
+            "required_gates": list(self.planned),
             "automatic_verdict": (
                 FAIL
                 if any(c["status"] == FAIL for c in cases.values())
                 else UNTESTED
-                if [c for c in CASES_RUN if c not in cases]
+                if [c for c in self.planned if c not in cases]
                 or any(c["status"] == UNTESTED for c in cases.values())
                 else "PASS_PENDING_MANUAL_REVIEW"
             ),
