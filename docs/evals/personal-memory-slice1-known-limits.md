@@ -50,3 +50,21 @@ delivers. No result may claim them as working.
 - In live voice the question comes after Jarvis's reply, only if the owner has
   not spoken since; the lab driver receives it in the same reply. The live
   delivery has not been tested against real Gemini Live.
+
+## Possibilities, questions and sensitive data (2026-11-25)
+
+- A possibility is kept as one only in categories whose record carries
+  certainty (personal facts, activities, events, plans, routines, goals). In
+  possessions and single-value preferences it is not saved. A possibility
+  never changes, corrects or withdraws a stored fact. Whether a statement is
+  a possibility is the extraction model's reading.
+- The question gate is sentence-level punctuation on the sentences a
+  proposal cites. A question joined to an assertion by a comma in one
+  sentence ("We're going to Jaipur, which hotel should we book?") drops the
+  assertion too (nothing saved, never a wrong fact). A spoken question
+  transcribed without a question mark relies on the model.
+- Sensitive data: the existing list of excluded data classes (credentials,
+  identity documents, financial and medical words) is checked on learned
+  evidence. Health information worded without those words (for example an
+  allergy) is excluded only if the model labels it non-standard; no new word
+  list was added.

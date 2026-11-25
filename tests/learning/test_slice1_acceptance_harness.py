@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -2622,3 +2623,101 @@ async def test_amendment_2_other_answers_pass_d28_to_d30(lab):
     for case in ("D28", "D29", "D30"):
         checks = {c["check"]: c["status"] for c in summary["cases"][case]["checks"]}
         assert set(checks.values()) == {acceptance.PASS}, (case, checks)
+
+
+def test_launcher_and_cli_accept_every_slice1_group():
+    """The exact entry path: every group the runner defines is accepted by the
+    Windows launcher's ValidateSet and by the lab CLI."""
+    launcher = (REPO / "tools/windows/Start-JarvisProjectMemoryLab.ps1").read_text(
+        encoding="utf-8"
+    )
+    (valid,) = re.findall(
+        r"ValidateSet\(([^)]*)\)\]\[string\[\]\]\$Slice1Group", launcher
+    )
+    assert set(re.findall(r"'([^']+)'", valid)) == set(acceptance.GROUP_ORDER)
+    assert "alternatives" in acceptance.GROUP_ORDER
+    # The lab CLI's --slice1-group choices are GROUP_ORDER itself.
+    source = (REPO / "src/jarvis/voice/project_memory_lab.py").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "GROUP_ORDER as SLICE1_GROUPS" in source and "choices=SLICE1_GROUPS" in source
+    )
+
+
+@pytest.mark.asyncio
+async def test_paid_entry_runs_the_targeted_d9_and_alternatives_groups(
+    lab, monkeypatch, authority_parts, tmp_path
+):
+    """The proposed targeted qualification, offline through the real entry
+    point on the Paid lane (scripted clients, no network): only the idiom and
+    alternatives groups run, every row is paid, no checkpoint allowance."""
+    import types
+
+    from jarvis.voice import paid_acceptance_budget, project_memory_lab
+
+    monkeypatch.setitem(
+        sys.modules,
+        "msvcrt",
+        types.SimpleNamespace(locking=lambda *a: None, LK_NBLCK=1, LK_UNLCK=0),
+    )
+    monkeypatch.setattr(
+        authority_parts.broker._audit, "close", lambda: None, raising=False
+    )
+    monkeypatch.setattr(
+        "jarvis.capabilities.authority_bridge.CapabilityAuthorityBroker",
+        lambda: authority_parts.broker,
+    )
+
+    def fake_memory(path):
+        class Deferred:
+            async def start(self_inner):
+                self_inner.__dict__.update({"real": await lab.deps.open_memory(path)})
+
+            def __getattr__(self_inner, name):
+                return getattr(self_inner.__dict__["real"], name)
+
+        return Deferred()
+
+    monkeypatch.setattr(
+        "jarvis.memory.runtime.build_default_memory_runtime", fake_memory
+    )
+    seen = {}
+
+    def paid_clients(model, ledger, *, lab, allowance=None):
+        seen["allowance"] = allowance
+        return lab_deps.extractor, lab_driver
+
+    lab_deps, lab_driver = lab.deps, lab.driver
+    monkeypatch.setattr(paid_acceptance_budget, "build_paid_clients", paid_clients)
+    root = lab.root / "entry-targeted"
+    root.mkdir()
+    summary = await project_memory_lab.run_slice1_acceptance(
+        types.SimpleNamespace(gemini_fallback=types.SimpleNamespace(enabled=True)),
+        root,
+        model="fictional-answer",
+        source_commit="2" * 40,
+        hashes=dict(acceptance.FROZEN_SHA256),
+        groups=("idiom", "alternatives"),
+        retry_interrupted=False,
+        call_spacing_seconds=0.5,
+        lane="paid",
+        paid_ledger=tmp_path / "ledger" / "ledger.sqlite3",
+    )
+    assert set(summary["cases"]) == {"D9", "D28", "D29", "D30"}
+    assert {c: summary["cases"][c]["status"] for c in summary["cases"]} == {
+        "D9": acceptance.PASS,
+        "D28": acceptance.PASS,
+        "D29": acceptance.PASS,
+        "D30": acceptance.PASS,
+    }
+    assert seen["allowance"] is None
+    assert [a["id"] for a in summary["acceptance_amendments"]] == [
+        "amendment-1",
+        "amendment-2",
+    ]
+    rows = [
+        json.loads(x)
+        for x in (root / "acceptance-steps.jsonl").read_text().splitlines()
+    ]
+    assert {row["lane"] for row in rows} == {"paid"}
