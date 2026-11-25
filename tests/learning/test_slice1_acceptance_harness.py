@@ -549,6 +549,45 @@ class FakeDriver:
             if not results:
                 return {"personal_context_catalog": {}}
             return {"answer": spec[1]}
+        if spec[0] == "stepwise_forget":
+            # As recorded in the final acceptance (story-18): catalog, then one
+            # facet at a time, starting with the Tigor, repeating one read,
+            # until a read shows the item; then forget that index. If reads
+            # keep failing, answer with a clarifying question.
+            needle, done, clarify = spec[1], spec[2], spec[3]
+            if not results:
+                return {"personal_context_catalog": {}}
+            catalog = results[0]["result"]
+            facets = catalog["facets"]
+            owned = [i for i, f in enumerate(facets) if f.startswith("owned_item")]
+            first = await self._facet_index(facets, "tigor")
+            order = [first] + [i for i in owned if i != first]
+            order = [order[0], order[1], order[1], *order[2:]]
+            order += [i for i in range(len(facets)) if i not in order]
+            last = results[-1]
+            if last["tool"] == "forget_memory":
+                return {"answer": done}
+            for call in results:
+                if call["tool"] == "read_personal_context":
+                    for fact in call["result"].get("facts") or ():
+                        if needle in fact["text"].casefold():
+                            index = facets.index(fact["predicate"])
+                            return {
+                                "forget_memory": {
+                                    "predicate": needle,
+                                    "catalog_id": catalog["catalog_id"],
+                                    "facet_index": index,
+                                }
+                            }
+            reads = sum(1 for c in results if c["tool"] == "read_personal_context")
+            if reads >= 5:
+                return {"answer": clarify}
+            return {
+                "read_personal_context": {
+                    "catalog_id": catalog["catalog_id"],
+                    "facet_indices": [order[reads]],
+                }
+            }
         if spec[0] == "forget":
             if not results:
                 return {"personal_context_catalog": {}}
@@ -2875,3 +2914,63 @@ def test_heldout_mode_refuses_the_paid_lane_and_other_modes(tmp_path):
         encoding="utf-8"
     )
     assert "--slice1-heldout-script" in launcher and "Free lane only" in launcher
+
+
+# D17 in the final acceptance (f6bd4972): target resolution, not consent ------
+
+STEPWISE_D17 = (
+    "stepwise_forget",
+    "classic",
+    "Forgotten.",
+    "Which Classic 350 record would you like me to forget?",
+)
+
+
+@pytest.mark.asyncio
+async def test_d17_stepwise_reads_now_reach_consent_and_deletion(lab, monkeypatch):
+    """The recorded tool flow (catalog, then one facet per read, starting with
+    the Tigor, one read repeated) now resolves the target, reaches consent
+    and deletes the item."""
+    driver = dict(DRIVER)
+    driver["Forget the Classic 350."] = STEPWISE_D17
+    monkeypatch.setattr(sys.modules[__name__], "DRIVER", driver)
+    runner, _log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    d17 = {c["check"]: c for c in summary["cases"]["D17"]["checks"]}
+    assert summary["cases"]["D17"]["status"] == acceptance.PASS, d17
+    consent = d17["fresh owner consent granted (Windows Hello)"]
+    assert consent["status"] == acceptance.PASS and consent["detail"]["reached"]
+    stage = d17["forget gate (stage diagnosis)"]["detail"]
+    statuses = [r["status"] for r in stage["target_reads"]]
+    assert statuses and set(statuses) == {"selected"}, stage["target_reads"]
+    assert summary["cases"]["D26"]["status"] == acceptance.PASS
+
+
+@pytest.mark.asyncio
+async def test_d17_consent_not_reached_is_untested_never_granted(lab, monkeypatch):
+    """The final-acceptance grader passed "fresh owner consent granted" with
+    an empty consent list. With no forget call there is no consent request:
+    the check is UNTESTED (not reached), the case still FAILs on its stage."""
+    driver = dict(DRIVER)
+    driver["Forget the Classic 350."] = ("catalog_only", "Which one?")
+    monkeypatch.setattr(sys.modules[__name__], "DRIVER", driver)
+    runner, _ = lab.runner()
+    summary = await runner.run(groups=("story",))
+    d17 = {c["check"]: c for c in summary["cases"]["D17"]["checks"]}
+    consent = d17["fresh owner consent granted (Windows Hello)"]
+    assert consent["status"] == acceptance.UNTESTED
+    assert consent["detail"]["reached"] is False
+    assert consent["detail"]["consent_outcomes"] == []
+    assert summary["cases"]["D17"]["status"] == acceptance.FAIL
+
+
+def test_consent_check_distinguishes_granted_refused_and_not_reached():
+    detail = {"forget_calls": [], "target_reads": []}
+    granted = acceptance._consent_check([{"outcome": "granted"}], detail)
+    refused = acceptance._consent_check([{"outcome": "PermissionError"}], detail)
+    absent = acceptance._consent_check([], detail)
+    assert [c["status"] for c in (granted, refused, absent)] == [
+        acceptance.PASS,
+        acceptance.FAIL,
+        acceptance.UNTESTED,
+    ]

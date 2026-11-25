@@ -3176,6 +3176,30 @@ FORGET_STAGES = (
 CONSENT_REFUSED = "Fresh owner consent was not granted"
 
 
+def _consent_check(consent, detail):
+    """Granted only when a consent request for the forget was answered
+    "granted". No request at all means the flow never reached consent (for
+    example the item was never selected): that is not a pass, it is
+    UNTESTED with the reason. A request that was not granted is a FAIL."""
+    if any(e.get("outcome") == "granted" for e in consent):
+        status = PASS
+    elif consent:
+        status = FAIL
+    else:
+        status = UNTESTED
+    return {
+        "check": "fresh owner consent granted (Windows Hello)",
+        "level": "a",
+        "status": status,
+        "detail": {
+            "consent_outcomes": consent,
+            "reached": bool(consent),
+            "forget_calls": detail.get("forget_calls"),
+            "target_reads": detail.get("target_reads"),
+        },
+    }
+
+
 def diagnose_forget(tools, target_predicates, lineage_remaining, residual):
     """Which stage of D17 failed, or None when it fully passed.
 
@@ -3219,6 +3243,17 @@ def diagnose_forget(tools, target_predicates, lineage_remaining, residual):
         "catalogs_received": len(catalogs),
         "listed_in_catalog": bool(listed),
         "shown_by_read": shown,
+        # Each read's selection and status (an opaque catalog is resolved
+        # by reading; refused reads are where target resolution stops).
+        "target_reads": [
+            {
+                "facet_indices": (call.get("arguments") or {}).get("facet_indices"),
+                "status": (call.get("result") or {}).get("status"),
+                "reason": (call.get("result") or {}).get("reason"),
+            }
+            for call in tools
+            if call["tool"] == "read_personal_context"
+        ],
         "forget_calls": [
             {
                 "target": target_of(c),
@@ -3322,12 +3357,7 @@ async def check_d17(context, log):
             ),
         ]
     return [
-        _check(
-            "fresh owner consent granted (Windows Hello)",
-            "a",
-            not consent or any(e.get("outcome") == "granted" for e in consent),
-            consent,
-        ),
+        _consent_check(consent, detail),
         {
             "check": "forget gate (stage diagnosis)",
             "level": "a",
