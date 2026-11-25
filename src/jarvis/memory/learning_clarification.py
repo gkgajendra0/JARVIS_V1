@@ -253,13 +253,19 @@ class ClarificationBoard:
         self._asked: set[tuple] = set()
 
     def offer(self, note: LearningClarification) -> bool:
-        """Open a question unless the same detail of the same fact already has
-        one open in this conversation (one question per detail)."""
+        """Open a question unless the same detail already has one open in
+        this conversation (one question per detail at a time; the fact's name
+        may be worded differently in a later proposal)."""
         if note.key in self._open or any(
             n.session_id == note.session_id
             and n.category == note.category
-            and n.subject.casefold() == note.subject.casefold()
-            and (set(n.details) & set(note.details) or not (n.details or note.details))
+            and (
+                set(n.details) & set(note.details)
+                or (
+                    not (n.details or note.details)
+                    and n.subject.casefold() == note.subject.casefold()
+                )
+            )
             for n in self._open.values()
         ):
             return False

@@ -669,8 +669,9 @@ def test_board_offers_once_settles_and_clears():
     assert board.pending("s1") == []
     assert board.offer(_note(turn="t3"))  # unclear afresh after settling
     assert board.take("s1", "t3") and board.take("s1", "t3") == []
-    for i in range(3):
-        board.offer(_note(subject=f"p{i}"))
+    board.close(board.pending("s1")[0])
+    for detail in ("stay", "companions", "other"):
+        board.offer(_note(subject=f"p-{detail}", details=(detail,)))
     assert len(board.pending("s1")) == 2  # bounded
     board.clear("s1")
     assert board.pending("s1") == [] and board.offer(note)
