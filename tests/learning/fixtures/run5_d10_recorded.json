@@ -1,0 +1,149 @@
+{
+ "source": "Run 5, E:/Jarvis/Temp/slice1-acceptance-5/profile/acceptance-events.jsonl: the ok learning_extraction and learning_resolution outputs of story-07 and story-10, copied unmodified",
+ "lab_commit": "7a0a29e2038bcf5cc3a99ed4ca4911983dbf97cc",
+ "owner_said": {
+  "story-07": "I'm planning a Ladakh or winter Spiti trip in January.",
+  "story-10": "We're going with winter Spiti, and we'll take the Jimny."
+ },
+ "steps": {
+  "story-07": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "trip",
+      "value": "Ladakh or winter Spiti trip",
+      "evidence": [
+       {
+        "turn_id": "7c01f81b-bc4f-45cd-923a-25e5e428d15c",
+        "start": 0,
+        "end": 54
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": "January",
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": null,
+        "options": [
+         "Ladakh",
+         "winter Spiti"
+        ],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "January",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": null,
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   }
+  },
+  "story-10": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "winter Spiti",
+      "value": "We're going with winter Spiti, and we'll take the Jimny.",
+      "evidence": [
+       {
+        "turn_id": "876dbaec-6625-4b9c-a106-a4a999784e49",
+        "start": 0,
+        "end": 56
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": null,
+      "location": "Spiti",
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "winter Spiti",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": null,
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": {
+        "value": "Jimny",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "stay": {
+        "value": null,
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "companions": {
+        "value": null,
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "other": {
+        "value": null,
+        "options": [],
+        "certainty": "confirmed"
+       }
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "match",
+      "target_id": "c5af4f0c-39c1-4510-b821-0c3f02a0b798"
+     }
+    ]
+   }
+  }
+ }
+}

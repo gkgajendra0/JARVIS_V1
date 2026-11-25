@@ -176,9 +176,9 @@ async def test_refine_mutation_through_admission_keeps_the_earlier_row_true(lear
     assert [r.value.get("details") for r in current] == ["diesel"]
 
 
-def test_plan_time_is_stored_with_precision_but_release_fields_are_unchanged():
-    """PR A stores precision and bounds; the release keeps its existing fields
-    and size until the paged budget lands (PR C)."""
+def test_plan_time_is_stored_and_released_with_its_precision():
+    """PR A stores precision and bounds; PR C releases them with the paged
+    budget, plus where the stated window stands (never a clock time)."""
     from test_context_projection import NOW, record
 
     from jarvis.memory.personal_context_projection import (
@@ -228,13 +228,20 @@ def test_plan_time_is_stored_with_precision_but_release_fields_are_unchanged():
         parse_context_requests([{"scope_key": "plan"}], question="my plans?"),
     )
     assert released.status == "selected"
-    assert set(released.facts[0]["temporal"]) == {
+    released_temporal = released.facts[0]["temporal"]
+    assert set(released_temporal) == {
         "expression",
         "date",
         "recorded_at",
         "anchor_at",
         "local_date",
+        "precision",
+        "earliest",
+        "latest",
+        "date_status",
     }
+    assert released_temporal["precision"] == "month"
+    assert released_temporal["date"] is None
 
 
 def test_plan_saved_before_new_date_rules_still_matches_the_same_day():

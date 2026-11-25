@@ -327,10 +327,12 @@ class SemanticRetrievalService:
         self._fts_window = fts_window
         self._rank_constant = rank_constant
 
-    async def learning_context_snapshot(self):
+    async def learning_context_snapshot(self, scopes=None):
         from .query import CanonicalMemoryReader
 
-        return await CanonicalMemoryReader(self._worker).learning_context_snapshot()
+        return await CanonicalMemoryReader(self._worker).learning_context_snapshot(
+            scopes
+        )
 
     async def learning_facet_catalog(self) -> MemoryFacetCatalog:
         from .query import CanonicalMemoryReader

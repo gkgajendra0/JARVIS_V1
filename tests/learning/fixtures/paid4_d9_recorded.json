@@ -1,0 +1,150 @@
+{
+ "source": "E:/Jarvis/Temp/slice1-acceptance-paid-4-d4 (lab ef365bbf, Paid lane, 2026-11-25), idiom group, recorded outputs unmodified",
+ "steps": {
+  "idiom-01": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "Spiti trip",
+      "value": "We're going to Spiti in January, Thar or no Thar.",
+      "evidence": [
+       {
+        "turn_id": "96643390-dde7-46cf-9e6d-ad77fcaaeb1f",
+        "start": 0,
+        "end": 49
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": "January",
+      "location": "Spiti",
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "Spiti",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "January",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": {
+        "value": null,
+        "options": [
+         "Thar",
+         "no Thar"
+        ],
+        "certainty": "uncertain"
+       },
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   },
+   "status": {
+    "processed": 1,
+    "committed": 1,
+    "dropped": 0,
+    "reason": "committed",
+    "skipped": []
+   },
+   "utterance": "We're going to Spiti in January, Thar or no Thar.",
+   "told_at": "2026-11-18T10:00:00+05:30",
+   "answer": "January mein Spiti trip ke liye aapke paas Thar lene ya na lene ka option khula hai. Spiti ki winter conditions ko dekhte hue 4x4 vehicle ya proper snow capability hona zaroori ho sakta hai, kyunki wahan roads par ice aur snow hoti hai."
+  },
+  "idiom-02": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "trip to Spiti",
+      "value": "We're going to Spiti in January",
+      "evidence": [
+       {
+        "turn_id": "96643390-dde7-46cf-9e6d-ad77fcaaeb1f",
+        "start": 0,
+        "end": 49
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": "January",
+      "location": "Spiti",
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 0.9,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "Spiti",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "January",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": {
+        "value": null,
+        "options": [
+         "Thar",
+         "no Thar"
+        ],
+        "certainty": "tentative"
+       },
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ]
+   },
+   "status": {
+    "processed": 1,
+    "committed": 0,
+    "dropped": 0,
+    "reason": "no_eligible_fact",
+    "skipped": []
+   },
+   "utterance": "Either way, January.",
+   "told_at": "2026-11-18T10:01:00+05:30",
+   "answer": "January mein Spiti trip ke liye aapne plan banaya hai, lekin vehicle (Thar ya no Thar) par decision abhi uncertain hai. January mein Spiti ki extreme winter conditions, snow aur ice ko dekhte hue 4x4 capability wali vehicle hona kafi important ho jata hai, chahe aap Thar lein ya koi aur suitable vehicle."
+  }
+ }
+}

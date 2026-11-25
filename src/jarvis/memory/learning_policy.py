@@ -16,8 +16,32 @@ from .learning_contracts import (
     LearningCandidate,
     LearningEligibility,
 )
+from .learning_temporal import POSSIBILITY_CATEGORIES
 from .learning_values import SLOT_NAMES, has_identifier
 from .project_routing import is_project_control_command
+from .topic_continuity_policy import SENSITIVE_DATA
+
+
+def ground_plan_label(source, candidate):
+    """A plan's label is only its display name. When the model composed one
+    that the owner never said ("Goa trip" for "Maybe we'll do Goa this
+    winter.") but the plan's value is the owner's own words, the value becomes
+    the label instead of the whole plan being dropped. Plans only; every other
+    category and every other gate is unchanged, and nothing unsaid is stored."""
+    if getattr(candidate, "category", None) != "plan" or not candidate.value:
+        return candidate
+    turns = {t.turn_id: t.text for t in source.turns}
+    fragments = []
+    for span in candidate.evidence:
+        text = turns.get(span.turn_id)
+        if text is None or not 0 <= span.start < span.end <= len(text):
+            return candidate
+        fragments.append(text[span.start : span.end])
+    if any(candidate.label in f for f in fragments) or not any(
+        candidate.value in f for f in fragments
+    ):
+        return candidate
+    return candidate.model_copy(update={"label": candidate.value})
 
 
 class LearningPolicy:
@@ -50,6 +74,15 @@ class LearningPolicy:
             not episodic and (c.intent == "transient" or c.importance == "transient")
         ):
             return LearningEligibility("transient", "not_durable")
+        if c.certainty == "uncertain":
+            # The proposal itself says the meaning is unclear: nothing is
+            # saved as a guessed fact (the reply asks what the owner meant).
+            return LearningEligibility("drop", "meaning_unclear")
+        if c.certainty == "tentative" and c.category not in POSSIBILITY_CATEGORIES:
+            # A possibility is kept only where the record carries its
+            # certainty. A possession or a single-value preference has none:
+            # "maybe I'll get a Kindle" must never read as owning one.
+            return LearningEligibility("drop", "possibility_not_fact")
         if (
             c.category in suppressed_categories
             or c.suppression_key in suppressed_categories
@@ -99,12 +132,18 @@ class LearningPolicy:
                 return LearningEligibility("drop", "unsupported_detail")
         if c.category != "plan" and (c.plan_status is not None or c.slots is not None):
             return LearningEligibility("drop", "plan_fields_on_non_plan")
-        if c.category == "plan" and all(
-            _interrogative(turns[span.turn_id], span.end) for span in c.evidence
-        ):
-            # A request for information is not a plan disclosure, whatever
-            # alternatives it names ("Kaza or Manali, which is better?").
+        if all(_interrogative(turns[span.turn_id], span.end) for span in c.evidence):
+            # A question is not a disclosure, in any category ("Kaza or
+            # Manali, which is better?", "Should I buy a Kindle?"). Only the
+            # sentences a proposal cites count: an assertion in the same turn
+            # as a question keeps its own evidence and is judged on it.
             return LearningEligibility("drop", "question_not_disclosure")
+        if any(SENSITIVE_DATA.search(fragment) for fragment in fragments):
+            # Credentials, identity documents, financial and medical data are
+            # outside automatic admission (the same classes already excluded
+            # from topic and project history). Judged on the cited words, so
+            # a separate standard fact in the same turn is unaffected.
+            return LearningEligibility("drop", "sensitive_content")
         if has_identifier(c.label) or has_identifier(c.value):
             return LearningEligibility("drop", "identifier_not_allowed")
         try:

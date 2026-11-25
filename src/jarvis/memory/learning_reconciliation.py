@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from uuid import uuid4
@@ -13,6 +14,7 @@ from jarvis.authority.proposal import canonical_json
 from jarvis.personal_learning_scope import CATEGORIES
 
 from .assertions import SemanticAssertionDraft
+from .learning_catalog_page import PAGE_AMBIGUOUS, bounded_entries, unique_reference
 from .learning_contracts import (
     AcceptedLearningSource,
     LearningBatch,
@@ -22,17 +24,25 @@ from .learning_contracts import (
 )
 from .learning_diagnostics import log_learning
 from .learning_policy import SCALAR_FACETS, LearningPolicy
-from .learning_temporal import HISTORY_CATEGORIES, occurrence_matches, temporal_context
+from .learning_temporal import (
+    HISTORY_CATEGORIES,
+    POSSIBILITY_CATEGORIES,
+    occurrence_matches,
+    temporal_context,
+)
 from .learning_values import (
     DISPOSED_STATES,
     PLAN_STATE,
+    decided_options,
+    decides_stated_options,
     has_identifier,
     item_time,
     minimal_quote,
     normalized_slots,
+    option_keys,
     refine_merge,
 )
-from .personal_time import day_boundary
+from .personal_time import day_boundary, time_object
 from .provenance import MemorySource
 from .service import normalize_memory_surface
 from .types import (
@@ -215,7 +225,11 @@ class LearningReconciler:
                 )
             )
         self.authority.validate_read(permit)
-        return LearningCatalog(entries=entries)
+        # Only the proposed categories, bounded per proposal (PR C); a proposal
+        # whose identity cannot be resolved from a bounded page is skipped and
+        # recorded instead of failing the whole turn.
+        supplied, ambiguous = bounded_entries(entries, batch.candidates, SCALAR_FACETS)
+        return LearningCatalog(entries=supplied, page_ambiguous=list(ambiguous))
 
     def plan(
         self,
@@ -262,6 +276,17 @@ class LearningReconciler:
             if LearningPolicy().evaluate(source, candidate).status != "eligible":
                 skip("policy_rejected", record=False)
                 continue
+            candidate = _settled_item_times(candidate)
+            candidate, date_issue = _evidenced_item_dates(candidate, source, batch)
+            if date_issue and _restates_nothing(candidate):
+                # A date with no positive evidence of being the purchase or
+                # disposal date (or with another role): nothing else was said,
+                # so the item stays unchanged and the reason is recorded.
+                skip(date_issue)
+                continue
+            if index in catalog.page_ambiguous:
+                skip(PAGE_AMBIGUOUS)
+                continue
             if (
                 candidate.category == "owned_item"
                 and normalize_memory_surface(candidate.label) in trip_choices
@@ -306,11 +331,22 @@ class LearningReconciler:
                 skip("ambiguous_existing_fact")
                 continue
             refine_target = None
+            decision_only = False
             added = (
                 _added_detail(candidate, source)
                 if candidate.intent == "new" and candidate.category not in SCALAR_FACETS
                 else {}
             )
+            if (
+                date_issue
+                and not added
+                and candidate.state == "owned"
+                and choice.decision in {"match", "duplicate"}
+            ):
+                # The only new detail for a known item was an unevidenced date:
+                # nothing to apply, recorded rather than silently dropped.
+                skip(date_issue)
+                continue
             if added:
                 if same:
                     refine_target = same[0]
@@ -319,9 +355,29 @@ class LearningReconciler:
                     and entry is not None
                     and entry.category == candidate.category
                     and entry.kind == candidate.kind
-                    and _label(entry) == normalize_memory_surface(candidate.label)
+                    and (
+                        _label(entry) == normalize_memory_surface(candidate.label)
+                        # A shorter name for exactly one item ("the Tigor"
+                        # for "Tata Tigor"); never between two plausible items.
+                        or unique_reference(entry, candidate.label, catalog.entries)
+                    )
                 ):
                     refine_target = entry
+                elif candidate.category == "plan" and _option_decision_target(
+                    choice, entry, candidate, added, catalog.entries
+                ):
+                    # The new words name the decision, not the stored plan
+                    # (run 5: stored label "trip", new label "winter Spiti").
+                    # The chosen option itself identifies the plan: it must be
+                    # one of this plan's stated alternatives and of no other
+                    # current plan. Only the option-decision change is allowed
+                    # through this route, never a refine. The plan keeps its
+                    # own kind: a plan's kind is not part of what identifies
+                    # it (Paid lab D10: the decision naming a vehicle was
+                    # proposed as kind "vehicle").
+                    refine_target, decision_only = entry, True
+                    if candidate.kind != entry.kind:
+                        candidate = candidate.model_copy(update={"kind": entry.kind})
             if refine_target is not None:
                 try:
                     old_value = json.loads(refine_target.value)
@@ -330,14 +386,74 @@ class LearningReconciler:
                 if not isinstance(old_value, dict):
                     skip("already_stored")
                     continue
+                # Recomputed with the stored value as context (a restated
+                # acquired month may then get its inferred year).
+                added = _added_detail(candidate, source, old_value) or added
                 merged, reason = refine_merge(old_value, added)
-                if merged is None:
-                    skip(reason)
-                    continue
                 predicate, expected = (
                     refine_target.predicate,
                     refine_target.assertion_id,
                 )
+                if (
+                    candidate.category == "owned_item"
+                    and not decision_only
+                    and candidate.state in OWNERSHIP_STATES
+                    and old_value.get("state") in OWNERSHIP_STATES
+                    and candidate.state != old_value.get("state")
+                ):
+                    # "I sold the Classic 350 in October." proposed as new
+                    # detail (run 7 D23): a different ownership state of the
+                    # named item is a real change of that item, never a
+                    # refine that would keep it owned.
+                    if predicate in used:
+                        skip("conflicting_mutations")
+                        continue
+                    used.add(predicate)
+                    value = _changed_value(old_value, candidate, source)
+                    mutations.append(
+                        self._mutation(
+                            index,
+                            candidate,
+                            source,
+                            "change",
+                            predicate,
+                            expected,
+                            value,
+                            effective_at=day_boundary(value.get("disposed")),
+                            others=_other_labels(batch, index),
+                        )
+                    )
+                    continue
+                if (
+                    merged is None
+                    and candidate.category == "plan"
+                    and decides_stated_options(old_value, added)
+                ):
+                    # Choosing one of the owner's stated alternatives changes
+                    # the same plan (D10); the earlier row keeps the options.
+                    if predicate in used:
+                        skip("conflicting_mutations")
+                        continue
+                    used.add(predicate)
+                    mutations.append(
+                        self._mutation(
+                            index,
+                            candidate,
+                            source,
+                            "change",
+                            predicate,
+                            expected,
+                            _changed_value(old_value, candidate, source),
+                            others=_other_labels(batch, index),
+                        )
+                    )
+                    continue
+                if decision_only:
+                    skip("new_fact_cannot_mutate_target")
+                    continue
+                if merged is None:
+                    skip(reason)
+                    continue
                 if predicate in used:
                     skip("conflicting_mutations")
                     continue
@@ -424,6 +540,37 @@ class LearningReconciler:
                         skip("invalid_existing_value")
                         continue
                     value = _changed_value(old, candidate, source)
+                    if candidate.category == "plan" and _names_entry(
+                        candidate, entry, catalog.entries
+                    ):
+                        # "Cancel the Goa plan": a status change of the plan
+                        # it names keeps that plan's name.
+                        value["label"] = old.get("label", value["label"])
+                        value["value"] = old.get("value", value["value"])
+                elif entry is not None and action == "correct":
+                    try:
+                        old = json.loads(entry.value)
+                    except (TypeError, ValueError):
+                        old = None
+                    if candidate.category == "owned_item" and isinstance(old, dict):
+                        candidate, unclear = _attributed_correction(
+                            candidate, old, source, batch
+                        )
+                        if unclear:
+                            skip(unclear)
+                            continue
+                    value = _new_value(candidate, source, old)
+                    if candidate.category == "owned_item" and isinstance(old, dict):
+                        value = _corrected_item_value(
+                            old, value, candidate, entry, catalog.entries
+                        )
+                    elif candidate.category == "plan" and isinstance(old, dict):
+                        value = _corrected_plan_value(
+                            old, value, candidate, entry, catalog.entries
+                        )
+                        if value is None:
+                            skip("correction_unclear")
+                            continue
                 else:
                     value = _new_value(candidate, source)
             effective_at = None
@@ -449,6 +596,32 @@ class LearningReconciler:
                     others=_other_labels(batch, index),
                 )
             )
+        kept = []
+        for mutation in mutations:
+            candidate = batch.candidates[mutation.ordinal]
+            problem = _item_inconsistency(mutation) or _possibility_overrides_fact(
+                mutation, candidate, by_id
+            )
+            if problem is None:
+                kept.append(mutation)
+                continue
+            log_learning(
+                self.diagnostics,
+                source,
+                "reconciliation",
+                "skipped",
+                candidate_index=mutation.ordinal,
+                reason=problem,
+            )
+            outcomes.append(
+                LearningOutcome(
+                    mutation.ordinal,
+                    candidate.suppression_key,
+                    candidate.category,
+                    problem,
+                )
+            )
+        mutations = kept
         return LearningPlan(
             source,
             tuple(mutations),
@@ -530,12 +703,28 @@ def _anchor(source, candidate):
     return temporal_context(source, candidate)["anchor_at"]
 
 
-def _item_fields(candidate, source):
+def _item_fields(candidate, source, context=None):
     """Slice-1 fields for an owned item: aliases, details (identifiers
-    removed), acquired/disposed time objects at their stated precision."""
+    removed), acquired/disposed time objects at their stated precision.
+
+    A bare month ("from September") gets an inferred year only with
+    supporting context that the time is already past:
+    - disposed: the owner said the item is gone (sold, given away, lost or
+      no longer owned), so the disposal already happened;
+    - acquired: ``context`` (the stored value being corrected, changed or
+      refined) already holds an acquired time, so the owner is restating
+      that same past time.
+    Without that context (for example a new item "from September") the month
+    stays unresolved with its wording; it is never turned into a purchase
+    date."""
     from datetime import datetime
 
     anchor = datetime.fromisoformat(_anchor(source, candidate))
+    context = context if isinstance(context, dict) else {}
+    past = {
+        "disposed": candidate.state in DISPOSED_STATES,
+        "acquired": isinstance(context.get("acquired"), dict),
+    }
     fields = {}
     aliases = [a for a in candidate.aliases if not has_identifier(a)]
     if aliases:
@@ -546,25 +735,467 @@ def _item_fields(candidate, source):
         ("acquired", candidate.acquired_expression),
         ("disposed", candidate.disposed_expression),
     ):
-        stated = item_time(expression, anchor)
+        stated = item_time(expression, anchor, past=past[key])
         if stated:
             fields[key] = stated
     return fields
+
+
+def _time_words(candidate) -> set[str]:
+    return {
+        normalize_memory_surface(t)
+        for t in (
+            candidate.acquired_expression,
+            candidate.disposed_expression,
+            candidate.time_expression,
+        )
+        if t
+    }
+
+
+OWNERSHIP_STATES = frozenset({"owned"}) | frozenset(DISPOSED_STATES)
+
+
+def _settled_item_times(candidate):
+    """Drop details that only repeat a time the proposal already placed in
+    its acquired or disposed field ("March 2024" twice). Nothing is moved:
+    what a date means is never inferred from where the model put it."""
+    if candidate.category != "owned_item" or not candidate.details:
+        return candidate
+    placed = {
+        normalize_memory_surface(t)
+        for t in (candidate.acquired_expression, candidate.disposed_expression)
+        if t
+    }
+    if normalize_memory_surface(candidate.details) in placed:
+        return candidate.model_copy(update={"details": None})
+    return candidate
+
+
+# "X, not Y" / "Y nahi, X": the owner names the stored time being replaced.
+_REPLACED_TIME = re.compile(
+    r"(?:\bnot\b|\binstead of\b|\brather than\b)\s+([^,.;!?]+)"
+    r"|([^,.;!?]+?)\s+(?:nahi|nahin)\b",
+    re.IGNORECASE,
+)
+
+
+def _corrected_reference(candidate, old, source):
+    """The stored date a correction refers to: the owner names the replaced
+    time ("from September, not October") and it falls inside exactly one of
+    the item's stored acquired/disposed periods. Returns "acquired",
+    "disposed" or None."""
+    anchor = datetime.fromisoformat(_anchor(source, candidate))
+    # "April 2017, not March": the replaced month shares the stated year.
+    years = {
+        y
+        for t in (
+            candidate.acquired_expression,
+            candidate.disposed_expression,
+            candidate.time_expression,
+        )
+        if t
+        for y in re.findall(r"\b(?:19|20)\d{2}\b", t)
+    }
+    matches = set()
+    for m in _REPLACED_TIME.finditer(source.text):
+        words = (m.group(1) or m.group(2) or "").strip()
+        if words and len(years) == 1 and not re.search(r"\b\d{4}\b", words):
+            words = f"{words} {next(iter(years))}"
+        named = time_object(words, anchor, direction="past") if words else None
+        if not named or not named.get("earliest"):
+            continue
+        for key in ("acquired", "disposed"):
+            stored = old.get(key)
+            if (
+                isinstance(stored, dict)
+                and stored.get("earliest")
+                and stored.get("latest")
+                and stored["earliest"] <= named["latest"]
+                and named["earliest"] <= stored["latest"]
+            ):
+                matches.add(key)
+    return matches.pop() if len(matches) == 1 else None
+
+
+def _attributed_correction(candidate, old, source, batch):
+    """Positive evidence for a correction's purchase/disposal date.
+
+    A date stays (or is placed) as the acquired/disposed time only with
+    acquisition/disposal wording for that item and date in the owner's words,
+    or when the correction unambiguously refers to that stored date (it names
+    the replaced time, which falls inside exactly that stored period). A
+    lone stored date is not enough, and wording giving the date another role
+    blocks it. Otherwise the date is not applied, and the correction is
+    skipped with a recorded reason when nothing else remains. Returns
+    (candidate, None) or (candidate, reason)."""
+    if candidate.category != "owned_item" or candidate.intent != "correction":
+        return candidate, None
+    reference = _corrected_reference(candidate, old, source)
+    update = {}
+    for key in ("acquired", "disposed"):
+        field = key + "_expression"
+        phrase = getattr(candidate, field)
+        if (
+            phrase
+            and not _has_date_evidence(source, candidate, phrase, key, batch)
+            and reference != key
+        ):
+            update[field] = None
+    if update:
+        candidate = candidate.model_copy(update=update)
+    if candidate.acquired_expression or candidate.disposed_expression:
+        return candidate, None
+    details = candidate.details
+    phrase = candidate.time_expression
+    time_only_details = bool(details and phrase) and normalize_memory_surface(
+        details
+    ) == normalize_memory_surface(phrase)
+    if not phrase or (details and not time_only_details):
+        if update and _restates_nothing(candidate):
+            return candidate, "date_evidence_missing"
+        return candidate, None
+    if _date_role(source, candidate, phrase):
+        return candidate, "date_role_conflict"
+    if reference is None:
+        return candidate, "time_meaning_unclear"
+    placed = {reference + "_expression": phrase}
+    if time_only_details:
+        placed["details"] = None
+    return candidate.model_copy(update=placed), None
+
+
+# Wording that gives a date another role on the same item. A date in the same
+# clause as one of these is never the item's purchase or disposal date.
+_OTHER_DATE_ROLES = re.compile(
+    r"\bmodel\b|\bmanufactur\w*|\bmfg\b"
+    r"|\bservic\w*"
+    r"|\bwarrant\w*|\bguarantee\w*"
+    r"|\binsur\w*|\bbima\b|\bpolicy\b|\brenew\w*",
+    re.IGNORECASE,
+)
+_CLAUSE_BREAK = re.compile(r"[,;.!?]|\b(?:and|aur|but|lekin|par)\b", re.IGNORECASE)
+
+
+def _evidence_text(source, candidate):
+    """The owner turns the evidence comes from, whole: a minimal quote such as
+    "a Royal Enfield Classic 350 from 2021" shares its verb ("I have ...")
+    with the rest of the owner's sentence."""
+    turns = {t.turn_id: t.text for t in source.turns}
+    cited = dict.fromkeys(
+        turns[span.turn_id] for span in candidate.evidence if span.turn_id in turns
+    )
+    return " ".join(cited) or source.text
+
+
+def _date_role(source, candidate, phrase):
+    """The other role the owner's own words give this date, or None: a clause
+    of the evidence that contains the date phrase also says model, service,
+    warranty or insurance. Checked on the owner's words, never the model's."""
+    if not phrase:
+        return None
+    wanted = phrase.casefold()
+    for clause in _CLAUSE_BREAK.split(_evidence_text(source, candidate)):
+        if wanted in clause.casefold():
+            found = _OTHER_DATE_ROLES.search(clause)
+            if found:
+                return found.group(0).casefold()
+    return None
+
+
+_ACQUISITION_WORDING = re.compile(
+    r"\b(?:bought|buy|buying|purchas\w*|got|get|getting|acquired|picked up"
+    r"|took delivery|liya|liye|kharid\w*)\b"
+    # "since" only: "I have X from 2021" may name a model year or vintage,
+    # so "from" alone never establishes when the owner got it (owner decision
+    # 2026-11-23 on frozen D1's ambiguous wording).
+    r"|\b(?:have|has|had|having|own|owns|owned|rakh\w*)\b[^,;.]*\bsince\b",
+    re.IGNORECASE,
+)
+_DISPOSAL_WORDING = re.compile(
+    r"\b(?:sold|sell|selling|gave|give|given|lost|lose|scrapp?\w*|traded"
+    r"|exchanged|stolen|bech\w*|kho\w*)\b",
+    re.IGNORECASE,
+)
+_REFERRING_ITEM = re.compile(
+    r"\b(?:it|its|this|that|woh|wo|use|usko|isko|ise)\b", re.IGNORECASE
+)
+
+
+def _names_this_item(clause, candidate, batch):
+    from .learning_catalog_page import name_words
+
+    words = name_words(clause)
+    own = (name_words(candidate.label) | name_words(candidate.value or "")) - {
+        "the",
+        "my",
+        "an",
+    }
+    if own & words:
+        return True
+    items = [c for c in batch.candidates if c.category == "owned_item"]
+    return len(items) == 1 and bool(_REFERRING_ITEM.search(clause))
+
+
+def _has_date_evidence(source, candidate, phrase, key, batch):
+    """Positive evidence that ``phrase`` is this item's acquisition (or
+    disposal) time: one clause of the owner's evidence contains the date,
+    acquisition (disposal) wording and the item (or, when the turn has a
+    single item, a referring word)."""
+    wording = _ACQUISITION_WORDING if key == "acquired" else _DISPOSAL_WORDING
+    wanted = phrase.casefold()
+    for clause in _CLAUSE_BREAK.split(_evidence_text(source, candidate)):
+        if (
+            wanted in clause.casefold()
+            and wording.search(clause)
+            and _names_this_item(clause, candidate, batch)
+        ):
+            return True
+    return False
+
+
+def _evidenced_item_dates(candidate, source, batch):
+    """Purchase/disposal dates need positive evidence, whoever supplied them.
+
+    Kept when the owner's words give acquisition/disposal wording linked to
+    the item and date. A correction's date is decided against the stored item
+    (``_attributed_correction``). Removed when the words give the date another
+    role (a veto, not the rule) or nothing positive supports it, so an
+    unfamiliar date role never defaults to purchase or sale. Returns
+    (candidate, reason or None)."""
+    if candidate.category != "owned_item":
+        return candidate, None
+    update, reason = {}, None
+    for key in ("acquired", "disposed"):
+        field = key + "_expression"
+        phrase = getattr(candidate, field)
+        if not phrase:
+            continue
+        if _date_role(source, candidate, phrase):
+            update[field], reason = None, "date_role_conflict"
+        elif _has_date_evidence(source, candidate, phrase, key, batch):
+            continue
+        elif candidate.intent == "correction":
+            continue  # decided against the stored item
+        else:
+            update[field] = None
+            reason = reason or "date_evidence_missing"
+    if not update:
+        return candidate, None
+    return candidate.model_copy(update=update), reason
+
+
+def _restates_nothing(candidate):
+    """A correction or change left with nothing to apply once a conflicting
+    date was removed (a different ownership state still counts as content)."""
+    if candidate.intent not in {"correction", "change"}:
+        return False
+    return not (
+        candidate.acquired_expression
+        or candidate.disposed_expression
+        or candidate.details
+        or candidate.aliases
+        or (candidate.intent == "change" and candidate.state in DISPOSED_STATES)
+    )
+
+
+def _item_inconsistency(mutation):
+    """Record-level invariants for an owned item about to be written; a
+    violation is skipped with a reason instead of stored:
+    - a disposal time only for a no-longer-owned state;
+    - details are never just one of the item's own time phrases;
+    - the value is never one of the item's own time phrases."""
+    value = getattr(mutation.draft, "value", None)
+    if not isinstance(value, dict) or value.get("category") != "owned_item":
+        return None
+    if value.get("disposed") and value.get("state") not in DISPOSED_STATES:
+        return "inconsistent_item_state"
+    times = {
+        normalize_memory_surface(t.get("expression"))
+        for t in (value.get("acquired"), value.get("disposed"))
+        if isinstance(t, dict) and t.get("expression")
+    }
+    details = value.get("details")
+    if isinstance(details, str) and normalize_memory_surface(details) in times:
+        return "time_in_item_details"
+    item = value.get("value")
+    if isinstance(item, str) and normalize_memory_surface(item) in times:
+        return "time_as_item_value"
+    return None
+
+
+def _item_identity(candidate) -> str:
+    """An owned item's value is the item, never one of its times: a proposal
+    that put the time in ``value`` ("Jimny", value "September") keeps the
+    item's name instead."""
+    value = candidate.value
+    if not value or normalize_memory_surface(value) in _time_words(candidate):
+        return candidate.label
+    return value
+
+
+_ARTICLES = ("the ", "my ", "our ", "a ", "an ")
+
+
+def _without_article(label):
+    """'the Tigor' names the Tigor: a leading article is not part of a name."""
+    text = (label or "").strip()
+    lowered = text.casefold()
+    for article in _ARTICLES:
+        if lowered.startswith(article) and len(text) > len(article):
+            return text[len(article) :].strip()
+    return text
+
+
+def _names_entry(candidate, entry, entries) -> bool:
+    """True when the proposal's label names the stored fact: the same label,
+    a unique shorter reference ("Tigor" -> "Tata Tigor"), or a label that
+    wholly contains the stored name of exactly one fact of that category and
+    kind ("Goa plan" -> "Goa"). A leading article is ignored."""
+    from .learning_catalog_page import PLAN_HEAD_NOUNS, identity_words, name_words
+
+    label = _without_article(candidate.label)
+    if _label(entry) == normalize_memory_surface(label):
+        return True
+    if unique_reference(entry, label, entries):
+        return True
+    words = name_words(label)
+    if entry.category in {"plan", "event"}:
+        # "Spiti trip" names "winter Spiti": the head noun says what kind of
+        # plan it is, not which one; the remaining words must name one plan.
+        wanted = words - PLAN_HEAD_NOUNS
+        named = [
+            e.assertion_id
+            for e in entries
+            if e.category == entry.category
+            and e.kind == entry.kind
+            and wanted
+            and any(wanted <= w for w in identity_words(e))
+        ]
+        if named == [entry.assertion_id]:
+            return True
+    inside = [
+        e.assertion_id
+        for e in entries
+        if e.category == entry.category
+        and e.kind == entry.kind
+        and any(w and w <= words for w in identity_words(e))
+    ]
+    return inside == [entry.assertion_id]
+
+
+def _corrected_item_value(old, fresh, candidate, entry, entries):
+    """A correction of one owned item changes only what the owner corrected.
+
+    When the correction names the stored item (same label, or a unique
+    shorter name), its identity - label, value and aliases - and every
+    attribute the correction does not restate are kept; only the restated
+    attributes (acquired, disposed, details, aliases, state) are replaced. A
+    correction naming a different item ("it's a Jimny, not a Thar") corrects
+    the identity and still keeps the unrelated attributes. A state corrected
+    back to owned drops the disposal time."""
+    names_item = _names_entry(candidate, entry, entries)
+    value = {**old, "schema": fresh["schema"], "state": fresh["state"]}
+    if not names_item:
+        value["label"], value["value"] = fresh["label"], fresh["value"]
+        value.pop("aliases", None)
+    for key in ("aliases", "details", "acquired", "disposed"):
+        if key in fresh:
+            value[key] = fresh[key]
+    if value["state"] not in DISPOSED_STATES:
+        value.pop("disposed", None)
+    return value
+
+
+def _corrected_plan_value(old, fresh, candidate, entry, entries):
+    """A correction of one plan changes only what it restates.
+
+    Shared update rule (as for owned items): the plan's identity and every
+    detail the correction does not restate are kept. Replaced when restated
+    and different: plan status (with its state), individual slots (merged,
+    never dropped), the time (temporal), location, reason, certainty. The
+    name changes only when the correction names a different plan ("the
+    Kerala trip, not the Goa trip"). A correction that restates nothing
+    different is unclear: None (skipped and recorded). An unstated detail is
+    never removed; the slice-1 schema has no way to state a removal."""
+    value = {**old, "schema": fresh["schema"]}
+    restated = False
+    if candidate.plan_status is not None and fresh.get("plan_status") != old.get(
+        "plan_status"
+    ):
+        value["plan_status"], value["state"] = fresh["plan_status"], fresh["state"]
+        restated = True
+    old_slots = old.get("slots") or {}
+    changed = {
+        k: v for k, v in (fresh.get("slots") or {}).items() if old_slots.get(k) != v
+    }
+    if changed:
+        value["slots"] = {**old_slots, **changed}
+        restated = True
+    old_time = (old.get("temporal") or {}).get("expression")
+    if candidate.time_expression and fresh["temporal"].get("expression") != old_time:
+        value["temporal"] = fresh["temporal"]
+        restated = True
+    for key in ("location", "reason"):
+        if fresh.get(key) is not None and fresh[key] != old.get(key):
+            value[key] = fresh[key]
+            restated = True
+    if restated and fresh.get("certainty") is not None:
+        value["certainty"] = fresh["certainty"]
+    if not _names_entry(candidate, entry, entries):
+        value["label"], value["value"] = fresh["label"], fresh["value"]
+        restated = True
+    return value if restated else None
 
 
 def _plan_fields(candidate):
     fields = {}
     if candidate.plan_status is not None:
         fields["plan_status"] = candidate.plan_status
-    slots = normalized_slots(candidate.slots)
+    slots = normalized_slots(candidate.slots, candidate.owner_confirmed)
     if slots:
         fields["slots"] = slots
     return fields
 
 
-def _added_detail(candidate, source):
+def _option_decision_target(choice, entry, candidate, added, entries) -> bool:
+    """True when the resolver's matched plan is identified by the decision
+    itself: a current plan, supplied in this catalog page, whose stated
+    alternatives include every chosen option, while no other current plan in
+    the page (of any kind) offers any of them. The proposal's plan kind is not
+    required to match: it does not identify a plan, and the change keeps the
+    stored plan's kind."""
+    if (
+        choice.decision not in {"match", "duplicate"}
+        or entry is None
+        or entry.category != "plan"
+        or candidate.category != "plan"
+    ):
+        return False
+    try:
+        old = json.loads(entry.value)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(old, dict):
+        return False
+    chosen = set(decided_options(old, added).values())
+    if not chosen:
+        return False
+    for other in entries:
+        if other.assertion_id == entry.assertion_id or other.category != "plan":
+            continue
+        try:
+            other_value = json.loads(other.value)
+        except (TypeError, ValueError):
+            continue
+        if chosen & option_keys(other_value):
+            return False
+    return True
+
+
+def _added_detail(candidate, source, context=None):
     if candidate.category == "owned_item":
-        return _item_fields(candidate, source)
+        return _item_fields(candidate, source, context)
     if candidate.category == "plan":
         return _plan_fields(candidate)
     return {}
@@ -579,18 +1210,22 @@ def _plan_state_and_certainty(candidate):
     return PLAN_STATE[candidate.plan_status], certainty
 
 
-def _new_value(candidate, source):
+def _new_value(candidate, source, context=None):
     state, certainty = _plan_state_and_certainty(candidate)
     value = {
         "schema": POLICY_VERSION,
         "category": candidate.category,
         "kind": candidate.kind,
         "label": candidate.label,
-        "value": candidate.value,
+        "value": (
+            _item_identity(candidate)
+            if candidate.category == "owned_item"
+            else candidate.value
+        ),
         "state": state,
     }
     if candidate.category == "owned_item":
-        value.update(_item_fields(candidate, source))
+        value.update(_item_fields(candidate, source, context))
     if candidate.category in HISTORY_CATEGORIES:
         value["certainty"] = certainty
         value["temporal"] = temporal_context(source, candidate)
@@ -600,6 +1235,40 @@ def _new_value(candidate, source):
                 value[key] = detail
         if candidate.category == "plan":
             value.update(_plan_fields(candidate))
+    return _record_certainty(value, candidate, certainty)
+
+
+def _possibility_overrides_fact(mutation, candidate, by_id):
+    """A possibility never changes, corrects or withdraws a stored fact, in
+    any category: "maybe we'll cancel Goa" leaves the plan as it is, and
+    "I might move my swim to 7" leaves 6. It may update a stored possibility.
+    Adding a detail (refine) is not affected; a detail keeps its own
+    certainty."""
+    # The owner's own certainty about what they said, not the plan's status:
+    # "the trip is only being considered now" is a stated change.
+    if candidate.certainty != "tentative" or mutation.action not in {
+        "change",
+        "correct",
+        "retract",
+    }:
+        return None
+    entry = by_id.get(mutation.expected_assertion_id)
+    try:
+        old = json.loads(entry.value) if entry is not None else None
+    except (TypeError, ValueError):
+        old = None
+    if isinstance(old, dict) and old.get("certainty") == "tentative":
+        return None
+    return "possibility_cannot_change_fact"
+
+
+def _record_certainty(value, candidate, certainty):
+    """Routines and goals record a possibility (absent means confirmed, as in
+    rows stored before this rule); history categories always record it."""
+    if candidate.category in POSSIBILITY_CATEGORIES - HISTORY_CATEGORIES:
+        value.pop("certainty", None)
+        if certainty == "tentative":
+            value["certainty"] = "tentative"
     return value
 
 
@@ -607,11 +1276,11 @@ def _changed_value(old, candidate, source):
     """A real-world change to the same thing: keep its identity, update what
     the owner said changed."""
     state, certainty = _plan_state_and_certainty(candidate)
-    value = {**old, "state": state}
+    value = _record_certainty({**old, "state": state}, candidate, certainty)
     if candidate.category != "owned_item":
         value["value"] = candidate.value
     else:
-        fields = _item_fields(candidate, source)
+        fields = _item_fields(candidate, source, old)
         for key in ("aliases", "details", "disposed"):
             if key in fields:
                 value[key] = fields[key]

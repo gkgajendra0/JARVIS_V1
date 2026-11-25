@@ -38,10 +38,22 @@ def has_identifier(text: str | None) -> bool:
     )
 
 
-def normalized_slots(slots) -> dict[str, dict]:
-    """Slots as stored. A slot with two or more options is undecided: its value
-    is cleared and its certainty can never be confirmed. Options never touch
-    the plan's own status."""
+def normalized_slots(slots, confirmed=()) -> dict[str, dict]:
+    """Slots as stored. General evidence rules, whatever the wording:
+
+    - A detail is decided only by a value the proposal states. Options are
+      never promoted to a value: mentioning something is not choosing it.
+    - Alternatives (two or more distinct options) are the model's reading of
+      the owner's words, so they are stored only for details the owner
+      confirmed in answer to Jarvis's question (``confirmed``, set by the
+      learning runtime); until then they stay pending in the conversation,
+      whatever certainty the model gave them.
+    - A lone option is a mention, not a choice, and is not stored.
+    - A slot whose meaning the proposal marks uncertain is not stored: an
+      unclear detail is asked about, never saved as a guessed fact.
+
+    Confirmed alternatives are undecided: no value, certainty tentative.
+    Options never touch the plan's own status."""
     stored = {}
     if slots is None:
         return stored
@@ -50,28 +62,43 @@ def normalized_slots(slots) -> dict[str, dict]:
         if slot is None:
             continue
         options = list(dict.fromkeys(o for o in slot.options if o))
-        if len(options) >= 2:
-            entry = {
-                "value": None,
-                "options": options,
-                "certainty": "uncertain"
-                if slot.certainty == "uncertain"
-                else "tentative",
-            }
-        elif slot.value or options:
-            entry = {
-                "value": slot.value or options[0],
+        if name in confirmed and len(options) >= 2:
+            stored[name] = {"value": None, "options": options, "certainty": "tentative"}
+        elif slot.certainty == "uncertain" or len(options) >= 2:
+            continue
+        elif slot.value:
+            stored[name] = {
+                "value": slot.value,
                 "options": [],
                 "certainty": slot.certainty,
             }
-        else:
+    return stored
+    for name in SLOT_NAMES:
+        slot = getattr(slots, name)
+        if slot is None or slot.certainty == "uncertain":
             continue
-        stored[name] = entry
+        options = list(dict.fromkeys(o for o in slot.options if o))
+        if len(options) >= 2:
+            stored[name] = {"value": None, "options": options, "certainty": "tentative"}
+        elif slot.value:
+            stored[name] = {
+                "value": slot.value,
+                "options": [],
+                "certainty": slot.certainty,
+            }
     return stored
 
 
-def item_time(expression: str | None, anchor) -> dict | None:
-    return time_object(expression, anchor) if expression else None
+def item_time(expression: str | None, anchor, *, past: bool = False) -> dict | None:
+    """When an item was acquired or disposed of, at the precision said.
+
+    ``past=True`` only when the caller has supporting context that the time
+    already happened; a bare month then gets an inferred year, marked
+    ``basis="inferred_year"`` (personal_time module). Otherwise a bare month
+    stays unresolved with its wording."""
+    if not expression:
+        return None
+    return time_object(expression, anchor, direction="past" if past else None)
 
 
 def _clauses(fragment: str) -> list[str]:
@@ -139,6 +166,66 @@ def _within(new: dict, old: dict) -> bool:
     if new.get("precision") in (None, "unresolved") or not new.get("earliest"):
         return False
     return old["earliest"] <= new["earliest"] and new["latest"] <= old["latest"]
+
+
+def _option_key(text) -> str:
+    return " ".join(str(text).casefold().split())
+
+
+def option_keys(value) -> set[str]:
+    """Normalized options of every undecided slot of a stored plan value."""
+    keys = set()
+    if not isinstance(value, dict):
+        return keys
+    for slot in (value.get("slots") or {}).values():
+        if isinstance(slot, dict) and not slot.get("value"):
+            keys |= {_option_key(o) for o in slot.get("options") or () if o}
+    return keys
+
+
+def decided_options(old: dict, added: dict) -> dict[str, str]:
+    """The slots a new statement decides among the owner's stated alternatives,
+    as {slot: normalized chosen option}; empty when it is not such a decision.
+
+    A decision is: a stored slot with no value and options, and a new value
+    that is one of those options ("Ladakh or winter Spiti" -> "winter Spiti"),
+    stated with confirmed certainty in a plan that is not merely being
+    considered. Any other disagreement (a value never offered, an
+    already-decided slot, a tentative choice, conflicting details) means it is
+    not a decision and keeps its existing handling."""
+    if added.get("plan_status") in {"considering", "cancelled", "done"}:
+        return {}
+    old_slots = old.get("slots") or {}
+    rest = {}
+    decided = {}
+    for name, slot in (added.get("slots") or {}).items():
+        current = old_slots.get(name)
+        if current is None or current == slot:
+            rest[name] = slot
+            continue
+        options = {_option_key(o) for o in current.get("options") or () if o}
+        value = slot.get("value")
+        if (
+            not current.get("value")
+            and value
+            and _option_key(value) in options
+            and slot.get("certainty") == "confirmed"
+        ):
+            decided[name] = _option_key(value)
+            continue
+        return {}
+    if not decided:
+        return {}
+    merged, reason = refine_merge(old, {**added, "slots": rest})
+    return decided if merged is not None or reason == "already_stored" else {}
+
+
+def decides_stated_options(old: dict, added: dict) -> bool:
+    """True when ``added`` decides among the plan's stated alternatives
+    (see :func:`decided_options`). That is a real change of the plan (the
+    earlier row, with its options, stays in history), never a refine and never
+    a conflict."""
+    return bool(decided_options(old, added))
 
 
 def refine_merge(old: dict, added: dict) -> tuple[dict | None, str]:

@@ -187,19 +187,25 @@ async def test_d1_separate_items_keep_partial_dates_and_their_own_quotes(learnin
     assert len(stored) == 3
     assert len({r["source_id"] for r in stored}) == 3  # one source per fact
     anchor = turn.accepted_at.astimezone()
+    # "have a Royal Enfield Classic 350 from 2021" is ambiguous (since 2021, or
+    # a 2021 model): owner decision 2026-11-23, no purchase date is stored.
     expected = {
-        "Royal Enfield Classic 350": ("year", time_object("2021", anchor)),
+        "Royal Enfield Classic 350": None,
         "Tata Tigor": ("month", time_object("March 2017", anchor)),
         "Jimny": ("month", time_object("last month", anchor)),
     }
     for row in stored:
-        precision, obj = expected[row["value"]["label"]]
-        acquired = row["value"]["acquired"]
-        assert acquired["precision"] == precision
-        assert (acquired["earliest"], acquired["latest"]) == (
-            obj["earliest"],
-            obj["latest"],
-        )
+        want = expected[row["value"]["label"]]
+        if want is None:
+            assert "acquired" not in row["value"]
+        else:
+            precision, obj = want
+            acquired = row["value"]["acquired"]
+            assert acquired["precision"] == precision
+            assert (acquired["earliest"], acquired["latest"]) == (
+                obj["earliest"],
+                obj["latest"],
+            )
         assert row["valid_from"] is None  # no invented day
         others = set(expected) - {row["value"]["label"]}
         assert row["value"]["label"].split()[-1] in row["quote"]
@@ -239,16 +245,24 @@ async def test_d2_added_detail_refines_the_same_item(learning):
 
 
 @pytest.mark.asyncio
-async def test_refine_never_overrides_a_contradicting_detail(learning):
+@pytest.mark.parametrize(
+    "text,reason",
+    [
+        ("I bought the Jimny in 2019.", "refine_conflicts_existing_detail"),
+        # No acquisition wording: the date is not applied at all (owner rule
+        # 2026-11-23, positive evidence for purchase/disposal dates).
+        ("The Jimny is from 2019.", "date_evidence_missing"),
+    ],
+)
+async def test_refine_never_overrides_a_contradicting_detail(learning, text, reason):
     owner, _ = await seed_d1(learning)
-    text = "The Jimny is from 2019."
     plan, result, _ = await owner.say(
         text,
-        [item("Jimny", ["The Jimny is from 2019"], acquired_expression="2019")],
+        [item("Jimny", [text.rstrip(".")], acquired_expression="2019")],
         [("match", "Jimny")],
     )
     assert plan.mutations == ()
-    assert [o.reason for o in plan.outcomes] == ["refine_conflicts_existing_detail"]
+    assert [o.reason for o in plan.outcomes] == [reason]
     assert result.status == "recorded"
 
 
@@ -411,7 +425,10 @@ def plan_spec(label, quotes, **extra):
 
 
 @pytest.mark.asyncio
-async def test_d6_destination_options_leave_the_trip_planned(learning):
+@pytest.mark.parametrize("owner_confirmed", [(), ("destination",)])
+async def test_d6_destination_options_leave_the_trip_planned(learning, owner_confirmed):
+    # Amendment 2: alternatives are stored (undecided) only once the owner
+    # confirmed them; until then the plan keeps its clear parts only.
     owner = Owner(learning)
     text = "I'm planning a Ladakh or winter Spiti trip in January."
     _plan, _result, _ = await owner.say(
@@ -429,16 +446,20 @@ async def test_d6_destination_options_leave_the_trip_planned(learning):
                     ),
                     when=SlotValue(value="January"),
                 ),
+                owner_confirmed=owner_confirmed,
             )
         ],
         [("new", None)],
     )
     value = current(await rows(learning))[0]["value"]
     assert value["plan_status"] == "planned" and value["state"] == "planned"
+    assert value["slots"]["when"]["value"] == "January"
+    if not owner_confirmed:
+        assert "destination" not in value["slots"]
+        return
     destination = value["slots"]["destination"]
     assert destination["options"] == ["Ladakh", "winter Spiti"]
     assert destination["value"] is None and destination["certainty"] != "confirmed"
-    assert value["slots"]["when"]["value"] == "January"
 
 
 @pytest.mark.asyncio
@@ -549,6 +570,7 @@ async def test_d10_decision_and_trip_vehicle_never_change_ownership(learning):
                 slots=PlanSlots(
                     destination=SlotValue(options=["Ladakh", "winter Spiti"])
                 ),
+                owner_confirmed=("destination",),  # amendment 2 (story-07b)
             )
         ],
         [("new", None)],

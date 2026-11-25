@@ -3,6 +3,10 @@
 from .personal_time import time_object
 
 HISTORY_CATEGORIES = frozenset({"personal_fact", "activity", "event", "plan"})
+# Categories whose stored record carries certainty, so a possibility can be
+# kept as a possibility. In every other category (possessions, single-value
+# preferences) a possibility is not saved: it would read as a current fact.
+POSSIBILITY_CATEGORIES = HISTORY_CATEGORIES | frozenset({"routine", "goal"})
 
 
 def temporal_context(source, candidate):

@@ -6,15 +6,26 @@ import asyncio
 import hashlib
 import json
 import logging
+import random
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from time import monotonic, perf_counter
 
+from jarvis.provider_retry import decide_retry
+
+from .learning_clarification import (
+    ALTERNATIVES,
+    ClarificationBoard,
+    alternatives_question,
+    clarification_for,
+    confirmation_candidate,
+    stated_details,
+)
 from .learning_contracts import AcceptedLearningSource, LearningBatch
 from .learning_controls import category_veto, suppression_binding
 from .learning_diagnostics import log_learning
 from .learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
-from .learning_policy import LearningPolicy
+from .learning_policy import LearningPolicy, ground_plan_label
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +41,27 @@ class LearningRuntimeStatus:
     reason: str
 
 
+def _already_held(note, catalog) -> bool:
+    """Alternatives already stored on a plan in this catalog page (the owner
+    confirmed them earlier) are not asked about again."""
+    if note is None or note.kind != ALTERNATIVES:
+        return False
+    for entry in catalog.entries:
+        if entry.category != "plan":
+            continue
+        try:
+            slots = json.loads(entry.value).get("slots") or {}
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if all(
+            {o.casefold() for o in (slots.get(name) or {}).get("options") or ()}
+            == {o.casefold() for o in options}
+            for name, options in note.choices
+        ):
+            return True
+    return False
+
+
 class PersonalLearningRuntime:
     def __init__(
         self,
@@ -42,10 +74,22 @@ class PersonalLearningRuntime:
         clock=monotonic,
         status_observer=None,
         diagnostics=False,
+        retry_observer=None,
+        sleep=asyncio.sleep,
+        rng=random.random,
+        clarification_observer=None,
     ):
         self.authority, self.service = authority, service
         self.extractor, self.resolver, self.reconciler = extractor, resolver, reconciler
         self.clock, self.status_observer = clock, status_observer
+        # Content-free record of every provider attempt that failed and what
+        # the bounded retry policy decided (jarvis.provider_retry).
+        self.retry_observer = retry_observer
+        self._sleep, self._rng = sleep, rng
+        # "Meaning unclear" outcomes for the reply path (learning_clarification):
+        # session-bound, offered once per detail, cleared on invalidation.
+        self.clarifications = ClarificationBoard()
+        self.clarification_observer = clarification_observer
         self.diagnostics = diagnostics
         self._stage = "source_validation"
         self._queue = asyncio.Queue(maxsize=32)
@@ -191,6 +235,7 @@ class PersonalLearningRuntime:
             )
 
     def invalidate_sources(self, category=None, turn_id=None):
+        self.clarifications.clear()
         if turn_id is None:
             self._window_cutoff = datetime.now(UTC)
         for receipt, (source, grant) in tuple(self._pending.items()):
@@ -233,30 +278,101 @@ class PersonalLearningRuntime:
             raise PermissionError("Learning source no longer registered")
         self._require(source.receipt_id, source, item[1])
 
-    async def _infer(self, source, operation):
-        remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
-        if remaining <= 0:
-            raise TimeoutError("source processing budget exhausted")
-        timeout = min(INFERENCE_TIMEOUT, remaining)
-        started = perf_counter()
-        log_learning(
-            self.diagnostics,
-            source,
-            self._stage,
-            "started",
-            timeout_seconds=round(timeout, 3),
-            source_age_ms=round((self.clock() - source.created_monotonic) * 1000, 1),
-        )
-        try:
-            return await asyncio.wait_for(operation(), timeout)
-        finally:
+    async def _infer(self, source, operation, receipt=None, grant=None):
+        """Run one provider stage inside the source's existing processing budget.
+
+        This runtime is the single retry owner for direct provider calls: a
+        temporary provider failure (503/500/lost connection) may be retried at
+        most twice, after a growing randomized wait, only when the wait plus a
+        useful attempt still fits in the remaining budget. Source validity and
+        the learning grant are rechecked before every retry. Each attempt's
+        timeout is the smaller of INFERENCE_TIMEOUT and the remaining budget, so
+        retries never extend the budget or the 30-second source lease. A stall
+        (no response before the timeout) is never retried. Failures from the
+        model router are not retried here: the router owns its retries.
+        """
+        from .learning_extractors import LearningProviderUnavailable
+
+        attempt = 0
+        while True:
+            attempt += 1
+            remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+            if remaining <= 0:
+                raise TimeoutError("source processing budget exhausted")
+            timeout = min(INFERENCE_TIMEOUT, remaining)
+            started = perf_counter()
             log_learning(
                 self.diagnostics,
                 source,
                 self._stage,
-                "finished_wait",
-                elapsed_ms=round((perf_counter() - started) * 1000, 1),
+                "started",
+                attempt=attempt,
+                timeout_seconds=round(timeout, 3),
+                source_age_ms=round(
+                    (self.clock() - source.created_monotonic) * 1000, 1
+                ),
             )
+            try:
+                return await asyncio.wait_for(operation(), timeout)
+            except LearningProviderUnavailable as exc:
+                failure = exc.failure
+                remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+                if exc.retry_owner != "runtime":
+                    decision_reason, delay, retry = "retry_owned_by_router", 0.0, False
+                else:
+                    decision = decide_retry(
+                        failure, attempt=attempt, remaining=remaining, rng=self._rng
+                    )
+                    decision_reason = decision.reason
+                    delay, retry = decision.delay, decision.retry
+                self._observe_retry(
+                    source,
+                    attempt=attempt,
+                    failure=failure,
+                    decision=decision_reason,
+                    delay=delay,
+                    remaining=remaining,
+                )
+                if not retry:
+                    raise
+            finally:
+                log_learning(
+                    self.diagnostics,
+                    source,
+                    self._stage,
+                    "finished_wait",
+                    attempt=attempt,
+                    elapsed_ms=round((perf_counter() - started) * 1000, 1),
+                )
+            await self._sleep(delay)
+            # The wait may have outlived a revocation, a privacy control or the
+            # session: recheck before dispatching again.
+            self._require(receipt, source, grant)
+
+    def _observe_retry(self, source, *, attempt, failure, decision, delay, remaining):
+        kind = getattr(getattr(failure, "kind", None), "value", None)
+        status = getattr(failure, "status_code", None)
+        record = {
+            "stage": self._stage,
+            "attempt": attempt,
+            "failure_kind": kind,
+            "status": status if type(status) is int else None,
+            "decision": decision,
+            "delay_seconds": delay,
+            "remaining_seconds": round(remaining, 3),
+        }
+        log_learning(
+            self.diagnostics,
+            source,
+            self._stage,
+            "attempt_failed",
+            **{k: v for k, v in record.items() if k != "stage"},
+        )
+        if self.retry_observer is not None:
+            try:
+                self.retry_observer(record)
+            except Exception:
+                LOGGER.debug("learning retry observer failed", exc_info=True)
 
     async def _process(self, receipt, source, grant):
         self._stage = "source_validation"
@@ -271,14 +387,44 @@ class PersonalLearningRuntime:
             self._report("category_suppressed")
             return
         self._stage = "extraction"
-        batch = await self._infer(source, lambda: self.extractor.extract(source))
+        window = {t.turn_id for t in source.turns}
+        open_questions = [
+            n
+            for n in self.clarifications.pending(source.session_id)
+            if n.turn_id in window and n.turn_id != source.turn_id
+        ]
+        if open_questions:
+            views = [n.model_view() for n in open_questions]
+            batch = await self._infer(
+                source,
+                lambda: self.extractor.extract(source, open_questions=views),
+                receipt,
+                grant,
+            )
+        else:
+            batch = await self._infer(
+                source, lambda: self.extractor.extract(source), receipt, grant
+            )
         self._require(receipt, source, grant)
+        answered, confirmations = self._answered(source, batch, open_questions)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
-        grounded_count = len(batch.candidates)
-        for index, candidate in enumerate(batch.candidates):
+        notes, settled = [], []
+        proposals = list(batch.candidates) + confirmations
+        grounded_count = len(proposals)
+        for index, candidate in enumerate(proposals):
+            grounded = ground_plan_label(source, candidate)
+            if grounded is not candidate:
+                log_learning(
+                    self.diagnostics,
+                    source,
+                    "eligibility",
+                    "label_from_value",
+                    grounded_index=index,
+                )
+                candidate = grounded
             decision = LearningPolicy().evaluate(
                 source, candidate, suppression.suppressed
             )
@@ -296,6 +442,11 @@ class PersonalLearningRuntime:
             )
             if decision.status == "eligible":
                 eligible.append(candidate)
+                notes.append(clarification_for(source, candidate))
+                notes.append(alternatives_question(source, candidate))
+                settled.append(candidate)
+            elif decision.reason == "meaning_unclear":
+                notes.append(clarification_for(source, candidate, dropped_unclear=True))
         batch = LearningBatch(candidates=eligible)
         if not batch.candidates:
             log_learning(
@@ -307,6 +458,7 @@ class PersonalLearningRuntime:
                 if grounded_count == 0
                 else "all_candidates_rejected",
             )
+            self._publish(source, notes, settled, answered)
             self._report("no_eligible_fact")
             return
         self._stage = "catalog"
@@ -316,9 +468,13 @@ class PersonalLearningRuntime:
         )
         self._require(receipt, source, grant)
         catalog = catalog.model_copy(update={"suppression_epochs": suppression.epochs})
+        notes = [n for n in notes if not _already_held(n, catalog)]
         self._stage = "resolution"
         resolutions = await self._infer(
-            source, lambda: self.resolver.resolve(source, batch, catalog)
+            source,
+            lambda: self.resolver.resolve(source, batch, catalog),
+            receipt,
+            grant,
         )
         self._require(receipt, source, grant)
         log_learning(
@@ -332,6 +488,7 @@ class PersonalLearningRuntime:
         plan = self.reconciler.plan(source, batch, catalog, resolutions)
         if not plan.mutations and not plan.outcomes:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
+            self._publish(source, notes, settled, answered)
             self._report("no_change")
             return
         self._stage = "storage"
@@ -359,7 +516,81 @@ class PersonalLearningRuntime:
                 for m in plan.mutations
             ],
         )
+        self._publish(source, notes, settled, answered)
         self._report(result.status)
+
+    def _answered(self, source, batch, open_questions):
+        """The owner's answers to open questions, as the extractor read them.
+        Code decides what each allows: a confirmation of alternatives becomes
+        an ordinary proposal from the owner's original words (then policy,
+        resolution and reconciliation as usual); "chosen" and "doesnt_matter"
+        close the question (a chosen value is the extractor's own proposal).
+        Nothing changes for a question the turn does not answer."""
+        by_id = {n.question_id: n for n in open_questions}
+        answered, confirmations = [], []
+        for answer in batch.answers:
+            note = by_id.pop(answer.question_id, None)
+            if note is None:
+                continue
+            answered.append((note, answer.answer))
+            if answer.answer == "confirmed" and note.kind == ALTERNATIVES:
+                candidate = confirmation_candidate(source, note)
+                if (
+                    candidate is not None
+                    and len(batch.candidates) + len(confirmations) < 8
+                ):
+                    confirmations.append(candidate)
+            log_learning(
+                self.diagnostics,
+                source,
+                "clarification",
+                "answered",
+                question=note.kind,
+                answer=answer.answer,
+                details=list(note.details),
+            )
+        return answered, confirmations
+
+    def _publish(self, source, notes, settled, answered=()):
+        """After the turn's learning completed: answered questions close;
+        details stated clearly settle earlier questions about them; new
+        questions go to the reply path. Nothing here is a storage receipt."""
+        closed = set()
+        for note, _answer in answered:
+            self.clarifications.close(note)
+            closed.add(note.key)
+        for candidate in settled:
+            details = stated_details(candidate)
+            if details:
+                self.clarifications.resolve(
+                    source.session_id,
+                    candidate.category,
+                    candidate.label or candidate.value,
+                    details,
+                )
+        for note in notes:
+            if (
+                note is None
+                or note.key in closed
+                or not self.clarifications.offer(note)
+            ):
+                continue
+            log_learning(
+                self.diagnostics,
+                source,
+                "clarification",
+                "offered",
+                category=note.category,
+                details=list(note.details),
+            )
+            if self.clarification_observer is not None:
+                try:
+                    self.clarification_observer(note)
+                except Exception as exc:  # noqa: BLE001 - reply path never breaks learning
+                    LOGGER.warning(
+                        "Learning clarification observer failed | error=%s",
+                        type(exc).__name__,
+                    )
 
     async def _run(self):
         while not self._closed:

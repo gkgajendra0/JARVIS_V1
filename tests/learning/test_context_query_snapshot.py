@@ -73,15 +73,21 @@ async def test_snapshot_facade_contains_only_canonical_registered_current_scope(
 
 
 @pytest.mark.asyncio
-async def test_snapshot_preserves_32_record_limit_and_releases_savepoint_on_error(
-    learning,
+async def test_snapshot_has_no_32_record_limit_and_releases_savepoint_on_error(
+    learning, monkeypatch
 ):
-    for i in range(32):
+    # Slice 1 PR C: reads page in the projection; more than 32 rows is normal.
+    for i in range(33):
         await seed_item(learning, f"item{i}")
     reader = CanonicalMemoryReader(learning.reader)
-    assert len((await reader.learning_context_snapshot()).entries) == 32
-    await seed_item(learning, "overflow")
-    with pytest.raises(ValueError, match="overflow"):
+    assert len((await reader.learning_context_snapshot()).entries) == 33
+    scoped = await reader.learning_context_snapshot(("owned_item.device",))
+    assert scoped.entries == ()
+    # The memory ceiling is an explicit failure, never a shortened list.
+    import jarvis.memory.query as module
+
+    monkeypatch.setattr(module, "SCOPED_READ_CEILING", 32)
+    with pytest.raises(ValueError, match="learning_scope_too_large"):
         await reader.learning_context_snapshot()
     assert not await learning.reader.run(lambda c: c.in_transaction)
 
@@ -95,8 +101,8 @@ async def test_snapshot_is_coherent_across_writer_commit(learning, monkeypatch):
     ready, committed = threading.Event(), threading.Event()
     original = module._learning_current_scoped_sync
 
-    def interleaved(connection):
-        rows = original(connection)
+    def interleaved(connection, *args):
+        rows = original(connection, *args)
         ready.set()
         assert committed.wait(3)
         return rows

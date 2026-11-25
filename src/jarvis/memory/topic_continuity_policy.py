@@ -17,10 +17,19 @@ from .explicit import (
     reject_prohibited_secret,
 )
 
-_RESTRICTED = re.compile(
-    r"\b(?:password|passcode|secret|token|credential|otp|passport|aadhaar|pan\s+card|"
+# The data classes outside automatic admission (credentials, identity
+# documents, financial and medical data), as already listed for topic and
+# project history. Shared with automatic learning (learning_policy).
+_SENSITIVE_DATA = (
+    r"password|passcode|secret|token|credential|otp|passport|aadhaar|pan\s+card|"
     r"account|bank|card\s+number|medical|diagnos\w*|disease|medicat\w*|health|"
-    r"salary|loan|balance|private|confidential|address|phone\s+number|"
+    r"salary|loan|balance"
+)
+SENSITIVE_DATA = re.compile(
+    rf"\b(?:{_SENSITIVE_DATA})\b|पासवर्ड|बीमारी|खाता|आधार|गुप्त", re.IGNORECASE
+)
+_RESTRICTED = re.compile(
+    rf"\b(?:{_SENSITIVE_DATA}|private|confidential|address|phone\s+number|"
     r"friend['’]?s|wife['’]?s|husband['’]?s|client['’]?s)\b|"
     r"पासवर्ड|बीमारी|खाता|आधार|गुप्त|निजी",
     re.IGNORECASE,
