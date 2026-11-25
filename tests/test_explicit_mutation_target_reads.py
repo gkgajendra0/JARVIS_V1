@@ -28,16 +28,17 @@ personal = fixtures.personal
 source = fixtures.source
 
 # Named so the catalog lists the three vehicles first and the plans after
-# them, as in the recorded catalog (index 0 = Tata Tigor).
+# them, as in the recorded catalog (index 0 = Tata Tigor). No number words:
+# predicate normalization turns them into digits.
 VEHICLES = {
-    "a vehicle one": "Tata Tigor, sold",
-    "a vehicle two": "Royal Enfield Classic 350",
-    "a vehicle three": "Jimny",
+    "a vehicle alpha": "Tata Tigor, sold",
+    "a vehicle charlie": "Royal Enfield Classic 350",
+    "a vehicle bravo": "Jimny",
 }
 PLANS = {
-    "b plan one": "Rishikesh trip in October",
-    "b plan two": "winter Spiti with the Jimny",
-    "b plan three": "Goa, cancelled",
+    "b plan alpha": "Rishikesh trip in October",
+    "b plan bravo": "winter Spiti with the Jimny",
+    "b plan charlie": "Goa, cancelled",
 }
 
 
@@ -65,9 +66,9 @@ def _index_naming(reads, needle):
 async def test_recorded_sequence_now_reads_each_facet_and_reaches_the_forget(personal):
     session, service, conversation, authority, catalog = await _story(personal)
     assert catalog["facets"][:3] == [
-        "a_vehicle_one",
-        "a_vehicle_three",
-        "a_vehicle_two",
+        "a_vehicle_alpha",
+        "a_vehicle_bravo",
+        "a_vehicle_charlie",
     ]
     assert len(catalog["facets"]) >= 6  # opaque names, no values
     assert "Classic" not in str(catalog["facets"])
@@ -87,13 +88,13 @@ async def test_recorded_sequence_now_reads_each_facet_and_reaches_the_forget(per
     remaining = {
         p: (await service.inspect_exact(predicate=p)).record.value
         for p in {**VEHICLES, **PLANS}
-        if p != "a vehicle two"
+        if p != "a vehicle charlie"
     }
     assert set(remaining.values()) == set(VEHICLES.values()) - {
         "Royal Enfield Classic 350"
     } | set(PLANS.values())
     with pytest.raises(MemoryNotFoundError):
-        await service.inspect_exact(predicate="a vehicle two")
+        await service.inspect_exact(predicate="a vehicle charlie")
 
 
 @pytest.mark.asyncio
@@ -145,9 +146,9 @@ async def test_declined_consent_deletes_nothing(personal):
             facet_index=target,
         )
     assert authority.calls[-1]["operation"] == "forget"  # asked, declined
-    assert (await service.inspect_exact(predicate="a vehicle two")).record.value == (
-        "Royal Enfield Classic 350"
-    )
+    assert (
+        await service.inspect_exact(predicate="a vehicle charlie")
+    ).record.value == ("Royal Enfield Classic 350")
 
 
 @pytest.mark.asyncio
