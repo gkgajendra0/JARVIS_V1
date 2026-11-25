@@ -34,3 +34,19 @@ delivers. No result may claim them as working.
   correct/retract path, matching, provenance and forget. That was assessed
   by reading the code, not in any live or lab run. They are not acceptance
   evidence.
+
+## Plan alternatives and open questions (amendment 2, 2026-11-25)
+
+- Alternatives are stored only after the owner confirms them. The answer is
+  read by the extractor (a model): if it misreads "yes" as unrelated, the
+  alternatives stay unsaved; if it misreads a reply as a confirmation, they
+  are stored as an undecided choice (never a decision or ownership). The
+  confirmation uses the owner's original words, so it is accepted only while
+  those words are within the last four owner turns of the conversation.
+- An open question lives only in its conversation. A conversation that ends
+  (inactivity, or a protected answer that clears context) drops it unsaved.
+- One question per plan detail at a time in a conversation; a second proposal
+  about the same detail waits until the first is answered.
+- In live voice the question comes after Jarvis's reply, only if the owner has
+  not spoken since; the lab driver receives it in the same reply. The live
+  delivery has not been tested against real Gemini Live.

@@ -65,6 +65,7 @@ FROZEN_SHA256 = {
 # the frozen case files above are never edited. The lab refuses to start if an
 # active amendment's file differs from the approved version.
 AMENDMENT_1_FILE = "docs/evals/personal-memory-acceptance-amendment-1.md"
+AMENDMENT_2_FILE = "docs/evals/personal-memory-acceptance-amendment-2.md"
 ACCEPTANCE_AMENDMENTS = (
     {
         "id": "amendment-1",
@@ -79,7 +80,21 @@ ACCEPTANCE_AMENDMENTS = (
             " 2021' sets purchase year 2021"
         ),
     },
+    {
+        "id": "amendment-2",
+        "status": "active",
+        "approved": "2026-11-25 13:40 IST",
+        "file": AMENDMENT_2_FILE,
+        "sha256": "57772e6b568b9b9db81c939fecf34cc83c75a638224b22fd4abf49f1975b3b2e",
+        "replaces": {"D6": "D6-A2"},
+        "adds": ["D28", "D29", "D30"],
+        "supersedes": (
+            "frozen D6 expectation that destination options are stored from the"
+            " single statement, before the owner confirms them"
+        ),
+    },
 )
+D6_CONFIRMATION = "Yes, still deciding between those."
 D1_FROZEN_TEXT = (
     "I have a Royal Enfield Classic 350 from 2021, a Tata Tigor I bought in"
     " March 2017, and last month I got a Jimny."
@@ -341,11 +356,19 @@ GROUPS = {
         Check("story-06c", "D22"),
         Say(
             "story-07",
-            "D6",
+            "D6-A2",
             "I'm planning a Ladakh or winter Spiti trip in January.",
             told(18, 12),
         ),
-        Check("story-07c", "D6"),
+        Say(
+            "story-07b",
+            "D6-A2",
+            D6_CONFIRMATION,
+            told(18, 12, 1),
+            new_session=False,
+            note="amendment-2 confirmation turn (D6-A2)",
+        ),
+        Check("story-07c", "D6-A2"),
         Say("story-08", "D7", "Maybe we'll do Goa this winter.", told(18, 13)),
         Check("story-08c", "D7"),
         Say(
@@ -546,6 +569,50 @@ GROUPS = {
         Say("d1r-01", "D1-R", D1_FROZEN_TEXT, told(17)),
         Check("d1r-01c", "D1-R"),
     ),
+    # Amendment 2: the other answers to a question about plan alternatives,
+    # each in its own conversation on this group's isolated memory.
+    "alternatives": (
+        Say(
+            "alt-01", "D28", "We're going to Spiti in January, Thar or Jimny.", told(18)
+        ),
+        Say(
+            "alt-02",
+            "D28",
+            "We'll take the Jimny.",
+            told(18, 10, 1),
+            new_session=False,
+        ),
+        Check("alt-02c", "D28"),
+        Say(
+            "alt-03",
+            "D29",
+            "We're going to Kerala in March, train or flight.",
+            told(18, 11),
+        ),
+        Say(
+            "alt-04",
+            "D29",
+            "Doesn't matter, either is fine.",
+            told(18, 11, 1),
+            new_session=False,
+        ),
+        Check("alt-04c", "D29"),
+        Say(
+            "alt-05",
+            "D30",
+            "We're going to Goa in April, Airbnb or hotel.",
+            told(18, 12),
+        ),
+        Say(
+            "alt-06",
+            "D30",
+            "What's the weather like there in April?",
+            told(18, 12, 1),
+            new_session=False,
+        ),
+        Say("alt-07", "D30", D6_CONFIRMATION, told(18, 13)),
+        Check("alt-07c", "D30"),
+    ),
     "pages": (
         Seed("p40-00", _vehicles("Vehicle", 40), note="D25 setup: 40 vehicles"),
         Say("p40-01", "D25", "List all my vehicles.", told(17)),
@@ -672,7 +739,14 @@ class RecordingAdapter:
         if callable(binder):
             binder(validator)
 
-    async def extract(self, source):
+    async def extract(self, source, open_questions=()):
+        if open_questions:
+            # Jarvis's open questions (amendment 2), passed through unchanged.
+            return await self._call(
+                "extraction",
+                lambda s: self.inner.extract(s, open_questions=open_questions),
+                source,
+            )
         return await self._call("extraction", self.inner.extract, source)
 
     async def resolve(self, source, batch, catalog):
@@ -2528,6 +2602,111 @@ async def check_d6(context, log):
     ]
 
 
+def _notes(context, step_id):
+    """The open questions that reached this turn's reply (amendment 2)."""
+    learning = (_reply(context, step_id) or {}).get("learning") or {}
+    return learning.get("clarification_notes") or []
+
+
+def _row_slot(row, name):
+    return (_value(row).get("slots") or {}).get(name) or {}
+
+
+async def check_d6_a2(context, log):
+    """Amendment 2, D6-A2: alternatives wait for the owner. Before the
+    confirmation the plan keeps its clear parts only; after it the same plan
+    holds the destination options, undecided. The frozen D6 expectation
+    (options straight from the single statement) is reported as SUPERSEDED."""
+    if not _learning_happened(context, "story-07"):
+        return [_untested("learning ran", "a", "no learning happened for D6-A2")]
+    rows = await _rows(context.memory)
+    before_ids = set(context.marks["before"]["story-07b"]["all_ids"])
+    ladakh = [
+        p
+        for p in _plans(rows, current=False)
+        if "ladakh" in json.dumps(_value(p)).casefold()
+    ]
+    first = [p for p in ladakh if p["assertion_id"] in before_ids]
+    first_destination = _row_slot(first[-1], "destination") if first else {}
+    current = [p for p in ladakh if p["current"]]
+    plan = _value(current[0]) if current else {}
+    destination = (plan.get("slots") or {}).get("destination") or {}
+    when = (plan.get("slots") or {}).get("when") or {}
+    options = [o.casefold() for o in destination.get("options") or ()]
+    notes = _notes(context, "story-07")
+    asked = [n for n in notes if n.get("question") == "confirm_alternatives"]
+    checks = [
+        _check("one plan after the statement", "a", len(first) == 1, len(first)),
+        _check(
+            "no destination options stored before confirmation",
+            "a",
+            bool(first) and not first_destination.get("options"),
+            first_destination,
+        ),
+        _check(
+            "one question about the destination choices",
+            "b",
+            len(asked) == 1 and "destination" in (asked[0].get("choices") or {}),
+            notes,
+        ),
+    ]
+    if not _learning_happened(context, "story-07b"):
+        checks.append(
+            _untested("confirmation learned", "a", "no learning for story-07b")
+        )
+    else:
+        checks += [
+            _check(
+                "same plan after confirmation (one current, superseding)",
+                "a",
+                len(current) == 1 and current[0]["supersedes_id"] is not None,
+                len(current),
+            ),
+            _check(
+                "status planned",
+                "a",
+                plan.get("plan_status") == "planned",
+                plan.get("plan_status"),
+            ),
+            _check(
+                "destination options [Ladakh, winter Spiti], undecided",
+                "a",
+                destination.get("value") is None
+                and any("ladakh" in o for o in options)
+                and any("spiti" in o for o in options),
+                destination,
+            ),
+            _check(
+                "when January",
+                "a",
+                "january" in str(when.get("value", "")).casefold(),
+                when,
+            ),
+        ]
+    checks.append(
+        {
+            "check": "frozen D6 expectation: destination options from the statement",
+            "level": "a",
+            "status": SUPERSEDED,
+            "detail": {
+                "superseded_by": "amendment-2",
+                "frozen_expected": ["Ladakh", "winter Spiti"],
+                "observed_before_confirmation": first_destination,
+                "current_requirement": "options stored only after the owner confirms",
+            },
+        }
+    )
+    checks.append(
+        _answer_check(
+            context,
+            "story-07",
+            "asks once whether still choosing, no storage claim",
+            (("claims saved", r"saved|noted|updated my memory"), ("asks", r"\?")),
+        )
+    )
+    return checks
+
+
 async def check_d7(context, log):
     if not _learning_happened(context, "story-08"):
         return [_untested("learning ran", "a", "no learning happened for D7")]
@@ -2599,7 +2778,20 @@ async def check_d9(context, log):
             when,
         ),
         _check("no owned Thar", "a", not _named(_items(rows), "thar")),
+        # Amendment 2: no question is required; at most one, about the vehicle.
+        _check(
+            "at most one question, only about the vehicle",
+            "b",
+            _at_most_one_vehicle_question(context, ("idiom-01", "idiom-02")),
+            [_notes(context, s) for s in ("idiom-01", "idiom-02")],
+        ),
     ]
+
+
+def _at_most_one_vehicle_question(context, steps):
+    notes = [n for s in steps for n in _notes(context, s)]
+    details = [set(n.get("choices") or {}) | set(n.get("unclear") or ()) for n in notes]
+    return len(notes) <= 1 and all(d == {"vehicle"} for d in details)
 
 
 async def check_d10(context, log):
@@ -3440,6 +3632,125 @@ async def check_d25(context, log):
     ]
 
 
+def _plan_named(rows, needle, *, current=True):
+    return [
+        p
+        for p in _plans(rows, current=current)
+        if needle in json.dumps(_value(p)).casefold()
+    ]
+
+
+def _slot_mentions(rows, needles):
+    """Any stored slot (current or history) holding these words."""
+    return [
+        (_label(r), name, slot)
+        for r in rows
+        for name, slot in ((_value(r).get("slots") or {}).items())
+        if any(n in json.dumps(slot).casefold() for n in needles)
+    ]
+
+
+async def check_d28(context, log):
+    """Amendment 2, D28: a final choice is saved on the same plan."""
+    if not _learning_happened(context, "alt-01"):
+        return [_untested("learning ran", "a", "no learning happened for D28")]
+    rows = await _rows(context.memory)
+    before_ids = set(context.marks["before"]["alt-02"]["all_ids"])
+    spiti = _plan_named(rows, "spiti", current=False)
+    first = [p for p in spiti if p["assertion_id"] in before_ids]
+    current = [p for p in spiti if p["current"]]
+    vehicle = _row_slot(current[0], "vehicle") if current else {}
+    slots = (_value(current[0]).get("slots") or {}) if current else {}
+    asked = _notes(context, "alt-01")
+    return [
+        _check(
+            "no vehicle stored before the answer",
+            "a",
+            bool(first) and not _row_slot(first[-1], "vehicle"),
+            _row_slot(first[-1], "vehicle") if first else None,
+        ),
+        _check(
+            "one question about the vehicle",
+            "b",
+            _at_most_one_vehicle_question(context, ("alt-01",)) and len(asked) == 1,
+            asked,
+        ),
+        _check(
+            "same plan, vehicle Jimny decided",
+            "a",
+            len(current) == 1
+            and current[0]["supersedes_id"] is not None
+            and "jimny" in str(vehicle.get("value", "")).casefold()
+            and not vehicle.get("options"),
+            vehicle,
+        ),
+        _check(
+            "destination Spiti and January kept",
+            "a",
+            "spiti" in str((slots.get("destination") or {}).get("value", "")).casefold()
+            and "january" in str((slots.get("when") or {}).get("value", "")).casefold(),
+            slots,
+        ),
+        _check(
+            "no owned Thar or Jimny added",
+            "a",
+            not _items(rows),
+            [_label(r) for r in _items(rows)],
+        ),
+    ]
+
+
+async def check_d29(context, log):
+    """Amendment 2, D29: "doesn't matter" discards the pending detail."""
+    if not _learning_happened(context, "alt-03"):
+        return [_untested("learning ran", "a", "no learning happened for D29")]
+    rows = await _rows(context.memory)
+    kerala = _plan_named(rows, "kerala", current=False)
+    current = [p for p in kerala if p["current"]]
+    when = _row_slot(current[0], "when") if current else {}
+    return [
+        _check("one Kerala plan", "a", len(current) == 1, len(current)),
+        _check(
+            "March kept", "a", "march" in str(when.get("value", "")).casefold(), when
+        ),
+        _check(
+            "no train/flight stored at any point",
+            "a",
+            not _slot_mentions(kerala, ("train", "flight")),
+            _slot_mentions(kerala, ("train", "flight")),
+        ),
+    ]
+
+
+async def check_d30(context, log):
+    """Amendment 2, D30: an unrelated reply and the end of the conversation
+    leave the pending detail unsaved."""
+    if not _learning_happened(context, "alt-05"):
+        return [_untested("learning ran", "a", "no learning happened for D30")]
+    rows = await _rows(context.memory)
+    goa = _plan_named(rows, "goa", current=False)
+    current = [p for p in goa if p["current"]]
+    when = _row_slot(current[0], "when") if current else {}
+    return [
+        _check("one Goa plan", "a", len(current) == 1, len(current)),
+        _check(
+            "April kept", "a", "april" in str(when.get("value", "")).casefold(), when
+        ),
+        _check(
+            "no Airbnb/hotel stored at any point",
+            "a",
+            not _slot_mentions(goa, ("airbnb", "hotel")),
+            _slot_mentions(goa, ("airbnb", "hotel")),
+        ),
+        _check(
+            "the new conversation carries no old question",
+            "b",
+            not _notes(context, "alt-07"),
+            _notes(context, "alt-07"),
+        ),
+    ]
+
+
 CHECKS = {
     "D1-A1": check_d1,
     "D1-R": check_d1_r,
@@ -3447,7 +3758,7 @@ CHECKS = {
     "D3": check_d3,
     "D4": check_d4,
     "D5": check_d5,
-    "D6": check_d6,
+    "D6-A2": check_d6_a2,
     "D7": check_d7,
     "D8": check_d8,
     "D9": check_d9,
@@ -3468,4 +3779,7 @@ CHECKS = {
     "D24": check_d24,
     "D25": check_d25,
     "D26": check_d26,
+    "D28": check_d28,
+    "D29": check_d29,
+    "D30": check_d30,
 }

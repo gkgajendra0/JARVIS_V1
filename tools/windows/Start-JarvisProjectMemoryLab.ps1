@@ -15,7 +15,7 @@ param(
     [switch]$Slice1Acceptance,
     [switch]$RetryInterrupted,
     [ValidateRange(0.5, 120)][double]$CallSpacingSeconds = 0,
-    [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','d1-regression','pages')][string[]]$Slice1Group,
+    [ValidateSet('story','explicit-list','ambiguous-bike','idiom','scale-11','scale-90','bytes','ambiguous-plan','d1-regression','alternatives','pages')][string[]]$Slice1Group,
     [switch]$PaidLane,
     [switch]$PaidCheckpoint,
     [switch]$RecoverD17Consent,

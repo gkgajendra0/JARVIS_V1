@@ -215,7 +215,70 @@ EXTRACT = {
     ],
 }
 
+EXTRACT.update(
+    {
+        # Amendment 2: the other answers to plan alternatives (group alternatives).
+        "We're going to Spiti in January, Thar or Jimny.": [
+            plan(
+                "Spiti",
+                "We're going to Spiti in January, Thar or Jimny.",
+                plan_status="planned",
+                slots={
+                    "destination": slot("Spiti"),
+                    "when": slot("January"),
+                    "vehicle": slot(options=("Thar", "Jimny")),
+                },
+            )
+        ],
+        "We'll take the Jimny.": [
+            plan(
+                "Spiti",
+                ["We're going to Spiti", "We'll take the Jimny."],
+                plan_status="planned",
+                slots={"vehicle": slot("Jimny")},
+            )
+        ],
+        "We're going to Kerala in March, train or flight.": [
+            plan(
+                "Kerala",
+                "We're going to Kerala in March, train or flight.",
+                plan_status="planned",
+                slots={
+                    "destination": slot("Kerala"),
+                    "when": slot("March"),
+                    "other": slot(options=("train", "flight")),
+                },
+            )
+        ],
+        "We're going to Goa in April, Airbnb or hotel.": [
+            plan(
+                "Goa",
+                "We're going to Goa in April, Airbnb or hotel.",
+                plan_status="planned",
+                slots={
+                    "destination": slot("Goa"),
+                    "when": slot("April"),
+                    "stay": slot(options=("Airbnb", "hotel")),
+                },
+            )
+        ],
+    }
+)
+
+# How the scripted extractor reads an answer to an open question: (answer,
+# detail); detail None answers every open question.
+ANSWERS = {
+    acceptance.D6_CONFIRMATION: [("confirmed", "destination")],
+    "We'll take the Jimny.": [("chosen", "vehicle")],
+    "Doesn't matter, either is fine.": [("doesnt_matter", None)],
+}
+
 RESOLVE = {
+    acceptance.D6_CONFIRMATION: [("match", "ladakh")],
+    "We'll take the Jimny.": [("match", "spiti")],
+    "We're going to Spiti in January, Thar or Jimny.": [("new", None)],
+    "We're going to Kerala in March, train or flight.": [("new", None)],
+    "We're going to Goa in April, Airbnb or hotel.": [("new", None)],
     "I bought the Tigor in March 2017, it's the diesel one.": [("match", "tigor")],
     "I sold the Tigor last week.": [("match", "tigor")],
     "I'm planning a Ladakh or winter Spiti trip in January.": [("new", None)],
@@ -251,7 +314,9 @@ class FakeGenai:
         )
         text = current["text"]
         stage = (
-            "extraction" if system_instruction == EXTRACTION_PROMPT else "resolution"
+            "extraction"
+            if system_instruction.startswith(EXTRACTION_PROMPT)
+            else "resolution"
         )
         self.calls.append((stage, text))
         if text in self.fail_on:
@@ -272,6 +337,16 @@ class FakeGenai:
                     evidence.append({"turn_id": turn["turn_id"], "quote": quote})
                 proposals.append({**proposal, "evidence": evidence})
             out = {"candidates": proposals}
+            questions = payload.get("open_questions") or []
+            if questions:
+                out["open_question_answers"] = [
+                    {"question_id": q["question_id"], "answer": answer}
+                    for answer, detail in ANSWERS.get(text, [])
+                    for q in questions
+                    if detail is None
+                    or detail in (q.get("choices") or {})
+                    or detail in (q.get("unclear") or [])
+                ]
         else:
             entries = payload["catalog"]["entries"]
             resolutions = []
@@ -284,11 +359,14 @@ class FakeGenai:
                         label = label.casefold()
                         return label == needle[1:] if exact else needle in label
 
-                    target = next(
-                        e["assertion_id"]
-                        for e in entries
-                        if names(json.loads(e["value"]).get("label", ""))
-                    )
+                    def matches(entry, names=names, exact=exact, needle=needle):
+                        stored = json.loads(entry["value"])
+                        return names(stored.get("label", "")) or (
+                            not exact
+                            and needle in str(stored.get("value", "")).casefold()
+                        )
+
+                    target = next(e["assertion_id"] for e in entries if matches(e))
                 resolutions.append(
                     {
                         "candidate_index": index,
@@ -301,6 +379,22 @@ class FakeGenai:
 
 
 DRIVER = {
+    acceptance.D6_CONFIRMATION: ("answer", "Okay."),
+    "We're going to Spiti in January, Thar or Jimny.": (
+        "answer",
+        "Are you still deciding between the Thar and the Jimny?",
+    ),
+    "We'll take the Jimny.": ("answer", "The Jimny it is."),
+    "We're going to Kerala in March, train or flight.": (
+        "answer",
+        "Still choosing between train and flight?",
+    ),
+    "Doesn't matter, either is fine.": ("answer", "Okay."),
+    "We're going to Goa in April, Airbnb or hotel.": (
+        "answer",
+        "Still deciding between an Airbnb and a hotel?",
+    ),
+    "What's the weather like there in April?": ("answer", "Warm and humid."),
     "We're planning a Rishikesh trip in October 2026.": ("answer", "Sounds lovely."),
     "I have a Royal Enfield Classic 350 from 2021, a Tata Tigor I bought in March 2017, and last month I got a Jimny.": (
         "answer",
@@ -605,30 +699,46 @@ def test_frozen_case_file_change_refuses_to_run(tmp_path):
 def test_every_development_case_is_planned_or_recorded():
     planned = set(acceptance.CASES_RUN) | set(acceptance.NOT_RUN_HERE)
     # Amendment 1: D1 runs as D1-A1 (amended wording) plus D1-R (regression).
-    assert planned == {f"D{i}" for i in range(2, 28)} | {"D1-A1", "D1-R"}
+    # Amendment 2: D6 runs as D6-A2 (with its confirmation turn); D28-D30 added.
+    assert planned == (
+        {f"D{i}" for i in range(2, 28)} - {"D6"}
+        | {"D1-A1", "D1-R", "D6-A2", "D28", "D29", "D30"}
+    )
     assert set(acceptance.CASES_RUN) == set(acceptance.CHECKS)
     # The frozen wording is used verbatim wherever the case gives it.
     frozen = (REPO / acceptance.ACCEPTANCE_FILE).read_text(encoding="utf-8")
     amended = (REPO / acceptance.AMENDMENT_1_FILE).read_text(encoding="utf-8")
+    amended_2 = (REPO / acceptance.AMENDMENT_2_FILE).read_text(encoding="utf-8")
     for group in acceptance.GROUPS.values():
         for step in group:
             if not isinstance(step, acceptance.Say) or "harness-chosen" in step.note:
                 continue
             if "amendment-1 wording" in step.note:
                 assert step.text in amended and step.text not in frozen, step.text
+            elif step.case in {"D28", "D29", "D30"} or "amendment-2" in step.note:
+                assert step.text in amended_2, step.text
             else:
                 assert step.text.casefold() in frozen.casefold(), step.text
     assert acceptance.D1_FROZEN_TEXT in frozen
 
 
-def test_amendment_1_is_verified_and_a_changed_file_refuses_to_run(tmp_path):
-    (active,) = acceptance.active_amendments(REPO)
-    assert active["id"] == "amendment-1" and active["status"] == "active"
-    target = tmp_path / acceptance.AMENDMENT_1_FILE
-    target.parent.mkdir(parents=True, exist_ok=True)
-    content = (REPO / acceptance.AMENDMENT_1_FILE).read_bytes().replace(b"\r\n", b"\n")
+@pytest.mark.parametrize("index", [0, 1])
+def test_amendments_are_verified_and_a_changed_file_refuses_to_run(tmp_path, index):
+    actives = acceptance.active_amendments(REPO)
+    assert [a["id"] for a in actives] == ["amendment-1", "amendment-2"]
+    assert all(a["status"] == "active" for a in actives)
+    for a in acceptance.ACCEPTANCE_AMENDMENTS:
+        target = tmp_path / a["file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((REPO / a["file"]).read_bytes())
+    name = acceptance.ACCEPTANCE_AMENDMENTS[index]["file"]
+    target = tmp_path / name
+    content = (REPO / name).read_bytes().replace(b"\r\n", b"\n")
     target.write_bytes(content.replace(b"\n", b"\r\n"))  # CRLF is not a change
-    assert acceptance.active_amendments(tmp_path)[0]["sha256"] == active["sha256"]
+    assert (
+        acceptance.active_amendments(tmp_path)[index]["sha256"]
+        == (actives[index]["sha256"])
+    )
     target.write_bytes(content.replace(b"APPROVED", b"PROPOSED", 1))
     with pytest.raises(ValueError, match="approved amendment file changed"):
         acceptance.active_amendments(tmp_path)
@@ -672,10 +782,13 @@ async def test_full_scripted_run_passes_every_automatic_check(lab):
     }
     assert failed == {}, json.dumps(failed, indent=1, default=str)[:4000]
     assert summary["automatic_verdict"] == "PASS_PENDING_MANUAL_REVIEW"
-    # Amendment 1 is active and identified in the report and on every row.
-    (amendment,) = summary["acceptance_amendments"]
-    assert amendment["id"] == "amendment-1" and amendment["status"] == "active"
-    assert amendment["sha256"] == acceptance.ACCEPTANCE_AMENDMENTS[0]["sha256"]
+    # Amendments 1 and 2 are active and identified in the report and on every row.
+    amendments = summary["acceptance_amendments"]
+    assert [a["id"] for a in amendments] == ["amendment-1", "amendment-2"]
+    assert all(a["status"] == "active" for a in amendments)
+    assert [a["sha256"] for a in amendments] == [
+        a["sha256"] for a in acceptance.ACCEPTANCE_AMENDMENTS
+    ]
     for row in log.read(log.cases):
         assert row["acceptance_amendments"] == summary["acceptance_amendments"]
     # D1-A1 passes on the amended wording (Classic bought in 2021).
@@ -693,9 +806,14 @@ async def test_full_scripted_run_passes_every_automatic_check(lab):
     assert superseded["detail"]["superseded_by"] == "amendment-1"
     assert superseded["detail"]["observed"] == [None, None, None]
     assert summary["cases"]["D1-R"]["status"] == acceptance.PASS
-    assert [e["check"] for e in summary["superseded_expectations"]] == [
-        "frozen D1 expectation: Classic acquired year 2021"
+    assert sorted(e["check"] for e in summary["superseded_expectations"]) == [
+        "frozen D1 expectation: Classic acquired year 2021",
+        "frozen D6 expectation: destination options from the statement",
     ]
+    # Amendment 2: D6-A2 (confirmation turn) passes; D28-D30 pass.
+    for case in ("D6-A2", "D28", "D29", "D30"):
+        assert summary["cases"][case]["status"] in {acceptance.PASS, acceptance.REVIEW}
+    assert "D6" not in summary["cases"]
     assert summary["d17_failed_stage"] is None
     assert "D17" in summary["required_gates"]
     hello = [c for c in summary["cases"]["D3"]["checks"] if c["check"] == "one Hello"]
@@ -751,13 +869,13 @@ async def test_wrong_model_output_fails_the_case(lab, monkeypatch):
     monkeypatch.setattr(sys.modules[__name__], "EXTRACT", wrong)
     runner, _ = lab.runner()
     summary = await runner.run(groups=("story",))
-    assert summary["cases"]["D6"]["status"] == acceptance.FAIL
+    assert summary["cases"]["D6-A2"]["status"] == acceptance.FAIL
     failing = {
         c["check"]
-        for c in summary["cases"]["D6"]["checks"]
+        for c in summary["cases"]["D6-A2"]["checks"]
         if c["status"] == acceptance.FAIL
     }
-    assert "destination options [Ladakh, winter Spiti]" in failing
+    assert "destination options [Ladakh, winter Spiti], undecided" in failing
 
 
 @pytest.mark.asyncio
@@ -794,7 +912,7 @@ async def test_quota_interruption_preserves_completed_steps_and_resume_never_rep
     }
     assert not [text for _, text in later if text in earlier_texts]
     assert log.step_states()["story-07"]["attempt"] == 2
-    assert summary["cases"]["D6"]["status"] == acceptance.PASS
+    assert summary["cases"]["D6-A2"]["status"] == acceptance.REVIEW  # (c) answer
     assert summary["cases"]["D1-A1"]["status"] == acceptance.PASS  # preserved
 
 
@@ -837,7 +955,7 @@ async def test_checkpoint_pauses_after_learning_lookup_and_answer_and_resume_nev
     assert not set(later_answers) & set(answers_before)
     assert summary["run_state"] in {"complete", "partial"}
     assert summary["cases"]["D5"] == d5_case  # checkpoint results preserved
-    assert summary["cases"]["D6"]["status"] == acceptance.PASS
+    assert summary["cases"]["D6-A2"]["status"] == acceptance.REVIEW  # (c) answer
     started = [r["step_id"] for r in log.read(log.steps) if r["status"] == "started"]
     assert len(started) == len(set(started))  # no step ran twice
 
@@ -855,14 +973,14 @@ async def test_a_definite_failure_stops_the_run_and_resume_refuses(lab, monkeypa
     ]
     monkeypatch.setattr(sys.modules[__name__], "EXTRACT", wrong)
     runner, log = lab.runner(stop_on_failure=True)
-    with pytest.raises(acceptance.AcceptanceStoppedOnFailure, match="D6 FAIL"):
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure, match="D6-A2 FAIL"):
         await runner.run(groups=("story",))
     states = log.step_states()
     assert states["story-07c"]["case_status"] == acceptance.FAIL
     assert "story-08" not in states  # no dependent case was run
     summary = json.loads(log.summary.read_text(encoding="utf-8"))
     assert summary["run_state"] == "stopped_on_failure"
-    assert summary["stopped_on_failure"]["case"] == "D6"
+    assert summary["stopped_on_failure"]["case"] == "D6-A2"
     calls = (list(lab.genai.calls), list(lab.driver.calls))
 
     # Resuming refuses before any model call; the failed answer is not retried.
@@ -2384,6 +2502,7 @@ async def test_paid4_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
         "no vehicle options": acceptance.PASS,
         "when January confirmed": acceptance.PASS,
         "no owned Thar": acceptance.PASS,
+        "at most one question, only about the vehicle": acceptance.PASS,
     }, summary["cases"]["D9"]
 
 
@@ -2442,6 +2561,7 @@ async def test_paid6_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
         "no vehicle options": acceptance.PASS,
         "when January confirmed": acceptance.PASS,
         "no owned Thar": acceptance.PASS,
+        "at most one question, only about the vehicle": acceptance.PASS,
     }, summary["cases"]["D9"]
     # The unclear vehicle reached the reply of the first turn, with what is
     # already known; the second turn (nothing unclear) carries no note.
@@ -2456,3 +2576,49 @@ async def test_paid6_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
     assert not {"saved", "stored", "status"} & set(note)
     later = [e["input"] for e in _events(log, "driver_step", "idiom-02")]
     assert later and all("learning_notes" not in p for p in later)
+
+
+# Amendment 2: plan alternatives wait for the owner ---------------------------
+
+
+@pytest.mark.asyncio
+async def test_amendment_2_alternatives_need_the_owners_confirmation(lab, monkeypatch):
+    """Without a confirmation the destination options are never stored, and
+    D6-A2 fails on them (not on the clear parts); the superseded frozen D6
+    expectation is reported, not graded."""
+    monkeypatch.setitem(ANSWERS, acceptance.D6_CONFIRMATION, [])
+    runner, log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    d6 = {c["check"]: c for c in summary["cases"]["D6-A2"]["checks"]}
+    assert d6["no destination options stored before confirmation"]["status"] == (
+        acceptance.PASS
+    )
+    assert d6["one question about the destination choices"]["status"] == (
+        acceptance.PASS
+    )
+    assert d6["destination options [Ladakh, winter Spiti], undecided"]["status"] == (
+        acceptance.FAIL
+    )
+    assert d6["when January"]["status"] == acceptance.PASS
+    superseded = d6["frozen D6 expectation: destination options from the statement"]
+    assert superseded["status"] == acceptance.SUPERSEDED
+    assert superseded["detail"]["superseded_by"] == "amendment-2"
+    # The confirmation turn's extraction was told the open question.
+    first_reply = [
+        e
+        for e in log.read(log.events)
+        if e.get("step_id") == "story-07" and e.get("kind") == "reply"
+    ]
+    (note,) = first_reply[0]["learning"]["clarification_notes"]
+    assert note["question"] == "confirm_alternatives"
+    assert note["choices"] == {"destination": ["Ladakh", "winter Spiti"]}
+    assert note["already_known"] == {"when": "January"}
+
+
+@pytest.mark.asyncio
+async def test_amendment_2_other_answers_pass_d28_to_d30(lab):
+    runner, _log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("alternatives",))
+    for case in ("D28", "D29", "D30"):
+        checks = {c["check"]: c["status"] for c in summary["cases"][case]["checks"]}
+        assert set(checks.values()) == {acceptance.PASS}, (case, checks)
