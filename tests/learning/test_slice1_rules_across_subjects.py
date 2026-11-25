@@ -422,7 +422,11 @@ def test_a_possibility_may_update_a_stored_possibility_and_a_fact_settles_it():
     assert action == "change" and still["certainty"] == "tentative"
     action, fact = _outcome(
         *_proposal(
-            "My swimming is at 7 now.", "routine", "swimming", value="at 7", intent="change"
+            "My swimming is at 7 now.",
+            "routine",
+            "swimming",
+            value="at 7",
+            intent="change",
         ),
         [entry],
         "match",
