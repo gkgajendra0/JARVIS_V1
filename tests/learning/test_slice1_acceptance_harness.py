@@ -263,14 +263,14 @@ class FakeGenai:
             proposals = []
             for proposal in EXTRACT.get(text, []):
                 proposal = dict(proposal)
-                quote = proposal.pop("quote")
-                turn = next(t for t in payload["turns"] if quote in t["text"])
-                proposals.append(
-                    {
-                        **proposal,
-                        "evidence": [{"turn_id": turn["turn_id"], "quote": quote}],
-                    }
-                )
+                quotes = proposal.pop("quote")
+                if isinstance(quotes, str):
+                    quotes = [quotes]
+                evidence = []
+                for quote in quotes:
+                    turn = next(t for t in payload["turns"] if quote in t["text"])
+                    evidence.append({"turn_id": turn["turn_id"], "quote": quote})
+                proposals.append({**proposal, "evidence": evidence})
             out = {"candidates": proposals}
         else:
             entries = payload["catalog"]["entries"]
@@ -2374,6 +2374,64 @@ async def test_paid4_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
     st = PAID4_D9["steps"]
     for step in ("idiom-01", "idiom-02"):
         monkeypatch.setitem(EXTRACT, st[step]["utterance"], _recorded_as_scripted(step))
+    runner, _log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("idiom",))
+    d9 = {c["check"]: c["status"] for c in summary["cases"]["D9"]["checks"]}
+    assert d9 == {
+        "one Spiti plan": acceptance.PASS,
+        "status planned": acceptance.PASS,
+        "destination Spiti": acceptance.PASS,
+        "no vehicle options": acceptance.PASS,
+        "when January confirmed": acceptance.PASS,
+        "no owned Thar": acceptance.PASS,
+    }, summary["cases"]["D9"]
+
+
+# Paid lab 6 D9: the second recorded shape, replayed offline -----------------------
+
+PAID6_D9 = json.loads(
+    (Path(__file__).parent / "fixtures" / "paid6_d9_recorded.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+def _lab6_as_scripted(step):
+    """The recorded proposal unmodified; each cited span is given as the
+    quote it covered in its own turn."""
+    st = PAID6_D9["steps"]
+    texts = {
+        "b23b2888-2fc8-49e6-98fa-7225f74cbcc2": st["idiom-01"]["utterance"],
+        "2ce657e5-28b6-4f09-abbc-cc297d7e7917": st["idiom-02"]["utterance"],
+    }
+    out = []
+    for raw in st[step]["extraction"]["candidates"]:
+        raw = json.loads(json.dumps(raw))
+        quotes = [
+            texts[span["turn_id"]][span["start"] : span["end"]]
+            for span in raw.pop("evidence")
+        ]
+        out.append({**raw, "quote": quotes})
+    return out
+
+
+@pytest.mark.asyncio
+async def test_paid6_recorded_d9_outputs_now_pass_d9(lab, monkeypatch):
+    """Paid lab 6 recorded D9 FAIL: the lone option ["Thar"] was promoted to a
+    tentative vehicle value. The same outputs (and the recorded "match" of the
+    second turn to the Spiti plan), replayed through the general rules, pass
+    the unchanged frozen checks."""
+    st = PAID6_D9["steps"]
+    (vehicle,) = [
+        c["slots"]["vehicle"] for c in st["idiom-01"]["extraction"]["candidates"]
+    ]
+    assert vehicle == {"value": None, "options": ["Thar"], "certainty": "tentative"}
+    for step in ("idiom-01", "idiom-02"):
+        monkeypatch.setitem(EXTRACT, st[step]["utterance"], _lab6_as_scripted(step))
+    assert [r["decision"] for r in st["idiom-02"]["resolution"]["resolutions"]] == [
+        "match"
+    ]
+    monkeypatch.setitem(RESOLVE, st["idiom-02"]["utterance"], [("match", "spiti")])
     runner, _log = lab.runner(stop_on_failure=True)
     summary = await runner.run(groups=("idiom",))
     d9 = {c["check"]: c["status"] for c in summary["cases"]["D9"]["checks"]}
