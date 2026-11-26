@@ -186,7 +186,10 @@ they are still choosing between those options (or confirms the meaning
 asked); chosen when the user chooses or states that detail (also propose the
 plan with that detail's value); doesnt_matter when the user says the detail
 does not matter or should be left out. Leave out questions the current turn
-does not answer. Do not propose the asked options again.
+does not answer. Each confirm_alternatives question covers one detail on one
+plan. A reply about one detail or plan does not answer another question.
+If the reply does not identify which question it answers, leave it out.
+Do not propose the asked options again.
 """
 
 

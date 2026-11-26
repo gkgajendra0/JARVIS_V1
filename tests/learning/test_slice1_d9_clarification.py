@@ -693,7 +693,9 @@ def _follow_up(board, conversation, *, idle):
 
     clock, asked = Clock(), []
 
-    async def deliver(notes):
+    async def deliver(notes, *, is_current):
+        if not is_current():
+            return False
         asked.append(notes)
         return True
 
@@ -900,3 +902,256 @@ def test_one_open_question_per_detail():
         choices=(("stay", ("hotel", "homestay")),),
     )
     assert board.offer(other)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("answer", "text", "expected_vehicle"),
+    [
+        (
+            "confirmed",
+            "Still deciding between both vehicles.",
+            {
+                "value": None,
+                "options": ["Thar", "Jimny"],
+                "certainty": "tentative",
+            },
+        ),
+        (
+            "chosen",
+            "We'll take the Jimny.",
+            {
+                "value": "Jimny",
+                "options": [],
+                "certainty": "confirmed",
+            },
+        ),
+        ("doesnt_matter", "The vehicle doesn't matter.", None),
+    ],
+)
+async def test_a_vehicle_answer_leaves_accommodation_open(
+    lab, answer, text, expected_vehicle
+):
+    lab.script.by_text[TWO_CHOICES] = _two_choices()
+    await lab.say(TWO_CHOICES)
+    lab.script.answers[text] = [(answer, "vehicle")]
+    lab.resolver.targets[text] = "Spiti"
+    if answer == "chosen":
+        lab.script.by_text[text] = _decision(text, "Jimny")
+    await lab.say(text)
+    (plan,) = await lab.plans()
+    assert "stay" not in plan["slots"]
+    assert plan["slots"].get("vehicle") == expected_vehicle
+    assert plan["slots"]["when"]["value"] == "January"
+    pending = lab.runtime.clarifications.pending(lab.conversation.session_id)
+    assert [note.model_view()["choices"] for note in pending] == [
+        {"stay": ["hotel", "homestay"]}
+    ]
+    assert len({note.question_id for note in lab.seen}) == 2
+    assert [note.details for note in lab.seen] == [("vehicle",), ("stay",)]
+
+    stay_answer = "Yes, still deciding between the hotel and homestay."
+    lab.script.answers[stay_answer] = [("confirmed", "stay")]
+    lab.resolver.targets[stay_answer] = "Spiti"
+    await lab.say(stay_answer)
+    (plan,) = await lab.plans()
+    assert plan["slots"]["stay"] == {
+        "value": None,
+        "options": ["hotel", "homestay"],
+        "certainty": "tentative",
+    }
+    assert plan["slots"].get("vehicle") == expected_vehicle
+
+
+TWO_CHOICES = "We're going to Spiti in January, Thar or Jimny, hotel or homestay."
+
+
+def _two_choices():
+    return _said(
+        TWO_CHOICES,
+        "Spiti",
+        slots={
+            "when": {"value": "January", "certainty": "confirmed"},
+            "vehicle": {"options": ["Thar", "Jimny"], "certainty": "tentative"},
+            "stay": {"options": ["hotel", "homestay"], "certainty": "tentative"},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_both_details_can_be_confirmed_in_one_reply(lab):
+    lab.script.by_text[TWO_CHOICES] = _two_choices()
+    await lab.say(TWO_CHOICES)
+    confirm = "Yes, still deciding on both the vehicle and the accommodation."
+    lab.script.answers[confirm] = [("confirmed", "vehicle"), ("confirmed", "stay")]
+    lab.resolver.targets[confirm] = "Spiti"
+    await lab.say(confirm)
+    (plan,) = await lab.plans()
+    assert plan["slots"]["vehicle"]["options"] == ["Thar", "Jimny"]
+    assert plan["slots"]["stay"]["options"] == ["hotel", "homestay"]
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("spiti_confirmed", [False, True], ids=["open", "stored"])
+async def test_same_options_for_another_plan_still_get_their_own_question(
+    lab, spiti_confirmed
+):
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    if spiti_confirmed:
+        confirm = "Yes, still deciding between vehicles for Spiti."
+        lab.script.answers[confirm] = [("confirmed", "vehicle")]
+        lab.resolver.targets[confirm] = "Spiti"
+        await lab.say(confirm)
+
+    goa = "We're going to Goa in April, Thar or Jimny."
+    lab.script.by_text[goa] = _said(
+        goa,
+        "Goa",
+        slots={
+            "when": {"value": "April", "certainty": "confirmed"},
+            "vehicle": {"options": ["Thar", "Jimny"], "certainty": "tentative"},
+        },
+    )
+    await lab.say(goa)
+    assert len(lab.seen) == 2
+    spiti_note, goa_note = lab.seen
+    assert (spiti_note.subject, goa_note.subject) == ("Spiti", "Goa")
+    assert spiti_note.question_id != goa_note.question_id
+
+    goa_choice = "We'll take the Jimny to Goa."
+    lab.script.by_text[goa_choice] = _said(
+        goa_choice,
+        "Goa",
+        slots={"vehicle": {"value": "Jimny", "certainty": "confirmed"}},
+    )
+    lab.resolver.targets[goa_choice] = "Goa"
+    await lab.say(goa_choice)
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert plans["Goa"]["slots"]["vehicle"]["value"] == "Jimny"
+    assert plans["Spiti"]["slots"].get("vehicle") == (
+        {"value": None, "options": ["Thar", "Jimny"], "certainty": "tentative"}
+        if spiti_confirmed
+        else None
+    )
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == (
+        [] if spiti_confirmed else [spiti_note]
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_slot_only_decision_keeps_the_plan_available_by_name(lab, learning):
+    from jarvis.memory.personal_context_projection import (
+        ScopedContextSnapshot,
+        parse_context_requests,
+        project_personal_context,
+    )
+
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    confirm = "Yes, still deciding between vehicles."
+    lab.script.answers[confirm] = [("confirmed", "vehicle")]
+    lab.resolver.targets[confirm] = "Spiti"
+    await lab.say(confirm)
+    (before,) = await learning.service.canonical_reader.learning_current()
+
+    take = "We'll take Jimny."
+    lab.script.by_text[take] = _said(
+        take,
+        "Jimny",
+        slots={"vehicle": {"value": "Jimny", "certainty": "confirmed"}},
+    )
+    lab.resolver.targets[take] = "Spiti"
+    await lab.say(take)
+
+    entries = await learning.service.canonical_reader.learning_current_scoped()
+    ((after, scope),) = entries
+    assert after.predicate == before.predicate
+    assert after.supersedes_id == before.assertion_id
+    assert (after.value["label"], after.value["value"]) == ("Spiti", "Spiti")
+    assert after.value["slots"]["vehicle"]["value"] == "Jimny"
+    requests = parse_context_requests(
+        [{"scope_key": scope, "target_quote": "Spiti"}],
+        question="Which vehicle did I choose for Spiti?",
+    )
+    result = project_personal_context(ScopedContextSnapshot(entries, ()), requests)
+    assert result.status == "selected"
+    assert "Jimny" in str(result.facts)
+
+
+@pytest.mark.asyncio
+async def test_a_shorter_reference_to_the_same_plan_keeps_one_question(lab):
+    first = "The winter Spiti trip is in January, Thar or Jimny."
+    slots = {"vehicle": {"options": ["Thar", "Jimny"], "certainty": "tentative"}}
+    lab.script.by_text[first] = _said(first, "winter Spiti trip", slots=slots)
+    await lab.say(first)
+    (question,) = lab.seen
+    repeat = "For Spiti, we could take the Thar or Jimny."
+    lab.script.by_text[repeat] = _said(repeat, "Spiti", slots=slots)
+    lab.resolver.targets[repeat] = "winter Spiti trip"
+    await lab.say(repeat)
+    assert lab.seen == [question]
+
+    choice = "We will take the Jimny to Spiti."
+    lab.script.by_text[choice] = _said(
+        choice,
+        "Spiti",
+        slots={"vehicle": {"value": "Jimny", "certainty": "confirmed"}},
+    )
+    lab.resolver.targets[choice] = "winter Spiti trip"
+    await lab.say(choice)
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []
+    (plan,) = await lab.plans()
+    assert plan["label"] == "winter Spiti trip"
+    assert plan["slots"]["vehicle"]["value"] == "Jimny"
+
+
+@pytest.mark.asyncio
+async def test_confirmation_cannot_create_a_second_plan_when_referred_to_by_alias(lab):
+    first = "We're planning our winter Spiti trip."
+    lab.script.by_text[first] = _said(first, "winter Spiti trip")
+    await lab.say(first)
+    options = "For Spiti, we'll take a Thar or Jimny."
+    lab.script.by_text[options] = _said(
+        options,
+        "Spiti",
+        slots={"vehicle": {"options": ["Thar", "Jimny"], "certainty": "tentative"}},
+    )
+    lab.resolver.targets[options] = "winter Spiti trip"
+    await lab.say(options)
+    (question,) = lab.seen
+    confirm = "Yes, still deciding between both vehicles."
+    lab.script.answers[confirm] = [("confirmed", "vehicle")]
+    # A resolver that calls the shorter name a new plan must not create one.
+    await lab.say(confirm)
+    (plan,) = await lab.plans()
+    assert plan["label"] == "winter Spiti trip"
+    assert "vehicle" not in plan.get("slots", {})
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == [question]
+
+    lab.resolver.targets[confirm] = "winter Spiti trip"
+    await lab.say(confirm)
+    (plan,) = await lab.plans()
+    assert plan["slots"]["vehicle"]["options"] == ["Thar", "Jimny"]
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []
+
+
+@pytest.mark.asyncio
+async def test_same_plan_with_confirmed_options_isnt_asked_again_under_an_alias(lab):
+    first = "We're planning our winter Spiti trip, Thar or Jimny."
+    slots = {"vehicle": {"options": ["Thar", "Jimny"], "certainty": "tentative"}}
+    lab.script.by_text[first] = _said(first, "winter Spiti trip", slots=slots)
+    await lab.say(first)
+    confirm = "Yes, still deciding between both vehicles."
+    lab.script.answers[confirm] = [("confirmed", "vehicle")]
+    lab.resolver.targets[confirm] = "winter Spiti trip"
+    await lab.say(confirm)
+    (question,) = lab.seen
+
+    repeat = "For Spiti, the Thar or Jimny are both options."
+    lab.script.by_text[repeat] = _said(repeat, "Spiti", slots=slots, plan_status=None)
+    lab.resolver.targets[repeat] = "winter Spiti trip"
+    await lab.say(repeat)
+    assert lab.seen == [question]
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []

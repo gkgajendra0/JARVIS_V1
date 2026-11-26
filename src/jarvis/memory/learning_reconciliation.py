@@ -86,6 +86,8 @@ class LearningPlan:
     mutations: tuple[PlannedLearningMutation, ...]
     suppression_epochs: tuple[tuple[str, int], ...] = ()
     outcomes: tuple[LearningOutcome, ...] = ()
+    # Ephemeral clarification bookkeeping, excluded from write authorization.
+    matched_plan_ids: tuple[tuple[int, str], ...] = ()
 
     @property
     def digest(self):
@@ -237,8 +239,11 @@ class LearningReconciler:
         batch: LearningBatch,
         catalog: LearningCatalog,
         resolutions: LearningResolutionBatch,
+        *,
+        confirmation_targets: dict[int, str] | None = None,
     ) -> LearningPlan:
         by_id = {entry.assertion_id: entry for entry in catalog.entries}
+        confirmation_targets = confirmation_targets or {}
         choices = {}
         duplicate_indices = set()
         for choice in resolutions.resolutions:
@@ -247,6 +252,7 @@ class LearningReconciler:
             choices[choice.candidate_index] = choice
         mutations = []
         outcomes = []
+        matched_plan_ids = {}
         used = set()
         trip_choices = _trip_choices(batch)
         for index, candidate in enumerate(batch.candidates):
@@ -330,13 +336,41 @@ class LearningReconciler:
             if len(same) > 1:
                 skip("ambiguous_existing_fact")
                 continue
-            refine_target = None
-            decision_only = False
+            named_target = same[0] if same else None
+            compatible_match = (
+                choice.decision in {"match", "duplicate"}
+                and entry is not None
+                and entry.category == candidate.category
+                and entry.kind == candidate.kind
+            )
+            if (
+                named_target is None
+                and compatible_match
+                and (
+                    _label(entry) == normalize_memory_surface(candidate.label)
+                    # A shorter name for exactly one item ("the Tigor"
+                    # for "Tata Tigor"); never between two plausible items.
+                    or unique_reference(entry, candidate.label, catalog.entries)
+                )
+            ):
+                named_target = entry
+            if candidate.category == "plan":
+                if named_target is not None:
+                    matched_plan_ids[index] = named_target.assertion_id
+                elif compatible_match and _names_entry(
+                    candidate, entry, catalog.entries
+                ):
+                    # A longer reference may identify an existing question
+                    # without satisfying the narrower rules for a write.
+                    matched_plan_ids[index] = entry.assertion_id
+
             added = (
                 _added_detail(candidate, source)
                 if candidate.intent == "new" and candidate.category not in SCALAR_FACETS
                 else {}
             )
+            refine_target = named_target if added else None
+            decision_only = False
             if (
                 date_issue
                 and not added
@@ -347,37 +381,26 @@ class LearningReconciler:
                 # nothing to apply, recorded rather than silently dropped.
                 skip(date_issue)
                 continue
-            if added:
-                if same:
-                    refine_target = same[0]
-                elif (
-                    choice.decision in {"match", "duplicate"}
-                    and entry is not None
-                    and entry.category == candidate.category
-                    and entry.kind == candidate.kind
-                    and (
-                        _label(entry) == normalize_memory_surface(candidate.label)
-                        # A shorter name for exactly one item ("the Tigor"
-                        # for "Tata Tigor"); never between two plausible items.
-                        or unique_reference(entry, candidate.label, catalog.entries)
-                    )
-                ):
-                    refine_target = entry
-                elif candidate.category == "plan" and _option_decision_target(
+            if (
+                added
+                and refine_target is None
+                and candidate.category == "plan"
+                and _option_decision_target(
                     choice, entry, candidate, added, catalog.entries
-                ):
-                    # The new words name the decision, not the stored plan
-                    # (run 5: stored label "trip", new label "winter Spiti").
-                    # The chosen option itself identifies the plan: it must be
-                    # one of this plan's stated alternatives and of no other
-                    # current plan. Only the option-decision change is allowed
-                    # through this route, never a refine. The plan keeps its
-                    # own kind: a plan's kind is not part of what identifies
-                    # it (Paid lab D10: the decision naming a vehicle was
-                    # proposed as kind "vehicle").
-                    refine_target, decision_only = entry, True
-                    if candidate.kind != entry.kind:
-                        candidate = candidate.model_copy(update={"kind": entry.kind})
+                )
+            ):
+                # The chosen option identifies the plan when it is one of the
+                # alternatives on only that plan. Only that decision can
+                # change the plan through this route, which keeps its kind.
+                refine_target, decision_only = entry, True
+                if candidate.kind != entry.kind:
+                    candidate = candidate.model_copy(update={"kind": entry.kind})
+            required = confirmation_targets.get(index)
+            if required is not None and (
+                refine_target is None or refine_target.predicate != required
+            ):
+                skip("confirmation_target_mismatch")
+                continue
             if refine_target is not None:
                 try:
                     old_value = json.loads(refine_target.value)
@@ -386,6 +409,8 @@ class LearningReconciler:
                 if not isinstance(old_value, dict):
                     skip("already_stored")
                     continue
+                if candidate.category == "plan":
+                    matched_plan_ids[index] = refine_target.assertion_id
                 # Recomputed with the stored value as context (a restated
                 # acquired month may then get its inferred year).
                 added = _added_detail(candidate, source, old_value) or added
@@ -435,6 +460,10 @@ class LearningReconciler:
                         skip("conflicting_mutations")
                         continue
                     used.add(predicate)
+                    value = _changed_value(old_value, candidate, source)
+                    for key in ("label", "value"):
+                        if key in old_value:
+                            value[key] = old_value[key]
                     mutations.append(
                         self._mutation(
                             index,
@@ -443,7 +472,7 @@ class LearningReconciler:
                             "change",
                             predicate,
                             expected,
-                            _changed_value(old_value, candidate, source),
+                            value,
                             others=_other_labels(batch, index),
                         )
                     )
@@ -627,6 +656,7 @@ class LearningReconciler:
             tuple(mutations),
             tuple(sorted(catalog.suppression_epochs.items())),
             tuple(outcomes),
+            tuple(matched_plan_ids.items()),
         )
 
     @staticmethod

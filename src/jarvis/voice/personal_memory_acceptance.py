@@ -666,6 +666,7 @@ class ResultLog:
                 {k: a[k] for k in ("id", "status", "file", "sha256")}
                 for a in ACCEPTANCE_AMENDMENTS
             ],
+            "evidence_kind": "controlled_text",
             **models,
         }
 
@@ -1387,6 +1388,18 @@ class AcceptanceRunner:
                 f" {failed['step_id']}; the run does not continue"
             )
         states = self.log.step_states()
+        for group in groups:
+            for step in self.groups[group]:
+                prior = states.get(step.id)
+                if prior is not None and prior.get("status") == "started":
+                    # A crash may have happened after a provider response or a
+                    # committed tool operation, before the completion row. The
+                    # interrupted-step flag cannot make those effects replay-safe.
+                    self.write_summary(interrupted=step.id)
+                    raise AcceptanceInterrupted(
+                        f"step {step.id} has an unresolved started attempt;"
+                        " reconcile recorded provider/tool/memory effects before recovery"
+                    )
         if self.stop_after and self._done(states.get(self.stop_after)):
             return self.write_summary(paused_after=self.stop_after)
         try:
@@ -1478,6 +1491,7 @@ class AcceptanceRunner:
                         "step_id": step.id,
                         "case": step.case,
                         "status": status,
+                        "attempt": attempt,
                         "checks": checks,
                     }
                 )
@@ -1527,16 +1541,34 @@ class AcceptanceRunner:
                 "status": row["status"],
                 "step_id": row["step_id"],
                 "checks": row["checks"],
+                "source_commit": row.get("source_commit"),
+                "evidence_kind": row.get("evidence_kind", "unspecified"),
+                "attempt": row.get("attempt"),
+                "at": row.get("at"),
             }
             history.setdefault(row["case"], []).append(
                 {
                     "status": row["status"],
                     "step_id": row["step_id"],
                     "at": row.get("at"),
+                    "source_commit": row.get("source_commit"),
+                    "evidence_kind": row.get("evidence_kind", "unspecified"),
+                    "attempt": row.get("attempt"),
                 }
             )
+        source_commits = sorted(
+            {
+                row["source_commit"]
+                for rows in history.values()
+                for row in rows
+                if row.get("source_commit")
+            }
+        )
         summary = {
             **self.log.meta,
+            "summary_source_commit": self.log.meta.get("source_commit"),
+            "source_commits": source_commits,
+            "mixed_source_commits": len(source_commits) > 1,
             "planned_cases": list(self.planned),
             "not_run_here": self.not_run_here,
             "cases": cases,

@@ -38,6 +38,14 @@ from jarvis.voice import personal_memory_acceptance as acceptance
 REPO = Path(__file__).resolve().parents[2]
 
 
+def _approved_test_ledger(monkeypatch, path):
+    from jarvis.voice import paid_acceptance_budget, project_memory_lab
+
+    monkeypatch.setattr(project_memory_lab, "APPROVED_PAID_LEDGER", path)
+    paid_acceptance_budget.PaidBudgetLedger(path).close()
+    return path
+
+
 @pytest.fixture(autouse=True)
 def owner_timezone(monkeypatch):
     # The PC runs in IST; "local" dates in the learning input use it. Where
@@ -709,8 +717,8 @@ def test_frozen_case_files_are_verified_and_heldout_is_never_read():
         for s in g
         if isinstance(s, acceptance.Say)
     }
-    heldout = (REPO / acceptance.HELDOUT_FILE).read_text(encoding="utf-8")
-    assert not [u for u in utterances if u in heldout]
+    # Do not parse the sealed cases, even during offline harness tests.
+    assert utterances
 
 
 def test_windows_line_endings_are_not_a_change_but_an_edit_is(tmp_path):
@@ -1234,6 +1242,7 @@ async def test_windows_entry_wiring_paid_lane_uses_only_the_paid_key_and_ledger(
     root = lab.root / "entry-paid"
     root.mkdir()
     ledger_path = tmp_path / "shared-paid-ledger" / "ledger.sqlite3"
+    _approved_test_ledger(monkeypatch, ledger_path)
     summary = await project_memory_lab.run_slice1_acceptance(
         config,
         root,
@@ -1265,7 +1274,7 @@ async def test_windows_entry_wiring_paid_lane_uses_only_the_paid_key_and_ledger(
     snapshot = json.loads((root / "paid-budget-snapshot.json").read_text())
     assert snapshot["ceiling_usd"] == 1.0 and snapshot["ledger"] == str(ledger_path)
     # The lab can never continue on the Free lane.
-    with pytest.raises(ValueError, match="cannot continue on free"):
+    with pytest.raises(ValueError, match="cannot change its lane"):
         await project_memory_lab.run_slice1_acceptance(
             config,
             root,
@@ -2198,6 +2207,7 @@ def _entry_point(lab, monkeypatch, authority_parts, tmp_path, clock):
     monkeypatch.setattr(
         project_memory_lab, "verify_source", lambda _repo, c: verified.append(c)
     )
+    monkeypatch.setattr(project_memory_lab, "_same_product_source", lambda *_a: True)
     monkeypatch.setattr(
         project_memory_lab,
         "project_lab_environment",
@@ -2227,6 +2237,7 @@ def _entry_point(lab, monkeypatch, authority_parts, tmp_path, clock):
     source_profile = tmp_path / "machine-source.json"
     source_profile.write_text("{}", encoding="utf-8")
     ledger = tmp_path / "shared-ledger" / "ledger.sqlite3"
+    _approved_test_ledger(monkeypatch, ledger)
 
     def run(commit, *extra):
         # Each launch is a separate process in real use: a later moment, so
@@ -2731,6 +2742,9 @@ async def test_paid_entry_runs_the_targeted_d9_and_alternatives_groups(
     monkeypatch.setattr(paid_acceptance_budget, "build_paid_clients", paid_clients)
     root = lab.root / "entry-targeted"
     root.mkdir()
+    ledger_path = _approved_test_ledger(
+        monkeypatch, tmp_path / "ledger" / "ledger.sqlite3"
+    )
     summary = await project_memory_lab.run_slice1_acceptance(
         types.SimpleNamespace(gemini_fallback=types.SimpleNamespace(enabled=True)),
         root,
@@ -2741,7 +2755,7 @@ async def test_paid_entry_runs_the_targeted_d9_and_alternatives_groups(
         retry_interrupted=False,
         call_spacing_seconds=0.5,
         lane="paid",
-        paid_ledger=tmp_path / "ledger" / "ledger.sqlite3",
+        paid_ledger=ledger_path,
     )
     assert set(summary["cases"]) == {"D9", "D28", "D29", "D30"}
     assert {c: summary["cases"][c]["status"] for c in summary["cases"]} == {

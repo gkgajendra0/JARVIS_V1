@@ -61,9 +61,60 @@ def verify_source(repo: Path, expected: str):
 
 
 RECOVERY_SOURCE = "recovery-source.json"
+LAB_ONLY_SOURCE_PATHS = frozenset(
+    "src/jarvis/voice/" + name + ".py"
+    for name in (
+        "heldout_player",
+        "paid_acceptance_budget",
+        "personal_memory_acceptance",
+        "project_memory_lab",
+    )
+)
 
 
-def _resume_allowed(lab: Path, marker: Path, commit, recovery_resume: bool) -> bool:
+def _same_product_source(source: Path, original: str, recovery: str) -> bool:
+    """Consent recovery may change lab tooling, never the product it tested."""
+    if any(
+        not isinstance(sha, str)
+        or len(sha) != 40
+        or any(c not in "0123456789abcdef" for c in sha)
+        for sha in (original, recovery)
+    ):
+        return False
+    try:
+        changed = subprocess.check_output(
+            [
+                "git",
+                "-C",
+                str(source),
+                "diff",
+                "--name-only",
+                "--no-renames",
+                original,
+                recovery,
+                "--",
+                "src",
+                "policies",
+                "pyproject.toml",
+                "uv.lock",
+                "requirements*.txt",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).splitlines()
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return not (set(changed) - LAB_ONLY_SOURCE_PATHS)
+
+
+def _resume_allowed(
+    lab: Path,
+    marker: Path,
+    commit,
+    recovery_resume: bool,
+    *,
+    source: Path | None = None,
+) -> bool:
     """A lab resumes on the commit its marker records. The only exception is
     the slice-1 D17 consent recovery: its first entry may run a later commit
     (the runner then validates the recovery before anything is sent and
@@ -79,6 +130,10 @@ def _resume_allowed(lab: Path, marker: Path, commit, recovery_resume: bool) -> b
     except ValueError:
         return False
     if recorded.get("kind") != MARKER or recorded.get("commit") == commit:
+        return False
+    if source is None or not _same_product_source(
+        source, recorded.get("commit"), commit
+    ):
         return False
     path = lab / RECOVERY_SOURCE
     if path.is_file():
@@ -108,7 +163,7 @@ def prepare_project_profile(
         raise ValueError("profile must be isolated")
     marker = lab / "project-memory.marker"
     if resume:
-        if not _resume_allowed(lab, marker, commit, recovery_resume):
+        if not _resume_allowed(lab, marker, commit, recovery_resume, source=source):
             raise ValueError("only this exact-source marked lab can resume")
         profile = (lab / "machine.json").resolve(strict=True)
         if profile.parent != lab:
@@ -713,22 +768,53 @@ CHECKPOINT_ALLOWANCE = ("slice1-paid-checkpoint-1", 100_000)
 # Owner instruction 2026-11-24 14:48: the D17 consent recovery reruns one
 # turn; it may use at most USD 0.05 of the same shared budget.
 D17_RECOVERY_ALLOWANCE = ("slice1-paid-d17-recovery-1", 50_000)
+# This approval is one lifetime budget, not a new budget per lab or filename.
+APPROVED_PAID_LEDGER = Path(r"E:\Jarvis\Temp\slice1-paid-budget\ledger.sqlite3")
+LANE_MARKER = "acceptance-lane.json"
 
 
 def check_lane(root: Path, lane: str, paid_ledger) -> None:
-    """A lab runs on exactly one lane; a resumed lab never changes lane."""
+    """Pin lane and the designated shared ledger before clients are created."""
     if lane not in {"free", "paid"}:
         raise ValueError("lane must be free or paid")
     if (lane == "paid") != (paid_ledger is not None):
         raise ValueError("the paid lane requires its ledger, and only it")
+    ledger = Path(paid_ledger).resolve() if paid_ledger is not None else None
+    if ledger is not None:
+        if ledger != APPROVED_PAID_LEDGER.resolve():
+            raise ValueError("Paid ledger differs from the approved shared ledger")
+        if not ledger.is_file():
+            raise ValueError(
+                "Shared Paid ledger is missing; explicit budget recovery required"
+            )
+    expected = {"lane": lane, "ledger": str(ledger) if ledger is not None else None}
+    marker = root / LANE_MARKER
+    if marker.exists() and json.loads(marker.read_text(encoding="utf-8")) != expected:
+        raise ValueError("This lab cannot change its lane or shared Paid ledger")
     steps_file = root / "acceptance-steps.jsonl"
     if steps_file.exists():
         first = steps_file.read_text(encoding="utf-8").splitlines()[:1]
-        recorded = json.loads(first[0]).get("lane") if first else None
+        row = json.loads(first[0]) if first else {}
+        recorded = row.get("lane")
         if recorded is not None and recorded != lane:
             raise ValueError(
                 f"this lab ran on the {recorded} lane; it cannot continue on {lane}"
             )
+        if recorded == "paid":
+            previous = (row.get("paid_budget") or {}).get("ledger")
+            if not previous or Path(previous).resolve() != ledger:
+                raise ValueError("This lab's recorded Paid ledger cannot be replaced")
+    if not marker.exists():
+        try:
+            with marker.open("x", encoding="utf-8") as stream:
+                json.dump(expected, stream, sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except FileExistsError:
+            if json.loads(marker.read_text(encoding="utf-8")) != expected:
+                raise ValueError(
+                    "This lab cannot change its lane or shared Paid ledger"
+                ) from None
 
 
 async def run_slice1_acceptance(

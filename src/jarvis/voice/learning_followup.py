@@ -22,7 +22,7 @@ import logging
 from time import monotonic
 from uuid import uuid4
 
-from jarvis.conversation import ConversationRole
+from jarvis.conversation import ConversationRole, ConversationStatus
 from jarvis.voice.voice_output_safety import (
     note_generation_instructions,
     register_internal_text,
@@ -32,10 +32,11 @@ LOGGER = logging.getLogger(__name__)
 
 NOTE_PREFIX = "[From Jarvis, not speech from the owner.] learning_note: "
 FOLLOW_UP_REQUEST = (
-    "[From Jarvis, not speech from the owner.] Ask the owner, in one short "
-    "natural question, the open question in the learning note above: what they "
+    "[From Jarvis, not speech from the owner.] Ask the owner one short "
+    "natural question for each open detail in the learning note above: what they "
     "meant about the unclear detail, or whether they are still choosing between "
-    "the listed choices. Do not ask about anything already known, and do not "
+    "the listed choices. Keep each plan and detail separate so an answer to one "
+    "does not confirm another. Do not ask about anything already known, and do not "
     "mention memory or saving."
 )
 ACK = "Noted."
@@ -46,17 +47,25 @@ def note_message(notes) -> str:
     return NOTE_PREFIX + json.dumps([n.model_view() for n in notes], ensure_ascii=False)
 
 
-def _latest_owner_turn_id(conversation):
+def _latest_owner_turn(conversation):
     for turn in reversed(conversation.turns):
         if turn.role is ConversationRole.USER:
-            return turn.turn_id
+            return turn
     return None
 
 
-async def inject_learning_note(session, notes, *, register=None) -> bool:
-    """Add the note as a completed exchange and request the question."""
+async def inject_learning_note(
+    session, notes, *, register=None, is_current=None
+) -> bool:
+    """Add the note as a completed exchange and request the question.
+
+    If delivery becomes obsolete, clean the agent's local context. Gemini
+    Live cannot recall items already sent to the provider.
+    """
     from livekit.agents.llm import ChatContext, ChatMessage
 
+    if is_current is not None and not is_current():
+        return False
     agent = getattr(session, "current_agent", None)
     if agent is None or not callable(getattr(agent, "update_chat_ctx", None)):
         return False
@@ -83,9 +92,35 @@ async def inject_learning_note(session, notes, *, register=None) -> bool:
         register(ChatContext(items=list(items)))
     context = agent.chat_ctx.copy()
     context.items.extend(items)
-    await agent.update_chat_ctx(context)
-    session.generate_reply(allow_interruptions=True)
-    return True
+    delivered = False
+    try:
+        await agent.update_chat_ctx(context)
+        if (is_current is not None and not is_current()) or getattr(
+            session, "current_agent", None
+        ) is not agent:
+            return False
+        session.generate_reply(allow_interruptions=True)
+        delivered = True
+        return True
+    finally:
+        if not delivered:
+            # The provider update may have yielded after the agent accepted a
+            # newer owner turn. Remove only our items from its latest context.
+            try:
+                current_context = agent.chat_ctx.copy()
+                injected_ids = {item.id for item in items}
+                kept = [
+                    item
+                    for item in current_context.items
+                    if item.id not in injected_ids
+                ]
+                if len(kept) != len(current_context.items):
+                    current_context.items = kept
+                    await agent.update_chat_ctx(current_context)
+            except Exception as exc:  # noqa: BLE001 - preserve delivery failure/cancellation
+                LOGGER.warning(
+                    "Learning follow-up cleanup failed | error=%s", type(exc).__name__
+                )
 
 
 class LearningFollowUp:
@@ -112,10 +147,15 @@ class LearningFollowUp:
         self.delivered: list = []
 
     def _current(self, note) -> bool:
+        owner_turn = _latest_owner_turn(self.conversation)
         return (
             not self._closed
+            and self.conversation.status is ConversationStatus.ACTIVE
             and note.session_id == self.conversation.session_id
-            and _latest_owner_turn_id(self.conversation) == note.turn_id
+            and owner_turn is not None
+            and owner_turn.turn_id == note.turn_id
+            and (owner_turn.user_activity_epoch or 0)
+            == self.conversation.user_activity_epoch
         )
 
     def offer(self, note) -> None:
@@ -138,8 +178,12 @@ class LearningFollowUp:
         notes = self.board.take(note.session_id, note.turn_id)
         if not notes:
             return  # already asked, or settled by a later statement
+
+        def is_current():
+            return self.idle() and self._current(note)
+
         try:
-            if await self.deliver(notes):
+            if await self.deliver(notes, is_current=is_current):
                 self.delivered.append(notes)
         except Exception as exc:  # noqa: BLE001 - the conversation continues
             LOGGER.warning(
@@ -147,7 +191,9 @@ class LearningFollowUp:
             )
 
     async def close(self) -> None:
-        self._closed = True
-        for task in tuple(self._tasks):
-            task.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+        tasks = tuple(self._tasks)
+        if not self._closed:
+            self._closed = True
+            for task in tasks:
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
