@@ -27,7 +27,9 @@ from .learning_policy import SCALAR_FACETS, LearningPolicy
 from .learning_temporal import (
     HISTORY_CATEGORIES,
     POSSIBILITY_CATEGORIES,
+    normalize_plan_time,
     occurrence_matches,
+    plan_time_restated,
     temporal_context,
 )
 from .learning_values import (
@@ -256,6 +258,7 @@ class LearningReconciler:
         used = set()
         trip_choices = _trip_choices(batch)
         for index, candidate in enumerate(batch.candidates):
+            candidate = normalize_plan_time(candidate)
 
             def skip(reason, *, index=index, candidate=candidate, record=True):
                 log_learning(
@@ -483,6 +486,24 @@ class LearningReconciler:
                 if merged is None:
                     skip(reason)
                     continue
+                if candidate.category == "plan" and "when" in added.get("slots", {}):
+                    # Adding a schedule detail must also fill its calendar.
+                    # A refinement cannot change an already stated window,
+                    # including a relative date re-anchored to a later turn.
+                    fresh_time = temporal_context(source, candidate)
+                    old_time = old_value.get("temporal") or {}
+                    if old_time.get("expression"):
+                        keys = ("precision", "earliest", "latest")
+                        same = all(old_time.get(k) == fresh_time.get(k) for k in keys)
+                        if old_time.get("precision") in {None, "unresolved"}:
+                            same = same and old_time.get(
+                                "expression"
+                            ) == fresh_time.get("expression")
+                        if not same:
+                            skip("refine_conflicts_existing_detail")
+                            continue
+                    else:
+                        merged["temporal"] = fresh_time
                 if predicate in used:
                     skip("conflicting_mutations")
                     continue
@@ -1162,9 +1183,13 @@ def _corrected_plan_value(old, fresh, candidate, entry, entries):
     if changed:
         value["slots"] = {**old_slots, **changed}
         restated = True
-    old_time = (old.get("temporal") or {}).get("expression")
-    if candidate.time_expression and fresh["temporal"].get("expression") != old_time:
-        value["temporal"] = fresh["temporal"]
+    old_time = old.get("temporal") or {}
+    fresh_time = fresh["temporal"]
+    if (candidate.time_expression is not None or plan_time_restated(candidate)) and any(
+        old_time.get(key) != fresh_time.get(key)
+        for key in ("expression", "precision", "earliest", "latest")
+    ):
+        value["temporal"] = fresh_time
         restated = True
     for key in ("location", "reason"):
         if fresh.get(key) is not None and fresh[key] != old.get(key):
@@ -1319,7 +1344,11 @@ def _changed_value(old, candidate, source):
     if candidate.category in HISTORY_CATEGORIES:
         value["label"] = candidate.label
         value["certainty"] = certainty
-        if candidate.time_expression is not None or "temporal" not in value:
+        if (
+            candidate.time_expression is not None
+            or plan_time_restated(candidate)
+            or "temporal" not in value
+        ):
             value["temporal"] = temporal_context(source, candidate)
         for key in ("location", "reason"):
             detail = getattr(candidate, key)

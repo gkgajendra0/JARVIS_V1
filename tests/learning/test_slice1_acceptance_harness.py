@@ -46,6 +46,25 @@ def _approved_test_ledger(monkeypatch, path):
     return path
 
 
+@pytest.mark.asyncio
+async def test_recorded_when_only_plan_releases_elapsed_status(lab, monkeypatch):
+    recorded = json.loads(
+        (Path(__file__).parent / "fixtures" / "codex_7e787c53_d13.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    raw = json.loads(json.dumps(recorded["extraction"]["candidates"][0]))
+    spans = raw.pop("evidence")
+    assert raw["time_expression"] is None
+    raw["quote"] = [recorded["utterance"][s["start"] : s["end"]] for s in spans]
+    monkeypatch.setitem(EXTRACT, recorded["utterance"], [raw])
+    runner, _ = lab.runner(stop_after="story-13c", stop_on_failure=True)
+    summary = await runner.run(groups=("story",))
+    checks = summary["cases"]["D13"]["checks"]
+    assert checks[0]["status"] == acceptance.PASS
+    assert checks[0]["detail"] == ["passed_outcome_unknown"]
+
+
 @pytest.fixture(autouse=True)
 def owner_timezone(monkeypatch):
     # The PC runs in IST; "local" dates in the learning input use it. Where
