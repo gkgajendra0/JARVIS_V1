@@ -35,6 +35,46 @@ SAVE_OPERATIONS = frozenset(
 )
 FORGET_OPERATIONS = frozenset({"forget", "retract", "suppress"})
 
+# The only words Jarvis may use to say memory changed: a sentence composed
+# here from the record, spoken as given (owner decision 2026-11-27).
+_VERBS = {
+    "create": "Saved",
+    "remember": "Saved",
+    "refine": "Saved",
+    "already_saved": "Already saved",
+    "change": "Updated",
+    "correct": "Updated",
+    "forget": "Forgot",
+    "retract": "Forgot",
+    "suppress": "Forgot",
+}
+RECEIPT_VERBS = tuple(dict.fromkeys(_VERBS.values()))
+NOTHING_SAVED = "Nothing was saved from that."
+STILL_SAVING = "Still saving that; nothing is saved yet."
+ISSUED_LIMIT = 8
+
+
+def compose_say(operations, *, still_processing=False) -> str:
+    """One deterministic sentence per kind of change, in record order:
+    "Saved: Suzuki Jimny. Updated: Goa plan." """
+    groups: dict[str, list[str]] = {}
+    for o in operations:
+        verb = _VERBS.get(o.operation)
+        if verb is None:
+            continue
+        items = groups.setdefault(verb, [])
+        if o.label and o.label not in items:
+            items.append(o.label)
+    if not groups:
+        return STILL_SAVING if still_processing else NOTHING_SAVED
+    parts = [
+        f"{verb}: {'; '.join(items)}." if items else f"{verb}."
+        for verb, items in groups.items()
+    ]
+    if still_processing:
+        parts.append("Still saving the rest.")
+    return " ".join(parts)
+
 
 @dataclass(frozen=True)
 class MemoryOperation:
@@ -56,6 +96,7 @@ class MemoryReceipts:
     def __init__(self, limit: int = MAX_TURNS):
         self._limit = limit
         self._turns: OrderedDict[tuple[str, str], _Turn] = OrderedDict()
+        self._issued: dict[str, list[str]] = {}
 
     def _turn(self, session_id, turn_id) -> _Turn:
         key = (session_id, turn_id)
@@ -95,7 +136,17 @@ class MemoryReceipts:
                 MemoryOperation("explicit", operation, label, turn_id)
             )
 
+    def issue(self, session_id, say: str) -> str:
+        """A receipt sentence handed to Jarvis to speak as given."""
+        issued = self._issued.setdefault(session_id, [])
+        issued.append(say)
+        del issued[:-ISSUED_LIMIT]
+        return say
+
     # readers -------------------------------------------------------------
+
+    def issued(self, session_id) -> tuple[str, ...]:
+        return tuple(self._issued.get(session_id, ()))
 
     def pending(self, session_id, turn_id) -> bool:
         turn = self._turns.get((session_id, turn_id))
@@ -158,18 +209,31 @@ class MemoryReceipts:
                 }
             )
         return {
+            "say": self.say(session_id, turn_ids),
             "turns": entries,
             "rule": (
-                "Owner turns newest first (latest = the owner's last request). "
-                "Confirm only what is listed, for the turn the owner means. "
-                "still_processing is not saved yet. nothing_saved means nothing "
-                "was saved for that turn: say so, and offer to try again or use "
-                "the explicit memory tools when the owner asked to remember, "
-                "correct or forget."
+                "Speak the say sentence exactly as given and add nothing about "
+                "memory in your own words. The turns (newest first) are for "
+                "your understanding only. If nothing was saved and the owner "
+                "wanted it saved, offer the explicit remember tool."
             ),
         }
 
+    def say(self, session_id, turn_ids) -> str:
+        """The receipt sentence for the owner's recent turns (oldest first)."""
+        operations = [
+            o
+            for turn_id in reversed(tuple(turn_ids))
+            for o in self.operations(session_id, turn_id)
+        ]
+        pending = any(self.pending(session_id, t) for t in turn_ids)
+        return compose_say(operations, still_processing=pending)
+
     def clear(self, session_id=None) -> None:
+        if session_id is None:
+            self._issued.clear()
+        else:
+            self._issued.pop(session_id, None)
         for key in list(self._turns):
             if session_id is None or key[0] == session_id:
                 turn = self._turns.pop(key)

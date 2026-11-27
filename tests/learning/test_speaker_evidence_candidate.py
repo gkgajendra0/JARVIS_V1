@@ -326,6 +326,37 @@ async def test_learning_admits_only_owner_scored_speech_and_records_why(learning
         await r.close()
 
 
+@pytest.mark.parametrize("scores_available", [True, False])
+def test_enforced_learning_fails_closed_without_speaker_scores(scores_available):
+    """Enforcement on but no enrolled-speaker model/template: automatic
+    learning is not attached at all (never a silent fallback to every voice)."""
+    from dataclasses import replace
+
+    bound = []
+    learning = SimpleNamespace(
+        bind=lambda conversation, grant, speaker_evidence=None: (
+            bound.append(speaker_evidence) or (lambda turn: None)
+        ),
+        clarifications=SimpleNamespace(),
+    )
+    observer = SimpleNamespace(score=lambda samples, sample_rate: None)
+    config = replace(JarvisConfig(), speaker_evidence_enforcement=True)
+    session, bridge = _session_pair()
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        config,
+        _FakeAudio(),
+        session_factory=lambda _: (session, bridge),
+        speaker_shadow_observer=observer if scores_available else None,
+    )
+    runtime._personal_learning = learning
+    runtime._learning_grant = object()
+    runtime._session_factory(config)
+    if scores_available:
+        assert len(bound) == 1 and bound[0].enforcing
+    else:
+        assert bound == []
+
+
 def test_project_history_keeps_the_331_rule_learning_is_stricter():
     from jarvis.voice.speaker_turn_evidence import SpeakerTurnEvidence
 

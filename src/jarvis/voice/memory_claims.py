@@ -1,20 +1,23 @@
-"""A reply may only say memory changed when memory verifiably changed.
+"""Jarvis never describes a memory change in its own words.
 
-The confirmation path is structural: memory results are recorded per owner
-turn (jarvis.memory.memory_receipts) by the operations themselves, and the
-``memory_status`` tool lets Jarvis confirm only what is recorded.
+Owner decision 2026-11-27 (Memory V1 closure): automatic learning is silent,
+and the only way Jarvis says something was saved, updated or forgotten is a
+receipt sentence composed in code from the verified record
+(jarvis.memory.memory_receipts.compose_say), handed to it by memory_status or
+an explicit memory tool and spoken word for word.
 
-This module is the backstop for a reply that claims a change anyway (Paid lab
-8ea0fd4e, D11: "Understood, I've noted that the Goa plan is cancelled." while
-nothing was stored). Spoken audio cannot be retracted, so, as for project
-actions (jarvis.voice.project_claims), the finished reply is checked against
-the record once that turn's learning has finished, and a false claim is
-corrected at once from the recorded facts.
+This module enforces that on the spoken reply. Any first-person memory claim
+(true or not) and any receipt-form sentence ("Saved: ...") that is not, word
+for word, a sentence Jarvis was given is unverified: while streaming its
+speech is stopped, and the owner then hears the receipt for their recent
+turns, composed from the record. A finished reply is checked the same way.
+Paid lab 8ea0fd4e, D11 ("Understood, I've noted that the Goa plan is
+cancelled." while nothing was stored) is the recorded case.
 
-Claim detection is deliberately narrow: affirmative first-person sentences
-saying Jarvis saved, noted, remembered, updated or forgot something. It only
-ever triggers a check against the record; it never decides what is true. A
-claim it does not recognise is not corrected (the documented limit).
+Detection only decides what to check, never what is true. The documented
+limit: a claim worded outside the narrow first-person patterns is not
+detected; the instructions forbid any such wording, and a miss is an
+improvement candidate, not a reason for more phrase rules.
 """
 
 from __future__ import annotations
@@ -28,12 +31,7 @@ from time import monotonic
 from uuid import uuid4
 
 from jarvis.conversation import ConversationRole, ConversationStatus
-from jarvis.memory.learning_catalog_page import PLAN_HEAD_NOUNS, name_words
-from jarvis.memory.memory_receipts import (
-    FORGET_OPERATIONS,
-    RECENT_TURNS,
-    SAVE_OPERATIONS,
-)
+from jarvis.memory.memory_receipts import RECEIPT_VERBS, RECENT_TURNS
 from jarvis.voice.voice_output_safety import (
     note_generation_instructions,
     register_internal_text,
@@ -98,7 +96,13 @@ _PATTERNS = (
     ("saved", _EN_SAVE),
     ("saved", _HI_SAVE),
 )
-_KINDS = {"saved": SAVE_OPERATIONS, "forgotten": FORGET_OPERATIONS}
+# A sentence in the receipt form ("Saved: ...", "Forgot: ...") is a memory
+# statement too: it must be one Jarvis was given, word for word.
+_RECEIPT_FORM = re.compile(
+    r"^\s*(?:" + "|".join(re.escape(v) for v in RECEIPT_VERBS) + r")\b\s*[:.]",
+    re.IGNORECASE,
+)
+_NORMAL = re.compile(r"[^\w]+", re.UNICODE)
 
 
 def _affirmed(clause):
@@ -129,50 +133,52 @@ def memory_claims(text: str) -> set[str]:
     return {kind for kind, _, _ in _claims(text)}
 
 
-def _names(sentence, label) -> bool:
-    """The sentence names the recorded item (a distinctive word of its label)."""
-    wanted = {w for w in name_words(label) - PLAN_HEAD_NOUNS if len(w) >= 3}
-    return bool(wanted) and bool(wanted & name_words(sentence))
+def _normal(text) -> str:
+    return " ".join(_NORMAL.sub(" ", text or "").lower().split())
 
 
-def unsupported_claims(text: str, operations, newest=None) -> set[str]:
-    """Claims the recorded operations do not support.
+def unverified_statements(text: str, issued) -> list[str]:
+    """Memory statements in a reply that are not receipt sentences Jarvis was
+    given (``issued``), word for word.
 
-    ``newest``: the newest owner turn's id (None: every operation counts as
-    the newest turn's). A claim is backed by an operation of its kind on the
-    newest owner turn, or by one on an earlier recent turn that the sentence
-    names ("Did you save that?" "Yes, I've noted your Jimny."). A sentence
-    still being spoken may not have named its item yet: until it ends, any
-    recorded operation of its kind is enough.
+    Owner decision 2026-11-27: automatic learning is silent, and Jarvis
+    never describes a memory change in its own words; it only speaks the
+    sentence code composed from the verified record (memory_status, or an
+    explicit tool's result). So any first-person memory claim, true or not,
+    and any receipt-form sentence that differs from what was issued, is
+    unverified. A sentence still being spoken only has to be the start of
+    an issued one.
     """
-    false = set()
-    for kind, sentence, complete in _claims(text):
-        ops = [o for o in operations if o.operation in _KINDS[kind]]
-        if any(newest is None or o.turn_id == newest for o in ops):
+    given = [
+        _normal(sentence)
+        for say in issued
+        for sentence in _SENTENCES.split(say or "")
+        if sentence.strip()
+    ]
+    found = []
+    sentences = [s for s in _SENTENCES.split(text or "") if s.strip()]
+    for index, sentence in enumerate(sentences):
+        complete = index < len(sentences) - 1 or bool(_SENTENCE_END.search(sentence))
+        claim = any(
+            clause.strip() and _affirmed(clause) for clause in _CLAUSES.split(sentence)
+        )
+        if not claim and not _RECEIPT_FORM.search(sentence):
             continue
-        if not complete and ops:
-            continue
-        if not any(o.label and _names(sentence, o.label) for o in ops):
-            false.add(kind)
-    return false
-
-
-def correction_facts(operations, still_processing=False) -> str:
-    if still_processing:
-        return "your request is still being processed and nothing is saved yet"
-    if not operations:
-        return "nothing was saved, changed or forgotten for that request"
-    parts = [f"{o.operation} {o.label}" if o.label else o.operation for o in operations]
-    return "only this was recorded: " + "; ".join(parts)
+        spoken = _normal(sentence)
+        if complete:
+            ok = spoken in given
+        else:
+            ok = any(g.startswith(spoken) for g in given)
+        if not ok:
+            found.append(sentence.strip())
+    return found
 
 
 NOTE_PREFIX = "[From Jarvis, not speech from the owner.] memory_check: "
 CORRECTION_REQUEST = (
-    "[From Jarvis, not speech from the owner.] Your previous reply said "
-    "something was saved, changed or forgotten before memory confirmed it. The "
-    "memory check above is what was actually recorded. Tell the owner now, in "
-    "one short sentence, exactly what the check shows. Do not claim anything "
-    "else was saved, and if nothing was saved offer to try again."
+    "[From Jarvis, not speech from the owner.] Your previous reply described a "
+    "memory change in your own words, which is never allowed. Say exactly the "
+    "say sentence in the memory check above, word for word, and nothing else."
 )
 ACK = "Checked."
 register_internal_text(CORRECTION_REQUEST)
@@ -217,7 +223,7 @@ def _recent_owner_turns(conversation, before=None):
     return list(reversed(owner))[:RECENT_TURNS]
 
 
-async def inject_correction(session, owner_words, facts, *, register=None) -> bool:
+async def inject_correction(session, owner_words, say, *, register=None) -> bool:
     from livekit.agents.llm import ChatContext, ChatMessage
 
     agent = getattr(session, "current_agent", None)
@@ -225,7 +231,7 @@ async def inject_correction(session, owner_words, facts, *, register=None) -> bo
         return False
     identity = uuid4().hex[:12]
     note = NOTE_PREFIX + json.dumps(
-        {"owner_words": owner_words, "memory_check": facts}, ensure_ascii=False
+        {"owner_words": owner_words, "say": say}, ensure_ascii=False
     )
     items = [
         ChatMessage(id="jarvis:memory-check:" + identity, role="user", content=[note]),
@@ -284,28 +290,28 @@ class MemoryClaimCheck:
         self.corrections: list = []
 
     def stream_gate(self, text) -> bool:
-        """While a reply streams: True (stop its speech now) when it claims a
-        memory change the record does not support, including while the
-        owner turn's learning is still running. The owner then hears what
-        the record shows once learning has finished. Each owner turn is
-        stopped and answered once; later speech is not cut."""
-        if self._closed or not memory_claims(text):
+        """While a reply streams: True (stop its speech now) when it states a
+        memory change other than a receipt sentence Jarvis was given. The
+        owner then hears the receipt for their recent turns. Each owner turn
+        is stopped and answered once; later speech is not cut."""
+        if self._closed:
+            return False
+        session = self.conversation.session_id
+        if not unverified_statements(text, self.receipts.issued(session)):
             return False
         turns = _recent_owner_turns(self.conversation)
         if not turns or turns[0].turn_id in self._corrected:
-            return False
-        session = self.conversation.session_id
-        operations = self.receipts.operations(session, tuple(t.turn_id for t in turns))
-        if not unsupported_claims(text, operations, newest=turns[0].turn_id):
             return False
         self._schedule(turns, text, stopped=True)
         return True
 
     def observe(self, turn) -> None:
-        """Accepted-turn observer: a finished reply that claims a change."""
+        """Accepted-turn observer: a finished reply with an unverified memory
+        statement."""
         if self._closed or turn.role is not ConversationRole.ASSISTANT:
             return
-        if not memory_claims(turn.text):
+        session = self.conversation.session_id
+        if not unverified_statements(turn.text, self.receipts.issued(session)):
             return
         turns = _recent_owner_turns(self.conversation, before=turn)
         if turns and turns[0].turn_id not in self._corrected:
@@ -323,27 +329,20 @@ class MemoryClaimCheck:
         owner = turns[0]
         session = self.conversation.session_id
         ids = tuple(t.turn_id for t in turns)
-        finished = await self.receipts.wait_learning(session, ids, self.learning_wait)
-        operations = self.receipts.operations(session, ids)
-        latest = [o for o in operations if o.turn_id == owner.turn_id]
-        false = unsupported_claims(text, operations, newest=owner.turn_id)
-        if not false and not stopped:
+        await self.receipts.wait_learning(session, ids, self.learning_wait)
+        statements = unverified_statements(text, self.receipts.issued(session))
+        if not statements and not stopped:
             return
-        if not false:
-            # Stopped before memory had confirmed it, and memory now backs
-            # it: the owner hears it from the record (this turn's when any).
-            facts = correction_facts(latest or operations)
-        else:
-            # A stopped reply is always answered, even if learning has not
-            # finished: speech was cut, so the owner hears where things stand.
-            facts = correction_facts(latest, still_processing=not finished)
+        # The owner hears the receipt, composed from the record.
+        say = self.receipts.issue(session, self.receipts.say(session, ids))
         LOGGER.warning(
-            "Memory claim check: reply claimed %s; recorded operations %s; correcting",
-            sorted(false),
-            sorted({o.operation for o in operations}),
+            "Memory claim check: unverified memory statement (%s sentences, "
+            "stopped=%s); speaking the receipt",
+            len(statements),
+            stopped,
         )
         if self._diag is not None:
-            self._diag("false_memory_claim", claims=sorted(false))
+            self._diag("unverified_memory_statement", stopped=stopped)
         deadline = self._clock() + self.idle_wait
         while not self.idle():
             if self._closed or self._clock() >= deadline:
@@ -353,8 +352,8 @@ class MemoryClaimCheck:
         if self._closed or self.conversation.status is not ConversationStatus.ACTIVE:
             return
         try:
-            if await self.deliver(owner.text, facts):
-                self.corrections.append((owner.turn_id, sorted(false), facts))
+            if await self.deliver(owner.text, say):
+                self.corrections.append((owner.turn_id, statements, say))
         except Exception as exc:  # noqa: BLE001 - the conversation continues
             LOGGER.warning(
                 "Memory claim correction not delivered | error=%s", type(exc).__name__

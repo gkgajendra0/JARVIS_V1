@@ -1656,8 +1656,8 @@ class AcceptanceRunner:
             "tiers": _tier_summary(
                 cases, missing=[c for c in self.planned if c not in cases]
             ),
-            # Replies that claimed a memory change the record of that turn did
-            # not show, and the correction given from the record.
+            # Replies that described a memory change in their own words, and
+            # the receipt sentence spoken instead.
             "memory_claims": [
                 {"step_id": e.get("step_id"), "case": e.get("case"), **e["correction"]}
                 for e in self.log.read(self.log.events)
@@ -2257,20 +2257,20 @@ class _GroupContext:
             self.conversation.accept_at(
                 ConversationRole.ASSISTANT, answer, step.told_at + timedelta(seconds=5)
             )
-            # The live claim check (jarvis.voice.memory_claims), with the turn's
-            # learning already finished: a claimed change the record does not
-            # show is corrected from the record (here in code; live, Jarvis
-            # speaks the correction from the same facts).
-            from jarvis.voice.memory_claims import correction_facts, unsupported_claims
+            # The live check (jarvis.voice.memory_claims), with the turn's
+            # learning already finished: any memory statement other than a
+            # receipt sentence Jarvis was given is replaced by the receipt
+            # (here in code; live, Jarvis speaks it).
+            from jarvis.voice.memory_claims import unverified_statements
 
-            operations = self.learning.receipts.operations(
-                self.conversation.session_id, turn.turn_id
+            session = self.conversation.session_id
+            statements = unverified_statements(
+                answer, self.learning.receipts.issued(session)
             )
-            false = unsupported_claims(answer, operations)
-            if false:
+            if statements:
                 correction = {
-                    "claims": sorted(false),
-                    "spoken": "Correction: " + correction_facts(operations) + ".",
+                    "statements": statements,
+                    "spoken": self.learning.receipts.say(session, [turn.turn_id]),
                 }
                 learning["memory_claim_check"] = correction
         self.replies[step.id] = {

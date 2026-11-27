@@ -1,30 +1,34 @@
-"""A reply may say memory changed only when memory verifiably changed.
+"""Jarvis never describes a memory change in its own words.
 
 Receipts are written by the operations themselves (explicit tools on ok,
-automatic learning when a turn finishes); memory_status reads them; a reply
-that claims a change the receipts do not support is stopped while it streams
-(when learning has not confirmed it yet) and corrected from the record. The
-recorded Paid lab 8ea0fd4e D11 reply ("Understood, I've noted that the Goa
-plan is cancelled." while nothing was stored) is replayed.
+automatic learning when a turn finishes). The only memory statement Jarvis
+may speak is a receipt sentence composed in code from them (memory_status or
+an explicit tool's result), word for word. Anything else, true or not, is
+stopped while it streams and replaced by the receipt (owner decision
+2026-11-27). The recorded Paid lab 8ea0fd4e D11 reply ("Understood, I've
+noted that the Goa plan is cancelled." while nothing was stored) is replayed.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 from types import SimpleNamespace
 
 import pytest
 
 from jarvis.conversation import ConversationRole, ConversationSession
-from jarvis.memory.memory_receipts import MemoryReceipts
+from jarvis.memory.memory_receipts import (
+    NOTHING_SAVED,
+    STILL_SAVING,
+    MemoryReceipts,
+    compose_say,
+)
 from jarvis.voice.memory_claims import (
     MemoryClaimCheck,
-    correction_facts,
     memory_claims,
     register_stream_gate,
     stream_gate_for,
-    unsupported_claims,
+    unverified_statements,
 )
 
 D11_REPLY = "Understood, I've noted that the Goa plan is cancelled."
@@ -79,54 +83,64 @@ def _op(operation, label=None, turn_id="t1"):
     return SimpleNamespace(operation=operation, label=label, turn_id=turn_id)
 
 
-def test_claims_must_be_backed_by_the_record():
-    # Nothing recorded: every claim is unsupported (8ea0fd4e D11).
-    assert unsupported_claims(D11_REPLY, (), newest="t1") == {"saved"}
-    assert unsupported_claims("Noted.", (), newest="t1") == {"saved"}
-    # An operation of the claimed kind on the newest owner turn backs it.
-    assert unsupported_claims(D11_REPLY, [_op("change", "Goa")], newest="t1") == set()
-    assert (
-        unsupported_claims("Noted.", [_op("create", "Pixel 9")], newest="t1") == set()
+def test_receipt_sentences_are_composed_from_the_record_only():
+    assert compose_say(()) == NOTHING_SAVED
+    assert compose_say((), still_processing=True) == STILL_SAVING
+    ops = [
+        _op("create", "Suzuki Jimny"),
+        _op("create", "Pixel 9"),
+        _op("change", "Goa plan"),
+        _op("retract", "Classic 350"),
+    ]
+    assert compose_say(ops) == (
+        "Saved: Suzuki Jimny; Pixel 9. Updated: Goa plan. Forgot: Classic 350."
     )
-    # A withdrawal never backs a save claim, nor a save a forget claim.
-    assert unsupported_claims(
-        "I've noted your Jimny.", [_op("retract", "Classic 350")], newest="t1"
-    ) == {"saved"}
-    assert unsupported_claims(
-        "I have forgotten the Classic 350.", [_op("create", "Classic 350")], newest="t1"
-    ) == {"forgotten"}
-    # An earlier turn's save backs only a sentence that names its item,
-    # and a bare "Noted." never: it answers the newest turn.
-    earlier = [_op("create", "Jimny", turn_id="t0")]
-    assert unsupported_claims("Yes, I've noted your Jimny.", earlier, "t1") == set()
-    assert unsupported_claims("Noted.", earlier, newest="t1") == {"saved"}
-    assert unsupported_claims("Noted: you prefer window seats.", earlier, "t1") == {
-        "saved"
-    }
-    # While a sentence is still being spoken its item may come later.
-    assert unsupported_claims("Yes, I've noted that you", earlier, "t1") == set()
-    assert unsupported_claims("Yes, I've noted that you", (), "t1") == {"saved"}
-    assert "nothing was saved" in correction_facts(())
-    assert "change Goa" in correction_facts([_op("change", "Goa")])
-    assert "still being processed" in correction_facts((), still_processing=True)
+    assert compose_say([_op("create", "Pixel 9")], still_processing=True) == (
+        "Saved: Pixel 9. Still saving the rest."
+    )
+
+
+def test_only_issued_receipt_sentences_may_state_a_memory_change():
+    issued = ["Saved: Suzuki Jimny."]
+    # Own words are never allowed, whether true or not (8ea0fd4e D11).
+    assert unverified_statements(D11_REPLY, ()) == [D11_REPLY]
+    assert unverified_statements("Yes, I've noted your Jimny.", issued)
+    assert unverified_statements("Noted.", issued) == ["Noted."]
+    # The receipt, word for word (case and punctuation aside), is allowed,
+    # also around ordinary conversation.
+    assert unverified_statements("Saved: Suzuki Jimny.", issued) == []
+    assert (
+        unverified_statements("Sure. saved, suzuki jimny! Anything else?", issued) == []
+    )
+    # A receipt-form sentence that differs from what was issued: wrong item,
+    # extra item, or invented.
+    assert unverified_statements("Saved: Mahindra Thar.", issued)
+    assert unverified_statements("Saved: Suzuki Jimny and the Thar.", issued)
+    assert unverified_statements("Forgot: Suzuki Jimny.", issued)
+    # Still being spoken: only the start of an issued sentence passes.
+    assert unverified_statements("Saved: Suzuki", issued) == []
+    assert unverified_statements("Saved: Mahindra", issued)
+    # Plain talk and "nothing was saved" are not memory claims.
+    assert unverified_statements("Understood. Spiti in June sounds great.", ()) == []
+    assert unverified_statements(NOTHING_SAVED, ()) == []
 
 
 @pytest.mark.parametrize(
-    "reply",
+    "receipt",
     [
-        "Yes, I've noted that you bought a Jimny.",
-        "I'll remember that for next time.",
-        "Got it, noted, your new car is the Jimny.",
+        "Saved: Suzuki Jimny.",
+        "Saved: Suzuki Jimny; Pixel 9. Updated: Goa plan.",
+        "Forgot: Classic 350.",
     ],
 )
-def test_a_verified_confirmation_is_never_cut_while_it_streams(reply):
-    conversation, (owner,) = _conversation((ConversationRole.USER, "I bought a Jimny."))
-    receipts = MemoryReceipts()
-    receipts.learning_finished(
-        conversation.session_id, owner.turn_id, "committed", [("create", "Jimny")]
+def test_an_issued_receipt_is_never_cut_while_it_streams(receipt):
+    conversation, (_owner,) = _conversation(
+        (ConversationRole.USER, "I bought a Jimny.")
     )
+    receipts = MemoryReceipts()
+    receipts.issue(conversation.session_id, receipt)
     check, _ = _check(receipts, conversation)
-    words = reply.split()
+    words = receipt.split()
     assert not any(
         check.stream_gate(" ".join(words[:n])) for n in range(1, len(words) + 1)
     )
@@ -207,17 +221,12 @@ async def test_cut_speech_is_always_answered_even_if_learning_never_finishes():
     check.learning_wait = 0.05
     assert check.stream_gate("Noted, the Pixel 9.") is True
     await asyncio.gather(*check._tasks)
-    assert delivered == [
-        (
-            "My new phone is a Pixel 9.",
-            "your request is still being processed and nothing is saved yet",
-        )
-    ]
+    assert delivered == [("My new phone is a Pixel 9.", STILL_SAVING)]
     await check.close()
 
 
 @pytest.mark.asyncio
-async def test_recorded_d11_reply_is_corrected_from_the_record():
+async def test_recorded_d11_reply_is_replaced_by_the_receipt():
     conversation, (owner, reply) = _conversation(
         (ConversationRole.USER, "Cancel the Goa plan."),
         (ConversationRole.ASSISTANT, D11_REPLY),
@@ -231,13 +240,9 @@ async def test_recorded_d11_reply_is_corrected_from_the_record():
     check, delivered = _check(receipts, conversation)
     check.observe(reply)
     await asyncio.gather(*check._tasks)
-    assert delivered == [
-        (
-            "Cancel the Goa plan.",
-            "nothing was saved, changed or forgotten for that request",
-        )
-    ]
-    # Corrected once per owner turn.
+    assert delivered == [("Cancel the Goa plan.", NOTHING_SAVED)]
+    # The receipt it was given is now allowed; corrected once per owner turn.
+    assert NOTHING_SAVED in receipts.issued(conversation.session_id)
     check.observe(reply)
     await asyncio.gather(*check._tasks)
     assert len(delivered) == 1
@@ -245,27 +250,35 @@ async def test_recorded_d11_reply_is_corrected_from_the_record():
 
 
 @pytest.mark.asyncio
-async def test_a_backed_claim_and_a_plain_reply_are_left_alone():
-    conversation, (owner, reply) = _conversation(
+async def test_a_true_claim_in_own_words_is_replaced_too_and_the_receipt_left_alone():
+    """Item-level safety: a save of the Goa plan is real, but "I've updated
+    the Goa plan as cancelled" is the model's wording, not the record's; the
+    owner hears the receipt instead. The issued receipt itself passes."""
+    conversation, (owner, own_words) = _conversation(
         (ConversationRole.USER, "Cancel the Goa plan."),
-        (ConversationRole.ASSISTANT, "Done, I've updated the Goa plan as cancelled."),
+        (ConversationRole.ASSISTANT, "Done, I've updated the Goa plan in my memory."),
     )
+    session = conversation.session_id
     receipts = MemoryReceipts()
     receipts.learning_finished(
-        conversation.session_id, owner.turn_id, "committed", [("change", "Goa")]
+        session, owner.turn_id, "committed", [("change", "Goa plan")]
     )
     check, delivered = _check(receipts, conversation)
-    check.observe(reply)
-    check.observe(
-        conversation.accept_turn(ConversationRole.USER, "Thanks.")
-    )  # owner turns ignored
+    check.observe(own_words)
     await asyncio.gather(*check._tasks)
-    assert delivered == []
+    assert delivered == [("Cancel the Goa plan.", "Updated: Goa plan.")]
+    plain = conversation.accept_turn(ConversationRole.USER, "Did you save that?")
+    check.observe(
+        conversation.accept_turn(ConversationRole.ASSISTANT, "Updated: Goa plan.")
+    )
+    check.observe(plain)  # owner turns ignored
+    await asyncio.gather(*check._tasks)
+    assert len(delivered) == 1
     await check.close()
 
 
 @pytest.mark.asyncio
-async def test_while_streaming_an_unconfirmed_claim_is_stopped_then_the_record_is_told():
+async def test_while_streaming_own_words_are_stopped_then_the_receipt_is_spoken():
     conversation, (owner,) = _conversation(
         (ConversationRole.USER, "My new phone is a Pixel 9."),
     )
@@ -274,7 +287,6 @@ async def test_while_streaming_an_unconfirmed_claim_is_stopped_then_the_record_i
     receipts.learning_started(session, owner.turn_id)
     check, delivered = _check(receipts, conversation)
     assert check.stream_gate("Got it") is False
-    # Learning still running: "noted" is not yet true, so it stops.
     assert check.stream_gate("Got it, noted") is True
     # Stopped and answered once per owner turn; later speech is not cut.
     assert check.stream_gate("Got it, noted, the Pixel") is False
@@ -282,17 +294,14 @@ async def test_while_streaming_an_unconfirmed_claim_is_stopped_then_the_record_i
         session, owner.turn_id, "committed", [("create", "Pixel 9")]
     )
     await asyncio.gather(*check._tasks)
-    # The owner hears what memory recorded, from the record.
-    assert delivered == [
-        ("My new phone is a Pixel 9.", "only this was recorded: create Pixel 9")
-    ]
+    assert delivered == [("My new phone is a Pixel 9.", "Saved: Pixel 9.")]
     await check.close()
 
 
 @pytest.mark.asyncio
-async def test_a_claim_about_an_earlier_turn_is_judged_on_that_turn():
-    """ "I bought a Jimny" (saved), then "Did you save that?": the answer
-    "Yes, I've noted your Jimny." is backed by the earlier turn's record."""
+async def test_the_receipt_covers_the_recent_turns_did_you_save_that():
+    """ "I bought a Jimny" (saved), then "Did you save that?": the receipt
+    for the recent turns says what was saved, never more."""
     conversation, (first, second) = _conversation(
         (ConversationRole.USER, "I bought a Jimny."),
         (ConversationRole.USER, "Did you save that?"),
@@ -300,16 +309,14 @@ async def test_a_claim_about_an_earlier_turn_is_judged_on_that_turn():
     session = conversation.session_id
     receipts = MemoryReceipts()
     receipts.learning_finished(
-        session, first.turn_id, "committed", [("create", "Jimny")]
+        session, first.turn_id, "committed", [("create", "Suzuki Jimny")]
     )
     receipts.learning_started(session, second.turn_id)
     check, delivered = _check(receipts, conversation)
-    assert check.stream_gate("Yes, I've noted your Jimny.") is False
-    # A claim about something never saved is still stopped.
     assert check.stream_gate("Yes, I've noted your Thar.") is True
     receipts.learning_finished(session, second.turn_id, "no_eligible_fact")
     await asyncio.gather(*check._tasks)
-    assert delivered and "nothing was saved" in delivered[0][1]
+    assert delivered == [("Did you save that?", "Saved: Suzuki Jimny.")]
     await check.close()
 
 
@@ -391,15 +398,23 @@ async def test_explicit_tools_record_receipts_and_memory_status_reads_them(learn
     tools = MemoryAgentTools(learning.service, conversation, receipts=receipts)
     status = await tools.verified_memory_status(wait=0)
     assert status["turns"][0]["status"] == "nothing_saved"
-    tools._record({"ok": True, "operation": "forget", "predicate": "classic 350"})
-    tools._record({"ok": False, "operation": "remember", "predicate": "x"})
+    assert status["say"] == NOTHING_SAVED
+    result = tools._record(
+        {"ok": True, "operation": "forget", "predicate": "classic 350"}
+    )
+    assert result["say"] == "Forgot: classic 350."
+    failed = tools._record({"ok": False, "operation": "remember", "predicate": "x"})
+    assert "say" not in failed
     status = await tools.verified_memory_status(wait=0)
     assert status["turns"][0]["status"] == "forgotten"
     assert status["turns"][0]["operations"] == [
         {"operation": "forget", "item": "classic 350"}
     ]
+    assert status["say"] == "Forgot: classic 350."
     assert status["turns"][0]["turn"] == "latest"
-    assert "Classic 350" not in json.dumps(status["rule"])
+    # Both receipts were issued: Jarvis may speak them word for word.
+    issued = receipts.issued(conversation.session_id)
+    assert issued[-1] == "Forgot: classic 350." and NOTHING_SAVED in issued
     assert receipts.operations(conversation.session_id, turn.turn_id)
     # Without receipts the tool is not offered.
     plain = MemoryAgentTools(learning.service, conversation)

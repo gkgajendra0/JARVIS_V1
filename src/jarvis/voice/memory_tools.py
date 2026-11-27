@@ -169,10 +169,21 @@ class MemoryAgentTools:
             )
         elif not labels and result.get("predicate"):
             labels = (str(result["predicate"]),)
-        self._receipts.explicit(
-            self._conversation.session_id, turn_id, operation, labels
+        from jarvis.memory.memory_receipts import MemoryOperation, compose_say
+
+        session = self._conversation.session_id
+        self._receipts.explicit(session, turn_id, operation, labels)
+        say = compose_say(
+            [
+                MemoryOperation("explicit", operation, label)
+                for label in labels or (None,)
+            ]
         )
-        return result
+        return {
+            **result,
+            "say": self._receipts.issue(session, say),
+            "say_rule": "Speak say exactly as given; add nothing about memory.",
+        }
 
     async def remember(
         self,
@@ -718,11 +729,11 @@ class MemoryAgentTools:
     async def memory_status(self, context: RunContext) -> dict[str, object]:
         """What memory verifiably did for the owner's recent turns.
 
-        Call this before telling the owner that anything was saved, noted,
-        updated, corrected or forgotten, and say only what it reports for the
-        turn the owner means (newest first). It waits briefly for automatic
-        learning of those turns to finish. It reads no other stored facts and
-        changes nothing.
+        Call this whenever the owner asks whether something was saved,
+        noted, updated or forgotten, and speak its say sentence exactly as
+        given. Never describe a memory change in your own words. It waits
+        briefly for automatic learning of those turns to finish. It reads no
+        other stored facts and changes nothing.
         """
         del context
         return await self.verified_memory_status()
@@ -735,13 +746,21 @@ class MemoryAgentTools:
             for t in reversed(self._conversation.turns)
             if t.role is ConversationRole.USER
         ][:RECENT_TURNS]
+        from jarvis.memory.memory_receipts import NOTHING_SAVED
+
         if self._receipts is None or not owner_turns:
-            return {"turns": [], "rule": "Nothing was saved in this conversation."}
+            return {
+                "say": NOTHING_SAVED,
+                "turns": [],
+                "rule": "Speak the say sentence exactly as given.",
+            }
         session = self._conversation.session_id
         await self._receipts.wait_learning(
             session, tuple(t.turn_id for t in owner_turns), wait
         )
-        return self._receipts.view(session, [t.turn_id for t in owner_turns])
+        view = self._receipts.view(session, [t.turn_id for t in owner_turns])
+        self._receipts.issue(session, view["say"])
+        return view
 
     @function_tool()
     async def recall_memory(

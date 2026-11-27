@@ -438,7 +438,24 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             else:
                 personal = None
                 self._personal_context = None
-            if self._personal_learning is not None and self._learning_grant is not None:
+            learning_blocked = (
+                config.speaker_evidence_enforcement
+                and self._session_purpose == "conversation"
+                and evidence is None
+            )
+            if learning_blocked and self._personal_learning is not None:
+                # Fail closed: enforcement asked for owner-only learning but no
+                # speaker scores are available, so nothing is learned.
+                LOGGER.warning(
+                    "Automatic memory paused | reason=speaker_evidence_unavailable | "
+                    "speaker enforcement is on but the enrolled-speaker model or "
+                    "template is not loaded; explicit memory tools still work"
+                )
+            if (
+                self._personal_learning is not None
+                and self._learning_grant is not None
+                and not learning_blocked
+            ):
                 bridge.add_accepted_turn_observer(
                     self._personal_learning.bind(
                         bridge.conversation,
@@ -1270,10 +1287,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         check = MemoryClaimCheck(
             self._memory_receipts,
             bridge.conversation,
-            lambda owner_words, facts: inject_correction(
+            lambda owner_words, say: inject_correction(
                 session,
                 owner_words,
-                facts,
+                say,
                 register=bridge.register_restored_context,
             ),
             idle=idle,

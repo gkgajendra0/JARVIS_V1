@@ -2796,8 +2796,8 @@ async def test_recorded_d11_quality_miss_is_measured_and_its_false_claim_correct
         "failed_checks"
     ]
     (claim,) = [c for c in summary["memory_claims"] if c["step_id"] == "story-11"]
-    assert claim["claims"] == ["saved"]
-    assert "nothing was saved" in claim["spoken"]
+    assert claim["statements"] == [D11_8EA0FD4E_REPLY.strip()]
+    assert claim["spoken"] == "Nothing was saved from that."
 
 
 @pytest.mark.asyncio
