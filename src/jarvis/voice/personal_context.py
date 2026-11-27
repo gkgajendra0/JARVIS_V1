@@ -366,7 +366,13 @@ class PersonalContextSession:
 
     async def _authorize(self, operation="read", mutation=None):
         binding = self._current(activity=operation != "read")
-        if binding is None or self._busy:
+        if binding is None:
+            return False
+        # The speaker check awaits; the busy/permit checks below run after it
+        # with no await before the session is marked busy.
+        if operation == "read" and not await self._speaker_verified(binding):
+            return False
+        if self._busy or self._current(activity=operation != "read") != binding:
             return False
         if self._permit is not None:
             if operation == self._operation == "read":
@@ -378,8 +384,6 @@ class PersonalContextSession:
                 or not await self._validate()
             ):
                 return False
-        if operation == "read" and not await self._speaker_verified(binding):
-            return False
         self._binding = binding
         turn = self._latest_turn()
         self._busy = True

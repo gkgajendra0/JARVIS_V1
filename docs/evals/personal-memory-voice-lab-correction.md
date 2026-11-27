@@ -152,10 +152,19 @@ inside the write transaction (under the broker lock, so a claim cannot land
 between check and commit). The learning runtime also drops that turn's queued
 or in-flight sources. To cover the opposite ordering (learning ready before the
 tool is called), the voice runtime makes learning hold its write until the
-reply to that turn is over (`ReplySettlement`: the next assistant turn, a newer
-owner turn, or the end of the session). An unsettled reply within the source
-budget writes nothing. Normal owner-authorized learning commits after the
-reply.
+reply to that turn is over (`ReplySettlement`: an assistant turn accepted
+after it while the agent is back to listening, so a spoken "let me check"
+before a tool step does not count; or a newer owner turn; or the end of the
+session). An unsettled reply within the source budget writes nothing. Claiming
+one turn never cancels learning in flight for another turn. Normal
+owner-authorized learning commits after the reply.
+
+Limits: the claim goes to the latest accepted owner turn when the tool runs;
+if unrelated speech is accepted between the request and the tool call, the
+claim lands on that newer turn. A plain-text record left by the earlier
+behaviour (for example `home_city` in the retained lab) stays outside the
+learning read scope; a new explicit save creates the readable personal_fact
+beside it.
 
 ### 2. Explicit save of "home city" could not be read back
 

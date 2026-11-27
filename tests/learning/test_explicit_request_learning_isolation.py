@@ -249,3 +249,76 @@ def test_reply_settlement_rules():
     assert not asyncio.run(settled("never-seen"))
     settlement.close()
     assert asyncio.run(settled(second.turn_id))
+
+
+@pytest.mark.asyncio
+async def test_claiming_one_turn_never_cancels_learning_for_another(learning):
+    """Re-review: an explicit request on turn T2 must not cancel learning
+    already running for T1."""
+    facts = GatedFacts(gate=True)
+    r = _runtime(learning, facts)
+    c = conversation()
+    observe = r.bind(c, learning.grant)
+    try:
+        first = c.accept_turn(ConversationRole.USER, "I own a City")
+        observe(first)
+        await facts.entered.wait()
+        second = c.accept_turn(
+            ConversationRole.USER, "Remember that my home city is Jaipur."
+        )
+        learning.service.claim_explicit_request(
+            session_id=c.session_id, turn_id=second.turn_id
+        )
+        facts.release.set()
+        await r.drain()
+        assert await learning.count() == 1
+    finally:
+        await r.close()
+
+
+@pytest.mark.asyncio
+async def test_a_reply_with_a_tool_step_settles_only_when_the_agent_listens():
+    """A spoken segment before a tool call ("let me check") is accepted as an
+    assistant turn while the agent is still thinking: not settled until the
+    agent is back to listening, so correct_memory in the next generation
+    claims the turn first."""
+    c = conversation()
+    settlement = ReplySettlement(agent_states=True)
+
+    async def settled(turn_id):
+        return await settlement.wait(turn_id, 0.01)
+
+    turn = c.accept_turn(ConversationRole.USER, "Correction, I'm vegetarian.")
+    settlement.observe(turn)
+    settlement.agent_state("thinking")
+    settlement.agent_state("speaking")
+    settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Let me check."))
+    settlement.agent_state("thinking")  # tool call running
+    assert not (await settled(turn.turn_id))
+    settlement.agent_state("speaking")
+    settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Updated: diet."))
+    assert not (await settled(turn.turn_id))
+    settlement.agent_state("listening")
+    assert await settled(turn.turn_id)
+
+
+@pytest.mark.asyncio
+async def test_memory_status_does_not_wait_for_the_turn_it_answers(learning):
+    import time
+
+    from jarvis.memory.memory_receipts import MemoryReceipts
+    from jarvis.voice.memory_tools import MemoryAgentTools
+
+    c = conversation()
+    receipts = MemoryReceipts()
+    fact = c.accept_turn(ConversationRole.USER, "I bought a Suzuki Jimny.")
+    receipts.learning_finished(
+        c.session_id, fact.turn_id, "committed", [("create", "Suzuki Jimny")]
+    )
+    question = c.accept_turn(ConversationRole.USER, "Did you save that?")
+    receipts.learning_started(c.session_id, question.turn_id)  # held for the reply
+    tools = MemoryAgentTools(learning.service, c, receipts=receipts)
+    started = time.monotonic()
+    status = await tools.verified_memory_status(wait=6.0)
+    assert time.monotonic() - started < 1.0
+    assert status["say"] == "Saved: Suzuki Jimny."

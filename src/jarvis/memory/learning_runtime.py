@@ -384,6 +384,14 @@ class PersonalLearningRuntime:
     def invalidate_sources(
         self, category=None, turn_id=None, keep_clarifications=False
     ):
+        inflight = self._pending.get(self._inflight_receipt)
+        inflight_matches = turn_id is None or (
+            inflight is not None
+            and (
+                inflight[0].turn_id == turn_id
+                or any(t.turn_id == turn_id for t in inflight[0].turns)
+            )
+        )
         if not keep_clarifications:
             self.clarifications.clear()
         if turn_id is None:
@@ -414,8 +422,11 @@ class PersonalLearningRuntime:
         if (
             self._inflight
             and not self._inflight.done()
+            and inflight_matches
             and (self._closed or self._inflight_receipt not in self._controls)
         ):
+            # Only the in-flight source this invalidation is about: claiming
+            # one turn never cancels learning running for another.
             self._inflight.cancel()
         self._report("sources_invalidated")
 

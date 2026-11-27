@@ -196,11 +196,12 @@ class MemoryAgentTools:
         value: str,
         sensitivity: str = "standard",
     ) -> dict[str, object]:
+        # Claimed before anything can fail, the authorization check included.
+        self._claim_latest()
         turn = authorize_explicit_memory_action(
             self._conversation,
             ExplicitMemoryAction.REMEMBER,
         )
-        self._claim(turn)
         if self._personal_context is not None:
             self._personal_context.reserve_mutation("remember")
         _require_grounded_target(turn, predicate)
@@ -493,9 +494,8 @@ class MemoryAgentTools:
 
     def _change_turn(self, action):
         if self._personal_context is None:
-            turn = authorize_explicit_memory_action(self._conversation, action)
-            self._claim(turn)
-            return turn
+            self._claim_latest()
+            return authorize_explicit_memory_action(self._conversation, action)
         turn = self._latest_user_turn()
         # Claimed before anything can fail: a refused or failed explicit
         # change never commits through automatic learning instead.
@@ -503,6 +503,13 @@ class MemoryAgentTools:
         reject_negated_memory_change(turn.text)
         self._personal_context.reserve_mutation(action.value)
         return turn
+
+    def _claim_latest(self):
+        try:
+            turn = self._latest_user_turn()
+        except MemoryToolGroundingError:
+            return
+        self._claim(turn)
 
     def _claim(self, turn):
         claim = getattr(self._service, "claim_explicit_request", None)
@@ -824,8 +831,11 @@ class MemoryAgentTools:
                 "rule": "Speak the say sentence exactly as given.",
             }
         session = self._conversation.session_id
+        # The latest turn is the one being answered: its learning is held
+        # until this reply is over, so waiting for it would only delay the
+        # answer; it is reported as still being saved.
         await self._receipts.wait_learning(
-            session, tuple(t.turn_id for t in owner_turns), wait
+            session, tuple(t.turn_id for t in owner_turns[1:]), wait
         )
         view = self._receipts.view(session, [t.turn_id for t in owner_turns])
         self._receipts.issue(session, view["say"], owner_turns[0].turn_id)

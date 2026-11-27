@@ -321,6 +321,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 else UnavailableSpeakerEvidence()
             )
             self._owner_evidence = owner_evidence
+            self._reply_settlement = None
             self._window_deadline = None
             self._window_grace_until = 0.0
             self._window_speech = False
@@ -475,7 +476,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             ):
                 from jarvis.memory.reply_settlement import ReplySettlement
 
-                settlement = ReplySettlement()
+                settlement = ReplySettlement(agent_states=True)
+                settlement.agent_state(self._agent_state)
+                self._reply_settlement = settlement
                 bridge.add_accepted_turn_observer(settlement.observe)
                 bridge.add_close_observer(settlement.close)
                 bridge.add_accepted_turn_observer(
@@ -555,6 +558,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 if self._live_session is not session:
                     return
                 self._agent_state = event.new_state
+                settlement = self._reply_settlement
+                if settlement is not None:
+                    settlement.agent_state(event.new_state)
                 sync_interactive_brain_gate()
                 LOGGER.info(
                     "Voice agent state changed: %s -> %s",
@@ -681,6 +687,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._speaker_shadow_observer = speaker_shadow_observer
         self._speaker_evidence: SpeakerTurnEvidenceBook | None = None
         self._owner_evidence = None
+        self._reply_settlement = None
         self._window_deadline: float | None = None
         self._window_grace_until = 0.0
         self._window_speech = False

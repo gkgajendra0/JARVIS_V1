@@ -233,13 +233,22 @@ class MemoryReceipts:
         }
 
     def say(self, session_id, turn_ids) -> str:
-        """The receipt sentence for the owner's recent turns (oldest first)."""
+        """The receipt sentence for the owner's recent turns (newest first in
+        ``turn_ids``; the sentence lists them oldest first).
+
+        The newest turn is usually the question being answered ("Did you save
+        that?"); its learning is held until the reply is over, so its pending
+        state alone never adds "still saving" to what earlier turns saved.
+        With nothing saved anywhere, it is reported as still being saved."""
+        turn_ids = tuple(turn_ids)
         operations = [
             o
-            for turn_id in reversed(tuple(turn_ids))
+            for turn_id in reversed(turn_ids)
             for o in self.operations(session_id, turn_id)
         ]
-        pending = any(self.pending(session_id, t) for t in turn_ids)
+        pending = any(self.pending(session_id, t) for t in turn_ids[1:])
+        if not operations and turn_ids and self.pending(session_id, turn_ids[0]):
+            pending = True
         return compose_say(operations, still_processing=pending)
 
     def clear(self, session_id=None) -> None:
