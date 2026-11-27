@@ -833,3 +833,48 @@ async def test_an_answer_too_large_to_cite_stores_nothing_and_breaks_nothing(lab
     plans = {p["label"]: p for p in await lab.plans()}
     assert plans[before["label"]] == before
     assert "Goa" in plans  # the rest of the turn is still learned
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("resolver", ["new", "match"])
+async def test_an_alias_of_the_plan_still_answers_and_never_makes_a_second_plan(
+    lab,  # noqa: F811
+    resolver,
+):
+    before, question = await _first_turn(lab)
+    text = "We'll take the Jimny for the Spiti trip."
+
+    def build(source):
+        return [_named(source.turns[-1], "Spiti trip", {"vehicle": _car("Jimny")})]
+
+    await _answer(
+        lab, text, build, target=before["label"] if resolver == "match" else None
+    )
+    (after,) = await lab.plans()
+    _assert_decided(before, after)
+    assert lab.runtime.clarifications.pending(question.session_id) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["Not sure yet. We're going to Goa in the Creta."])
+@pytest.mark.parametrize("label", ["Goa trip", "goa"])
+async def test_a_paraphrase_with_another_destination_does_not_answer(
+    lab,  # noqa: F811
+    text,
+    label,
+):
+    before, question = await _first_turn(lab)
+
+    def build(source):
+        return [
+            _named(
+                source.turns[-1],
+                label,
+                {"vehicle": _car("Creta"), "destination": _car("Goa")},
+            )
+        ]
+
+    await _answer(lab, text, build)
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert plans[before["label"]] == before
+    assert lab.runtime.clarifications.pending(question.session_id) == [question]

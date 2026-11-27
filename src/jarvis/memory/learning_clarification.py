@@ -294,19 +294,41 @@ def _original_words(source, note) -> str:
     return "\n".join(parts)
 
 
+def _names_in(text, name) -> bool:
+    """``name`` is said, as whole words, in ``text`` (case aside)."""
+    return _whole(text, name)
+
+
+def _plan_words(note) -> set[str]:
+    """The words that name the question's plan: its known destination when the
+    owner gave one, else the proposal's name (never its other details)."""
+    from .learning_catalog_page import name_words
+
+    known = dict(note.known).get("destination")
+    if known:
+        return name_words(known)
+    return name_words(getattr(note.candidate, "label", None) or note.subject)
+
+
 def about_the_question(source, candidate, note) -> bool:
     """Whether a proposal can be about this question's plan, judged only by
-    the proposal's own identity against the owner's words:
+    the identity it states in the owner's words (its name, value and
+    destination), never by its wording:
 
-    - its name is not in the owner's words it cites (a paraphrase or a
-      reference: it names no plan of its own; D28's "trip to Spiti");
-    - or every name it gives in the owner's words is also in the words the
-      question was asked from ("Spiti"), or is one of that question's
-      options (a detail used as a name, "Jimny").
+    - a destination said in the cited words must be the question's plan's
+      own (said in the words the question was asked from);
+    - a name said in the cited words must share a word with the plan's name
+      (its destination, or its name: "Spiti trip" for Spiti) or be one of the
+      question's options (a detail used as a name, "Jimny");
+    - a name not said in the cited words names no plan of its own (a
+      paraphrase or reference, D28's "trip to Spiti"): the extractor's reading
+      that it answers the question stands.
 
-    A proposal naming something else in the owner's words ("For Goa ...",
-    "Ladakh in May ...") is about another plan: it is neither read as this
-    answer nor replaced by it, and it is learned on its own."""
+    A proposal stating another plan in the owner's words ("For Goa ...",
+    "Ladakh in May ...", destination Goa) is neither read as this answer nor
+    replaced by it, and it is learned on its own."""
+    from .learning_catalog_page import name_words
+
     if candidate.category != "plan" or candidate.slots is None:
         return False
     turns = {t.turn_id: t.text for t in source.turns}
@@ -315,13 +337,20 @@ def about_the_question(source, candidate, note) -> bool:
         for s in candidate.evidence
         if s.turn_id in turns
     )
-    names = [n for n in dict.fromkeys((candidate.label, candidate.value)) if n]
-    grounded = [n for n in names if n in cited]
-    if not grounded:
-        return True
     original = _original_words(source, note)
+    destination = candidate.slots.destination
+    if (
+        destination is not None
+        and destination.value
+        and _names_in(cited, destination.value)
+        and not _names_in(original, destination.value)
+    ):
+        return False
+    names = [n for n in dict.fromkeys((candidate.label, candidate.value)) if n]
+    grounded = [n for n in names if _names_in(cited, n)]
     options = {o.casefold() for d in note.details for o in _options(note, d)}
-    return all(_whole(original, n) or n.casefold() in options for n in grounded)
+    plan = _plan_words(note)
+    return all(n.casefold() in options or name_words(n) & plan for n in grounded)
 
 
 def chosen_values(source, notes, candidates):
@@ -353,7 +382,7 @@ def chosen_values(source, notes, candidates):
             if not about_the_question(source, candidate, note):
                 continue
             for detail in note.details:
-                slot = getattr(candidate.slots, detail)
+                slot = getattr(candidate.slots, detail, None)
                 if _decided(slot) and (owner := said_now(text, slot.value)):
                     said.setdefault(detail, []).append(owner)
         chosen, reason = {}, None
