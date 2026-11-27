@@ -127,6 +127,16 @@ def test_only_issued_receipt_sentences_may_state_a_memory_change():
     assert unverified_statements("Okay, saved, Suzuki Jimny.", issued) == []
     assert unverified_statements("Saved Suzuki Jimny.", issued) == []
     assert unverified_statements("You saved some money.", ()) == []
+    # Ordinary sentences that merely start with a receipt verb.
+    for plain in (
+        "Updated forecasts show rain tomorrow.",
+        "Forgot your keys again?",
+        "Saved games live in Documents.",
+    ):
+        assert unverified_statements(plain, ()) == []
+    # A colon-less receipt while receipts were issued for this request is
+    # still compared (a spoken receipt's transcript may lose the colon).
+    assert unverified_statements("Saved Mahindra Thar.", issued)
     # A finished reply is judged whole: a cut-off receipt is not a receipt.
     assert unverified_statements("Saved: Suzuki", issued, final=True)
     # Plain talk and "nothing was saved" are not memory claims.

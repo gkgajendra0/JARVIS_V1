@@ -441,7 +441,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             # Any session purpose: a session without speaker scores (system
             # sessions have none) never learns while enforcement is on.
             learning_blocked = config.speaker_evidence_enforcement and evidence is None
-            if learning_blocked and self._personal_learning is not None:
+            if (
+                learning_blocked
+                and self._personal_learning is not None
+                and self._session_purpose == "conversation"
+            ):
                 # Fail closed: enforcement asked for owner-only learning but no
                 # speaker scores are available, so nothing is learned.
                 LOGGER.warning(

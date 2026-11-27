@@ -99,15 +99,17 @@ _PATTERNS = (
 )
 # A sentence in the receipt form ("Saved: ...", "Forgot: ...") is a memory
 # statement too: it must be one Jarvis was given, word for word.
-# A receipt-form statement ("Saved: ...", "Okay, saved Goa plan.") is a
-# memory statement too: from its verb to the end of the sentence it must be
-# a receipt Jarvis was given, word for word. The verb counts at the start of
-# the sentence or right after punctuation, never after another word ("you
-# saved some money" is about the owner).
+# A receipt-form statement ("Saved: ...") is a memory statement too: from its
+# verb to the end of the sentence it must be a receipt Jarvis was given, word
+# for word. The verb counts at the start of the sentence or right after
+# punctuation, never after another word ("you saved some money" is about the
+# owner). Followed by punctuation it is always checked; without it (a spoken
+# receipt's transcript may lose the colon) only while receipts were issued
+# for this request, so "Updated forecasts show rain" is ordinary speech.
 _RECEIPT_FORM = re.compile(
-    r"(?:^|(?<=[,;:.!?—–…-]))\s*(?:"
+    r"(?:^|(?<=[,;:.!?\u2014\u2013\u2026-]))\s*(?:"
     + "|".join(re.escape(v) for v in sorted(RECEIPT_VERBS, key=len, reverse=True))
-    + r")\b",
+    + r")\b(?P<separator>\s*[:,;.\u2014\u2013-])?",
     re.IGNORECASE,
 )
 _NORMAL = re.compile(r"[^\w]+", re.UNICODE)
@@ -177,7 +179,7 @@ def unverified_statements(text: str, issued, *, final: bool = False) -> list[str
             found.append(sentence.strip())
             continue
         match = _RECEIPT_FORM.search(sentence)
-        if match is None:
+        if match is None or (match.group("separator") is None and not given):
             continue
         spoken = _normal(sentence[match.start() :])
         if complete:
