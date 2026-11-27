@@ -3066,10 +3066,16 @@ async def check_d15(context, log):
     reached = bool(plan_released) or in_context
     unrelated = [f.get("text") for f in released if f not in plan_released]
     answer = reply.get("answer") or ""
-    recommends_other = re.search(
-        r"\b(classic|enfield|tigor)\b[^.]*\b(best|better|behtar|recommend)",
-        answer,
-        re.IGNORECASE,
+    # A sentence recommending another vehicle without naming the decided one
+    # contradicts the plan. A comparison naming both ("the Classic 350 ...
+    # but the Jimny ... much better") cannot be read reliably by a pattern:
+    # it is flagged for the manual review below, never auto-failed (eea8eea5
+    # lab: a correct Jimny answer was failed this way).
+    other = r"\b(classic|enfield|tigor)\b[^.!?]*\b(best|better|behtar|recommend)"
+    sentences = re.split(r"(?<=[.!?])\s+", answer)
+    recommends_other = any(
+        re.search(other, s, re.IGNORECASE) and vehicle.casefold() not in s.casefold()
+        for s in sentences
     )
     return [
         _check(
@@ -3103,6 +3109,10 @@ async def check_d15(context, log):
             (
                 ("mentions Jimny", r"jimny"),
                 ("re-asks", r"which vehicles do you|what vehicles do you"),
+                (
+                    "compares with another vehicle (check which is recommended)",
+                    r"\b(classic|enfield|tigor)\b[^.!?]*\b(best|better|behtar|recommend)",
+                ),
             ),
         ),
     ]

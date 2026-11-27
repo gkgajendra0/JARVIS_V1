@@ -2012,6 +2012,41 @@ async def test_d15_answer_contradicting_the_decided_plan_fails(lab, monkeypatch)
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        # Lab eea8eea5's recorded answer: correct, failed by the old pattern.
+        (
+            (
+                "For a snowy Spiti trip, your Jimny is definitely the best choice. You"
+                " also own a Royal Enfield Classic 350, but the Jimny's 4x4 capability"
+                " will handle the snow and terrain much better. You mentioned taking"
+                " the Jimny when you planned this trip for January."
+            ),
+            "PASS",
+        ),
+        ("The Jimny is fine. The Classic 350 is the best for snow.", "FAIL"),
+    ],
+    ids=["comparison-naming-both", "recommends-another"],
+)
+async def test_d15_consistency_reads_each_sentence(lab, monkeypatch, answer, expected):
+    monkeypatch.setitem(
+        DRIVER, D15, ("read", ["owned_item.vehicle", "plan=Spiti"], answer)
+    )
+    runner, _log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    checks = _d15_checks(summary)
+    assert checks["answer consistent with the decided plan"] == getattr(
+        acceptance, expected
+    )
+    (review,) = [
+        c for c in summary["cases"]["D15"]["checks"] if c["check"] == "useful advice"
+    ]
+    flags = review["detail"]["keyword_flags"]
+    assert flags["compares with another vehicle (check which is recommended)"]
+
+
+@pytest.mark.asyncio
 async def test_run6_d11_goa_lookup_by_word_finds_the_cancelled_plan(lab, monkeypatch):
     (recorded,) = RUN6["steps"]["story-11"]["tool_results"]
     assert recorded["result"]["status"] == "no_match"  # run 6
