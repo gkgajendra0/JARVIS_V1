@@ -1082,8 +1082,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         follow_up = LearningFollowUp(
             learning.clarifications,
             bridge.conversation,
-            lambda notes: inject_learning_note(
-                session, notes, register=bridge.register_restored_context
+            lambda notes, *, is_current: inject_learning_note(
+                session,
+                notes,
+                register=bridge.register_restored_context,
+                is_current=is_current,
             ),
             idle=idle,
         )

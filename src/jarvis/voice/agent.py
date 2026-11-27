@@ -593,7 +593,8 @@ meant about the listed detail; ask what they meant, in their own words
 (owner_words), for example "Do you mean ...?". question confirm_alternatives:
 the owner named the listed choices for a plan detail; ask briefly whether they
 are still choosing between them (for example "Are you still deciding between
-... and ...?"). Ask one brief natural question about only that detail. Never
+... and ...?"). Ask one brief natural question per listed detail. If several
+questions are listed, keep their plans and details distinct. Never
 ask about already_known details. Do not say anything was or was not saved,
 noted or remembered, and do not mention the note. If the owner has already
 made it clear, do not ask.

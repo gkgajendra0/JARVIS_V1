@@ -104,13 +104,21 @@ class LearningClarification:
     question_id: str = field(default_factory=lambda: uuid4().hex[:12])
     # The proposal the question came from (for a confirmation); never shown.
     candidate: object = field(default=None, compare=False, hash=False, repr=False)
+    # A plan's predicate survives changes to its assertion and display name.
+    plan_predicate: str | None = field(default=None, repr=False)
+
+    @property
+    def identity(self):
+        return self.plan_predicate, (
+            self.subject.casefold() if self.plan_predicate is None else None
+        )
 
     @property
     def key(self):
         return (
             self.session_id,
             self.category,
-            self.subject.casefold(),
+            self.identity,
             self.details,
             self.kind,
         )
@@ -167,39 +175,42 @@ def clarification_for(source, candidate, *, dropped_unclear=False):
     )
 
 
-def alternatives_question(source, candidate):
-    """The ``confirm_alternatives`` question for a plan proposal whose
-    alternatives are not confirmed, or None."""
+def alternatives_questions(source, candidate):
+    """One independently answerable question per unconfirmed plan detail."""
     pending = pending_alternatives(candidate)
     subject = _subject(candidate)
     if not pending or not subject:
-        return None
+        return []
     skip = set(pending) | set(unclear_slot_names(candidate.slots))
-    words = tuple(dict.fromkeys(o for options in pending.values() for o in options))
-    return LearningClarification(
-        source.session_id,
-        source.turn_id,
-        candidate.category,
-        subject,
-        tuple(pending),
-        words,
-        tuple(_known(candidate, skip).items()),
-        kind=ALTERNATIVES,
-        choices=tuple(pending.items()),
-        candidate=candidate,
-    )
+    known = tuple(_known(candidate, skip).items())
+    return [
+        LearningClarification(
+            source.session_id,
+            source.turn_id,
+            candidate.category,
+            subject,
+            (detail,),
+            options,
+            known,
+            kind=ALTERNATIVES,
+            choices=((detail, options),),
+            candidate=candidate,
+        )
+        for detail, options in pending.items()
+    ]
 
 
-def confirmation_candidate(source, note):
-    """The owner confirmed the pending alternatives: the same proposal, with
-    only those details, citing the owner's original words (still within this
+def confirmation_candidate(source, notes):
+    """The owner confirmed these questions from one proposal: keep only
+    those details, citing the owner's original words (still within this
     learning source) and the confirming turn. It then passes the ordinary
     policy, resolution and reconciliation. None when the original words are
     no longer in the source (nothing is stored)."""
     from .learning_contracts import EvidenceSpan, LearningCandidate
 
+    note = notes[0]
     original = note.candidate
-    if note.kind != ALTERNATIVES or original is None:
+    if original is None:
         return None
     window = {t.turn_id for t in source.turns}
     spans = [s for s in original.evidence if s.turn_id in window]
@@ -212,7 +223,8 @@ def confirmation_candidate(source, note):
         )
     slots = {
         name: {"value": None, "options": list(options), "certainty": "tentative"}
-        for name, options in note.choices
+        for confirmed in notes
+        for name, options in confirmed.choices
     }
     data = original.model_dump(mode="json", exclude={"evidence", "slots"})
     return LearningCandidate.model_validate(
@@ -221,7 +233,7 @@ def confirmation_candidate(source, note):
             "intent": "new",
             "slots": slots,
             "evidence": [s.model_dump() for s in spans],
-            "owner_confirmed": tuple(name for name, _ in note.choices),
+            "owner_confirmed": tuple(slots),
         }
     )
 
@@ -241,6 +253,66 @@ def stated_details(candidate) -> set[str]:
     }
 
 
+def ground_chosen_plan(source, candidate, questions):
+    """Repair only an ungrounded display identity on an answered question.
+
+    The open question supplies the original, grounded identity, not the
+    extractor's paraphrase. The selected option must be stated in the latest
+    cited owner turn. Reconciliation must still match the question's canonical
+    predicate; this cannot create a plan or redirect an already grounded name.
+    """
+    if candidate.category != "plan":
+        return candidate, ()
+    turns = {t.turn_id: t.text for t in source.turns}
+    fragments, current = [], []
+    for span in candidate.evidence:
+        text = turns.get(span.turn_id)
+        if text is None or not 0 <= span.start < span.end <= len(text):
+            return candidate, ()
+        fragment = text[span.start : span.end]
+        fragments.append(fragment)
+        if span.turn_id == source.turn_id:
+            current.append(fragment)
+    if any(
+        identity in fragment
+        for identity in (candidate.label, candidate.value)
+        for fragment in fragments
+    ):
+        return candidate, ()
+    matches = []
+    cited = {span.turn_id for span in candidate.evidence}
+    for note in questions:
+        if (
+            note.kind != ALTERNATIVES
+            or note.session_id != source.session_id
+            or note.plan_predicate is None
+            or note.turn_id not in cited
+            or note.candidate is None
+        ):
+            continue
+        for detail, options in note.choices:
+            slot = getattr(candidate.slots, detail, None)
+            if (
+                slot is not None
+                and slot.value in options
+                and slot.certainty == "confirmed"
+                and not slot.options
+                and any(slot.value in text for text in current)
+            ):
+                matches.append(note)
+    if not matches or len({n.plan_predicate for n in matches}) != 1:
+        return candidate, ()
+    original = matches[0].candidate
+    if not all(
+        any(identity in text for text in fragments)
+        for identity in (original.label, original.value)
+    ):
+        return candidate, ()
+    return candidate.model_copy(
+        update={"label": original.label, "value": original.value, "kind": original.kind}
+    ), tuple(matches)
+
+
 class ClarificationBoard:
     """Open questions of each conversation. A question is asked once and
     stays open until answered, settled by a later clear statement, or its
@@ -253,19 +325,12 @@ class ClarificationBoard:
         self._asked: set[tuple] = set()
 
     def offer(self, note: LearningClarification) -> bool:
-        """Open a question unless the same detail already has one open in
-        this conversation (one question per detail at a time; the fact's name
-        may be worded differently in a later proposal)."""
+        """Open a question unless this fact and detail already have one."""
         if note.key in self._open or any(
             n.session_id == note.session_id
             and n.category == note.category
-            and (
-                set(n.details) & set(note.details)
-                or (
-                    not (n.details or note.details)
-                    and n.subject.casefold() == note.subject.casefold()
-                )
-            )
+            and n.identity == note.identity
+            and (set(n.details) & set(note.details) or not (n.details or note.details))
             for n in self._open.values()
         ):
             return False
@@ -288,16 +353,21 @@ class ClarificationBoard:
             None,
         )
 
-    def resolve(self, session_id, category, subject, details) -> list:
+    def resolve(
+        self, session_id, category, subject, details, *, plan_predicate=None
+    ) -> list:
         """A later clear statement of these details settles the questions
-        about them; the subject must name the same fact."""
-        subject = (subject or "").casefold()
+        about them on the same fact."""
+        identity = (
+            plan_predicate,
+            (subject or "").casefold() if plan_predicate is None else None,
+        )
         settled = []
         for note in list(self._open.values()):
             if (
                 note.session_id == session_id
                 and note.category == category
-                and note.subject.casefold() == subject
+                and note.identity == identity
                 and note.details
                 and set(note.details) <= set(details)
             ):

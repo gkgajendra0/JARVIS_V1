@@ -1,5 +1,6 @@
 """Anchor user date expressions to their accepted turn, never to retrieval time."""
 
+from .learning_values import normalized_slots
 from .personal_time import time_object
 
 HISTORY_CATEGORIES = frozenset({"personal_fact", "activity", "event", "plan"})
@@ -9,7 +10,40 @@ HISTORY_CATEGORIES = frozenset({"personal_fact", "activity", "event", "plan"})
 POSSIBILITY_CATEGORIES = HISTORY_CATEGORIES | frozenset({"routine", "goal"})
 
 
+def plan_time_restated(candidate):
+    """Whether this proposal admits a schedule detail, even an open choice."""
+    return candidate.category == "plan" and "when" in normalized_slots(
+        candidate.slots, candidate.owner_confirmed
+    )
+
+
+def plan_schedule_unspecified(candidate):
+    """Default-empty means not stated; an explicit uncertainty mark does not."""
+    when = candidate.slots.when if candidate.slots is not None else None
+    return when is None or (
+        not (when.value or when.options) and when.certainty == "confirmed"
+    )
+
+
+def normalize_plan_time(candidate):
+    """A supplied schedule slot is the plan's time, not a second calendar.
+
+    Only an admitted, confirmed value supplies a date. Alternatives and
+    unclear/tentative schedule details cannot leak one option through the
+    optional legacy time field. Without a schedule slot that field still
+    supports older proposals.
+    """
+    if candidate.category != "plan" or plan_schedule_unspecified(candidate):
+        return candidate
+    when = normalized_slots(candidate.slots, candidate.owner_confirmed).get("when")
+    expression = (
+        when.get("value") if when and when.get("certainty") == "confirmed" else None
+    )
+    return candidate.model_copy(update={"time_expression": expression})
+
+
 def temporal_context(source, candidate):
+    candidate = normalize_plan_time(candidate)
     recorded = source.turns[-1].accepted_at.astimezone()
     anchor = recorded
     expression = candidate.time_expression

@@ -173,9 +173,10 @@ def _json_default(value):
 def context_scope_signature(
     snapshot: ScopedContextSnapshot, scope_keys: tuple[str, ...]
 ) -> str:
+    provenance = dict(snapshot.provenance)
     rows = sorted(
         (
-            (scope, asdict(record))
+            (scope, asdict(record), provenance.get(record.assertion_id))
             for record, scope in snapshot.entries
             if scope in scope_keys
         ),
@@ -204,15 +205,16 @@ def only_additions_from_turn(
     """Whether ``after`` differs from ``before`` within ``scope_keys`` only by
     new rows learned from ``canonical_ref`` (one accepted owner turn).
 
-    Every looked-up row is still current and unchanged, nothing new replaces
-    anything, and suppression for those scopes is the same. Any other
-    difference - a correction, forget, retraction, disabled category, or a row
-    from another turn or source - is not accepted."""
+    Every looked-up row and its provenance are unchanged, nothing new
+    replaces anything, and suppression for those scopes is the same. Any
+    other difference - a correction, forget, retraction, disabled category, or
+    a row from another turn or source - is not accepted."""
     keys = set(scope_keys)
 
     def rows(snapshot):
+        provenance = dict(snapshot.provenance)
         return {
-            record.assertion_id: asdict(record)
+            record.assertion_id: (scope, record, provenance.get(record.assertion_id))
             for record, scope in snapshot.entries
             if scope in keys
         }
@@ -225,12 +227,14 @@ def only_additions_from_turn(
     old, new = rows(before), rows(after)
     if any(new.get(assertion) != row for assertion, row in old.items()):
         return False
-    added = [row for assertion, row in new.items() if assertion not in old]
+    added = [
+        record for assertion, (_, record, _) in new.items() if assertion not in old
+    ]
     references = dict(after.sources)
     return bool(added) and all(
-        row["supersedes_id"] is None
-        and references.get(row["source_id"]) == canonical_ref
-        for row in added
+        record.supersedes_id is None
+        and references.get(record.source_id) == canonical_ref
+        for record in added
     )
 
 

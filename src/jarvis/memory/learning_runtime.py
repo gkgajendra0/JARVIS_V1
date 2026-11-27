@@ -16,9 +16,10 @@ from jarvis.provider_retry import decide_retry
 from .learning_clarification import (
     ALTERNATIVES,
     ClarificationBoard,
-    alternatives_question,
+    alternatives_questions,
     clarification_for,
     confirmation_candidate,
+    ground_chosen_plan,
     stated_details,
 )
 from .learning_contracts import AcceptedLearningSource, LearningBatch
@@ -41,25 +42,19 @@ class LearningRuntimeStatus:
     reason: str
 
 
-def _already_held(note, catalog) -> bool:
-    """Alternatives already stored on a plan in this catalog page (the owner
-    confirmed them earlier) are not asked about again."""
-    if note is None or note.kind != ALTERNATIVES:
+def _already_held(note, entry) -> bool:
+    """Skip alternatives already confirmed for this resolved plan."""
+    if entry is None or note.kind != ALTERNATIVES:
         return False
-    for entry in catalog.entries:
-        if entry.category != "plan":
-            continue
-        try:
-            slots = json.loads(entry.value).get("slots") or {}
-        except (TypeError, ValueError, AttributeError):
-            continue
-        if all(
-            {o.casefold() for o in (slots.get(name) or {}).get("options") or ()}
-            == {o.casefold() for o in options}
-            for name, options in note.choices
-        ):
-            return True
-    return False
+    try:
+        slots = json.loads(entry.value).get("slots") or {}
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return all(
+        {o.casefold() for o in (slots.get(name) or {}).get("options") or ()}
+        == {o.casefold() for o in options}
+        for name, options in note.choices
+    )
 
 
 class PersonalLearningRuntime:
@@ -406,15 +401,18 @@ class PersonalLearningRuntime:
                 source, lambda: self.extractor.extract(source), receipt, grant
             )
         self._require(receipt, source, grant)
-        answered, confirmations = self._answered(source, batch, open_questions)
+        answered, confirmations, chosen = self._answered(source, batch, open_questions)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
-        notes, settled = [], []
-        proposals = list(batch.candidates) + confirmations
+        notes, confirmation_questions = [], {}
+        proposals = [
+            ground_chosen_plan(source, candidate, chosen)
+            for candidate in batch.candidates
+        ] + confirmations
         grounded_count = len(proposals)
-        for index, candidate in enumerate(proposals):
+        for index, (candidate, questions) in enumerate(proposals):
             grounded = ground_plan_label(source, candidate)
             if grounded is not candidate:
                 log_learning(
@@ -441,12 +439,19 @@ class PersonalLearningRuntime:
                 fact=candidate.model_dump(mode="json"),
             )
             if decision.status == "eligible":
+                ordinal = len(eligible)
                 eligible.append(candidate)
-                notes.append(clarification_for(source, candidate))
-                notes.append(alternatives_question(source, candidate))
-                settled.append(candidate)
+                if questions:
+                    confirmation_questions[ordinal] = questions
+                if note := clarification_for(source, candidate):
+                    notes.append((ordinal, note))
+                notes.extend(
+                    (ordinal, note)
+                    for note in alternatives_questions(source, candidate)
+                )
             elif decision.reason == "meaning_unclear":
-                notes.append(clarification_for(source, candidate, dropped_unclear=True))
+                if note := clarification_for(source, candidate, dropped_unclear=True):
+                    notes.append((None, note))
         batch = LearningBatch(candidates=eligible)
         if not batch.candidates:
             log_learning(
@@ -458,7 +463,7 @@ class PersonalLearningRuntime:
                 if grounded_count == 0
                 else "all_candidates_rejected",
             )
-            self._publish(source, notes, settled, answered)
+            self._publish(source, (note for _, note in notes), (), answered)
             self._report("no_eligible_fact")
             return
         self._stage = "catalog"
@@ -468,7 +473,6 @@ class PersonalLearningRuntime:
         )
         self._require(receipt, source, grant)
         catalog = catalog.model_copy(update={"suppression_epochs": suppression.epochs})
-        notes = [n for n in notes if not _already_held(n, catalog)]
         self._stage = "resolution"
         resolutions = await self._infer(
             source,
@@ -485,61 +489,107 @@ class PersonalLearningRuntime:
             decisions=resolutions.model_dump(mode="json")["resolutions"],
         )
         self._stage = "reconciliation"
-        plan = self.reconciler.plan(source, batch, catalog, resolutions)
+        plan = self.reconciler.plan(
+            source,
+            batch,
+            catalog,
+            resolutions,
+            confirmation_targets={
+                i: questions[0].plan_predicate
+                for i, questions in confirmation_questions.items()
+                if questions[0].plan_predicate is not None
+            },
+        )
+        committed = {}
         if not plan.mutations and not plan.outcomes:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
-            self._publish(source, notes, settled, answered)
-            self._report("no_change")
-            return
-        self._stage = "storage"
-        permit = self.authority.issue_child(grant, plan.binding())
-        result = await self.service.admit_learning(plan, permit)
-        if result.status == "committed":
-            self._committed += len(result.assertion_ids)
-        log_learning(
-            self.diagnostics,
-            source,
-            "storage",
-            result.status,
-            assertion_ids=list(result.assertion_ids),
-            skipped=[
-                {"candidate_index": o.ordinal, "reason": o.reason}
-                for o in plan.outcomes
-            ],
-            mutations=[
-                {
-                    "action": m.action,
-                    "predicate": m.predicate,
-                    "expected_assertion_id": m.expected_assertion_id,
-                    "stored_value": m.draft.value if m.draft else None,
+            status = "no_change"
+        else:
+            self._stage = "storage"
+            permit = self.authority.issue_child(grant, plan.binding())
+            result = await self.service.admit_learning(plan, permit)
+            status = result.status
+            if status == "committed":
+                self._committed += len(result.assertion_ids)
+                committed = {
+                    m.ordinal: m.predicate
+                    for m in plan.mutations
+                    if m.draft is not None
                 }
-                for m in plan.mutations
-            ],
+            log_learning(
+                self.diagnostics,
+                source,
+                "storage",
+                status,
+                assertion_ids=list(result.assertion_ids),
+                skipped=[
+                    {"candidate_index": o.ordinal, "reason": o.reason}
+                    for o in plan.outcomes
+                ],
+                mutations=[
+                    {
+                        "action": m.action,
+                        "predicate": m.predicate,
+                        "expected_assertion_id": m.expected_assertion_id,
+                        "stored_value": m.draft.value if m.draft else None,
+                    }
+                    for m in plan.mutations
+                ],
+            )
+
+        by_id = {entry.assertion_id: entry for entry in catalog.entries}
+        matched = {i: by_id[aid] for i, aid in plan.matched_plan_ids}
+        predicates = {i: entry.predicate for i, entry in matched.items()} | committed
+        skipped = {o.ordinal for o in plan.outcomes} | {
+            m.ordinal for m in plan.mutations if m.ordinal not in committed
+        }
+        settled = [
+            (eligible[i], predicate)
+            for i, predicate in predicates.items()
+            if i not in skipped
+        ]
+        for i, questions in confirmation_questions.items():
+            answered.extend(
+                question
+                for question in questions
+                if i in committed or _already_held(question, matched.get(i))
+            )
+        self._publish(
+            source,
+            (
+                replace(note, plan_predicate=predicates.get(i))
+                for i, note in notes
+                if not _already_held(note, matched.get(i))
+            ),
+            settled,
+            answered,
         )
-        self._publish(source, notes, settled, answered)
-        self._report(result.status)
+        self._report(status)
 
     def _answered(self, source, batch, open_questions):
         """The owner's answers to open questions, as the extractor read them.
         Code decides what each allows: a confirmation of alternatives becomes
         an ordinary proposal from the owner's original words (then policy,
-        resolution and reconciliation as usual); "chosen" and "doesnt_matter"
-        close the question (a chosen value is the extractor's own proposal).
-        Nothing changes for a question the turn does not answer."""
+        resolution and reconciliation as usual). A proposed choice settles its
+        question through ordinary reconciliation of a clear detail. An answered
+        alternatives question can supply its grounded identity when the model
+        paraphrases both identity fields; its canonical target stays binding."""
         by_id = {n.question_id: n for n in open_questions}
-        answered, confirmations = [], []
+        answered, groups, chosen = [], {}, []
         for answer in batch.answers:
             note = by_id.pop(answer.question_id, None)
             if note is None:
                 continue
-            answered.append((note, answer.answer))
             if answer.answer == "confirmed" and note.kind == ALTERNATIVES:
-                candidate = confirmation_candidate(source, note)
-                if (
-                    candidate is not None
-                    and len(batch.candidates) + len(confirmations) < 8
-                ):
-                    confirmations.append(candidate)
+                # A turn may explicitly confirm multiple questions from one
+                # proposal. Reconcile them together as one plan mutation.
+                groups.setdefault((id(note.candidate), note.plan_predicate), []).append(
+                    note
+                )
+            elif answer.answer == "chosen" and note.details:
+                chosen.append(note)
+            else:
+                answered.append(note)
             log_learning(
                 self.diagnostics,
                 source,
@@ -549,17 +599,22 @@ class PersonalLearningRuntime:
                 answer=answer.answer,
                 details=list(note.details),
             )
-        return answered, confirmations
+        confirmations = [
+            (candidate, questions)
+            for questions in groups.values()
+            if (candidate := confirmation_candidate(source, questions)) is not None
+        ]
+        return answered, confirmations[: 8 - len(batch.candidates)], chosen
 
     def _publish(self, source, notes, settled, answered=()):
         """After the turn's learning completed: answered questions close;
         details stated clearly settle earlier questions about them; new
         questions go to the reply path. Nothing here is a storage receipt."""
         closed = set()
-        for note, _answer in answered:
+        for note in answered:
             self.clarifications.close(note)
             closed.add(note.key)
-        for candidate in settled:
+        for candidate, predicate in settled:
             details = stated_details(candidate)
             if details:
                 self.clarifications.resolve(
@@ -567,13 +622,10 @@ class PersonalLearningRuntime:
                     candidate.category,
                     candidate.label or candidate.value,
                     details,
+                    plan_predicate=predicate,
                 )
         for note in notes:
-            if (
-                note is None
-                or note.key in closed
-                or not self.clarifications.offer(note)
-            ):
+            if note.key in closed or not self.clarifications.offer(note):
                 continue
             log_learning(
                 self.diagnostics,

@@ -27,7 +27,10 @@ from .learning_policy import SCALAR_FACETS, LearningPolicy
 from .learning_temporal import (
     HISTORY_CATEGORIES,
     POSSIBILITY_CATEGORIES,
+    normalize_plan_time,
     occurrence_matches,
+    plan_schedule_unspecified,
+    plan_time_restated,
     temporal_context,
 )
 from .learning_values import (
@@ -86,6 +89,8 @@ class LearningPlan:
     mutations: tuple[PlannedLearningMutation, ...]
     suppression_epochs: tuple[tuple[str, int], ...] = ()
     outcomes: tuple[LearningOutcome, ...] = ()
+    # Ephemeral clarification bookkeeping, excluded from write authorization.
+    matched_plan_ids: tuple[tuple[int, str], ...] = ()
 
     @property
     def digest(self):
@@ -237,8 +242,11 @@ class LearningReconciler:
         batch: LearningBatch,
         catalog: LearningCatalog,
         resolutions: LearningResolutionBatch,
+        *,
+        confirmation_targets: dict[int, str] | None = None,
     ) -> LearningPlan:
         by_id = {entry.assertion_id: entry for entry in catalog.entries}
+        confirmation_targets = confirmation_targets or {}
         choices = {}
         duplicate_indices = set()
         for choice in resolutions.resolutions:
@@ -247,9 +255,11 @@ class LearningReconciler:
             choices[choice.candidate_index] = choice
         mutations = []
         outcomes = []
+        matched_plan_ids = {}
         used = set()
         trip_choices = _trip_choices(batch)
         for index, candidate in enumerate(batch.candidates):
+            candidate = normalize_plan_time(candidate)
 
             def skip(reason, *, index=index, candidate=candidate, record=True):
                 log_learning(
@@ -330,13 +340,41 @@ class LearningReconciler:
             if len(same) > 1:
                 skip("ambiguous_existing_fact")
                 continue
-            refine_target = None
-            decision_only = False
+            named_target = same[0] if same else None
+            compatible_match = (
+                choice.decision in {"match", "duplicate"}
+                and entry is not None
+                and entry.category == candidate.category
+                and entry.kind == candidate.kind
+            )
+            if (
+                named_target is None
+                and compatible_match
+                and (
+                    _label(entry) == normalize_memory_surface(candidate.label)
+                    # A shorter name for exactly one item ("the Tigor"
+                    # for "Tata Tigor"); never between two plausible items.
+                    or unique_reference(entry, candidate.label, catalog.entries)
+                )
+            ):
+                named_target = entry
+            if candidate.category == "plan":
+                if named_target is not None:
+                    matched_plan_ids[index] = named_target.assertion_id
+                elif compatible_match and _names_entry(
+                    candidate, entry, catalog.entries
+                ):
+                    # A longer reference may identify an existing question
+                    # without satisfying the narrower rules for a write.
+                    matched_plan_ids[index] = entry.assertion_id
+
             added = (
                 _added_detail(candidate, source)
                 if candidate.intent == "new" and candidate.category not in SCALAR_FACETS
                 else {}
             )
+            refine_target = named_target if added else None
+            decision_only = False
             if (
                 date_issue
                 and not added
@@ -347,37 +385,26 @@ class LearningReconciler:
                 # nothing to apply, recorded rather than silently dropped.
                 skip(date_issue)
                 continue
-            if added:
-                if same:
-                    refine_target = same[0]
-                elif (
-                    choice.decision in {"match", "duplicate"}
-                    and entry is not None
-                    and entry.category == candidate.category
-                    and entry.kind == candidate.kind
-                    and (
-                        _label(entry) == normalize_memory_surface(candidate.label)
-                        # A shorter name for exactly one item ("the Tigor"
-                        # for "Tata Tigor"); never between two plausible items.
-                        or unique_reference(entry, candidate.label, catalog.entries)
-                    )
-                ):
-                    refine_target = entry
-                elif candidate.category == "plan" and _option_decision_target(
+            if (
+                added
+                and refine_target is None
+                and candidate.category == "plan"
+                and _option_decision_target(
                     choice, entry, candidate, added, catalog.entries
-                ):
-                    # The new words name the decision, not the stored plan
-                    # (run 5: stored label "trip", new label "winter Spiti").
-                    # The chosen option itself identifies the plan: it must be
-                    # one of this plan's stated alternatives and of no other
-                    # current plan. Only the option-decision change is allowed
-                    # through this route, never a refine. The plan keeps its
-                    # own kind: a plan's kind is not part of what identifies
-                    # it (Paid lab D10: the decision naming a vehicle was
-                    # proposed as kind "vehicle").
-                    refine_target, decision_only = entry, True
-                    if candidate.kind != entry.kind:
-                        candidate = candidate.model_copy(update={"kind": entry.kind})
+                )
+            ):
+                # The chosen option identifies the plan when it is one of the
+                # alternatives on only that plan. Only that decision can
+                # change the plan through this route, which keeps its kind.
+                refine_target, decision_only = entry, True
+                if candidate.kind != entry.kind:
+                    candidate = candidate.model_copy(update={"kind": entry.kind})
+            required = confirmation_targets.get(index)
+            if required is not None and (
+                refine_target is None or refine_target.predicate != required
+            ):
+                skip("confirmation_target_mismatch")
+                continue
             if refine_target is not None:
                 try:
                     old_value = json.loads(refine_target.value)
@@ -386,6 +413,8 @@ class LearningReconciler:
                 if not isinstance(old_value, dict):
                     skip("already_stored")
                     continue
+                if candidate.category == "plan":
+                    matched_plan_ids[index] = refine_target.assertion_id
                 # Recomputed with the stored value as context (a restated
                 # acquired month may then get its inferred year).
                 added = _added_detail(candidate, source, old_value) or added
@@ -435,6 +464,10 @@ class LearningReconciler:
                         skip("conflicting_mutations")
                         continue
                     used.add(predicate)
+                    value = _changed_value(old_value, candidate, source)
+                    for key in ("label", "value"):
+                        if key in old_value:
+                            value[key] = old_value[key]
                     mutations.append(
                         self._mutation(
                             index,
@@ -443,7 +476,7 @@ class LearningReconciler:
                             "change",
                             predicate,
                             expected,
-                            _changed_value(old_value, candidate, source),
+                            value,
                             others=_other_labels(batch, index),
                         )
                     )
@@ -454,6 +487,24 @@ class LearningReconciler:
                 if merged is None:
                     skip(reason)
                     continue
+                if candidate.category == "plan" and "when" in added.get("slots", {}):
+                    # Adding a schedule detail must also fill its calendar.
+                    # A refinement cannot change an already stated window,
+                    # including a relative date re-anchored to a later turn.
+                    fresh_time = temporal_context(source, candidate)
+                    old_time = old_value.get("temporal") or {}
+                    if old_time.get("expression"):
+                        keys = ("precision", "earliest", "latest")
+                        same = all(old_time.get(k) == fresh_time.get(k) for k in keys)
+                        if old_time.get("precision") in {None, "unresolved"}:
+                            same = same and old_time.get(
+                                "expression"
+                            ) == fresh_time.get("expression")
+                        if not same:
+                            skip("refine_conflicts_existing_detail")
+                            continue
+                    else:
+                        merged["temporal"] = fresh_time
                 if predicate in used:
                     skip("conflicting_mutations")
                     continue
@@ -627,6 +678,7 @@ class LearningReconciler:
             tuple(mutations),
             tuple(sorted(catalog.suppression_epochs.items())),
             tuple(outcomes),
+            tuple(matched_plan_ids.items()),
         )
 
     @staticmethod
@@ -1132,9 +1184,13 @@ def _corrected_plan_value(old, fresh, candidate, entry, entries):
     if changed:
         value["slots"] = {**old_slots, **changed}
         restated = True
-    old_time = (old.get("temporal") or {}).get("expression")
-    if candidate.time_expression and fresh["temporal"].get("expression") != old_time:
-        value["temporal"] = fresh["temporal"]
+    old_time = old.get("temporal") or {}
+    fresh_time = fresh["temporal"]
+    if (candidate.time_expression is not None or plan_time_restated(candidate)) and any(
+        old_time.get(key) != fresh_time.get(key)
+        for key in ("expression", "precision", "earliest", "latest")
+    ):
+        value["temporal"] = fresh_time
         restated = True
     for key in ("location", "reason"):
         if fresh.get(key) is not None and fresh[key] != old.get(key):
@@ -1148,11 +1204,24 @@ def _corrected_plan_value(old, fresh, candidate, entry, entries):
     return value if restated else None
 
 
-def _plan_fields(candidate):
+def _plan_fields(candidate, context=None):
     fields = {}
     if candidate.plan_status is not None:
         fields["plan_status"] = candidate.plan_status
     slots = normalized_slots(candidate.slots, candidate.owner_confirmed)
+    if (
+        candidate.time_expression is not None
+        and plan_schedule_unspecified(candidate)
+        and context
+        and "when" in (context.get("slots") or {})
+    ):
+        # A legacy time-only update restates the same schedule detail; it
+        # must not leave its older slot value contradicting the calendar.
+        slots["when"] = {
+            "value": candidate.time_expression,
+            "options": [],
+            "certainty": candidate.certainty,
+        }
     if slots:
         fields["slots"] = slots
     return fields
@@ -1197,7 +1266,7 @@ def _added_detail(candidate, source, context=None):
     if candidate.category == "owned_item":
         return _item_fields(candidate, source, context)
     if candidate.category == "plan":
-        return _plan_fields(candidate)
+        return _plan_fields(candidate, context)
     return {}
 
 
@@ -1234,7 +1303,7 @@ def _new_value(candidate, source, context=None):
             if detail is not None:
                 value[key] = detail
         if candidate.category == "plan":
-            value.update(_plan_fields(candidate))
+            value.update(_plan_fields(candidate, context))
     return _record_certainty(value, candidate, certainty)
 
 
@@ -1289,14 +1358,18 @@ def _changed_value(old, candidate, source):
     if candidate.category in HISTORY_CATEGORIES:
         value["label"] = candidate.label
         value["certainty"] = certainty
-        if candidate.time_expression is not None or "temporal" not in value:
+        if (
+            candidate.time_expression is not None
+            or plan_time_restated(candidate)
+            or "temporal" not in value
+        ):
             value["temporal"] = temporal_context(source, candidate)
         for key in ("location", "reason"):
             detail = getattr(candidate, key)
             if detail is not None:
                 value[key] = detail
         if candidate.category == "plan":
-            fields = _plan_fields(candidate)
+            fields = _plan_fields(candidate, old)
             if "plan_status" in fields:
                 value["plan_status"] = fields["plan_status"]
             if "slots" in fields:

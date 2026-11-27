@@ -1,0 +1,55 @@
+{
+  "source_commit": "7e787c53d125e5413d67e5dd214751d8fffe8eb9",
+  "utterance": "We're planning a Rishikesh trip in October 2026.",
+  "told_date": "2026-09-15",
+  "extraction": {
+    "candidates": [
+      {
+        "category": "plan",
+        "kind": "other",
+        "intent": "new",
+        "label": "Rishikesh trip",
+        "value": "Rishikesh trip",
+        "evidence": [
+          {
+            "turn_id": "2b009247-d178-4808-87fb-0c7051ff3269",
+            "start": 0,
+            "end": 48
+          }
+        ],
+        "qualification": "direct",
+        "importance": "stable",
+        "sensitivity": "standard",
+        "state": "planned",
+        "certainty": "confirmed",
+        "time_expression": null,
+        "location": null,
+        "reason": null,
+        "scalar_facet": null,
+        "confidence": 1.0,
+        "aliases": [],
+        "details": null,
+        "acquired_expression": null,
+        "disposed_expression": null,
+        "plan_status": "planned",
+        "slots": {
+          "destination": {
+            "value": "Rishikesh",
+            "options": [],
+            "certainty": "confirmed"
+          },
+          "when": {
+            "value": "October 2026",
+            "options": [],
+            "certainty": "confirmed"
+          },
+          "vehicle": null,
+          "stay": null,
+          "companions": null,
+          "other": null
+        }
+      }
+    ],
+    "answers": []
+  }
+}

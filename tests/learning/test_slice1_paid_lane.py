@@ -432,16 +432,28 @@ def test_learning_call_paths_are_told_apart_by_prompt():
 # -- one lane per lab -------------------------------------------------------------
 
 
-def test_a_lab_never_changes_lane_on_resume(tmp_path):
-    from jarvis.voice.project_memory_lab import check_lane
+def test_a_lab_never_changes_lane_on_resume(tmp_path, monkeypatch):
+    from jarvis.voice import project_memory_lab
+
+    check_lane = project_memory_lab.check_lane
 
     ledger = tmp_path / "ledger.sqlite3"
+    ledger.touch()
+    monkeypatch.setattr(project_memory_lab, "APPROVED_PAID_LEDGER", ledger)
     check_lane(tmp_path, "paid", ledger)  # fresh lab
     (tmp_path / "acceptance-steps.jsonl").write_text(
-        json.dumps({"lane": "paid", "step_id": "story-01"}) + "\n", encoding="utf-8"
+        json.dumps(
+            {
+                "lane": "paid",
+                "step_id": "story-01",
+                "paid_budget": {"ledger": str(ledger)},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
     )
     check_lane(tmp_path, "paid", ledger)
-    with pytest.raises(ValueError, match="cannot continue on free"):
+    with pytest.raises(ValueError, match="cannot change|cannot continue on free"):
         check_lane(tmp_path, "free", None)
     with pytest.raises(ValueError, match="requires its ledger"):
         check_lane(tmp_path, "paid", None)
@@ -556,8 +568,18 @@ def test_a_ledger_created_before_allowances_keeps_its_rows(tmp_path):
     assert snap["committed_usd"] == 40 / 1e6 and snap["ceiling_usd"] == 1.0
 
 
-def test_resume_marker_rule_allows_only_the_recorded_recovery_build(tmp_path):
-    from jarvis.voice.project_memory_lab import MARKER, RECOVERY_SOURCE, _resume_allowed
+def test_resume_marker_rule_allows_only_the_recorded_recovery_build(
+    tmp_path, monkeypatch
+):
+    from jarvis.voice import project_memory_lab
+    from jarvis.voice.project_memory_lab import MARKER, RECOVERY_SOURCE
+
+    monkeypatch.setattr(project_memory_lab, "_same_product_source", lambda *_a: True)
+
+    def _resume_allowed(lab, marker, commit, recovering):
+        return project_memory_lab._resume_allowed(
+            lab, marker, commit, recovering, source=tmp_path
+        )
 
     marker = tmp_path / "project-memory.marker"
     original, recovery, other = "0" * 40, "7" * 40, "9" * 40

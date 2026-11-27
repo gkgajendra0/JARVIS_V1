@@ -3,6 +3,7 @@
 import asyncio
 import sqlite3
 import threading
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -11,13 +12,20 @@ from livekit import rtc
 from livekit.agents.voice.io import AudioOutput, AudioOutputCapabilities
 
 from jarvis.conversation import ConversationRole, ConversationSession
+from jarvis.memory.assertions import SemanticAssertionDraft
 from jarvis.memory.lifecycle import MemoryLifecycleService
 from jarvis.memory.migration_runner import MemoryMigrationRunner
 from jarvis.memory.provenance import MemorySource
 from jarvis.memory.query import CanonicalMemoryReader
 from jarvis.memory.retrieval import SemanticRetrievalService
 from jarvis.memory.service import MemoryService
-from jarvis.memory.types import AuthorityClass, MemorySourceClass, Sensitivity
+from jarvis.memory.types import (
+    AuthorityClass,
+    FreshnessClass,
+    MemorySourceClass,
+    Sensitivity,
+    ValueType,
+)
 from jarvis.memory.worker import SerialConnectionWorker
 from jarvis.voice.personal_context import PersonalContextSession
 from jarvis.voice.personal_context_audio import PersonalContextAudioOutput
@@ -105,6 +113,97 @@ async def personal(tmp_path):
     session.close()
     await reader.close()
     await writer.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "consumer", ["cache", "page", "audio", "restore", "audio_after_learning"]
+)
+async def test_external_forget_refuses_released_provenance_after_quote_scrub(
+    personal, consumer
+):
+    session, service, conversation, _, retired = personal
+
+    async def remember(category, kind, label, state, *, quote=None, canonical_ref=None):
+        predicate = f"{category}_{label.casefold()}"
+        draft = SemanticAssertionDraft(
+            "personal",
+            "owner",
+            predicate,
+            ValueType.JSON,
+            {
+                "schema": "personal-learning-v1",
+                "category": category,
+                "kind": kind,
+                "label": label,
+                "value": label,
+                "state": state,
+            },
+            label,
+            FreshnessClass.CHANGEABLE,
+            Sensitivity.STANDARD,
+        )
+        evidence = source(label)
+        await service._lifecycle.create(
+            draft,
+            replace(
+                evidence,
+                authority_class=AuthorityClass.OWNER_DIRECT,
+                source_class=MemorySourceClass.OWNER_DIRECT,
+                canonical_ref=canonical_ref or f"conversation:fiction:turn:{label}",
+                evidence_text=quote,
+            ),
+        )
+        return predicate
+
+    await remember(
+        "owned_item", "vehicle", "City", "owned", quote="City for SecretTrip"
+    )
+    plan = await remember("plan", "other", "SecretTrip", "planned")
+    if consumer == "page":
+        for number in range(8):
+            await remember("owned_item", "vehicle", f"Demo car {number}", "owned")
+
+    session._explicit_question_queries = True
+    turn = conversation.accept_turn(ConversationRole.USER, "Which vehicles do I own?")
+    requests = [{"scope_key": "owned_item.vehicle"}]
+    result = await session.query_for_question(requests)
+    assert result["status"] == "selected"
+    assert result["facts"][0]["told"]["quote"] == "City for SecretTrip"
+
+    scopes = ("owned_item.vehicle",)
+    if consumer == "audio_after_learning":
+        await remember(
+            "owned_item",
+            "vehicle",
+            "Test scooter",
+            "owned",
+            canonical_ref=f"conversation:{conversation.session_id}:turn:{turn.turn_id}",
+        )
+        assert await session.allow_audio()
+
+    before = await service.canonical_reader.learning_context_snapshot(scopes)
+    # Another writer goes through canonical forget and never calls the read
+    # session's mutation API. The City assertion survives its source's scrub.
+    await service.forget_exact(predicate=plan, source=source("forget-plan"))
+    after = await service.canonical_reader.learning_context_snapshot(scopes)
+    assert before.entries == after.entries
+    assert before.provenance != after.provenance
+    assert "SecretTrip" not in str(after.provenance)
+
+    if consumer == "cache":
+        refused = await session.query_for_question(requests)
+        assert refused["status"] == "denied"
+    elif consumer == "page":
+        refused = await session.query_for_question(
+            requests, result["paging"]["next_page"]
+        )
+        assert refused["status"] == "denied"
+    elif consumer == "restore":
+        assert not await session.validate_transport_restore()
+    else:
+        assert not await session.allow_audio()
+    assert retired
 
 
 @pytest.mark.asyncio
