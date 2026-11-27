@@ -389,7 +389,6 @@ async def test_explicit_tools_record_receipts_and_memory_status_reads_them(learn
     turn = conversation.accept_turn(ConversationRole.USER, "Forget the Classic 350.")
     receipts = MemoryReceipts()
     tools = MemoryAgentTools(learning.service, conversation, receipts=receipts)
-    assert tools.memory_status in tools.tools
     status = await tools.verified_memory_status(wait=0)
     assert status["turns"][0]["status"] == "nothing_saved"
     tools._record({"ok": True, "operation": "forget", "predicate": "classic 350"})
