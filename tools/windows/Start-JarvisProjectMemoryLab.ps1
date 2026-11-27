@@ -21,6 +21,7 @@ param(
     [switch]$RecoverD17Consent,
     [string]$PaidBudgetLedger = "",
     [string]$HeldoutScript = "",
+    [ValidateSet('any','invariant')][string]$StopOn = "any",
     [ValidateSet('without','with')][string]$ContextEvalArm,
     [ValidateSet('travel','diet','device')][string]$ContextEvalCase,
     [ValidateSet('p0-q0','p1-q1','p2-q2','p3-q3','p4-q4','p5-q5')][string]$DevelopmentCase
@@ -40,6 +41,7 @@ if ($RecoverD17Consent -and -not ($Slice1Acceptance -and $ResumeLab)) { throw "R
 if ([bool]$PaidLane -ne [bool]$PaidBudgetLedger) { throw "PaidLane and PaidBudgetLedger go together." }
 if ($RetryInterrupted -and -not $ResumeLab) { throw "RetryInterrupted only continues an existing lab (ResumeLab)." }
 if ($HeldoutScript -and (-not $Slice1Acceptance -or $Slice1Group -or $PaidLane -or $PaidCheckpoint -or $RecoverD17Consent -or $ResumeLab)) { throw "HeldoutScript runs once in a fresh lab with Slice1Acceptance, Free lane only (the approved Paid budget excludes held-out)." }
+if ($StopOn -ne "any" -and -not $PaidLane) { throw "StopOn applies to the Paid lane." }
 if ($CallSpacingSeconds -and -not $Slice1Acceptance) { throw "CallSpacingSeconds requires Slice1Acceptance." }
 if ($DevelopmentBatch -and ($SeedAcceptance -or $ResumeLab)) { throw "Development batch requires a new isolated lab, without acceptance seeding or resume." }
 if ($SeedAcceptance -and $ResumeLab) { throw "Acceptance seeding requires a new isolated lab." }
@@ -101,6 +103,7 @@ try {
     if ($PaidCheckpoint) { $arguments += "--paid-checkpoint" }
     if ($RecoverD17Consent) { $arguments += "--recover-d17-consent" }
     if ($HeldoutScript) { $arguments += @("--slice1-heldout-script", [IO.Path]::GetFullPath($HeldoutScript)) }
+    if ($StopOn -ne "any") { $arguments += @("--slice1-stop-on", $StopOn) }
     Push-Location $source
     try { & $python @arguments; if ($LASTEXITCODE -ne 0) { throw "Lab failed; retain its files." } }
     finally { Pop-Location }

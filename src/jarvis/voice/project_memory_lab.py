@@ -832,6 +832,7 @@ async def run_slice1_acceptance(
     checkpoint=False,
     recover_d17_consent=False,
     heldout=None,
+    stop_on="any",
 ):
     """Frozen D1-D27 development acceptance in this isolated lab profile.
 
@@ -1075,6 +1076,7 @@ async def run_slice1_acceptance(
             retry_interrupted=retry_interrupted,
             stop_after=CHECKPOINT_STOP_AFTER if checkpoint else None,
             stop_on_failure=lane == "paid",
+            stop_on=stop_on,
             recover_d17_consent=recover_d17_consent,
             **held,
         )
@@ -1173,6 +1175,7 @@ def run_slice1_acceptance_mode(args, repo, tool_paths):
                     lane="paid" if args.paid_lane else "free",
                     paid_ledger=args.paid_budget_ledger,
                     checkpoint=args.paid_checkpoint,
+                    stop_on=args.slice1_stop_on,
                     recover_d17_consent=args.recover_d17_consent,
                     heldout=heldout,
                 )
@@ -1241,7 +1244,12 @@ def main(argv=None):
     parser.add_argument("--paid-checkpoint", action="store_true")
     parser.add_argument("--recover-d17-consent", action="store_true")
     parser.add_argument("--slice1-heldout-script", type=Path, default=None)
+    # "invariant": the Paid lane stops only on a failed safety invariant;
+    # model-quality failures are measured (bounded final evaluation).
+    parser.add_argument("--slice1-stop-on", choices=("any", "invariant"), default="any")
     args = parser.parse_args(argv)
+    if args.slice1_stop_on != "any" and not args.paid_lane:
+        parser.error("--slice1-stop-on applies to the Paid lane")
     if args.slice1_heldout_script is not None and (
         not args.slice1_acceptance
         or args.slice1_group

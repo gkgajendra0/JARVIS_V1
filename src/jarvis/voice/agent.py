@@ -440,8 +440,15 @@ async def guarded_transcription(agent: Agent, text, model_settings):
     that speech is stopped, so the rest is never played, and the internal text
     is not forwarded as transcript.
     """
+    from jarvis.voice.memory_claims import stream_gate_for
+
     guard = SpokenTextGuard()
     stopped = False
+    spoken = ""
+    try:
+        claim_gate = stream_gate_for(agent.session)
+    except RuntimeError:  # the agent is not running
+        claim_gate = None
     async for delta in Agent.default.transcription_node(agent, text, model_settings):
         if stopped:
             continue
@@ -449,6 +456,13 @@ async def guarded_transcription(agent: Agent, text, model_settings):
         if reason is not None:
             stopped = True
             _stop_current_speech(agent, reason)
+            continue
+        spoken += str(delta)
+        if claim_gate is not None and claim_gate(spoken):
+            # A memory change claimed before memory confirmed it: stop now;
+            # the owner hears what memory recorded (jarvis.voice.memory_claims).
+            stopped = True
+            _stop_current_speech(agent, "unverified_memory_claim")
             continue
         yield delta
 
@@ -541,7 +555,7 @@ PERSONAL_LEARNING_CONTEXT_INSTRUCTIONS = (
     )
     .replace(
         "Durable learning remains explicit only; declarative facts do not\nauthorize writes.",
-        "Automatic learning runs only during the locally opened owner session. For an ordinary personal declaration, acknowledge understanding naturally (for example 'Understood') and respond to its content. The background learner is a separate request whose result you have not received. Do not say 'I have noted', 'saved', 'remembered', 'updated my memory' or equivalent wording in any language unless a successful canonical tool result actually confirms that operation. A spoken acknowledgement is never a database receipt. Never claim a fact was saved without a successful canonical result. Session expiry or denial never permits model-driven reopening.",
+        "Automatic learning runs only during the locally opened owner session. For an ordinary personal declaration, acknowledge understanding naturally (for example 'Understood') and respond to its content. The background learner is a separate request whose result you have not received. Do not say 'I have noted', 'saved', 'remembered', 'updated my memory' or equivalent wording in any language unless a successful canonical tool result actually confirms that operation. Before confirming that anything was saved, changed or forgotten, call memory_status and say only what it reports; still_processing or nothing_saved is never a save. A reply that claims a change memory does not show is corrected aloud. A spoken acknowledgement is never a database receipt. Never claim a fact was saved without a successful canonical result. Session expiry or denial never permits model-driven reopening.",
     )
     + """
 Use ownership status exactly as returned: not_owned means no longer owned, not a current possession. Persisted changeable facts are last known, not guaranteed current. An owned bike does not reveal why it was bought. For unknown motives, purchase reasons, restrictions or budgets, say the detail is unknown rather than supplying a plausible story. Unrelated programming/general questions need no personal context. Never offer a per-fact save confirmation for ordinary conversation. No tool or spoken yes can open or re-enable the owner learning session.

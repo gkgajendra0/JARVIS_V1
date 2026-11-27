@@ -103,6 +103,7 @@ class MemoryAgentTools:
         | None = None,
         personal_context=None,
         split_owned_item_lists: bool = True,
+        receipts=None,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
@@ -121,6 +122,9 @@ class MemoryAgentTools:
         self._split_owned_item_lists = split_owned_item_lists
         self._semantic_query_coordinator = semantic_query_coordinator
         self._personal_context = personal_context
+        # Verified memory results per owner turn (jarvis.memory.memory_receipts):
+        # explicit operations are recorded here, and memory_status reads them.
+        self._receipts = receipts
 
     @property
     def tools(self) -> list:
@@ -136,7 +140,39 @@ class MemoryAgentTools:
             and self._personal_context is None
         ):
             tools.append(self.recall_memory)
+        if self._receipts is not None:
+            tools.append(self.memory_status)
         return tools
+
+    def _owner_turn_id(self):
+        for turn in reversed(self._conversation.turns):
+            if turn.role is ConversationRole.USER:
+                return turn.turn_id
+        return None
+
+    def _record(self, result):
+        """Record an explicit operation that returned ok for the latest owner
+        turn (the turn it was asked in)."""
+        if self._receipts is None or not isinstance(result, dict):
+            return result
+        turn_id = self._owner_turn_id()
+        if not result.get("ok") or turn_id is None:
+            return result
+        operation = str(result.get("operation") or "")
+        if operation not in {"remember", "correct", "forget"}:
+            return result
+        labels = tuple(result.get("saved") or ())
+        if operation == "remember" and "saved" in result and not labels:
+            operation, labels = (
+                "already_saved",
+                tuple(result.get("already_saved") or ()),
+            )
+        elif not labels and result.get("predicate"):
+            labels = (str(result["predicate"]),)
+        self._receipts.explicit(
+            self._conversation.session_id, turn_id, operation, labels
+        )
+        return result
 
     async def remember(
         self,
@@ -611,11 +647,13 @@ class MemoryAgentTools:
         or implicit candidate promotion.
         """
         context.disallow_interruptions()
-        return await self._call_tool(
-            self.remember(
-                predicate=predicate,
-                value=value,
-                sensitivity=sensitivity,
+        return self._record(
+            await self._call_tool(
+                self.remember(
+                    predicate=predicate,
+                    value=value,
+                    sensitivity=sensitivity,
+                )
             )
         )
 
@@ -640,12 +678,14 @@ class MemoryAgentTools:
         Without personal context, the legacy exact-command rules still apply.
         """
         context.disallow_interruptions()
-        return await self._call_tool(
-            self.correct(
-                predicate=predicate,
-                value=value,
-                catalog_id=catalog_id,
-                facet_index=facet_index,
+        return self._record(
+            await self._call_tool(
+                self.correct(
+                    predicate=predicate,
+                    value=value,
+                    catalog_id=catalog_id,
+                    facet_index=facet_index,
+                )
             )
         )
 
@@ -666,11 +706,33 @@ class MemoryAgentTools:
         personal context, legacy exact-command rules still apply.
         """
         context.disallow_interruptions()
-        return await self._call_tool(
-            self.forget(
-                predicate=predicate, catalog_id=catalog_id, facet_index=facet_index
+        return self._record(
+            await self._call_tool(
+                self.forget(
+                    predicate=predicate, catalog_id=catalog_id, facet_index=facet_index
+                )
             )
         )
+
+    @function_tool()
+    async def memory_status(self, context: RunContext) -> dict[str, object]:
+        """What memory verifiably did for the owner's latest turn.
+
+        Call this before telling the owner that anything was saved, noted,
+        updated, corrected or forgotten, and say only what it reports. It waits
+        briefly for automatic learning of that turn to finish. It reads no
+        stored facts and changes nothing.
+        """
+        del context
+        return await self.verified_memory_status()
+
+    async def verified_memory_status(self, wait: float = 6.0) -> dict[str, object]:
+        turn_id = self._owner_turn_id()
+        if self._receipts is None or turn_id is None:
+            return {"status": "nothing_saved", "operations": []}
+        session = self._conversation.session_id
+        await self._receipts.wait_learning(session, turn_id, wait)
+        return self._receipts.view(session, turn_id)
 
     @function_tool()
     async def recall_memory(

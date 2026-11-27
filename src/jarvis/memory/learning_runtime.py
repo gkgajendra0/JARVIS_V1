@@ -29,6 +29,7 @@ from .learning_controls import category_veto, suppression_binding
 from .learning_diagnostics import log_learning
 from .learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
 from .learning_policy import LearningPolicy, ground_plan_label
+from .memory_receipts import MemoryReceipts
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +60,22 @@ def _already_held(note, entry) -> bool:
     )
 
 
+def _mutation_label(mutation, catalog):
+    """The display name of the fact a committed mutation wrote or withdrew."""
+    value = mutation.draft.value if mutation.draft is not None else None
+    if isinstance(value, dict) and value.get("label"):
+        return str(value["label"])
+    if isinstance(value, str) and value:
+        return value
+    for entry in catalog.entries:
+        if entry.assertion_id == mutation.expected_assertion_id:
+            try:
+                return json.loads(entry.value).get("label")
+            except (TypeError, ValueError, AttributeError):
+                return None
+    return None
+
+
 class PersonalLearningRuntime:
     def __init__(
         self,
@@ -75,8 +92,13 @@ class PersonalLearningRuntime:
         sleep=asyncio.sleep,
         rng=random.random,
         clarification_observer=None,
+        receipts=None,
     ):
         self.authority, self.service = authority, service
+        # What learning verifiably did per owner turn (memory_receipts): the
+        # only basis on which a reply may say something was saved.
+        self.receipts = receipts if receipts is not None else MemoryReceipts()
+        self._turn_ops = []
         self.extractor, self.resolver, self.reconciler = extractor, resolver, reconciler
         self.clock, self.status_observer = clock, status_observer
         # Content-free record of every provider attempt that failed and what
@@ -164,6 +186,7 @@ class PersonalLearningRuntime:
                 self.authority.register_source(grant, source.receipt_id, source=source)
                 self._pending[source.receipt_id] = (source, grant)
                 self._controls[source.receipt_id] = categories
+                self.receipts.learning_started(source.session_id, source.turn_id)
                 self._enqueue(source.receipt_id)
                 return
             if not LearningPolicy.source_allowed(source):
@@ -200,6 +223,7 @@ class PersonalLearningRuntime:
             self.authority.register_source(grant, source.receipt_id, source=source)
             self._pending[source.receipt_id] = (source, grant)
             log_learning(self.diagnostics, source, "source", "queued", text=source.text)
+            self.receipts.learning_started(source.session_id, source.turn_id)
             self._enqueue(source.receipt_id)
         except (ValueError, PermissionError) as exc:
             state = self.authority.validate(grant)
@@ -239,6 +263,9 @@ class PersonalLearningRuntime:
             if (turn_id is None or source.turn_id == turn_id) and (
                 self._closed or receipt not in self._controls
             ):
+                self.receipts.learning_finished(
+                    source.session_id, source.turn_id, "sources_invalidated"
+                )
                 self.authority.release_source(grant, receipt)
                 self._pending.pop(receipt, None)
                 self._controls.pop(receipt, None)
@@ -381,6 +408,7 @@ class PersonalLearningRuntime:
                 grant, suppression_binding(source, categories)
             )
             await self.service.suppress_learning_categories(source, categories, permit)
+            self._turn_ops = [("suppress", category) for category in categories]
             self._report("category_suppressed")
             return
         self._stage = "extraction"
@@ -517,6 +545,9 @@ class PersonalLearningRuntime:
             status = result.status
             if status == "committed":
                 self._committed += len(result.assertion_ids)
+                self._turn_ops = [
+                    (m.action, _mutation_label(m, catalog)) for m in plan.mutations
+                ]
                 committed = {
                     m.ordinal: m.predicate
                     for m in plan.mutations
@@ -715,6 +746,7 @@ class PersonalLearningRuntime:
             try:
                 if item:
                     source, grant = item
+                    self._turn_ops = []
                     self._inflight_receipt = receipt
                     self._inflight = asyncio.create_task(
                         self._process(receipt, source, grant)
@@ -762,6 +794,13 @@ class PersonalLearningRuntime:
                     self._processed += 1
             finally:
                 if item:
+                    self.receipts.learning_finished(
+                        item[0].session_id,
+                        item[0].turn_id,
+                        self._reason,
+                        self._turn_ops,
+                    )
+                    self._turn_ops = []
                     self.authority.release_source(item[1], receipt)
                 self._pending.pop(receipt, None)
                 self._controls.pop(receipt, None)

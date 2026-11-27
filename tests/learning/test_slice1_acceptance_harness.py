@@ -2764,6 +2764,58 @@ async def test_recorded_ef0c9340_d28_passes_through_the_lab_runner(
     assert set(checks.values()) == {acceptance.PASS}, checks
 
 
+# Bounded final evaluation: invariants stop, quality is measured ------------------
+
+D11_8EA0FD4E_REPLY = "Understood, I've noted that the Goa plan is cancelled."
+
+
+@pytest.mark.asyncio
+async def test_recorded_d11_quality_miss_is_measured_and_its_false_claim_corrected(
+    lab, monkeypatch
+):
+    """Paid lab 8ea0fd4e D11: the extractor proposed nothing for "Cancel the
+    Goa plan." and the reply claimed it was noted. With stop_on="invariant"
+    the storage miss is a quality measurement (the story continues), and the
+    reply's claim is corrected from the record (nothing saved)."""
+    monkeypatch.setitem(EXTRACT, "Cancel the Goa plan.", [])
+    monkeypatch.setitem(DRIVER, "Cancel the Goa plan.", ("answer", D11_8EA0FD4E_REPLY))
+    runner, _log = lab.runner(stop_on_failure=True, stop_on="invariant")
+    summary = await runner.run(groups=("story",))
+    assert summary["run_state"] != "stopped_on_failure"
+    d11 = {c["check"]: c for c in summary["cases"]["D11"]["checks"]}
+    assert d11["Goa status cancelled"]["status"] == acceptance.FAIL
+    assert d11["Goa status cancelled"]["tier"] == "quality"
+    # Later story cases still ran.
+    assert "D17" in summary["cases"] and "D21" in summary["cases"]
+    tiers = summary["tiers"]
+    assert tiers["invariants"]["verdict"] == acceptance.PASS
+    assert {"case": "D11", "check": "Goa status cancelled"} in tiers["quality"][
+        "failed_checks"
+    ]
+    (claim,) = [c for c in summary["memory_claims"] if c["step_id"] == "story-11"]
+    assert claim["claims"] == ["saved"]
+    assert "nothing was saved" in claim["spoken"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_invariant_still_stops_the_bounded_evaluation(lab, monkeypatch):
+    async def broken(context, log):
+        return [{"check": "owned items unchanged", "level": "a", "status": "FAIL"}]
+
+    monkeypatch.setitem(acceptance.CHECKS, "D1-A1", broken)
+    runner, _log = lab.runner(stop_on_failure=True, stop_on="invariant")
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure):
+        await runner.run(groups=("story",))
+    summary = json.loads(runner.log.summary.read_text(encoding="utf-8"))
+    assert summary["stopped_on_failure"]["case"] == "D1-A1"
+    assert summary["tiers"]["invariants"]["verdict"] == acceptance.FAIL
+
+
+def test_stop_on_accepts_only_known_modes(lab):
+    with pytest.raises(ValueError):
+        lab.runner(stop_on="sometimes")
+
+
 def test_launcher_and_cli_accept_every_slice1_group():
     """The exact entry path: every group the runner defines is accepted by the
     Windows launcher's ValidateSet and by the lab CLI."""
