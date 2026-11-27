@@ -19,6 +19,7 @@ from .learning_clarification import (
     alternatives_questions,
     clarification_for,
     confirmation_candidate,
+    ground_chosen_plan,
     stated_details,
 )
 from .learning_contracts import AcceptedLearningSource, LearningBatch
@@ -400,13 +401,16 @@ class PersonalLearningRuntime:
                 source, lambda: self.extractor.extract(source), receipt, grant
             )
         self._require(receipt, source, grant)
-        answered, confirmations = self._answered(source, batch, open_questions)
+        answered, confirmations, chosen = self._answered(source, batch, open_questions)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
         notes, confirmation_questions = [], {}
-        proposals = [(candidate, ()) for candidate in batch.candidates] + confirmations
+        proposals = [
+            ground_chosen_plan(source, candidate, chosen)
+            for candidate in batch.candidates
+        ] + confirmations
         grounded_count = len(proposals)
         for index, (candidate, questions) in enumerate(proposals):
             grounded = ground_plan_label(source, candidate)
@@ -567,9 +571,11 @@ class PersonalLearningRuntime:
         Code decides what each allows: a confirmation of alternatives becomes
         an ordinary proposal from the owner's original words (then policy,
         resolution and reconciliation as usual). A proposed choice settles its
-        question through ordinary reconciliation of a clear detail."""
+        question through ordinary reconciliation of a clear detail. An answered
+        alternatives question can supply its grounded identity when the model
+        paraphrases both identity fields; its canonical target stays binding."""
         by_id = {n.question_id: n for n in open_questions}
-        answered, groups = [], {}
+        answered, groups, chosen = [], {}, []
         for answer in batch.answers:
             note = by_id.pop(answer.question_id, None)
             if note is None:
@@ -580,7 +586,9 @@ class PersonalLearningRuntime:
                 groups.setdefault((id(note.candidate), note.plan_predicate), []).append(
                     note
                 )
-            elif answer.answer != "chosen" or not note.details:
+            elif answer.answer == "chosen" and note.details:
+                chosen.append(note)
+            else:
                 answered.append(note)
             log_learning(
                 self.diagnostics,
@@ -596,7 +604,7 @@ class PersonalLearningRuntime:
             for questions in groups.values()
             if (candidate := confirmation_candidate(source, questions)) is not None
         ]
-        return answered, confirmations[: 8 - len(batch.candidates)]
+        return answered, confirmations[: 8 - len(batch.candidates)], chosen
 
     def _publish(self, source, notes, settled, answered=()):
         """After the turn's learning completed: answered questions close;

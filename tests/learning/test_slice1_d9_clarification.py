@@ -381,6 +381,53 @@ def _decision(text, value):
     return build
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "matched", [True, False], ids=["same-plan", "resolver-says-new"]
+)
+async def test_recorded_d28_choice_uses_its_open_questions_grounded_plan(lab, matched):
+    recorded = json.loads(
+        (FIXTURES / "codex_7b580710_d28.json").read_text(encoding="utf-8")
+    )["steps"]
+    original_id = recorded["alt-01"]["extraction"]["candidates"][0]["evidence"][0][
+        "turn_id"
+    ]
+
+    def replay(step):
+        def build(source):
+            raw = json.loads(json.dumps(recorded[step]["extraction"]["candidates"][0]))
+            for span in raw["evidence"]:
+                text = recorded["alt-01" if span["turn_id"] == original_id else step][
+                    "utterance"
+                ]
+                span["turn_id"] = next(
+                    t.turn_id for t in source.turns if t.text == text
+                )
+            return [LearningCandidate.model_validate(raw)]
+
+        return build
+
+    first, answer = (recorded[s]["utterance"] for s in ("alt-01", "alt-02"))
+    lab.script.by_text[first] = replay("alt-01")
+    await lab.say(first)
+    (before,) = await lab.plans()
+    assert "vehicle" not in before["slots"]
+    lab.script.by_text[answer] = replay("alt-02")
+    lab.script.answers[answer] = [("chosen", "vehicle")]
+    if matched:
+        lab.resolver.targets[answer] = before["label"]
+    await lab.say(answer)
+    (after,) = await lab.plans()
+    assert after["slots"]["vehicle"] == {
+        "value": "Jimny",
+        "options": [],
+        "certainty": "confirmed",
+    }
+    assert after["label"] == before["label"]
+    assert after["slots"]["when"] == before["slots"]["when"]
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []
+
+
 async def _rows(learning_reader):
     rows = await learning_reader.run(
         lambda c: c.execute(

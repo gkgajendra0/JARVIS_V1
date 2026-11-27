@@ -253,6 +253,66 @@ def stated_details(candidate) -> set[str]:
     }
 
 
+def ground_chosen_plan(source, candidate, questions):
+    """Repair only an ungrounded display identity on an answered question.
+
+    The open question supplies the original, grounded identity, not the
+    extractor's paraphrase. The selected option must be stated in the latest
+    cited owner turn. Reconciliation must still match the question's canonical
+    predicate; this cannot create a plan or redirect an already grounded name.
+    """
+    if candidate.category != "plan":
+        return candidate, ()
+    turns = {t.turn_id: t.text for t in source.turns}
+    fragments, current = [], []
+    for span in candidate.evidence:
+        text = turns.get(span.turn_id)
+        if text is None or not 0 <= span.start < span.end <= len(text):
+            return candidate, ()
+        fragment = text[span.start : span.end]
+        fragments.append(fragment)
+        if span.turn_id == source.turn_id:
+            current.append(fragment)
+    if any(
+        identity in fragment
+        for identity in (candidate.label, candidate.value)
+        for fragment in fragments
+    ):
+        return candidate, ()
+    matches = []
+    cited = {span.turn_id for span in candidate.evidence}
+    for note in questions:
+        if (
+            note.kind != ALTERNATIVES
+            or note.session_id != source.session_id
+            or note.plan_predicate is None
+            or note.turn_id not in cited
+            or note.candidate is None
+        ):
+            continue
+        for detail, options in note.choices:
+            slot = getattr(candidate.slots, detail, None)
+            if (
+                slot is not None
+                and slot.value in options
+                and slot.certainty == "confirmed"
+                and not slot.options
+                and any(slot.value in text for text in current)
+            ):
+                matches.append(note)
+    if not matches or len({n.plan_predicate for n in matches}) != 1:
+        return candidate, ()
+    original = matches[0].candidate
+    if not all(
+        any(identity in text for text in fragments)
+        for identity in (original.label, original.value)
+    ):
+        return candidate, ()
+    return candidate.model_copy(
+        update={"label": original.label, "value": original.value, "kind": original.kind}
+    ), tuple(matches)
+
+
 class ClarificationBoard:
     """Open questions of each conversation. A question is asked once and
     stays open until answered, settled by a later clear statement, or its

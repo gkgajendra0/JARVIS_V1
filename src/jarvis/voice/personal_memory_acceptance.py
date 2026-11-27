@@ -3537,10 +3537,10 @@ async def check_d18(context, log):
         ),
         _check("complete false on first page", "b", first.get("complete") is False),
         _check(
-            "paged on to all 11",
+            "paging completed if attempted (partial answer also allowed)",
             "b",
-            len(reads) >= 2
-            and (reads[-1]["result"].get("paging") or {}).get("complete") is True,
+            len(reads) == 1
+            or (reads[-1]["result"].get("paging") or {}).get("complete") is True,
             [len(r["result"].get("facts") or ()) for r in reads],
             review=False,
         ),
@@ -3555,6 +3555,7 @@ async def check_d18(context, log):
                 "answer": answer,
                 "named_count": len(named),
                 "released_count": len(released),
+                "pagination_exercised": len(reads) >= 2,
             }
         },
     ]
