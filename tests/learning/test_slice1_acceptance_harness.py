@@ -2788,7 +2788,10 @@ async def test_recorded_d11_quality_miss_is_measured_and_its_false_claim_correct
     # Later story cases still ran.
     assert "D17" in summary["cases"] and "D21" in summary["cases"]
     tiers = summary["tiers"]
-    assert tiers["invariants"]["verdict"] == acceptance.PASS
+    assert tiers["invariants"]["failed"] == []
+    assert tiers["invariants"]["untested_cases"] == []
+    # Only the story ran, so the other groups' invariants are not checked.
+    assert tiers["invariants"]["verdict"] == acceptance.UNTESTED
     assert {"case": "D11", "check": "Goa status cancelled"} in tiers["quality"][
         "failed_checks"
     ]
@@ -2809,6 +2812,52 @@ async def test_a_failed_invariant_still_stops_the_bounded_evaluation(lab, monkey
     summary = json.loads(runner.log.summary.read_text(encoding="utf-8"))
     assert summary["stopped_on_failure"]["case"] == "D1-A1"
     assert summary["tiers"]["invariants"]["verdict"] == acceptance.FAIL
+
+
+def test_untested_invariants_are_never_reported_as_passing():
+    cases = {
+        "D17": {
+            "status": acceptance.UNTESTED,
+            "checks": acceptance._tiered(
+                [
+                    {
+                        "check": "forget gate (stage diagnosis)",
+                        "status": acceptance.UNTESTED,
+                        "detail": {"failed_stage": "owner_consent_not_granted"},
+                    },
+                    {"check": "lineage gone", "status": acceptance.UNTESTED},
+                ]
+            ),
+        },
+        "D2": {
+            "status": acceptance.PASS,
+            "checks": acceptance._tiered(
+                [{"check": "A not retracted", "status": acceptance.PASS}]
+            ),
+        },
+    }
+    tiers = acceptance._tier_summary(cases)
+    assert tiers["invariants"]["verdict"] == acceptance.UNTESTED
+    assert tiers["invariants"]["untested_cases"] == ["D17"]
+
+
+def test_d17_deletion_checks_are_invariants_only_when_the_code_failed():
+    def tiers(stage):
+        checks = acceptance._tiered(
+            [
+                {
+                    "check": "forget gate (stage diagnosis)",
+                    "status": acceptance.FAIL,
+                    "detail": {"failed_stage": stage},
+                },
+                {"check": "lineage gone", "status": acceptance.FAIL},
+            ]
+        )
+        return [c["tier"] for c in checks]
+
+    assert tiers("model_did_not_select_available_item") == ["quality", "quality"]
+    assert tiers("forget_operation_failed") == ["invariant", "invariant"]
+    assert tiers(None) == ["quality", "invariant"]
 
 
 def test_stop_on_accepts_only_known_modes(lab):

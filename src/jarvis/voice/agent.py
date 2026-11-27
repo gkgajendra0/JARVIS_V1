@@ -458,7 +458,12 @@ async def guarded_transcription(agent: Agent, text, model_settings):
             _stop_current_speech(agent, reason)
             continue
         spoken += str(delta)
-        if claim_gate is not None and claim_gate(spoken):
+        try:
+            claimed = claim_gate is not None and claim_gate(spoken)
+        except Exception as exc:  # noqa: BLE001 - the reply keeps streaming
+            LOGGER.warning("Memory claim gate failed | error=%s", type(exc).__name__)
+            claim_gate, claimed = None, False
+        if claimed:
             # A memory change claimed before memory confirmed it: stop now;
             # the owner hears what memory recorded (jarvis.voice.memory_claims).
             stopped = True

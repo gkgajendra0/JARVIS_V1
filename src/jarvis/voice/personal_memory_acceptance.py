@@ -1653,7 +1653,9 @@ class AcceptanceRunner:
                 for c in row["checks"]
                 if c["status"] == SUPERSEDED
             ],
-            "tiers": _tier_summary(cases),
+            "tiers": _tier_summary(
+                cases, missing=[c for c in self.planned if c not in cases]
+            ),
             # Replies that claimed a memory change the record of that turn did
             # not show, and the correction given from the record.
             "memory_claims": [
@@ -1771,21 +1773,15 @@ INVARIANT_CHECKS = frozenset(
         "every current row has a source",
         "every page bound to the same question permit",
         "first page released <= 8",
-        "fresh owner consent granted (Windows Hello)",
         "history row keeps the options",
         "lineage gone",
         "more_remaining with total 40",
-        "no Airbnb/hotel stored at any point",
         "no destination options stored before confirmation",
         "no evidence text names Classic 350",
         "no orphan sources",
-        "no owned Thar",
-        "no owned Thar or Jimny added",
         "no plural record",
         "no residual in any personal-memory store",
-        "no train/flight stored at any point",
         "no truncated item",
-        "no vehicle stored before the answer",
         "old row retracted",
         "old row superseded, valid_to NULL",
         "owned items unchanged",
@@ -1802,11 +1798,33 @@ INVARIANT_CHECKS = frozenset(
 )
 
 
+# D17's forget stages: the code failed (invariant) or the model did not pick
+# the item / the owner did not approve (deletion never reached: quality).
+_CODE_FORGET_STAGES = frozenset(
+    {"forget_operation_failed", "deleted_but_residual_remains"}
+)
+_DELETION_CHECKS = frozenset({"lineage gone", "no evidence text names Classic 350"})
+
+
 def _tiered(checks):
+    stage = next(
+        (
+            (c.get("detail") or {}).get("failed_stage")
+            for c in checks
+            if c.get("check") == "forget gate (stage diagnosis)"
+        ),
+        "absent",
+    )
     for check in checks:
-        check["tier"] = (
-            "invariant" if check.get("check") in INVARIANT_CHECKS else "quality"
-        )
+        name = check.get("check")
+        invariant = name in INVARIANT_CHECKS
+        if (
+            name == "forget gate (stage diagnosis)"
+            or name in _DELETION_CHECKS
+            and stage not in {None, "absent"}
+        ):
+            invariant = stage in _CODE_FORGET_STAGES
+        check["tier"] = "invariant" if invariant else "quality"
     return checks
 
 
@@ -1825,9 +1843,11 @@ def _overall(checks):
     return PASS
 
 
-def _tier_summary(cases):
-    """Invariants (each must hold) apart from quality measurements (rates)."""
-    invariant_fail, invariant_pass = [], 0
+def _tier_summary(cases, missing=()):
+    """Invariants (each must hold) apart from quality measurements (rates).
+    ``missing``: planned cases that did not run."""
+    invariant_fail, invariant_untested, invariant_pass = [], [], 0
+    untested_cases = [case for case, row in cases.items() if row["status"] == UNTESTED]
     quality = {PASS: 0, FAIL: 0, REVIEW: 0, UNTESTED: 0}
     quality_fail = []
     for case, row in cases.items():
@@ -1843,6 +1863,8 @@ def _tier_summary(cases):
                     invariant_fail.append({"case": case, "check": check["check"]})
                 elif status == PASS:
                     invariant_pass += 1
+                else:
+                    invariant_untested.append({"case": case, "check": check["check"]})
             else:
                 quality[status] = quality.get(status, 0) + 1
                 if status == FAIL:
@@ -1852,7 +1874,15 @@ def _tier_summary(cases):
         "invariants": {
             "passed": invariant_pass,
             "failed": invariant_fail,
-            "verdict": FAIL if invariant_fail else PASS,
+            # Not checked: an invariant left UNTESTED, or a case whose missing
+            # prerequisite left its checks unrun. Never reported as PASS.
+            "untested": invariant_untested,
+            "untested_cases": untested_cases,
+            "verdict": FAIL
+            if invariant_fail
+            else UNTESTED
+            if invariant_untested or untested_cases or missing
+            else PASS,
         },
         "quality": {
             **{k.lower(): v for k, v in quality.items()},

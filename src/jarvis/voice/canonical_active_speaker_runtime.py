@@ -189,6 +189,11 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._live_session: Any | None = None
         self._personal_context: PersonalContextSession | None = None
         self._personal_learning = None
+        # What memory verifiably did per owner turn (explicit tools and
+        # automatic learning): the basis for every memory confirmation.
+        from jarvis.memory.memory_receipts import MemoryReceipts
+
+        self._memory_receipts = MemoryReceipts()
         self._learning_authority = None
         self._learning_grant = None
         self._learning_start_attempted = False
@@ -413,7 +418,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 )
                 if self._session_purpose == "conversation":
                     self._attach_learning_follow_up(session, bridge)
-                    self._attach_memory_claim_check(session, bridge)
+            if (
+                self._memory_runtime is not None
+                and self._session_purpose == "conversation"
+            ):
+                # With or without automatic learning: explicit memory tools
+                # record their results too.
+                self._attach_memory_claim_check(session, bridge)
             # Explicit opt-in only. No model dispatch, memory persistence, or
             # model-visible release without a separately provided, trusted gate.
             # The bridge closes and invalidates this state on session retirement.
@@ -598,11 +609,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 capability_runtime=capability_runtime,
                 work_runtime=work_runtime,
                 personal_context_getter=lambda: self._personal_context,
-                memory_receipts_getter=lambda: (
-                    self._personal_learning.receipts
-                    if self._personal_learning is not None
-                    else None
-                ),
+                memory_receipts_getter=lambda: self._memory_receipts,
                 project_turns_getter=lambda: self._project_turns,
             )
 
@@ -1115,9 +1122,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             MemoryClaimCheck,
             inject_correction,
             register_stream_gate,
+            unregister_stream_gate,
         )
-
-        learning = self._personal_learning
 
         def idle():
             return (
@@ -1128,7 +1134,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             )
 
         check = MemoryClaimCheck(
-            learning.receipts,
+            self._memory_receipts,
             bridge.conversation,
             lambda owner_words, facts: inject_correction(
                 session,
@@ -1140,7 +1146,12 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         )
         bridge.add_accepted_turn_observer(check.observe)
         register_stream_gate(session, check.stream_gate)
-        bridge.add_close_observer(lambda: asyncio.ensure_future(check.close()))
+
+        def detach():
+            unregister_stream_gate(session, check.stream_gate)
+            asyncio.ensure_future(check.close())
+
+        bridge.add_close_observer(detach)
 
     async def _start_personal_learning(self):
         if (
@@ -1234,6 +1245,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     diagnostics=self.config.show_transcript,
                 ),
                 diagnostics=self.config.show_transcript,
+                receipts=self._memory_receipts,
                 status_observer=lambda state: LOGGER.info(
                     "Personal learning | session=%s | queued=%s | processed=%s | committed=%s | dropped=%s | reason=%s",
                     state.session,

@@ -23,12 +23,15 @@ import asyncio
 import json
 import logging
 import re
-import weakref
 from time import monotonic
 from uuid import uuid4
 
 from jarvis.conversation import ConversationRole, ConversationStatus
-from jarvis.memory.memory_receipts import FORGET_OPERATIONS, SAVE_OPERATIONS
+from jarvis.memory.memory_receipts import (
+    FORGET_OPERATIONS,
+    RECENT_TURNS,
+    SAVE_OPERATIONS,
+)
 from jarvis.voice.voice_output_safety import (
     note_generation_instructions,
     register_internal_text,
@@ -37,70 +40,98 @@ from jarvis.voice.voice_output_safety import (
 LOGGER = logging.getLogger(__name__)
 
 _SENTENCES = re.compile(r"(?<=[.!?।])\s+")
+# A claim is judged per clause: "Noted, I won't forget that." claims the
+# first clause and negates only the second.
+_CLAUSES = re.compile(r"\s*(?:[,;:—–]|\bbut\b|\blekin\b)\s*", re.IGNORECASE)
 _NEGATION = re.compile(
     r"\b(?:no|not|nothing|never|cannot|can['’]?t|didn['’]?t|wasn['’]?t|haven['’]?t|"
     r"hasn['’]?t|couldn['’]?t|won['’]?t|isn['’]?t|aren['’]?t|nahi|nahin|mat)\b"
     r"|n['’]t\b|नहीं|नही",
     re.IGNORECASE,
 )
-_FORGET_VERBS = r"(?:deleted|removed|forgotten|forgot|erased|cleared)"
-_SAVE_VERBS = (
-    r"(?:saved|noted|stored|remembered|recorded|updated|changed|corrected|added|"
-    r"marked)"
-)
-# English: "I've saved ...", "I have noted ...", "I'll remember ...",
-# "Noted.", "It's saved", "That has been updated".
+# Only words that are about memory itself, or a general verb with a memory
+# object: "I've saved the document" or "I've added the task" is another
+# tool's action, never checked against memory.
+_MEMORY_OBJECT = r"(?:my|your|the)?\s*(?:memory|memories|records?|notes)"
 _EN_FORGET = re.compile(
-    rf"\bI(?:['’]ve|\s+have|['’]ll|\s+will)?\s+(?:now\s+|just\s+|also\s+)?{_FORGET_VERBS}\b"
-    rf"|\b(?:it|that|this)(?:['’]s(?:\s+been)?|\s+is|\s+has\s+been|\s+was)\s+(?:now\s+)?{_FORGET_VERBS}\b",
+    r"\bI(?:['’]ve|\s+have|['’]ll|\s+will)?\s+(?:now\s+|just\s+|also\s+)?"
+    r"(?:forgotten|forgot|forget)\b"
+    r"|\b(?:it|that|this)(?:['’]s(?:\s+been)?|\s+is|\s+has\s+been|\s+was)\s+"
+    r"(?:now\s+)?forgotten\b"
+    rf"|\b(?:deleted|removed|erased|cleared)\b[^.!?]{{0,40}}\bfrom\s+{_MEMORY_OBJECT}\b",
     re.IGNORECASE,
 )
 _EN_SAVE = re.compile(
-    rf"\bI(?:['’]ve|\s+have)?\s+(?:now\s+|just\s+|also\s+)?{_SAVE_VERBS}\b"
-    r"|\bI(?:['’]ll|\s+will)\s+(?:remember|note|save|update)\b"
-    r"|^\s*(?:okay|ok|alright|sure|done|got\s+it)?[,.!]?\s*noted\b"
-    rf"|\b(?:it|that|this)(?:['’]s(?:\s+been)?|\s+is|\s+has\s+been|\s+was)\s+(?:now\s+)?{_SAVE_VERBS}\b"
-    r"|\b(?:saved|noted|updated)\s+(?:it|that|this)\b",
+    r"\bI(?:['’]ve|\s+have)?\s+(?:now\s+|just\s+|also\s+)?(?:noted|remembered)\b"
+    r"|\bI(?:['’]ll|\s+will)\s+(?:remember|note)\b"
+    r"|^\s*(?:okay|ok|alright|sure|done|got\s+it|understood)?[,.!]?\s*noted\b"
+    r"|\b(?:it|that|this)(?:['’]s(?:\s+been)?|\s+is|\s+has\s+been|\s+was)\s+"
+    r"(?:now\s+)?noted\b"
+    rf"|\b(?:saved|stored|recorded|added|updated|changed|corrected|kept)\b"
+    rf"[^.!?]{{0,40}}\b(?:in|to)\s+{_MEMORY_OBJECT}\b"
+    rf"|\bupdated\s+{_MEMORY_OBJECT}\b",
     re.IGNORECASE,
 )
-# Hinglish / Hindi: "save kar liya", "note kar liya", "yaad rakh liya",
-# "update kar diya", "hata diya", "सेव कर लिया".
 _HI_FORGET = re.compile(
-    r"\b(?:delete|remove|hata)\s+(?:kar\s+)?(?:diya|di|liya|li|dunga|dungi)\b"
-    r"|\bbhool\s+(?:gaya|gayi|jaunga|jaungi)\b|हटा\s+(?:दिया|दी)|डिलीट\s+कर\s+(?:दिया|दी)",
+    r"\bbhool\s+(?:gaya|gayi|jaunga|jaungi)\b"
+    r"|\b(?:memory|yaadon)\s+se\s+(?:hata|delete|remove)\b"
+    r"|मेमोरी\s+से\s+हटा",
     re.IGNORECASE,
 )
 _HI_SAVE = re.compile(
-    r"\b(?:save|note|update|record|store)\s+(?:kar\s+)?(?:liya|li|diya|di|lunga|lungi)\b"
+    r"\bnote\s+(?:kar\s+)?(?:liya|li|lunga|lungi)\b"
     r"|\byaad\s+(?:rakh|kar)\s+(?:liya|li|lunga|lungi|loonga|loongi)\b"
     r"|\byaad\s+rakhunga\b|\byaad\s+rakhungi\b"
-    r"|(?:सेव|नोट|अपडेट)\s+कर\s+(?:लिया|ली|दिया|दी)|याद\s+रख\s+(?:लिया|ली|लूँगा|लूंगा|लूँगी|लूंगी)",
+    r"|\bmemory\s+(?:mein|me)\s+(?:save|add|update)\b"
+    r"|नोट\s+कर\s+(?:लिया|ली)|याद\s+रख\s+(?:लिया|ली|लूँगा|लूंगा|लूँगी|लूंगी)",
     re.IGNORECASE,
 )
+_WORD = re.compile(r"\w+", re.UNICODE)
+# A short bare acknowledgement names no item ("Noted.", "I'll remember that.").
+_BARE_MAX_WORDS = 4
+
+
+def _claim_clauses(text):
+    """(kind, clause) for each affirmed memory claim."""
+    for sentence in _SENTENCES.split(text or ""):
+        for clause in _CLAUSES.split(sentence):
+            if not clause.strip() or _NEGATION.search(clause):
+                continue
+            if _EN_FORGET.search(clause) or _HI_FORGET.search(clause):
+                yield "forgotten", clause
+            elif _EN_SAVE.search(clause) or _HI_SAVE.search(clause):
+                yield "saved", clause
 
 
 def memory_claims(text: str) -> set[str]:
     """Kinds of memory change a reply affirms: {"saved", "forgotten"}."""
-    claims = set()
-    for sentence in _SENTENCES.split(text or ""):
-        if _NEGATION.search(sentence):
-            continue
-        if _EN_FORGET.search(sentence) or _HI_FORGET.search(sentence):
-            claims.add("forgotten")
-        elif _EN_SAVE.search(sentence) or _HI_SAVE.search(sentence):
-            claims.add("saved")
-    return claims
+    return {kind for kind, _ in _claim_clauses(text)}
+
+
+def _names(clause, label) -> bool:
+    """The clause names the recorded item (a distinctive word of its label)."""
+    from jarvis.memory.learning_catalog_page import PLAN_HEAD_NOUNS, name_words
+
+    wanted = {w for w in name_words(label) - PLAN_HEAD_NOUNS if len(w) >= 3}
+    return bool(wanted) and bool(wanted & name_words(clause))
 
 
 def unsupported_claims(text: str, operations) -> set[str]:
-    """Claims the recorded operations of that owner turn do not support."""
-    done = {o.operation for o in operations}
-    supported = set()
-    if done & SAVE_OPERATIONS:
-        supported.add("saved")
-    if done & FORGET_OPERATIONS:
-        supported |= {"forgotten", "saved"}  # "updated" after a withdrawal
-    return memory_claims(text) - supported
+    """Claims the recorded operations do not support, item by item: a claim
+    naming an item needs an operation of its kind on that item; a bare
+    acknowledgement ("Noted.") needs an operation of its kind."""
+    kinds = {"saved": SAVE_OPERATIONS, "forgotten": FORGET_OPERATIONS}
+    false = set()
+    for kind, clause in _claim_clauses(text):
+        ops = [o for o in operations if o.operation in kinds[kind]]
+        bare = len(_WORD.findall(clause)) <= _BARE_MAX_WORDS
+        if bare:
+            ok = bool(ops)
+        else:
+            ok = any(o.label and _names(clause, o.label) for o in ops)
+        if not ok:
+            false.add(kind)
+    return false
 
 
 def correction_facts(operations, still_processing=False) -> str:
@@ -124,40 +155,43 @@ ACK = "Checked."
 register_internal_text(CORRECTION_REQUEST)
 
 
-# Live sessions whose replies are gated while they stream (agent.py
-# guarded_transcription looks the gate up by the speaking session).
-_STREAM_GATES = weakref.WeakKeyDictionary()
+# The gate rides on the live session object itself (agent.py
+# guarded_transcription reads it from the speaking session) and is removed
+# when the conversation closes, so nothing outlives the session.
+_GATE_ATTRIBUTE = "_jarvis_memory_claim_gate"
 
 
 def register_stream_gate(session, gate) -> None:
     try:
-        _STREAM_GATES[session] = gate
-    except TypeError:  # an object that cannot be weakly referenced
+        setattr(session, _GATE_ATTRIBUTE, gate)
+    except (AttributeError, TypeError):
         LOGGER.info("Memory claim stream gate not registered for this session")
 
 
+def unregister_stream_gate(session, gate=None) -> None:
+    current = getattr(session, _GATE_ATTRIBUTE, None)
+    if current is not None and (gate is None or current == gate):
+        try:
+            delattr(session, _GATE_ATTRIBUTE)
+        except (AttributeError, TypeError):
+            pass
+
+
 def stream_gate_for(session):
-    try:
-        return _STREAM_GATES.get(session)
-    except TypeError:
-        return None
+    return getattr(session, _GATE_ATTRIBUTE, None)
 
 
-def _latest_owner_turn(conversation):
-    for item in reversed(conversation.turns):
-        if item.role is ConversationRole.USER:
-            return item
-    return None
-
-
-def _owner_turn_before(conversation, turn):
-    owner = None
+def _recent_owner_turns(conversation, before=None):
+    """The owner's most recent turns (newest first), up to ``before`` when
+    given: a reply may answer the latest turn or speak about an earlier one,
+    and its owner turn may be accepted after the reply starts."""
+    owner = []
     for item in conversation.turns:
-        if item is turn or item.turn_id == turn.turn_id:
-            return owner
+        if before is not None and (item is before or item.turn_id == before.turn_id):
+            break
         if item.role is ConversationRole.USER:
-            owner = item
-    return owner
+            owner.append(item)
+    return list(reversed(owner))[:RECENT_TURNS]
 
 
 async def inject_correction(session, owner_words, facts, *, register=None) -> bool:
@@ -228,20 +262,21 @@ class MemoryClaimCheck:
 
     def stream_gate(self, text) -> bool:
         """While a reply streams: True (stop its speech now) when it claims a
-        memory change the record of the current owner turn does not yet
-        support, including while that turn's learning is still running. The
-        owner then hears what the record shows once learning has finished."""
+        memory change the record of the owner's recent turns does not
+        support, including while their learning is still running. The owner
+        then hears what the record shows once learning has finished. Each
+        owner turn is stopped and answered once; later speech is not cut."""
         if self._closed or not memory_claims(text):
             return False
-        owner = _latest_owner_turn(self.conversation)
-        if owner is None:
+        turns = _recent_owner_turns(self.conversation)
+        if not turns or turns[0].turn_id in self._corrected:
             return False
         session = self.conversation.session_id
-        if not self.receipts.pending(session, owner.turn_id) and not (
-            unsupported_claims(text, self.receipts.operations(session, owner.turn_id))
-        ):
+        ids = tuple(t.turn_id for t in turns)
+        # Unsupported now, whether learning is still running or finished.
+        if not unsupported_claims(text, self.receipts.operations(session, ids)):
             return False
-        self._schedule(owner, text, stopped=True)
+        self._schedule(turns, text, stopped=True)
         return True
 
     def observe(self, turn) -> None:
@@ -250,33 +285,34 @@ class MemoryClaimCheck:
             return
         if not memory_claims(turn.text):
             return
-        owner = _owner_turn_before(self.conversation, turn)
-        if owner is not None:
-            self._schedule(owner, turn.text, stopped=False)
+        turns = _recent_owner_turns(self.conversation, before=turn)
+        if turns and turns[0].turn_id not in self._corrected:
+            self._schedule(turns, turn.text, stopped=False)
 
-    def _schedule(self, owner, text, *, stopped) -> None:
-        if owner.turn_id in self._corrected:
-            return
-        self._corrected.add(owner.turn_id)
-        task = asyncio.get_running_loop().create_task(self._check(owner, text, stopped))
+    def _schedule(self, turns, text, *, stopped) -> None:
+        self._corrected.add(turns[0].turn_id)
+        task = asyncio.get_running_loop().create_task(self._check(turns, text, stopped))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _check(self, owner, text, stopped) -> None:
+    async def _check(self, turns, text, stopped) -> None:
+        owner = turns[0]
         session = self.conversation.session_id
-        finished = await self.receipts.wait_learning(
-            session, owner.turn_id, self.learning_wait
-        )
-        operations = self.receipts.operations(session, owner.turn_id)
+        ids = tuple(t.turn_id for t in turns)
+        finished = await self.receipts.wait_learning(session, ids, self.learning_wait)
+        operations = self.receipts.operations(session, ids)
         false = unsupported_claims(text, operations)
-        if not false and stopped and finished and operations:
+        if not false and stopped and finished:
             # Stopped before memory had confirmed it; memory has now confirmed
             # it: the owner hears it from the record.
             facts = correction_facts(operations)
         elif not false:
             return
         else:
-            facts = correction_facts(operations, still_processing=not finished)
+            facts = correction_facts(
+                [o for o in operations if o.turn_id == owner.turn_id],
+                still_processing=not finished,
+            )
         LOGGER.warning(
             "Memory claim check: reply claimed %s; recorded operations %s; correcting",
             sorted(false),

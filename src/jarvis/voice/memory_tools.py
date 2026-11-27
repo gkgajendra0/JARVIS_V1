@@ -716,23 +716,32 @@ class MemoryAgentTools:
 
     @function_tool()
     async def memory_status(self, context: RunContext) -> dict[str, object]:
-        """What memory verifiably did for the owner's latest turn.
+        """What memory verifiably did for the owner's recent turns.
 
         Call this before telling the owner that anything was saved, noted,
-        updated, corrected or forgotten, and say only what it reports. It waits
-        briefly for automatic learning of that turn to finish. It reads no
-        stored facts and changes nothing.
+        updated, corrected or forgotten, and say only what it reports for the
+        turn the owner means (newest first). It waits briefly for automatic
+        learning of those turns to finish. It reads no other stored facts and
+        changes nothing.
         """
         del context
         return await self.verified_memory_status()
 
     async def verified_memory_status(self, wait: float = 6.0) -> dict[str, object]:
-        turn_id = self._owner_turn_id()
-        if self._receipts is None or turn_id is None:
-            return {"status": "nothing_saved", "operations": []}
+        from jarvis.memory.memory_receipts import RECENT_TURNS
+
+        owner_turns = [
+            t
+            for t in reversed(self._conversation.turns)
+            if t.role is ConversationRole.USER
+        ][:RECENT_TURNS]
+        if self._receipts is None or not owner_turns:
+            return {"turns": [], "rule": "Nothing was saved in this conversation."}
         session = self._conversation.session_id
-        await self._receipts.wait_learning(session, turn_id, wait)
-        return self._receipts.view(session, turn_id)
+        await self._receipts.wait_learning(
+            session, tuple(t.turn_id for t in owner_turns), wait
+        )
+        return self._receipts.view(session, [(t.turn_id, t.text) for t in owner_turns])
 
     @function_tool()
     async def recall_memory(

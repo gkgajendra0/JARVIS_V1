@@ -263,9 +263,12 @@ class PersonalLearningRuntime:
             if (turn_id is None or source.turn_id == turn_id) and (
                 self._closed or receipt not in self._controls
             ):
-                self.receipts.learning_finished(
-                    source.session_id, source.turn_id, "sources_invalidated"
-                )
+                if receipt != self._inflight_receipt:
+                    # The in-flight turn is finished by its own worker, with
+                    # anything it already committed.
+                    self.receipts.learning_finished(
+                        source.session_id, source.turn_id, "sources_invalidated"
+                    )
                 self.authority.release_source(grant, receipt)
                 self._pending.pop(receipt, None)
                 self._controls.pop(receipt, None)
