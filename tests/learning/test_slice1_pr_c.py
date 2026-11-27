@@ -125,6 +125,12 @@ async def test_d18_eleven_vehicles_page_truthfully_then_all_are_named(learning):
         assert paging["this_page"] == {"from": 1, "to": 8}
         assert len(first["facts"]) == 8 and "next_page" in paging
         assert "11 saved; here are 8" in paging["list_rule"]
+        # A request for the list itself pages on before answering (D25 run
+        # on bc7d1a47 stopped after page one); narrowing only for advice.
+        rule = " ".join(paging["list_rule"].split())
+        assert "When the owner asked for this list itself, continue" in rule
+        assert "until the list is complete or no more pages remain" in rule
+        assert "When the list only supports another request" in rule
         assert paging["scopes"]["owned_item.vehicle"] == {
             "total": 11,
             "released_through": 8,

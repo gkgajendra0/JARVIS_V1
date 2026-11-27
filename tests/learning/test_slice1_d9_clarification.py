@@ -891,6 +891,15 @@ def test_reply_instructions_explain_the_note_and_forbid_storage_claims():
     assert "Do not say anything was or was not saved" in flat
 
 
+def test_list_instructions_page_on_when_the_list_itself_was_asked():
+    from jarvis.voice.agent import PERSONAL_LEARNING_QUERY_INSTRUCTIONS as text
+
+    flat = " ".join(text.split())
+    assert "When the owner asked for the list itself, continue" in flat
+    assert "until the list is complete or no more pages remain" in flat
+    assert "when the list only supports another request" in flat
+
+
 @pytest.mark.asyncio
 async def test_live_session_wiring_offers_notes_only_while_that_session_is_open():
     module = pytest.importorskip("jarvis.voice.canonical_active_speaker_runtime")
