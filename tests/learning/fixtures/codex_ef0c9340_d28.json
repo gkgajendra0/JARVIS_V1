@@ -1,0 +1,139 @@
+{
+ "source_commit": "ef0c93400e19ff6a0b0de36d73947668e39ca4b9",
+ "lab": "E:/Jarvis/Temp/slice1-acceptance-codex-ef0c9340-final (acceptance-events.jsonl sha256 1ff740a9128a5dbbdec852dc6f81673695484c4b1f42bf07c6cc341b0827d017)",
+ "steps": {
+  "alt-01": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "other",
+      "intent": "new",
+      "label": "trip to Spiti",
+      "value": "We're going to Spiti in January, Thar or Jimny.",
+      "evidence": [
+       {
+        "turn_id": "a13ff093-f819-4c54-a2de-661a82153a40",
+        "start": 0,
+        "end": 47
+       }
+      ],
+      "qualification": "direct",
+      "importance": "stable",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": "January",
+      "location": "Spiti",
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 1.0,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "Spiti",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "January",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": {
+        "value": null,
+        "options": [
+         "Thar",
+         "Jimny"
+        ],
+        "certainty": "tentative"
+       },
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ],
+    "answers": []
+   },
+   "resolution": {
+    "resolutions": [
+     {
+      "candidate_index": 0,
+      "decision": "new",
+      "target_id": null
+     }
+    ]
+   },
+   "utterance": "We're going to Spiti in January, Thar or Jimny.",
+   "answer": "Understood"
+  },
+  "alt-02": {
+   "extraction": {
+    "candidates": [
+     {
+      "category": "plan",
+      "kind": "vehicle",
+      "intent": "new",
+      "label": "trip to Spiti",
+      "value": "trip to Spiti",
+      "evidence": [
+       {
+        "turn_id": "03b309a9-8ed9-4493-9204-9111edea17c4",
+        "start": 0,
+        "end": 21
+       }
+      ],
+      "qualification": "direct",
+      "importance": "transient",
+      "sensitivity": "standard",
+      "state": "planned",
+      "certainty": "confirmed",
+      "time_expression": null,
+      "location": null,
+      "reason": null,
+      "scalar_facet": null,
+      "confidence": 0.95,
+      "aliases": [],
+      "details": null,
+      "acquired_expression": null,
+      "disposed_expression": null,
+      "plan_status": "planned",
+      "slots": {
+       "destination": {
+        "value": "Spiti",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "when": {
+        "value": "January",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "vehicle": {
+        "value": "Jimny",
+        "options": [],
+        "certainty": "confirmed"
+       },
+       "stay": null,
+       "companions": null,
+       "other": null
+      }
+     }
+    ],
+    "answers": [
+     {
+      "question_id": "c43aa98e467e",
+      "answer": "chosen"
+     }
+    ]
+   },
+   "utterance": "We'll take the Jimny.",
+   "answer": "Understood, Jimny it is for Spiti in January!"
+  }
+ }
+}

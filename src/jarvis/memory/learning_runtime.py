@@ -17,9 +17,12 @@ from .learning_clarification import (
     ALTERNATIVES,
     ClarificationBoard,
     alternatives_questions,
+    answer_candidate,
+    answers_the_question,
+    chosen_values,
     clarification_for,
-    confirmation_candidate,
-    ground_chosen_plan,
+    current_turn_details,
+    has_statement,
     stated_details,
 )
 from .learning_contracts import AcceptedLearningSource, LearningBatch
@@ -401,16 +404,17 @@ class PersonalLearningRuntime:
                 source, lambda: self.extractor.extract(source), receipt, grant
             )
         self._require(receipt, source, grant)
-        answered, confirmations, chosen = self._answered(source, batch, open_questions)
+        answered, answers, replaced = self._answered(source, batch, open_questions)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
         notes, confirmation_questions = [], {}
         proposals = [
-            ground_chosen_plan(source, candidate, chosen)
-            for candidate in batch.candidates
-        ] + confirmations
+            (candidate, ())
+            for index, candidate in enumerate(batch.candidates)
+            if index not in replaced
+        ] + answers
         grounded_count = len(proposals)
         for index, (candidate, questions) in enumerate(proposals):
             grounded = ground_plan_label(source, candidate)
@@ -467,7 +471,14 @@ class PersonalLearningRuntime:
             self._report("no_eligible_fact")
             return
         self._stage = "catalog"
-        catalog = await self.reconciler.catalog(source, batch, grant)
+        targets = {
+            i: questions[0].plan_predicate
+            for i, questions in confirmation_questions.items()
+            if questions[0].plan_predicate is not None
+        }
+        catalog = await self.reconciler.catalog(
+            source, batch, grant, targets=tuple(targets.values())
+        )
         log_learning(
             self.diagnostics, source, "catalog", "loaded", count=len(catalog.entries)
         )
@@ -494,11 +505,7 @@ class PersonalLearningRuntime:
             batch,
             catalog,
             resolutions,
-            confirmation_targets={
-                i: questions[0].plan_predicate
-                for i, questions in confirmation_questions.items()
-                if questions[0].plan_predicate is not None
-            },
+            confirmation_targets=targets,
         )
         committed = {}
         if not plan.mutations and not plan.outcomes:
@@ -537,6 +544,18 @@ class PersonalLearningRuntime:
                 ],
             )
 
+        if status == "committed":
+            # A plan that ended (cancelled, completed or withdrawn) leaves
+            # nothing to ask about it.
+            for mutation in plan.mutations:
+                value = mutation.draft.value if mutation.draft is not None else None
+                if mutation.action == "retract" or (
+                    isinstance(value, dict)
+                    and value.get("state") in {"cancelled", "completed"}
+                ):
+                    for note in self.clarifications.pending(source.session_id):
+                        if note.plan_predicate == mutation.predicate:
+                            self.clarifications.close(note)
         by_id = {entry.assertion_id: entry for entry in catalog.entries}
         matched = {i: by_id[aid] for i, aid in plan.matched_plan_ids}
         predicates = {i: entry.predicate for i, entry in matched.items()} | committed
@@ -568,28 +587,26 @@ class PersonalLearningRuntime:
 
     def _answered(self, source, batch, open_questions):
         """The owner's answers to open questions, as the extractor read them.
-        Code decides what each allows: a confirmation of alternatives becomes
-        an ordinary proposal from the owner's original words (then policy,
-        resolution and reconciliation as usual). A proposed choice settles its
-        question through ordinary reconciliation of a clear detail. An answered
-        alternatives question can supply its grounded identity when the model
-        paraphrases both identity fields; its canonical target stays binding."""
+
+        Code decides what each allows. Confirmed alternatives and checked
+        choices become one proposal per plan, from the question's own identity
+        and the owner's original words plus the current turn
+        (:func:`answer_candidate`); it must then reconcile to the question's
+        canonical plan. The extractor's own proposal of the same answer is
+        replaced (``replaced``: its batch indices), so a paraphrased name or a
+        missing earlier citation cannot block or duplicate it. An answer code
+        cannot check stores nothing and leaves its question open.
+
+        Returns ``(answered, [(candidate, questions)], replaced)``."""
         by_id = {n.question_id: n for n in open_questions}
-        answered, groups, chosen = [], {}, []
+        current = next(
+            (t.text for t in source.turns if t.turn_id == source.turn_id), ""
+        )
+        answered, confirmed, chosen = [], [], []
         for answer in batch.answers:
             note = by_id.pop(answer.question_id, None)
             if note is None:
                 continue
-            if answer.answer == "confirmed" and note.kind == ALTERNATIVES:
-                # A turn may explicitly confirm multiple questions from one
-                # proposal. Reconcile them together as one plan mutation.
-                groups.setdefault((id(note.candidate), note.plan_predicate), []).append(
-                    note
-                )
-            elif answer.answer == "chosen" and note.details:
-                chosen.append(note)
-            else:
-                answered.append(note)
             log_learning(
                 self.diagnostics,
                 source,
@@ -599,12 +616,87 @@ class PersonalLearningRuntime:
                 answer=answer.answer,
                 details=list(note.details),
             )
-        confirmations = [
-            (candidate, questions)
-            for questions in groups.values()
-            if (candidate := confirmation_candidate(source, questions)) is not None
-        ]
-        return answered, confirmations[: 8 - len(batch.candidates)], chosen
+            if answer.answer in {"confirmed", "chosen"} and not has_statement(current):
+                # A question back is not an answer, whatever the reading.
+                self._unusable(source, note, "question_not_answer")
+            elif answer.answer == "confirmed" and note.kind == ALTERNATIVES:
+                confirmed.append(note)
+            elif answer.answer == "chosen" and note.details:
+                chosen.append(note)
+            else:
+                answered.append(note)
+        values, refused = chosen_values(source, chosen, batch.candidates)
+        for note, reason in refused:
+            self._unusable(source, note, reason)
+        replaced = {
+            index
+            for index, candidate in enumerate(batch.candidates)
+            if answers_the_question(candidate, chosen, values)
+        }
+        groups: dict[object, tuple[list, list]] = {}
+
+        def group(note):
+            key = note.plan_predicate or ("proposal", id(note.candidate))
+            return groups.setdefault(key, ([], []))
+
+        for note in confirmed:
+            group(note)[0].append(note)
+        for note in chosen:
+            if note.question_id in values:
+                group(note)[1].append((note, values[note.question_id]))
+        extras: dict[object, dict] = {}
+        for index in replaced:
+            # Other details the owner said in the same answer ("... and stay
+            # in Kaza") go with it when the replaced proposal answered
+            # exactly one plan's questions.
+            candidate = batch.candidates[index]
+            owners = [
+                key
+                for key, (confirms, picks) in groups.items()
+                if picks
+                and answers_the_question(
+                    candidate,
+                    [note for note, _ in picks],
+                    {note.question_id: v for note, v in picks},
+                )
+            ]
+            if len(owners) == 1:
+                confirms, picks = groups[owners[0]]
+                # Never an asked detail, nor one already known when asked: a
+                # different value for that is a change, not part of the answer.
+                asked = {
+                    d
+                    for n in [*confirms, *(n for n, _ in picks)]
+                    for d in (*n.details, *(name for name, _ in n.known))
+                }
+                extras.setdefault(owners[0], {}).update(
+                    current_turn_details(source, candidate, asked)
+                )
+        answers = []
+        for key, (confirms, picks) in groups.items():
+            candidate, reason = answer_candidate(
+                source, confirms, picks, extras.get(key)
+            )
+            questions = [*confirms, *(n for n, _ in picks)]
+            if candidate is None:
+                for note in questions:
+                    self._unusable(source, note, reason)
+                continue
+            answers.append((candidate, questions))
+        return answered, answers[: 8 - len(batch.candidates) + len(replaced)], replaced
+
+    def _unusable(self, source, note, reason):
+        """An answer that stores nothing: recorded, never claimed; the question
+        stays open in its conversation."""
+        log_learning(
+            self.diagnostics,
+            source,
+            "clarification",
+            "answer_not_used",
+            question=note.kind,
+            details=list(note.details),
+            reason=reason,
+        )
 
     def _publish(self, source, notes, settled, answered=()):
         """After the turn's learning completed: answered questions close;

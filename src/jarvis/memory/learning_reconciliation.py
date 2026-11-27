@@ -14,12 +14,18 @@ from jarvis.authority.proposal import canonical_json
 from jarvis.personal_learning_scope import CATEGORIES
 
 from .assertions import SemanticAssertionDraft
-from .learning_catalog_page import PAGE_AMBIGUOUS, bounded_entries, unique_reference
+from .learning_catalog_page import (
+    CATALOG_LIMIT,
+    PAGE_AMBIGUOUS,
+    bounded_entries,
+    unique_reference,
+)
 from .learning_contracts import (
     AcceptedLearningSource,
     LearningBatch,
     LearningCatalog,
     LearningCatalogEntry,
+    LearningResolution,
     LearningResolutionBatch,
 )
 from .learning_diagnostics import log_learning
@@ -195,7 +201,10 @@ class LearningReconciler:
         self.reader = reader
         self.authority = authority
 
-    async def catalog(self, source, batch, grant):
+    async def catalog(self, source, batch, grant, *, targets=()):
+        """Current entries for these proposals. ``targets``: canonical plans
+        an answered open question is bound to; always supplied, so the
+        answer can reach its own plan however many entries exist."""
         categories = tuple(sorted(CATEGORIES))
         permit = self.authority.issue_child(
             grant,
@@ -234,6 +243,10 @@ class LearningReconciler:
         # whose identity cannot be resolved from a bounded page is skipped and
         # recorded instead of failing the whole turn.
         supplied, ambiguous = bounded_entries(entries, batch.candidates, SCALAR_FACETS)
+        held = {e.assertion_id for e in supplied}
+        supplied += [
+            e for e in entries if e.predicate in targets and e.assertion_id not in held
+        ][: max(0, CATALOG_LIMIT - len(supplied))]
         return LearningCatalog(entries=supplied, page_ambiguous=list(ambiguous))
 
     def plan(
@@ -294,7 +307,8 @@ class LearningReconciler:
                 # so the item stays unchanged and the reason is recorded.
                 skip(date_issue)
                 continue
-            if index in catalog.page_ambiguous:
+            required = confirmation_targets.get(index)
+            if index in catalog.page_ambiguous and required is None:
                 skip(PAGE_AMBIGUOUS)
                 continue
             if (
@@ -310,6 +324,51 @@ class LearningReconciler:
                 skip("trip_choice_not_ownership")
                 continue
             choice = choices.get(index)
+            if required is not None:
+                # An answer to an open question is bound by code to the plan
+                # the question was asked about; the resolver's reading and the
+                # proposal's display name cannot redirect it. It only adds the
+                # answered details to that current plan, or nothing.
+                bound = next(
+                    (
+                        e
+                        for e in catalog.entries
+                        if e.predicate == required and e.category == candidate.category
+                    ),
+                    None,
+                )
+                if bound is None:
+                    skip("confirmation_target_missing")
+                    continue
+                matched_plan_ids[index] = bound.assertion_id
+                try:
+                    held = json.loads(bound.value)
+                except (TypeError, ValueError):
+                    held = None
+                if not isinstance(held, dict):
+                    skip("invalid_existing_value")
+                    continue
+                if held.get("state") in {"cancelled", "completed"}:
+                    # A question about a plan that has since ended is moot.
+                    skip("plan_ended")
+                    continue
+                # The plan's own kind, status and certainty stay as stored.
+                candidate = candidate.model_copy(
+                    update={
+                        "kind": bound.kind,
+                        "state": held.get("state", candidate.state),
+                        "certainty": held.get("certainty", candidate.certainty),
+                        "plan_status": held.get("plan_status"),
+                    }
+                )
+                if not _added_detail(candidate, source):
+                    skip("already_stored")
+                    continue
+                choice = LearningResolution(
+                    candidate_index=index,
+                    decision="match",
+                    target_id=bound.assertion_id,
+                )
             if (
                 choice is None
                 or index in duplicate_indices
@@ -337,7 +396,7 @@ class LearningReconciler:
                 == normalize_memory_surface(candidate.value)
                 and occurrence_matches(e, candidate, source)
             ]
-            if len(same) > 1:
+            if len(same) > 1 and required is None:
                 skip("ambiguous_existing_fact")
                 continue
             named_target = same[0] if same else None
@@ -357,6 +416,8 @@ class LearningReconciler:
                     or unique_reference(entry, candidate.label, catalog.entries)
                 )
             ):
+                named_target = entry
+            if required is not None:
                 named_target = entry
             if candidate.category == "plan":
                 if named_target is not None:

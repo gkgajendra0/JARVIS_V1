@@ -2694,6 +2694,41 @@ async def test_amendment_2_other_answers_pass_d28_to_d30(lab):
         assert set(checks.values()) == {acceptance.PASS}, (case, checks)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("resolver", ["new", "match"])
+async def test_recorded_ef0c9340_d28_passes_through_the_lab_runner(
+    lab, monkeypatch, resolver
+):
+    """The latest D28 failure end to end through the lab runner: the scripted
+    provider returns lab ef0c9340's recorded extractions (paraphrased name,
+    only the answer turn cited, restated details), unmodified apart from
+    evidence given as quotes of the same spans."""
+    recorded = json.loads(
+        (Path(__file__).parent / "fixtures" / "codex_ef0c9340_d28.json").read_text(
+            encoding="utf-8"
+        )
+    )["steps"]
+    texts = {}
+    for step in ("alt-01", "alt-02"):
+        for raw in recorded[step]["extraction"]["candidates"]:
+            for span in raw["evidence"]:
+                texts[span["turn_id"]] = recorded[step]["utterance"][
+                    span["start"] : span["end"]
+                ]
+    for step in ("alt-01", "alt-02"):
+        raws = []
+        for raw in json.loads(json.dumps(recorded[step]["extraction"]["candidates"])):
+            raw["quote"] = [texts[s["turn_id"]] for s in raw.pop("evidence")]
+            raws.append(raw)
+        monkeypatch.setitem(EXTRACT, recorded[step]["utterance"], raws)
+    if resolver == "new":
+        monkeypatch.setitem(RESOLVE, "We'll take the Jimny.", [("new", None)])
+    runner, _log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("alternatives",))
+    checks = {c["check"]: c["status"] for c in summary["cases"]["D28"]["checks"]}
+    assert set(checks.values()) == {acceptance.PASS}, checks
+
+
 def test_launcher_and_cli_accept_every_slice1_group():
     """The exact entry path: every group the runner defines is accepted by the
     Windows launcher's ValidateSet and by the lab CLI."""

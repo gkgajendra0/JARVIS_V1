@@ -20,11 +20,19 @@ asked again) and nothing about storage, so the reply has no receipt to claim.
 It is asked once and stays open in its conversation until the owner answers
 it (the extractor reads the answer; code decides what it allows):
 
-- ``confirmed`` alternatives are stored as an undecided choice, from the
-  owner's original words plus the confirming turn (:func:`confirmation_candidate`);
-- ``chosen``: the owner's stated value is an ordinary clear proposal;
+- ``confirmed`` alternatives are stored as an undecided choice;
+- ``chosen``: the decided value, said in a statement of the owner's current
+  turn, is stored on the same plan (:func:`chosen_values`);
 - ``doesnt_matter`` discards the pending detail;
 - no answer leaves it unsaved; it ends with the conversation.
+
+An answer never depends on the extractor repeating the plan's name or its
+earlier evidence: the question supplies both (:func:`answer_candidate`), and
+reconciliation is bound to the question's canonical plan. The extractor's own
+version of the same answer is replaced, not stored beside it. An answer that
+cannot be checked (not said in the current turn, contradictory, ambiguous
+between plans, or whose original words have left the source) stores nothing
+and leaves the question open.
 """
 
 from __future__ import annotations
@@ -172,6 +180,10 @@ def clarification_for(source, candidate, *, dropped_unclear=False):
         details,
         words,
         tuple(known.items()),
+        # A detail question keeps its proposal: the plan's identity and the
+        # owner's original words for a later answer. A whole-fact question
+        # has no detail to answer.
+        candidate=None if dropped_unclear else candidate,
     )
 
 
@@ -200,42 +212,233 @@ def alternatives_questions(source, candidate):
     ]
 
 
-def confirmation_candidate(source, notes):
-    """The owner confirmed these questions from one proposal: keep only
-    those details, citing the owner's original words (still within this
-    learning source) and the confirming turn. It then passes the ordinary
-    policy, resolution and reconciliation. None when the original words are
-    no longer in the source (nothing is stored)."""
+def _statement_sentences(text):
+    """Spans of the sentences of ``text`` that are statements, not questions."""
+    out, start = [], 0
+    for index, char in enumerate(text):
+        if char in ".!?\n":
+            if char != "?" and text[start:index].strip():
+                out.append((start, index + 1))
+            start = index + 1
+    if text[start:].strip() and not text[start:].rstrip().endswith("?"):
+        out.append((start, len(text)))
+    return out
+
+
+def has_statement(text) -> bool:
+    """Whether a turn says anything other than questions."""
+    return bool(_statement_sentences(text))
+
+
+def said_now(text, value):
+    """The owner's own spelling of ``value`` in a statement (not a question)
+    of the current turn, or None. Case is the only difference allowed."""
+    if not value:
+        return None
+    sentences = _statement_sentences(text)
+    folded, wanted = text.lower(), value.lower()
+    if len(folded) != len(text):
+        folded, wanted = text, value
+    at = folded.find(wanted)
+    while at >= 0:
+        end = at + len(wanted)
+        whole = (at == 0 or not text[at - 1].isalnum()) and (
+            end == len(text) or not text[end].isalnum()
+        )
+        if whole and any(s <= at and end <= e for s, e in sentences):
+            return text[at:end]
+        at = folded.find(wanted, at + 1)
+    return None
+
+
+def _options(note, detail):
+    return dict(note.choices).get(detail) or (
+        note.owner_words if note.kind == UNCLEAR else ()
+    )
+
+
+def _decided(slot):
+    return (
+        slot is not None
+        and slot.value
+        and not _slot_parts(slot)
+        and slot.certainty == "confirmed"
+    )
+
+
+def chosen_values(source, notes, candidates):
+    """The value the owner chose for each answered question, or why not.
+
+    The extractor reads the meaning (which question, which value: its proposed
+    slot for the detail). Code accepts a value only when it can check it: a
+    decided value (confirmed, no options), said in a statement of the owner's
+    current turn, and attributable to exactly one question (one of that
+    question's own options, or the only question about that detail). Several
+    values for one question, or one value claimed by questions on different
+    plans, decide nothing.
+
+    Returns ``({question_id: {detail: value}}, [(note, reason)])``.
+    """
+    text = next((t.text for t in source.turns if t.turn_id == source.turn_id), "")
+    said: dict[str, list[str]] = {}
+    for candidate in candidates:
+        if candidate.category != "plan" or candidate.slots is None:
+            continue
+        for name in SLOT_NAMES:
+            slot = getattr(candidate.slots, name)
+            if _decided(slot) and (owner := said_now(text, slot.value)):
+                said.setdefault(name, []).append(owner)
+    asking: dict[str, int] = {}
+    for note in notes:
+        for detail in note.details:
+            asking[detail] = asking.get(detail, 0) + 1
+    values, refused = {}, []
+    for note in notes:
+        if note.plan_predicate is None or note.candidate is None:
+            refused.append((note, "unbound_question"))
+            continue
+        chosen, reason = {}, None
+        for detail in note.details:
+            heard = list(dict.fromkeys(v.casefold() for v in said.get(detail, ())))
+            options = {o.casefold() for o in _options(note, detail)}
+            among = [v for v in heard if v in options]
+            pick = among or (heard if asking[detail] == 1 else [])
+            if not pick:
+                reason = "choice_not_stated"
+                break
+            if len(pick) > 1:
+                reason = "contradictory_choice"
+                break
+            chosen[detail] = next(v for v in said[detail] if v.casefold() == pick[0])
+        if reason:
+            refused.append((note, reason))
+        else:
+            values[note.question_id] = chosen
+    claims: dict[tuple, set] = {}
+    for note in notes:
+        for detail, value in values.get(note.question_id, {}).items():
+            claims.setdefault((detail, value.casefold()), set()).add(
+                note.plan_predicate
+            )
+    for note in notes:
+        chosen = values.get(note.question_id)
+        if chosen and any(
+            len(claims[(d, v.casefold())]) > 1 for d, v in chosen.items()
+        ):
+            del values[note.question_id]
+            refused.append((note, "ambiguous_choice"))
+    return values, refused
+
+
+def answers_the_question(candidate, notes, values) -> bool:
+    """Whether a proposal is the extractor's own version of these answers (a
+    plan stating an answered detail as one of that question's options, as its
+    chosen value, or as those options again). It is replaced by the answer the
+    question supports, never stored beside it."""
+    if candidate.category != "plan" or candidate.slots is None:
+        return False
+    for note in notes:
+        for detail in note.details:
+            slot = getattr(candidate.slots, detail, None)
+            if slot is None:
+                continue
+            known = {o.casefold() for o in _options(note, detail)}
+            chosen = values.get(note.question_id, {}).get(detail)
+            if chosen:
+                known.add(chosen.casefold())
+            stated = {o.casefold() for o in _slot_parts(slot)}
+            if slot.value:
+                stated.add(slot.value.casefold())
+            if stated & known:
+                return True
+    return False
+
+
+def answer_candidate(source, confirmed, chosen, extra_slots=None):
+    """One proposal for the owner's answers to questions on one plan.
+
+    Identity (label, value, kind) and the original evidence come from the
+    trusted question: the owner's original words, which must still be in this
+    learning source; the current turn is cited in full. Only the answered
+    details are proposed: confirmed alternatives stay undecided
+    (``owner_confirmed``); a choice is the decided value code checked
+    (:func:`chosen_values`). ``extra_slots``: other decided details said in the
+    current turn. It then passes the ordinary policy, resolution and
+    reconciliation bound to the question's plan. ``(None, reason)`` when the
+    original words are no longer available (nothing is stored)."""
     from .learning_contracts import EvidenceSpan, LearningCandidate
 
-    note = notes[0]
-    original = note.candidate
+    notes = [*confirmed, *(note for note, _ in chosen)]
+    original = notes[0].candidate
     if original is None:
-        return None
+        return None, "unbound_question"
     window = {t.turn_id for t in source.turns}
-    spans = [s for s in original.evidence if s.turn_id in window]
-    if not spans or note.turn_id not in window:
-        return None
-    latest = source.turns[-1]
+    spans = []
+    for note in notes:
+        if note.candidate is None or note.turn_id not in window:
+            return None, "original_evidence_expired"
+        kept = [s for s in note.candidate.evidence if s.turn_id in window]
+        if not kept:
+            return None, "original_evidence_expired"
+        spans += [s for s in kept if s not in spans]
+    latest = next(t for t in source.turns if t.turn_id == source.turn_id)
     if all(s.turn_id != latest.turn_id for s in spans):
         spans.append(
             EvidenceSpan(turn_id=latest.turn_id, start=0, end=len(latest.text))
         )
-    slots = {
-        name: {"value": None, "options": list(options), "certainty": "tentative"}
-        for confirmed in notes
-        for name, options in confirmed.choices
-    }
+    slots = dict(extra_slots or {})
+    for note in confirmed:
+        for name, options in note.choices:
+            slots[name] = {
+                "value": None,
+                "options": list(options),
+                "certainty": "tentative",
+            }
+    for _, values in chosen:
+        for name, value in values.items():
+            slots[name] = {"value": value, "options": [], "certainty": "confirmed"}
+    # Identity only: the question's earlier restated facts (time, place,
+    # status, aliases) are not part of the answer and could be stale.
     data = original.model_dump(mode="json", exclude={"evidence", "slots"})
+    data.update(
+        {
+            "time_expression": None,
+            "location": None,
+            "reason": None,
+            "details": None,
+            "aliases": [],
+            "acquired_expression": None,
+            "disposed_expression": None,
+            "plan_status": None,
+        }
+    )
     return LearningCandidate.model_validate(
         {
             **data,
             "intent": "new",
             "slots": slots,
             "evidence": [s.model_dump() for s in spans],
-            "owner_confirmed": tuple(slots),
+            "owner_confirmed": tuple(
+                name for note in confirmed for name, _ in note.choices
+            ),
         }
-    )
+    ), None
+
+
+def current_turn_details(source, candidate, skip) -> dict:
+    """Decided details of an answering proposal that the owner said in a
+    statement of the current turn (never a restated earlier detail)."""
+    text = next((t.text for t in source.turns if t.turn_id == source.turn_id), "")
+    out = {}
+    if candidate.category != "plan" or candidate.slots is None:
+        return out
+    for name in SLOT_NAMES:
+        slot = getattr(candidate.slots, name)
+        if name in skip or not _decided(slot):
+            continue
+        if owner := said_now(text, slot.value):
+            out[name] = {"value": owner, "options": [], "certainty": "confirmed"}
+    return out
 
 
 def stated_details(candidate) -> set[str]:
@@ -251,66 +454,6 @@ def stated_details(candidate) -> set[str]:
         and slot.certainty != "uncertain"
         and len(_slot_parts(slot)) < 2
     }
-
-
-def ground_chosen_plan(source, candidate, questions):
-    """Repair only an ungrounded display identity on an answered question.
-
-    The open question supplies the original, grounded identity, not the
-    extractor's paraphrase. The selected option must be stated in the latest
-    cited owner turn. Reconciliation must still match the question's canonical
-    predicate; this cannot create a plan or redirect an already grounded name.
-    """
-    if candidate.category != "plan":
-        return candidate, ()
-    turns = {t.turn_id: t.text for t in source.turns}
-    fragments, current = [], []
-    for span in candidate.evidence:
-        text = turns.get(span.turn_id)
-        if text is None or not 0 <= span.start < span.end <= len(text):
-            return candidate, ()
-        fragment = text[span.start : span.end]
-        fragments.append(fragment)
-        if span.turn_id == source.turn_id:
-            current.append(fragment)
-    if any(
-        identity in fragment
-        for identity in (candidate.label, candidate.value)
-        for fragment in fragments
-    ):
-        return candidate, ()
-    matches = []
-    cited = {span.turn_id for span in candidate.evidence}
-    for note in questions:
-        if (
-            note.kind != ALTERNATIVES
-            or note.session_id != source.session_id
-            or note.plan_predicate is None
-            or note.turn_id not in cited
-            or note.candidate is None
-        ):
-            continue
-        for detail, options in note.choices:
-            slot = getattr(candidate.slots, detail, None)
-            if (
-                slot is not None
-                and slot.value in options
-                and slot.certainty == "confirmed"
-                and not slot.options
-                and any(slot.value in text for text in current)
-            ):
-                matches.append(note)
-    if not matches or len({n.plan_predicate for n in matches}) != 1:
-        return candidate, ()
-    original = matches[0].candidate
-    if not all(
-        any(identity in text for text in fragments)
-        for identity in (original.label, original.value)
-    ):
-        return candidate, ()
-    return candidate.model_copy(
-        update={"label": original.label, "value": original.value, "kind": original.kind}
-    ), tuple(matches)
 
 
 class ClarificationBoard:
