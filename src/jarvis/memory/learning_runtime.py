@@ -76,6 +76,9 @@ def _mutation_label(mutation, catalog):
     return None
 
 
+_UNSET = object()
+
+
 class PersonalLearningRuntime:
     def __init__(
         self,
@@ -161,11 +164,17 @@ class PersonalLearningRuntime:
     def bind(self, conversation, grant, *, speaker_evidence=None):
         self._grant = grant
         self._speaker_evidence = speaker_evidence
-        return lambda turn: self.observe_turn(conversation, turn, grant)
+        # Each bound conversation keeps its own evidence book.
+        return lambda turn: self.observe_turn(
+            conversation, turn, grant, speaker_evidence=speaker_evidence
+        )
 
-    def observe_turn(self, conversation, turn, grant):
+    def observe_turn(self, conversation, turn, grant, *, speaker_evidence=_UNSET):
         if self._closed or turn.turn_id in self._seen:
             return
+        evidence = (
+            self._speaker_evidence if speaker_evidence is _UNSET else speaker_evidence
+        )
         try:
             source = AcceptedLearningSource.from_turn(
                 self.authority.runtime_id_for(grant),
@@ -177,34 +186,11 @@ class PersonalLearningRuntime:
                 raise PermissionError("input limit")
             self._seen.add(turn.turn_id)
             self.authority.observe_accepted_input(grant, turn.turn_id)
-            categories = category_veto(source.text)
-            if categories:
-                self._vetoed.add(turn.turn_id)
-                self.invalidate_sources()
-                if any(
-                    set(categories) <= set(keys) for keys in self._controls.values()
-                ):
-                    self._report("category_suppression_pending")
-                    return
-                self.authority.register_source(grant, source.receipt_id, source=source)
-                self._pending[source.receipt_id] = (source, grant)
-                self._controls[source.receipt_id] = categories
-                self.receipts.learning_started(source.session_id, source.turn_id)
-                self._enqueue(source.receipt_id)
-                return
-            if not LearningPolicy.source_allowed(source):
-                self._vetoed.add(turn.turn_id)
-                self.invalidate_sources(turn_id=turn.turn_id)
-                log_learning(
-                    self.diagnostics, source, "source", "rejected", reason="source_veto"
-                )
-                self._report("source_veto")
-                return
-            evidence = self._speaker_evidence
             if evidence is not None and evidence.enforcing:
-                # The source is fixed now (latest turn, its context window);
-                # registration waits for the speaker evidence. memory_status
-                # reports it as still processing meanwhile.
+                # Everything this turn could change (a fact, or a category
+                # privacy control) waits for the speaker evidence: only the
+                # owner's own speech is acted on. memory_status reports it as
+                # still processing meanwhile.
                 self.receipts.learning_started(source.session_id, source.turn_id)
                 task = asyncio.create_task(
                     self._admit_after_evidence(evidence, source, turn, grant),
@@ -212,15 +198,61 @@ class PersonalLearningRuntime:
                 )
                 self._admissions.add(task)
                 task.add_done_callback(self._admissions.discard)
+                task.add_done_callback(
+                    lambda t, s=source: (
+                        self.receipts.learning_finished(
+                            s.session_id, s.turn_id, "closed"
+                        )
+                        if t.cancelled()
+                        else None
+                    )
+                )
                 return
-            self._admit(source, turn, grant)
+            self._route(source, turn, grant)
         except (ValueError, PermissionError) as exc:
             self._source_denied(turn, exc, grant)
+
+    def _route(self, source, turn, grant, *, receipt_started=False):
+        """A category privacy control, or an ordinary learning source."""
+        categories = category_veto(source.text)
+        if categories:
+            self._vetoed.add(turn.turn_id)
+            self.invalidate_sources()
+            if any(set(categories) <= set(keys) for keys in self._controls.values()):
+                if receipt_started:
+                    self.receipts.learning_finished(
+                        source.session_id,
+                        source.turn_id,
+                        "category_suppression_pending",
+                    )
+                self._report("category_suppression_pending")
+                return
+            self.authority.register_source(grant, source.receipt_id, source=source)
+            self._pending[source.receipt_id] = (source, grant)
+            self._controls[source.receipt_id] = categories
+            if not receipt_started:
+                self.receipts.learning_started(source.session_id, source.turn_id)
+            self._enqueue(source.receipt_id)
+            return
+        if not LearningPolicy.source_allowed(source):
+            self._vetoed.add(turn.turn_id)
+            self.invalidate_sources(turn_id=turn.turn_id)
+            log_learning(
+                self.diagnostics, source, "source", "rejected", reason="source_veto"
+            )
+            if receipt_started:
+                self.receipts.learning_finished(
+                    source.session_id, source.turn_id, "source_veto"
+                )
+            self._report("source_veto")
+            return
+        self._admit(source, turn, grant, receipt_started=receipt_started)
 
     async def _admit_after_evidence(self, evidence, source, turn, grant):
         """Automatic learning admits only speech scored as the owner: an
         earlier context turn that is not is removed before any provider sees
-        it, and the source itself is dropped unless it is."""
+        it, and the source itself is dropped unless it is. Cancellation (on
+        close) finishes the receipt in the task's done callback."""
         try:
             for context_turn in source.turns[:-1]:
                 if not evidence.admits_learning(
@@ -228,7 +260,9 @@ class PersonalLearningRuntime:
                 ):
                     self._vetoed.add(context_turn.turn_id)
             result = await evidence.wait(turn.turn_id)
-        except BaseException:
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             self.receipts.learning_finished(
                 source.session_id, source.turn_id, "speaker_evidence_unavailable"
             )
@@ -253,12 +287,19 @@ class PersonalLearningRuntime:
             self._report("speaker_not_owner")
             return
         try:
-            self._admit(source, turn, grant, receipt_started=True)
+            self._route(source, turn, grant, receipt_started=True)
         except (ValueError, PermissionError) as exc:
             self.receipts.learning_finished(
                 source.session_id, source.turn_id, "source_denied"
             )
             self._source_denied(turn, exc, grant)
+        except Exception:
+            self.receipts.learning_finished(
+                source.session_id, source.turn_id, "learning_error"
+            )
+            LOGGER.exception(
+                "Automatic memory admission failed | turn_id=%s", turn.turn_id
+            )
 
     def _admit(self, source, turn, grant, *, receipt_started=False):
         # Remove vetoed/pre-forget context before any provider receives it.
@@ -899,8 +940,12 @@ class PersonalLearningRuntime:
             self._queue.task_done()
         self._seen.clear()
         self._vetoed.clear()
-        for task in tuple(self._admissions):
+        admissions = tuple(self._admissions)
+        for task in admissions:
             task.cancel()
+        # Their done callbacks finish the receipts of turns still awaiting
+        # speaker evidence.
+        await asyncio.gather(*admissions, return_exceptions=True)
         for adapter in {
             id(self.extractor): self.extractor,
             id(self.resolver): self.resolver,

@@ -181,7 +181,7 @@ class MemoryAgentTools:
         )
         return {
             **result,
-            "say": self._receipts.issue(session, say),
+            "say": self._receipts.issue(session, say, turn_id),
             "say_rule": "Speak say exactly as given; add nothing about memory.",
         }
 
@@ -759,7 +759,7 @@ class MemoryAgentTools:
             session, tuple(t.turn_id for t in owner_turns), wait
         )
         view = self._receipts.view(session, [t.turn_id for t in owner_turns])
-        self._receipts.issue(session, view["say"])
+        self._receipts.issue(session, view["say"], owner_turns[0].turn_id)
         return view
 
     @function_tool()

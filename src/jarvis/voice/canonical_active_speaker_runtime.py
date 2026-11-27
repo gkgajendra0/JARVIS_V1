@@ -438,11 +438,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             else:
                 personal = None
                 self._personal_context = None
-            learning_blocked = (
-                config.speaker_evidence_enforcement
-                and self._session_purpose == "conversation"
-                and evidence is None
-            )
+            # Any session purpose: a session without speaker scores (system
+            # sessions have none) never learns while enforcement is on.
+            learning_blocked = config.speaker_evidence_enforcement and evidence is None
             if learning_blocked and self._personal_learning is not None:
                 # Fail closed: enforcement asked for owner-only learning but no
                 # speaker scores are available, so nothing is learned.
@@ -1300,6 +1298,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
 
         def detach():
             unregister_stream_gate(session, check.stream_gate)
+            self._memory_receipts.drop_issued(bridge.conversation.session_id)
             asyncio.ensure_future(check.close())
 
         bridge.add_close_observer(detach)

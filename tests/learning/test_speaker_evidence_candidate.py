@@ -357,6 +357,83 @@ def test_enforced_learning_fails_closed_without_speaker_scores(scores_available)
         assert bound == []
 
 
+@pytest.mark.asyncio
+async def test_a_background_privacy_command_changes_nothing(learning):
+    """Background speech "Don't remember my plans" must not write a category
+    suppression nor discard the owner's pending learning."""
+    from jarvis.memory.memory_receipts import MemoryReceipts
+
+    extractor = RecordingExtractor()
+    r = learning_runtime(learning, extractor)
+    r.receipts = MemoryReceipts()
+    c = learning_conversation()
+    book = SpeakerTurnEvidenceBook(threshold=0.45, enforce=True, follow_up=False)
+    observe = r.bind(c, learning.grant, speaker_evidence=book)
+    try:
+        owner = accept(c, book, OWNER_FOLLOW_UP[0])
+        observe(owner)
+        tv = accept(c, book, "Don't remember my plans")
+        observe(tv)
+        await asyncio.sleep(0)
+        book.resolve(owner.turn_id, score=OWNER_FOLLOW_UP[1], reason="scored")
+        book.resolve(tv.turn_id, score=TV_SCORES[0], reason="scored")
+        await r.drain()
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert extractor.sources == [OWNER_FOLLOW_UP[0]]
+        assert r._controls == {}
+        (entry,) = r.receipts.view(c.session_id, [tv.turn_id])["turns"]
+        assert entry["status"] == "nothing_saved"
+    finally:
+        await r.close()
+
+
+@pytest.mark.asyncio
+async def test_closing_during_the_evidence_wait_leaves_nothing_in_flight(learning):
+    from jarvis.memory.memory_receipts import MemoryReceipts
+
+    r = learning_runtime(learning, RecordingExtractor())
+    r.receipts = MemoryReceipts()
+    c = learning_conversation()
+    book = SpeakerTurnEvidenceBook(threshold=0.45, enforce=True, follow_up=False)
+    observe = r.bind(c, learning.grant, speaker_evidence=book)
+    turn = accept(c, book, OWNER_FOLLOW_UP[0])
+    observe(turn)  # cancelled before its first step
+    assert r.receipts.pending(c.session_id, turn.turn_id)
+    await r.close()
+    await asyncio.sleep(0)
+    assert not r.receipts.pending(c.session_id, turn.turn_id)
+
+
+@pytest.mark.parametrize("purpose", ["conversation", "system"])
+def test_enforced_learning_never_attaches_to_a_session_without_scores(purpose):
+    from dataclasses import replace
+
+    bound = []
+    learning = SimpleNamespace(
+        bind=lambda conversation, grant, speaker_evidence=None: (
+            bound.append(speaker_evidence) or (lambda turn: None)
+        ),
+        clarifications=SimpleNamespace(),
+    )
+    config = replace(JarvisConfig(), speaker_evidence_enforcement=True)
+    session, bridge = _session_pair()
+    runtime = CanonicalActiveSpeakerRuntimeController(
+        config,
+        _FakeAudio(),
+        session_factory=lambda _: (session, bridge),
+        speaker_shadow_observer=SimpleNamespace(
+            score=lambda samples, sample_rate: None
+        ),
+    )
+    runtime._session_purpose = purpose
+    runtime._personal_learning = learning
+    runtime._learning_grant = object()
+    runtime._session_factory(config)
+    # A system session has no speaker evidence book, so it never learns.
+    assert len(bound) == (1 if purpose == "conversation" else 0)
+
+
 def test_project_history_keeps_the_331_rule_learning_is_stricter():
     from jarvis.voice.speaker_turn_evidence import SpeakerTurnEvidence
 

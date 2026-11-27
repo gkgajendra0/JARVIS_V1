@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import re
+import unicodedata
 from collections import OrderedDict
 from time import monotonic
 from uuid import uuid4
@@ -98,8 +99,15 @@ _PATTERNS = (
 )
 # A sentence in the receipt form ("Saved: ...", "Forgot: ...") is a memory
 # statement too: it must be one Jarvis was given, word for word.
+# A receipt-form statement ("Saved: ...", "Okay, saved Goa plan.") is a
+# memory statement too: from its verb to the end of the sentence it must be
+# a receipt Jarvis was given, word for word. The verb counts at the start of
+# the sentence or right after punctuation, never after another word ("you
+# saved some money" is about the owner).
 _RECEIPT_FORM = re.compile(
-    r"^\s*(?:" + "|".join(re.escape(v) for v in RECEIPT_VERBS) + r")\b\s*[:.]",
+    r"(?:^|(?<=[,;:.!?—–…-]))\s*(?:"
+    + "|".join(re.escape(v) for v in sorted(RECEIPT_VERBS, key=len, reverse=True))
+    + r")\b",
     re.IGNORECASE,
 )
 _NORMAL = re.compile(r"[^\w]+", re.UNICODE)
@@ -134,10 +142,11 @@ def memory_claims(text: str) -> set[str]:
 
 
 def _normal(text) -> str:
-    return " ".join(_NORMAL.sub(" ", text or "").lower().split())
+    text = unicodedata.normalize("NFKC", text or "")
+    return " ".join(_NORMAL.sub(" ", text).lower().split())
 
 
-def unverified_statements(text: str, issued) -> list[str]:
+def unverified_statements(text: str, issued, *, final: bool = False) -> list[str]:
     """Memory statements in a reply that are not receipt sentences Jarvis was
     given (``issued``), word for word.
 
@@ -145,9 +154,9 @@ def unverified_statements(text: str, issued) -> list[str]:
     never describes a memory change in its own words; it only speaks the
     sentence code composed from the verified record (memory_status, or an
     explicit tool's result). So any first-person memory claim, true or not,
-    and any receipt-form sentence that differs from what was issued, is
-    unverified. A sentence still being spoken only has to be the start of
-    an issued one.
+    and any receipt-form statement that differs from what was issued, is
+    unverified. While a reply streams, its last unfinished sentence only has
+    to be the start of an issued one; a ``final`` reply is judged whole.
     """
     given = [
         _normal(sentence)
@@ -158,13 +167,19 @@ def unverified_statements(text: str, issued) -> list[str]:
     found = []
     sentences = [s for s in _SENTENCES.split(text or "") if s.strip()]
     for index, sentence in enumerate(sentences):
-        complete = index < len(sentences) - 1 or bool(_SENTENCE_END.search(sentence))
-        claim = any(
-            clause.strip() and _affirmed(clause) for clause in _CLAUSES.split(sentence)
+        complete = (
+            final or index < len(sentences) - 1 or bool(_SENTENCE_END.search(sentence))
         )
-        if not claim and not _RECEIPT_FORM.search(sentence):
+        if any(
+            clause.strip() and _affirmed(clause) for clause in _CLAUSES.split(sentence)
+        ):
+            # Own words: never a receipt.
+            found.append(sentence.strip())
             continue
-        spoken = _normal(sentence)
+        match = _RECEIPT_FORM.search(sentence)
+        if match is None:
+            continue
+        spoken = _normal(sentence[match.start() :])
         if complete:
             ok = spoken in given
         else:
@@ -291,18 +306,23 @@ class MemoryClaimCheck:
 
     def stream_gate(self, text) -> bool:
         """While a reply streams: True (stop its speech now) when it states a
-        memory change other than a receipt sentence Jarvis was given. The
-        owner then hears the receipt for their recent turns. Each owner turn
-        is stopped and answered once; later speech is not cut."""
+        memory change other than a receipt sentence issued for the newest
+        owner turn. The first time for an owner turn the owner then hears
+        the receipt; any later unverified statement for that turn (also in
+        the reply meant to read the receipt) is stopped without another
+        correction, so nothing loops."""
         if self._closed:
             return False
-        session = self.conversation.session_id
-        if not unverified_statements(text, self.receipts.issued(session)):
-            return False
         turns = _recent_owner_turns(self.conversation)
-        if not turns or turns[0].turn_id in self._corrected:
+        if not turns:
             return False
-        self._schedule(turns, text, stopped=True)
+        session = self.conversation.session_id
+        if not unverified_statements(
+            text, self.receipts.issued(session, turns[0].turn_id)
+        ):
+            return False
+        if turns[0].turn_id not in self._corrected:
+            self._schedule(turns, text, stopped=True)
         return True
 
     def observe(self, turn) -> None:
@@ -310,11 +330,13 @@ class MemoryClaimCheck:
         statement."""
         if self._closed or turn.role is not ConversationRole.ASSISTANT:
             return
-        session = self.conversation.session_id
-        if not unverified_statements(turn.text, self.receipts.issued(session)):
-            return
         turns = _recent_owner_turns(self.conversation, before=turn)
-        if turns and turns[0].turn_id not in self._corrected:
+        if not turns or turns[0].turn_id in self._corrected:
+            return
+        session = self.conversation.session_id
+        if unverified_statements(
+            turn.text, self.receipts.issued(session, turns[0].turn_id), final=True
+        ):
             self._schedule(turns, turn.text, stopped=False)
 
     def _schedule(self, turns, text, *, stopped) -> None:
@@ -330,11 +352,15 @@ class MemoryClaimCheck:
         session = self.conversation.session_id
         ids = tuple(t.turn_id for t in turns)
         await self.receipts.wait_learning(session, ids, self.learning_wait)
-        statements = unverified_statements(text, self.receipts.issued(session))
+        statements = unverified_statements(
+            text, self.receipts.issued(session, owner.turn_id), final=not stopped
+        )
         if not statements and not stopped:
             return
         # The owner hears the receipt, composed from the record.
-        say = self.receipts.issue(session, self.receipts.say(session, ids))
+        say = self.receipts.issue(
+            session, self.receipts.say(session, ids), owner.turn_id
+        )
         LOGGER.warning(
             "Memory claim check: unverified memory statement (%s sentences, "
             "stopped=%s); speaking the receipt",

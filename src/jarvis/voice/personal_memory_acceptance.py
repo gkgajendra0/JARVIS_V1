@@ -2265,7 +2265,7 @@ class _GroupContext:
 
             session = self.conversation.session_id
             statements = unverified_statements(
-                answer, self.learning.receipts.issued(session)
+                answer, self.learning.receipts.issued(session, turn.turn_id), final=True
             )
             if statements:
                 correction = {

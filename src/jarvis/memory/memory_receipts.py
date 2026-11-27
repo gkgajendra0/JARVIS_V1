@@ -136,17 +136,27 @@ class MemoryReceipts:
                 MemoryOperation("explicit", operation, label, turn_id)
             )
 
-    def issue(self, session_id, say: str) -> str:
-        """A receipt sentence handed to Jarvis to speak as given."""
+    def issue(self, session_id, say: str, turn_id=None) -> str:
+        """A receipt sentence handed to Jarvis to speak as given, for the
+        owner turn that was newest when it was composed. It is valid only
+        while that turn is still the newest: a later request gets its own."""
         issued = self._issued.setdefault(session_id, [])
-        issued.append(say)
+        issued.append((turn_id, say))
         del issued[:-ISSUED_LIMIT]
         return say
 
+    def drop_issued(self, session_id) -> None:
+        self._issued.pop(session_id, None)
+
     # readers -------------------------------------------------------------
 
-    def issued(self, session_id) -> tuple[str, ...]:
-        return tuple(self._issued.get(session_id, ()))
+    def issued(self, session_id, turn_id) -> tuple[str, ...]:
+        """Receipts issued while ``turn_id`` was the newest owner turn."""
+        return tuple(
+            say
+            for issued_for, say in self._issued.get(session_id, ())
+            if issued_for == turn_id
+        )
 
     def pending(self, session_id, turn_id) -> bool:
         turn = self._turns.get((session_id, turn_id))
