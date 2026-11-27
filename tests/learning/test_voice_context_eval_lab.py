@@ -143,7 +143,7 @@ def test_incompatible_flags_are_refused(
 
 
 @pytest.mark.asyncio
-async def test_lab_runtime_is_built_without_automatic_learning(tmp_path):
+async def test_lab_runtime_keeps_learning_and_explicit_tools_opt_in(tmp_path):
     from jarvis.voice.project_voice_lab import run_voice_lab
 
     seen = {}
@@ -164,7 +164,7 @@ async def test_lab_runtime_is_built_without_automatic_learning(tmp_path):
     await run_voice_lab(object(), tmp_path, baseline=False, runtime_builder=builder)
     assert "automatic_learning" not in seen  # production default untouched
     seen.clear()
-    # --personal-learning: production's automatic learning, same read-only tools.
+    # --personal-learning: automatic learning plus explicit receipt/memory tools.
     await run_voice_lab(
         object(),
         tmp_path,
@@ -174,9 +174,12 @@ async def test_lab_runtime_is_built_without_automatic_learning(tmp_path):
         learning=True,
     )
     assert "automatic_learning" not in seen
-    assert not {"remember_memory", "correct_memory", "forget_memory"} & set(
-        seen["tool_allowlist"]
-    )
+    assert {
+        "memory_status",
+        "remember_memory",
+        "correct_memory",
+        "forget_memory",
+    } <= seen["tool_allowlist"]
     with pytest.raises(ValueError, match="needs saved personal context"):
         await run_voice_lab(
             object(), tmp_path, baseline=False, runtime_builder=builder, learning=True

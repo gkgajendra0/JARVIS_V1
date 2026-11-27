@@ -20,8 +20,8 @@ from pathlib import Path
 
 # The ONLY tools Gemini can see or call in each lab mode, enforced in code by
 # VoiceRuntimeController (restrict_tools). Hands, desktop/file control,
-# capability acquisition, research, work, vision and canonical-memory tools are
-# all withheld; their internal authority services still run for Hello/SQLCipher.
+# capability acquisition, research, work and vision are withheld. Canonical
+# memory operations are opt-in below; authority services still enforce consent.
 BASELINE_TOOLS = frozenset({"enter_standby"})
 # Project memory's own tools: context, older-history search and forgetting.
 PROJECT_TOOLS = frozenset(
@@ -43,10 +43,25 @@ PERSONAL_READ_TOOLS = frozenset(
 )
 
 
-def lab_tool_allowlist(*, baseline: bool, personal: bool = False) -> frozenset[str]:
+# --personal-learning with --personal-context only: production receipt/status
+# and explicit personal operations. These are the original governed tools:
+# explicit mutations still require current user intent and fresh Windows Hello.
+PERSONAL_LEARNING_TOOLS = frozenset(
+    {"memory_status", "remember_memory", "correct_memory", "forget_memory"}
+)
+
+
+def lab_tool_allowlist(
+    *, baseline: bool, personal: bool = False, learning: bool = False
+) -> frozenset[str]:
     if baseline:
         return BASELINE_TOOLS
-    return PROJECT_MEMORY_TOOLS | (PERSONAL_READ_TOOLS if personal else frozenset())
+    allowed = PROJECT_MEMORY_TOOLS
+    if personal:
+        allowed |= PERSONAL_READ_TOOLS
+        if learning:
+            allowed |= PERSONAL_LEARNING_TOOLS
+    return allowed
 
 
 def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
@@ -217,7 +232,7 @@ async def run_voice_lab(
     allowlist = (
         None
         if qualification
-        else lab_tool_allowlist(baseline=baseline, personal=personal)
+        else lab_tool_allowlist(baseline=baseline, personal=personal, learning=learning)
     )
     meter = VoiceUsageMeter(
         lab / "voice-usage.jsonl",
@@ -319,7 +334,8 @@ def main():
         action="store_true",
         help="With --personal-context: keep production's automatic personal "
         "learning on, so facts the owner states are learned into this lab's "
-        "memory (still no memory write tools for the model).",
+        "memory; also expose production memory_status and explicit "
+        "remember/correct/forget tools with their existing consent checks.",
     )
     parser.add_argument(
         "--speaker-evidence",
@@ -418,7 +434,9 @@ def main():
                     + ", ".join(
                         sorted(
                             lab_tool_allowlist(
-                                baseline=args.baseline, personal=args.personal_context
+                                baseline=args.baseline,
+                                personal=args.personal_context,
+                                learning=args.personal_learning,
                             )
                         )
                     )

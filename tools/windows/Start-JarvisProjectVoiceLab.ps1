@@ -20,7 +20,8 @@ param(
     # -SeedVoiceEval first.
     [switch]$PersonalContext,
     # With -PersonalContext: keep production's automatic learning on (learned
-    # facts go into this lab's memory only).
+    # facts go into this lab's memory only); also expose production receipt/status
+    # and explicit memory tools, retaining their existing authorization checks.
     [switch]$PersonalLearning,
     # With -PersonalContext: score each transcript against the enrolled owner voice
     # (template copied into the lab) and enforce the R2-D candidates in the lab only.
