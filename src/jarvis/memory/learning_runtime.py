@@ -21,7 +21,6 @@ from .learning_clarification import (
     answers_the_question,
     chosen_values,
     clarification_for,
-    current_turn_details,
     has_statement,
     stated_details,
 )
@@ -631,7 +630,7 @@ class PersonalLearningRuntime:
         replaced = {
             index
             for index, candidate in enumerate(batch.candidates)
-            if answers_the_question(candidate, chosen, values)
+            if answers_the_question(source, candidate, chosen, values)
         }
         groups: dict[object, tuple[list, list]] = {}
 
@@ -644,46 +643,19 @@ class PersonalLearningRuntime:
         for note in chosen:
             if note.question_id in values:
                 group(note)[1].append((note, values[note.question_id]))
-        extras: dict[object, dict] = {}
-        for index in replaced:
-            # Other details the owner said in the same answer ("... and stay
-            # in Kaza") go with it when the replaced proposal answered
-            # exactly one plan's questions.
-            candidate = batch.candidates[index]
-            owners = [
-                key
-                for key, (confirms, picks) in groups.items()
-                if picks
-                and answers_the_question(
-                    candidate,
-                    [note for note, _ in picks],
-                    {note.question_id: v for note, v in picks},
-                )
-            ]
-            if len(owners) == 1:
-                confirms, picks = groups[owners[0]]
-                # Never an asked detail, nor one already known when asked: a
-                # different value for that is a change, not part of the answer.
-                asked = {
-                    d
-                    for n in [*confirms, *(n for n, _ in picks)]
-                    for d in (*n.details, *(name for name, _ in n.known))
-                }
-                extras.setdefault(owners[0], {}).update(
-                    current_turn_details(source, candidate, asked)
-                )
         answers = []
-        for key, (confirms, picks) in groups.items():
-            candidate, reason = answer_candidate(
-                source, confirms, picks, extras.get(key)
-            )
+        room = 8 - len(batch.candidates) + len(replaced)
+        for confirms, picks in groups.values():
             questions = [*confirms, *(n for n, _ in picks)]
+            candidate, reason = answer_candidate(source, confirms, picks)
+            if candidate is not None and len(answers) >= room:
+                candidate, reason = None, "too_many_proposals"
             if candidate is None:
                 for note in questions:
                     self._unusable(source, note, reason)
                 continue
             answers.append((candidate, questions))
-        return answered, answers[: 8 - len(batch.candidates) + len(replaced)], replaced
+        return answered, answers, replaced
 
     def _unusable(self, source, note, reason):
         """An answer that stores nothing: recorded, never claimed; the question

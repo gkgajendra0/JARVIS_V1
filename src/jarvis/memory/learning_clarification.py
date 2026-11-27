@@ -266,28 +266,79 @@ def _decided(slot):
     )
 
 
+def _whole(text, phrase) -> bool:
+    """``phrase`` occurs as whole words in ``text`` (case aside)."""
+    if not phrase:
+        return False
+    folded, wanted = text.casefold(), phrase.casefold()
+    at = folded.find(wanted)
+    while at >= 0:
+        end = at + len(wanted)
+        if (at == 0 or not folded[at - 1].isalnum()) and (
+            end == len(folded) or not folded[end].isalnum()
+        ):
+            return True
+        at = folded.find(wanted, at + 1)
+    return False
+
+
+def _original_words(source, note) -> str:
+    """The owner's words the question was asked from (its proposal's cited
+    spans still in this source) and its subject."""
+    turns = {t.turn_id: t.text for t in source.turns}
+    parts = [note.subject]
+    for span in getattr(note.candidate, "evidence", ()) or ():
+        text = turns.get(span.turn_id)
+        if text is not None:
+            parts.append(text[span.start : span.end])
+    return "\n".join(parts)
+
+
+def about_the_question(source, candidate, note) -> bool:
+    """Whether a proposal can be about this question's plan, judged only by
+    the proposal's own identity against the owner's words:
+
+    - its name is not in the owner's words it cites (a paraphrase or a
+      reference: it names no plan of its own; D28's "trip to Spiti");
+    - or every name it gives in the owner's words is also in the words the
+      question was asked from ("Spiti"), or is one of that question's
+      options (a detail used as a name, "Jimny").
+
+    A proposal naming something else in the owner's words ("For Goa ...",
+    "Ladakh in May ...") is about another plan: it is neither read as this
+    answer nor replaced by it, and it is learned on its own."""
+    if candidate.category != "plan" or candidate.slots is None:
+        return False
+    turns = {t.turn_id: t.text for t in source.turns}
+    cited = "\n".join(
+        turns[s.turn_id][s.start : s.end]
+        for s in candidate.evidence
+        if s.turn_id in turns
+    )
+    names = [n for n in dict.fromkeys((candidate.label, candidate.value)) if n]
+    grounded = [n for n in names if n in cited]
+    if not grounded:
+        return True
+    original = _original_words(source, note)
+    options = {o.casefold() for d in note.details for o in _options(note, d)}
+    return all(_whole(original, n) or n.casefold() in options for n in grounded)
+
+
 def chosen_values(source, notes, candidates):
     """The value the owner chose for each answered question, or why not.
 
     The extractor reads the meaning (which question, which value: its proposed
     slot for the detail). Code accepts a value only when it can check it: a
-    decided value (confirmed, no options), said in a statement of the owner's
-    current turn, and attributable to exactly one question (one of that
-    question's own options, or the only question about that detail). Several
-    values for one question, or one value claimed by questions on different
-    plans, decide nothing.
+    decided value (confirmed, no options) from a proposal that can be about
+    that question's plan (:func:`about_the_question`), said in a statement of
+    the owner's current turn, and attributable to exactly one question (one of
+    that question's own options, or the only question about that detail).
+    Several values for one question, or one value claimed by questions on
+    different plans, decide nothing.
 
     Returns ``({question_id: {detail: value}}, [(note, reason)])``.
     """
     text = next((t.text for t in source.turns if t.turn_id == source.turn_id), "")
-    said: dict[str, list[str]] = {}
-    for candidate in candidates:
-        if candidate.category != "plan" or candidate.slots is None:
-            continue
-        for name in SLOT_NAMES:
-            slot = getattr(candidate.slots, name)
-            if _decided(slot) and (owner := said_now(text, slot.value)):
-                said.setdefault(name, []).append(owner)
     asking: dict[str, int] = {}
     for note in notes:
         for detail in note.details:
@@ -297,6 +348,14 @@ def chosen_values(source, notes, candidates):
         if note.plan_predicate is None or note.candidate is None:
             refused.append((note, "unbound_question"))
             continue
+        said: dict[str, list[str]] = {}
+        for candidate in candidates:
+            if not about_the_question(source, candidate, note):
+                continue
+            for detail in note.details:
+                slot = getattr(candidate.slots, detail)
+                if _decided(slot) and (owner := said_now(text, slot.value)):
+                    said.setdefault(detail, []).append(owner)
         chosen, reason = {}, None
         for detail in note.details:
             heard = list(dict.fromkeys(v.casefold() for v in said.get(detail, ())))
@@ -330,14 +389,15 @@ def chosen_values(source, notes, candidates):
     return values, refused
 
 
-def answers_the_question(candidate, notes, values) -> bool:
-    """Whether a proposal is the extractor's own version of these answers (a
-    plan stating an answered detail as one of that question's options, as its
-    chosen value, or as those options again). It is replaced by the answer the
-    question supports, never stored beside it."""
-    if candidate.category != "plan" or candidate.slots is None:
-        return False
+def answers_the_question(source, candidate, notes, values) -> bool:
+    """Whether a proposal is the extractor's own version of these answers: it
+    can be about the question's plan and states an answered detail as one of
+    that question's options, as its chosen value, or as those options again.
+    It is replaced by the answer the question supports, never stored beside
+    it."""
     for note in notes:
+        if not about_the_question(source, candidate, note):
+            continue
         for detail in note.details:
             slot = getattr(candidate.slots, detail, None)
             if slot is None:
@@ -354,7 +414,7 @@ def answers_the_question(candidate, notes, values) -> bool:
     return False
 
 
-def answer_candidate(source, confirmed, chosen, extra_slots=None):
+def answer_candidate(source, confirmed, chosen):
     """One proposal for the owner's answers to questions on one plan.
 
     Identity (label, value, kind) and the original evidence come from the
@@ -362,10 +422,12 @@ def answer_candidate(source, confirmed, chosen, extra_slots=None):
     learning source; the current turn is cited in full. Only the answered
     details are proposed: confirmed alternatives stay undecided
     (``owner_confirmed``); a choice is the decided value code checked
-    (:func:`chosen_values`). ``extra_slots``: other decided details said in the
-    current turn. It then passes the ordinary policy, resolution and
-    reconciliation bound to the question's plan. ``(None, reason)`` when the
-    original words are no longer available (nothing is stored)."""
+    (:func:`chosen_values`). It then passes the ordinary policy, resolution
+    and reconciliation bound to the question's plan. ``(None, reason)`` when
+    the original words are no longer available or the answer cannot form a
+    valid proposal (nothing is stored)."""
+    from pydantic import ValidationError
+
     from .learning_contracts import EvidenceSpan, LearningCandidate
 
     notes = [*confirmed, *(note for note, _ in chosen)]
@@ -386,7 +448,7 @@ def answer_candidate(source, confirmed, chosen, extra_slots=None):
         spans.append(
             EvidenceSpan(turn_id=latest.turn_id, start=0, end=len(latest.text))
         )
-    slots = dict(extra_slots or {})
+    slots = {}
     for note in confirmed:
         for name, options in note.choices:
             slots[name] = {
@@ -412,33 +474,22 @@ def answer_candidate(source, confirmed, chosen, extra_slots=None):
             "plan_status": None,
         }
     )
-    return LearningCandidate.model_validate(
-        {
-            **data,
-            "intent": "new",
-            "slots": slots,
-            "evidence": [s.model_dump() for s in spans],
-            "owner_confirmed": tuple(
-                name for note in confirmed for name, _ in note.choices
-            ),
-        }
-    ), None
-
-
-def current_turn_details(source, candidate, skip) -> dict:
-    """Decided details of an answering proposal that the owner said in a
-    statement of the current turn (never a restated earlier detail)."""
-    text = next((t.text for t in source.turns if t.turn_id == source.turn_id), "")
-    out = {}
-    if candidate.category != "plan" or candidate.slots is None:
-        return out
-    for name in SLOT_NAMES:
-        slot = getattr(candidate.slots, name)
-        if name in skip or not _decided(slot):
-            continue
-        if owner := said_now(text, slot.value):
-            out[name] = {"value": owner, "options": [], "certainty": "confirmed"}
-    return out
+    try:
+        candidate = LearningCandidate.model_validate(
+            {
+                **data,
+                "intent": "new",
+                "slots": slots,
+                "evidence": [s.model_dump() for s in spans],
+                "owner_confirmed": tuple(
+                    name for note in confirmed for name, _ in note.choices
+                ),
+            }
+        )
+    except ValidationError:
+        # For example more cited spans than a proposal may carry.
+        return None, "answer_not_representable"
+    return candidate, None
 
 
 def stated_details(candidate) -> set[str]:

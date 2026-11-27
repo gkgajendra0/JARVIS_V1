@@ -203,8 +203,9 @@ class LearningReconciler:
 
     async def catalog(self, source, batch, grant, *, targets=()):
         """Current entries for these proposals. ``targets``: canonical plans
-        an answered open question is bound to; always supplied, so the
-        answer can reach its own plan however many entries exist."""
+        an answered open question is bound to; added within the catalog bound
+        (an answer whose plan does not fit is skipped as
+        ``confirmation_target_missing``, never redirected)."""
         categories = tuple(sorted(CATEGORIES))
         permit = self.authority.issue_child(
             grant,
@@ -358,7 +359,9 @@ class LearningReconciler:
                         "kind": bound.kind,
                         "state": held.get("state", candidate.state),
                         "certainty": held.get("certainty", candidate.certainty),
-                        "plan_status": held.get("plan_status"),
+                        "plan_status": held.get("plan_status")
+                        if held.get("plan_status") in PLAN_STATE
+                        else None,
                     }
                 )
                 if not _added_detail(candidate, source):

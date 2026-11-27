@@ -203,7 +203,6 @@ def _cite_both(raw, source):
         (TAKE, _only_vehicle),
         (TAKE, _set(label="Spiti trip", value="Spiti trip", kind="other")),
         (TAKE, _set(label="Spiti", value="Spiti", kind="other")),
-        (TAKE, _set(label=TAKE, value=TAKE)),
         (TAKE, _cite_question_turn),
         (TAKE, _cite_both),
         (TAKE, _vehicle("jimny")),
@@ -216,7 +215,6 @@ def _cite_both(raw, source):
         "only-the-answered-detail",
         "paraphrased-name",
         "grounded-other-name",
-        "answer-words-as-name",
         "cites-only-the-question-turn",
         "cites-both-turns",
         "different-case",
@@ -248,6 +246,9 @@ async def test_any_reading_of_the_choice_decides_the_questions_plan(lab, text, m
         ("We'll probably take the Jimny.", _vehicle(certainty="tentative")),
         ("Jimny, or maybe the Thar.", "both"),  # contradictory
         (TAKE, _vehicle(options=["Thar", "Jimny"], value="")),  # options again
+        # Names the plan with other words of this turn: read as another plan
+        # (admitted limitation; the ordinary path then judges it on its own).
+        (TAKE, _set(label=TAKE, value=TAKE)),
     ],
     ids=[
         "not-said",
@@ -257,6 +258,7 @@ async def test_any_reading_of_the_choice_decides_the_questions_plan(lab, text, m
         "tentative",
         "contradictory",
         "options-again",
+        "answer-words-as-name",
     ],
 )
 async def test_an_unchecked_choice_stores_nothing(lab, learning, text, mutate):  # noqa: F811
@@ -292,7 +294,10 @@ async def test_a_choice_outside_the_options_is_still_the_owners_decision(lab):  
 
 
 @pytest.mark.asyncio
-async def test_other_details_said_in_the_answer_go_with_it_never_restated_ones(lab):  # noqa: F811
+async def test_only_the_answered_detail_is_taken_from_the_answer(lab):  # noqa: F811
+    """Admitted limitation: another detail said inside the answer ("stay in
+    Kaza") is not learned from that turn, so it can never sink the decision
+    or slip a restated earlier detail in with it."""
     before, _ = await _first_turn(lab)
     text = "We'll take the Jimny and stay in Kaza."
 
@@ -302,7 +307,6 @@ async def test_other_details_said_in_the_answer_go_with_it_never_restated_ones(l
             "options": [],
             "certainty": "confirmed",
         }
-        # A restated detail not said in this turn is never carried.
         raw["slots"]["when"] = {
             "value": "February",
             "options": [],
@@ -313,7 +317,7 @@ async def test_other_details_said_in_the_answer_go_with_it_never_restated_ones(l
     await _answer(lab, text, _reading(mutate))
     (after,) = await lab.plans()
     assert after["slots"]["vehicle"] == JIMNY
-    assert after["slots"]["stay"]["value"] == "Kaza"
+    assert "stay" not in after["slots"]
     assert after["slots"]["when"] == before["slots"]["when"]
 
 
@@ -715,3 +719,117 @@ def test_chosen_values_unit_rules():
     # A word inside another word is not the owner's choice.
     turn.text = "We'll take the Jimnyx."
     assert chosen_values(source, [note], [reading])[1] == [(note, "choice_not_stated")]
+
+
+# a second plan in the answer turn is learned on its own ----------------------
+
+
+def _named(turn, label, slots, intent="new"):
+    return LearningCandidate(
+        category="plan",
+        kind="other",
+        intent=intent,
+        label=label,
+        value=label,
+        state="planned",
+        plan_status="planned",
+        slots=slots,
+        evidence=[{"turn_id": turn.turn_id, "start": 0, "end": len(turn.text)}],
+    )
+
+
+def _car(value):
+    return {"value": value, "options": [], "certainty": "confirmed"}
+
+
+@pytest.mark.asyncio
+async def test_another_plans_details_never_ride_onto_the_questioned_plan(lab):  # noqa: F811
+    lab.script.by_text[CHOICE] = _choice()
+    await lab.say(CHOICE)
+    goa = "We're going to Goa in April."
+    lab.script.by_text[goa] = _said(goa, "Goa")
+    await lab.say(goa)
+    text = "Jimny for Spiti. For Goa we'll take the Jimny too and stay in Baga."
+
+    def build(source):
+        t = source.turns[-1]
+        return [
+            _named(t, "Spiti", {"vehicle": _car("Jimny")}),
+            _named(t, "Goa", {"vehicle": _car("Jimny"), "stay": _car("Baga")}),
+        ]
+
+    lab.resolver.targets[text] = "Goa"
+    await _answer(lab, text, build)
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert plans["Spiti"]["slots"]["vehicle"] == JIMNY
+    assert "stay" not in plans["Spiti"]["slots"]
+    assert plans["Goa"]["slots"]["stay"]["value"] == "Baga"
+    assert plans["Goa"]["slots"]["vehicle"]["value"] == "Jimny"
+
+
+@pytest.mark.asyncio
+async def test_a_value_said_about_another_plan_does_not_answer(lab):  # noqa: F811
+    before, question = await _first_turn(lab)
+    text = "Not sure yet. For Goa we're taking the Creta."
+
+    def build(source):
+        return [_named(source.turns[-1], "Goa", {"vehicle": _car("Creta")})]
+
+    await _answer(lab, text, build)
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert plans[before["label"]] == before
+    assert plans["Goa"]["slots"]["vehicle"]["value"] == "Creta"  # learned itself
+    assert lab.runtime.clarifications.pending(question.session_id) == [question]
+
+
+@pytest.mark.asyncio
+async def test_a_new_plan_with_another_option_neither_blocks_nor_is_lost(lab):  # noqa: F811
+    before, question = await _first_turn(lab)
+    text = "We'll take the Jimny. Ladakh in May is with the Thar."
+
+    def build(source):
+        t = source.turns[-1]
+        return [
+            LearningCandidate.model_validate(
+                {
+                    **EF0C["steps"]["alt-02"]["extraction"]["candidates"][0],
+                    "evidence": [{"turn_id": t.turn_id, "start": 0, "end": 21}],
+                }
+            ),
+            _named(t, "Ladakh", {"vehicle": _car("Thar")}),
+        ]
+
+    await _answer(lab, text, build)
+    plans = {p["label"]: p for p in await lab.plans()}
+    _assert_decided(before, plans[before["label"]])
+    assert plans["Ladakh"]["slots"]["vehicle"]["value"] == "Thar"
+    assert lab.runtime.clarifications.pending(question.session_id) == []
+
+
+@pytest.mark.asyncio
+async def test_an_answer_too_large_to_cite_stores_nothing_and_breaks_nothing(lab):  # noqa: F811
+    from dataclasses import replace
+
+    before, question = await _first_turn(lab)
+    # A question whose proposal cites eight spans: with the answer turn the
+    # answer would need nine, more than a proposal may carry.
+    first = lab.conversation.turns[0]
+    spans = [{"turn_id": first.turn_id, "start": i, "end": i + 5} for i in range(8)]
+    wide = question.candidate.model_copy(
+        update={
+            "evidence": [type(question.candidate.evidence[0])(**span) for span in spans]
+        }
+    )
+    board = lab.runtime.clarifications
+    board.close(question)
+    board.offer(replace(question, candidate=wide))
+    other = "We're going to Goa in April."
+    text = TAKE + " " + other
+
+    def build(source):
+        return _reading()(source) + _said(text, "Goa", quote=other)(source)
+
+    await _answer(lab, text, build)
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert plans[before["label"]] == before
+    assert "Goa" in plans  # the rest of the turn is still learned
