@@ -1846,7 +1846,8 @@ def _overall(checks):
 def _tier_summary(cases, missing=()):
     """Invariants (each must hold) apart from quality measurements (rates).
     ``missing``: planned cases that did not run."""
-    invariant_fail, invariant_untested, invariant_pass = [], [], 0
+    invariant_fail, invariant_untested, invariant_review = [], [], []
+    invariant_pass = 0
     untested_cases = [case for case, row in cases.items() if row["status"] == UNTESTED]
     quality = {PASS: 0, FAIL: 0, REVIEW: 0, UNTESTED: 0}
     quality_fail = []
@@ -1863,6 +1864,8 @@ def _tier_summary(cases, missing=()):
                     invariant_fail.append({"case": case, "check": check["check"]})
                 elif status == PASS:
                     invariant_pass += 1
+                elif status == REVIEW:
+                    invariant_review.append({"case": case, "check": check["check"]})
                 else:
                     invariant_untested.append({"case": case, "check": check["check"]})
             else:
@@ -1878,10 +1881,14 @@ def _tier_summary(cases, missing=()):
             # prerequisite left its checks unrun. Never reported as PASS.
             "untested": invariant_untested,
             "untested_cases": untested_cases,
+            # Needs the owner's decision before it counts as passing.
+            "review": invariant_review,
             "verdict": FAIL
             if invariant_fail
             else UNTESTED
             if invariant_untested or untested_cases or missing
+            else REVIEW
+            if invariant_review
             else PASS,
         },
         "quality": {

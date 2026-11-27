@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 MAX_TURNS = 64
 RECENT_TURNS = 3
+_POSITIONS = ("latest", "previous", "two_before")
 
 # Operation kinds, as claims are checked against them.
 SAVE_OPERATIONS = frozenset(
@@ -132,13 +133,12 @@ class MemoryReceipts:
                 out.extend(turn.operations)
         return tuple(out)
 
-    def view(self, session_id, turns) -> dict:
+    def view(self, session_id, turn_ids) -> dict:
         """What the memory_status tool returns: what was verifiably done for
-        the owner's recent turns (newest first), never more.
-
-        ``turns``: (turn_id, owner words) pairs, newest first."""
+        the owner's recent turns, never more. ``turn_ids``: newest first.
+        Turns are named by position, not by the owner's words."""
         entries = []
-        for turn_id, words in turns:
+        for index, turn_id in enumerate(turn_ids):
             ops = self.operations(session_id, turn_id)
             if self.pending(session_id, turn_id):
                 status = "still_processing"
@@ -150,7 +150,7 @@ class MemoryReceipts:
                 status = "nothing_saved"
             entries.append(
                 {
-                    "owner_words": words,
+                    "turn": _POSITIONS[index] if index < len(_POSITIONS) else index,
                     "status": status,
                     "operations": [
                         {"operation": o.operation, "item": o.label} for o in ops
@@ -160,11 +160,12 @@ class MemoryReceipts:
         return {
             "turns": entries,
             "rule": (
-                "Newest owner turn first. Confirm only what is listed, for the "
-                "turn the owner means. still_processing is not saved yet. "
-                "nothing_saved means nothing was saved for that turn: say so, and "
-                "offer to try again or use the explicit memory tools when the "
-                "owner asked to remember, correct or forget."
+                "Owner turns newest first (latest = the owner's last request). "
+                "Confirm only what is listed, for the turn the owner means. "
+                "still_processing is not saved yet. nothing_saved means nothing "
+                "was saved for that turn: say so, and offer to try again or use "
+                "the explicit memory tools when the owner asked to remember, "
+                "correct or forget."
             ),
         }
 

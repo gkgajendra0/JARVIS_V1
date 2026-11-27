@@ -741,7 +741,7 @@ class MemoryAgentTools:
         await self._receipts.wait_learning(
             session, tuple(t.turn_id for t in owner_turns), wait
         )
-        return self._receipts.view(session, [(t.turn_id, t.text) for t in owner_turns])
+        return self._receipts.view(session, [t.turn_id for t in owner_turns])
 
     @function_tool()
     async def recall_memory(

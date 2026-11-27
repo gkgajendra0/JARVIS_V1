@@ -23,10 +23,12 @@ import asyncio
 import json
 import logging
 import re
+from collections import OrderedDict
 from time import monotonic
 from uuid import uuid4
 
 from jarvis.conversation import ConversationRole, ConversationStatus
+from jarvis.memory.learning_catalog_page import PLAN_HEAD_NOUNS, name_words
 from jarvis.memory.memory_receipts import (
     FORGET_OPERATIONS,
     RECENT_TURNS,
@@ -40,30 +42,36 @@ from jarvis.voice.voice_output_safety import (
 LOGGER = logging.getLogger(__name__)
 
 _SENTENCES = re.compile(r"(?<=[.!?।])\s+")
-# A claim is judged per clause: "Noted, I won't forget that." claims the
-# first clause and negates only the second.
+_SENTENCE_END = re.compile(r"[.!?।]['\"’”)]*\s*$")
+# A claim is found per clause ("Noted, I won't forget that." claims the first
+# clause and negates only the second) and judged on its whole sentence.
 _CLAUSES = re.compile(r"\s*(?:[,;:—–]|\bbut\b|\blekin\b)\s*", re.IGNORECASE)
+# Negation counts only before or inside the claim itself: "I've noted that
+# you don't drink coffee" is still a claim.
 _NEGATION = re.compile(
     r"\b(?:no|not|nothing|never|cannot|can['’]?t|didn['’]?t|wasn['’]?t|haven['’]?t|"
     r"hasn['’]?t|couldn['’]?t|won['’]?t|isn['’]?t|aren['’]?t|nahi|nahin|mat)\b"
     r"|n['’]t\b|नहीं|नही",
     re.IGNORECASE,
 )
-# Only words that are about memory itself, or a general verb with a memory
-# object: "I've saved the document" or "I've added the task" is another
-# tool's action, never checked against memory.
-_MEMORY_OBJECT = r"(?:my|your|the)?\s*(?:memory|memories|records?|notes)"
+# Only words about memory itself, or a general verb with memory as its
+# object: "I've saved the document", "added the task", "stored it in my notes
+# app" are other tools' actions, never checked against memory.
+_MEMORY_OBJECT = r"(?:my|your|the)?\s*(?:memory|memories)"
+# A verb followed by an infinitive or a question word is ordinary speech, not
+# a memory change: "I have forgotten to mention", "I'll remember to call".
+_NOT_A_CHANGE = r"(?!\s+(?:to|about|what|where|when|how|whether|if|which)\b)"
 _EN_FORGET = re.compile(
-    r"\bI(?:['’]ve|\s+have|['’]ll|\s+will)?\s+(?:now\s+|just\s+|also\s+)?"
-    r"(?:forgotten|forgot|forget)\b"
+    rf"\bI(?:['’]ve|\s+have)\s+(?:now\s+|just\s+|also\s+)?forgotten\b{_NOT_A_CHANGE}"
     r"|\b(?:it|that|this)(?:['’]s(?:\s+been)?|\s+is|\s+has\s+been|\s+was)\s+"
     r"(?:now\s+)?forgotten\b"
     rf"|\b(?:deleted|removed|erased|cleared)\b[^.!?]{{0,40}}\bfrom\s+{_MEMORY_OBJECT}\b",
     re.IGNORECASE,
 )
 _EN_SAVE = re.compile(
-    r"\bI(?:['’]ve|\s+have)?\s+(?:now\s+|just\s+|also\s+)?(?:noted|remembered)\b"
-    r"|\bI(?:['’]ll|\s+will)\s+(?:remember|note)\b"
+    rf"\bI(?:['’]ve|\s+have)?\s+(?:now\s+|just\s+|also\s+)?(?:noted|remembered)\b"
+    rf"{_NOT_A_CHANGE}"
+    rf"|\bI(?:['’]ll|\s+will)\s+(?:remember|note)\b{_NOT_A_CHANGE}"
     r"|^\s*(?:okay|ok|alright|sure|done|got\s+it|understood)?[,.!]?\s*noted\b"
     r"|\b(?:it|that|this)(?:['’]s(?:\s+been)?|\s+is|\s+has\s+been|\s+was)\s+"
     r"(?:now\s+)?noted\b"
@@ -73,9 +81,7 @@ _EN_SAVE = re.compile(
     re.IGNORECASE,
 )
 _HI_FORGET = re.compile(
-    r"\bbhool\s+(?:gaya|gayi|jaunga|jaungi)\b"
-    r"|\b(?:memory|yaadon)\s+se\s+(?:hata|delete|remove)\b"
-    r"|मेमोरी\s+से\s+हटा",
+    r"\b(?:memory|yaadon)\s+se\s+(?:hata|delete|remove)\b|मेमोरी\s+से\s+हटा",
     re.IGNORECASE,
 )
 _HI_SAVE = re.compile(
@@ -86,50 +92,67 @@ _HI_SAVE = re.compile(
     r"|नोट\s+कर\s+(?:लिया|ली)|याद\s+रख\s+(?:लिया|ली|लूँगा|लूंगा|लूँगी|लूंगी)",
     re.IGNORECASE,
 )
-_WORD = re.compile(r"\w+", re.UNICODE)
-# A short bare acknowledgement names no item ("Noted.", "I'll remember that.").
-_BARE_MAX_WORDS = 4
+_PATTERNS = (
+    ("forgotten", _EN_FORGET),
+    ("forgotten", _HI_FORGET),
+    ("saved", _EN_SAVE),
+    ("saved", _HI_SAVE),
+)
+_KINDS = {"saved": SAVE_OPERATIONS, "forgotten": FORGET_OPERATIONS}
 
 
-def _claim_clauses(text):
-    """(kind, clause) for each affirmed memory claim."""
-    for sentence in _SENTENCES.split(text or ""):
+def _affirmed(clause):
+    """The kind a clause affirms, or None."""
+    for kind, pattern in _PATTERNS:
+        for match in pattern.finditer(clause):
+            if not _NEGATION.search(clause[: match.end()]):
+                return kind
+    return None
+
+
+def _claims(text):
+    """(kind, sentence, complete) for each affirmed claim."""
+    sentences = [s for s in _SENTENCES.split(text or "") if s.strip()]
+    for index, sentence in enumerate(sentences):
+        complete = index < len(sentences) - 1 or bool(_SENTENCE_END.search(sentence))
+        kinds = []
         for clause in _CLAUSES.split(sentence):
-            if not clause.strip() or _NEGATION.search(clause):
-                continue
-            if _EN_FORGET.search(clause) or _HI_FORGET.search(clause):
-                yield "forgotten", clause
-            elif _EN_SAVE.search(clause) or _HI_SAVE.search(clause):
-                yield "saved", clause
+            kind = clause.strip() and _affirmed(clause)
+            if kind and kind not in kinds:
+                kinds.append(kind)
+        for kind in kinds:
+            yield kind, sentence, complete
 
 
 def memory_claims(text: str) -> set[str]:
     """Kinds of memory change a reply affirms: {"saved", "forgotten"}."""
-    return {kind for kind, _ in _claim_clauses(text)}
+    return {kind for kind, _, _ in _claims(text)}
 
 
-def _names(clause, label) -> bool:
-    """The clause names the recorded item (a distinctive word of its label)."""
-    from jarvis.memory.learning_catalog_page import PLAN_HEAD_NOUNS, name_words
-
+def _names(sentence, label) -> bool:
+    """The sentence names the recorded item (a distinctive word of its label)."""
     wanted = {w for w in name_words(label) - PLAN_HEAD_NOUNS if len(w) >= 3}
-    return bool(wanted) and bool(wanted & name_words(clause))
+    return bool(wanted) and bool(wanted & name_words(sentence))
 
 
-def unsupported_claims(text: str, operations) -> set[str]:
-    """Claims the recorded operations do not support, item by item: a claim
-    naming an item needs an operation of its kind on that item; a bare
-    acknowledgement ("Noted.") needs an operation of its kind."""
-    kinds = {"saved": SAVE_OPERATIONS, "forgotten": FORGET_OPERATIONS}
+def unsupported_claims(text: str, operations, newest=None) -> set[str]:
+    """Claims the recorded operations do not support.
+
+    ``newest``: the newest owner turn's id (None: every operation counts as
+    the newest turn's). A claim is backed by an operation of its kind on the
+    newest owner turn, or by one on an earlier recent turn that the sentence
+    names ("Did you save that?" "Yes, I've noted your Jimny."). A sentence
+    still being spoken may not have named its item yet: until it ends, any
+    recorded operation of its kind is enough.
+    """
     false = set()
-    for kind, clause in _claim_clauses(text):
-        ops = [o for o in operations if o.operation in kinds[kind]]
-        bare = len(_WORD.findall(clause)) <= _BARE_MAX_WORDS
-        if bare:
-            ok = bool(ops)
-        else:
-            ok = any(o.label and _names(clause, o.label) for o in ops)
-        if not ok:
+    for kind, sentence, complete in _claims(text):
+        ops = [o for o in operations if o.operation in _KINDS[kind]]
+        if any(newest is None or o.turn_id == newest for o in ops):
+            continue
+        if not complete and ops:
+            continue
+        if not any(o.label and _names(sentence, o.label) for o in ops):
             false.add(kind)
     return false
 
@@ -256,25 +279,24 @@ class MemoryClaimCheck:
         self._clock, self._sleep = clock, sleep
         self._diag = diagnostics
         self._tasks: set[asyncio.Task] = set()
-        self._corrected: set[str] = set()
+        self._corrected: OrderedDict[str, None] = OrderedDict()
         self._closed = False
         self.corrections: list = []
 
     def stream_gate(self, text) -> bool:
         """While a reply streams: True (stop its speech now) when it claims a
-        memory change the record of the owner's recent turns does not
-        support, including while their learning is still running. The owner
-        then hears what the record shows once learning has finished. Each
-        owner turn is stopped and answered once; later speech is not cut."""
+        memory change the record does not support, including while the
+        owner turn's learning is still running. The owner then hears what
+        the record shows once learning has finished. Each owner turn is
+        stopped and answered once; later speech is not cut."""
         if self._closed or not memory_claims(text):
             return False
         turns = _recent_owner_turns(self.conversation)
         if not turns or turns[0].turn_id in self._corrected:
             return False
         session = self.conversation.session_id
-        ids = tuple(t.turn_id for t in turns)
-        # Unsupported now, whether learning is still running or finished.
-        if not unsupported_claims(text, self.receipts.operations(session, ids)):
+        operations = self.receipts.operations(session, tuple(t.turn_id for t in turns))
+        if not unsupported_claims(text, operations, newest=turns[0].turn_id):
             return False
         self._schedule(turns, text, stopped=True)
         return True
@@ -290,7 +312,9 @@ class MemoryClaimCheck:
             self._schedule(turns, turn.text, stopped=False)
 
     def _schedule(self, turns, text, *, stopped) -> None:
-        self._corrected.add(turns[0].turn_id)
+        self._corrected[turns[0].turn_id] = None
+        while len(self._corrected) > 64:
+            self._corrected.popitem(last=False)
         task = asyncio.get_running_loop().create_task(self._check(turns, text, stopped))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
@@ -301,18 +325,18 @@ class MemoryClaimCheck:
         ids = tuple(t.turn_id for t in turns)
         finished = await self.receipts.wait_learning(session, ids, self.learning_wait)
         operations = self.receipts.operations(session, ids)
-        false = unsupported_claims(text, operations)
-        if not false and stopped and finished:
-            # Stopped before memory had confirmed it; memory has now confirmed
-            # it: the owner hears it from the record.
-            facts = correction_facts(operations)
-        elif not false:
+        latest = [o for o in operations if o.turn_id == owner.turn_id]
+        false = unsupported_claims(text, operations, newest=owner.turn_id)
+        if not false and not stopped:
             return
+        if not false:
+            # Stopped before memory had confirmed it, and memory now backs
+            # it: the owner hears it from the record (this turn's when any).
+            facts = correction_facts(latest or operations)
         else:
-            facts = correction_facts(
-                [o for o in operations if o.turn_id == owner.turn_id],
-                still_processing=not finished,
-            )
+            # A stopped reply is always answered, even if learning has not
+            # finished: speech was cut, so the owner hears where things stand.
+            facts = correction_facts(latest, still_processing=not finished)
         LOGGER.warning(
             "Memory claim check: reply claimed %s; recorded operations %s; correcting",
             sorted(false),
