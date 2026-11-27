@@ -29,6 +29,7 @@ from .learning_temporal import (
     POSSIBILITY_CATEGORIES,
     normalize_plan_time,
     occurrence_matches,
+    plan_schedule_unspecified,
     plan_time_restated,
     temporal_context,
 )
@@ -1203,11 +1204,24 @@ def _corrected_plan_value(old, fresh, candidate, entry, entries):
     return value if restated else None
 
 
-def _plan_fields(candidate):
+def _plan_fields(candidate, context=None):
     fields = {}
     if candidate.plan_status is not None:
         fields["plan_status"] = candidate.plan_status
     slots = normalized_slots(candidate.slots, candidate.owner_confirmed)
+    if (
+        candidate.time_expression is not None
+        and plan_schedule_unspecified(candidate)
+        and context
+        and "when" in (context.get("slots") or {})
+    ):
+        # A legacy time-only update restates the same schedule detail; it
+        # must not leave its older slot value contradicting the calendar.
+        slots["when"] = {
+            "value": candidate.time_expression,
+            "options": [],
+            "certainty": candidate.certainty,
+        }
     if slots:
         fields["slots"] = slots
     return fields
@@ -1252,7 +1266,7 @@ def _added_detail(candidate, source, context=None):
     if candidate.category == "owned_item":
         return _item_fields(candidate, source, context)
     if candidate.category == "plan":
-        return _plan_fields(candidate)
+        return _plan_fields(candidate, context)
     return {}
 
 
@@ -1289,7 +1303,7 @@ def _new_value(candidate, source, context=None):
             if detail is not None:
                 value[key] = detail
         if candidate.category == "plan":
-            value.update(_plan_fields(candidate))
+            value.update(_plan_fields(candidate, context))
     return _record_certainty(value, candidate, certainty)
 
 
@@ -1355,7 +1369,7 @@ def _changed_value(old, candidate, source):
             if detail is not None:
                 value[key] = detail
         if candidate.category == "plan":
-            fields = _plan_fields(candidate)
+            fields = _plan_fields(candidate, old)
             if "plan_status" in fields:
                 value["plan_status"] = fields["plan_status"]
             if "slots" in fields:

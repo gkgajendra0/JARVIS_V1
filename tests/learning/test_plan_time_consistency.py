@@ -276,3 +276,46 @@ def test_relative_schedule_correction_compares_anchored_window(other_slots):
     mutation = _plan(source, candidate, old).mutations[0]
     assert mutation.action == "correct"
     assert mutation.draft.value["temporal"]["earliest"] == "2026-12-01"
+
+
+def test_empty_schedule_is_unspecified_and_keeps_legacy_time():
+    source, candidate = _candidate(
+        "Alpine trip in October 2026.",
+        slots={"when": {}},
+        time_expression="October 2026",
+    )
+    value = _plan(source, candidate).mutations[0].draft.value
+    assert value["temporal"]["earliest"] == "2026-10-01"
+
+
+@pytest.mark.parametrize("intent", ["change", "correction"])
+def test_legacy_time_update_cannot_leave_an_old_schedule_value(intent):
+    source, candidate = _candidate(
+        "Alpine trip in November 2026, not October 2026.",
+        time_expression="November 2026",
+        intent=intent,
+    )
+    value = _plan(source, candidate, _stored()).mutations[0].draft.value
+    assert value["temporal"]["earliest"] == "2026-11-01"
+    assert value["slots"]["when"]["value"] == "November 2026"
+
+
+@pytest.mark.parametrize("certainty", ["uncertain", "tentative"])
+@pytest.mark.parametrize("intent", ["new", "change", "correction"])
+def test_explicitly_unclear_empty_schedule_never_promotes_a_legacy_date(
+    certainty, intent
+):
+    source, candidate = _candidate(
+        "Alpine trip in November 2026 with Jimny.",
+        intent=intent,
+        time_expression="November 2026",
+        slots={"when": {"certainty": certainty}, "vehicle": {"value": "Jimny"}},
+    )
+    old = None if intent == "new" else _stored()
+    value = _plan(source, candidate, old).mutations[0].draft.value
+    if old is None:
+        assert not value["temporal"].get("precision")
+        assert "when" not in value.get("slots", {})
+    else:
+        assert value["temporal"] == old["temporal"]
+        assert value["slots"]["when"] == old["slots"]["when"]

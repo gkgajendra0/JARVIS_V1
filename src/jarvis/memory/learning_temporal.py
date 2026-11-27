@@ -17,6 +17,14 @@ def plan_time_restated(candidate):
     )
 
 
+def plan_schedule_unspecified(candidate):
+    """Default-empty means not stated; an explicit uncertainty mark does not."""
+    when = candidate.slots.when if candidate.slots is not None else None
+    return when is None or (
+        not (when.value or when.options) and when.certainty == "confirmed"
+    )
+
+
 def normalize_plan_time(candidate):
     """A supplied schedule slot is the plan's time, not a second calendar.
 
@@ -25,11 +33,7 @@ def normalize_plan_time(candidate):
     optional legacy time field. Without a schedule slot that field still
     supports older proposals.
     """
-    if (
-        candidate.category != "plan"
-        or candidate.slots is None
-        or candidate.slots.when is None
-    ):
+    if candidate.category != "plan" or plan_schedule_unspecified(candidate):
         return candidate
     when = normalized_slots(candidate.slots, candidate.owner_confirmed).get("when")
     expression = (
