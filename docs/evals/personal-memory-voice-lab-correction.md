@@ -121,3 +121,97 @@ background utterance disclosed data:
 Do not certify unauthorized-read or background-history acceptance from this
 allowlist fix. Resolving those limitations needs a separately approved change;
 no authorization policy is redesigned here.
+
+## Repairs after the aeb987b2 live acceptance (2026-11-28)
+
+Live evidence (retained, unmodified):
+`E:\Jarvis\Temp\memory-v1-voice-gate-aeb987b2-560b094b6e0749b2baea2b064b1c5cbe`.
+Each issue below is accepted separately; local tests and CI are not live
+acceptance.
+
+### 1. A refused explicit correction committed through automatic learning
+
+Recorded: session `48c472e1…`, turn `d6e0274b…`, "Okay. Correction. My diet
+preference is vegetarian." `correct_memory` consent was refused at
+17:48:14.295Z; automatic learning committed the same correction from the same
+turn at 17:48:15.187Z.
+
+Root cause: the explicit path (personal-context reservation, consent, commit
+guard) and automatic learning (learning grant, child permit, writer
+transaction) had no shared notion of "this request". The learning permit is
+bound to the source turn but never consulted the explicit outcome, so a
+refusal blocked only the explicit write.
+
+Repair: before anything can fail, an explicit remember/correct/forget claims
+its owner turn at the shared write boundary
+(`MemoryService.claim_explicit_request` → `PersonalLearningAuthority`). From
+then on, whether the explicit request is granted, denied, cancelled, expired
+or fails, the learning authority refuses any learning child for a source whose
+turn is, or whose context quotes, the claimed turn: on issue, before, and
+inside the write transaction (under the broker lock, so a claim cannot land
+between check and commit). The learning runtime also drops that turn's queued
+or in-flight sources. To cover the opposite ordering (learning ready before the
+tool is called), the voice runtime makes learning hold its write until the
+reply to that turn is over (`ReplySettlement`: the next assistant turn, a newer
+owner turn, or the end of the session). An unsettled reply within the source
+budget writes nothing. Normal owner-authorized learning commits after the
+reply.
+
+### 2. Explicit save of "home city" could not be read back
+
+Recorded: "Remember that my home city is Jaipur." → consent, commit, receipt
+"Saved: home_city."; "What is my saved home city?" → "Nothing was saved from
+that." (memory_status used as a fact answer); "What is my home city?" → "I don't
+have a record".
+
+Root cause: the explicit write stored a plain-text `home_city` record. In a
+learning session, owner-memory reads see only registered personal-learning
+records (`personal_learning_scope.record_scope`); a plain `home_city` record has
+no registered scope, so it was invisible to reads and could not be targeted for
+correction or deletion. memory_status receipts were also used to answer a
+fact question.
+
+Repair: in a session whose reads are learning-scoped, an explicit standard fact
+outside the registered facets is stored as a `personal_fact` in the registered
+shape (`MemoryService.remember_personal_fact`), with owner-explicit
+provenance. It is in read scope, appears in the facet catalog, correction keeps
+its shape (`correct_text` no longer flattens a registered record to plain
+text), forgetting removes it, and the personal_fact suppression applies.
+Sensitive facts and registered facets keep their existing paths; nothing is
+added to an allowlist. Receipts name the fact in words ("Saved: home city.").
+memory_status and its rule now say it reports recent changes only and never
+answers what a stored fact is.
+
+### 3. Owner-only admission and private reads (speaker enforcement on)
+
+Repair: only positive owner evidence for the exact request turn acts for the
+owner (`SpeakerTurnEvidenceBook.authorizes_owner` / `owner_verified`).
+Unknown (short, unscored, timed out, session closed), non-owner, missing, stale
+or another turn's evidence never does, opening turn or not. With enforcement on
+but no speaker scores, an evidence object that authorizes nothing is used
+(fail closed).
+
+| Path | Now |
+| --- | --- |
+| Project history admission | Owner-scored turns only (opening included); others `not_saved` (`speaker_not_owner` / `speaker_unverified`) |
+| Project history preload | Only after speech in this wake was scored as the owner; never on the wake word alone |
+| `search_history`, `forget_history` | Denied (`speaker_not_verified`) before any archive access unless the request turn is owner-verified |
+| Personal-context reads | Denied unless the bound request turn is owner-verified and still current |
+| `memory_status` | An unverified speaker gets a fixed sentence that names no fact |
+| `inspect_memory`, `recall_memory` | Denied for an unverified speaker |
+| Automatic learning | Unchanged: owner-scored only; category controls wait for evidence |
+| Explicit mutations | Unchanged: fresh Windows Hello for each concrete change |
+
+Provider-preloaded data versus new reads: what was already given to the model
+in this wake (the preload, or facts released for an owner-verified question)
+stays in that live model context; it cannot be withdrawn. Every new tool read
+is authorized per request. A later unverified speaker in the same wake gets no
+new private reads, but the model could still repeat context it already holds.
+The bounded follow-up window and wake retirement limit how long such a context
+lives. Closing that residual fully (for example ending the wake on positive
+non-owner speech after private context was given) is a separate policy
+decision.
+
+Changed behaviour the owner will notice: with enforcement on, very short
+commands that cannot be scored (for example "Go back to sleep, Jarvis.") are
+answered but not saved to project history, and give no private context.

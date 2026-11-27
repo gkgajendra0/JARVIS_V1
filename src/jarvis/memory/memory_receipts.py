@@ -51,6 +51,7 @@ _VERBS = {
 RECEIPT_VERBS = tuple(dict.fromkeys(_VERBS.values()))
 NOTHING_SAVED = "Nothing was saved from that."
 STILL_SAVING = "Still saving that; nothing is saved yet."
+SPEAKER_NOT_VERIFIED = "I can only report memory changes to the owner."
 ISSUED_LIMIT = 8
 
 
@@ -224,8 +225,10 @@ class MemoryReceipts:
             "rule": (
                 "Speak the say sentence exactly as given and add nothing about "
                 "memory in your own words. The turns (newest first) are for "
-                "your understanding only. If nothing was saved and the owner "
-                "wanted it saved, offer the explicit remember tool."
+                "your understanding only. This reports what recent requests "
+                "changed; it never answers what a stored fact is (use the "
+                "personal context tools for that). If nothing was saved and "
+                "the owner wanted it saved, offer the explicit remember tool."
             ),
         }
 

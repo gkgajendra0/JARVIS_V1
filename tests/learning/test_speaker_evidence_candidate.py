@@ -230,10 +230,12 @@ async def test_enforced_history_keeps_out_scored_tv_lines_and_their_replies(lab)
     await say(SHORT_COMMAND, None)
     texts = [text for _, text, *_ in lab.rows()]
     assert OWNER_QUESTION[0] in texts and OWNER_FOLLOW_UP[0] in texts
-    assert SHORT_COMMAND in texts  # unscorable command: kept
+    # Owner decision 2026-11-27: unscorable speech is never saved as the
+    # owner's (before: kept). The owner can say it again in a longer sentence.
+    assert SHORT_COMMAND not in texts
     assert not set(TV_LINES) & set(texts)
     assert "The situation appears critical." not in texts
-    assert voice.metrics.speaker_not_owner == 3
+    assert voice.metrics.speaker_not_owner == 4
     wake.close()
 
 
@@ -334,7 +336,7 @@ def test_enforced_learning_fails_closed_without_speaker_scores(scores_available)
 
     bound = []
     learning = SimpleNamespace(
-        bind=lambda conversation, grant, speaker_evidence=None: (
+        bind=lambda conversation, grant, speaker_evidence=None, **_: (
             bound.append(speaker_evidence) or (lambda turn: None)
         ),
         clarifications=SimpleNamespace(),
@@ -351,10 +353,15 @@ def test_enforced_learning_fails_closed_without_speaker_scores(scores_available)
     runtime._personal_learning = learning
     runtime._learning_grant = object()
     runtime._session_factory(config)
+    from jarvis.voice.speaker_turn_evidence import UnavailableSpeakerEvidence
+
     if scores_available:
         assert len(bound) == 1 and bound[0].enforcing
+        assert runtime._owner_evidence is runtime._speaker_evidence
     else:
         assert bound == []
+        # Private reads and history saving check a book that authorizes nothing.
+        assert isinstance(runtime._owner_evidence, UnavailableSpeakerEvidence)
 
 
 @pytest.mark.asyncio
@@ -411,7 +418,7 @@ def test_enforced_learning_never_attaches_to_a_session_without_scores(purpose):
 
     bound = []
     learning = SimpleNamespace(
-        bind=lambda conversation, grant, speaker_evidence=None: (
+        bind=lambda conversation, grant, speaker_evidence=None, **_: (
             bound.append(speaker_evidence) or (lambda turn: None)
         ),
         clarifications=SimpleNamespace(),
@@ -434,17 +441,52 @@ def test_enforced_learning_never_attaches_to_a_session_without_scores(purpose):
     assert len(bound) == (1 if purpose == "conversation" else 0)
 
 
-def test_project_history_keeps_the_331_rule_learning_is_stricter():
+@pytest.mark.asyncio
+async def test_only_positive_owner_evidence_for_that_turn_acts_for_the_owner():
+    """Owner decision 2026-11-27: history, learning, archive and personal
+    reads and memory receipts all need positive owner evidence for the exact
+    turn. Unknown, non-owner, timed-out, unobserved or another turn's
+    evidence never does, opening turn or not. The follow-up window keeps
+    #331's rule (only positive non-owner speech is withheld from it)."""
     from jarvis.voice.speaker_turn_evidence import SpeakerTurnEvidence
 
-    book = SpeakerTurnEvidenceBook(threshold=0.45, enforce=True, follow_up=False)
-    unknown = SpeakerTurnEvidence("t", SpeakerTurnStatus.UNKNOWN, None, "short", False)
-    owner = SpeakerTurnEvidence("t", SpeakerTurnStatus.OWNER, 0.7, "scored", True)
-    assert not book.withholds(unknown)  # history: only non-owner kept out
-    assert not book.admits_learning(unknown)
-    assert book.admits_learning(owner)
+    c = learning_conversation()
+    book = SpeakerTurnEvidenceBook(
+        threshold=0.45, enforce=True, follow_up=False, wait_seconds=0.01
+    )
+    opening = c.accept_turn(ConversationRole.USER, "What should I pack?")
+    book.observe_turn(opening)
+    later = c.accept_turn(ConversationRole.USER, "Should I take the Thar?")
+    book.observe_turn(later)
+    unknown = SpeakerTurnEvidence(
+        opening.turn_id, SpeakerTurnStatus.UNKNOWN, None, "short", True
+    )
+    owner = SpeakerTurnEvidence(
+        later.turn_id, SpeakerTurnStatus.OWNER, 0.7, "scored", False
+    )
+    assert not book.withholds(unknown)  # follow-up window: unchanged
+    assert not book.authorizes_owner(unknown)
+    assert book.authorizes_owner(owner, later.turn_id)
+    assert not book.authorizes_owner(owner, opening.turn_id)  # another turn's
+    stray = SpeakerTurnEvidence("never-seen", SpeakerTurnStatus.OWNER, 0.7, "x", False)
+    assert not book.authorizes_owner(stray)
+    # Opening turn scored owner: authorized; nothing arrives: timed out.
+    book.resolve(opening.turn_id, score=0.7, reason="scored")
+    assert await book.owner_verified(opening.turn_id)
+    assert not await book.owner_verified(later.turn_id)  # evidence_timeout
+    assert not await book.owner_verified("never-seen")
     off = SpeakerTurnEvidenceBook(threshold=0.45, enforce=False, follow_up=False)
-    assert off.admits_learning(unknown)
+    assert off.admits_learning(unknown) and await off.owner_verified("x")
+
+
+@pytest.mark.asyncio
+async def test_without_scores_enforcement_authorizes_nothing():
+    from jarvis.voice.speaker_turn_evidence import UnavailableSpeakerEvidence
+
+    book = UnavailableSpeakerEvidence()
+    assert book.enforcing
+    assert not await book.owner_verified("t")
+    assert not book.authorizes_owner(await book.wait("t"))
 
 
 # --- bounded follow-up window --------------------------------------------

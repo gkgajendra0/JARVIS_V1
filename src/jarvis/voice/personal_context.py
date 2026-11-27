@@ -137,6 +137,7 @@ class PersonalContextSession:
         topic_checkpoints=None,
         topic_continuity=None,
         explicit_question_queries: bool = False,
+        speaker_evidence=None,
     ):
         if learning_authority is None and learning_grant is not None:
             raise ValueError("learning issuer and grant must be supplied together")
@@ -145,6 +146,10 @@ class PersonalContextSession:
         self._explicit_question_queries = explicit_question_queries
         self._learning_authority = learning_authority
         self._learning_grant = learning_grant
+        # Speaker evidence for this wake (jarvis.voice.speaker_turn_evidence):
+        # with enforcement, a personal read acts for the owner only when the
+        # request turn was positively scored as the owner.
+        self._speaker_evidence = speaker_evidence
         self._learning_source = None
         self._learning_read = False
         self._topic_checkpoints = topic_checkpoints
@@ -373,6 +378,8 @@ class PersonalContextSession:
                 or not await self._validate()
             ):
                 return False
+        if operation == "read" and not await self._speaker_verified(binding):
+            return False
         self._binding = binding
         turn = self._latest_turn()
         self._busy = True
@@ -1135,6 +1142,31 @@ class PersonalContextSession:
         except Exception:  # noqa: BLE001 - never return source/provider error text
             self.close()
             return {"status": "denied"}
+
+    async def _speaker_verified(self, binding) -> bool:
+        """With speaker enforcement, a read needs positive owner evidence for
+        the bound request turn, and that turn must still be the current
+        request afterwards (unknown, non-owner, timed-out, stale or another
+        turn's evidence never authorizes a read). Mutations keep their own
+        fresh Windows Hello consent."""
+        book = self._speaker_evidence
+        if book is None or not book.enforcing:
+            return True
+        verified = await book.owner_verified(binding[1])
+        if not verified or self._closed or self._current(activity=False) != binding:
+            LOGGER.info(
+                "Personal context read denied | reason=speaker_not_verified | "
+                "turn_id=%s",
+                binding[1],
+            )
+            return False
+        return True
+
+    @property
+    def learning_scoped_reads(self) -> bool:
+        """Owner-memory reads in this session see only registered
+        personal-learning records (jarvis.personal_learning_scope)."""
+        return self._learning_authority is not None
 
     def reserve_mutation(self, operation):
         binding = self._current()

@@ -40,7 +40,10 @@ from jarvis.voice.personal_context import (
 from jarvis.voice.personal_context_audio import PersonalContextAudioOutput
 from jarvis.voice.research_tools import ResearchAgentTools
 from jarvis.voice.runtime import VoiceRuntimeController, VoiceRuntimeState
-from jarvis.voice.speaker_turn_evidence import SpeakerTurnEvidenceBook
+from jarvis.voice.speaker_turn_evidence import (
+    SpeakerTurnEvidenceBook,
+    UnavailableSpeakerEvidence,
+)
 from jarvis.voice.work_tools import WorkAgentTools
 from jarvis.work.models import WorkDeliveryKind, WorkState
 from jarvis.work.provider_retry import delivery_retry_delay_seconds, provider_retry_hint
@@ -71,8 +74,10 @@ class _SessionToolBundle:
         | None = None,
         project_turns_getter: Callable[[], Any] | None = None,
         memory_receipts_getter: Callable[[], Any] | None = None,
+        speaker_evidence_getter: Callable[[], Any] | None = None,
     ) -> None:
         self._project_turns_getter = project_turns_getter or (lambda: None)
+        self._speaker_evidence_getter = speaker_evidence_getter or (lambda: None)
         self._memory_receipts_getter = memory_receipts_getter or (lambda: None)
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -104,6 +109,7 @@ class _SessionToolBundle:
                     semantic_query_coordinator=self._memory_query_coordinator,
                     personal_context=personal,
                     receipts=self._memory_receipts_getter(),
+                    speaker_evidence=self._speaker_evidence_getter(),
                 ).tools
             )
             if personal is not None:
@@ -307,6 +313,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 bridge.add_accepted_turn_observer(evidence.observe_turn)
                 bridge.add_close_observer(evidence.close)
             self._speaker_evidence = evidence
+            # What private reads and history saving check: the session's book,
+            # or, with enforcement but no scores, one that authorizes nothing.
+            owner_evidence = (
+                evidence
+                if evidence is not None or not config.speaker_evidence_enforcement
+                else UnavailableSpeakerEvidence()
+            )
+            self._owner_evidence = owner_evidence
             self._window_deadline = None
             self._window_grace_until = 0.0
             self._window_speech = False
@@ -339,7 +353,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 project_turns.bind_retire(retire_after_forget)
                 bind_evidence = getattr(project_turns, "bind_speaker_evidence", None)
                 if callable(bind_evidence):
-                    bind_evidence(evidence)
+                    bind_evidence(owner_evidence)
                 # A reply Gemini transcribed but never voiced is replayed once
                 # through scripted TTS, only if this gate approves it.
                 recovery = getattr(bridge, "silent_audio_recovery", None)
@@ -425,6 +439,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         else None
                     ),
                     topic_continuity=continuity,
+                    speaker_evidence=owner_evidence,
                 )
                 self._personal_context = personal
                 if project_turns is not None:
@@ -458,11 +473,17 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 and self._learning_grant is not None
                 and not learning_blocked
             ):
+                from jarvis.memory.reply_settlement import ReplySettlement
+
+                settlement = ReplySettlement()
+                bridge.add_accepted_turn_observer(settlement.observe)
+                bridge.add_close_observer(settlement.close)
                 bridge.add_accepted_turn_observer(
                     self._personal_learning.bind(
                         bridge.conversation,
                         self._learning_grant,
                         speaker_evidence=evidence,
+                        reply_settlement=settlement,
                     )
                 )
                 if self._session_purpose == "conversation":
@@ -659,6 +680,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         super().__init__(*args, session_factory=capture_session, **kwargs)
         self._speaker_shadow_observer = speaker_shadow_observer
         self._speaker_evidence: SpeakerTurnEvidenceBook | None = None
+        self._owner_evidence = None
         self._window_deadline: float | None = None
         self._window_grace_until = 0.0
         self._window_speech = False
@@ -693,6 +715,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 personal_context_getter=lambda: self._personal_context,
                 memory_receipts_getter=lambda: self._memory_receipts,
                 project_turns_getter=lambda: self._project_turns,
+                speaker_evidence_getter=lambda: self._owner_evidence,
             )
 
     async def _before_conversation_session(self) -> str | None:

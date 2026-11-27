@@ -79,6 +79,10 @@ class SpeakerTurnEvidenceBook:
         self._opening[turn.turn_id] = self._user_turns == 1 and not self._follow_up
         self._future(turn.turn_id)
 
+    def observed(self, turn_id: str) -> bool:
+        """This accepted turn has an evidence entry in this wake."""
+        return turn_id in self._opening
+
     def is_opening(self, turn_id: str) -> bool:
         return self._opening.get(turn_id, False)
 
@@ -119,8 +123,9 @@ class SpeakerTurnEvidenceBook:
             (
                 "kept out of project history and personal learning"
                 if withheld
+                or (self.enforcing and status is not SpeakerTurnStatus.OWNER)
                 else "observed only; would keep out of project history and learning"
-                if self._would_withhold(evidence)
+                if status is not SpeakerTurnStatus.OWNER
                 else "none"
             ),
         )
@@ -137,6 +142,10 @@ class SpeakerTurnEvidenceBook:
             return SpeakerTurnEvidence(
                 turn_id, SpeakerTurnStatus.UNKNOWN, None, "not_observed", opening
             )
+        if future.cancelled():
+            return SpeakerTurnEvidence(
+                turn_id, SpeakerTurnStatus.UNKNOWN, None, "session_closed", opening
+            )
         try:
             return await asyncio.wait_for(
                 asyncio.shield(future), timeout=self._wait_seconds
@@ -144,6 +153,12 @@ class SpeakerTurnEvidenceBook:
         except TimeoutError:
             return SpeakerTurnEvidence(
                 turn_id, SpeakerTurnStatus.UNKNOWN, None, "evidence_timeout", opening
+            )
+        except asyncio.CancelledError:
+            if not future.cancelled():
+                raise  # the waiting task itself was cancelled
+            return SpeakerTurnEvidence(
+                turn_id, SpeakerTurnStatus.UNKNOWN, None, "session_closed", opening
             )
 
     @staticmethod
@@ -156,17 +171,71 @@ class SpeakerTurnEvidenceBook:
             self.enforcing and evidence is not None and self._would_withhold(evidence)
         )
 
-    def admits_learning(self, evidence: SpeakerTurnEvidence | None) -> bool:
-        """Automatic learning, with enforcement: only speech positively scored
-        as the owner (opening or not). Unknown is never owner, so a short or
-        unscored turn is not learned from; the explicit memory tools, which
-        need fresh Windows Hello for writes, remain the way to save it.
+    def authorizes_owner(
+        self, evidence: SpeakerTurnEvidence | None, turn_id: str | None = None
+    ) -> bool:
+        """With enforcement, only positive owner evidence for that exact turn
+        acts for the owner: saving to project history, automatic learning,
+        project archive reads, personal-context reads and memory receipts.
+        Unknown (too short, unscored, timed out, session closed), non-owner,
+        missing or another turn's evidence never does, opening turn or not.
         Owner decision, 2026-11-27 (Memory V1 closure)."""
         if not self.enforcing:
             return True
-        return evidence is not None and evidence.status is SpeakerTurnStatus.OWNER
+        return (
+            evidence is not None
+            and evidence.status is SpeakerTurnStatus.OWNER
+            and (turn_id is None or evidence.turn_id == turn_id)
+            and evidence.turn_id in self._opening
+        )
+
+    def admits_learning(self, evidence: SpeakerTurnEvidence | None) -> bool:
+        """Automatic learning: see authorizes_owner. The explicit memory
+        tools, which need fresh Windows Hello for writes, remain the way to
+        save what an unscored short turn said."""
+        return self.authorizes_owner(evidence)
+
+    async def owner_verified(self, turn_id: str | None) -> bool:
+        """Wait (bounded) for this accepted turn's evidence; True only for
+        positive owner evidence (always True without enforcement)."""
+        if not self.enforcing:
+            return True
+        if not turn_id or turn_id not in self._opening:
+            return False  # not an accepted turn of this wake
+        return self.authorizes_owner(await self.wait(turn_id), turn_id)
 
     def close(self) -> None:
         for future in self._futures.values():
             if not future.done():
                 future.cancel()
+
+
+class UnavailableSpeakerEvidence:
+    """Enforcement is on but no speaker scores exist for this session (no
+    enrolled template or model, or a session without scoring): nothing is
+    authorized for the owner. Fails closed instead of skipping the check."""
+
+    enforcing = True
+
+    async def wait(self, turn_id: str) -> SpeakerTurnEvidence:
+        return SpeakerTurnEvidence(
+            turn_id, SpeakerTurnStatus.UNKNOWN, None, "no_speaker_scores", False
+        )
+
+    def current(self, turn_id: str) -> None:
+        return None
+
+    def observed(self, turn_id: str) -> bool:
+        return True
+
+    def authorizes_owner(self, evidence, turn_id=None) -> bool:
+        return False
+
+    def admits_learning(self, evidence) -> bool:
+        return False
+
+    def withholds(self, evidence) -> bool:
+        return False
+
+    async def owner_verified(self, turn_id) -> bool:
+        return False

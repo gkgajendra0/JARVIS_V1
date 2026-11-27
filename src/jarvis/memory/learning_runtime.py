@@ -126,11 +126,14 @@ class PersonalLearningRuntime:
         self._closed = False
         self._grant = None
         self._speaker_evidence = None
+        self._settlements = {}
         self._admissions = set()
         self._processed = self._committed = self._dropped = 0
         self._reason = "ready"
         self._unavailable_reported = False
         service.bind_learning_invalidator(self.invalidate_sources)
+        if hasattr(service, "bind_learning_turn_claim"):
+            service.bind_learning_turn_claim(self.explicit_request_claimed)
         for adapter in {id(extractor): extractor, id(resolver): resolver}.values():
             binder = getattr(adapter, "bind_source_validator", None)
             if callable(binder):
@@ -161,9 +164,13 @@ class PersonalLearningRuntime:
         if self.status_observer:
             self.status_observer(self.status())
 
-    def bind(self, conversation, grant, *, speaker_evidence=None):
+    def bind(
+        self, conversation, grant, *, speaker_evidence=None, reply_settlement=None
+    ):
         self._grant = grant
         self._speaker_evidence = speaker_evidence
+        if reply_settlement is not None:
+            self._settlements[conversation.session_id] = reply_settlement
         # Each bound conversation keeps its own evidence book.
         return lambda turn: self.observe_turn(
             conversation, turn, grant, speaker_evidence=speaker_evidence
@@ -366,8 +373,19 @@ class PersonalLearningRuntime:
                 self._run(), name="jarvis-personal-learning"
             )
 
-    def invalidate_sources(self, category=None, turn_id=None):
-        self.clarifications.clear()
+    def explicit_request_claimed(self, turn_id):
+        """An explicit memory request owns this turn: drop its sources (also
+        in flight) and keep it out of later sources' context. The learning
+        authority refuses any write from it independently of this."""
+        self._vetoed.add(turn_id)
+        self.invalidate_sources(turn_id=turn_id, keep_clarifications=True)
+        self._report("explicit_request")
+
+    def invalidate_sources(
+        self, category=None, turn_id=None, keep_clarifications=False
+    ):
+        if not keep_clarifications:
+            self.clarifications.clear()
         if turn_id is None:
             self._window_cutoff = datetime.now(UTC)
         for receipt, (source, grant) in tuple(self._pending.items()):
@@ -653,6 +671,26 @@ class PersonalLearningRuntime:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
             status = "no_change"
         else:
+            settlement = self._settlements.get(source.session_id)
+            if settlement is not None and plan.mutations:
+                # Hold the write until the reply to this turn is over, so an
+                # explicit memory request in it claims the turn first.
+                self._stage = "reply_settlement"
+                remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+                if not await settlement.wait(source.turn_id, remaining):
+                    log_learning(
+                        self.diagnostics, source, "storage", "reply_not_settled"
+                    )
+                    self._report("reply_not_settled")
+                    return
+                self._require(receipt, source, grant)
+                claimed = getattr(self.authority, "explicitly_claimed", None)
+                if claimed is not None and claimed(source):
+                    log_learning(
+                        self.diagnostics, source, "storage", "explicit_request"
+                    )
+                    self._report("explicit_request")
+                    return
             self._stage = "storage"
             permit = self.authority.issue_child(grant, plan.binding())
             result = await self.service.admit_learning(plan, permit)

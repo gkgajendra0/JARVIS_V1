@@ -103,6 +103,12 @@ class PersonalLearningAuthority:
         self._grants: dict[LearningGrantHandle, _Grant] = {}
         self._children: dict[LearningPermitHandle, _Child] = {}
         self._reenables = {}
+        # Owner turns an explicit memory request has claimed (live voice
+        # 27 Nov, turn d6e0274b: a refused correct_memory then committed by
+        # automatic learning). Whatever happens to the explicit request
+        # (granted, denied, cancelled, expired, failed), automatic learning
+        # never writes from that turn, nor from a source that quotes it.
+        self._explicit_turns: dict[str, None] = {}
 
     def open(self, runtime_id: str, provider: str) -> LearningGrantHandle:
         if not runtime_id or provider not in {"gemini", "openai"}:
@@ -244,6 +250,29 @@ class PersonalLearningAuthority:
                 record.seen.add(turn_id)
                 record.last_input = self._broker._clock()
 
+    def claim_explicit_request(self, turn_id):
+        """The explicit memory path owns this owner turn from now on."""
+        if not isinstance(turn_id, str) or not turn_id:
+            raise ValueError("canonical turn identity required")
+        with self._broker._lock:
+            claimed = self.__dict__.setdefault("_explicit_turns", {})
+            claimed[turn_id] = None
+            while len(claimed) > 4096:
+                claimed.pop(next(iter(claimed)))
+
+    def explicitly_claimed(self, source) -> bool:
+        with self._broker._lock:
+            return self._claimed(source)
+
+    def _claimed(self, source):
+        claimed = getattr(self, "_explicit_turns", None)
+        if not claimed or source is None:
+            return False
+        turns = getattr(source, "turns", ()) or ()
+        return getattr(source, "turn_id", None) in claimed or any(
+            getattr(turn, "turn_id", None) in claimed for turn in turns
+        )
+
     def runtime_id_for(self, grant):
         with self._broker._lock:
             return self._require(grant).parent.context.session_id
@@ -344,6 +373,12 @@ class PersonalLearningAuthority:
                 >= record.sources.get(binding.source_receipt_id, 0)
             ):
                 raise PermissionError("invalid learning child binding")
+            if binding.operation in {"admit", "suppress"} and self._claimed(
+                record.source_objects.get(binding.source_receipt_id)
+            ):
+                # Only automatic writes: the explicit request's own target
+                # read (personal context) shares this issuer and must work.
+                raise PermissionError("an explicit memory request owns this turn")
             parameters = {
                 "parent_delegation_id": grant.token,
                 "policy_sha256": self.POLICY_DIGEST,
@@ -422,6 +457,14 @@ class PersonalLearningAuthority:
         self._require(child.grant)
         if child.authorized.proposal.is_expired(self._broker._clock()):
             raise PermissionError("learning child expired")
+        # Checked on issue, before and inside the write transaction (it holds
+        # the broker lock), so a claim cannot slip between check and commit.
+        if child.binding.operation in {"admit", "suppress"} and self._claimed(
+            self._grants[child.grant].source_objects.get(
+                child.binding.source_receipt_id
+            )
+        ):
+            raise PermissionError("an explicit memory request owns this turn")
         self._proof(child.grant, child.authorized.proposal)
         return child
 

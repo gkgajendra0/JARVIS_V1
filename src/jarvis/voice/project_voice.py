@@ -701,6 +701,16 @@ def source_attribution(titles) -> str:
     return f"In your {', '.join(names[:-1])} and {names[-1]} projects"
 
 
+# A request whose speaker was not verified as the owner reads no archive.
+_SPEAKER_NOT_VERIFIED = {
+    "status": "denied",
+    "reason": "speaker_not_verified",
+    "guidance": "This request was not verified as the owner's voice, so no saved "
+    "project history was read. Do not answer from memory; the owner can ask "
+    "again.",
+}
+
+
 def _preload_rows(sources, *, exclude) -> list:
     """Newest-first selection of whole rows within the preload budget.
 
@@ -821,6 +831,7 @@ class VoiceProjectTurns:
         self._nudged_epochs: set[int] = set()
         self._retire = None
         self._speaker_evidence = None
+        self._user_turn_seen = asyncio.Event()
         self._played = 0  # audible response segments allowed so far
         self._played_epochs: set[int] = set()
         # Grant renewal pending at wake: turns wait (bounded) for Hello.
@@ -893,6 +904,7 @@ class VoiceProjectTurns:
             # Durable capture does not wait for, or depend on, the model.
             self._outcome_future(turn)
             self._turn_ready.set()
+            self._user_turn_seen.set()
             return
         if turn.role is not ConversationRole.ASSISTANT or self._closed:
             return
@@ -1158,6 +1170,10 @@ class VoiceProjectTurns:
             return
         self._closed = True
         self._turn_ready.set()
+        self._user_turn_seen.set()
+        task = self._preload_task
+        if task is not None and task.get_name() == "jarvis-project-preload-wait":
+            task.cancel()
         for user in self._user_turns():
             if user.turn_id not in self._delivered_turns:
                 self.metrics.undelivered_user_turns += 1
@@ -1231,17 +1247,24 @@ class VoiceProjectTurns:
         owner = self._owner
         evidence_book = self._speaker_evidence
         if evidence_book is not None and evidence_book.enforcing:
-            # A later turn waits (bounded) for its speaker evidence; positive
-            # non-owner evidence keeps it out of project history and routing.
+            # Every turn, the opening one included, waits (bounded) for its
+            # speaker evidence. Only positive owner evidence for this turn
+            # saves it to project history or gives it project context:
+            # unknown (short, unscored, timed out) and non-owner never do.
             evidence = await evidence_book.wait(turn.turn_id)
-            if evidence_book.withholds(evidence):
+            if not evidence_book.authorizes_owner(evidence, turn.turn_id):
+                reason = (
+                    "speaker_not_owner"
+                    if evidence.status.value == "non_owner"
+                    else "speaker_unverified"
+                )
                 owner.metrics.speaker_not_owner += 1
                 if not future.done():
-                    future.set_result(_Outcome("not_saved", reason="speaker_not_owner"))
+                    future.set_result(_Outcome("not_saved", reason=reason))
                 LOGGER.info(
-                    "Project voice turn not saved | reason=speaker_not_owner | "
-                    "score=%.4f | turn_id=%s",
-                    evidence.score,
+                    "Project voice turn not saved | reason=%s | score=%s | turn_id=%s",
+                    reason,
+                    "n/a" if evidence.score is None else f"{evidence.score:.4f}",
                     turn.turn_id,
                 )
                 self._diag(
@@ -1249,7 +1272,7 @@ class VoiceProjectTurns:
                     epoch=turn.user_activity_epoch,
                     turn_id=turn.turn_id,
                     status="not_saved",
-                    reason="speaker_not_owner",
+                    reason=reason,
                 )
                 return
         if not await self._ready():
@@ -1924,11 +1947,31 @@ class VoiceProjectTurns:
             return  # tool-only mode: every request goes through the tool
         if self._preload_task is None and self._session is not None:
             try:
-                self._preload_task = self._owner.spawn(
-                    self._preload_when_agent_ready(), name="jarvis-project-preload"
-                )
+                book = self._speaker_evidence
+                if book is not None and book.enforcing:
+                    # Waiting for verified owner speech is not saving work:
+                    # it never holds up drain/shutdown (untracked, cancelled
+                    # on close); the preload itself is tracked once it starts.
+                    self._preload_task = asyncio.get_running_loop().create_task(
+                        self._preload_after_owner_speech(),
+                        name="jarvis-project-preload-wait",
+                    )
+                else:
+                    self._preload_task = self._owner.spawn(
+                        self._preload_when_agent_ready(),
+                        name="jarvis-project-preload",
+                    )
             except RuntimeError:  # no running loop: the tool path still works
                 LOGGER.warning("Project voice preload not started")
+
+    async def _preload_after_owner_speech(self) -> None:
+        try:
+            if await self._owner_spoke() and not self._closed:
+                self._owner.spawn(
+                    self._preload_when_agent_ready(), name="jarvis-project-preload"
+                )
+        except asyncio.CancelledError:
+            pass
 
     async def _preload_when_agent_ready(self) -> None:
         agent = None
@@ -1946,6 +1989,38 @@ class VoiceProjectTurns:
         if not await self._ready():
             return  # paused: no history is given to the model
         await self._safe_preload(agent)
+
+    async def _owner_spoke(self) -> bool:
+        """With speaker enforcement, history is given to the model only after
+        speech in this wake was positively scored as the owner's (a wake
+        word alone, or unscored speech, never preloads it). Until then every
+        request takes the tool path, which checks each request's speaker."""
+        book = self._speaker_evidence
+        if book is None or not book.enforcing:
+            return True
+        checked = set()
+        while not self._closed:
+            self._user_turn_seen.clear()
+            pending = [
+                t
+                for t in self._conversation.turns
+                if t.role is ConversationRole.USER and t.turn_id not in checked
+            ]
+            for turn in pending:
+                if not book.observed(turn.turn_id):
+                    continue  # its evidence entry is not open yet
+                checked.add(turn.turn_id)
+                if await book.owner_verified(turn.turn_id):
+                    LOGGER.info(
+                        "Project voice preload after verified owner speech | turn_id=%s",
+                        turn.turn_id,
+                    )
+                    return True
+            if not any(t.turn_id not in checked for t in pending):
+                await self._user_turn_seen.wait()
+            else:
+                await asyncio.sleep(0.05)
+        return False
 
     async def _safe_preload(self, agent) -> None:
         try:
@@ -2257,6 +2332,15 @@ class VoiceProjectTurns:
             except Exception:  # noqa: BLE001 - the session also ends on its timer
                 LOGGER.warning("Project voice: session retire after forget failed")
 
+    async def _owner_verified(self, turn) -> bool:
+        """Archive reads and history changes act for the owner only: with
+        speaker enforcement, the request turn needs positive owner evidence
+        (checked before any archive access, whatever the turn's outcome)."""
+        book = self._speaker_evidence
+        if book is None or not book.enforcing:
+            return True
+        return await book.owner_verified(getattr(turn, "turn_id", None))
+
     async def _current_source(self):
         activity = self._conversation.user_activity_epoch
         try:
@@ -2278,6 +2362,8 @@ class VoiceProjectTurns:
         epoch, turn = await self._current_source()
         if turn is None:
             return {"status": "unavailable", "reason": "no_current_request"}
+        if not await self._owner_verified(turn):
+            return _SPEAKER_NOT_VERIFIED
         # The reply reports this operation; like standby it needs no project
         # context, so the gate lets it play (it is never saved, see observe_turn).
         self._control_epochs.add(epoch)
@@ -2414,6 +2500,8 @@ class VoiceProjectTurns:
         epoch, turn = await self._current_source()
         if turn is None:
             return {"status": "unavailable", "reason": "no_current_request"}
+        if not await self._owner_verified(turn):
+            return _SPEAKER_NOT_VERIFIED
         used = self._searches.get(epoch, 0)
         if used >= SEARCHES_PER_UTTERANCE:
             return {"status": "denied", "reason": "search_budget_exhausted"}
@@ -2428,6 +2516,11 @@ class VoiceProjectTurns:
             )
         except TimeoutError:
             outcome = None
+        if outcome is not None and outcome.reason in {
+            "speaker_not_owner",
+            "speaker_unverified",
+        }:
+            return _SPEAKER_NOT_VERIFIED
         exclude = (
             outcome.packet.request_id
             if outcome is not None and outcome.status == "ready"
