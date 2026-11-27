@@ -878,3 +878,51 @@ async def test_a_paraphrase_with_another_destination_does_not_answer(
     plans = {p["label"]: p for p in await lab.plans()}
     assert plans[before["label"]] == before
     assert lab.runtime.clarifications.pending(question.session_id) == [question]
+
+
+OFFICE = "The office trip is next month, train or flight."
+
+
+def _office():
+    return _said(
+        OFFICE,
+        "office trip",
+        slots={"other": {"options": ["train", "flight"], "certainty": "tentative"}},
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_shared_head_noun_does_not_make_another_trip_the_answer(lab):  # noqa: F811
+    lab.script.by_text[OFFICE] = _office()
+    await lab.say(OFFICE)
+    (question,) = lab.seen
+    text = "Not sure yet. The family trip will take the train."
+
+    def build(source):
+        return [_named(source.turns[-1], "family trip", {"other": _car("train")})]
+
+    await _answer(lab, text, build, answers=[("chosen", "other")])
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert "other" not in plans["office trip"].get("slots", {})
+    assert plans["family trip"]["slots"]["other"]["value"] == "train"
+    assert lab.runtime.clarifications.pending(question.session_id) == [question]
+
+
+@pytest.mark.asyncio
+async def test_each_trip_keeps_its_own_choice(lab):  # noqa: F811
+    lab.script.by_text[OFFICE] = _office()
+    await lab.say(OFFICE)
+    text = "We'll take the flight for the office trip, and the family trip will take the train."
+
+    def build(source):
+        t = source.turns[-1]
+        return [
+            _named(t, "office trip", {"other": _car("flight")}),
+            _named(t, "family trip", {"other": _car("train")}),
+        ]
+
+    await _answer(lab, text, build, answers=[("chosen", "other")])
+    plans = {p["label"]: p for p in await lab.plans()}
+    assert plans["office trip"]["slots"]["other"]["value"] == "flight"
+    assert plans["family trip"]["slots"]["other"]["value"] == "train"
+    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []

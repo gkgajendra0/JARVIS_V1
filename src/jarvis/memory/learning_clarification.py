@@ -300,14 +300,25 @@ def _names_in(text, name) -> bool:
 
 
 def _plan_words(note) -> set[str]:
-    """The words that name the question's plan: its known destination when the
-    owner gave one, else the proposal's name (never its other details)."""
-    from .learning_catalog_page import name_words
+    """The words that can name the question's plan: its known destination and
+    its name, without the head nouns that only say what kind of plan it is."""
+    from .learning_catalog_page import PLAN_HEAD_NOUNS, name_words
 
-    known = dict(note.known).get("destination")
-    if known:
-        return name_words(known)
-    return name_words(getattr(note.candidate, "label", None) or note.subject)
+    words = name_words(dict(note.known).get("destination"))
+    words |= name_words(getattr(note.candidate, "label", None) or note.subject)
+    return words - PLAN_HEAD_NOUNS
+
+
+def _names_the_plan(name, plan) -> bool:
+    """The project's naming rule for plans (``_names_entry``): without a
+    leading article and head nouns, every remaining word of ``name`` is a word
+    of the plan's name ("the Spiti trip" names Spiti; "family trip" does not
+    name the office trip)."""
+    from .learning_catalog_page import PLAN_HEAD_NOUNS, name_words
+    from .learning_reconciliation import _without_article
+
+    wanted = name_words(_without_article(name)) - PLAN_HEAD_NOUNS
+    return bool(wanted) and wanted <= plan
 
 
 def about_the_question(source, candidate, note) -> bool:
@@ -317,9 +328,10 @@ def about_the_question(source, candidate, note) -> bool:
 
     - a destination said in the cited words must be the question's plan's
       own (said in the words the question was asked from);
-    - a name said in the cited words must share a word with the plan's name
-      (its destination, or its name: "Spiti trip" for Spiti) or be one of the
-      question's options (a detail used as a name, "Jimny");
+    - a name said in the cited words must name the plan by the project's
+      naming rule (``_names_the_plan``: "the Spiti trip" for Spiti, never
+      "family trip" for the office trip) or be one of the question's options
+      (a detail used as a name, "Jimny");
     - a name not said in the cited words names no plan of its own (a
       paraphrase or reference, D28's "trip to Spiti"): the extractor's reading
       that it answers the question stands.
@@ -327,7 +339,6 @@ def about_the_question(source, candidate, note) -> bool:
     A proposal stating another plan in the owner's words ("For Goa ...",
     "Ladakh in May ...", destination Goa) is neither read as this answer nor
     replaced by it, and it is learned on its own."""
-    from .learning_catalog_page import name_words
 
     if candidate.category != "plan" or candidate.slots is None:
         return False
@@ -350,7 +361,7 @@ def about_the_question(source, candidate, note) -> bool:
     grounded = [n for n in names if _names_in(cited, n)]
     options = {o.casefold() for d in note.details for o in _options(note, d)}
     plan = _plan_words(note)
-    return all(n.casefold() in options or name_words(n) & plan for n in grounded)
+    return all(n.casefold() in options or _names_the_plan(n, plan) for n in grounded)
 
 
 def chosen_values(source, notes, candidates):
