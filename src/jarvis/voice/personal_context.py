@@ -369,6 +369,9 @@ class PersonalContextSession:
         return self._same(self._binding)
 
     async def _authorize(self, operation="read", mutation=None):
+        if self._request_binding is not None:
+            # Any personal-context tool call is part of its reply chain.
+            self._request_binding.tool_started()
         binding = self._current(activity=operation != "read")
         if binding is None:
             return False
@@ -1553,7 +1556,7 @@ class PersonalContextAgentTools:
         """
         binding = getattr(self._session, "_request_binding", None)
         if binding is not None:
-            binding.bind_request()
+            binding.tool_started()
         return await self._session.catalog()
 
     @function_tool()

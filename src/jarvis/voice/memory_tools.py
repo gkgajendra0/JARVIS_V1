@@ -295,6 +295,12 @@ class MemoryAgentTools:
             "sensitivity": result.record.sensitivity.value,
         }
 
+    def _mark_disclosed(self) -> None:
+        """An owner fact is now in the live model context (see the
+        private-disclosure guard in the voice runtime)."""
+        if self._receipts is not None:
+            self._receipts.mark_disclosed(self._conversation.session_id)
+
     async def _speaker_verified(self, turn) -> bool:
         book = self._speaker_evidence
         if book is None or not book.enforcing:
@@ -662,6 +668,7 @@ class MemoryAgentTools:
             record.sensitivity.value,
             decision.reason_code,
         )
+        self._mark_disclosed()
         return {
             "ok": True,
             "operation": "semantic_recall",
@@ -701,6 +708,7 @@ class MemoryAgentTools:
                     "configured realtime provider."
                 ),
             }
+        self._mark_disclosed()
         LOGGER.info(
             "Explicit memory inspect hit | predicate=%s | sensitivity=%s | "
             "verification=%s",

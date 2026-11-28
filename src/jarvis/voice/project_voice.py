@@ -2113,6 +2113,8 @@ class VoiceProjectTurns:
         owner-side turn the very next generation answers; it is noted as
         Jarvis's own text so an echo of it is never spoken back or saved.
         """
+        # Saved project context is now in the live model context.
+        self.private_released = True
         from livekit.agents.llm import ChatContext, ChatMessage
 
         identity = uuid4().hex[:12]
@@ -2338,6 +2340,15 @@ class VoiceProjectTurns:
                 retire()
             except Exception:  # noqa: BLE001 - the session also ends on its timer
                 LOGGER.warning("Project voice: session retire after forget failed")
+
+    def bind_request_binding(self, binding) -> None:
+        """The session's reply-chain tracker (jarvis.memory.reply_settlement)."""
+        self._request_binding = binding
+
+    def note_tool_call(self) -> None:
+        binding = getattr(self, "_request_binding", None)
+        if binding is not None:
+            binding.tool_started()
 
     async def _owner_verified(self, turn) -> bool:
         """Archive reads and history changes act for the owner only: with
@@ -2692,6 +2703,7 @@ class VoiceProjectTools:
     async def prepare_project_turn(self, raw_arguments: dict[str, object]) -> dict:
         if raw_arguments not in ({}, None):
             return {"status": "denied", "reason": "no_arguments_accepted"}
+        self._turns.note_tool_call()
         return await self._turns.prepare()
 
     @function_tool(
@@ -2715,6 +2727,7 @@ class VoiceProjectTools:
         query = (raw_arguments or {}).get("query")
         if not isinstance(query, str) or len(query) > 200:
             return {"status": "denied", "reason": "short_query_text_required"}
+        self._turns.note_tool_call()
         return await self._turns.search_history(query)
 
     @function_tool(
@@ -2739,6 +2752,7 @@ class VoiceProjectTools:
         words = (raw_arguments or {}).get("words")
         if not isinstance(words, str) or len(words) > 200:
             return {"status": "denied", "reason": "short_words_text_required"}
+        self._turns.note_tool_call()
         return await self._turns.forget_history(words)
 
 

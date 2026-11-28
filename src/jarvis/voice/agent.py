@@ -418,6 +418,13 @@ unrelated project details or context selection.
 """
 
 
+def _private_wake_closing(agent) -> bool:
+    try:
+        return bool(getattr(agent.session, "_jarvis_private_wake_closing", False))
+    except RuntimeError:  # the agent is not running
+        return False
+
+
 def _stop_current_speech(agent: Agent, reason: str) -> None:
     try:
         speech = agent.session.current_speech
@@ -451,6 +458,12 @@ async def guarded_transcription(agent: Agent, text, model_settings):
         claim_gate = None
     async for delta in Agent.default.transcription_node(agent, text, model_settings):
         if stopped:
+            continue
+        if _private_wake_closing(agent):
+            # The wake is ending for an unverified speaker after private
+            # context was given: nothing more is spoken in it.
+            stopped = True
+            _stop_current_speech(agent, "private_wake_closing")
             continue
         reason = guard.feed(str(delta))
         if reason is not None:

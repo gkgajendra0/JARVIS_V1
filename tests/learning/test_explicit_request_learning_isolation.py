@@ -277,28 +277,28 @@ async def test_claiming_one_turn_never_cancels_learning_for_another(learning):
 
 
 @pytest.mark.asyncio
-async def test_a_reply_with_a_tool_step_settles_only_when_the_agent_listens():
-    """A spoken segment before a tool call ("let me check") is accepted as an
-    assistant turn while the agent is still thinking: not settled until the
-    agent is back to listening, so correct_memory in the next generation
-    claims the turn first."""
+async def test_a_reply_with_a_tool_step_settles_only_when_its_chain_ends():
+    """A spoken segment before a tool step ("let me check") is accepted as an
+    assistant turn, and with realtime models the agent is reported listening
+    between generations; the turn settles only when the chain's final
+    generation (no tool call) finished, so correct_memory claims it first."""
     c = conversation()
-    settlement = ReplySettlement(agent_states=True)
+    settlement = ReplySettlement(speech_feed=True)
 
     async def settled(turn_id):
         return await settlement.wait(turn_id, 0.01)
 
     turn = c.accept_turn(ConversationRole.USER, "Correction, I'm vegetarian.")
     settlement.observe(turn)
-    settlement.agent_state("thinking")
-    settlement.agent_state("speaking")
+    settlement.speech_started()
+    settlement.tool_started()  # personal_context_catalog
     settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Let me check."))
-    settlement.agent_state("thinking")  # tool call running
+    settlement.speech_finished(tool_call=True, interrupted=False)
     assert not (await settled(turn.turn_id))
-    settlement.agent_state("speaking")
+    settlement.speech_started()  # the tool follow-up generation
     settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Updated: diet."))
     assert not (await settled(turn.turn_id))
-    settlement.agent_state("listening")
+    settlement.speech_finished(tool_call=False, interrupted=False)
     assert await settled(turn.turn_id)
 
 

@@ -46,31 +46,34 @@ def _claimed(learning, turn):
 async def test_an_utterance_between_target_resolution_and_mutation_changes_nothing(
     learning,
 ):
-    """Exact regression: "Correction, my diet is vegetarian" (T); target
-    resolution binds T; "hmm" (T2) is accepted while the reply is still
-    running; correct_memory runs. The change is refused before consent, T is
-    claimed (not T2), and T's correction never commits through learning."""
+    """Exact regression: "Correction, ..." (R1); the reply's catalog call binds
+    R1; Jarvis says "let me check" (with realtime models LiveKit reports the
+    agent as listening here); "hmm" (U2) is accepted; correct_memory runs in
+    the follow-up generation. The change is refused before consent, R1 is
+    claimed (not U2), and R1 never commits through learning."""
     facts = GatedFacts()
     r = _runtime(learning, facts)
     c = conversation()
-    settlement = ReplySettlement(agent_states=True)
-    settlement.agent_state("listening")
+    settlement = ReplySettlement(speech_feed=True)
     observe = r.bind(c, learning.grant, reply_settlement=settlement)
     try:
         request = c.accept_turn(ConversationRole.USER, "I own a City")
         settlement.observe(request)
         observe(request)
-        settlement.agent_state("thinking")
-        assert settlement.bind_request() == request.turn_id  # catalog call
+        settlement.speech_started()
+        settlement.tool_started()  # personal_context_catalog binds R1
+        settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Let me check."))
+        settlement.speech_finished(tool_call=True, interrupted=False)
         interloper = c.accept_turn(ConversationRole.USER, "hmm")
         settlement.observe(interloper)
+        settlement.speech_started()  # follow-up generation
         tools = MemoryAgentTools(learning.service, c, request_binding=settlement)
         with pytest.raises(ExplicitMemoryAuthorizationError, match="Another utterance"):
             tools._change_turn(ExplicitMemoryAction.CORRECT)
         assert _claimed(learning, request)
         assert not _claimed(learning, interloper)
         settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Please repeat."))
-        settlement.agent_state("listening")
+        settlement.speech_finished(tool_call=False, interrupted=False)
         await r.drain()
         assert await learning.count() == 0
     finally:
@@ -90,21 +93,20 @@ async def test_consent_refused_for_the_bound_request_never_commits_via_learning(
     facts = GatedFacts()
     r = _runtime(learning, facts)
     c = conversation()
-    settlement = ReplySettlement(agent_states=True)
-    settlement.agent_state("listening")
+    settlement = ReplySettlement(speech_feed=True)
     observe = r.bind(c, learning.grant, reply_settlement=settlement)
     try:
         request = c.accept_turn(ConversationRole.USER, "I own a City")
         settlement.observe(request)
         observe(request)
-        settlement.agent_state("thinking")
+        settlement.speech_started()
         tools = MemoryAgentTools(learning.service, c, request_binding=settlement)
         tools._personal_context = Refusing()
         with pytest.raises(PermissionError):
             tools._change_turn(ExplicitMemoryAction.CORRECT)
         assert _claimed(learning, request)
         settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Not changed."))
-        settlement.agent_state("listening")
+        settlement.speech_finished(tool_call=False, interrupted=False)
         await r.drain()
         assert await learning.count() == 0
     finally:
@@ -113,31 +115,64 @@ async def test_consent_refused_for_the_bound_request_never_commits_via_learning(
 
 def test_without_an_interloper_the_bound_request_is_the_latest_turn(learning):
     c = conversation()
-    settlement = ReplySettlement(agent_states=True)
-    settlement.agent_state("listening")
+    settlement = ReplySettlement(speech_feed=True)
     request = c.accept_turn(
         ConversationRole.USER, "Forget what you remember about my diet_preference."
     )
     settlement.observe(request)
-    settlement.agent_state("thinking")
+    settlement.speech_started()
     tools = MemoryAgentTools(learning.service, c, request_binding=settlement)
     turn = tools._change_turn(ExplicitMemoryAction.FORGET)
     assert turn.turn_id == request.turn_id and _claimed(learning, request)
 
 
-def test_the_binding_resets_when_the_agent_listens_again():
+def test_chain_binding_rules():
+    clock = [0.0]
     c = conversation()
-    settlement = ReplySettlement(agent_states=True)
-    settlement.agent_state("listening")
+    settlement = ReplySettlement(speech_feed=True, clock=lambda: clock[0])
+    old = c.accept_turn(ConversationRole.USER, "earlier")
+    settlement.observe(old)
+    # The reply's generation starts before its transcript is accepted: the
+    # late transcript becomes the request while no tool has run.
+    settlement.speech_started()
     first = c.accept_turn(ConversationRole.USER, "one")
     settlement.observe(first)
-    settlement.agent_state("thinking")
     assert settlement.bind_request() == first.turn_id
     second = c.accept_turn(ConversationRole.USER, "two")
     settlement.observe(second)
-    assert settlement.bind_request() == first.turn_id  # same reply
-    settlement.agent_state("listening")
+    assert settlement.bind_request() == first.turn_id  # interloper after a tool
+    settlement.speech_finished(tool_call=False, interrupted=False)
     assert settlement.bind_request() == second.turn_id  # a new reply
+    # A tool chain with no follow-up expires after CHAIN_IDLE_SECONDS.
+    settlement.speech_finished(tool_call=True, interrupted=False)
+    third = c.accept_turn(ConversationRole.USER, "three")
+    settlement.observe(third)
+    clock[0] = 100.0
+    assert settlement.bind_request() == third.turn_id
+    # An interrupted reply ends its chain.
+    settlement.speech_started()
+    settlement.speech_finished(tool_call=True, interrupted=True)
+    fourth = c.accept_turn(ConversationRole.USER, "four")
+    settlement.observe(fourth)
+    assert settlement.bind_request() == fourth.turn_id
+
+
+@pytest.mark.parametrize(
+    "tool",
+    ["personal_context_read", "project_tool"],
+)
+def test_any_tool_as_the_first_call_binds_the_chain(tool):
+    """Reads and project tools bind too, so a later mutation in the same
+    chain does not fall through to an interloper."""
+    c = conversation()
+    settlement = ReplySettlement(speech_feed=True)
+    request = c.accept_turn(ConversationRole.USER, "What do I drive? Forget it.")
+    settlement.observe(request)
+    settlement.speech_started()
+    settlement.tool_started()  # what _authorize / note_tool_call do
+    settlement.speech_finished(tool_call=True, interrupted=False)
+    settlement.observe(c.accept_turn(ConversationRole.USER, "hmm"))
+    assert settlement.bind_request() == request.turn_id
 
 
 # --- 2. ending a private wake -------------------------------------------------
@@ -263,3 +298,31 @@ def test_each_kind_of_private_release_counts():
     runtime._memory_receipts.drop_issued("s")
     runtime._project_turns = SimpleNamespace(private_released=True)
     assert released(runtime, "s")
+
+
+@pytest.mark.asyncio
+async def test_private_context_arriving_after_the_verdict_still_ends_the_wake():
+    runtime, bridge, interruptible = _controller(released=False)
+    _accept(runtime, bridge, "Which hotel did we book?", score=0.25)
+    await asyncio.sleep(0.3)
+    assert not runtime._active_end.is_set()
+    runtime._project_turns.private_released = True  # a preload lands late
+    await _settle_guard()
+    assert runtime._active_end.is_set()
+    assert interruptible.interrupts == 1
+
+
+@pytest.mark.asyncio
+async def test_nothing_more_is_spoken_once_the_private_wake_is_closing():
+    from jarvis.voice.agent import _private_wake_closing
+
+    runtime, bridge, _ = _controller(released=True)
+    agent = SimpleNamespace(session=interruptible_session(bridge, runtime))
+    assert not _private_wake_closing(agent)
+    _accept(runtime, bridge, "Tell me the hotel.", score=0.25)
+    await _settle_guard()
+    assert _private_wake_closing(agent)
+
+
+def interruptible_session(bridge, runtime):
+    return runtime._live_session

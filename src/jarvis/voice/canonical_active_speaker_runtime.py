@@ -157,6 +157,9 @@ def personal_speech_finished(personal, project_turns, handle, *, provider) -> No
     personal.response_finished()
 
 
+PRIVATE_RELEASE_WATCH_SECONDS = 10.0
+
+
 class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
     """Run CAM++ + LR-ASD shadow analysis on one canonical microphone timeline."""
 
@@ -328,8 +331,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             # which owner turn a tool chain acts for (request binding).
             from jarvis.memory.reply_settlement import ReplySettlement
 
-            settlement = ReplySettlement(agent_states=True)
-            settlement.agent_state(self._agent_state)
+            settlement = ReplySettlement(speech_feed=True)
             self._reply_settlement = settlement
             bridge.add_accepted_turn_observer(settlement.observe)
             bridge.add_close_observer(settlement.close)
@@ -366,6 +368,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 bind_evidence = getattr(project_turns, "bind_speaker_evidence", None)
                 if callable(bind_evidence):
                     bind_evidence(owner_evidence)
+                bind_binding = getattr(project_turns, "bind_request_binding", None)
+                if callable(bind_binding):
+                    bind_binding(settlement)
                 # A reply Gemini transcribed but never voiced is replayed once
                 # through scripted TTS, only if this gate approves it.
                 recovery = getattr(bridge, "silent_audio_recovery", None)
@@ -565,9 +570,6 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 if self._live_session is not session:
                     return
                 self._agent_state = event.new_state
-                settlement = self._reply_settlement
-                if settlement is not None:
-                    settlement.agent_state(event.new_state)
                 sync_interactive_brain_gate()
                 LOGGER.info(
                     "Voice agent state changed: %s -> %s",
@@ -672,17 +674,26 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                         work_runtime.set_interactive_brain_active(False)
 
             def track_speech(event):
-                if personal is None:
-                    return
+                settlement.speech_started()
 
                 def finished(handle):
-                    if self._live_session is not session:
+                    settlement.speech_finished(
+                        tool_call=any(
+                            isinstance(item, FunctionCall) for item in handle.chat_items
+                        ),
+                        interrupted=bool(handle.interrupted),
+                    )
+                    if personal is None or self._live_session is not session:
                         return
                     personal_speech_finished(
                         personal, project_turns, handle, provider=config.ai_provider
                     )
 
                 event.speech_handle.add_done_callback(finished)
+
+            session.on(
+                "function_tools_executed", lambda _event: settlement.tool_started()
+            )
 
             session.on("agent_state_changed", track_agent_state)
             session.on("user_state_changed", track_user_activity)
@@ -1332,13 +1343,36 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         session_id = bridge.conversation.session_id
         tasks: set[asyncio.Task] = set()
 
+        def latest_user_turn_id():
+            return next(
+                (
+                    t.turn_id
+                    for t in reversed(bridge.conversation.turns)
+                    if t.role is ConversationRole.USER
+                ),
+                None,
+            )
+
         async def verify(turn):
             if await evidence.owner_verified(turn.turn_id):
                 return
+            # Private context may still be arriving (a preload or a tool read
+            # in flight): keep watching while this unverified turn is the
+            # latest request.
+            deadline = monotonic() + PRIVATE_RELEASE_WATCH_SECONDS
+            while not self._private_context_released(session_id):
+                if (
+                    self._live_session is not session
+                    or latest_user_turn_id() != turn.turn_id
+                    or monotonic() >= deadline
+                ):
+                    return
+                await asyncio.sleep(0.25)
             if self._live_session is not session:
                 return
-            if not self._private_context_released(session_id):
-                return
+            # From now on nothing more is spoken in this wake (a reply for the
+            # unverified turn generated before the session closes included).
+            session._jarvis_private_wake_closing = True
             current = evidence.current(turn.turn_id)
             LOGGER.warning(
                 "Private wake ended | reason=speaker_not_verified | status=%s | "
@@ -1355,8 +1389,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 LOGGER.warning(
                     "Private wake interrupt failed | error=%s", type(exc).__name__
                 )
-            self.private_wakes_ended += 1
             if self._live_session is session and self._active_end is not None:
+                self.private_wakes_ended += 1
                 self._active_end.set()
 
         def observe(turn):

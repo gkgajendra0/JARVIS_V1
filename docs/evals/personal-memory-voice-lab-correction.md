@@ -160,9 +160,14 @@ one turn never cancels learning in flight for another turn. Normal
 owner-authorized learning commits after the reply.
 
 Request binding (owner review of ad87660a): an explicit change acts for its
-originating request, the owner turn bound by the first tool call of the reply
-(target resolution), not whichever turn is latest when the mutation tool runs.
-The binding holds until the agent is back to listening. If another utterance
+originating request, not whichever turn is latest when the mutation tool runs.
+The reply is tracked as a chain of speech handles (with realtime models
+LiveKit reports the agent as listening between a tool step and its follow-up
+generation, so agent state is not used): the chain binds the latest owner
+turn when it starts (a late transcript replaces it until a tool has run), any
+tool call (memory, personal context, project) marks it, and it ends when a
+generation finishes without a tool call or is interrupted (or after 30 s idle
+with no follow-up). If another utterance
 is accepted between target resolution and the mutation call, the original
 request is claimed (excluded from learning) and the change is refused before
 any consent prompt; the owner repeats it. A newer owner turn no longer settles
@@ -228,7 +233,10 @@ timeout, or someone else barging in) ends and clears the wake: speech in
 flight is interrupted and the session, with its model context, is closed
 ("Private wake ended | reason=speaker_not_verified" in the log). Private
 context is given again only after fresh owner verification in a new wake. A
-wake that released nothing private is not affected. Remaining window: speech
+wake that released nothing private is not affected. A verdict that comes
+before a preload or tool read lands is watched for 10 s while that turn is the
+latest request. Once the wake is closing, any further speech in it is stopped
+at its first words. Remaining window: speech
 that already played between the start of a reply and the speaker verdict
 (evidence is scored at the end of the utterance, normally before or around
 the reply's start; at most the evidence wait of 1.5 s).
