@@ -68,6 +68,7 @@ class ReplySettlement:
         # the transcript is accepted).
         self._activity_epoch = activity_epoch or (lambda: None)
         self._chain_epoch = None
+        self._chain_pre_turn = False
         self._expiry = None
 
     # --- conversation ------------------------------------------------------
@@ -81,9 +82,15 @@ class ReplySettlement:
                 self._waiting.update(pending)
                 epoch = getattr(turn, "user_activity_epoch", None)
                 if not self._chain_tool or (
-                    epoch is not None and epoch == self._chain_epoch
+                    # Once: only while the request is still the turn from
+                    # before the chain started (a second final transcript of
+                    # the same speech never takes the binding over).
+                    self._chain_pre_turn
+                    and epoch is not None
+                    and epoch == self._chain_epoch
                 ):
                     self._chain_request = turn.turn_id
+                    self._chain_pre_turn = False
             else:
                 self._settle(pending)
             event = asyncio.Event()
@@ -146,6 +153,7 @@ class ReplySettlement:
 
     def _start_chain(self) -> None:
         self._chain_request = self._latest_user
+        self._chain_pre_turn = True
         try:
             self._chain_epoch = self._activity_epoch()
         except Exception:  # noqa: BLE001 - no epoch: rebinding by epoch off

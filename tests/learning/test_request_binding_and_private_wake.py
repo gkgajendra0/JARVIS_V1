@@ -346,6 +346,10 @@ def test_a_tool_before_the_transcript_still_binds_the_owners_request():
     request = c.accept_turn(ConversationRole.USER, "Remember my home city is Jaipur.")
     settlement.observe(request)
     assert settlement.bind_request() == request.turn_id
+    # A second final transcript of the same speech does not take it over.
+    again = c.accept_turn(ConversationRole.USER, "and Udaipur too")
+    settlement.observe(again)
+    assert settlement.bind_request() == request.turn_id
     c.begin_user_activity()
     other = c.accept_turn(ConversationRole.USER, "hmm")
     settlement.observe(other)
