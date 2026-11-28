@@ -340,5 +340,4 @@ async def test_the_inner_stream_is_closed_when_the_reply_is_cut():
     task.cancel()  # interruption
     with pytest.raises(asyncio.CancelledError):
         await task
-    await asyncio.sleep(0.05)
-    assert closed == [True]
+    assert closed == [True]  # closed at once, not at garbage collection

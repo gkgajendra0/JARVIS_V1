@@ -516,8 +516,9 @@ async def gated_output(agent, stream, *, kind: str):
             async for item in inner:
                 yield item
         return
-    async for item in gate.hold(stream, kind=kind):  # closes the stream itself
-        yield item
+    async with contextlib.aclosing(gate.hold(stream, kind=kind)) as held:
+        async for item in held:  # hold closes the inner stream itself
+            yield item
 
 
 class JarvisVoiceAgent(Agent):

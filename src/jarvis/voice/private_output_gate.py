@@ -126,6 +126,15 @@ class PrivateOutputGate:
                             await asyncio.wait_for(
                                 asyncio.shield(verdict), self._transcript_wait
                             )
+                        except asyncio.CancelledError:
+                            current = asyncio.current_task()
+                            if current is not None and current.cancelling():
+                                raise  # this stream itself is being cancelled
+                            # The shared verdict was evicted: fail closed.
+                            decided = False
+                            self.dropped_frames += len(held)
+                            held.clear()
+                            continue
                         except TimeoutError:
                             decided = False
                             self.dropped_frames += len(held)
@@ -171,6 +180,8 @@ class PrivateOutputGate:
         finally:
             if upcoming is not None and not upcoming.done():
                 upcoming.cancel()
+                with contextlib.suppress(BaseException):
+                    await upcoming
             close = getattr(stream, "aclose", None)
             if close is not None:
                 with contextlib.suppress(Exception):
