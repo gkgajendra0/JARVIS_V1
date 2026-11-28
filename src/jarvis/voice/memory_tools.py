@@ -180,6 +180,8 @@ class MemoryAgentTools:
 
         session = self._conversation.session_id
         self._receipts.explicit(session, turn_id, operation, labels)
+        # The result (and its receipt) names an owner fact.
+        self._receipts.mark_disclosed(session)
         say = compose_say(
             [
                 MemoryOperation("explicit", operation, label)

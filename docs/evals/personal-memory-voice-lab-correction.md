@@ -240,13 +240,23 @@ cannot be withdrawn from that context. So (owner decisions 2026-11-28):
   agent's realtime audio output, TTS output and transcript are held at the
   output boundary (`jarvis.voice.private_output_gate`, wired through
   `JarvisVoiceAgent.realtime_audio_output_node`, `tts_node` and the
-  transcript node). The request is the reply chain's own request; while its
-  transcript (same user activity) has not been accepted, the verdict is
-  pending. Owner: held frames are released in order. Unknown, non-owner,
-  evidence timeout, a transcript that never arrives, or a closing wake:
-  everything held and after is dropped and the wake is ended. Private
-  context landing while a reply streams starts holding from that frame. A
-  wake that released nothing private is never held.
+  transcript node). The request is the accepted turn of the user activity
+  the generation started on, so a generation that starts after someone else
+  began speaking is never covered by an earlier owner verdict; while that
+  transcript is not accepted the verdict is pending. Audio and transcript of
+  one generation share one verdict. Owner: held frames are released in order
+  as soon as the verdict lands. Unknown, non-owner or evidence timeout:
+  everything held and after is dropped and the wake is ended. A transcript
+  that never arrives, or a closing wake: nothing is heard. Private context
+  landing while a reply streams starts holding from that frame. A wake that
+  released nothing private is never held.
+
+  Live check: the verdict needs the request's accepted transcript and its
+  speaker evidence. In the controlled Gemini path the transcript is accepted
+  before the reply starts (recorded 2026-11-08: transcript 47.299, agent
+  thinking 47.385). If the lab log shows a transcript accepted only at the
+  end of a reply, the owner's private follow-ups would be silent: record it
+  as a defect of that path.
 - Wake ending. An unverified request also ends and clears the wake: speech
   in flight is interrupted and the session, with its model context, is
   closed ("Private wake ended | reason=speaker_not_verified" in the log).

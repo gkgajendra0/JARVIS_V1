@@ -1,5 +1,6 @@
 """JARVIS voice identity and tool-use behavior."""
 
+import contextlib
 import inspect
 import json
 import logging
@@ -507,10 +508,15 @@ async def gated_output(agent, stream, *, kind: str):
     except RuntimeError:  # the agent is not running
         gate = None
     if gate is None:
-        async for item in stream:
-            yield item
+        async with (
+            contextlib.aclosing(stream)
+            if hasattr(stream, "aclose")
+            else contextlib.nullcontext(stream) as inner
+        ):
+            async for item in inner:
+                yield item
         return
-    async for item in gate.hold(stream, kind=kind):
+    async for item in gate.hold(stream, kind=kind):  # closes the stream itself
         yield item
 
 

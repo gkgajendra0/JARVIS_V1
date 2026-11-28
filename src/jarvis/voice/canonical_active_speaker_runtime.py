@@ -1308,11 +1308,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         follow_up = LearningFollowUp(
             learning.clarifications,
             bridge.conversation,
-            lambda notes, *, is_current: inject_learning_note(
-                session,
-                notes,
-                register=bridge.register_restored_context,
-                is_current=is_current,
+            lambda notes, *, is_current: self._note_learning_disclosure(
+                bridge.conversation.session_id,
+                inject_learning_note(
+                    session,
+                    notes,
+                    register=bridge.register_restored_context,
+                    is_current=is_current,
+                ),
             ),
             idle=idle,
         )
@@ -1324,6 +1327,14 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             asyncio.ensure_future(follow_up.close())
 
         bridge.add_close_observer(detach)
+
+    async def _note_learning_disclosure(self, session_id, delivery):
+        """A learning follow-up names owner facts (a clarification about a
+        plan or item): once delivered it counts as private context."""
+        delivered = await delivery
+        if delivered and self._memory_receipts is not None:
+            self._memory_receipts.mark_disclosed(session_id)
+        return delivered
 
     def _private_context_released(self, session_id) -> bool:
         """Owner-private context is in this wake's live model context: saved

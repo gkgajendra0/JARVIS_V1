@@ -155,7 +155,8 @@ async def test_a_transcript_that_never_arrives_releases_nothing():
     world.c.begin_user_activity()
     task = asyncio.create_task(world.model_speaks(PRIVATE))
     await asyncio.wait_for(task, 3)
-    assert world.played == [] and world.denied == [None]
+    # Never heard; no speaker was judged, so this alone does not end the wake.
+    assert world.played == [] and world.denied == []
 
 
 @pytest.mark.asyncio
@@ -233,3 +234,111 @@ def test_the_agent_routes_audio_tts_and_transcript_through_the_gate():
     assert "def tts_node" in source
     assert source.count("gated_output(") >= 2
     assert "gated_output(" in inspect.getsource(module.guarded_transcription)
+
+
+@pytest.mark.asyncio
+async def test_a_newer_speaker_is_never_covered_by_an_earlier_owner_verdict():
+    """Re-review: owner T1 verified, a tool ran and T1's transcript bound the
+    chain; then someone else starts speaking and the next generation starts.
+    It answers the newer activity: held until that turn is judged."""
+    world = World()
+    owner = world.say("Which hotel did we book?", score=0.72)
+    world.settlement.speech_started()
+    world.settlement.tool_started()
+    world.settlement.speech_finished(tool_call=True, interrupted=False)
+    world.c.begin_user_activity()  # someone else starts speaking
+    task = asyncio.create_task(world.model_speaks(PRIVATE))
+    await asyncio.sleep(0.3)
+    assert world.played == []  # not released on T1's owner verdict
+    intruder = world.c.accept_turn(ConversationRole.USER, "Which hotel?")
+    world.book.observe_turn(intruder)
+    world.settlement.observe(intruder)
+    world.book.resolve(intruder.turn_id, score=0.25, reason="scored")
+    await asyncio.wait_for(task, 3)
+    assert world.played == [] and world.denied == [intruder.turn_id]
+    assert owner.turn_id not in world.denied
+
+
+@pytest.mark.asyncio
+async def test_held_frames_play_as_soon_as_the_owner_verdict_lands():
+    world = World()
+    turn = world.say("Which hotel did we book?", resolve=False)
+    gate_open = asyncio.Event()
+
+    async def generate():
+        yield "first"
+        await gate_open.wait()  # the model pauses (e.g. a long tool)
+        yield "second"
+
+    world.settlement.speech_started()
+    played = []
+
+    async def play():
+        async for frame in gated_output(world.agent, generate(), kind="audio"):
+            played.append(frame)
+
+    task = asyncio.create_task(play())
+    await asyncio.sleep(0.1)
+    assert played == []
+    world.book.resolve(turn.turn_id, score=0.72, reason="scored")
+    await asyncio.sleep(0.1)
+    assert played == ["first"]  # released without waiting for the next frame
+    gate_open.set()
+    await asyncio.wait_for(task, 2)
+    assert played == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_audio_and_transcript_of_one_generation_share_one_verdict():
+    world = World()
+    turn = world.say("Which hotel did we book?", resolve=False)
+    world.settlement.speech_started()
+
+    async def frames(items):
+        for item in items:
+            await asyncio.sleep(0.01)
+            yield item
+
+    audio, text = [], []
+
+    async def play(target, items, kind):
+        async for item in gated_output(world.agent, frames(items), kind=kind):
+            target.append(item)
+
+    tasks = [
+        asyncio.create_task(play(audio, PRIVATE, "audio")),
+        asyncio.create_task(play(text, ["You booked", " the Yak."], "transcript")),
+    ]
+    await asyncio.sleep(0.2)
+    assert len(world.gate._verdicts) == 1
+    world.book.resolve(turn.turn_id, score=0.72, reason="scored")
+    await asyncio.wait_for(asyncio.gather(*tasks), 2)
+    assert audio == PRIVATE and text == ["You booked", " the Yak."]
+
+
+@pytest.mark.asyncio
+async def test_the_inner_stream_is_closed_when_the_reply_is_cut():
+    world = World()
+    world.say("Which hotel did we book?", resolve=False)
+    world.settlement.speech_started()
+    closed = []
+
+    async def generate():
+        try:
+            while True:
+                await asyncio.sleep(0.01)
+                yield "frame"
+        finally:
+            closed.append(True)
+
+    async def play():
+        async for _ in gated_output(world.agent, generate(), kind="audio"):
+            pass
+
+    task = asyncio.create_task(play())
+    await asyncio.sleep(0.1)
+    task.cancel()  # interruption
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0.05)
+    assert closed == [True]

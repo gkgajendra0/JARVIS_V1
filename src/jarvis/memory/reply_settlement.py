@@ -59,6 +59,9 @@ class ReplySettlement:
         self._clock = clock
         self._latest_user: str | None = None
         self._latest_epoch: int | None = None
+        self._turn_epochs: dict[str, int] = {}
+        self._epoch_turns: dict[int, str] = {}
+        self._speech_epoch = None
         self._chain_request: str | None = None
         self._chain_tool = False
         self._open = 0
@@ -79,6 +82,12 @@ class ReplySettlement:
         if turn.role is ConversationRole.USER:
             self._latest_user = turn.turn_id
             self._latest_epoch = getattr(turn, "user_activity_epoch", None)
+            if self._latest_epoch is not None:
+                self._turn_epochs[turn.turn_id] = self._latest_epoch
+                self._epoch_turns[self._latest_epoch] = turn.turn_id
+                while len(self._turn_epochs) > self._limit:
+                    old_turn = next(iter(self._turn_epochs))
+                    self._epoch_turns.pop(self._turn_epochs.pop(old_turn), None)
             pending = [t for t, e in self._events.items() if not e.is_set()]
             if self._chain_request is not None:
                 self._waiting.update(pending)
@@ -119,6 +128,10 @@ class ReplySettlement:
         if self._chain_request is None:
             self._start_chain()
             self._chain_tool = False
+        try:
+            self._speech_epoch = self._activity_epoch()
+        except Exception:  # noqa: BLE001 - no epoch: per-generation binding off
+            self._speech_epoch = None
         self._open += 1
         self._last_activity = self._clock()
 
@@ -153,19 +166,34 @@ class ReplySettlement:
     def latest_user(self) -> str | None:
         return self._latest_user
 
-    def current_request(self) -> str | None:
-        """The owner turn the reply now being produced answers, or None while
-        that request's transcript has not been accepted yet (the reply chain
-        started on newer user activity than any accepted turn)."""
-        if not self._speech_feed or self._chain_request is None:
+    def speech_epoch(self):
+        """The user activity epoch when the latest generation started."""
+        return self._speech_epoch
+
+    def current_request(self, speech_epoch=None) -> str | None:
+        """The owner turn the generation that started at ``speech_epoch`` (user
+        activity epoch at its start) answers, or None while that activity's
+        transcript has not been accepted yet.
+
+        A generation that starts after newer user activity than its chain's
+        request (someone spoke after the request: a barge-in, an interloper
+        before a tool follow-up) answers that newer activity, never the
+        earlier, possibly verified, request."""
+        if not self._speech_feed:
             return self._latest_user
-        if (
-            self._chain_pre_turn
-            and self._chain_epoch is not None
-            and self._latest_epoch != self._chain_epoch
-        ):
-            return None
-        return self._chain_request
+        epoch = speech_epoch if speech_epoch is not None else self._speech_epoch
+        request = self._chain_request or self._latest_user
+        if epoch is None:
+            return request
+        if self._turn_epochs.get(request) == epoch:
+            return request
+        newer = self._epoch_turns.get(epoch)
+        if newer is not None:
+            return newer
+        request_epoch = self._turn_epochs.get(request)
+        if request_epoch is not None and request_epoch > epoch:
+            return request  # a generation older than its accepted request
+        return None
 
     def _start_chain(self) -> None:
         self._chain_request = self._latest_user
