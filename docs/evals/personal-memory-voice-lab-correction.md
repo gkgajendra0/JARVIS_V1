@@ -159,9 +159,16 @@ session). An unsettled reply within the source budget writes nothing. Claiming
 one turn never cancels learning in flight for another turn. Normal
 owner-authorized learning commits after the reply.
 
-Limits: the claim goes to the latest accepted owner turn when the tool runs;
-if unrelated speech is accepted between the request and the tool call, the
-claim lands on that newer turn. A plain-text record left by the earlier
+Request binding (owner review of ad87660a): an explicit change acts for its
+originating request, the owner turn bound by the first tool call of the reply
+(target resolution), not whichever turn is latest when the mutation tool runs.
+The binding holds until the agent is back to listening. If another utterance
+is accepted between target resolution and the mutation call, the original
+request is claimed (excluded from learning) and the change is refused before
+any consent prompt; the owner repeats it. A newer owner turn no longer settles
+an earlier one while its reply is still running.
+
+Limit: a plain-text record left by the earlier
 behaviour (for example `home_city` in the retained lab) stays outside the
 learning read scope; a new explicit save creates the readable personal_fact
 beside it.
@@ -211,16 +218,56 @@ but no speaker scores, an evidence object that authorizes nothing is used
 | Automatic learning | Unchanged: owner-scored only; category controls wait for evidence |
 | Explicit mutations | Unchanged: fresh Windows Hello for each concrete change |
 
-Provider-preloaded data versus new reads: what was already given to the model
-in this wake (the preload, or facts released for an owner-verified question)
-stays in that live model context; it cannot be withdrawn. Every new tool read
-is authorized per request. A later unverified speaker in the same wake gets no
-new private reads, but the model could still repeat context it already holds.
-The bounded follow-up window and wake retirement limit how long such a context
-lives. Closing that residual fully (for example ending the wake on positive
-non-owner speech after private context was given) is a separate policy
-decision.
+Provider-preloaded data versus new reads: every new tool read is authorized
+per request. What was already given to the live model in this wake (the
+preload, history from a tool result, released personal facts, or a memory
+receipt naming facts) cannot be withdrawn from that context, so (owner
+decision 2026-11-28) once any of it was given, a request that cannot be
+positively verified as the owner (non-owner, unknown or too short, evidence
+timeout, or someone else barging in) ends and clears the wake: speech in
+flight is interrupted and the session, with its model context, is closed
+("Private wake ended | reason=speaker_not_verified" in the log). Private
+context is given again only after fresh owner verification in a new wake. A
+wake that released nothing private is not affected. Remaining window: speech
+that already played between the start of a reply and the speaker verdict
+(evidence is scored at the end of the utterance, normally before or around
+the reply's start; at most the evidence wait of 1.5 s).
 
 Changed behaviour the owner will notice: with enforcement on, very short
 commands that cannot be scored (for example "Go back to sleep, Jarvis.") are
-answered but not saved to project history, and give no private context.
+answered but not saved to project history, and give no private context; after
+private context was given in a wake, such a command ends the wake.
+
+### Fresh-lab acceptance checklist (each issue recorded separately)
+
+1. Refused correction: save "My diet preference is vegan" (approve Hello);
+   say "Okay. Correction. My diet preference is vegetarian." and refuse
+   Hello; ask "What is my diet preference?" Pass: vegan; no learning commit
+   for that turn in the log. Then one approved correction stores the new
+   value.
+2. Interloper between resolution and change: say the correction, and while
+   Jarvis is still working, say "hmm" (or have another sound accepted).
+   Pass: nothing changes, Jarvis asks to repeat; no learning commit for the
+   correction turn.
+3. Readback: "Remember that my home city is Jaipur." (approve) → "What is my
+   home city?" answers Jaipur (not the save-status sentence).
+4. Approved deletion: "Forget my home city." (approve Hello) → "What is my
+   home city?" says no record.
+5. Denied deletion: save it again, "Forget my home city." and refuse Hello →
+   it is still Jaipur; no learning change for that turn.
+6. Restart persistence: close the lab, start it again with -ResumeLab on the
+   same lab root; ask the diet preference and home city: the approved values
+   are still there, refused changes are not.
+7. Speaker gating: another person or a phone clip asks "What vehicles do I
+   have?" and "Which hotel did we book?" in a fresh wake → reads denied
+   (speaker_not_verified), no facts spoken; the owner gets answers.
+8. Same-wake speaker switch: the owner asks a private question and gets the
+   answer; then another person asks a private follow-up in the same wake.
+   Pass: speech stops, "Private wake ended | reason=speaker_not_verified"
+   is logged, nothing private is spoken to them; the owner must wake Jarvis
+   again and is verified before private context is given again. Repeat with
+   the other person barging in while Jarvis is answering, and with a very
+   short unscored command after a private answer.
+9. Ordinary conversation: in a wake with nothing private, another person's
+   general question ("What's the capital of Nepal?") is answered and the wake
+   continues.

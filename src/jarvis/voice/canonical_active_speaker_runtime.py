@@ -75,9 +75,11 @@ class _SessionToolBundle:
         project_turns_getter: Callable[[], Any] | None = None,
         memory_receipts_getter: Callable[[], Any] | None = None,
         speaker_evidence_getter: Callable[[], Any] | None = None,
+        request_binding_getter: Callable[[], Any] | None = None,
     ) -> None:
         self._project_turns_getter = project_turns_getter or (lambda: None)
         self._speaker_evidence_getter = speaker_evidence_getter or (lambda: None)
+        self._request_binding_getter = request_binding_getter or (lambda: None)
         self._memory_receipts_getter = memory_receipts_getter or (lambda: None)
         self._vision_tools = vision_tools
         self._conversation_getter = conversation_getter
@@ -110,6 +112,7 @@ class _SessionToolBundle:
                     personal_context=personal,
                     receipts=self._memory_receipts_getter(),
                     speaker_evidence=self._speaker_evidence_getter(),
+                    request_binding=self._request_binding_getter(),
                 ).tools
             )
             if personal is not None:
@@ -321,7 +324,15 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 else UnavailableSpeakerEvidence()
             )
             self._owner_evidence = owner_evidence
-            self._reply_settlement = None
+            # Per conversation: when the reply to an owner turn is over, and
+            # which owner turn a tool chain acts for (request binding).
+            from jarvis.memory.reply_settlement import ReplySettlement
+
+            settlement = ReplySettlement(agent_states=True)
+            settlement.agent_state(self._agent_state)
+            self._reply_settlement = settlement
+            bridge.add_accepted_turn_observer(settlement.observe)
+            bridge.add_close_observer(settlement.close)
             self._window_deadline = None
             self._window_grace_until = 0.0
             self._window_speech = False
@@ -441,6 +452,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                     ),
                     topic_continuity=continuity,
                     speaker_evidence=owner_evidence,
+                    request_binding=settlement,
                 )
                 self._personal_context = personal
                 if project_turns is not None:
@@ -474,13 +486,6 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 and self._learning_grant is not None
                 and not learning_blocked
             ):
-                from jarvis.memory.reply_settlement import ReplySettlement
-
-                settlement = ReplySettlement(agent_states=True)
-                settlement.agent_state(self._agent_state)
-                self._reply_settlement = settlement
-                bridge.add_accepted_turn_observer(settlement.observe)
-                bridge.add_close_observer(settlement.close)
                 bridge.add_accepted_turn_observer(
                     self._personal_learning.bind(
                         bridge.conversation,
@@ -498,6 +503,8 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 # With or without automatic learning: explicit memory tools
                 # record their results too.
                 self._attach_memory_claim_check(session, bridge)
+            if owner_evidence is not None and owner_evidence.enforcing:
+                self._attach_private_disclosure_guard(session, bridge, owner_evidence)
             bridge.add_accepted_turn_observer(self._note_window_turn)
             # Explicit opt-in only. No model dispatch, memory persistence, or
             # model-visible release without a separately provided, trusted gate.
@@ -688,6 +695,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._speaker_evidence: SpeakerTurnEvidenceBook | None = None
         self._owner_evidence = None
         self._reply_settlement = None
+        self.private_wakes_ended = 0
         self._window_deadline: float | None = None
         self._window_grace_until = 0.0
         self._window_speech = False
@@ -723,6 +731,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 memory_receipts_getter=lambda: self._memory_receipts,
                 project_turns_getter=lambda: self._project_turns,
                 speaker_evidence_getter=lambda: self._owner_evidence,
+                request_binding_getter=lambda: self._reply_settlement,
             )
 
     async def _before_conversation_session(self) -> str | None:
@@ -1297,6 +1306,74 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             asyncio.ensure_future(follow_up.close())
 
         bridge.add_close_observer(detach)
+
+    def _private_context_released(self, session_id) -> bool:
+        """Owner-private context is in this wake's live model context: saved
+        project history (preload or tool results), released personal facts,
+        or a memory receipt naming owner facts."""
+        project = self._project_turns
+        personal = self._personal_context
+        receipts = self._memory_receipts
+        return bool(
+            (project is not None and getattr(project, "private_released", False))
+            or (personal is not None and getattr(personal, "protected", False))
+            or (receipts is not None and receipts.disclosed(session_id))
+        )
+
+    def _attach_private_disclosure_guard(self, session, bridge, evidence):
+        """Owner decision 2026-11-28: once private context is in the live model
+        context, a request that cannot be positively verified as the owner
+        (non-owner, unknown/too short, evidence timeout, a barge-in by someone
+        else) ends and clears the wake: speech in flight is interrupted and the
+        session, with its model context, is closed. Private context is given
+        again only after fresh owner verification in a new wake (preload and
+        every read check it). A wake that released nothing private is not
+        affected, so ordinary conversation continues."""
+        session_id = bridge.conversation.session_id
+        tasks: set[asyncio.Task] = set()
+
+        async def verify(turn):
+            if await evidence.owner_verified(turn.turn_id):
+                return
+            if self._live_session is not session:
+                return
+            if not self._private_context_released(session_id):
+                return
+            current = evidence.current(turn.turn_id)
+            LOGGER.warning(
+                "Private wake ended | reason=speaker_not_verified | status=%s | "
+                "evidence=%s | turn_id=%s",
+                getattr(getattr(current, "status", None), "value", "unknown"),
+                getattr(current, "reason", "unavailable"),
+                turn.turn_id,
+            )
+            try:
+                interrupted = session.interrupt()
+                if asyncio.isfuture(interrupted) or asyncio.iscoroutine(interrupted):
+                    await asyncio.wait_for(interrupted, 2)
+            except Exception as exc:  # noqa: BLE001 - ending the wake still follows
+                LOGGER.warning(
+                    "Private wake interrupt failed | error=%s", type(exc).__name__
+                )
+            self.private_wakes_ended += 1
+            if self._live_session is session and self._active_end is not None:
+                self._active_end.set()
+
+        def observe(turn):
+            if turn.role is not ConversationRole.USER:
+                return
+            task = asyncio.get_running_loop().create_task(
+                verify(turn), name="jarvis-private-disclosure-guard"
+            )
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+        def close():
+            for task in tuple(tasks):
+                task.cancel()
+
+        bridge.add_accepted_turn_observer(observe)
+        bridge.add_close_observer(close)
 
     def _attach_memory_claim_check(self, session, bridge):
         """Correct a finished reply that claimed a memory change the record of

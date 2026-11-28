@@ -98,6 +98,7 @@ class MemoryReceipts:
         self._limit = limit
         self._turns: OrderedDict[tuple[str, str], _Turn] = OrderedDict()
         self._issued: dict[str, list[str]] = {}
+        self._disclosed: set[str] = set()
 
     def _turn(self, session_id, turn_id) -> _Turn:
         key = (session_id, turn_id)
@@ -148,6 +149,14 @@ class MemoryReceipts:
 
     def drop_issued(self, session_id) -> None:
         self._issued.pop(session_id, None)
+        self._disclosed.discard(session_id)
+
+    def mark_disclosed(self, session_id) -> None:
+        """A receipt naming owner facts was given to the live model."""
+        self._disclosed.add(session_id)
+
+    def disclosed(self, session_id) -> bool:
+        return session_id in self._disclosed
 
     # readers -------------------------------------------------------------
 

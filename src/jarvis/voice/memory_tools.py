@@ -105,6 +105,7 @@ class MemoryAgentTools:
         split_owned_item_lists: bool = True,
         receipts=None,
         speaker_evidence=None,
+        request_binding=None,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
@@ -129,6 +130,8 @@ class MemoryAgentTools:
         # With speaker enforcement, memory receipts and reads answer only a
         # request positively scored as the owner's voice.
         self._speaker_evidence = speaker_evidence
+        # Which owner turn a tool chain acts for (jarvis.memory.reply_settlement).
+        self._request_binding = request_binding
 
     @property
     def tools(self) -> list:
@@ -493,23 +496,47 @@ class MemoryAgentTools:
         }
 
     def _change_turn(self, action):
-        if self._personal_context is None:
-            self._claim_latest()
-            return authorize_explicit_memory_action(self._conversation, action)
-        turn = self._latest_user_turn()
         # Claimed before anything can fail: a refused or failed explicit
         # change never commits through automatic learning instead.
-        self._claim(turn)
+        self._claim_request()
+        if self._personal_context is None:
+            return authorize_explicit_memory_action(self._conversation, action)
+        turn = self._latest_user_turn()
         reject_negated_memory_change(turn.text)
         self._personal_context.reserve_mutation(action.value)
         return turn
 
     def _claim_latest(self):
+        self._claim_request()
+
+    def _claim_request(self):
+        """Claim the owner turn this tool chain acts for (its originating
+        request, bound by the first tool call of the reply), not whichever
+        turn is latest now. If another utterance was accepted after it, the
+        change is refused: the original request is excluded from learning
+        and nothing is written for either turn."""
+        binding = self._request_binding
+        request_id = binding.bind_request() if binding is not None else None
         try:
-            turn = self._latest_user_turn()
+            latest = self._latest_user_turn()
         except MemoryToolGroundingError:
+            latest = None
+        request = (
+            next(
+                (t for t in self._conversation.turns if t.turn_id == request_id),
+                None,
+            )
+            if request_id is not None
+            else latest
+        )
+        if request is None:
             return
-        self._claim(turn)
+        self._claim(request)
+        if latest is not None and latest.turn_id != request.turn_id:
+            raise ExplicitMemoryAuthorizationError(
+                "Another utterance arrived after this memory request; nothing was "
+                "changed. Ask the owner to repeat the request."
+            )
 
     def _claim(self, turn):
         claim = getattr(self._service, "claim_explicit_request", None)
@@ -839,6 +866,8 @@ class MemoryAgentTools:
         )
         view = self._receipts.view(session, [t.turn_id for t in owner_turns])
         self._receipts.issue(session, view["say"], owner_turns[0].turn_id)
+        if any(entry["operations"] for entry in view["turns"]):
+            self._receipts.mark_disclosed(session)
         return view
 
     @function_tool()

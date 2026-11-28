@@ -138,6 +138,7 @@ class PersonalContextSession:
         topic_continuity=None,
         explicit_question_queries: bool = False,
         speaker_evidence=None,
+        request_binding=None,
     ):
         if learning_authority is None and learning_grant is not None:
             raise ValueError("learning issuer and grant must be supplied together")
@@ -150,6 +151,9 @@ class PersonalContextSession:
         # with enforcement, a personal read acts for the owner only when the
         # request turn was positively scored as the owner.
         self._speaker_evidence = speaker_evidence
+        # The first tool call of a reply binds its originating owner turn
+        # (jarvis.memory.reply_settlement.ReplySettlement.bind_request).
+        self._request_binding = request_binding
         self._learning_source = None
         self._learning_read = False
         self._topic_checkpoints = topic_checkpoints
@@ -1547,6 +1551,9 @@ class PersonalContextAgentTools:
         exact accepted user text for grounding the value in its original script.
         Names are proposals only; call read_personal_context for relevant values.
         """
+        binding = getattr(self._session, "_request_binding", None)
+        if binding is not None:
+            binding.bind_request()
         return await self._session.catalog()
 
     @function_tool()

@@ -39,10 +39,20 @@ class ReplySettlement:
         # not thinking or speaking.
         self._agent_states = agent_states
         self._agent_busy = agent_states
+        self._latest_user: str | None = None
+        self._bound_request: str | None = None
 
     def observe(self, turn) -> None:
         if turn.role is ConversationRole.USER:
-            self._settle(tuple(self._events))
+            self._latest_user = turn.turn_id
+            # A newer owner turn supersedes earlier ones, but while a reply
+            # (a tool chain) is still running for one of them it is not over:
+            # it settles when the agent is back to listening.
+            pending = [t for t, e in self._events.items() if not e.is_set()]
+            if self._agent_busy:
+                self._replied.update(pending)
+            else:
+                self._settle(pending)
             event = asyncio.Event()
             if self._closed:
                 event.set()
@@ -63,7 +73,25 @@ class ReplySettlement:
             return
         self._agent_busy = state in _BUSY_STATES
         if not self._agent_busy:
+            self._bound_request = None
             self._settle(tuple(self._replied))
+
+    def bind_request(self) -> str | None:
+        """The owner turn a memory or personal-context tool call acts for.
+
+        The first tool call of a reply binds the latest accepted owner turn;
+        later tool calls of the same reply (until the agent is back to
+        listening) keep that binding even if another utterance was accepted
+        meanwhile, so a correction resolved for one request is never applied
+        to, or excluded from learning for, whichever turn is latest."""
+        if (
+            self._agent_states
+            and self._agent_busy
+            and self._bound_request in self._events
+        ):
+            return self._bound_request
+        self._bound_request = self._latest_user
+        return self._bound_request
 
     def _settle(self, turn_ids) -> None:
         for turn_id in turn_ids:

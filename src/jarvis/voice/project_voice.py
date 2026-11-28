@@ -832,6 +832,9 @@ class VoiceProjectTurns:
         self._retire = None
         self._speaker_evidence = None
         self._user_turn_seen = asyncio.Event()
+        # True once saved project history was given to the live model in this
+        # wake (preload or a tool result); see the private-disclosure guard.
+        self.private_released = False
         self._played = 0  # audible response segments allowed so far
         self._played_epochs: set[int] = set()
         # Grant renewal pending at wake: turns wait (bounded) for Hello.
@@ -1060,6 +1063,9 @@ class VoiceProjectTurns:
     # -- provider / transport handoff (Gemini paid fallback, fresh session) ----
 
     def _remember_delivered(self, identities, items) -> None:
+        if identities:
+            # Saved project history is now in the live model context.
+            self.private_released = True
         for identity, item in zip(identities, items, strict=False):
             self._delivered_ids[identity] = None
             role = item.get("role")
@@ -2060,6 +2066,7 @@ class VoiceProjectTurns:
         )
         if text:
             await self._inject_closed_context(agent, text)
+            self.private_released = True
         given = [*decisions, *rows]
         self._remember_delivered(
             [row.event.event_id for row in given],
