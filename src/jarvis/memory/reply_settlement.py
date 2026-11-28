@@ -166,6 +166,13 @@ class ReplySettlement:
     def latest_user(self) -> str | None:
         return self._latest_user
 
+    def activity_epoch(self):
+        """The conversation's user activity epoch now."""
+        try:
+            return self._activity_epoch()
+        except Exception:  # noqa: BLE001
+            return None
+
     def speech_epoch(self):
         """The user activity epoch when the latest generation started."""
         return self._speech_epoch

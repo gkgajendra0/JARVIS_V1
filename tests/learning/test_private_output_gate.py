@@ -341,3 +341,100 @@ async def test_the_inner_stream_is_closed_when_the_reply_is_cut():
     with pytest.raises(asyncio.CancelledError):
         await task
     assert closed == [True]  # closed at once, not at garbage collection
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["audio", "transcript"])
+async def test_closing_an_approved_stream_stops_every_later_item(kind):
+    """Review of 0df8b73e: after the owner verdict, a wake that starts closing
+    lets no further item through (the next frame, nor held ones)."""
+    world = World()
+    world.say("Which hotel did we book?", score=0.72)
+    world.settlement.speech_started()
+    produce = asyncio.Queue()
+
+    async def generate():
+        while (item := await produce.get()) is not None:
+            yield item
+
+    played = []
+
+    async def play():
+        async for item in gated_output(world.agent, generate(), kind=kind):
+            played.append(item)
+
+    task = asyncio.create_task(play())
+    await produce.put("first")
+    await asyncio.sleep(0.1)
+    assert played == ["first"]  # approved and consumed
+    world.closing = True
+    await produce.put("second")
+    await produce.put("third")
+    await produce.put(None)
+    await asyncio.wait_for(task, 2)
+    assert played == ["first"]
+
+
+@pytest.mark.asyncio
+async def test_closing_while_held_frames_are_released_stops_the_rest():
+    world = World()
+    turn = world.say("Which hotel did we book?", resolve=False)
+    world.settlement.speech_started()
+
+    async def generate():
+        for frame in PRIVATE:
+            yield frame
+        await asyncio.sleep(0.3)
+
+    played = []
+
+    async def play():
+        async for frame in gated_output(world.agent, generate(), kind="audio"):
+            played.append(frame)
+            if len(played) == 2:
+                world.closing = True  # the wake starts closing mid-release
+
+    task = asyncio.create_task(play())
+    await asyncio.sleep(0.1)
+    world.book.resolve(turn.turn_id, score=0.72, reason="scored")
+    await asyncio.wait_for(task, 2)
+    assert played == PRIVATE[:2]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("newer_score", "expect_rest"), [(0.25, False), (0.72, True)])
+async def test_newer_speech_during_an_approved_stream_needs_its_own_verdict(
+    newer_score, expect_rest
+):
+    world = World()
+    world.say("Which hotel did we book?", score=0.72)
+    world.settlement.speech_started()
+    produce = asyncio.Queue()
+
+    async def generate():
+        while (item := await produce.get()) is not None:
+            yield item
+
+    played = []
+
+    async def play():
+        async for item in gated_output(world.agent, generate(), kind="audio"):
+            played.append(item)
+
+    task = asyncio.create_task(play())
+    await produce.put("owner-1")
+    await asyncio.sleep(0.1)
+    assert played == ["owner-1"]
+    newer = world.say("And the room number?", resolve=False)  # newer speech
+    await produce.put("rest-1")
+    await produce.put("rest-2")
+    await asyncio.sleep(0.2)
+    assert played == ["owner-1"]  # the earlier approval does not cover it
+    world.book.resolve(newer.turn_id, score=newer_score, reason="scored")
+    await asyncio.sleep(0.2)
+    await produce.put(None)
+    await asyncio.wait_for(task, 2)
+    if expect_rest:
+        assert played == ["owner-1", "rest-1", "rest-2"]
+    else:
+        assert played == ["owner-1"] and world.denied == [newer.turn_id]

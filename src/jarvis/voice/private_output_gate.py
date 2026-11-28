@@ -104,6 +104,7 @@ class PrivateOutputGate:
         arrives is never heard; that alone does not end the wake (no speaker
         was judged)."""
         epoch = self._settlement.speech_epoch()
+        approved_epoch = None
         iterator = stream.__aiter__()
         decided: bool | None = None
         verdict: asyncio.Task | None = None
@@ -115,10 +116,13 @@ class PrivateOutputGate:
                 if decided is None and verdict is not None and verdict.done():
                     decided = self._decide(verdict, kind)
                     if decided:
-                        for item in held:
-                            yield item
-                    else:
-                        self.dropped_frames += len(held)
+                        approved_epoch = epoch
+                        while held:
+                            if self._closing():
+                                decided = False
+                                break
+                            yield held.pop(0)
+                    self.dropped_frames += len(held)
                     held.clear()
                 if ended:
                     if decided is None and verdict is not None:
@@ -160,7 +164,8 @@ class PrivateOutputGate:
                     ended, upcoming = True, None
                     continue
                 upcoming = asyncio.ensure_future(iterator.__anext__())
-                if decided is None and self._closing():
+                if decided is not False and self._closing():
+                    # Checked before every forwarded item, approved or not.
                     decided = False
                     self.dropped_frames += len(held)
                     held.clear()
@@ -168,8 +173,20 @@ class PrivateOutputGate:
                     self.dropped_frames += 1
                     continue
                 if decided is True:
-                    yield item
-                    continue
+                    now = self._settlement.activity_epoch()
+                    if (
+                        self.required()
+                        and now is not None
+                        and approved_epoch is not None
+                        and now != approved_epoch
+                    ):
+                        # Newer speech began while an approved reply streams:
+                        # the earlier approval does not cover it; hold again
+                        # until the newer request is judged.
+                        epoch, decided, verdict = now, None, None
+                    else:
+                        yield item
+                        continue
                 if verdict is None:
                     if not self.required():
                         yield item
