@@ -231,21 +231,31 @@ but no speaker scores, an evidence object that authorizes nothing is used
 
 Provider-preloaded data versus new reads: every new tool read is authorized
 per request. What was already given to the live model in this wake (the
-preload, history from a tool result, released personal facts, or a memory
-receipt naming facts) cannot be withdrawn from that context, so (owner
-decision 2026-11-28) once any of it was given, a request that cannot be
-positively verified as the owner (non-owner, unknown or too short, evidence
-timeout, or someone else barging in) ends and clears the wake: speech in
-flight is interrupted and the session, with its model context, is closed
-("Private wake ended | reason=speaker_not_verified" in the log). Private
-context is given again only after fresh owner verification in a new wake. A
-wake that released nothing private is not affected. A verdict that comes
-before a preload or tool read lands is watched for 10 s while that turn is the
-latest request. Once the wake is closing, any further speech in it is stopped
-at its first words. Remaining window: speech
-that already played between the start of a reply and the speaker verdict
-(evidence is scored at the end of the utterance, normally before or around
-the reply's start; at most the evidence wait of 1.5 s).
+preload, history or project details from a tool result, released personal
+facts, recalled or inspected memory, or a memory receipt naming facts)
+cannot be withdrawn from that context. So (owner decisions 2026-11-28):
+
+- Output gate. Once any of it was given, the reply to a new request does not
+  become audible until that exact request has positive owner evidence. The
+  agent's realtime audio output, TTS output and transcript are held at the
+  output boundary (`jarvis.voice.private_output_gate`, wired through
+  `JarvisVoiceAgent.realtime_audio_output_node`, `tts_node` and the
+  transcript node). The request is the reply chain's own request; while its
+  transcript (same user activity) has not been accepted, the verdict is
+  pending. Owner: held frames are released in order. Unknown, non-owner,
+  evidence timeout, a transcript that never arrives, or a closing wake:
+  everything held and after is dropped and the wake is ended. Private
+  context landing while a reply streams starts holding from that frame. A
+  wake that released nothing private is never held.
+- Wake ending. An unverified request also ends and clears the wake: speech
+  in flight is interrupted and the session, with its model context, is
+  closed ("Private wake ended | reason=speaker_not_verified" in the log).
+  Private context is given again only after fresh owner verification in a
+  new wake. A verdict that comes before a preload or tool read lands is
+  watched for 10 s while that turn is the latest request.
+
+Cost: in a wake that already holds private context, every reply waits for
+its request's speaker verdict before it is heard.
 
 Changed behaviour the owner will notice: with enforcement on, very short
 commands that cannot be scored (for example "Go back to sleep, Jarvis.") are
@@ -277,9 +287,12 @@ private context was given in a wake, such a command ends the wake.
    (speaker_not_verified), no facts spoken; the owner gets answers.
 8. Same-wake speaker switch: the owner asks a private question and gets the
    answer; then another person asks a private follow-up in the same wake.
-   Pass: speech stops, "Private wake ended | reason=speaker_not_verified"
-   is logged, nothing private is spoken to them; the owner must wake Jarvis
-   again and is verified before private context is given again. Repeat with
+   Pass: no private words are audible to them at all (not even the start of
+   an answer; "Private output withheld" and "Private wake ended |
+   reason=speaker_not_verified" are logged); the owner must wake Jarvis
+   again and is verified before private context is given again. Also check
+   that the owner's own follow-ups in a private wake still play (after a
+   short wait for verification). Repeat with
    the other person barging in while Jarvis is answering, and with a very
    short unscored command after a private answer.
 9. Ordinary conversation: in a wake with nothing private, another person's

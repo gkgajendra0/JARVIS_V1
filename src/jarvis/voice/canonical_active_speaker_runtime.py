@@ -513,6 +513,9 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 self._attach_memory_claim_check(session, bridge)
             if owner_evidence is not None and owner_evidence.enforcing:
                 self._attach_private_disclosure_guard(session, bridge, owner_evidence)
+                self._attach_private_output_gate(
+                    session, bridge, owner_evidence, settlement
+                )
             bridge.add_accepted_turn_observer(self._note_window_turn)
             # Explicit opt-in only. No model dispatch, memory persistence, or
             # model-visible release without a separately provided, trusted gate.
@@ -710,6 +713,7 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
         self._owner_evidence = None
         self._reply_settlement = None
         self.private_wakes_ended = 0
+        self._private_output_gate = None
         self._window_deadline: float | None = None
         self._window_grace_until = 0.0
         self._window_speech = False
@@ -1334,6 +1338,54 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             or (receipts is not None and receipts.disclosed(session_id))
         )
 
+    def _end_private_wake(self, session, reason, turn_id=None) -> None:
+        """Stop all further speech in this wake and close it (its model
+        context with it)."""
+        if self._live_session is not session:
+            return
+        already = getattr(session, "_jarvis_private_wake_closing", False)
+        session._jarvis_private_wake_closing = True
+        if already:
+            return
+        LOGGER.warning("Private wake ended | reason=%s | turn_id=%s", reason, turn_id)
+        try:
+            interrupted = session.interrupt()
+            if asyncio.isfuture(interrupted) or asyncio.iscoroutine(interrupted):
+                asyncio.ensure_future(interrupted)
+        except Exception as exc:  # noqa: BLE001 - ending the wake still follows
+            LOGGER.warning(
+                "Private wake interrupt failed | error=%s", type(exc).__name__
+            )
+        if self._active_end is not None:
+            self.private_wakes_ended += 1
+            self._active_end.set()
+
+    def _attach_private_output_gate(self, session, bridge, evidence, settlement):
+        """Hold every reply's audio and transcript at the output boundary until
+        its exact request is verified as the owner, once private context is in
+        this session (jarvis.voice.private_output_gate)."""
+        from jarvis.voice.private_output_gate import (
+            PrivateOutputGate,
+            register_output_gate,
+            unregister_output_gate,
+        )
+
+        session_id = bridge.conversation.session_id
+        gate = PrivateOutputGate(
+            evidence=evidence,
+            settlement=settlement,
+            released=lambda: self._private_context_released(session_id),
+            on_denied=lambda turn_id: self._end_private_wake(
+                session, "speaker_not_verified", turn_id
+            ),
+            closing=lambda: bool(
+                getattr(session, "_jarvis_private_wake_closing", False)
+            ),
+        )
+        self._private_output_gate = gate
+        register_output_gate(session, gate)
+        bridge.add_close_observer(lambda: unregister_output_gate(session, gate))
+
     def _attach_private_disclosure_guard(self, session, bridge, evidence):
         """Owner decision 2026-11-28: once private context is in the live model
         context, a request that cannot be positively verified as the owner
@@ -1371,30 +1423,13 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
                 ):
                     return
                 await asyncio.sleep(0.25)
-            if self._live_session is not session:
-                return
-            # From now on nothing more is spoken in this wake (a reply for the
-            # unverified turn generated before the session closes included).
-            session._jarvis_private_wake_closing = True
             current = evidence.current(turn.turn_id)
-            LOGGER.warning(
-                "Private wake ended | reason=speaker_not_verified | status=%s | "
-                "evidence=%s | turn_id=%s",
-                getattr(getattr(current, "status", None), "value", "unknown"),
-                getattr(current, "reason", "unavailable"),
+            self._end_private_wake(
+                session,
+                "speaker_not_verified:"
+                + str(getattr(getattr(current, "status", None), "value", "unknown")),
                 turn.turn_id,
             )
-            try:
-                interrupted = session.interrupt()
-                if asyncio.isfuture(interrupted) or asyncio.iscoroutine(interrupted):
-                    await asyncio.wait_for(interrupted, 2)
-            except Exception as exc:  # noqa: BLE001 - ending the wake still follows
-                LOGGER.warning(
-                    "Private wake interrupt failed | error=%s", type(exc).__name__
-                )
-            if self._live_session is session and self._active_end is not None:
-                self.private_wakes_ended += 1
-                self._active_end.set()
 
         def observe(turn):
             if turn.role is not ConversationRole.USER:

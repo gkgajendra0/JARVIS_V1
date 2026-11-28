@@ -58,6 +58,7 @@ class ReplySettlement:
         self._speech_feed = speech_feed
         self._clock = clock
         self._latest_user: str | None = None
+        self._latest_epoch: int | None = None
         self._chain_request: str | None = None
         self._chain_tool = False
         self._open = 0
@@ -77,6 +78,7 @@ class ReplySettlement:
         self._expire()
         if turn.role is ConversationRole.USER:
             self._latest_user = turn.turn_id
+            self._latest_epoch = getattr(turn, "user_activity_epoch", None)
             pending = [t for t, e in self._events.items() if not e.is_set()]
             if self._chain_request is not None:
                 self._waiting.update(pending)
@@ -150,6 +152,20 @@ class ReplySettlement:
 
     def latest_user(self) -> str | None:
         return self._latest_user
+
+    def current_request(self) -> str | None:
+        """The owner turn the reply now being produced answers, or None while
+        that request's transcript has not been accepted yet (the reply chain
+        started on newer user activity than any accepted turn)."""
+        if not self._speech_feed or self._chain_request is None:
+            return self._latest_user
+        if (
+            self._chain_pre_turn
+            and self._chain_epoch is not None
+            and self._latest_epoch != self._chain_epoch
+        ):
+            return None
+        return self._chain_request
 
     def _start_chain(self) -> None:
         self._chain_request = self._latest_user

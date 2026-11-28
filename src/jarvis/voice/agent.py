@@ -1,5 +1,6 @@
 """JARVIS voice identity and tool-use behavior."""
 
+import inspect
 import json
 import logging
 
@@ -456,7 +457,12 @@ async def guarded_transcription(agent: Agent, text, model_settings):
         claim_gate = stream_gate_for(agent.session)
     except RuntimeError:  # the agent is not running
         claim_gate = None
-    async for delta in Agent.default.transcription_node(agent, text, model_settings):
+    source = gated_output(
+        agent,
+        Agent.default.transcription_node(agent, text, model_settings),
+        kind="transcript",
+    )
+    async for delta in source:
         if stopped:
             continue
         if _private_wake_closing(agent):
@@ -483,6 +489,29 @@ async def guarded_transcription(agent: Agent, text, model_settings):
             _stop_current_speech(agent, "unverified_memory_claim")
             continue
         yield delta
+
+
+async def gated_output(agent, stream, *, kind: str):
+    """Pass a reply's audio frames or transcript through the private output
+    gate (jarvis.voice.private_output_gate): after private context entered
+    this session, nothing reaches playback before the exact request is
+    verified as the owner's voice."""
+    from jarvis.voice.private_output_gate import output_gate_for
+
+    if inspect.isawaitable(stream):
+        stream = await stream
+    if stream is None:
+        return
+    try:
+        gate = output_gate_for(agent.session)
+    except RuntimeError:  # the agent is not running
+        gate = None
+    if gate is None:
+        async for item in stream:
+            yield item
+        return
+    async for item in gate.hold(stream, kind=kind):
+        yield item
 
 
 class JarvisVoiceAgent(Agent):
@@ -518,6 +547,18 @@ class JarvisVoiceAgent(Agent):
 
     def transcription_node(self, text, model_settings):
         return guarded_transcription(self, text, model_settings)
+
+    def realtime_audio_output_node(self, audio, model_settings):
+        return gated_output(
+            self,
+            Agent.default.realtime_audio_output_node(self, audio, model_settings),
+            kind="audio",
+        )
+
+    def tts_node(self, text, model_settings):
+        return gated_output(
+            self, Agent.default.tts_node(self, text, model_settings), kind="audio"
+        )
 
 
 PERSONAL_CONTEXT_INSTRUCTIONS = """
