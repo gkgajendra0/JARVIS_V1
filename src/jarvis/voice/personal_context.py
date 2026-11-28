@@ -137,6 +137,8 @@ class PersonalContextSession:
         topic_checkpoints=None,
         topic_continuity=None,
         explicit_question_queries: bool = False,
+        speaker_evidence=None,
+        request_binding=None,
     ):
         if learning_authority is None and learning_grant is not None:
             raise ValueError("learning issuer and grant must be supplied together")
@@ -145,6 +147,13 @@ class PersonalContextSession:
         self._explicit_question_queries = explicit_question_queries
         self._learning_authority = learning_authority
         self._learning_grant = learning_grant
+        # Speaker evidence for this wake (jarvis.voice.speaker_turn_evidence):
+        # with enforcement, a personal read acts for the owner only when the
+        # request turn was positively scored as the owner.
+        self._speaker_evidence = speaker_evidence
+        # The first tool call of a reply binds its originating owner turn
+        # (jarvis.memory.reply_settlement.ReplySettlement.bind_request).
+        self._request_binding = request_binding
         self._learning_source = None
         self._learning_read = False
         self._topic_checkpoints = topic_checkpoints
@@ -360,8 +369,17 @@ class PersonalContextSession:
         return self._same(self._binding)
 
     async def _authorize(self, operation="read", mutation=None):
+        if self._request_binding is not None:
+            # Any personal-context tool call is part of its reply chain.
+            self._request_binding.tool_started()
         binding = self._current(activity=operation != "read")
-        if binding is None or self._busy:
+        if binding is None:
+            return False
+        # The speaker check awaits; the busy/permit checks below run after it
+        # with no await before the session is marked busy.
+        if operation == "read" and not await self._speaker_verified(binding):
+            return False
+        if self._busy or self._current(activity=operation != "read") != binding:
             return False
         if self._permit is not None:
             if operation == self._operation == "read":
@@ -1136,6 +1154,31 @@ class PersonalContextSession:
             self.close()
             return {"status": "denied"}
 
+    async def _speaker_verified(self, binding) -> bool:
+        """With speaker enforcement, a read needs positive owner evidence for
+        the bound request turn, and that turn must still be the current
+        request afterwards (unknown, non-owner, timed-out, stale or another
+        turn's evidence never authorizes a read). Mutations keep their own
+        fresh Windows Hello consent."""
+        book = self._speaker_evidence
+        if book is None or not book.enforcing:
+            return True
+        verified = await book.owner_verified(binding[1])
+        if not verified or self._closed or self._current(activity=False) != binding:
+            LOGGER.info(
+                "Personal context read denied | reason=speaker_not_verified | "
+                "turn_id=%s",
+                binding[1],
+            )
+            return False
+        return True
+
+    @property
+    def learning_scoped_reads(self) -> bool:
+        """Owner-memory reads in this session see only registered
+        personal-learning records (jarvis.personal_learning_scope)."""
+        return self._learning_authority is not None
+
     def reserve_mutation(self, operation):
         binding = self._current()
         if binding is None:
@@ -1511,6 +1554,9 @@ class PersonalContextAgentTools:
         exact accepted user text for grounding the value in its original script.
         Names are proposals only; call read_personal_context for relevant values.
         """
+        binding = getattr(self._session, "_request_binding", None)
+        if binding is not None:
+            binding.tool_started()
         return await self._session.catalog()
 
     @function_tool()

@@ -103,6 +103,9 @@ class MemoryAgentTools:
         | None = None,
         personal_context=None,
         split_owned_item_lists: bool = True,
+        receipts=None,
+        speaker_evidence=None,
+        request_binding=None,
     ) -> None:
         if not isinstance(service, MemoryService):
             raise TypeError("service must be a MemoryService")
@@ -121,6 +124,14 @@ class MemoryAgentTools:
         self._split_owned_item_lists = split_owned_item_lists
         self._semantic_query_coordinator = semantic_query_coordinator
         self._personal_context = personal_context
+        # Verified memory results per owner turn (jarvis.memory.memory_receipts):
+        # explicit operations are recorded here, and memory_status reads them.
+        self._receipts = receipts
+        # With speaker enforcement, memory receipts and reads answer only a
+        # request positively scored as the owner's voice.
+        self._speaker_evidence = speaker_evidence
+        # Which owner turn a tool chain acts for (jarvis.memory.reply_settlement).
+        self._request_binding = request_binding
 
     @property
     def tools(self) -> list:
@@ -136,7 +147,52 @@ class MemoryAgentTools:
             and self._personal_context is None
         ):
             tools.append(self.recall_memory)
+        if self._receipts is not None:
+            tools.append(self.memory_status)
         return tools
+
+    def _owner_turn_id(self):
+        for turn in reversed(self._conversation.turns):
+            if turn.role is ConversationRole.USER:
+                return turn.turn_id
+        return None
+
+    def _record(self, result):
+        """Record an explicit operation that returned ok for the latest owner
+        turn (the turn it was asked in)."""
+        if self._receipts is None or not isinstance(result, dict):
+            return result
+        turn_id = self._owner_turn_id()
+        if not result.get("ok") or turn_id is None:
+            return result
+        operation = str(result.get("operation") or "")
+        if operation not in {"remember", "correct", "forget"}:
+            return result
+        labels = tuple(result.get("saved") or ())
+        if operation == "remember" and "saved" in result and not labels:
+            operation, labels = (
+                "already_saved",
+                tuple(result.get("already_saved") or ()),
+            )
+        elif not labels and (result.get("label") or result.get("predicate")):
+            labels = (_receipt_label(result),)
+        from jarvis.memory.memory_receipts import MemoryOperation, compose_say
+
+        session = self._conversation.session_id
+        self._receipts.explicit(session, turn_id, operation, labels)
+        # The result (and its receipt) names an owner fact.
+        self._receipts.mark_disclosed(session)
+        say = compose_say(
+            [
+                MemoryOperation("explicit", operation, label)
+                for label in labels or (None,)
+            ]
+        )
+        return {
+            **result,
+            "say": self._receipts.issue(session, say, turn_id),
+            "say_rule": "Speak say exactly as given; add nothing about memory.",
+        }
 
     async def remember(
         self,
@@ -145,6 +201,8 @@ class MemoryAgentTools:
         value: str,
         sensitivity: str = "standard",
     ) -> dict[str, object]:
+        # Claimed before anything can fail, the authorization check included.
+        self._claim_latest()
         turn = authorize_explicit_memory_action(
             self._conversation,
             ExplicitMemoryAction.REMEMBER,
@@ -197,14 +255,25 @@ class MemoryAgentTools:
             turn=turn,
             sensitivity=resolved_sensitivity,
         )
+        as_personal_fact = self._readable_only_as_personal_fact(
+            predicate, resolved_sensitivity
+        )
         try:
-            result = await self._service.remember_text(
-                predicate=predicate,
-                value=value,
-                source=source,
-                sensitivity=resolved_sensitivity,
-                **self._commit_guard(),
-            )
+            if as_personal_fact:
+                result = await self._service.remember_personal_fact(
+                    label=canonical_memory_predicate(predicate).replace("_", " "),
+                    value=value,
+                    source=source,
+                    **self._commit_guard(),
+                )
+            else:
+                result = await self._service.remember_text(
+                    predicate=predicate,
+                    value=value,
+                    source=source,
+                    sensitivity=resolved_sensitivity,
+                    **self._commit_guard(),
+                )
         except (Exception, asyncio.CancelledError):
             if self._personal_context is not None:
                 self._personal_context.mutation_failed()
@@ -223,9 +292,35 @@ class MemoryAgentTools:
             "ok": True,
             "operation": "remember",
             "predicate": result.predicate,
+            **_label_of(result.record),
             "memory_id": result.record.assertion_id,
             "sensitivity": result.record.sensitivity.value,
         }
+
+    def _mark_disclosed(self) -> None:
+        """An owner fact is now in the live model context (see the
+        private-disclosure guard in the voice runtime)."""
+        if self._receipts is not None:
+            self._receipts.mark_disclosed(self._conversation.session_id)
+
+    async def _speaker_verified(self, turn) -> bool:
+        book = self._speaker_evidence
+        if book is None or not book.enforcing:
+            return True
+        return await book.owner_verified(getattr(turn, "turn_id", None))
+
+    def _readable_only_as_personal_fact(self, predicate, sensitivity) -> bool:
+        """In a session whose owner-memory reads see only registered
+        personal-learning records, a standard fact outside the registered
+        facets is stored as a personal_fact (owner-explicit provenance), so
+        it can be read back, corrected and forgotten through those reads."""
+        from jarvis.personal_learning_scope import LEGACY_FACETS
+
+        return (
+            bool(getattr(self._personal_context, "learning_scoped_reads", False))
+            and sensitivity.value == "standard"
+            and canonical_memory_predicate(predicate) not in LEGACY_FACETS
+        )
 
     async def _remember_items(self, turn, predicate, kind, items):
         """One approval showing exactly the items that will be committed; one
@@ -347,6 +442,7 @@ class MemoryAgentTools:
             "ok": True,
             "operation": "correct",
             "predicate": result.predicate,
+            **_label_of(result.record),
             "memory_id": result.record.assertion_id,
             "sensitivity": result.record.sensitivity.value,
         }
@@ -404,15 +500,56 @@ class MemoryAgentTools:
             "ok": True,
             "operation": "forget",
             "predicate": forgotten_predicate,
+            **_label_of(current),
         }
 
     def _change_turn(self, action):
+        # Claimed before anything can fail: a refused or failed explicit
+        # change never commits through automatic learning instead.
+        self._claim_request()
         if self._personal_context is None:
             return authorize_explicit_memory_action(self._conversation, action)
         turn = self._latest_user_turn()
         reject_negated_memory_change(turn.text)
         self._personal_context.reserve_mutation(action.value)
         return turn
+
+    def _claim_latest(self):
+        self._claim_request()
+
+    def _claim_request(self):
+        """Claim the owner turn this tool chain acts for (its originating
+        request, bound by the first tool call of the reply), not whichever
+        turn is latest now. If another utterance was accepted after it, the
+        change is refused: the original request is excluded from learning
+        and nothing is written for either turn."""
+        binding = self._request_binding
+        request_id = binding.bind_request() if binding is not None else None
+        try:
+            latest = self._latest_user_turn()
+        except MemoryToolGroundingError:
+            latest = None
+        request = (
+            next(
+                (t for t in self._conversation.turns if t.turn_id == request_id),
+                None,
+            )
+            if request_id is not None
+            else latest
+        )
+        if request is None:
+            return
+        self._claim(request)
+        if latest is not None and latest.turn_id != request.turn_id:
+            raise ExplicitMemoryAuthorizationError(
+                "Another utterance arrived after this memory request; nothing was "
+                "changed. Ask the owner to repeat the request."
+            )
+
+    def _claim(self, turn):
+        claim = getattr(self._service, "claim_explicit_request", None)
+        if claim is not None:
+            claim(session_id=self._conversation.session_id, turn_id=turn.turn_id)
 
     async def _change_target(self, turn, predicate, catalog_id, facet_index):
         activity_epoch = self._conversation.user_activity_epoch
@@ -492,6 +629,8 @@ class MemoryAgentTools:
                 "semantic memory recall is not enabled for this session"
             )
         turn = self._latest_user_turn()
+        if not await self._speaker_verified(turn):
+            raise PermissionError("This request was not verified as the owner's voice")
         activity_epoch = self._conversation.user_activity_epoch
 
         def validate_recall_source():
@@ -531,6 +670,7 @@ class MemoryAgentTools:
             record.sensitivity.value,
             decision.reason_code,
         )
+        self._mark_disclosed()
         return {
             "ok": True,
             "operation": "semantic_recall",
@@ -551,6 +691,8 @@ class MemoryAgentTools:
             ExplicitMemoryAction.INSPECT,
         )
         _require_grounded_target(turn, predicate)
+        if not await self._speaker_verified(turn):
+            raise PermissionError("This request was not verified as the owner's voice")
         result = await self._service.inspect_exact(predicate=predicate)
         record = result.record
         if record.sensitivity is Sensitivity.LOCAL_ONLY:
@@ -568,6 +710,7 @@ class MemoryAgentTools:
                     "configured realtime provider."
                 ),
             }
+        self._mark_disclosed()
         LOGGER.info(
             "Explicit memory inspect hit | predicate=%s | sensitivity=%s | "
             "verification=%s",
@@ -611,11 +754,13 @@ class MemoryAgentTools:
         or implicit candidate promotion.
         """
         context.disallow_interruptions()
-        return await self._call_tool(
-            self.remember(
-                predicate=predicate,
-                value=value,
-                sensitivity=sensitivity,
+        return self._record(
+            await self._call_tool(
+                self.remember(
+                    predicate=predicate,
+                    value=value,
+                    sensitivity=sensitivity,
+                )
             )
         )
 
@@ -640,12 +785,14 @@ class MemoryAgentTools:
         Without personal context, the legacy exact-command rules still apply.
         """
         context.disallow_interruptions()
-        return await self._call_tool(
-            self.correct(
-                predicate=predicate,
-                value=value,
-                catalog_id=catalog_id,
-                facet_index=facet_index,
+        return self._record(
+            await self._call_tool(
+                self.correct(
+                    predicate=predicate,
+                    value=value,
+                    catalog_id=catalog_id,
+                    facet_index=facet_index,
+                )
             )
         )
 
@@ -666,11 +813,72 @@ class MemoryAgentTools:
         personal context, legacy exact-command rules still apply.
         """
         context.disallow_interruptions()
-        return await self._call_tool(
-            self.forget(
-                predicate=predicate, catalog_id=catalog_id, facet_index=facet_index
+        return self._record(
+            await self._call_tool(
+                self.forget(
+                    predicate=predicate, catalog_id=catalog_id, facet_index=facet_index
+                )
             )
         )
+
+    @function_tool()
+    async def memory_status(self, context: RunContext) -> dict[str, object]:
+        """What memory verifiably did for the owner's recent turns.
+
+        Call this only when the owner asks whether a recent request of
+        theirs was saved, noted, updated or forgotten, and speak its say
+        sentence exactly as given. Never describe a memory change in your own
+        words. It is not an answer about stored facts: for "what is my ...",
+        "what did I save about ..." or any question about what memory holds,
+        use the personal context tools instead. It waits
+        briefly for automatic learning of those turns to finish. It reads no
+        other stored facts and changes nothing.
+        """
+        del context
+        return await self.verified_memory_status()
+
+    async def verified_memory_status(self, wait: float = 6.0) -> dict[str, object]:
+        from jarvis.memory.memory_receipts import RECENT_TURNS
+
+        owner_turns = [
+            t
+            for t in reversed(self._conversation.turns)
+            if t.role is ConversationRole.USER
+        ][:RECENT_TURNS]
+        from jarvis.memory.memory_receipts import NOTHING_SAVED, SPEAKER_NOT_VERIFIED
+
+        if owner_turns and not await self._speaker_verified(owner_turns[0]):
+            # Receipt labels name owner facts: an unverified speaker gets a
+            # fixed sentence that names none.
+            if self._receipts is not None:
+                self._receipts.issue(
+                    self._conversation.session_id,
+                    SPEAKER_NOT_VERIFIED,
+                    owner_turns[0].turn_id,
+                )
+            return {
+                "say": SPEAKER_NOT_VERIFIED,
+                "turns": [],
+                "rule": "Speak the say sentence exactly as given.",
+            }
+        if self._receipts is None or not owner_turns:
+            return {
+                "say": NOTHING_SAVED,
+                "turns": [],
+                "rule": "Speak the say sentence exactly as given.",
+            }
+        session = self._conversation.session_id
+        # The latest turn is the one being answered: its learning is held
+        # until this reply is over, so waiting for it would only delay the
+        # answer; it is reported as still being saved.
+        await self._receipts.wait_learning(
+            session, tuple(t.turn_id for t in owner_turns[1:]), wait
+        )
+        view = self._receipts.view(session, [t.turn_id for t in owner_turns])
+        self._receipts.issue(session, view["say"], owner_turns[0].turn_id)
+        if any(entry["operations"] for entry in view["turns"]):
+            self._receipts.mark_disclosed(session)
+        return view
 
     @function_tool()
     async def recall_memory(
@@ -710,6 +918,19 @@ class MemoryAgentTools:
             return await operation
         except _EXPECTED_MEMORY_ERRORS as exc:
             raise ToolError(str(exc)) from exc
+
+
+def _label_of(record) -> dict:
+    value = getattr(record, "value", None)
+    if isinstance(value, dict) and value.get("label"):
+        return {"label": str(value["label"])}
+    return {}
+
+
+def _receipt_label(result) -> str:
+    """What the spoken receipt names: the fact's label, else its key in
+    words ("home_city" -> "home city")."""
+    return str(result.get("label") or str(result["predicate"]).replace("_", " "))
 
 
 _HARD_SEPARATORS = re.compile(r"\s*[,;]\s*")

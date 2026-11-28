@@ -17,9 +17,11 @@ from .learning_clarification import (
     ALTERNATIVES,
     ClarificationBoard,
     alternatives_questions,
+    answer_candidate,
+    answers_the_question,
+    chosen_values,
     clarification_for,
-    confirmation_candidate,
-    ground_chosen_plan,
+    has_statement,
     stated_details,
 )
 from .learning_contracts import AcceptedLearningSource, LearningBatch
@@ -27,6 +29,7 @@ from .learning_controls import category_veto, suppression_binding
 from .learning_diagnostics import log_learning
 from .learning_limits import INFERENCE_TIMEOUT, PROCESSING_BUDGET
 from .learning_policy import LearningPolicy, ground_plan_label
+from .memory_receipts import MemoryReceipts
 
 LOGGER = logging.getLogger(__name__)
 
@@ -57,6 +60,25 @@ def _already_held(note, entry) -> bool:
     )
 
 
+def _mutation_label(mutation, catalog):
+    """The display name of the fact a committed mutation wrote or withdrew."""
+    value = mutation.draft.value if mutation.draft is not None else None
+    if isinstance(value, dict) and value.get("label"):
+        return str(value["label"])
+    if isinstance(value, str) and value:
+        return value
+    for entry in catalog.entries:
+        if entry.assertion_id == mutation.expected_assertion_id:
+            try:
+                return json.loads(entry.value).get("label")
+            except (TypeError, ValueError, AttributeError):
+                return None
+    return None
+
+
+_UNSET = object()
+
+
 class PersonalLearningRuntime:
     def __init__(
         self,
@@ -73,8 +95,13 @@ class PersonalLearningRuntime:
         sleep=asyncio.sleep,
         rng=random.random,
         clarification_observer=None,
+        receipts=None,
     ):
         self.authority, self.service = authority, service
+        # What learning verifiably did per owner turn (memory_receipts): the
+        # only basis on which a reply may say something was saved.
+        self.receipts = receipts if receipts is not None else MemoryReceipts()
+        self._turn_ops = []
         self.extractor, self.resolver, self.reconciler = extractor, resolver, reconciler
         self.clock, self.status_observer = clock, status_observer
         # Content-free record of every provider attempt that failed and what
@@ -98,10 +125,15 @@ class PersonalLearningRuntime:
         self._inflight_receipt = None
         self._closed = False
         self._grant = None
+        self._speaker_evidence = None
+        self._settlements = {}
+        self._admissions = set()
         self._processed = self._committed = self._dropped = 0
         self._reason = "ready"
         self._unavailable_reported = False
         service.bind_learning_invalidator(self.invalidate_sources)
+        if hasattr(service, "bind_learning_turn_claim"):
+            service.bind_learning_turn_claim(self.explicit_request_claimed)
         for adapter in {id(extractor): extractor, id(resolver): resolver}.values():
             binder = getattr(adapter, "bind_source_validator", None)
             if callable(binder):
@@ -132,13 +164,24 @@ class PersonalLearningRuntime:
         if self.status_observer:
             self.status_observer(self.status())
 
-    def bind(self, conversation, grant):
+    def bind(
+        self, conversation, grant, *, speaker_evidence=None, reply_settlement=None
+    ):
         self._grant = grant
-        return lambda turn: self.observe_turn(conversation, turn, grant)
+        self._speaker_evidence = speaker_evidence
+        if reply_settlement is not None:
+            self._settlements[conversation.session_id] = reply_settlement
+        # Each bound conversation keeps its own evidence book.
+        return lambda turn: self.observe_turn(
+            conversation, turn, grant, speaker_evidence=speaker_evidence
+        )
 
-    def observe_turn(self, conversation, turn, grant):
+    def observe_turn(self, conversation, turn, grant, *, speaker_evidence=_UNSET):
         if self._closed or turn.turn_id in self._seen:
             return
+        evidence = (
+            self._speaker_evidence if speaker_evidence is _UNSET else speaker_evidence
+        )
         try:
             source = AcceptedLearningSource.from_turn(
                 self.authority.runtime_id_for(grant),
@@ -150,77 +193,178 @@ class PersonalLearningRuntime:
                 raise PermissionError("input limit")
             self._seen.add(turn.turn_id)
             self.authority.observe_accepted_input(grant, turn.turn_id)
-            categories = category_veto(source.text)
-            if categories:
-                self._vetoed.add(turn.turn_id)
-                self.invalidate_sources()
-                if any(
-                    set(categories) <= set(keys) for keys in self._controls.values()
-                ):
-                    self._report("category_suppression_pending")
-                    return
-                self.authority.register_source(grant, source.receipt_id, source=source)
-                self._pending[source.receipt_id] = (source, grant)
-                self._controls[source.receipt_id] = categories
-                self._enqueue(source.receipt_id)
-                return
-            if not LearningPolicy.source_allowed(source):
-                self._vetoed.add(turn.turn_id)
-                self.invalidate_sources(turn_id=turn.turn_id)
-                log_learning(
-                    self.diagnostics, source, "source", "rejected", reason="source_veto"
+            if evidence is not None and evidence.enforcing:
+                # Everything this turn could change (a fact, or a category
+                # privacy control) waits for the speaker evidence: only the
+                # owner's own speech is acted on. memory_status reports it as
+                # still processing meanwhile.
+                self.receipts.learning_started(source.session_id, source.turn_id)
+                task = asyncio.create_task(
+                    self._admit_after_evidence(evidence, source, turn, grant),
+                    name="jarvis-learning-speaker-evidence",
                 )
-                self._report("source_veto")
+                self._admissions.add(task)
+                task.add_done_callback(self._admissions.discard)
+                task.add_done_callback(
+                    lambda t, s=source: (
+                        self.receipts.learning_finished(
+                            s.session_id, s.turn_id, "closed"
+                        )
+                        if t.cancelled()
+                        else None
+                    )
+                )
                 return
-            # Remove vetoed/pre-forget context before any provider receives it.
-            turns = tuple(
-                t
-                for t in source.turns
-                if t.turn_id not in self._vetoed
-                and LearningPolicy.source_allowed(replace(source, turns=(t,)))
-                and (self._window_cutoff is None or t.accepted_at > self._window_cutoff)
-            )
-            if not turns or turns[-1] is not turn:
-                raise PermissionError("stale input")
-            source = replace(
-                source,
-                turns=turns,
-                digest=hashlib.sha256(
-                    json.dumps(
-                        [(t.turn_id, t.text) for t in turns], ensure_ascii=False
-                    ).encode()
-                ).hexdigest(),
-            )
-            if self._queue.full():
-                self._dropped += 1
-                self._report("queue_full")
+            self._route(source, turn, grant)
+        except (ValueError, PermissionError) as exc:
+            self._source_denied(turn, exc, grant)
+
+    def _route(self, source, turn, grant, *, receipt_started=False):
+        """A category privacy control, or an ordinary learning source."""
+        categories = category_veto(source.text)
+        if categories:
+            self._vetoed.add(turn.turn_id)
+            self.invalidate_sources()
+            if any(set(categories) <= set(keys) for keys in self._controls.values()):
+                if receipt_started:
+                    self.receipts.learning_finished(
+                        source.session_id,
+                        source.turn_id,
+                        "category_suppression_pending",
+                    )
+                self._report("category_suppression_pending")
                 return
             self.authority.register_source(grant, source.receipt_id, source=source)
             self._pending[source.receipt_id] = (source, grant)
-            log_learning(self.diagnostics, source, "source", "queued", text=source.text)
+            self._controls[source.receipt_id] = categories
+            if not receipt_started:
+                self.receipts.learning_started(source.session_id, source.turn_id)
             self._enqueue(source.receipt_id)
+            return
+        if not LearningPolicy.source_allowed(source):
+            self._vetoed.add(turn.turn_id)
+            self.invalidate_sources(turn_id=turn.turn_id)
+            log_learning(
+                self.diagnostics, source, "source", "rejected", reason="source_veto"
+            )
+            if receipt_started:
+                self.receipts.learning_finished(
+                    source.session_id, source.turn_id, "source_veto"
+                )
+            self._report("source_veto")
+            return
+        self._admit(source, turn, grant, receipt_started=receipt_started)
+
+    async def _admit_after_evidence(self, evidence, source, turn, grant):
+        """Automatic learning admits only speech scored as the owner: an
+        earlier context turn that is not is removed before any provider sees
+        it, and the source itself is dropped unless it is. Cancellation (on
+        close) finishes the receipt in the task's done callback."""
+        try:
+            for context_turn in source.turns[:-1]:
+                if not evidence.admits_learning(
+                    await evidence.wait(context_turn.turn_id)
+                ):
+                    self._vetoed.add(context_turn.turn_id)
+            result = await evidence.wait(turn.turn_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.receipts.learning_finished(
+                source.session_id, source.turn_id, "speaker_evidence_unavailable"
+            )
+            raise
+        if self._closed:
+            self.receipts.learning_finished(source.session_id, source.turn_id, "closed")
+            return
+        if not evidence.admits_learning(result):
+            self._vetoed.add(turn.turn_id)
+            log_learning(
+                self.diagnostics,
+                source,
+                "source",
+                "rejected",
+                reason="speaker_not_owner",
+                status=result.status.value,
+                score=None if result.score is None else round(result.score, 4),
+            )
+            self.receipts.learning_finished(
+                source.session_id, source.turn_id, "speaker_not_owner"
+            )
+            self._report("speaker_not_owner")
+            return
+        try:
+            self._route(source, turn, grant, receipt_started=True)
         except (ValueError, PermissionError) as exc:
-            state = self.authority.validate(grant)
-            if state.status != "active" and not self._unavailable_reported:
-                self._unavailable_reported = True
-                LOGGER.warning(
-                    "Automatic memory unavailable | state=%s | reason=%s | "
-                    "new memories are not being saved; restart Jarvis and approve Windows Hello",
-                    state.status,
-                    state.reason,
-                )
-            # Canonical assistant turns are expected here; distinguish them from
-            # rejected user sources without changing admission or counters.
-            if self.diagnostics:
-                LOGGER.info(
-                    "Memory source skipped | turn_id=%s | role=%s | reason=%s | error_type=%s",
-                    turn.turn_id,
-                    turn.role.value,
-                    "not_user_turn" if turn.role.value != "user" else "source_denied",
-                    type(exc).__name__,
-                )
+            self.receipts.learning_finished(
+                source.session_id, source.turn_id, "source_denied"
+            )
+            self._source_denied(turn, exc, grant)
+        except Exception:
+            self.receipts.learning_finished(
+                source.session_id, source.turn_id, "learning_error"
+            )
+            LOGGER.exception(
+                "Automatic memory admission failed | turn_id=%s", turn.turn_id
+            )
+
+    def _admit(self, source, turn, grant, *, receipt_started=False):
+        # Remove vetoed/pre-forget context before any provider receives it.
+        turns = tuple(
+            t
+            for t in source.turns
+            if t.turn_id not in self._vetoed
+            and LearningPolicy.source_allowed(replace(source, turns=(t,)))
+            and (self._window_cutoff is None or t.accepted_at > self._window_cutoff)
+        )
+        if not turns or turns[-1] is not turn:
+            raise PermissionError("stale input")
+        source = replace(
+            source,
+            turns=turns,
+            digest=hashlib.sha256(
+                json.dumps(
+                    [(t.turn_id, t.text) for t in turns], ensure_ascii=False
+                ).encode()
+            ).hexdigest(),
+        )
+        if self._queue.full():
             self._dropped += 1
-            self._report("source_denied")
+            if receipt_started:
+                self.receipts.learning_finished(
+                    source.session_id, source.turn_id, "queue_full"
+                )
+            self._report("queue_full")
+            return
+        self.authority.register_source(grant, source.receipt_id, source=source)
+        self._pending[source.receipt_id] = (source, grant)
+        log_learning(self.diagnostics, source, "source", "queued", text=source.text)
+        if not receipt_started:
+            self.receipts.learning_started(source.session_id, source.turn_id)
+        self._enqueue(source.receipt_id)
+
+    def _source_denied(self, turn, exc, grant):
+        state = self.authority.validate(grant)
+        if state.status != "active" and not self._unavailable_reported:
+            self._unavailable_reported = True
+            LOGGER.warning(
+                "Automatic memory unavailable | state=%s | reason=%s | "
+                "new memories are not being saved; restart Jarvis and approve Windows Hello",
+                state.status,
+                state.reason,
+            )
+        # Canonical assistant turns are expected here; distinguish them from
+        # rejected user sources without changing admission or counters.
+        if self.diagnostics:
+            LOGGER.info(
+                "Memory source skipped | turn_id=%s | role=%s | reason=%s | error_type=%s",
+                turn.turn_id,
+                turn.role.value,
+                "not_user_turn" if turn.role.value != "user" else "source_denied",
+                type(exc).__name__,
+            )
+        self._dropped += 1
+        self._report("source_denied")
 
     def _enqueue(self, receipt):
         self._queue.put_nowait(receipt)
@@ -229,14 +373,39 @@ class PersonalLearningRuntime:
                 self._run(), name="jarvis-personal-learning"
             )
 
-    def invalidate_sources(self, category=None, turn_id=None):
-        self.clarifications.clear()
+    def explicit_request_claimed(self, turn_id):
+        """An explicit memory request owns this turn: drop its sources (also
+        in flight) and keep it out of later sources' context. The learning
+        authority refuses any write from it independently of this."""
+        self._vetoed.add(turn_id)
+        self.invalidate_sources(turn_id=turn_id, keep_clarifications=True)
+        self._report("explicit_request")
+
+    def invalidate_sources(
+        self, category=None, turn_id=None, keep_clarifications=False
+    ):
+        inflight = self._pending.get(self._inflight_receipt)
+        inflight_matches = turn_id is None or (
+            inflight is not None
+            and (
+                inflight[0].turn_id == turn_id
+                or any(t.turn_id == turn_id for t in inflight[0].turns)
+            )
+        )
+        if not keep_clarifications:
+            self.clarifications.clear()
         if turn_id is None:
             self._window_cutoff = datetime.now(UTC)
         for receipt, (source, grant) in tuple(self._pending.items()):
             if (turn_id is None or source.turn_id == turn_id) and (
                 self._closed or receipt not in self._controls
             ):
+                if receipt != self._inflight_receipt:
+                    # The in-flight turn is finished by its own worker, with
+                    # anything it already committed.
+                    self.receipts.learning_finished(
+                        source.session_id, source.turn_id, "sources_invalidated"
+                    )
                 self.authority.release_source(grant, receipt)
                 self._pending.pop(receipt, None)
                 self._controls.pop(receipt, None)
@@ -253,8 +422,11 @@ class PersonalLearningRuntime:
         if (
             self._inflight
             and not self._inflight.done()
+            and inflight_matches
             and (self._closed or self._inflight_receipt not in self._controls)
         ):
+            # Only the in-flight source this invalidation is about: claiming
+            # one turn never cancels learning running for another.
             self._inflight.cancel()
         self._report("sources_invalidated")
 
@@ -379,6 +551,7 @@ class PersonalLearningRuntime:
                 grant, suppression_binding(source, categories)
             )
             await self.service.suppress_learning_categories(source, categories, permit)
+            self._turn_ops = [("suppress", category) for category in categories]
             self._report("category_suppressed")
             return
         self._stage = "extraction"
@@ -401,16 +574,17 @@ class PersonalLearningRuntime:
                 source, lambda: self.extractor.extract(source), receipt, grant
             )
         self._require(receipt, source, grant)
-        answered, confirmations, chosen = self._answered(source, batch, open_questions)
+        answered, answers, replaced = self._answered(source, batch, open_questions)
         self._stage = "eligibility"
         suppression = await self.service.learning_suppression()
         self._require(receipt, source, grant)
         eligible = []
         notes, confirmation_questions = [], {}
         proposals = [
-            ground_chosen_plan(source, candidate, chosen)
-            for candidate in batch.candidates
-        ] + confirmations
+            (candidate, ())
+            for index, candidate in enumerate(batch.candidates)
+            if index not in replaced
+        ] + answers
         grounded_count = len(proposals)
         for index, (candidate, questions) in enumerate(proposals):
             grounded = ground_plan_label(source, candidate)
@@ -467,7 +641,14 @@ class PersonalLearningRuntime:
             self._report("no_eligible_fact")
             return
         self._stage = "catalog"
-        catalog = await self.reconciler.catalog(source, batch, grant)
+        targets = {
+            i: questions[0].plan_predicate
+            for i, questions in confirmation_questions.items()
+            if questions[0].plan_predicate is not None
+        }
+        catalog = await self.reconciler.catalog(
+            source, batch, grant, targets=tuple(targets.values())
+        )
         log_learning(
             self.diagnostics, source, "catalog", "loaded", count=len(catalog.entries)
         )
@@ -494,23 +675,42 @@ class PersonalLearningRuntime:
             batch,
             catalog,
             resolutions,
-            confirmation_targets={
-                i: questions[0].plan_predicate
-                for i, questions in confirmation_questions.items()
-                if questions[0].plan_predicate is not None
-            },
+            confirmation_targets=targets,
         )
         committed = {}
         if not plan.mutations and not plan.outcomes:
             log_learning(self.diagnostics, source, "reconciliation", "no_change")
             status = "no_change"
         else:
+            settlement = self._settlements.get(source.session_id)
+            if settlement is not None and plan.mutations:
+                # Hold the write until the reply to this turn is over, so an
+                # explicit memory request in it claims the turn first.
+                self._stage = "reply_settlement"
+                remaining = source.created_monotonic + PROCESSING_BUDGET - self.clock()
+                if not await settlement.wait(source.turn_id, remaining):
+                    log_learning(
+                        self.diagnostics, source, "storage", "reply_not_settled"
+                    )
+                    self._report("reply_not_settled")
+                    return
+                self._require(receipt, source, grant)
+                claimed = getattr(self.authority, "explicitly_claimed", None)
+                if claimed is not None and claimed(source):
+                    log_learning(
+                        self.diagnostics, source, "storage", "explicit_request"
+                    )
+                    self._report("explicit_request")
+                    return
             self._stage = "storage"
             permit = self.authority.issue_child(grant, plan.binding())
             result = await self.service.admit_learning(plan, permit)
             status = result.status
             if status == "committed":
                 self._committed += len(result.assertion_ids)
+                self._turn_ops = [
+                    (m.action, _mutation_label(m, catalog)) for m in plan.mutations
+                ]
                 committed = {
                     m.ordinal: m.predicate
                     for m in plan.mutations
@@ -537,6 +737,18 @@ class PersonalLearningRuntime:
                 ],
             )
 
+        if status == "committed":
+            # A plan that ended (cancelled, completed or withdrawn) leaves
+            # nothing to ask about it.
+            for mutation in plan.mutations:
+                value = mutation.draft.value if mutation.draft is not None else None
+                if mutation.action == "retract" or (
+                    isinstance(value, dict)
+                    and value.get("state") in {"cancelled", "completed"}
+                ):
+                    for note in self.clarifications.pending(source.session_id):
+                        if note.plan_predicate == mutation.predicate:
+                            self.clarifications.close(note)
         by_id = {entry.assertion_id: entry for entry in catalog.entries}
         matched = {i: by_id[aid] for i, aid in plan.matched_plan_ids}
         predicates = {i: entry.predicate for i, entry in matched.items()} | committed
@@ -568,28 +780,26 @@ class PersonalLearningRuntime:
 
     def _answered(self, source, batch, open_questions):
         """The owner's answers to open questions, as the extractor read them.
-        Code decides what each allows: a confirmation of alternatives becomes
-        an ordinary proposal from the owner's original words (then policy,
-        resolution and reconciliation as usual). A proposed choice settles its
-        question through ordinary reconciliation of a clear detail. An answered
-        alternatives question can supply its grounded identity when the model
-        paraphrases both identity fields; its canonical target stays binding."""
+
+        Code decides what each allows. Confirmed alternatives and checked
+        choices become one proposal per plan, from the question's own identity
+        and the owner's original words plus the current turn
+        (:func:`answer_candidate`); it must then reconcile to the question's
+        canonical plan. The extractor's own proposal of the same answer is
+        replaced (``replaced``: its batch indices), so a paraphrased name or a
+        missing earlier citation cannot block or duplicate it. An answer code
+        cannot check stores nothing and leaves its question open.
+
+        Returns ``(answered, [(candidate, questions)], replaced)``."""
         by_id = {n.question_id: n for n in open_questions}
-        answered, groups, chosen = [], {}, []
+        current = next(
+            (t.text for t in source.turns if t.turn_id == source.turn_id), ""
+        )
+        answered, confirmed, chosen = [], [], []
         for answer in batch.answers:
             note = by_id.pop(answer.question_id, None)
             if note is None:
                 continue
-            if answer.answer == "confirmed" and note.kind == ALTERNATIVES:
-                # A turn may explicitly confirm multiple questions from one
-                # proposal. Reconcile them together as one plan mutation.
-                groups.setdefault((id(note.candidate), note.plan_predicate), []).append(
-                    note
-                )
-            elif answer.answer == "chosen" and note.details:
-                chosen.append(note)
-            else:
-                answered.append(note)
             log_learning(
                 self.diagnostics,
                 source,
@@ -599,12 +809,60 @@ class PersonalLearningRuntime:
                 answer=answer.answer,
                 details=list(note.details),
             )
-        confirmations = [
-            (candidate, questions)
-            for questions in groups.values()
-            if (candidate := confirmation_candidate(source, questions)) is not None
-        ]
-        return answered, confirmations[: 8 - len(batch.candidates)], chosen
+            if answer.answer in {"confirmed", "chosen"} and not has_statement(current):
+                # A question back is not an answer, whatever the reading.
+                self._unusable(source, note, "question_not_answer")
+            elif answer.answer == "confirmed" and note.kind == ALTERNATIVES:
+                confirmed.append(note)
+            elif answer.answer == "chosen" and note.details:
+                chosen.append(note)
+            else:
+                answered.append(note)
+        values, refused = chosen_values(source, chosen, batch.candidates)
+        for note, reason in refused:
+            self._unusable(source, note, reason)
+        replaced = {
+            index
+            for index, candidate in enumerate(batch.candidates)
+            if answers_the_question(source, candidate, chosen, values)
+        }
+        groups: dict[object, tuple[list, list]] = {}
+
+        def group(note):
+            key = note.plan_predicate or ("proposal", id(note.candidate))
+            return groups.setdefault(key, ([], []))
+
+        for note in confirmed:
+            group(note)[0].append(note)
+        for note in chosen:
+            if note.question_id in values:
+                group(note)[1].append((note, values[note.question_id]))
+        answers = []
+        room = 8 - len(batch.candidates) + len(replaced)
+        for confirms, picks in groups.values():
+            questions = [*confirms, *(n for n, _ in picks)]
+            candidate, reason = answer_candidate(source, confirms, picks)
+            if candidate is not None and len(answers) >= room:
+                candidate, reason = None, "too_many_proposals"
+            if candidate is None:
+                for note in questions:
+                    self._unusable(source, note, reason)
+                continue
+            answers.append((candidate, questions))
+        return answered, answers, replaced
+
+    def _unusable(self, source, note, reason):
+        """An answer that stores nothing: recorded, never claimed; the question
+        stays open in its conversation."""
+        log_learning(
+            self.diagnostics,
+            source,
+            "clarification",
+            "answer_not_used",
+            question=note.kind,
+            details=list(note.details),
+            reason=reason,
+        )
 
     def _publish(self, source, notes, settled, answered=()):
         """After the turn's learning completed: answered questions close;
@@ -651,6 +909,7 @@ class PersonalLearningRuntime:
             try:
                 if item:
                     source, grant = item
+                    self._turn_ops = []
                     self._inflight_receipt = receipt
                     self._inflight = asyncio.create_task(
                         self._process(receipt, source, grant)
@@ -698,6 +957,13 @@ class PersonalLearningRuntime:
                     self._processed += 1
             finally:
                 if item:
+                    self.receipts.learning_finished(
+                        item[0].session_id,
+                        item[0].turn_id,
+                        self._reason,
+                        self._turn_ops,
+                    )
+                    self._turn_ops = []
                     self.authority.release_source(item[1], receipt)
                 self._pending.pop(receipt, None)
                 self._controls.pop(receipt, None)
@@ -706,6 +972,8 @@ class PersonalLearningRuntime:
                 self._queue.task_done()
 
     async def drain(self):
+        while self._admissions:
+            await asyncio.gather(*tuple(self._admissions), return_exceptions=True)
         await self._queue.join()
 
     async def close(self):
@@ -721,6 +989,12 @@ class PersonalLearningRuntime:
             self._queue.task_done()
         self._seen.clear()
         self._vetoed.clear()
+        admissions = tuple(self._admissions)
+        for task in admissions:
+            task.cancel()
+        # Their done callbacks finish the receipts of turns still awaiting
+        # speaker evidence.
+        await asyncio.gather(*admissions, return_exceptions=True)
         for adapter in {
             id(self.extractor): self.extractor,
             id(self.resolver): self.resolver,

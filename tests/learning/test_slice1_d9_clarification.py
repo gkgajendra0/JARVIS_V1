@@ -891,6 +891,15 @@ def test_reply_instructions_explain_the_note_and_forbid_storage_claims():
     assert "Do not say anything was or was not saved" in flat
 
 
+def test_list_instructions_page_on_when_the_list_itself_was_asked():
+    from jarvis.voice.agent import PERSONAL_LEARNING_QUERY_INSTRUCTIONS as text
+
+    flat = " ".join(text.split())
+    assert "When the owner asked for the list itself, continue" in flat
+    assert "until the list is complete or no more pages remain" in flat
+    assert "when the list only supports another request" in flat
+
+
 @pytest.mark.asyncio
 async def test_live_session_wiring_offers_notes_only_while_that_session_is_open():
     module = pytest.importorskip("jarvis.voice.canonical_active_speaker_runtime")
@@ -1170,18 +1179,14 @@ async def test_confirmation_cannot_create_a_second_plan_when_referred_to_by_alia
     (question,) = lab.seen
     confirm = "Yes, still deciding between both vehicles."
     lab.script.answers[confirm] = [("confirmed", "vehicle")]
-    # A resolver that calls the shorter name a new plan must not create one.
+    # A resolver that calls the shorter name a new plan cannot create one: the
+    # answer is bound by code to the plan the question was asked about.
     await lab.say(confirm)
     (plan,) = await lab.plans()
     assert plan["label"] == "winter Spiti trip"
-    assert "vehicle" not in plan.get("slots", {})
-    assert lab.runtime.clarifications.pending(lab.conversation.session_id) == [question]
-
-    lab.resolver.targets[confirm] = "winter Spiti trip"
-    await lab.say(confirm)
-    (plan,) = await lab.plans()
     assert plan["slots"]["vehicle"]["options"] == ["Thar", "Jimny"]
     assert lab.runtime.clarifications.pending(lab.conversation.session_id) == []
+    assert question.plan_predicate is not None
 
 
 @pytest.mark.asyncio

@@ -23,7 +23,11 @@ from livekit.agents.llm import ChatMessage
 from livekit.agents.voice.io import PlaybackFinishedEvent
 
 from jarvis.config import JarvisConfig
-from jarvis.conversation import ConversationSession, ConversationStatus
+from jarvis.conversation import (
+    ConversationRole,
+    ConversationSession,
+    ConversationStatus,
+)
 from jarvis.dev_control import DevControlClient, parse_explicit_update_decision
 from jarvis.identity.active_speaker import (
     ActiveSpeakerVisualBuffer,
@@ -122,6 +126,23 @@ def restrict_tools(tools: list, allowlist: frozenset[str] | None) -> list:
         withheld,
     )
     return kept
+
+
+def canonical_user_turn_id(conversation, item) -> str | None:
+    """The accepted canonical USER turn a Gemini user item belongs to: the
+    same external item id, else the latest USER turn with the same text."""
+    if conversation is None:
+        return None
+    item_id = getattr(item, "id", None)
+    text = item.text_content.strip()
+    for candidate in reversed(conversation.turns):
+        if candidate.role is not ConversationRole.USER:
+            continue
+        if item_id and candidate.external_item_id == item_id:
+            return candidate.turn_id
+        if candidate.text == text:
+            return candidate.turn_id
+    return None
 
 
 class VoiceRuntimeController:
@@ -578,13 +599,21 @@ class VoiceRuntimeController:
             quality_accepted=quality.accepted,
         )
 
+    def _speaker_evidence_unavailable(
+        self, conversation_turn_id: str | None, reason: str
+    ) -> None:
+        """No speaker evidence can be produced for this turn (base: no-op)."""
+        del conversation_turn_id, reason
+
     async def _inspect_shadow_turn(
         self,
         turn: SpeakerTurnAudio,
         *,
         audio_turn_id: str,
         active_speaker_turn: SpeakerTurnAudio | None = None,
+        conversation_turn_id: str | None = None,
     ) -> None:
+        del conversation_turn_id
         analysis_turn = turn
         speech_segments = 0
         speaker_region_available = True
@@ -1040,11 +1069,12 @@ class VoiceRuntimeController:
         session.output.audio = session_output
         has_user_turn = False
 
-        def submit_shadow_turn() -> None:
+        def submit_shadow_turn(conversation_turn_id: str | None = None) -> None:
             if turn_capture is None:
                 return
             turn = turn_capture.snapshot_recent_audio()
             if turn is None:
+                self._speaker_evidence_unavailable(conversation_turn_id, "no_audio")
                 return
             active_speaker_turn = (
                 paired_turn_capture.snapshot_recent_audio()
@@ -1054,7 +1084,11 @@ class VoiceRuntimeController:
             audio_turn_id = str(uuid.uuid4())
             if paired_turn_capture is None:
                 task = asyncio.create_task(
-                    self._inspect_shadow_turn(turn, audio_turn_id=audio_turn_id),
+                    self._inspect_shadow_turn(
+                        turn,
+                        audio_turn_id=audio_turn_id,
+                        conversation_turn_id=conversation_turn_id,
+                    ),
                     name=f"jarvis-speaker-shadow-{audio_turn_id[:8]}",
                 )
             else:
@@ -1063,6 +1097,7 @@ class VoiceRuntimeController:
                         turn,
                         audio_turn_id=audio_turn_id,
                         active_speaker_turn=active_speaker_turn,
+                        conversation_turn_id=conversation_turn_id,
                     ),
                     name=f"jarvis-speaker-shadow-{audio_turn_id[:8]}",
                 )
@@ -1280,7 +1315,9 @@ class VoiceRuntimeController:
             has_user_turn = True
             self._note_committed_user_turn()
             self._cancel_timeout()
-            submit_shadow_turn()
+            submit_shadow_turn(
+                canonical_user_turn_id(getattr(bridge, "conversation", None), item)
+            )
 
         def on_playback_finished(event: PlaybackFinishedEvent) -> None:
             nonlocal standby_playback_finished, session_success_observed

@@ -104,8 +104,12 @@ def paging_section(projection, *, page, token, omitted_scopes):
             f"Partial list: {projection.total} saved, items "
             f"{projection.offset + 1}-{released_through} released so far. Say the "
             f"list is partial (for example '{projection.total} saved; here are "
-            f"{released_through}'). To continue, call read_personal_context_for_question "
-            "again with the same requests and this page_token, or ask the owner to narrow."
+            f"{released_through}'). When the owner asked for this list itself, "
+            "continue before answering: call read_personal_context_for_question "
+            "again with the same requests and this page_token until the list is "
+            "complete or no more pages remain for this question. When the list only "
+            "supports another request (advice, a choice), you may instead answer "
+            "from it and ask the owner to narrow."
         )
     elif projection.next_offset is not None:
         rule = (

@@ -907,8 +907,13 @@ def _driver_model(tools):
         model_config = ConfigDict(extra="forbid")
         forget_memory: _ChangeArgs
 
+    class _Status(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        memory_status: _CatalogArgs
+
     variants = [_Answer]
     table = {
+        "memory_status": _Status,
         "read_personal_context_for_question": _Read,
         "personal_context_catalog": _Catalog,
         "read_personal_context": _Facets,
@@ -963,6 +968,7 @@ def tool_descriptions(names):
         "remember_memory": doc(MemoryAgentTools.remember_memory),
         "correct_memory": doc(MemoryAgentTools.correct_memory),
         "forget_memory": doc(MemoryAgentTools.forget_memory),
+        "memory_status": doc(MemoryAgentTools.memory_status),
     }
     return {name: known[name] for name in names}
 
@@ -1103,6 +1109,8 @@ class TextDriver:
         learning_notes=(),
     ):
         tools = ["read_personal_context_for_question"]
+        if getattr(memory_tools, "_receipts", None) is not None:
+            tools.append("memory_status")
         if explicit:
             tools += [
                 "personal_context_catalog",
@@ -1198,14 +1206,17 @@ class TextDriver:
                 return await personal.read(
                     arguments["catalog_id"], arguments["facet_indices"]
                 )
+            if name == "memory_status":
+                # Learning has already finished when the lab driver replies.
+                return await memory_tools.verified_memory_status(wait=0)
             clean = {k: v for k, v in arguments.items() if v is not None}
             if name == "remember_memory":
-                return await memory_tools.remember(**clean)
+                return memory_tools._record(await memory_tools.remember(**clean))
             if name == "correct_memory":
-                return await memory_tools.correct(**clean)
+                return memory_tools._record(await memory_tools.correct(**clean))
             if name == "forget_memory":
                 clean.pop("value", None)
-                return await memory_tools.forget(**clean)
+                return memory_tools._record(await memory_tools.forget(**clean))
         except _EXPECTED_MEMORY_ERRORS as exc:
             return {"ok": False, "error": type(exc).__name__, "message": str(exc)}
         except PermissionError as exc:
@@ -1246,6 +1257,7 @@ class AcceptanceRunner:
         retry_interrupted=False,
         stop_after=None,
         stop_on_failure=False,
+        stop_on="any",
         recover_d17_consent=False,
         groups_map=None,
         checks_map=None,
@@ -1262,6 +1274,11 @@ class AcceptanceRunner:
         self.retry_interrupted = retry_interrupted
         self.stop_after = stop_after
         self.stop_on_failure = stop_on_failure
+        # "any": a FAIL or UNTESTED case stops (the default); "invariant": only
+        # a failed safety invariant stops, quality failures are measured.
+        if stop_on not in {"any", "invariant"}:
+            raise ValueError("stop_on must be 'any' or 'invariant'")
+        self.stop_on = stop_on
         self.recover_d17_consent = recover_d17_consent
         if recover_d17_consent:
             self.stop_after = D17_RECOVERY_STEPS[-1]
@@ -1276,7 +1293,12 @@ class AcceptanceRunner:
         # The latest result per case decides. A case can only have a newer
         # result than a recorded failure through an explicit recovery.
         for case, row in self._latest_cases().items():
-            if case not in ignore and row["status"] in {FAIL, UNTESTED}:
+            if case in ignore:
+                continue
+            if self.stop_on == "invariant":
+                if _invariant_failed(row.get("checks") or ()):
+                    return row
+            elif row["status"] in {FAIL, UNTESTED}:
                 return row
         return None
 
@@ -1483,7 +1505,7 @@ class AcceptanceRunner:
             elif isinstance(step, Say):
                 record = await context.say(step, self.log)
             else:
-                checks = await self.checks[step.case](context, self.log)
+                checks = _tiered(await self.checks[step.case](context, self.log))
                 status = _overall(checks)
                 self.log.case(
                     {
@@ -1505,7 +1527,11 @@ class AcceptanceRunner:
                         "case_status": status,
                     }
                 )
-                if self.stop_on_failure and status in {FAIL, UNTESTED}:
+                if self.stop_on_failure and (
+                    _invariant_failed(checks)
+                    if self.stop_on == "invariant"
+                    else status in {FAIL, UNTESTED}
+                ):
                     failed = {"case": step.case, "step_id": step.id, "status": status}
                     self.write_summary(stopped=failed)
                     raise AcceptanceStoppedOnFailure(
@@ -1627,6 +1653,17 @@ class AcceptanceRunner:
                 for c in row["checks"]
                 if c["status"] == SUPERSEDED
             ],
+            "tiers": _tier_summary(
+                cases, missing=[c for c in self.planned if c not in cases]
+            ),
+            # Replies that described a memory change in their own words, and
+            # the receipt sentence spoken instead.
+            "memory_claims": [
+                {"step_id": e.get("step_id"), "case": e.get("case"), **e["correction"]}
+                for e in self.log.read(self.log.events)
+                if e.get("kind") == "reply" and e.get("correction")
+            ],
+            "stop_on": self.stop_on,
             "answer_quality": "manual_review_required",
             "retry_policy": policy_summary(),
             "provider_reliability": provider_reliability(
@@ -1716,6 +1753,85 @@ def provider_reliability(events):
     return summary
 
 
+# Deterministic safety and integrity guarantees that code enforces whatever
+# the model says: consent, forgetting, history, isolation of unrelated facts,
+# pending alternatives, release and paging correctness. A failure here is
+# investigated at once. Every other check measures model quality (what the
+# model understood or chose): it is recorded as a rate, and its failure is a
+# known limitation unless it repeats in real use (owner rule, 27 November).
+INVARIANT_CHECKS = frozenset(
+    {
+        "2 sources",
+        "3 distinct sources",
+        "90+ standard rows, no overflow",
+        "A not retracted",
+        "A validity unchanged",
+        "Tigor and Jimny facts and evidence intact",
+        "changes superseded with unknown or known effective time",
+        "complete false",
+        "complete false on first page",
+        "every current row has a source",
+        "every page bound to the same question permit",
+        "first page released <= 8",
+        "history row keeps the options",
+        "lineage gone",
+        "more_remaining with total 40",
+        "no destination options stored before confirmation",
+        "no evidence text names Classic 350",
+        "no orphan sources",
+        "no plural record",
+        "no residual in any personal-memory store",
+        "no truncated item",
+        "old row retracted",
+        "old row superseded, valid_to NULL",
+        "owned items unchanged",
+        "page ends by bytes (fewer than 6, <= 3000 bytes)",
+        "refine predecessors superseded, validity untouched",
+        "release date_status passed_outcome_unknown",
+        "released evidence: owner's words and told date, apart from recorded_at",
+        "seeded combined record unchanged",
+        "skip recorded with reason",
+        "the new conversation carries no old question",
+        "total 11",
+        "total 45 plans, complete reported truthfully",
+    }
+)
+
+
+# D17's forget stages: the code failed (invariant) or the model did not pick
+# the item / the owner did not approve (deletion never reached: quality).
+_CODE_FORGET_STAGES = frozenset(
+    {"forget_operation_failed", "deleted_but_residual_remains"}
+)
+_DELETION_CHECKS = frozenset({"lineage gone", "no evidence text names Classic 350"})
+
+
+def _tiered(checks):
+    stage = next(
+        (
+            (c.get("detail") or {}).get("failed_stage")
+            for c in checks
+            if c.get("check") == "forget gate (stage diagnosis)"
+        ),
+        "absent",
+    )
+    for check in checks:
+        name = check.get("check")
+        invariant = name in INVARIANT_CHECKS
+        if (
+            name == "forget gate (stage diagnosis)"
+            or name in _DELETION_CHECKS
+            and stage not in {None, "absent"}
+        ):
+            invariant = stage in _CODE_FORGET_STAGES
+        check["tier"] = "invariant" if invariant else "quality"
+    return checks
+
+
+def _invariant_failed(checks):
+    return any(c.get("tier") == "invariant" and c.get("status") == FAIL for c in checks)
+
+
 def _overall(checks):
     statuses = {c["status"] for c in checks} - {SUPERSEDED}
     if FAIL in statuses:
@@ -1725,6 +1841,62 @@ def _overall(checks):
     if REVIEW in statuses:
         return REVIEW
     return PASS
+
+
+def _tier_summary(cases, missing=()):
+    """Invariants (each must hold) apart from quality measurements (rates).
+    ``missing``: planned cases that did not run."""
+    invariant_fail, invariant_untested, invariant_review = [], [], []
+    invariant_pass = 0
+    untested_cases = [case for case, row in cases.items() if row["status"] == UNTESTED]
+    quality = {PASS: 0, FAIL: 0, REVIEW: 0, UNTESTED: 0}
+    quality_fail = []
+    for case, row in cases.items():
+        for check in row["checks"]:
+            status = check.get("status")
+            if status == SUPERSEDED:
+                continue
+            tier = check.get("tier") or (
+                "invariant" if check.get("check") in INVARIANT_CHECKS else "quality"
+            )
+            if tier == "invariant":
+                if status == FAIL:
+                    invariant_fail.append({"case": case, "check": check["check"]})
+                elif status == PASS:
+                    invariant_pass += 1
+                elif status == REVIEW:
+                    invariant_review.append({"case": case, "check": check["check"]})
+                else:
+                    invariant_untested.append({"case": case, "check": check["check"]})
+            else:
+                quality[status] = quality.get(status, 0) + 1
+                if status == FAIL:
+                    quality_fail.append({"case": case, "check": check["check"]})
+    graded = quality[PASS] + quality[FAIL]
+    return {
+        "invariants": {
+            "passed": invariant_pass,
+            "failed": invariant_fail,
+            # Not checked: an invariant left UNTESTED, or a case whose missing
+            # prerequisite left its checks unrun. Never reported as PASS.
+            "untested": invariant_untested,
+            "untested_cases": untested_cases,
+            # Needs the owner's decision before it counts as passing.
+            "review": invariant_review,
+            "verdict": FAIL
+            if invariant_fail
+            else UNTESTED
+            if invariant_untested or untested_cases or missing
+            else REVIEW
+            if invariant_review
+            else PASS,
+        },
+        "quality": {
+            **{k.lower(): v for k, v in quality.items()},
+            "failed_checks": quality_fail,
+            "automatic_pass_rate": round(quality[PASS] / graded, 3) if graded else None,
+        },
+    }
 
 
 class ConsentRecorder:
@@ -2057,7 +2229,10 @@ class _GroupContext:
             learning_grant=self.deps.learning_grant,
         )
         tools = MemoryAgentTools(
-            self.memory.service, self.conversation, personal_context=personal
+            self.memory.service,
+            self.conversation,
+            personal_context=personal,
+            receipts=self.learning.receipts,
         )
         driver = TextDriver(
             self.deps.driver_client,
@@ -2077,12 +2252,30 @@ class _GroupContext:
             )
         finally:
             personal.close()
+        correction = None
         if answer:
             self.conversation.accept_at(
                 ConversationRole.ASSISTANT, answer, step.told_at + timedelta(seconds=5)
             )
+            # The live check (jarvis.voice.memory_claims), with the turn's
+            # learning already finished: any memory statement other than a
+            # receipt sentence Jarvis was given is replaced by the receipt
+            # (here in code; live, Jarvis speaks it).
+            from jarvis.voice.memory_claims import unverified_statements
+
+            session = self.conversation.session_id
+            statements = unverified_statements(
+                answer, self.learning.receipts.issued(session, turn.turn_id), final=True
+            )
+            if statements:
+                correction = {
+                    "statements": statements,
+                    "spoken": self.learning.receipts.say(session, [turn.turn_id]),
+                }
+                learning["memory_claim_check"] = correction
         self.replies[step.id] = {
             "answer": answer,
+            "correction": correction,
             "tools": results,
             "learning": learning,
         }
@@ -2095,6 +2288,7 @@ class _GroupContext:
                 "utterance": step.text,
                 "told_at": step.told_at.isoformat(),
                 "answer": answer,
+                "correction": correction,
                 "tools": results,
                 "learning": learning,
             }
@@ -3066,10 +3260,16 @@ async def check_d15(context, log):
     reached = bool(plan_released) or in_context
     unrelated = [f.get("text") for f in released if f not in plan_released]
     answer = reply.get("answer") or ""
-    recommends_other = re.search(
-        r"\b(classic|enfield|tigor)\b[^.]*\b(best|better|behtar|recommend)",
-        answer,
-        re.IGNORECASE,
+    # A sentence recommending another vehicle without naming the decided one
+    # contradicts the plan. A comparison naming both ("the Classic 350 ...
+    # but the Jimny ... much better") cannot be read reliably by a pattern:
+    # it is flagged for the manual review below, never auto-failed (eea8eea5
+    # lab: a correct Jimny answer was failed this way).
+    other = r"\b(classic|enfield|tigor)\b[^.!?]*\b(best|better|behtar|recommend)"
+    sentences = re.split(r"(?<=[.!?])\s+", answer)
+    recommends_other = any(
+        re.search(other, s, re.IGNORECASE) and vehicle.casefold() not in s.casefold()
+        for s in sentences
     )
     return [
         _check(
@@ -3103,6 +3303,10 @@ async def check_d15(context, log):
             (
                 ("mentions Jimny", r"jimny"),
                 ("re-asks", r"which vehicles do you|what vehicles do you"),
+                (
+                    "compares with another vehicle (check which is recommended)",
+                    r"\b(classic|enfield|tigor)\b[^.!?]*\b(best|better|behtar|recommend)",
+                ),
             ),
         ),
     ]

@@ -20,8 +20,8 @@ from pathlib import Path
 
 # The ONLY tools Gemini can see or call in each lab mode, enforced in code by
 # VoiceRuntimeController (restrict_tools). Hands, desktop/file control,
-# capability acquisition, research, work, vision and canonical-memory tools are
-# all withheld; their internal authority services still run for Hello/SQLCipher.
+# capability acquisition, research, work and vision are withheld. Canonical
+# memory operations are opt-in below; authority services still enforce consent.
 BASELINE_TOOLS = frozenset({"enter_standby"})
 # Project memory's own tools: context, older-history search and forgetting.
 PROJECT_TOOLS = frozenset(
@@ -43,10 +43,25 @@ PERSONAL_READ_TOOLS = frozenset(
 )
 
 
-def lab_tool_allowlist(*, baseline: bool, personal: bool = False) -> frozenset[str]:
+# --personal-learning with --personal-context only: production receipt/status
+# and explicit personal operations. These are the original governed tools:
+# explicit mutations still require current user intent and fresh Windows Hello.
+PERSONAL_LEARNING_TOOLS = frozenset(
+    {"memory_status", "remember_memory", "correct_memory", "forget_memory"}
+)
+
+
+def lab_tool_allowlist(
+    *, baseline: bool, personal: bool = False, learning: bool = False
+) -> frozenset[str]:
     if baseline:
         return BASELINE_TOOLS
-    return PROJECT_MEMORY_TOOLS | (PERSONAL_READ_TOOLS if personal else frozenset())
+    allowed = PROJECT_MEMORY_TOOLS
+    if personal:
+        allowed |= PERSONAL_READ_TOOLS
+        if learning:
+            allowed |= PERSONAL_LEARNING_TOOLS
+    return allowed
 
 
 def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
@@ -71,7 +86,43 @@ def managed_tool_path(source_profile: Path, environ=None) -> Path | None:
     return candidate
 
 
-def voice_lab_config(config, *, personal: bool = False):
+SPEAKER_EVIDENCE_THRESHOLD = 0.45  # experimental; kept fixed for evaluation
+
+
+def prepare_speaker_evidence(source_profile: Path, lab: Path, environ=None) -> dict:
+    """Use the owner's enrolled voice template in this lab without touching
+    the live store: copy the identity database into the lab (the live file is
+    only read) and point the speaker model at the installed CAM++ file. A
+    missing template or model refuses the run (no download)."""
+    import shutil
+
+    from jarvis.identity.speaker_assets import CAMPP_MODEL_FILENAME
+
+    env = os.environ if environ is None else environ
+    state = Path(source_profile).resolve().parent
+    identity = state / "identity" / "owner_identity.db"
+    model = state / "models" / "speaker" / CAMPP_MODEL_FILENAME
+    if not identity.is_file():
+        raise RuntimeError(f"enrolled owner identity store not found: {identity}")
+    if not model.is_file():
+        raise RuntimeError(f"installed speaker model not found: {model}")
+    copy_dir = Path(lab).resolve() / "identity"
+    copy_dir.mkdir(parents=True, exist_ok=True)
+    copy = copy_dir / "owner_identity.db"
+    if not copy.exists():
+        shutil.copy2(identity, copy)
+    env["JARVIS_IDENTITY_DATA_DIR"] = str(copy_dir)
+    env["JARVIS_SPEAKER_MODEL_PATH"] = str(model)
+    return {"identity_copy": copy, "model": model}
+
+
+def voice_lab_config(
+    config,
+    *,
+    personal: bool = False,
+    speaker_evidence: bool = False,
+    speaker_evidence_observe: bool = False,
+):
     """``personal`` turns on saved personal context as production's
     ``--personal-learning apply`` does (the startup learning session, which
     grants question-bound reads), against this lab's isolated memory only.
@@ -95,7 +146,19 @@ def voice_lab_config(config, *, personal: bool = False):
         chatgpt_plan_enabled=False,
         show_transcript=True,
         vision_enabled=False,
-        speaker_shadow_enabled=False,
+        # --speaker-evidence: the enrolled-speaker score per transcript, with
+        # the R2-D candidates enforced in this lab only (normal Jarvis keeps
+        # them off).
+        # --speaker-evidence-observe: scored and logged per transcript, nothing
+        # enforced and the follow-up window unchanged (measurement runs).
+        speaker_shadow_enabled=speaker_evidence or speaker_evidence_observe,
+        speaker_evidence_enforcement=speaker_evidence,
+        follow_up_window_bounded=speaker_evidence,
+        speaker_owner_min_cosine=(
+            SPEAKER_EVIDENCE_THRESHOLD
+            if speaker_evidence or speaker_evidence_observe
+            else config.speaker_owner_min_cosine
+        ),
         active_speaker_shadow_enabled=False,
         pocket3_native_tracking_enabled=False,
         # Free credential lane only: the isolated lab never spends paid budget.
@@ -169,7 +232,7 @@ async def run_voice_lab(
     allowlist = (
         None
         if qualification
-        else lab_tool_allowlist(baseline=baseline, personal=personal)
+        else lab_tool_allowlist(baseline=baseline, personal=personal, learning=learning)
     )
     meter = VoiceUsageMeter(
         lab / "voice-usage.jsonl",
@@ -271,13 +334,34 @@ def main():
         action="store_true",
         help="With --personal-context: keep production's automatic personal "
         "learning on, so facts the owner states are learned into this lab's "
-        "memory (still no memory write tools for the model).",
+        "memory; also expose production memory_status and explicit "
+        "remember/correct/forget tools with their existing consent checks.",
+    )
+    parser.add_argument(
+        "--speaker-evidence",
+        action="store_true",
+        help="With --personal-context: score each transcript against the owner's "
+        "enrolled voice (template copied into the lab) and enforce the R2-D "
+        f"candidates in this lab only: speaker evidence at {SPEAKER_EVIDENCE_THRESHOLD} "
+        "and the bounded follow-up window.",
+    )
+    parser.add_argument(
+        "--speaker-evidence-observe",
+        action="store_true",
+        help="As --speaker-evidence, but nothing is enforced and the follow-up "
+        "window is unchanged: each transcript's speaker score is only logged.",
     )
     args = parser.parse_args()
     if args.personal_context and args.baseline:
         parser.error("--personal-context needs project memory (no --baseline)")
     if args.personal_learning and not args.personal_context:
         parser.error("--personal-learning needs --personal-context")
+    if args.speaker_evidence and not args.personal_context:
+        parser.error("--speaker-evidence needs --personal-context")
+    if args.speaker_evidence_observe and not args.personal_context:
+        parser.error("--speaker-evidence-observe needs --personal-context")
+    if args.speaker_evidence and args.speaker_evidence_observe:
+        parser.error("choose --speaker-evidence or --speaker-evidence-observe")
     if args.qualification and (args.baseline or not args.record_diagnostics):
         parser.error("--qualification needs project memory and --record-diagnostics")
     if os.name != "nt":
@@ -304,6 +388,18 @@ def main():
     )
     lab = profile.parent
     with project_lab_environment(profile, repo):
+        speaker = None
+        if args.speaker_evidence or args.speaker_evidence_observe:
+            from jarvis.identity.speaker_shadow import (
+                SpeakerShadowRuntimeError,
+                build_default_enrolled_speaker_observer,
+            )
+
+            try:
+                paths = prepare_speaker_evidence(args.profile, lab)
+                speaker = build_default_enrolled_speaker_observer()
+            except (RuntimeError, SpeakerShadowRuntimeError) as exc:
+                parser.error(f"speaker evidence unavailable: {exc}")
         database = require_isolated_memory(lab)
         lock = (lab / "project-memory.lock").open("a+b")
         lock.write(b"0")
@@ -316,7 +412,10 @@ def main():
             parser.error("another lab process owns this lab; close it first")
         try:
             config = voice_lab_config(
-                JarvisConfig.from_environment(), personal=args.personal_context
+                JarvisConfig.from_environment(),
+                personal=args.personal_context,
+                speaker_evidence=args.speaker_evidence,
+                speaker_evidence_observe=args.speaker_evidence_observe,
             )
             configure_logging(config.log_level, jsonl_path=lab / "voice-lab.jsonl")
             require_startup_preflight(config)
@@ -335,7 +434,9 @@ def main():
                     + ", ".join(
                         sorted(
                             lab_tool_allowlist(
-                                baseline=args.baseline, personal=args.personal_context
+                                baseline=args.baseline,
+                                personal=args.personal_context,
+                                learning=args.personal_learning,
                             )
                         )
                     )
@@ -344,6 +445,22 @@ def main():
             print(
                 "Normal wake word, barge-in and Gemini Live. Free lane only; no Paid fallback."
             )
+            if speaker is not None:
+                print(
+                    "SPEAKER EVIDENCE (lab only): enrolled owner voice template loaded "
+                    f"({speaker.template.prototype_count} prototypes, model "
+                    f"{speaker.template.model_id}); copy {paths['identity_copy']}. "
+                    f"Threshold {config.speaker_owner_min_cosine:.2f}, enforcement "
+                    + (
+                        "ON"
+                        if config.speaker_evidence_enforcement
+                        else "OFF (observe only)"
+                    )
+                    + ", bounded follow-up window "
+                    + ("ON" if config.follow_up_window_bounded else "OFF")
+                    + ". Each transcript's status is logged as "
+                    "'Speaker evidence | turn_id=...'."
+                )
             if not args.baseline:
                 print(
                     "Approve Windows Hello for project history"

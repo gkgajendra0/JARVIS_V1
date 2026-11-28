@@ -248,3 +248,46 @@ async def test_local_only_memory_is_not_released_by_provider_facing_inspect(
     finally:
         await reader.close()
         await writer.close()
+
+
+@pytest.mark.asyncio
+async def test_personal_learning_lab_exposes_real_production_memory_tools(tmp_path):
+    from jarvis.memory.memory_receipts import MemoryReceipts
+    from jarvis.voice.project_voice_lab import lab_tool_allowlist
+    from jarvis.voice.runtime import restrict_tools
+
+    service, writer, reader = _service(tmp_path / "lab-tools.db")
+    try:
+        tools = MemoryAgentTools(
+            service,
+            _conversation("Did you save that?"),
+            personal_context=object(),
+            receipts=MemoryReceipts(),
+        ).tools
+        kept = restrict_tools(
+            tools, lab_tool_allowlist(baseline=False, personal=True, learning=True)
+        )
+        assert {tool.id for tool in kept} == {
+            "memory_status",
+            "remember_memory",
+            "correct_memory",
+            "forget_memory",
+        }
+        assert all(any(tool is original for original in tools) for tool in kept)
+        for baseline, personal, learning in (
+            (True, True, True),
+            (False, True, False),
+            (False, False, True),
+        ):
+            assert (
+                restrict_tools(
+                    tools,
+                    lab_tool_allowlist(
+                        baseline=baseline, personal=personal, learning=learning
+                    ),
+                )
+                == []
+            )
+    finally:
+        await reader.close()
+        await writer.close()

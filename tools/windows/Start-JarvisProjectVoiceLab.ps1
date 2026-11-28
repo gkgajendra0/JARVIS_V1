@@ -20,8 +20,16 @@ param(
     # -SeedVoiceEval first.
     [switch]$PersonalContext,
     # With -PersonalContext: keep production's automatic learning on (learned
-    # facts go into this lab's memory only).
+    # facts go into this lab's memory only); also expose production receipt/status
+    # and explicit memory tools, retaining their existing authorization checks.
     [switch]$PersonalLearning,
+    # With -PersonalContext: score each transcript against the enrolled owner voice
+    # (template copied into the lab) and enforce the R2-D candidates in the lab only.
+    [switch]$SpeakerEvidence,
+    # As -SpeakerEvidence, but observe only: scores logged, nothing enforced.
+    [switch]$SpeakerEvidenceObserve,
+    # After a -RecordDiagnostics run: rescore its utterances (numbers only).
+    [switch]$RescoreSpeakerEvidence,
     # Decrypt the latest diagnostics run into a local HTML report (no voice run).
     [switch]$DiagnosticsReport,
     # Delete all diagnostics recordings, records and reports of this lab.
@@ -46,6 +54,17 @@ if ($GradeQualification) {
         $env:PYTHONPATH = Join-Path $source "src"
         & $python -X utf8 -m jarvis.voice.project_voice_qualification --lab-root $profile
         if ($LASTEXITCODE -ne 0) { throw "Qualification grading failed." }
+    } finally { $env:PYTHONPATH = $oldPath }
+    return
+}
+if ($RescoreSpeakerEvidence) {
+    if (-not (Test-Path (Join-Path $profile "project-memory.marker") -PathType Leaf)) { throw "Marked profile unavailable." }
+    $oldPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = Join-Path $source "src"
+        $out = & $python -X utf8 -m jarvis.voice.speaker_evidence_rescore --lab-root $profile
+        if ($LASTEXITCODE -ne 0) { throw "Speaker evidence rescoring failed." }
+        Write-Host ("Scores only (no audio): {0}" -f $out)
     } finally { $env:PYTHONPATH = $oldPath }
     return
 }
@@ -89,6 +108,8 @@ try {
     if ($ToolOnlyMemory) { $arguments += "--tool-only-memory" }
     if ($PersonalContext) { $arguments += "--personal-context" }
     if ($PersonalLearning) { $arguments += "--personal-learning" }
+    if ($SpeakerEvidence) { $arguments += "--speaker-evidence" }
+    if ($SpeakerEvidenceObserve) { $arguments += "--speaker-evidence-observe" }
     if ($Qualification) {
         $arguments += "--qualification"
         if (-not $RecordDiagnostics) { $arguments += "--record-diagnostics" }

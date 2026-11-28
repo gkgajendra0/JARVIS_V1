@@ -88,6 +88,24 @@ def canonical_memory_predicate(value: str) -> str:
     return normalized
 
 
+def _structured_correction(current, predicate, text):
+    """The corrected value of a registered personal-learning text fact, or
+    None for a plain record. Owned items are identified by their label, so an
+    explicit text correction never rewrites one (the learning path owns item
+    changes)."""
+    from jarvis.personal_learning_scope import POLICY_VERSION
+
+    value = current.value
+    if (
+        not isinstance(value, dict)
+        or value.get("schema") != POLICY_VERSION
+        or value.get("category") in {None, "owned_item"}
+        or not predicate.startswith(f"{value.get('category')}_")
+    ):
+        return None
+    return {**value, "value": text}
+
+
 def _text_value(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("memory value must be a string")
@@ -121,6 +139,22 @@ class MemoryService:
         self._learning_authority = None
         self._learning_invalidator = None
         self._plan_epoch_refresher = None
+
+    def bind_learning_turn_claim(self, callback):
+        """Automatic learning's hook for a turn an explicit request claimed."""
+        self._learning_turn_claim = callback
+
+    def claim_explicit_request(self, *, session_id: str, turn_id: str) -> None:
+        """An explicit memory request (remember / correct / forget) is about
+        to act on this owner turn. From now on only that request may write
+        from it: automatic learning drops its sources for the turn and the
+        learning authority refuses any write citing or quoting it, whether
+        the explicit request is later granted, denied, cancelled or fails."""
+        if self._learning_authority is not None:
+            self._learning_authority.claim_explicit_request(turn_id)
+        callback = getattr(self, "_learning_turn_claim", None)
+        if callback is not None:
+            callback(turn_id)
 
     def bind_learning_invalidator(self, callback):
         if self._learning_invalidator is not None or not callable(callback):
@@ -359,6 +393,66 @@ class MemoryService:
         self._invalidate_learning()
         return records
 
+    async def remember_personal_fact(
+        self,
+        *,
+        label: str,
+        value: str,
+        source: MemorySource,
+        commit_guard: Callable[[], None] | None = None,
+    ) -> ExplicitMemoryResult:
+        """An explicit standard owner fact ("my home city is Jaipur") in the
+        registered personal-learning shape, so the owner-memory reads of a
+        learning session (record_scope: category personal_fact) can find it,
+        and correction, forgetting and the personal_fact suppression apply to
+        it like any learned personal fact. Provenance stays owner-explicit.
+        Live voice 27 Nov: a plain-text "home_city" record was saved but
+        invisible to every later read."""
+        from uuid import uuid4
+
+        from jarvis.personal_learning_scope import POLICY_VERSION
+
+        label = _text_value(label)
+        text = _text_value(value)
+        self._validate_write_policy(
+            source, Sensitivity.STANDARD, FreshnessClass.CHANGEABLE
+        )
+        if any(
+            isinstance(r.value, dict)
+            and r.value.get("category") == "personal_fact"
+            and str(r.value.get("label", "")).casefold() == label.casefold()
+            for r in await self._reader.learning_current()
+        ):
+            raise MemoryAlreadyExistsError(
+                f"current memory already exists for {label!r}; use correction"
+            )
+        draft = SemanticAssertionDraft(
+            "personal",
+            "owner",
+            f"personal_fact_{uuid4().hex}",
+            ValueType.JSON,
+            {
+                "schema": POLICY_VERSION,
+                "category": "personal_fact",
+                "kind": "other",
+                "label": label,
+                "value": text,
+                "state": "active",
+            },
+            f"personal_fact: {label}; value={text}; state=active",
+            FreshnessClass.CHANGEABLE,
+            Sensitivity.STANDARD,
+        )
+        record = await self._lifecycle.create(
+            draft,
+            source,
+            reason_code="explicit_owner_remember",
+            require_absent_current=True,
+            commit_guard=commit_guard,
+        )
+        self._invalidate_learning()
+        return ExplicitMemoryResult(predicate=draft.predicate, record=record)
+
     async def correct_text(
         self,
         *,
@@ -383,14 +477,28 @@ class MemoryService:
         resolved_sensitivity = sensitivity or current.sensitivity
         resolved_freshness = freshness_class or current.freshness_class
         self._validate_write_policy(source, resolved_sensitivity, resolved_freshness)
+        draft = self._draft(
+            predicate=key,
+            value=text,
+            sensitivity=resolved_sensitivity,
+            freshness_class=resolved_freshness,
+        )
+        structured = _structured_correction(current, key, text)
+        if structured is not None:
+            # A registered personal-learning record keeps its shape (and so
+            # its read scope and suppression category); only its value changes.
+            draft = replace(
+                draft,
+                value_type=ValueType.JSON,
+                value=structured,
+                normalized_text=(
+                    f"{structured['category']}: {structured.get('label', '')}; "
+                    f"value={text}; state={structured.get('state', '')}"
+                ),
+            )
         record = await self._lifecycle.correct(
             current.assertion_id,
-            self._draft(
-                predicate=key,
-                value=text,
-                sensitivity=resolved_sensitivity,
-                freshness_class=resolved_freshness,
-            ),
+            draft,
             source,
             reason_code="explicit_owner_correction",
             commit_guard=commit_guard,

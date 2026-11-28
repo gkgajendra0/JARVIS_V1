@@ -222,3 +222,48 @@ def test_every_declared_voice_tool_except_the_allowlist_is_withheld():
         kept = {t.id for t in restrict_tools(fake_tools(declared), allowlist)}
         assert kept == set(allowlist)
         assert len(declared - kept) >= 40
+
+
+@pytest.mark.parametrize("baseline", [False, True])
+@pytest.mark.parametrize("personal", [False, True])
+@pytest.mark.parametrize("learning_enabled", [False, True])
+def test_explicit_personal_tools_require_opt_in_and_keep_other_tools_isolated(
+    baseline, personal, learning_enabled
+):
+    # Dropping the learning flag or admitting every canonical tool breaks this.
+    declared = _declared_voice_tool_ids()
+    allowed = lab_tool_allowlist(
+        baseline=baseline, personal=personal, learning=learning_enabled
+    )
+    kept = {tool.id for tool in restrict_tools(fake_tools(declared), allowed)}
+    memory_operations = {
+        "memory_status",
+        "remember_memory",
+        "correct_memory",
+        "forget_memory",
+    }
+    if baseline:
+        assert kept == {"enter_standby"}
+    elif personal:
+        expected = {
+            "enter_standby",
+            "prepare_project_turn",
+            "search_project_history",
+            "forget_saved_history",
+            "personal_context_catalog",
+            "read_personal_context",
+            "read_personal_context_for_question",
+            "prepare_conversation_topic",
+            "resume_conversation_topic",
+        }
+        if learning_enabled:
+            expected |= memory_operations
+        assert kept == expected
+    else:
+        assert kept == {
+            "enter_standby",
+            "prepare_project_turn",
+            "search_project_history",
+            "forget_saved_history",
+        }
+    assert not {"inspect_memory", "recall_memory", "use_computer", "search_web"} & kept

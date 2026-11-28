@@ -2012,6 +2012,41 @@ async def test_d15_answer_contradicting_the_decided_plan_fails(lab, monkeypatch)
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        # Lab eea8eea5's recorded answer: correct, failed by the old pattern.
+        (
+            (
+                "For a snowy Spiti trip, your Jimny is definitely the best choice. You"
+                " also own a Royal Enfield Classic 350, but the Jimny's 4x4 capability"
+                " will handle the snow and terrain much better. You mentioned taking"
+                " the Jimny when you planned this trip for January."
+            ),
+            "PASS",
+        ),
+        ("The Jimny is fine. The Classic 350 is the best for snow.", "FAIL"),
+    ],
+    ids=["comparison-naming-both", "recommends-another"],
+)
+async def test_d15_consistency_reads_each_sentence(lab, monkeypatch, answer, expected):
+    monkeypatch.setitem(
+        DRIVER, D15, ("read", ["owned_item.vehicle", "plan=Spiti"], answer)
+    )
+    runner, _log = lab.runner()
+    summary = await runner.run(groups=("story",))
+    checks = _d15_checks(summary)
+    assert checks["answer consistent with the decided plan"] == getattr(
+        acceptance, expected
+    )
+    (review,) = [
+        c for c in summary["cases"]["D15"]["checks"] if c["check"] == "useful advice"
+    ]
+    flags = review["detail"]["keyword_flags"]
+    assert flags["compares with another vehicle (check which is recommended)"]
+
+
+@pytest.mark.asyncio
 async def test_run6_d11_goa_lookup_by_word_finds_the_cancelled_plan(lab, monkeypatch):
     (recorded,) = RUN6["steps"]["story-11"]["tool_results"]
     assert recorded["result"]["status"] == "no_match"  # run 6
@@ -2692,6 +2727,142 @@ async def test_amendment_2_other_answers_pass_d28_to_d30(lab):
     for case in ("D28", "D29", "D30"):
         checks = {c["check"]: c["status"] for c in summary["cases"][case]["checks"]}
         assert set(checks.values()) == {acceptance.PASS}, (case, checks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("resolver", ["new", "match"])
+async def test_recorded_ef0c9340_d28_passes_through_the_lab_runner(
+    lab, monkeypatch, resolver
+):
+    """The latest D28 failure end to end through the lab runner: the scripted
+    provider returns lab ef0c9340's recorded extractions (paraphrased name,
+    only the answer turn cited, restated details), unmodified apart from
+    evidence given as quotes of the same spans."""
+    recorded = json.loads(
+        (Path(__file__).parent / "fixtures" / "codex_ef0c9340_d28.json").read_text(
+            encoding="utf-8"
+        )
+    )["steps"]
+    texts = {}
+    for step in ("alt-01", "alt-02"):
+        for raw in recorded[step]["extraction"]["candidates"]:
+            for span in raw["evidence"]:
+                texts[span["turn_id"]] = recorded[step]["utterance"][
+                    span["start"] : span["end"]
+                ]
+    for step in ("alt-01", "alt-02"):
+        raws = []
+        for raw in json.loads(json.dumps(recorded[step]["extraction"]["candidates"])):
+            raw["quote"] = [texts[s["turn_id"]] for s in raw.pop("evidence")]
+            raws.append(raw)
+        monkeypatch.setitem(EXTRACT, recorded[step]["utterance"], raws)
+    if resolver == "new":
+        monkeypatch.setitem(RESOLVE, "We'll take the Jimny.", [("new", None)])
+    runner, _log = lab.runner(stop_on_failure=True)
+    summary = await runner.run(groups=("alternatives",))
+    checks = {c["check"]: c["status"] for c in summary["cases"]["D28"]["checks"]}
+    assert set(checks.values()) == {acceptance.PASS}, checks
+
+
+# Bounded final evaluation: invariants stop, quality is measured ------------------
+
+D11_8EA0FD4E_REPLY = "Understood, I've noted that the Goa plan is cancelled."
+
+
+@pytest.mark.asyncio
+async def test_recorded_d11_quality_miss_is_measured_and_its_false_claim_corrected(
+    lab, monkeypatch
+):
+    """Paid lab 8ea0fd4e D11: the extractor proposed nothing for "Cancel the
+    Goa plan." and the reply claimed it was noted. With stop_on="invariant"
+    the storage miss is a quality measurement (the story continues), and the
+    reply's claim is corrected from the record (nothing saved)."""
+    monkeypatch.setitem(EXTRACT, "Cancel the Goa plan.", [])
+    monkeypatch.setitem(DRIVER, "Cancel the Goa plan.", ("answer", D11_8EA0FD4E_REPLY))
+    runner, _log = lab.runner(stop_on_failure=True, stop_on="invariant")
+    summary = await runner.run(groups=("story",))
+    assert summary["run_state"] != "stopped_on_failure"
+    d11 = {c["check"]: c for c in summary["cases"]["D11"]["checks"]}
+    assert d11["Goa status cancelled"]["status"] == acceptance.FAIL
+    assert d11["Goa status cancelled"]["tier"] == "quality"
+    # Later story cases still ran.
+    assert "D17" in summary["cases"] and "D21" in summary["cases"]
+    tiers = summary["tiers"]
+    assert tiers["invariants"]["failed"] == []
+    assert tiers["invariants"]["untested_cases"] == []
+    # Only the story ran, so the other groups' invariants are not checked.
+    assert tiers["invariants"]["verdict"] == acceptance.UNTESTED
+    assert {"case": "D11", "check": "Goa status cancelled"} in tiers["quality"][
+        "failed_checks"
+    ]
+    (claim,) = [c for c in summary["memory_claims"] if c["step_id"] == "story-11"]
+    assert claim["statements"] == [D11_8EA0FD4E_REPLY.strip()]
+    assert claim["spoken"] == "Nothing was saved from that."
+
+
+@pytest.mark.asyncio
+async def test_a_failed_invariant_still_stops_the_bounded_evaluation(lab, monkeypatch):
+    async def broken(context, log):
+        return [{"check": "owned items unchanged", "level": "a", "status": "FAIL"}]
+
+    monkeypatch.setitem(acceptance.CHECKS, "D1-A1", broken)
+    runner, _log = lab.runner(stop_on_failure=True, stop_on="invariant")
+    with pytest.raises(acceptance.AcceptanceStoppedOnFailure):
+        await runner.run(groups=("story",))
+    summary = json.loads(runner.log.summary.read_text(encoding="utf-8"))
+    assert summary["stopped_on_failure"]["case"] == "D1-A1"
+    assert summary["tiers"]["invariants"]["verdict"] == acceptance.FAIL
+
+
+def test_untested_invariants_are_never_reported_as_passing():
+    cases = {
+        "D17": {
+            "status": acceptance.UNTESTED,
+            "checks": acceptance._tiered(
+                [
+                    {
+                        "check": "forget gate (stage diagnosis)",
+                        "status": acceptance.UNTESTED,
+                        "detail": {"failed_stage": "owner_consent_not_granted"},
+                    },
+                    {"check": "lineage gone", "status": acceptance.UNTESTED},
+                ]
+            ),
+        },
+        "D2": {
+            "status": acceptance.PASS,
+            "checks": acceptance._tiered(
+                [{"check": "A not retracted", "status": acceptance.PASS}]
+            ),
+        },
+    }
+    tiers = acceptance._tier_summary(cases)
+    assert tiers["invariants"]["verdict"] == acceptance.UNTESTED
+    assert tiers["invariants"]["untested_cases"] == ["D17"]
+
+
+def test_d17_deletion_checks_are_invariants_only_when_the_code_failed():
+    def tiers(stage):
+        checks = acceptance._tiered(
+            [
+                {
+                    "check": "forget gate (stage diagnosis)",
+                    "status": acceptance.FAIL,
+                    "detail": {"failed_stage": stage},
+                },
+                {"check": "lineage gone", "status": acceptance.FAIL},
+            ]
+        )
+        return [c["tier"] for c in checks]
+
+    assert tiers("model_did_not_select_available_item") == ["quality", "quality"]
+    assert tiers("forget_operation_failed") == ["invariant", "invariant"]
+    assert tiers(None) == ["quality", "invariant"]
+
+
+def test_stop_on_accepts_only_known_modes(lab):
+    with pytest.raises(ValueError):
+        lab.runner(stop_on="sometimes")
 
 
 def test_launcher_and_cli_accept_every_slice1_group():
