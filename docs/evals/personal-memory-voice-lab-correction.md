@@ -164,10 +164,16 @@ originating request, not whichever turn is latest when the mutation tool runs.
 The reply is tracked as a chain of speech handles (with realtime models
 LiveKit reports the agent as listening between a tool step and its follow-up
 generation, so agent state is not used): the chain binds the latest owner
-turn when it starts (a late transcript replaces it until a tool has run), any
-tool call (memory, personal context, project) marks it, and it ends when a
-generation finishes without a tool call or is interrupted (or after 30 s idle
-with no follow-up). If another utterance
+turn when it starts; an accepted turn of the same user activity (epoch)
+replaces it, also after a tool ran (tools can run before the transcript is
+accepted); any tool call (memory, personal context, project) marks it; it ends
+when a generation finishes without a tool call or is interrupted, or 30 s
+after a tool step that got no follow-up generation (timer).
+
+Limits (fail closed): while a long-running tool keeps a reply open, a new
+owner request is treated as an interloper for memory changes (refused, asked
+to repeat), and learning for turns waiting on that reply is dropped if the
+reply outlasts the source budget (memory_status then says nothing was saved). If another utterance
 is accepted between target resolution and the mutation call, the original
 request is claimed (excluded from learning) and the change is refused before
 any consent prompt; the owner repeats it. A newer owner turn no longer settles

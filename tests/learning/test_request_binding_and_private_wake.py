@@ -326,3 +326,44 @@ async def test_nothing_more_is_spoken_once_the_private_wake_is_closing():
 
 def interruptible_session(bridge, runtime):
     return runtime._live_session
+
+
+def test_a_tool_before_the_transcript_still_binds_the_owners_request():
+    """Re-review: a tool can run before the owner's transcript is accepted
+    (prepare_project_turn waits for it). The accepted turn of the same user
+    activity becomes the chain's request; a turn of newer activity stays an
+    interloper."""
+    c = conversation()
+    settlement = ReplySettlement(
+        speech_feed=True, activity_epoch=lambda: c.user_activity_epoch
+    )
+    c.begin_user_activity()
+    previous = c.accept_turn(ConversationRole.USER, "earlier")
+    settlement.observe(previous)
+    c.begin_user_activity()  # the owner starts speaking
+    settlement.speech_started()
+    settlement.tool_started()  # a project tool before the transcript lands
+    request = c.accept_turn(ConversationRole.USER, "Remember my home city is Jaipur.")
+    settlement.observe(request)
+    assert settlement.bind_request() == request.turn_id
+    c.begin_user_activity()
+    other = c.accept_turn(ConversationRole.USER, "hmm")
+    settlement.observe(other)
+    assert settlement.bind_request() == request.turn_id
+
+
+@pytest.mark.asyncio
+async def test_a_tool_step_without_follow_up_expires_on_its_own(monkeypatch):
+    import jarvis.memory.reply_settlement as module
+
+    monkeypatch.setattr(module, "CHAIN_IDLE_SECONDS", 0.05)
+    clock = [0.0]
+    c = conversation()
+    settlement = ReplySettlement(speech_feed=True, clock=lambda: clock[0])
+    request = c.accept_turn(ConversationRole.USER, "I own a City")
+    settlement.observe(request)
+    settlement.speech_started()
+    settlement.observe(c.accept_turn(ConversationRole.ASSISTANT, "Checking."))
+    settlement.speech_finished(tool_call=True, interrupted=False)
+    clock[0] = 1.0
+    assert await settlement.wait(request.turn_id, 1.0)

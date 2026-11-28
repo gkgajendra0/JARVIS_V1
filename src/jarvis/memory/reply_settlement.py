@@ -44,7 +44,12 @@ CHAIN_IDLE_SECONDS = 30.0
 
 class ReplySettlement:
     def __init__(
-        self, limit: int = MAX_TURNS, *, speech_feed: bool = False, clock=monotonic
+        self,
+        limit: int = MAX_TURNS,
+        *,
+        speech_feed: bool = False,
+        clock=monotonic,
+        activity_epoch=None,
     ):
         self._limit = limit
         self._events: OrderedDict[str, asyncio.Event] = OrderedDict()
@@ -57,6 +62,13 @@ class ReplySettlement:
         self._chain_tool = False
         self._open = 0
         self._last_activity = 0.0
+        # The user activity the chain answers (conversation epoch when its
+        # first generation started): an accepted turn of that same activity is
+        # the chain's request even if a tool already ran (tools can run before
+        # the transcript is accepted).
+        self._activity_epoch = activity_epoch or (lambda: None)
+        self._chain_epoch = None
+        self._expiry = None
 
     # --- conversation ------------------------------------------------------
 
@@ -67,7 +79,10 @@ class ReplySettlement:
             pending = [t for t, e in self._events.items() if not e.is_set()]
             if self._chain_request is not None:
                 self._waiting.update(pending)
-                if not self._chain_tool:
+                epoch = getattr(turn, "user_activity_epoch", None)
+                if not self._chain_tool or (
+                    epoch is not None and epoch == self._chain_epoch
+                ):
                     self._chain_request = turn.turn_id
             else:
                 self._settle(pending)
@@ -93,7 +108,7 @@ class ReplySettlement:
             return
         self._expire()
         if self._chain_request is None:
-            self._chain_request = self._latest_user
+            self._start_chain()
             self._chain_tool = False
         self._open += 1
         self._last_activity = self._clock()
@@ -105,13 +120,15 @@ class ReplySettlement:
         self._last_activity = self._clock()
         if (interrupted or not tool_call) and self._open == 0:
             self._end_chain()
+        elif self._open == 0:
+            self._arm_expiry()
 
     def tool_started(self) -> None:
         if not self._speech_feed:
             return
         self._expire()
         if self._chain_request is None:
-            self._chain_request = self._latest_user
+            self._start_chain()
         self._chain_tool = True
         self._last_activity = self._clock()
 
@@ -127,10 +144,33 @@ class ReplySettlement:
     def latest_user(self) -> str | None:
         return self._latest_user
 
+    def _start_chain(self) -> None:
+        self._chain_request = self._latest_user
+        try:
+            self._chain_epoch = self._activity_epoch()
+        except Exception:  # noqa: BLE001 - no epoch: rebinding by epoch off
+            self._chain_epoch = None
+
     def _end_chain(self) -> None:
         self._chain_request = None
         self._chain_tool = False
+        self._chain_epoch = None
+        if self._expiry is not None:
+            self._expiry.cancel()
+            self._expiry = None
         self._settle(tuple(self._waiting))
+
+    def _arm_expiry(self) -> None:
+        """A tool step with no follow-up generation (a stopped response, a
+        follow-up that never came) ends the chain after CHAIN_IDLE_SECONDS
+        even if nothing else happens."""
+        if self._expiry is not None:
+            self._expiry.cancel()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._expiry = loop.call_later(CHAIN_IDLE_SECONDS + 0.1, self._expire)
 
     def _expire(self) -> None:
         if (
@@ -152,6 +192,9 @@ class ReplySettlement:
     def close(self) -> None:
         self._closed = True
         self._chain_request = None
+        if self._expiry is not None:
+            self._expiry.cancel()
+            self._expiry = None
         self._settle(tuple(self._events))
 
     async def wait(self, turn_id: str, timeout: float) -> bool:

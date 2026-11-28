@@ -331,7 +331,10 @@ class CanonicalActiveSpeakerRuntimeController(VoiceRuntimeController):
             # which owner turn a tool chain acts for (request binding).
             from jarvis.memory.reply_settlement import ReplySettlement
 
-            settlement = ReplySettlement(speech_feed=True)
+            settlement = ReplySettlement(
+                speech_feed=True,
+                activity_epoch=lambda: bridge.conversation.user_activity_epoch,
+            )
             self._reply_settlement = settlement
             bridge.add_accepted_turn_observer(settlement.observe)
             bridge.add_close_observer(settlement.close)

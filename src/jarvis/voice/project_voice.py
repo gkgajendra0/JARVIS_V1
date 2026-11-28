@@ -2345,6 +2345,17 @@ class VoiceProjectTurns:
         """The session's reply-chain tracker (jarvis.memory.reply_settlement)."""
         self._request_binding = binding
 
+    def note_project_result(self, result) -> None:
+        """A project tool result carrying project context (rows, a project
+        title or names, a clarification) is in the live model context."""
+        if isinstance(result, dict) and result.get("status") not in {
+            None,
+            "unavailable",
+            "denied",
+            "no_match",
+        }:
+            self.private_released = True
+
     def note_tool_call(self) -> None:
         binding = getattr(self, "_request_binding", None)
         if binding is not None:
@@ -2704,7 +2715,9 @@ class VoiceProjectTools:
         if raw_arguments not in ({}, None):
             return {"status": "denied", "reason": "no_arguments_accepted"}
         self._turns.note_tool_call()
-        return await self._turns.prepare()
+        result = await self._turns.prepare()
+        self._turns.note_project_result(result)
+        return result
 
     @function_tool(
         raw_schema={
@@ -2728,7 +2741,9 @@ class VoiceProjectTools:
         if not isinstance(query, str) or len(query) > 200:
             return {"status": "denied", "reason": "short_query_text_required"}
         self._turns.note_tool_call()
-        return await self._turns.search_history(query)
+        result = await self._turns.search_history(query)
+        self._turns.note_project_result(result)
+        return result
 
     @function_tool(
         raw_schema={
